@@ -3,6 +3,7 @@
 //! it is not a mounted destination component.
 
 use super::components::library_panel::LibraryKey;
+use super::components::msg::MusicArtistTarget;
 use super::components::music_content::MusicContent;
 use super::components::LibraryKind;
 use super::shell::{Model, MusicTrackFocusRequest, MusicTrackSelection};
@@ -34,6 +35,40 @@ impl Model {
     fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
         let key = self.music_owner_key()?;
         self.update_library_owner(key, || Box::new(MusicContent::new()), f)
+    }
+
+    /// Starts (or reuses) both halves of the focused artist's detail fetch
+    /// (design D7, tasks 6.1/6.2): the typed track request arms the verified
+    /// `ArtistIds` query — or, for a fallback root, the per-album fetches —
+    /// and the typed artwork request goes through the existing image/cache
+    /// boundary by the artist's stable ID. Both dedupe on their caches, so
+    /// repeat pushes with the same identity are free. Used by the projection
+    /// push; the component's typed request arms dispatch the two concerns
+    /// through their own shell arms.
+    pub(super) fn request_music_artist_detail(&mut self, target: MusicArtistTarget) {
+        self.request_music_artist_tracks(target.clone());
+        self.request_music_artist_artwork(target);
+    }
+
+    /// The typed track request's handler (task 6.1): the component-resolved
+    /// identity arms the `ArtistIds` Audio query — or, for a fallback root
+    /// (`artist_id == None`), the explicit per-album aggregation fetches —
+    /// with no invented provider ID.
+    pub(super) fn request_music_artist_tracks(&mut self, target: MusicArtistTarget) {
+        let Some(destination) = self.music_owner_key() else {
+            return;
+        };
+        self.app.request_artist_tracks(destination, target);
+    }
+
+    /// The typed artwork request's handler (task 6.2): the stable artist ID
+    /// walks the existing image/cache boundary; a fallback artist is the
+    /// explicit no-artwork arm inside `request_artist_artwork`.
+    pub(super) fn request_music_artist_artwork(&mut self, target: MusicArtistTarget) {
+        let Some(destination) = self.music_owner_key() else {
+            return;
+        };
+        self.app.request_artist_artwork(destination, target);
     }
 
     /// The shell's reaction to a completed recursive album activation
@@ -141,7 +176,28 @@ impl Model {
                     .and_then(|t| level.items.iter().position(|i| i.id == t))
             })
             .or_else(|| resting.map(|r| r.0));
-        let context = self.app.wide_music_render_ctx(index, cursor);
+        let base_context = self.app.wide_music_render_ctx(index, cursor);
+        // The artist detail projection (design D7, tasks 6.1–6.3): read the
+        // owner's component-resolved artist target, re-bind it to this push's
+        // settled source revision, request the missing tracks/artwork (both
+        // dedupe on their caches), and project the cached summary and grouped
+        // tracks. The shell never re-resolves a tree cursor.
+        let artist_target = self
+            .music_owner()
+            .and_then(MusicContent::artist_detail_target)
+            .map(|mut target| {
+                target.revision = base_context.catalog_revision;
+                target
+            });
+        if let Some(target) = artist_target.clone() {
+            self.request_music_artist_detail(target);
+        }
+        let context = match artist_target {
+            Some(target) => self
+                .app
+                .project_music_artist_detail(&key, base_context, target),
+            None => base_context,
+        };
         // Grouped Music's album-track fetch follows the tree owner's resolved
         // album selection: an artist-root focus has no album, so no album-track
         // fetch starts for it (the artist-track request is a later row).
@@ -302,6 +358,206 @@ mod tests {
         assert!(
             model.app.album_tracks_loading.contains("album-1"),
             "the selected album's tracks must be fetched"
+        );
+    }
+
+    /// A settled one-album catalog whose only album carries a Service
+    /// (`ArtistItems`) identity, with images enabled and a configured
+    /// (unroutable) client: the loading reservations the artist-detail
+    /// requests make are observable synchronously.
+    fn settled_service_artist_app() -> crate::app::App {
+        let mut app = make_music_group_app();
+        app.image_protocol_enabled = true;
+        app.emby_runtime = ready_emby_runtime();
+        {
+            let level = app.libs[0].nav_stack.last_mut().unwrap();
+            for item in &mut level.items {
+                item.artist_items = vec![mbv_core::api::EmbyArtistRef {
+                    name: "Alpha".into(),
+                    id: "artist-alpha".into(),
+                }];
+            }
+            let mut catalog = crate::app::music_grouping::build_grouped_album_catalog(
+                &level.items,
+                &Default::default(),
+            );
+            catalog.revision = 7;
+            catalog.parent_id = level.parent_id.clone();
+            level.music_grouping = Some(crate::app::music_grouping::MusicGroupingState {
+                revision: 7,
+                candidate: None,
+                settled: Some(catalog),
+            });
+        }
+        app
+    }
+
+    fn music_destination() -> crate::app::components::library_panel::LibraryKey {
+        crate::app::components::library_panel::LibraryKey::Service {
+            service: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-music".into(),
+            kind: crate::app::components::LibraryKind::Music,
+        }
+    }
+
+    fn artist_focused_model() -> (Model, mbv_core::service_runtime::SetupGeneration) {
+        let mut model = Model::new(settled_service_artist_app());
+        model.app.panel_focus = crate::app::PanelFocus::Library;
+        model.sync_mounted_surfaces();
+        model.test_music_owner_mut().browser.select_first_visible();
+        assert!(model.test_music_owner().selected_is_artist());
+        model.push_music_workspace_content();
+        let generation = model.app.emby_runtime.generation();
+        (model, generation)
+    }
+
+    /// Tasks 6.1/6.2 (design D7): an artist-root focus dispatches the typed
+    /// track request with the full source identity and the typed artwork
+    /// request through the shared image boundary by stable ID; a cached
+    /// result never re-arms either fetch.
+    #[test]
+    fn artist_focus_dispatches_the_typed_requests_and_reuses_the_cache() {
+        let destination = music_destination();
+        let (mut model, generation) = artist_focused_model();
+        let key = crate::app::music_artist_detail::ArtistDetailKey {
+            destination: destination.clone(),
+            generation: generation.value(),
+            artist_id: "artist-alpha".into(),
+            revision: 7,
+        };
+        assert!(
+            model.app.artist_detail_loading.contains(&key),
+            "the push dispatches the typed track request with the full identity"
+        );
+        assert!(
+            model.app.card_image_loading.contains(
+                &crate::app::music_artist_detail::artist_artwork_cache_key(
+                    &destination,
+                    generation.value(),
+                    "artist-alpha",
+                )
+            ),
+            "the typed artwork request walks the shared image boundary by stable ID"
+        );
+
+        // The typed request arm dispatches through the shell with the
+        // component-resolved identity; repeat dispatches reuse the caches.
+        let target = model
+            .test_music_owner()
+            .artist_detail_target()
+            .expect("artist target");
+        let (mut music_resize, mut tv_resize) = (false, false);
+        model.handle_terminal_message(
+            crate::app::components::Msg::Shell(
+                crate::app::components::ShellRequest::MusicArtistTracks { target },
+            ),
+            &mut music_resize,
+            &mut tv_resize,
+        );
+        assert!(model.app.artist_detail_loading.contains(&key));
+        model.app.artist_detail_loading.remove(&key);
+        model.app.artist_detail_cache.insert(
+            key,
+            crate::app::music_artist_detail::ArtistDetailCacheEntry::default(),
+        );
+        let target = model
+            .test_music_owner()
+            .artist_detail_target()
+            .expect("artist target");
+        model.handle_terminal_message(
+            crate::app::components::Msg::Shell(
+                crate::app::components::ShellRequest::MusicArtistTracks { target },
+            ),
+            &mut music_resize,
+            &mut tv_resize,
+        );
+        assert!(
+            model.app.artist_detail_loading.is_empty(),
+            "a cached artist result never re-arms the fetch"
+        );
+    }
+
+    /// Task 6.1/6.3 (design D7): a fallback root arms the existing per-album
+    /// fetches and explicitly starts no artist-ID query and no artist-ID
+    /// artwork request.
+    #[test]
+    fn fallback_artist_push_arms_per_album_fetches_without_artist_requests() {
+        let mut app = make_music_group_app();
+        app.emby_runtime = ready_emby_runtime();
+        let mut model = Model::new(app);
+        model.app.panel_focus = crate::app::PanelFocus::Library;
+        model.sync_mounted_surfaces();
+        model.test_music_owner_mut().browser.select_first_visible();
+        assert!(model.test_music_owner().selected_is_artist());
+        model.push_music_workspace_content();
+
+        assert!(
+            model.app.artist_detail_loading.is_empty(),
+            "a fallback root issues no artist-ID query"
+        );
+        assert!(
+            model.app.album_tracks_loading.contains("album-1"),
+            "the per-album fallback fetches are armed"
+        );
+        assert!(
+            model
+                .app
+                .card_image_loading
+                .iter()
+                .all(|cache_key| !cache_key.starts_with("artist:")),
+            "a fallback root makes no artist-ID artwork request"
+        );
+    }
+
+    /// Task 6.1/6.3 (design D7): only a completion matching the pushed
+    /// destination, generation, revision, and focused artist reaches the
+    /// visible Workspace; a stale revision paints nothing, and the matching
+    /// result projects its grouped rows on the next push.
+    #[test]
+    fn only_a_completion_matching_the_pushed_identity_reaches_the_workspace() {
+        use crate::app::components::media_list::MediaListRow;
+
+        let destination = music_destination();
+        let (mut model, generation) = artist_focused_model();
+
+        model
+            .app
+            .handle_lib_event(crate::app::LibEvent::ArtistTracksFetched {
+                destination: destination.clone(),
+                generation,
+                artist_id: "artist-alpha".into(),
+                revision: 6,
+                result: Ok(vec![crate::app::tests::make_item("Stale", "Audio")]),
+            });
+        model.push_music_workspace_content();
+        assert!(
+            model.test_music_owner().track_list.rows().is_empty(),
+            "a replaced snapshot's completion paints nothing"
+        );
+
+        let mut track = crate::app::tests::make_item("Song", "Audio");
+        track.id = "track-1".into();
+        track.album_id = "album-1".into();
+        model
+            .app
+            .handle_lib_event(crate::app::LibEvent::ArtistTracksFetched {
+                destination: destination.clone(),
+                generation,
+                artist_id: "artist-alpha".into(),
+                revision: 7,
+                result: Ok(vec![track]),
+            });
+        model.push_music_workspace_content();
+        let rows = model.test_music_owner().track_list.rows();
+        assert!(
+            matches!(rows.first(), Some(MediaListRow::Heading { .. })),
+            "the matching completion projects its canonical heading row"
+        );
+        assert_eq!(
+            rows.iter()
+                .filter_map(MediaListRow::selectable_target)
+                .count(),
+            1,
         );
     }
 }

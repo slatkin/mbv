@@ -31,6 +31,21 @@ pub enum ShellRequest {
         target: usize,
         kind: AlbumCursorKind,
     },
+    /// Request the focused artist's Audio tracks (design D7, task 6.1). A
+    /// `None` artist ID in the target is the explicit fallback arm: the shell
+    /// arms the existing per-album fetches instead of issuing a provider
+    /// query with an invented ID.
+    MusicArtistTracks {
+        target: super::intents::MusicArtistTarget,
+    },
+    /// Request the focused artist's stable-ID artwork through the existing
+    /// image/cache boundary (task 6.2). Fallback artists carry no provider ID
+    /// and are an explicit no-artwork no-op. The focus-transition path routes
+    /// both concerns together (see the tracks arm); this arm is the artwork
+    /// concern's own typed boundary and dispatch point.
+    MusicArtistArtwork {
+        target: super::intents::MusicArtistTarget,
+    },
     /// A focused artist root resolved by the tree owner to ordered album
     /// items. `origin` is the stable tree/list identity recorded for the
     /// task-4.3 status/bulk-action wiring; this task carries it across the

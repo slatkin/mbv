@@ -89,6 +89,63 @@ fn content_exposes_tracks_as_the_workspace() {
 }
 
 #[test]
+fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
+    use crate::app::components::msg::MusicArtistTarget;
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut album = make_item("Album", "MusicAlbum");
+    album.id = "album-1".into();
+    let mut first = make_item("Same Title", "Audio");
+    first.id = "track-1".into();
+    first.album_id = album.id.clone();
+    let mut second = make_item("Same Title", "Audio");
+    second.id = "track-2".into();
+    second.album_id = album.id.clone();
+    let detail = ArtistDetailProjection {
+        target: MusicArtistTarget {
+            artist_id: Some("artist-1".into()),
+            artist_name: "Artist".into(),
+            album_targets: vec![album.id.clone()],
+            revision: 7,
+        },
+        summary: ArtistSummary {
+            name: "Artist".into(),
+            album_count: 1,
+            year_start: Some(2001),
+            year_end: Some(2001),
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: album.id.clone(),
+            album_title: album.name.clone(),
+            tracks: vec![first.clone(), second.clone()],
+        }],
+        artwork: HeroImageState::None,
+        artwork_cache_key: None,
+    };
+    let mut ctx = context(album, "overview");
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(detail);
+    let mut owner = MusicContent::new();
+    owner.set_content(ctx);
+
+    assert!(matches!(
+        owner.track_list.rows().first(),
+        Some(MediaListRow::Heading { text }) if text == "Album"
+    ));
+    let items: Vec<&str> = owner
+        .track_list
+        .rows()
+        .iter()
+        .filter_map(MediaListRow::selectable_target)
+        .map(String::as_str)
+        .collect();
+    assert_eq!(items, ["track-1", "track-2"]);
+}
+
+#[test]
 fn hero_double_click_activates_the_selected_track() {
     let album = make_item("Album", "MusicAlbum");
     let track = make_item("Track", "Audio");
@@ -336,14 +393,17 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
     let root_at = tree_point(&owner, area, root);
     let album_0_at = tree_point(&owner, area, album_0);
 
-    // A click resolves the painted artist row, changes local selection, and
-    // does not manufacture an album request for the grouping root.
-    assert_eq!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
-            root_at
-        ))),
-        None
-    );
+    // A click resolves the painted artist row and changes local selection;
+    // the grouping root manufactures no album request, but its resolved
+    // focus crosses as the typed artist-track request (design D7).
+    match owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+        root_at,
+    ))) {
+        Some(Msg::Shell(ShellRequest::MusicArtistTracks { target })) => {
+            assert_eq!(target.artist_name, "Alpha");
+        }
+        other => panic!("expected the typed artist-track request, got {other:?}"),
+    }
     assert!(owner.browser.selected_is_artist());
 
     // The same completed frame resolves a leaf click to its stable album
@@ -543,8 +603,14 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
 
     // Left on a leaf returns to its artist parent without collapsing it and
     // without emitting an album-cursor request (an artist never overwrites
-    // album persistence).
-    assert_eq!(press(&mut owner, Key::Left), None);
+    // album persistence); the resolved root focus crosses as the typed
+    // artist-track request (design D7).
+    match press(&mut owner, Key::Left) {
+        Some(Msg::Shell(ShellRequest::MusicArtistTracks { target })) => {
+            assert_eq!(target.artist_name, "Alpha");
+        }
+        other => panic!("expected the typed artist-track request, got {other:?}"),
+    }
     assert_eq!(owner.browser.selected_id(), Some(root));
     assert!(
         owner.browser.root_is_expanded(root),

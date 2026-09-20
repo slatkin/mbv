@@ -47,6 +47,7 @@ mod library_search_actions;
 mod list_pane_width;
 mod mouse_gestures;
 mod music_actions;
+mod music_artist_detail;
 mod music_grouping;
 mod notify_actions;
 pub(crate) mod palette;

@@ -289,6 +289,14 @@ impl MusicTreeModel {
         }
     }
 
+    /// The artist root's settled display name; album leaves have none.
+    pub(in crate::app) fn artist_name_of(&self, id: usize) -> Option<&str> {
+        match self.nodes.get(id) {
+            Some(MusicNode::Artist { name, .. }) => Some(name),
+            _ => None,
+        }
+    }
+
     /// The model's current revision value.
     #[cfg(test)]
     pub(in crate::app) fn revision_value(&self) -> u64 {
@@ -726,6 +734,19 @@ impl MusicTreeBrowser {
         self.state
             .selected_id()
             .and_then(|id| self.model.target_of(id))
+    }
+
+    /// The selected artist root's settled identity (design D7): the stable
+    /// `ArtistItems` key or the deterministic fallback grouping key.
+    pub(in crate::app) fn selected_artist_key(&self) -> Option<&ArtistKey> {
+        self.selected_id()
+            .and_then(|id| self.model.artist_key_of(id))
+    }
+
+    /// The selected artist root's settled display name.
+    pub(in crate::app) fn selected_artist_name(&self) -> Option<&str> {
+        self.selected_id()
+            .and_then(|id| self.model.artist_name_of(id))
     }
 
     /// Returns the focused artist's album targets in settled order. The walk

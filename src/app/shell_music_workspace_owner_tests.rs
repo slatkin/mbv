@@ -573,14 +573,22 @@ fn down_key_moves_visible_nodes_in_settled_display_order() {
     // Down from that album leaf reaches the next visible node — the Bravo
     // artist root — which resolves to no album, so no cursor intent is emitted
     // (an artist root is never an album effect target).
+    // Down from that album leaf reaches the next visible node — the Bravo
+    // artist root — which resolves to no album cursor request (an artist
+    // root is never an album effect target); its resolved focus crosses as
+    // the typed artist-track request (design D7), here the explicit
+    // fallback arm because Bravo has no Service identity.
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     });
-    assert!(
-        message.is_none(),
-        "an artist root resolves to no album cursor intent, got {message:?}"
-    );
+    match message {
+        Some(Msg::Shell(ShellRequest::MusicArtistTracks { target })) => {
+            assert_eq!(target.artist_name, "Bravo");
+            assert_eq!(target.artist_id, None);
+        }
+        other => panic!("expected the fallback artist-track request, got {other:?}"),
+    }
 }
 
 // ── Keyboard: shortcuts reuse the component's own selection ──────────────

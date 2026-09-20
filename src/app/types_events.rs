@@ -148,6 +148,27 @@ pub(super) enum LibEvent {
         album_id: String,
         tracks: Vec<EmbyItem>,
     },
+    /// Completion of the typed `ArtistItems`-ID Audio query (design D7,
+    /// task 6.1). The destination, Service setup generation, and settled
+    /// revision all ride the completion so the shell can reject a response
+    /// from a navigated-away or replaced source instead of painting it.
+    ArtistTracksFetched {
+        destination: crate::app::components::library_panel::LibraryKey,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        artist_id: String,
+        revision: u64,
+        result: Result<Vec<EmbyItem>, String>,
+    },
+    /// Completion notification emitted after the shared image/cache boundary
+    /// has stored an artist's stable-ID artwork (task 6.2).
+    ArtistArtworkFetched {
+        destination: crate::app::components::library_panel::LibraryKey,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        artist_id: String,
+        revision: u64,
+        cache_key: String,
+        available: bool,
+    },
     /// TV series detail (seasons + episodes) fetched proactively for inline
     /// rendering when a Series is selected.
     SeriesDetailFetched {

@@ -435,6 +435,23 @@ pub struct App {
     /// lifetime.
     pub(super) album_tracks_cache: std::collections::HashMap<String, Vec<EmbyItem>>,
     pub(super) album_tracks_loading: std::collections::HashSet<String>,
+    /// Artist detail tracks keyed by destination, Service setup generation,
+    /// stable `ArtistItems` identity, and settled catalog revision (design
+    /// D7, tasks 6.1–6.3). Shell-owned; the component never sees the cache.
+    pub(super) artist_detail_cache: std::collections::HashMap<
+        crate::app::music_artist_detail::ArtistDetailKey,
+        crate::app::music_artist_detail::ArtistDetailCacheEntry,
+    >,
+    pub(super) artist_detail_loading:
+        std::collections::HashSet<crate::app::music_artist_detail::ArtistDetailKey>,
+    /// Typed identity hand-off for artist artwork fetched by the shared image
+    /// worker. The image cache itself remains provider/generic.
+    pub(super) artist_artwork_requests:
+        std::collections::HashMap<String, crate::app::music_artist_detail::ArtistDetailKey>,
+    pub(super) artist_artwork_status: std::collections::HashMap<
+        crate::app::music_artist_detail::ArtistDetailKey,
+        crate::app::music_artist_detail::ArtistArtworkStatus,
+    >,
     /// TV series detail cache for inline rendering.
     /// When a Series is selected, we proactively fetch seasons and episodes
     /// so the inline detail pane can render without drilling in.

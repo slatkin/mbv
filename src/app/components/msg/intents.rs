@@ -87,6 +87,21 @@ pub enum MusicTreeAction {
     Shuffle,
 }
 
+/// Stable, component-resolved identity for one focused Grouped Music artist
+/// (design D7). The tree owner resolves the root's settled identity, display
+/// name, and leaf album targets before this crosses the boundary; the shell
+/// uses the settled revision and the opaque targets to reject late
+/// completions and to aggregate fallback tracks without re-reading a cursor.
+/// A `None` artist ID is the explicit fallback arm: the root only has the
+/// deterministic grouping key, so no provider-ID request may be invented.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MusicArtistTarget {
+    pub artist_id: Option<String>,
+    pub artist_name: String,
+    pub album_targets: Vec<String>,
+    pub revision: u64,
+}
+
 /// Closed set of podcast episode action intents (task 5.3d.7). The component
 /// emits the intent matched from Space/Enter/Ctrl+A; the shell runs the App
 /// play/enqueue effect directly — episodes are the tab's leaf rows, so there

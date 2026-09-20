@@ -22,6 +22,14 @@ pub(in crate::app) struct MusicWideRenderCtx {
     pub(in crate::app) album_order: Vec<usize>,
     pub(in crate::app) focused: bool,
     pub(in crate::app) album_tracks: Option<Vec<EmbyItem>>,
+    /// Settled source revision carried with the tree snapshot (design D7):
+    /// artist detail requests bind to it so a completion from a replaced
+    /// catalog can never become the new snapshot's Workspace.
+    pub(in crate::app) catalog_revision: u64,
+    /// The focused artist's projected summary and grouped track Workspace
+    /// (tasks 6.2/6.3), when the tree owner is on an artist root.
+    pub(in crate::app) artist_detail:
+        Option<crate::app::music_artist_detail::ArtistDetailProjection>,
 }
 
 impl MusicWideRenderCtx {
@@ -66,7 +74,14 @@ impl MusicWideRenderCtx {
             // from `Attribute::Focus`; content projection never sets it.
             focused: false,
             album_tracks,
+            catalog_revision: 0,
+            artist_detail: None,
         }
+    }
+
+    pub(in crate::app) fn with_catalog_revision(mut self, revision: u64) -> Self {
+        self.catalog_revision = revision;
+        self
     }
 }
 
@@ -117,6 +132,10 @@ impl App {
         let album_tracks = selected_album
             .as_ref()
             .and_then(|album| self.album_tracks_cache.get(&album.id).cloned());
+        let catalog_revision = catalog
+            .as_ref()
+            .map(|catalog| catalog.revision)
+            .unwrap_or(0);
 
         MusicWideRenderCtx::new(
             list,
@@ -129,5 +148,6 @@ impl App {
             album_order,
             album_tracks,
         )
+        .with_catalog_revision(catalog_revision)
     }
 }

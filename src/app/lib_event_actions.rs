@@ -708,6 +708,34 @@ impl App {
                 sort_audio_tracks(&mut tracks);
                 self.album_tracks_cache.insert(album_id, tracks);
             }
+            LibEvent::ArtistTracksFetched {
+                destination,
+                generation,
+                artist_id,
+                revision,
+                result,
+            } => self.handle_artist_tracks_fetched(
+                destination,
+                generation,
+                artist_id,
+                revision,
+                result,
+            ),
+            LibEvent::ArtistArtworkFetched {
+                destination,
+                generation,
+                artist_id,
+                revision,
+                cache_key,
+                available,
+            } => self.handle_artist_artwork_fetched(
+                destination,
+                generation,
+                artist_id,
+                revision,
+                cache_key,
+                available,
+            ),
             LibEvent::SeriesDetailFetched {
                 series_id,
                 seasons,

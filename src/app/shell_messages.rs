@@ -62,6 +62,23 @@ impl Model {
                         }
                         self.push_music_workspace_content();
                     }
+                    ShellRequest::MusicArtistTracks { target } => {
+                        // Design D7 (tasks 6.1/6.2): one focus transition
+                        // requests both concerns. The track request arms the
+                        // artist query/fallback here; the artwork half
+                        // re-dispatches as its own typed variant so each
+                        // concern keeps a separate exhaustive dispatch arm.
+                        self.request_music_artist_tracks(target.clone());
+                        self.handle_terminal_message(
+                            Msg::Shell(ShellRequest::MusicArtistArtwork { target }),
+                            music_resize,
+                            tv_resize,
+                        );
+                    }
+                    ShellRequest::MusicArtistArtwork { target } => {
+                        self.request_music_artist_artwork(target);
+                        self.push_music_workspace_content();
+                    }
                     ShellRequest::MusicAlbumCursor { target, kind } => {
                         // Click-to-focus: a pointer-driven album-cursor move pulls
                         // panel focus to the Library. Keyboard moves only reach

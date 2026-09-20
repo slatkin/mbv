@@ -20,7 +20,7 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
     MediaSemanticState, RowIntent, SelectionOrigin,
 };
-use super::msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
+use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
 use super::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::render::MusicWideRenderCtx;
@@ -60,27 +60,51 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     tracks
         .iter()
         .enumerate()
-        .map(|(index, track)| {
-            let number = if track.index_number > 0 {
-                track.index_number
-            } else {
-                index as i64 + 1
-            };
-            // Library lists carry no time column (only the Queue list and
-            // the sessions modal show one).
-            let duration = None;
-            MediaListRow::Item {
-                target: track.id.clone(),
-                primary: format!("{number}. {}", track.name),
-                secondary: None,
-                trailing: None,
-                duration,
-                kind: MediaKind::Media,
-                // The one canonical state derivation.
-                semantic_state: MediaSemanticState::from_emby(track),
-            }
-        })
+        .map(|(index, track)| track_row(track, index))
         .collect()
+}
+
+fn track_row(track: &EmbyItem, index: usize) -> MediaListRow<String> {
+    let number = if track.index_number > 0 {
+        track.index_number
+    } else {
+        index as i64 + 1
+    };
+    // Library lists carry no time column (only the Queue list and the
+    // sessions modal show one).
+    MediaListRow::Item {
+        target: track.id.clone(),
+        primary: format!("{number}. {}", track.name),
+        secondary: None,
+        trailing: None,
+        duration: None,
+        kind: MediaKind::Media,
+        // The one canonical state derivation.
+        semantic_state: MediaSemanticState::from_emby(track),
+    }
+}
+
+/// The focused artist's Workspace rows (task 6.3): one canonical `Heading`
+/// per settled album in settled order, then that album's tracks in disc/track
+/// order. Duplicate titles stay distinct because rows are keyed by the
+/// tracks' own stable IDs.
+fn build_artist_track_rows(
+    detail: &crate::app::music_artist_detail::ArtistDetailProjection,
+) -> Vec<MediaListRow<String>> {
+    let mut rows = Vec::new();
+    for group in &detail.track_groups {
+        rows.push(MediaListRow::Heading {
+            text: group.album_title.clone(),
+        });
+        rows.extend(
+            group
+                .tracks
+                .iter()
+                .enumerate()
+                .map(|(index, track)| track_row(track, index)),
+        );
+    }
+    rows
 }
 
 /// The plain Music content owner. Its tree browser owns the Grouped Music
@@ -101,6 +125,11 @@ pub struct MusicContent {
     /// selects the Library Hero overlay instead.
     pub(in crate::app) inline_track_focus_enabled: bool,
     last_album_id: Option<String>,
+    /// The artist identity last carried to the shell on a typed
+    /// artist-track request (design D7). Moving onto a different root emits;
+    /// returning to the last reported one relies on the shell's projection
+    /// push, which re-derives the same component-resolved target.
+    last_artist_request: Option<crate::app::music_grouping::ArtistKey>,
     pub(in crate::app) inline_search: InlineSearch,
     /// Stable identity of the tree/list that produced a direct artist action.
     /// The Library panel supplies it on activation. It stays absent until that
@@ -134,6 +163,7 @@ impl MusicContent {
             track_focused: false,
             inline_track_focus_enabled: false,
             last_album_id: None,
+            last_artist_request: None,
             inline_search: InlineSearch::new(),
             // There is no honest library identity before the panel's first
             // active-owner projection. Artist actions wait for that projection
@@ -145,6 +175,11 @@ impl MusicContent {
     }
 
     pub(in crate::app) fn set_content(&mut self, context: MusicWideRenderCtx) {
+        let artist_changed = match (&self.context.artist_detail, &context.artist_detail) {
+            (Some(previous), Some(next)) => previous.target != next.target,
+            (Some(_), None) | (None, Some(_)) => true,
+            (None, None) => false,
+        };
         let album_changed = self.last_album_id.as_deref()
             != context
                 .selected_album
@@ -187,7 +222,14 @@ impl MusicContent {
                 self.browser.select_album_target(&target);
             }
         }
-        let track_rows = build_track_rows(self.context.album_tracks.as_deref().unwrap_or_default());
+        let track_rows = self
+            .context
+            .artist_detail
+            .as_ref()
+            .map(build_artist_track_rows)
+            .unwrap_or_else(|| {
+                build_track_rows(self.context.album_tracks.as_deref().unwrap_or_default())
+            });
         // The overlay's Workspace can outrun the album's track fetch: the open
         // transition cannot take the focus while the rows are still empty, so
         // it is taken the moment they arrive. Only the empty-to-non-empty edge
@@ -197,7 +239,7 @@ impl MusicContent {
         if self.track_list.rows() != track_rows.as_slice() {
             self.track_list.set_content(track_rows);
         }
-        if album_changed {
+        if album_changed || artist_changed {
             self.track_list.select_first();
         }
         if track_rows_arrived && self.hero_overlay_open {
@@ -294,6 +336,22 @@ impl MusicContent {
         self.browser.selected_is_artist()
     }
 
+    /// The focused artist root's component-resolved detail identity (design
+    /// D7): settled identity, display name, leaf album targets, and the
+    /// snapshot's settled revision. `None` while an album leaf is focused.
+    pub(in crate::app) fn artist_detail_target(&self) -> Option<MusicArtistTarget> {
+        let key = self.browser.selected_artist_key()?.clone();
+        Some(MusicArtistTarget {
+            artist_id: match key {
+                crate::app::music_grouping::ArtistKey::Service(id) => Some(id),
+                crate::app::music_grouping::ArtistKey::Fallback(_) => None,
+            },
+            artist_name: self.browser.selected_artist_name()?.to_string(),
+            album_targets: self.browser.selected_artist_album_targets()?,
+            revision: self.context.catalog_revision,
+        })
+    }
+
     fn selected_album_index(&self) -> usize {
         self.browser
             .selected_album_target()
@@ -315,16 +373,32 @@ impl MusicContent {
     /// never when an artist root receives focus — artist focus does not
     /// overwrite album persistence with an artist target.
     fn album_selection_request(&mut self, kind: AlbumCursorKind) -> Option<Msg> {
-        let target = self.browser.take_album_selection_change()?;
-        let index = self
-            .context
-            .album_targets
-            .iter()
-            .position(|candidate| *candidate == target)?;
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: index,
-            kind,
-        }))
+        if let Some(target) = self.browser.take_album_selection_change() {
+            self.last_artist_request = None;
+            let index = self
+                .context
+                .album_targets
+                .iter()
+                .position(|candidate| *candidate == target)?;
+            return Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                target: index,
+                kind,
+            }));
+        }
+        // Artist roots have no album persistence target (task 2.2). Their
+        // focus crosses as the typed artist-track request (design D7) so the
+        // resolved identity — not a recomputed cursor — drives the shell's
+        // detail fetches; the shell dedupes repeat identities by cache key.
+        let target = self.artist_detail_target()?;
+        let identity = match &target.artist_id {
+            Some(id) => crate::app::music_grouping::ArtistKey::Service(id.clone()),
+            None => crate::app::music_grouping::ArtistKey::Fallback(target.artist_name.clone()),
+        };
+        if self.last_artist_request.as_ref() == Some(&identity) {
+            return None;
+        }
+        self.last_artist_request = Some(identity);
+        Some(Msg::Shell(ShellRequest::MusicArtistTracks { target }))
     }
 
     /// Moves the tree owner's selection by `delta` visible rows and reports the
@@ -416,6 +490,13 @@ impl MusicContent {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
         let target = self.track_list.selected_target()?;
+        if let Some(detail) = self.context.artist_detail.as_ref() {
+            return detail
+                .track_groups
+                .iter()
+                .flat_map(|group| group.tracks.iter())
+                .position(|track| track.id == *target);
+        }
         self.context
             .album_tracks
             .as_deref()?
@@ -424,6 +505,14 @@ impl MusicContent {
     }
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
         let target = self.track_list.selected_target()?;
+        if let Some(detail) = self.context.artist_detail.as_ref() {
+            return detail
+                .track_groups
+                .iter()
+                .flat_map(|group| group.tracks.iter())
+                .find(|track| track.id == *target)
+                .cloned();
+        }
         self.context
             .album_tracks
             .as_deref()?
