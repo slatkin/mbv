@@ -301,9 +301,9 @@ impl MusicTreeModel {
     }
 
     pub(in crate::app) fn target_of(&self, id: usize) -> Option<&str> {
-        match &self.nodes[id] {
-            MusicNode::Album { target, .. } => Some(target),
-            MusicNode::Artist { .. } => None,
+        match self.nodes.get(id) {
+            Some(MusicNode::Album { target, .. }) => Some(target),
+            _ => None,
         }
     }
 
@@ -638,8 +638,15 @@ impl MusicTreeBrowser {
         // viewport. A settled-content change already re-arms through
         // `reconcile`, and a no-op frame does not touch the offset.
         if *last_area != Some(area) {
-            if let Some(id) = state.selected_id() {
-                state.select_by_id(model, query, id);
+            // Re-arm the selected row's visibility for the new height without
+            // touching expansion. The crate only arms its `KeepInView` rule
+            // when the selection actually changes, so clear and restore the
+            // current projection row; `select_id`/`select_by_id` must not be
+            // used here because their `expand_to` would promote filter-forced
+            // expansion into persistent expansion on every resize (D5).
+            if let Some(index) = state.selected_index() {
+                state.select_index(None);
+                state.select_index(Some(index));
             }
             *last_area = Some(area);
         }

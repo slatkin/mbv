@@ -10,7 +10,7 @@
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tui_treelistview::{TreeMarkState, TreeRevision};
+use tui_treelistview::{TreeFilterConfig, TreeMarkState, TreeRevision};
 
 use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::music_grouping::ArtistKey;
@@ -393,6 +393,28 @@ fn settled_replacement_retains_the_selected_node_expansion_and_marks() {
 }
 
 #[test]
+fn marking_an_out_of_range_node_id_is_a_no_op() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let mut browser = MusicTreeBrowser::new(model);
+    // An id interned by a larger arena is foreign here: `set_marked` is the
+    // seam later hit-test/stale ids reach, so it must no-op rather than index
+    // this arena out of range.
+    let foreign_model = MusicTreeModel::from_entries(&viewport_entries());
+    let foreign = album_id(&foreign_model, "alpha-11").expect("foreign id");
+
+    assert!(
+        !browser.set_marked(foreign, true),
+        "a foreign node id is never a mark target"
+    );
+    assert_eq!(browser.mark_state(foreign), TreeMarkState::Unmarked);
+    assert!(
+        !browser.set_marked(usize::MAX, true),
+        "an out-of-range node id is never a mark target"
+    );
+    assert_eq!(browser.mark_state(usize::MAX), TreeMarkState::Unmarked);
+}
+
+#[test]
 fn a_settled_change_invalidates_the_projection_but_a_no_op_reconcile_does_not() {
     let entries = base_entries();
     let model = MusicTreeModel::from_entries(&entries);
@@ -498,6 +520,43 @@ fn a_geometry_change_keeps_the_selection_visible_within_bounds() {
     frame(&mut browser, 30);
     assert_eq!(browser.offset(), 0);
     assert_selection_visible(&browser, 30);
+}
+
+#[test]
+fn a_geometry_change_does_not_persist_filter_forced_expansion() {
+    let entries = base_entries();
+    let model = MusicTreeModel::from_entries(&entries);
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let album_2 = album_id(&model, "album-2").expect("album-2 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+
+    // A filter policy force-expands matching paths in the projection while
+    // leaving persistent expansion untouched (design D5). `NoFilter` matches
+    // every node, so the whole tree projects under forced expansion.
+    browser.query.set_filter_config(TreeFilterConfig::enabled());
+    frame(&mut browser, 10);
+    assert!(
+        !browser.root_is_expanded(alpha_root),
+        "filter-forced expansion is not persistent"
+    );
+    assert_eq!(browser.target_of(album_2), Some("album-2"));
+
+    // Select the deep leaf by projection row only, so nothing persists its
+    // ancestor path on its behalf.
+    let row = projection_row(&browser, album_2);
+    browser.select_index(row);
+    assert_eq!(browser.selected_id(), Some(album_2));
+
+    // A geometry change re-arms the same owner's viewport visibility without
+    // promoting the filter-forced branch into persistent expansion.
+    frame(&mut browser, 4);
+    assert!(
+        !browser.root_is_expanded(alpha_root),
+        "a resize must not persist filter-forced expansion"
+    );
+    assert_eq!(browser.selected_id(), Some(album_2));
+    assert_selection_visible(&browser, 4);
 }
 
 #[test]
