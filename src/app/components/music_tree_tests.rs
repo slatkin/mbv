@@ -671,3 +671,111 @@ fn album_selection_persistence_changes_only_with_the_resolved_album() {
         Some("album-3")
     );
 }
+
+#[test]
+fn visual_root_toggle_marks_visible_descendants_in_settled_order() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_all_roots();
+    browser.select_id(alpha_root);
+
+    assert!(browser.toggle_node(alpha_root));
+    assert_eq!(
+        browser.marked_album_targets(),
+        vec!["album-1".to_string(), "album-2".to_string()]
+    );
+    assert!(browser.is_visual_mode());
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+
+    assert!(browser.toggle_node(alpha_root));
+    assert!(browser.marked_album_targets().is_empty());
+    assert!(!browser.is_visual_mode());
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Unmarked);
+}
+
+#[test]
+fn visual_root_aggregate_is_partial_until_all_visible_leaves_are_marked() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let album_1 = album_id(&model, "album-1").expect("album-1");
+    let album_2 = album_id(&model, "album-2").expect("album-2");
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_root(alpha_root);
+
+    browser.set_marked(album_1, true);
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Partial);
+    browser.set_marked(album_2, true);
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+    assert_eq!(
+        browser.marked_album_targets(),
+        vec!["album-1".to_string(), "album-2".to_string()]
+    );
+}
+
+#[test]
+fn visual_ranges_walk_album_leaves_and_skip_artist_roots() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let album_1 = album_id(&model, "album-1").expect("album-1");
+    let album_3 = album_id(&model, "album-3").expect("album-3");
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_all_roots();
+    browser.select_id(album_1);
+    assert!(browser.toggle_node(album_1));
+    assert!(browser.range_to(album_3));
+
+    assert_eq!(
+        browser.marked_album_targets(),
+        vec![
+            "album-1".to_string(),
+            "album-2".to_string(),
+            "album-3".to_string()
+        ]
+    );
+    assert_eq!(browser.mark_state(album_3), TreeMarkState::Marked);
+}
+
+#[test]
+fn filtered_root_toggle_masks_hidden_marks_and_preserves_them() {
+    let entries = vec![
+        alpha("album-1", "First Album"),
+        alpha("album-2", "Second Album"),
+        alpha("album-3", "Third Album"),
+    ];
+    let model = MusicTreeModel::from_entries(&entries);
+    let root = artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let album_1 = album_id(&model, "album-1").expect("album-1");
+    let album_2 = album_id(&model, "album-2").expect("album-2");
+    let album_3 = album_id(&model, "album-3").expect("album-3");
+    let mut browser = MusicTreeBrowser::new(model);
+
+    // A mark hidden by the filter survives, but contributes to no filtered
+    // aggregate or ordered membership.
+    browser.set_marked(album_2, true);
+    browser.set_filter_matches(Some(&[album_1, album_3]));
+    assert_eq!(browser.mark_state(root), TreeMarkState::Unmarked);
+    assert!(browser.marked_album_targets().is_empty());
+
+    browser.select_id(root);
+    assert!(browser.toggle_node(root));
+    assert_eq!(browser.mark_state(root), TreeMarkState::Marked);
+    assert_eq!(
+        browser.marked_album_targets(),
+        vec!["album-1".to_string(), "album-3".to_string()]
+    );
+
+    // Clearing the filter reveals the pre-existing hidden mark and the two
+    // marks made by the filtered root toggle; no other leaf is added.
+    browser.set_filter_matches(None);
+    assert_eq!(
+        browser.marked_album_targets(),
+        vec![
+            "album-1".to_string(),
+            "album-2".to_string(),
+            "album-3".to_string()
+        ]
+    );
+    assert_eq!(browser.mark_state(root), TreeMarkState::Marked);
+}
