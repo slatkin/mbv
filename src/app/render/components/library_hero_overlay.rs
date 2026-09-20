@@ -99,7 +99,7 @@ mod tests {
         let (buf, inner) = draw(area, overlay, &hints);
         let row_bg = Color::Rgb(30, 35, 38); // PillRow
         let foam = Color::Rgb(58, 148, 197); // HINT_PILL_FILLS[0]
-        let yellow = Color::Rgb(219, 188, 127); // HINT_PILL_FILLS[1]
+        let yellow = Color::Rgb(230, 183, 104); // HINT_PILL_FILLS[1]
         let bar_y = overlay.bottom() - 1;
         let line = row_text(&buf, bar_y, (overlay.x, overlay.right()));
         assert!(line.contains("Enter:Play"));
@@ -132,7 +132,7 @@ mod tests {
         let (buf, _) = draw(area, overlay, &hints);
         let bar_y = overlay.bottom() - 1;
         let foam = Color::Rgb(58, 148, 197);
-        let yellow = Color::Rgb(219, 188, 127);
+        let yellow = Color::Rgb(230, 183, 104);
         let orange = Color::Rgb(229, 152, 117);
         // Chip 0 is "◢A:1◤" = 5 columns and every later chip is "B:2◤" = 4,
         // so a 17-column group in a 60-column row leaves 21 columns to its
