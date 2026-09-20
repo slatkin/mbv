@@ -214,16 +214,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // The queue card's now-playing content is the queue column's content,
-        // so it resolves the content-body pair with the queue column's focus
-        // even though it sits inside the card
-        // (`render/components/card.rs:245-248`).
-        Surface::QueueCardVisualizer => Row {
-            level: Level::ContentBody,
-            focus: FocusSource::QueueColumn,
-            soft: false,
-            resting: SURFACE_RESTING,
-        },
         // --- recess ---
         // The now-playing panel's own content rows follow the panel's fill
         // (`render/components/chrome_player.rs:43,52,65,93,109,197,406`, via
@@ -259,6 +249,17 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: Palette::Grey2.color(),
         },
         // --- chrome band ---
+        // The queue card's visualizer fills the same band the queue playback
+        // panel paints, so it takes that band's value in both focus states
+        // rather than following the queue column's: the reserved slot never
+        // flashes a fill the panel around it does not have
+        // (`render/components/card.rs:233-236`).
+        Surface::QueueCardVisualizer => Row {
+            level: Level::ChromeBand,
+            focus: FocusSource::Fixed,
+            soft: false,
+            resting: SURFACE_CHROME,
+        },
         Surface::StatusBar => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,

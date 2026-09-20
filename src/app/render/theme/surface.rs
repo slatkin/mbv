@@ -151,15 +151,15 @@ declare_surfaces!(
     // a focus-driven one (see `surface_table`'s row doc).
     QueueOnlyPlaybackPanel,
     SidebarBody,
-    // The queue card's now-playing content: an inset by geography, but it
-    // resolves the content-body pair (design D2 row shape).
-    QueueCardVisualizer,
     // --- recess: a non-focusable inset inside a content body ---
     PlaybackRecess,
     PlaybackStatusPill,
     ArtworkPlaceholder,
     ArtworkLoadingPlaceholder,
     // --- chrome band: non-focusable structural chrome ---
+    // The queue card's visualizer fills the queue playback panel's own band,
+    // so it carries that band's value rather than following panel focus.
+    QueueCardVisualizer,
     StatusBar,
     StatusBarPill,
     QueuePanelBand,
