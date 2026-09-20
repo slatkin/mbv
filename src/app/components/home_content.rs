@@ -489,7 +489,6 @@ impl LibraryContentOwner for HomeContent {
         };
         LibraryPanelContent {
             selector,
-            controls: None,
             list,
             hero,
         }
@@ -576,11 +575,8 @@ impl LibraryContentOwner for HomeContent {
                     _ => None,
                 }
             }
-            // Home has no List-controls row, no Workspace and no hero-pane
-            // input of its own.
-            LibrarySlotEvent::ControlPicked(_)
-            | LibrarySlotEvent::WorkspaceSelectorPicked(_)
-            | LibrarySlotEvent::HeroPane(_) => None,
+            // Home has no Workspace and no hero-pane input of its own.
+            LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
             LibrarySlotEvent::HeroActivate => match self
                 .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
                 .external_intent

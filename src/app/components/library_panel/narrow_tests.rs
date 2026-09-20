@@ -1,9 +1,7 @@
 use super::super::wide::text_in;
 use super::*;
 use crate::app::components::inline_search::{InlineSearch, SearchPool};
-use crate::app::components::library_panel::{
-    LibraryPanelContent, ListControls, ListSlot, SelectorRow,
-};
+use crate::app::components::library_panel::{LibraryPanelContent, ListSlot, SelectorRow};
 use crate::app::components::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
 };
@@ -34,9 +32,6 @@ fn narrow_skeleton_keeps_fixed_rows_and_panel_slots() {
             pills: vec!["All".into()],
             active: Some(0),
         }),
-        controls: Some(ListControls {
-            label: "3 items".into(),
-        }),
         list: ListSlot::Media(&mut carrier),
         hero: None,
     };
@@ -63,12 +58,11 @@ fn narrow_skeleton_keeps_fixed_rows_and_panel_slots() {
     assert!(buf[(geometry.selector_bar.x, geometry.selector_bar.y)]
         .symbol()
         .contains(' '));
-    let controls = geometry.controls.expect("controls row reserved");
-    // The row flow is inset inside the list panel: one spacer row of the panel
-    // above it (`PANE_PAD_Y`, the shared browser-pane inset).
+    // The list box follows the Selector band directly; its row flow keeps
+    // the shared browser-pane inset and has no secondary controls row.
     assert_eq!(
         geometry.list_area.y,
-        controls.bottom() + crate::app::render::PANE_PAD_Y
+        geometry.list_panel.y + crate::app::render::PANE_PAD_Y
     );
     assert!(geometry.selected.is_some());
     assert_eq!(carrier.selected_target(), Some(&"beta".to_string()));
@@ -82,7 +76,6 @@ fn fixed_row_owner_clamps_when_narrow_viewport_shrinks_and_restores() {
     carrier.set_scroll(9);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut carrier),
         hero: None,
     };
@@ -120,9 +113,6 @@ fn narrow_search_paints_one_search_bar_and_one_result_list() {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
             active: Some(0),
-        }),
-        controls: Some(ListControls {
-            label: "3 items".into(),
         }),
         list: ListSlot::Search(&mut search),
         hero: None,
@@ -174,7 +164,6 @@ fn narrow_list_box_uses_the_wide_browser_pane_fill_without_stripes() {
         carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
         let mut content = LibraryPanelContent {
             selector: None,
-            controls: None,
             list: ListSlot::Media(&mut carrier),
             hero: None,
         };

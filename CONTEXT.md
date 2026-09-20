@@ -490,7 +490,7 @@ _Avoid_: status bar
 
 **Library panel**:
 The root-composed Panel that owns the shared Wide and Narrow library skeleton.
-Destinations supply typed Selector row, List controls row, list, Hero header,
+Destinations supply typed Selector row, list, Hero header,
 and Workspace content; they do not place or paint those slots. It also owns the
 Library Hero overlay lifecycle and its Library-confined placement and hit
 geometry.
@@ -525,11 +525,6 @@ _Avoid_: now-playing panel
 The Library panel slot for one browse pill bar, such as a letter range, group,
 bucket, section, or the Feeds watched-filter pills followed by feed groups.
 _Avoid_: selector bar
-
-**List controls row**:
-The optional Library panel slot for secondary list controls, such as an Emby
-home-video count. Feeds does not use this row.
-_Avoid_: secondary selector
 
 **Hero header**:
 The Wide Library panel slot for selected-item facts and artwork. Its closed

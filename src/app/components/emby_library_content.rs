@@ -24,7 +24,7 @@ use mbv_core::api::EmbyItem;
 
 use super::inline_search::{InlineSearch, InlineSearchAction, InlineSearchHost};
 use super::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListControls, ListSlot, SelectorRow,
+    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::library_panel::hero::hero_content_emby;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
@@ -70,9 +70,9 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
 }
 
 /// One shell content push (mirrors the Emby library owner's content push, plus the
-/// letter/feed-group pill and home-video-count facts the old
-/// `NarrowBrowseExtras`/wide-Movies pill row carried separately; task 6.1
-/// unifies them into the Selector row and List controls row, design D8).
+/// letter/feed-group pill facts the old `NarrowBrowseExtras`/wide-Movies pill
+/// row carried separately; task 6.1 unifies them into the Selector row,
+/// design D8).
 pub(in crate::app) struct BrowserOwnerPush {
     pub items: Vec<EmbyItem>,
     pub total_count: usize,
@@ -83,8 +83,6 @@ pub(in crate::app) struct BrowserOwnerPush {
     /// (`is_feed_home_video_group_view`): the Selector row shows feed-group
     /// pills instead of letter pills, and `[`/`]` cycles groups.
     pub group_pills: bool,
-    /// Whether the List controls row shows the home-video item-count label.
-    pub home_video: bool,
     pub show_letter_pills: bool,
     pub feed_groups: Vec<String>,
     pub feed_group_cursor: usize,
@@ -101,7 +99,6 @@ pub(in crate::app) struct EmbyLibraryContent {
     letter_filter: Option<LetterFilter>,
     loading: bool,
     group_pills: bool,
-    home_video: bool,
     show_letter_pills: bool,
     feed_groups: Vec<String>,
     feed_group_cursor: usize,
@@ -137,7 +134,6 @@ impl EmbyLibraryContent {
             letter_filter: None,
             loading: false,
             group_pills: false,
-            home_video: false,
             show_letter_pills: false,
             feed_groups: Vec::new(),
             feed_group_cursor: 0,
@@ -161,7 +157,6 @@ impl EmbyLibraryContent {
         self.letter_filter = push.letter_filter;
         self.loading = push.loading;
         self.group_pills = push.group_pills;
-        self.home_video = push.home_video;
         self.show_letter_pills = push.show_letter_pills;
         self.feed_groups = push.feed_groups;
         self.feed_group_cursor = push.feed_group_cursor;
@@ -583,9 +578,6 @@ impl LibraryContentOwner for EmbyLibraryContent {
         } else {
             None
         };
-        let controls = self.home_video.then(|| ListControls {
-            label: format!("{} items", self.total_count),
-        });
         let list = if self.inline_search.is_active() {
             ListSlot::Search(&mut self.inline_search)
         } else if self.items.is_empty() {
@@ -598,7 +590,6 @@ impl LibraryContentOwner for EmbyLibraryContent {
         };
         LibraryPanelContent {
             selector,
-            controls,
             list,
             hero,
         }
@@ -680,11 +671,9 @@ impl LibraryContentOwner for EmbyLibraryContent {
                     _ => None,
                 }
             }
-            // The Browser owner has no List-controls row, no Workspace and
-            // no hero-pane input of its own.
-            LibrarySlotEvent::ControlPicked(_)
-            | LibrarySlotEvent::WorkspaceSelectorPicked(_)
-            | LibrarySlotEvent::HeroPane(_) => None,
+            // The Browser owner has no Workspace and no hero-pane input of
+            // its own.
+            LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
             LibrarySlotEvent::HeroActivate => self
                 .selected_effect_item()
                 .map(|item| Msg::Shell(ShellRequest::EmbyLibraryActivate { item })),

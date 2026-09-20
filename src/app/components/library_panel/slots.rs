@@ -1,10 +1,8 @@
 //! Slot Render Components for the Library panel's Browser-pane rows
 //! (task 5.1): the Selector row (one pill bar + the panel's spacer, with the
-//! bar's `HitRegions` retained by the panel) and the List controls row
-//! (optional pills + optional label). Painters only: typed content in,
+//! bar's `HitRegions` retained by the panel). Painters only: typed content in,
 //! painted rects out; no state, no effects, no destination arm.
 
-use ratatui::layout::Alignment;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
@@ -14,14 +12,14 @@ use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::{render_pill_bar, PillBar, PillBarWindow};
 
-use super::content::{ListControls, SelectorRow};
+use super::content::SelectorRow;
 
 /// Paints one pill-bar row from `labels` plus the active pill's index into
 /// `area`, pushing the painted pills' hitboxes into `hits` and refreshing
 /// `window` — the row's sticky overflow window the caller retains across
 /// frames — with this frame's painted window. The one shared pill-row
-/// painter for every panel site (Selector row, List controls row,
-/// pre-5.6 Workspace selector). `active: None` paints NO active pill (the
+/// painter for every panel site (Selector row and Workspace selector).
+/// `active: None` paints NO active pill (the
 /// `SelectorRow` contract in `content.rs`); an empty label list or a zero
 /// area paints nothing. The caller keeps its own `HitRegions` registry and
 /// window.
@@ -115,24 +113,6 @@ pub(in crate::app) fn paint_pill_row_gap(
     f.render_widget(
         Paragraph::new(" ".repeat(area.width as usize)).style(Style::default().bg(background)),
         area,
-    );
-}
-
-/// Paints one List controls row as a right-aligned plain-text label.
-pub(in crate::app) fn paint_list_controls_row(
-    f: &mut Frame,
-    area: Rect,
-    controls: &ListControls,
-    _hits: &mut HitRegions<usize>,
-) {
-    if area.height == 0 || area.width == 0 {
-        return;
-    }
-    f.render_widget(
-        Paragraph::new(controls.label.clone())
-            .style(Style::default().fg(palette::TEXT_SECONDARY))
-            .alignment(Alignment::Right),
-        Rect { height: 1, ..area },
     );
 }
 
@@ -337,19 +317,5 @@ mod tests {
         );
         let gap_bg = palette::surface_colors(palette::Surface::PillRowGap, false).fill;
         assert_eq!(buf[(spacer.x, spacer.y)].bg, gap_bg);
-    }
-
-    #[test]
-    fn list_controls_row_paints_its_label() {
-        let area = Rect::new(2, 3, 24, 1);
-        let controls = ListControls {
-            label: "17 items".into(),
-        };
-        let mut hits = HitRegions::new();
-        let terminal = draw(28, 5, |f| {
-            paint_list_controls_row(f, area, &controls, &mut hits);
-        });
-        assert!(text_in(terminal.backend().buffer(), area, "17 items"));
-        assert!(hits.regions().is_empty());
     }
 }

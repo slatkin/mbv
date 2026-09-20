@@ -221,7 +221,7 @@ impl FeedsContent {
         self.reset_selection();
     }
 
-    /// Set the Watched filter from a List-controls pill index.
+    /// Set the Watched filter from a Selector-row pill index.
     fn select_watched_filter(&mut self, position: usize) {
         if let Some(filter) = WatchedFilter::from_position(position) {
             self.watched_filter = filter;
@@ -484,7 +484,6 @@ impl LibraryContentOwner for FeedsContent {
             // overflow window follow that group within the combined row.
             active: Some(WatchedFilter::COUNT + self.selected_group),
         });
-        let controls = None;
         let list = if !has_subs {
             ListSlot::Empty {
                 loading: false,
@@ -500,7 +499,6 @@ impl LibraryContentOwner for FeedsContent {
         };
         LibraryPanelContent {
             selector,
-            controls,
             list,
             hero,
         }
@@ -520,7 +518,6 @@ impl LibraryContentOwner for FeedsContent {
                 }
                 None
             }
-            LibrarySlotEvent::ControlPicked(_) => None,
             LibrarySlotEvent::List(input) => match input {
                 MediaListSurfaceInput::Wheel { at, delta } => {
                     // The claim gate mirrors the mounted component: a wheel
@@ -679,7 +676,8 @@ mod tests {
             ["All", "Played", "Unplayed", "All", "A", "B"]
         );
         assert_eq!(selector.active, Some(3));
-        assert!(content.controls.is_none());
+        // The panel's no-secondary-row contract is owned by the shared
+        // `narrow_skeleton_keeps_fixed_rows_and_panel_slots` test.
         drop(content);
 
         owner.cycle_group(1);
@@ -687,9 +685,9 @@ mod tests {
     }
 
     /// Without subscriptions the legacy chrome painted no pill bar at all:
-    /// neither the Selector row nor the List controls row exists.
+    /// the Selector row is absent; the shared panel owns the row structure.
     #[test]
-    fn content_omits_the_controls_row_without_a_watched_filter() {
+    fn content_omits_selector_row_without_subscriptions() {
         let mut owner = FeedsContent::new();
         owner.set_content(FeedsOwnerPush {
             subscriptions: Vec::new(),
@@ -699,7 +697,8 @@ mod tests {
         });
         let content = owner.content();
         assert!(content.selector.is_none());
-        assert!(content.controls.is_none());
+        // Secondary-row absence is covered by the shared panel skeleton test;
+        // this owner test only covers Feeds' empty-state slot projection.
         match content.list {
             ListSlot::Empty { loading, text } => {
                 assert!(!loading);

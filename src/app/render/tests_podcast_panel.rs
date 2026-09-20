@@ -145,10 +145,8 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
             .all(|(rect, _)| rect.y == first_y.unwrap() && rect.height == 1),
         "the Selector row is one pill bar"
     );
-    assert!(
-        wide.controls.is_none(),
-        "podcasts have no List controls row"
-    );
+    // The shared skeleton characterization owns the absence of a secondary
+    // controls row; this test covers the podcast selector and hero/list paint.
     assert!(
         output.contains("Played") && output.contains("Unplayed") && output.contains("All"),
         "{output:?}"

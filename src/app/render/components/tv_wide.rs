@@ -95,7 +95,7 @@ impl App {
     /// Whether the right panel is in the wide Wide hero breakpoint right
     /// now, derived paint-free from the current terminal size. Replaces the
     /// four deleted `is_wide_*_active()` paint-inference predicates: the
-    /// breakpoint (`wide_hero_presentation`) is the same for every
+    /// breakpoint (`wide_hero_fits`) is the same for every
     /// Wide hero destination, so one predicate serves all of them.
     pub(in crate::app) fn is_right_panel_wide(&self) -> bool {
         self.right_panel_lib_area()
@@ -106,7 +106,7 @@ impl App {
     /// workspace owns `lib_idx`, computed paint-free from the current
     /// terminal size — `None` when the library is not a wide-TV series list
     /// or the breakpoint is narrow. Mirrors the exact library-panel gate
-    /// applies (`is_wide_tv_library` + `wide_hero_presentation` on the
+    /// applies (`is_wide_tv_library` + `wide_hero_fits` on the
     /// finalized area), so component mount/focus can be routed a frame
     /// earlier than the deleted previous-frame paint signal this predicate
     /// replaced, which used to flash the narrow browser on entry.

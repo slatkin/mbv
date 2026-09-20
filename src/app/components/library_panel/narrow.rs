@@ -1,8 +1,8 @@
 //! The non-Wide Library panel skeleton. In non-Wide geometry the panel *is*
 //! the Wide browser pane without a Hero (design D1): the shared
-//! browser-pane composition paints the Selector row, the optional List
-//! controls row and the list box, with the same surface identities the Wide
-//! list pane uses, and no Hero pane is painted beside it.
+//! browser-pane composition paints the Selector row and the list box, with the
+//! same surface identities the Wide list pane uses, and no Hero pane is
+//! painted beside it.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -40,7 +40,6 @@ pub(in crate::app) fn render_narrow_skeleton(
     WideSkeletonGeometry {
         browser: area,
         selector_bar: browser.selector_bar,
-        controls: browser.controls,
         list_panel: browser.list_panel,
         list_area: browser.list_area,
         selected: browser.selected,

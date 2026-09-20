@@ -62,7 +62,6 @@ impl TvContent {
             },
             // The hero pane: the episode box's rows, or the pane itself.
             LibrarySlotEvent::HeroPane(input) => self.hero_pane_event(input),
-            LibrarySlotEvent::ControlPicked(_) => None,
         }
     }
 

@@ -147,9 +147,7 @@ impl MusicContent {
                     }
                 }
             }
-            LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::ControlPicked(_) => {
-                None
-            }
+            LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
             LibrarySlotEvent::HeroActivate => {
                 if self.track_focused {
                     let track = self.selected_track_item()?;

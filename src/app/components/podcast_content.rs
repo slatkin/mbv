@@ -470,7 +470,6 @@ impl PodcastContent {
         };
         LibraryPanelContent {
             selector,
-            controls: None,
             list,
             hero,
         }
@@ -596,9 +595,7 @@ impl LibraryContentOwner for PodcastContent {
                 }
             },
             // No Workspace and no hero-pane input of its own (design D1).
-            LibrarySlotEvent::WorkspaceSelectorPicked(_)
-            | LibrarySlotEvent::ControlPicked(_)
-            | LibrarySlotEvent::HeroPane(_) => None,
+            LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
             LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
                 ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
                     self.episodes.selected_target().cloned(),
@@ -846,7 +843,8 @@ mod tests {
             ["All", "Unplayed", "Played", "Alpha Show", "Beta Show"]
         );
         assert_eq!(content.selector.unwrap().active, Some(0));
-        assert!(content.controls.is_none());
+        // Secondary-row absence is owned by the shared panel skeleton test;
+        // this owner test covers the combined state/show selector only.
 
         // `]` walks the whole bar uniformly, state pills included.
         owner.set_focused(true);

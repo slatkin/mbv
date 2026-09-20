@@ -67,7 +67,6 @@ impl LibraryContentOwner for HeroFixtureOwner {
     fn content(&mut self) -> LibraryPanelContent<'_> {
         LibraryPanelContent {
             selector: None,
-            controls: None,
             list: ListSlot::Media(&mut self.carrier),
             hero: Some(HeroContent {
                 facts: self.hero.facts.clone(),
