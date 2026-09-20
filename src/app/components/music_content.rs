@@ -103,9 +103,10 @@ pub struct MusicContent {
     last_album_id: Option<String>,
     pub(in crate::app) inline_search: InlineSearch,
     /// Stable identity of the tree/list that produced a direct artist action.
-    /// The Library panel replaces the initial placeholder on every active-owner
-    /// projection; the shell uses the carried identity for downstream routing.
-    selection_origin: SelectionOrigin,
+    /// The Library panel supplies it on activation. It stays absent until that
+    /// projection so an unprojected component cannot claim Queue as its origin;
+    /// task 4.3 will consume the carried identity for status/bulk-action wiring.
+    selection_origin: Option<SelectionOrigin>,
     hero_image: HeroImageState,
     /// Whether the Library Hero overlay is open over this owner (pushed by
     /// the panel). The overlay takes the Workspace's keyboard focus once, on
@@ -134,7 +135,10 @@ impl MusicContent {
             inline_track_focus_enabled: false,
             last_album_id: None,
             inline_search: InlineSearch::new(),
-            selection_origin: SelectionOrigin::Queue,
+            // There is no honest library identity before the panel's first
+            // active-owner projection. Artist actions wait for that projection
+            // instead of claiming the Queue origin by default.
+            selection_origin: None,
             hero_image: HeroImageState::None,
             hero_overlay_open: false,
         }
@@ -243,33 +247,44 @@ impl MusicContent {
         self.context.list.items.get(index).cloned()
     }
 
-    /// Materializes the tree owner's focused artist scope into the settled
-    /// album items that the existing shell effects already understand. Every
-    /// target must resolve through the component's stable target projection;
-    /// silently dropping one would change the artist's ordered action scope.
-    fn selected_artist_items(&self) -> Option<Vec<EmbyItem>> {
+    /// Resolves the focused artist's settled album targets against the latest
+    /// content snapshot. A sync race may leave one target without an item; keep
+    /// the ordered items that still resolve and return the misses separately so
+    /// the shell can surface feedback instead of silently dropping the action.
+    fn selected_artist_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
         let targets = self.browser.selected_artist_album_targets()?;
         let mut items = Vec::with_capacity(targets.len());
+        let mut unresolved_targets = Vec::new();
         for target in targets {
-            let index = self
+            let Some(index) = self
                 .context
                 .album_targets
                 .iter()
-                .position(|candidate| candidate == &target)?;
-            items.push(self.context.list.items.get(index)?.clone());
+                .position(|candidate| candidate == &target)
+            else {
+                unresolved_targets.push(target);
+                continue;
+            };
+            let Some(item) = self.context.list.items.get(index) else {
+                unresolved_targets.push(target);
+                continue;
+            };
+            items.push(item.clone());
         }
-        Some(items)
+        Some((items, unresolved_targets))
     }
 
     fn artist_action(&self, action: MusicTreeAction) -> Option<Msg> {
-        let items = self.selected_artist_items()?;
-        if items.is_empty() {
+        let origin = self.selection_origin.clone()?;
+        let (items, unresolved_targets) = self.selected_artist_items()?;
+        if items.is_empty() && unresolved_targets.is_empty() {
             return None;
         }
         Some(Msg::Shell(ShellRequest::MusicArtistAction {
             action,
             items,
-            origin: self.selection_origin.clone(),
+            origin,
+            unresolved_targets,
         }))
     }
 
@@ -537,9 +552,10 @@ impl LibraryContentOwner for MusicContent {
         &mut self,
         origin: crate::app::components::media_list::SelectionOrigin,
     ) {
-        // The same stable owner identity used by canonical lists also tags
-        // direct artist actions. Task 4.2 will reuse it for tree Visual mode.
-        self.selection_origin = origin;
+        // The panel's active-owner projection records this identity for the
+        // task-4.3 status/bulk-action wiring. Direct artist actions carry it,
+        // but the shell does not consume it until that task lands.
+        self.selection_origin = Some(origin);
     }
 
     fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
@@ -762,7 +778,7 @@ impl LibraryContentOwner for MusicContent {
             }
             Key::Char('.') => {
                 if self.selected_is_artist() {
-                    let items = self.selected_artist_items()?;
+                    let (items, _unresolved_targets) = self.selected_artist_items()?;
                     if items.is_empty() {
                         return None;
                     }

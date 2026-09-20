@@ -32,12 +32,17 @@ pub enum ShellRequest {
         kind: AlbumCursorKind,
     },
     /// A focused artist root resolved by the tree owner to ordered album
-    /// items. `origin` is the stable tree/list identity supplied by the
-    /// Library panel; the shell does not reconstruct artist scope.
+    /// items. `origin` is the stable tree/list identity recorded for the
+    /// task-4.3 status/bulk-action wiring; this task carries it across the
+    /// boundary, but the shell does not consume it yet or reconstruct artist
+    /// scope. `unresolved_targets` reports album identities that disappeared
+    /// between tree and content projections so the shell can provide feedback
+    /// without dropping the targets that did resolve.
     MusicArtistAction {
         action: super::intents::MusicTreeAction,
         items: Vec<EmbyItem>,
         origin: SelectionOrigin,
+        unresolved_targets: Vec<String>,
     },
     /// Activate the selected album in non-Wide mode by opening its Library
     /// Hero overlay. Carries the component-resolved album so the shell effect

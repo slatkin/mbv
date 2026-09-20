@@ -134,7 +134,7 @@ impl MusicContent {
                             let (_id, index) = self.browser.hit_node(at)?;
                             self.browser.select_index(index);
                             if self.browser.selected_is_artist() {
-                                let items = self.selected_artist_items()?;
+                                let (items, _unresolved_targets) = self.selected_artist_items()?;
                                 if items.is_empty() {
                                     return None;
                                 }

@@ -99,28 +99,51 @@ impl Model {
                         action,
                         items,
                         origin: _origin,
+                        unresolved_targets,
                     } => {
-                        // The tree has already materialized the ordered album
-                        // items. Reuse the existing selection effects so
-                        // owner admission, queue routing, and capability
-                        // handling remain downstream and centralized.
-                        let action = match action {
-                            crate::app::components::msg::MusicTreeAction::Play => {
-                                crate::app::types_context_menu::ContextAction::PlaySelection(items)
-                            }
-                            crate::app::components::msg::MusicTreeAction::Enqueue => {
-                                crate::app::types_context_menu::ContextAction::EnqueueSelection(
-                                    items,
-                                )
-                            }
-                            crate::app::components::msg::MusicTreeAction::Shuffle => {
-                                crate::app::types_context_menu::ContextAction::ShuffleSelection(
-                                    items,
-                                )
-                            }
-                        };
+                        // `origin` is recorded for task 4.3's status/bulk-action
+                        // wiring; it is intentionally not consumed here.
+                        // Album rows are folders, so never submit them through
+                        // flat PlaySelection/ShuffleSelection. Re-enter the
+                        // existing per-album browser effects instead: those
+                        // paths expand each folder before owner admission.
                         self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                        self.app.execute_context_action(Some(action), None);
+                        let had_items = !items.is_empty();
+                        for item in items {
+                            let request = match action {
+                                crate::app::components::msg::MusicTreeAction::Play => {
+                                    ShellRequest::EmbyLibraryPlay { item }
+                                }
+                                crate::app::components::msg::MusicTreeAction::Enqueue => {
+                                    ShellRequest::EmbyLibraryEnqueue { item }
+                                }
+                                crate::app::components::msg::MusicTreeAction::Shuffle => {
+                                    ShellRequest::EmbyLibraryShuffle { item }
+                                }
+                            };
+                            self.handle_emby_library_request(request);
+                        }
+                        if unresolved_targets.is_empty() {
+                            if !had_items {
+                                self.app.flash(
+                                    "No artist albums available".into(),
+                                    ToastSeverity::Neutral,
+                                );
+                            }
+                        } else {
+                            self.app.flash(
+                                format!(
+                                    "{} artist album{} unavailable",
+                                    unresolved_targets.len(),
+                                    if unresolved_targets.len() != 1 {
+                                        "s"
+                                    } else {
+                                        ""
+                                    }
+                                ),
+                                ToastSeverity::Warning,
+                            );
+                        }
                         self.push_music_workspace_content();
                     }
                     // Inline album-track activation/enqueue/context-menu

@@ -226,6 +226,9 @@ fn tree_owner_with_tracks(
             let mut album = make_item(target, "MusicAlbum");
             album.id = (*target).to_string();
             album.artist = (*artist).to_string();
+            // Grouped Music album rows are folder targets: shell actions must
+            // expand them through the existing per-folder playback effects.
+            album.is_folder = true;
             items.push(album);
             album_info.push((
                 (*artist).to_string(),
@@ -252,6 +255,15 @@ fn tree_owner_with_tracks(
     );
     let mut owner = MusicContent::new();
     owner.set_content(ctx);
+    owner.selection_origin = Some(SelectionOrigin::Library(
+        crate::app::components::media_list::LibrarySelectionOrigin::Service(
+            crate::app::components::library_panel::owner::LibraryKey::Service {
+                service: mbv_core::config::ServiceKind::Emby,
+                library_id: "music-library".into(),
+                kind: crate::app::components::library_panel::owner::LibraryKind::Music,
+            },
+        ),
+    ));
     owner
 }
 
@@ -692,6 +704,7 @@ fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicConten
             let mut album = make_item(target, "MusicAlbum");
             album.id = (*target).to_string();
             album.artist = (*artist).to_string();
+            album.is_folder = true;
             items.push(album);
             album_info.push((
                 (*artist).to_string(),
@@ -717,6 +730,15 @@ fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicConten
         order,
         None,
     ));
+    owner.selection_origin = Some(SelectionOrigin::Library(
+        crate::app::components::media_list::LibrarySelectionOrigin::Service(
+            crate::app::components::library_panel::owner::LibraryKey::Service {
+                service: mbv_core::config::ServiceKind::Emby,
+                library_id: "music-library".into(),
+                kind: crate::app::components::library_panel::owner::LibraryKind::Music,
+            },
+        ),
+    ));
     owner
 }
 
@@ -730,11 +752,31 @@ fn artist_action_ids(owner: &mut MusicContent, code: Key) -> Vec<String> {
         },
     });
     let items = match message {
-        Some(Msg::Shell(ShellRequest::MusicArtistAction { items, .. })) => items,
+        Some(Msg::Shell(ShellRequest::MusicArtistAction {
+            items,
+            unresolved_targets,
+            ..
+        })) => {
+            assert!(
+                unresolved_targets.is_empty(),
+                "settled artist fixture should resolve every album target"
+            );
+            assert!(
+                items.iter().all(|item| item.is_folder),
+                "artist play/enqueue/shuffle requests carry folder album targets"
+            );
+            items
+        }
         Some(Msg::Shell(ShellRequest::RowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
             _,
-        ))) => items,
+        ))) => {
+            assert!(
+                items.iter().all(|item| item.is_folder),
+                "artist context requests carry folder album targets"
+            );
+            items
+        }
         other => panic!("expected an artist album action for {code:?}, got {other:?}"),
     };
     items.into_iter().map(|item| item.id).collect()
@@ -798,6 +840,61 @@ fn filtered_artist_actions_materialize_only_matching_leaves_in_settled_order() {
         artist_action_ids(&mut owner, Key::Char('.')),
         vec!["a-1".to_string(), "a-3".to_string()]
     );
+}
+
+#[test]
+fn partially_unresolved_artist_actions_keep_ordered_targets_and_report_misses() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    press(&mut owner, Key::Home);
+    // Simulate a tree/content sync race: the tree still has both leaves, but
+    // the latest content snapshot only resolves the first one.
+    owner.context.album_targets = vec!["a-0".into(), "stale-target".into()];
+    owner.context.list.items.truncate(1);
+
+    for code in [Key::Char('p'), Key::Char('a'), Key::Char('s')] {
+        let message = owner.on_key(&KeyEvent {
+            code,
+            modifiers: KeyModifiers::CONTROL,
+        });
+        match message {
+            Some(Msg::Shell(ShellRequest::MusicArtistAction {
+                items,
+                unresolved_targets,
+                ..
+            })) => {
+                assert_eq!(
+                    items.into_iter().map(|item| item.id).collect::<Vec<_>>(),
+                    vec!["a-0"],
+                    "a resolved album must survive a stale sibling target"
+                );
+                assert_eq!(unresolved_targets, vec!["a-1"]);
+            }
+            other => panic!("expected a partial artist action for {code:?}, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn fully_unresolved_artist_action_requests_shell_feedback() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    press(&mut owner, Key::Home);
+    owner.context.album_targets.clear();
+    owner.context.list.items.clear();
+
+    match owner.on_key(&KeyEvent {
+        code: Key::Char('p'),
+        modifiers: KeyModifiers::CONTROL,
+    }) {
+        Some(Msg::Shell(ShellRequest::MusicArtistAction {
+            items,
+            unresolved_targets,
+            ..
+        })) => {
+            assert!(items.is_empty());
+            assert_eq!(unresolved_targets, vec!["a-0", "a-1"]);
+        }
+        other => panic!("expected shell feedback request, got {other:?}"),
+    }
 }
 
 #[test]
