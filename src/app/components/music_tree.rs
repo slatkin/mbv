@@ -1233,8 +1233,8 @@ fn rearm_selection_visibility_for(state: &mut TreeListViewState<usize>) {
 fn tree_glyphs(use_nerd_fonts: bool) -> TreeGlyphs<'static> {
     let mut glyphs = TreeGlyphs::unicode();
     if use_nerd_fonts {
-        glyphs.expanded = "\u{f0d7}";
-        glyphs.collapsed = "\u{f0da}";
+        glyphs.expanded = "\u{f135a}";
+        glyphs.collapsed = "\u{f1359}";
     }
     glyphs
 }

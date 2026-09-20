@@ -722,7 +722,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
 /// hierarchy guides — keeps the crate's Unicode default in both states.
 #[rstest]
 #[case(false, '▼', '▶')]
-#[case(true, '\u{f0d7}', '\u{f0da}')]
+#[case(true, '\u{f135a}', '\u{f1359}')]
 fn music_tree_expansion_glyphs_follow_the_nerd_font_setting(
     #[case] use_nerd_fonts: bool,
     #[case] expanded: char,

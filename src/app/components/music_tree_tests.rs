@@ -362,8 +362,8 @@ fn tree_glyphs_override_only_the_expansion_pair_when_nerd_fonts_are_on() {
     );
 
     let nerd = super::tree_glyphs(true);
-    assert_eq!(nerd.expanded, "\u{f0d7}", "Nerd Font angle-down");
-    assert_eq!(nerd.collapsed, "\u{f0da}", "Nerd Font angle-right");
+    assert_eq!(nerd.expanded, "\u{f135a}", "Nerd Font angle-down");
+    assert_eq!(nerd.collapsed, "\u{f1359}", "Nerd Font angle-right");
     assert_eq!(nerd.branch, unicode.branch);
     assert_eq!(nerd.branch_last, unicode.branch_last);
     assert_eq!(nerd.vert, unicode.vert);
