@@ -17,6 +17,7 @@ use super::intents::{
     SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
+use crate::app::components::media_list::SelectionOrigin;
 use crate::app::types_context_menu::ContextMenuTargets;
 use crate::app::types_playback::QueueScope;
 
@@ -29,6 +30,14 @@ pub enum ShellRequest {
     MusicAlbumCursor {
         target: usize,
         kind: AlbumCursorKind,
+    },
+    /// A focused artist root resolved by the tree owner to ordered album
+    /// items. `origin` is the stable tree/list identity supplied by the
+    /// Library panel; the shell does not reconstruct artist scope.
+    MusicArtistAction {
+        action: super::intents::MusicTreeAction,
+        items: Vec<EmbyItem>,
+        origin: SelectionOrigin,
     },
     /// Activate the selected album in non-Wide mode by opening its Library
     /// Hero overlay. Carries the component-resolved album so the shell effect

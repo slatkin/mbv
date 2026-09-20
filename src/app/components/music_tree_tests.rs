@@ -10,7 +10,7 @@
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
-use tui_treelistview::{TreeFilterConfig, TreeMarkState, TreeRevision};
+use tui_treelistview::{TreeMarkState, TreeModel, TreeRevision};
 
 use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::components::media_list::MediaSemanticState;
@@ -576,9 +576,10 @@ fn a_geometry_change_does_not_persist_filter_forced_expansion() {
     let mut browser = MusicTreeBrowser::new(model);
 
     // A filter policy force-expands matching paths in the projection while
-    // leaving persistent expansion untouched (design D5). `NoFilter` matches
-    // every node, so the whole tree projects under forced expansion.
-    browser.query.set_filter_config(TreeFilterConfig::enabled());
+    // leaving persistent expansion untouched (design D5). Matching every
+    // current node projects the whole tree under forced expansion.
+    let matching: Vec<usize> = (0..browser.model.size_hint()).collect();
+    browser.set_filter_matches(Some(&matching));
     frame(&mut browser, 10);
     assert!(
         !browser.root_is_expanded(alpha_root),

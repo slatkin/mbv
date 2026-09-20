@@ -133,14 +133,22 @@ impl MusicContent {
                             }
                             let (_id, index) = self.browser.hit_node(at)?;
                             self.browser.select_index(index);
-                            // An artist root has no album to contextualize
-                            // (task 4.1 scope); a focused album leaf resolves
-                            // its generic library context menu.
-                            let item = self.selected_item()?;
-                            Some(Msg::Shell(ShellRequest::RowContextMenu(
-                                crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
-                                Some((at.x, at.y)),
-                            )))
+                            if self.browser.selected_is_artist() {
+                                let items = self.selected_artist_items()?;
+                                if items.is_empty() {
+                                    return None;
+                                }
+                                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                                    Some((at.x, at.y)),
+                                )))
+                            } else {
+                                let item = self.selected_item()?;
+                                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                                    Some((at.x, at.y)),
+                                )))
+                            }
                         }
                         _ => None,
                     }

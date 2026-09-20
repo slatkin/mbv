@@ -77,6 +77,16 @@ pub enum AlbumCursorKind {
     Page,
 }
 
+/// Direct actions over a focused Grouped Music artist. The tree owner resolves
+/// the artist root to ordered album items before this intent crosses the
+/// component boundary; the artist identity itself is never a target.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MusicTreeAction {
+    Play,
+    Enqueue,
+    Shuffle,
+}
+
 /// Closed set of podcast episode action intents (task 5.3d.7). The component
 /// emits the intent matched from Space/Enter/Ctrl+A; the shell runs the App
 /// play/enqueue effect directly — episodes are the tab's leaf rows, so there

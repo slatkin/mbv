@@ -18,9 +18,9 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaSemanticState, RowIntent,
+    MediaSemanticState, RowIntent, SelectionOrigin,
 };
-use super::msg::{AlbumCursorKind, Msg, ShellRequest};
+use super::msg::{AlbumCursorKind, Msg, MusicTreeAction, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
 use super::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::render::MusicWideRenderCtx;
@@ -102,6 +102,10 @@ pub struct MusicContent {
     pub(in crate::app) inline_track_focus_enabled: bool,
     last_album_id: Option<String>,
     pub(in crate::app) inline_search: InlineSearch,
+    /// Stable identity of the tree/list that produced a direct artist action.
+    /// The Library panel replaces the initial placeholder on every active-owner
+    /// projection; the shell uses the carried identity for downstream routing.
+    selection_origin: SelectionOrigin,
     hero_image: HeroImageState,
     /// Whether the Library Hero overlay is open over this owner (pushed by
     /// the panel). The overlay takes the Workspace's keyboard focus once, on
@@ -130,6 +134,7 @@ impl MusicContent {
             inline_track_focus_enabled: false,
             last_album_id: None,
             inline_search: InlineSearch::new(),
+            selection_origin: SelectionOrigin::Queue,
             hero_image: HeroImageState::None,
             hero_overlay_open: false,
         }
@@ -236,6 +241,36 @@ impl MusicContent {
             .iter()
             .position(|candidate| candidate == target)?;
         self.context.list.items.get(index).cloned()
+    }
+
+    /// Materializes the tree owner's focused artist scope into the settled
+    /// album items that the existing shell effects already understand. Every
+    /// target must resolve through the component's stable target projection;
+    /// silently dropping one would change the artist's ordered action scope.
+    fn selected_artist_items(&self) -> Option<Vec<EmbyItem>> {
+        let targets = self.browser.selected_artist_album_targets()?;
+        let mut items = Vec::with_capacity(targets.len());
+        for target in targets {
+            let index = self
+                .context
+                .album_targets
+                .iter()
+                .position(|candidate| candidate == &target)?;
+            items.push(self.context.list.items.get(index)?.clone());
+        }
+        Some(items)
+    }
+
+    fn artist_action(&self, action: MusicTreeAction) -> Option<Msg> {
+        let items = self.selected_artist_items()?;
+        if items.is_empty() {
+            return None;
+        }
+        Some(Msg::Shell(ShellRequest::MusicArtistAction {
+            action,
+            items,
+            origin: self.selection_origin.clone(),
+        }))
     }
 
     /// Whether the tree's focused node is an artist root (task 2.2: an artist
@@ -500,10 +535,11 @@ impl LibraryContentOwner for MusicContent {
 
     fn set_selection_origin(
         &mut self,
-        _origin: crate::app::components::media_list::SelectionOrigin,
+        origin: crate::app::components::media_list::SelectionOrigin,
     ) {
-        // The tree has no Visual-mode selection origin yet; task 4.2 reconnects
-        // the tree's multi-selection to the shared origin projection.
+        // The same stable owner identity used by canonical lists also tags
+        // direct artist actions. Task 4.2 will reuse it for tree Visual mode.
+        self.selection_origin = origin;
     }
 
     fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
@@ -556,6 +592,19 @@ impl LibraryContentOwner for MusicContent {
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Music is focused.
         if key.modifiers.contains(KeyModifiers::CONTROL) && !self.track_focused {
+            if self.selected_is_artist() {
+                return match key.code {
+                    Key::Char('p') => self.artist_action(MusicTreeAction::Play),
+                    Key::Char('a') => self.artist_action(MusicTreeAction::Enqueue),
+                    Key::Char('s') => self.artist_action(MusicTreeAction::Shuffle),
+                    // Artist roots are grouping rows, so watched-state is
+                    // unavailable while the library-wide rescan remains
+                    // available from every focused library row.
+                    Key::Char('w') => None,
+                    Key::Char('r') => Some(Msg::Shell(ShellRequest::EmbyLibraryRescan)),
+                    _ => None,
+                };
+            }
             let item = self.selected_item();
             return match key.code {
                 Key::Char('p') => {
@@ -712,15 +761,23 @@ impl LibraryContentOwner for MusicContent {
                 }
             }
             Key::Char('.') => {
-                // The tree's focused album leaf resolves the generic library
-                // context menu; an artist root has no album to contextualize
-                // (artist-root materialization is task 4.1 scope).
-                self.selected_item().map(|item| {
-                    Msg::Shell(ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                if self.selected_is_artist() {
+                    let items = self.selected_artist_items()?;
+                    if items.is_empty() {
+                        return None;
+                    }
+                    Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                         None,
-                    ))
-                })
+                    )))
+                } else {
+                    self.selected_item().map(|item| {
+                        Msg::Shell(ShellRequest::RowContextMenu(
+                            crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                            None,
+                        ))
+                    })
+                }
             }
             Key::Char('r')
                 if !self.track_focused

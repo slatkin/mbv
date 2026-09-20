@@ -95,6 +95,34 @@ impl Model {
                         }
                         self.push_music_workspace_content();
                     }
+                    ShellRequest::MusicArtistAction {
+                        action,
+                        items,
+                        origin: _origin,
+                    } => {
+                        // The tree has already materialized the ordered album
+                        // items. Reuse the existing selection effects so
+                        // owner admission, queue routing, and capability
+                        // handling remain downstream and centralized.
+                        let action = match action {
+                            crate::app::components::msg::MusicTreeAction::Play => {
+                                crate::app::types_context_menu::ContextAction::PlaySelection(items)
+                            }
+                            crate::app::components::msg::MusicTreeAction::Enqueue => {
+                                crate::app::types_context_menu::ContextAction::EnqueueSelection(
+                                    items,
+                                )
+                            }
+                            crate::app::components::msg::MusicTreeAction::Shuffle => {
+                                crate::app::types_context_menu::ContextAction::ShuffleSelection(
+                                    items,
+                                )
+                            }
+                        };
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                        self.app.execute_context_action(Some(action), None);
+                        self.push_music_workspace_content();
+                    }
                     // Inline album-track activation/enqueue/context-menu
                     // target resolution: the component owns the cursor,
                     // the shell resolves it to the cached track and runs

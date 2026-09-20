@@ -31,7 +31,7 @@
 //! fixed-width cell per row, reserved only on rows that carry a year, so a
 //! yearless row's title keeps the full width.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use ratatui::layout::{Position, Rect};
@@ -40,8 +40,9 @@ use ratatui::text::Span;
 use ratatui::widgets::{Cell, StatefulWidget};
 use tui_treelistview::{
     tree_label_line, ColumnDef, ColumnWidth, ProjectedNode, TreeChildren, TreeColumnSet,
-    TreeGlyphs, TreeHit, TreeLabelPrefix, TreeLabelRenderer, TreeListView, TreeListViewState,
-    TreeMarkState, TreeModel, TreeQuery, TreeRevision, TreeRowContext,
+    TreeFilter, TreeFilterConfig, TreeGlyphs, TreeHit, TreeLabelPrefix, TreeLabelRenderer,
+    TreeListView, TreeListViewState, TreeMarkState, TreeModel, TreeQuery, TreeRevision,
+    TreeRowContext,
 };
 
 use unicode_width::UnicodeWidthStr;
@@ -367,6 +368,20 @@ impl TreeModel for MusicTreeModel {
     }
 }
 
+/// The destination-local matching projection used by the tree owner. The
+/// eventual fuzzy filter (task 5.1) supplies matching album/root ids through
+/// this same seam; expansion never participates in the action scope.
+#[derive(Clone, Debug, Default)]
+struct MusicTreeFilter {
+    matching: HashSet<usize>,
+}
+
+impl TreeFilter<MusicTreeModel> for MusicTreeFilter {
+    fn is_match(&self, _model: &MusicTreeModel, id: usize) -> bool {
+        self.matching.contains(&id)
+    }
+}
+
 /// Width of the hierarchy guides + expansion glyph prefix `tree_label_line`
 /// paints before a row's name: `level` three-column guides, then one
 /// separator, the one-column state glyph, and one separator.
@@ -530,13 +545,13 @@ fn semantic_role(state: &MediaSemanticState) -> ratatui::style::Color {
 
 /// The Grouped Music tree browser: one `TreeListViewState` owner over the
 /// destination-local model, painted through the crate's widget. The query
-/// stays unfiltered and unsorted (settled order) until the filter session
-/// lands; `TreeQuery` remains that seam. Task 2.4 maps the destination's local
+/// remains unsorted (settled order); its matching predicate is disabled until
+/// the filter session feeds the owner-local seam. Task 2.4 maps the destination's local
 /// chords (visible-node movement, Home/End, paging, parent/child, root
 /// expansion) onto this owner's operations; the crate keymap stays disabled.
 pub(in crate::app) struct MusicTreeBrowser {
     model: MusicTreeModel,
-    query: TreeQuery,
+    query: TreeQuery<MusicTreeFilter>,
     state: TreeListViewState<usize>,
     focused: bool,
     marquee_key: String,
@@ -557,7 +572,11 @@ pub(in crate::app) struct MusicTreeBrowser {
 
 impl MusicTreeBrowser {
     pub(in crate::app) fn new(model: MusicTreeModel) -> Self {
-        let query = TreeQuery::new();
+        let query = TreeQuery::new().with_filter(
+            MusicTreeFilter::default(),
+            TreeFilterConfig::Disabled,
+            TreeRevision::INITIAL,
+        );
         let mut state = TreeListViewState::with_capacity(model.size_hint());
         state.ensure_projection(&model, &query);
         state.select_index((!state.is_empty()).then_some(0));
@@ -707,6 +726,60 @@ impl MusicTreeBrowser {
         self.state
             .selected_id()
             .and_then(|id| self.model.target_of(id))
+    }
+
+    /// Returns the focused artist's album targets in settled order. The walk
+    /// intentionally reads the model's child list rather than the expanded
+    /// projection: a collapsed root has the same action scope as an expanded
+    /// root. When filtering is enabled, the current tree projection is the
+    /// visibility predicate, so only matching leaves cross the component
+    /// boundary. A non-artist selection is not an artist action; an empty
+    /// artist returns an empty list so callers can handle that case explicitly.
+    pub(in crate::app) fn selected_artist_album_targets(&self) -> Option<Vec<String>> {
+        let root = self.selected_id()?;
+        if !self.model.is_artist(root) {
+            return None;
+        }
+        let filtered = !matches!(self.query.filter_config(), TreeFilterConfig::Disabled);
+        let visible = |id| {
+            !filtered
+                || self
+                    .state
+                    .projection()
+                    .nodes()
+                    .iter()
+                    .any(|node| node.id() == id && node.parent() == Some(root))
+        };
+        Some(
+            self.model.children[root]
+                .iter()
+                .copied()
+                .filter(|id| visible(*id))
+                .filter_map(|id| self.model.target_of(id).map(str::to_owned))
+                .collect(),
+        )
+    }
+
+    /// Replaces the owner-local matching projection without creating a second
+    /// filter owner. `None` disables filtering; `Some(&[])` is an active
+    /// no-match filter. Task 5.1 can feed fuzzy-matched node ids here after
+    /// its debounce while this task's action walk already respects them.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(in crate::app) fn set_filter_matches(&mut self, matching: Option<&[usize]>) {
+        {
+            let filter = self.query.filter_mut();
+            filter.matching.clear();
+            if let Some(matching) = matching {
+                filter.matching.extend(matching.iter().copied());
+            }
+        }
+        self.query.set_filter_config(match matching {
+            Some(_) => TreeFilterConfig::enabled(),
+            None => TreeFilterConfig::Disabled,
+        });
+        self.state.ensure_projection(&self.model, &self.query);
+        self.state.ensure_mark_states(&self.model);
+        self.invalidate();
     }
 
     /// The album-selection persistence request for the shell (design D3 step
