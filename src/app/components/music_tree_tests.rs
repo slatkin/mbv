@@ -1,12 +1,18 @@
-//! Task 2.1 focused cases for the Grouped Music tree model: the
-//! destination-local node arena (monotonic non-reused ids, settled ordering,
-//! atomic model revision, and node-to-domain translation), refresh retention,
-//! deletion tombstoning, equal-name separation, and destination reset. The
-//! browser's selection/viewport ownership is task 2.2 scope.
+//! Task 2.1 focused cases for the Grouped Music tree model and task 2.2
+//! focused cases for the one state owner over it: the destination-local node
+//! arena (monotonic non-reused ids, settled ordering, atomic model revision,
+//! and node-to-domain translation), refresh retention, deletion tombstoning,
+//! equal-name separation, and destination reset; then selected-node and
+//! expansion retention, viewport continuity/clamping, missing-node fallback,
+//! multi-selection survival, projection-cache invalidation, and the
+//! album-selection persistence guard.
 
-use tui_treelistview::TreeRevision;
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
+use ratatui::Terminal;
+use tui_treelistview::{TreeMarkState, TreeRevision};
 
-use super::{MusicNodeKey, MusicTreeEntry, MusicTreeModel};
+use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::music_grouping::ArtistKey;
 
 fn entry(
@@ -279,4 +285,285 @@ fn node_to_domain_translation_maps_artist_keys_and_album_targets() {
     assert_eq!(model.target_of(alpha_root), None);
     assert!(model.is_artist(alpha_root));
     assert!(!model.is_artist(album_2));
+}
+
+/// A two-artist corpus large enough to overflow a five-row viewport: Alpha
+/// and Beta with twelve albums each. Arena ids follow settled order (Alpha
+/// root, its leaves, Beta root, its leaves).
+fn viewport_entries() -> Vec<MusicTreeEntry> {
+    let mut entries = Vec::new();
+    for (artist, key, target_prefix) in [
+        ("Alpha", "artist-alpha", "alpha"),
+        ("Beta", "artist-beta", "beta"),
+    ] {
+        for i in 0..12 {
+            entries.push(entry(
+                artist,
+                ArtistKey::Service(key.into()),
+                &format!("{artist} {i:02}"),
+                &format!("{target_prefix}-{i}"),
+                "2001",
+            ));
+        }
+    }
+    entries
+}
+
+const VIEW_WIDTH: u16 = 40;
+
+fn expand_all_roots(browser: &mut MusicTreeBrowser) {
+    for root in 0..browser.projection_len() {
+        let id = browser.projected_nodes()[root].id();
+        if browser.target_of(id).is_none() {
+            browser.expand_root(id);
+        }
+    }
+}
+
+/// One component-level frame at a `VIEW_WIDTH` × `height` browser rect. The
+/// owner's viewport, mark aggregate, and hit map settle exactly as they do
+/// when the mounted view paints.
+fn frame(browser: &mut MusicTreeBrowser, height: u16) {
+    let area = Rect::new(0, 0, VIEW_WIDTH, height);
+    let mut term = Terminal::new(TestBackend::new(area.width, area.height)).expect("test terminal");
+    term.draw(|f| browser.view(f, area)).expect("tree frame");
+}
+
+fn projection_row(browser: &MusicTreeBrowser, id: usize) -> usize {
+    browser
+        .projected_nodes()
+        .iter()
+        .position(|node| node.id() == id)
+        .expect("node is projected")
+}
+
+fn assert_selection_visible(browser: &MusicTreeBrowser, height: usize) {
+    let selected = projection_row(browser, browser.selected_id().expect("a node is selected"));
+    let offset = browser.offset();
+    assert!(
+        selected >= offset && selected < offset + height,
+        "selection row {selected} outside the viewport {offset}..{}",
+        offset + height
+    );
+}
+
+#[test]
+fn settled_replacement_retains_the_selected_node_expansion_and_marks() {
+    let entries = base_entries();
+    let model = MusicTreeModel::from_entries(&entries);
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let beta_root = artist_id(&model, ArtistKey::Service("artist-beta".into())).expect("beta root");
+    let album_1 = album_id(&model, "album-1").expect("album-1 interned");
+    let album_2 = album_id(&model, "album-2").expect("album-2 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_root(alpha_root);
+    browser.expand_root(beta_root);
+    browser.select_id(album_1);
+
+    // Aggregate root state is derived: an artist root is never a stored
+    // mark target (design D6).
+    assert!(
+        !browser.set_marked(alpha_root, true),
+        "artist roots are not stored mark targets"
+    );
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Unmarked);
+    browser.set_marked(album_1, true);
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Partial);
+
+    // A settled replacement that still contains the selected leaf and both
+    // expanded roots rebuilds the projection but keeps the owner's state.
+    let mut grown = base_entries();
+    grown.push(beta("album-4", "New Beta"));
+    assert!(
+        browser.reconcile(&grown),
+        "a settled change rebuilds the projection"
+    );
+    assert_eq!(browser.selected_id(), Some(album_1));
+    assert!(browser.root_is_expanded(alpha_root));
+    assert!(browser.root_is_expanded(beta_root));
+    assert_eq!(browser.projection_len(), 6);
+    assert_eq!(browser.mark_state(album_1), TreeMarkState::Marked);
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Partial);
+    assert_eq!(browser.mark_state(beta_root), TreeMarkState::Unmarked);
+
+    // The surviving mark lifts to Marked once the second leaf is marked.
+    browser.set_marked(album_2, true);
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+}
+
+#[test]
+fn a_settled_change_invalidates_the_projection_but_a_no_op_reconcile_does_not() {
+    let entries = base_entries();
+    let model = MusicTreeModel::from_entries(&entries);
+    let album_1 = album_id(&model, "album-1").expect("album-1 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+    frame(&mut browser, 10);
+
+    // The crate caches the projection behind a stamp containing the model's
+    // `TreeRevision`; an unchanged revision (identical settled content) keeps
+    // the stamp equal, so no rebuild is reported and the offset is untouched.
+    assert!(
+        !browser.reconcile(&entries),
+        "a no-op reconcile holds the cached projection"
+    );
+    assert_eq!(browser.title_of(album_1), "First Album");
+
+    // A real settled change advances the model revision, the stamp no longer
+    // matches, and the projection rebuilds from the new settled content.
+    let renamed = vec![alpha("album-1", "Renamed Album")];
+    assert!(
+        browser.reconcile(&renamed),
+        "a changed revision invalidates the cached projection"
+    );
+    assert_eq!(browser.title_of(album_1), "Renamed Album");
+    assert_eq!(
+        browser.projection_len(),
+        1,
+        "only the collapsed root projects"
+    );
+}
+
+#[test]
+fn viewport_keeps_its_offset_and_scrolls_only_the_minimum() {
+    let entries = viewport_entries();
+    let model = MusicTreeModel::from_entries(&entries);
+    let alpha_5 = album_id(&model, "alpha-5").expect("alpha-5 interned");
+    let beta_11 = album_id(&model, "beta-11").expect("beta-11 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+    expand_all_roots(&mut browser);
+
+    // Scroll the selected leaf to the viewport's last row.
+    browser.select_id(alpha_5);
+    frame(&mut browser, 5);
+    assert_eq!(browser.offset(), 2, "the leaf sits at the viewport bottom");
+    assert_selection_visible(&browser, 5);
+
+    // A settled insertion *after* the selection leaves the offset exactly
+    // where it was (bounds still permit).
+    let mut appended = entries.clone();
+    appended.push(beta("beta-12", "Beta Twelve"));
+    assert!(browser.reconcile(&appended));
+    frame(&mut browser, 5);
+    assert_eq!(browser.offset(), 2, "the prior viewport row is preserved");
+    assert_selection_visible(&browser, 5);
+
+    // A settled insertion *before* the selection pushes the leaf out of the
+    // window: the viewport scrolls only the minimum needed to keep it
+    // visible, not to the top and not centered.
+    let mut prepended = vec![entry(
+        "Aardvark",
+        ArtistKey::Service("artist-aardvark".into()),
+        "Aardvark Album",
+        "aardvark-1",
+        "1999",
+    )];
+    prepended.extend(entries.iter().cloned());
+    assert!(browser.reconcile(&prepended));
+    frame(&mut browser, 5);
+    let selected_row = projection_row(&browser, alpha_5);
+    assert_eq!(
+        browser.offset(),
+        selected_row + 1 - 5,
+        "only the minimum scroll keeps the selection visible"
+    );
+    assert_selection_visible(&browser, 5);
+
+    // A jump to the last projection row clamps at the projection bounds.
+    browser.select_id(beta_11);
+    frame(&mut browser, 5);
+    assert_eq!(browser.offset(), browser.projection_len() - 5);
+    assert_selection_visible(&browser, 5);
+}
+
+#[test]
+fn a_geometry_change_keeps_the_selection_visible_within_bounds() {
+    let entries = viewport_entries();
+    let model = MusicTreeModel::from_entries(&entries);
+    let beta_11 = album_id(&model, "beta-11").expect("beta-11 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+    expand_all_roots(&mut browser);
+    browser.select_id(beta_11);
+
+    frame(&mut browser, 30);
+    assert_eq!(browser.offset(), 0, "the tall viewport needs no scroll");
+
+    // Shrinking the same owner clamps around the selection instead of leaving
+    // it outside a viewport clamped to the top.
+    frame(&mut browser, 5);
+    assert_eq!(browser.offset(), browser.projection_len() - 5);
+    assert_selection_visible(&browser, 5);
+
+    // Growing back re-clamps at the projection bounds.
+    frame(&mut browser, 30);
+    assert_eq!(browser.offset(), 0);
+    assert_selection_visible(&browser, 30);
+}
+
+#[test]
+fn a_removed_selected_album_falls_back_to_a_visible_node() {
+    let entries = base_entries();
+    let model = MusicTreeModel::from_entries(&entries);
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let album_1 = album_id(&model, "album-1").expect("album-1 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+    expand_all_roots(&mut browser);
+    browser.select_id(album_1);
+    frame(&mut browser, 5);
+
+    let replacement: Vec<MusicTreeEntry> = entries
+        .iter()
+        .filter(|entry| entry.target != "album-1")
+        .cloned()
+        .collect();
+    assert!(browser.reconcile(&replacement));
+    assert_eq!(
+        browser.selected_id(),
+        Some(alpha_root),
+        "the missing node's fallback is its artist parent"
+    );
+    frame(&mut browser, 5);
+    assert_selection_visible(&browser, 5);
+}
+
+#[test]
+fn album_selection_persistence_changes_only_with_the_resolved_album() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let album_1 = album_id(&model, "album-1").expect("album-1 interned");
+    let album_3 = album_id(&model, "album-3").expect("album-3 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+
+    // The initial artist-root selection has no album to persist.
+    assert_eq!(browser.selected_id(), Some(alpha_root));
+    assert_eq!(browser.take_album_selection_change(), None);
+
+    browser.select_id(album_1);
+    assert_eq!(
+        browser.take_album_selection_change().as_deref(),
+        Some("album-1")
+    );
+    assert_eq!(
+        browser.take_album_selection_change(),
+        None,
+        "an unchanged album does not re-emit"
+    );
+
+    // Focusing an artist root neither emits nor overwrites the retained album.
+    browser.select_id(alpha_root);
+    assert_eq!(browser.take_album_selection_change(), None);
+    browser.select_id(album_1);
+    assert_eq!(
+        browser.take_album_selection_change(),
+        None,
+        "returning to the retained album is still not a change"
+    );
+
+    browser.select_id(album_3);
+    assert_eq!(
+        browser.take_album_selection_change().as_deref(),
+        Some("album-3")
+    );
 }

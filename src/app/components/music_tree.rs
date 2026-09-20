@@ -7,12 +7,15 @@
 //! seams only — no crate keymap, no second painter, no raw colours (every
 //! style resolves an existing `palette` role here, inside the owning layer).
 //!
-//! Task 1.1 scope is the dependency gate: the spike renders one frame at the
+//! Task 1.1 scope was the dependency gate: the spike renders one frame at the
 //! existing Wide and smallest supported non-Wide Library-panel fixtures and
 //! proves the full-row selected bar, group-relative zebra, scrollbar, focused
-//! marquee, clipping, latest-render hit testing, and aggregate marks. The
-//! tree is not yet wired into `MusicContent` or the `PanelList` surface
-//! (tasks 2.x/5.2); nothing outside this module and its spike tests uses it.
+//! marquee, clipping, latest-render hit testing, and aggregate marks. Task 2.2
+//! adds the one state owner over that model: settled-catalog reconciliation
+//! (selection, expansion, marks, viewport continuity) and responsive geometry
+//! reconciliation, plus the album-selection persistence guard. The tree is not
+//! yet wired into `MusicContent` or the `PanelList` surface (tasks 2.3/2.4/
+//! 5.2); nothing outside this module and its tests uses it.
 
 // Until tasks 2.x wire the tree into the Grouped Music browser, only the
 // spike tests reach this module; the allowance lapses at that integration.
@@ -63,6 +66,7 @@ pub(in crate::app) enum MusicNodeKey {
 /// One settled album leaf's domain projection: the stable target the shell
 /// already keys albums by, plus its settled artist identity and the display
 /// text the row paints.
+#[derive(Clone)]
 pub(in crate::app) struct MusicTreeEntry {
     pub(in crate::app) artist: String,
     pub(in crate::app) artist_key: ArtistKey,
@@ -445,6 +449,14 @@ pub(in crate::app) struct MusicTreeBrowser {
     focused: bool,
     marquee_key: String,
     marquee_started: Instant,
+    /// The rect of the latest frame, so a geometry change re-applies the
+    /// viewport visibility rule to this same owner (design D3/D4) instead of
+    /// leaving the selection outside a newly clamped viewport.
+    last_area: Option<Rect>,
+    /// The last album target reported for the shell's destination-position
+    /// persistence (design D3 step 5). An artist-root focus resolves to no
+    /// album and never clears or overwrites it.
+    last_reported_album: Option<String>,
 }
 
 impl MusicTreeBrowser {
@@ -460,7 +472,25 @@ impl MusicTreeBrowser {
             focused: true,
             marquee_key: String::new(),
             marquee_started: Instant::now(),
+            last_area: None,
+            last_reported_album: None,
         }
+    }
+
+    /// Reconciles this one owner with a settled catalog (design D3): re-intern
+    /// the arena, rebuild the cached projection only when the model revision
+    /// changed, and refresh the derived mark aggregate. The crate restores the
+    /// selected node and surviving expansion/marks by stable identity; the
+    /// viewport keeps its prior offset when bounds permit, otherwise the next
+    /// frame applies only the minimum scroll that keeps the selection visible.
+    ///
+    /// Returns whether the projection was rebuilt: a no-op reconciliation
+    /// leaves the cached projection, offset, and arming untouched.
+    pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) -> bool {
+        self.model.reconcile(entries);
+        let rebuilt = self.state.ensure_projection(&self.model, &self.query);
+        self.state.ensure_mark_states(&self.model);
+        rebuilt
     }
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
@@ -472,8 +502,47 @@ impl MusicTreeBrowser {
         self.state.ensure_projection(&self.model, &self.query);
     }
 
+    /// Whether an artist root is persistently expanded.
+    pub(in crate::app) fn root_is_expanded(&self, root: usize) -> bool {
+        self.state.node_is_expanded(root, None)
+    }
+
+    /// Selects a node by stable identity, loading its ancestor path, and arms
+    /// the viewport to keep it visible (design D3 step 4).
+    pub(in crate::app) fn select_id(&mut self, id: usize) -> bool {
+        self.state.select_by_id(&self.model, &self.query, id)
+    }
+
     pub(in crate::app) fn select_index(&mut self, index: usize) {
         self.state.select_index(Some(index));
+    }
+
+    /// The selected node's stable arena id.
+    pub(in crate::app) fn selected_id(&self) -> Option<usize> {
+        self.state.selected_id()
+    }
+
+    /// The selected node's album target; `None` when an artist root (or
+    /// nothing) is selected.
+    pub(in crate::app) fn selected_album_target(&self) -> Option<&str> {
+        self.state
+            .selected_id()
+            .and_then(|id| self.model.target_of(id))
+    }
+
+    /// The album-selection persistence request for the shell (design D3 step
+    /// 5): `Some(target)` only when the resolved selected album differs from
+    /// the last one reported, and `None` while an artist root is focused — an
+    /// artist focus never overwrites (or clears) the retained album identity.
+    pub(in crate::app) fn take_album_selection_change(&mut self) -> Option<String> {
+        let resolved = self.selected_album_target().map(str::to_owned);
+        if let Some(target) = resolved {
+            if self.last_reported_album.as_deref() != Some(target.as_str()) {
+                self.last_reported_album = Some(target.clone());
+                return Some(target);
+            }
+        }
+        None
     }
 
     /// The first visible projection row (the viewport offset the latest
@@ -482,8 +551,18 @@ impl MusicTreeBrowser {
         self.state.offset()
     }
 
+    /// Stores a mark on an album leaf. Artist roots derive their aggregate
+    /// state from child leaves and are never stored as mark targets (design
+    /// D6), so marking one is a no-op.
     pub(in crate::app) fn set_marked(&mut self, id: usize, marked: bool) -> bool {
-        self.state.set_marked(id, marked)
+        if self.model.target_of(id).is_none() {
+            return false;
+        }
+        let changed = self.state.set_marked(id, marked);
+        if changed {
+            self.state.ensure_mark_states(&self.model);
+        }
+        changed
     }
 
     pub(in crate::app) fn mark_state(&self, id: usize) -> TreeMarkState {
@@ -547,9 +626,23 @@ impl MusicTreeBrowser {
             focused,
             marquee_key,
             marquee_started,
+            last_area,
+            ..
         } = self;
 
         state.ensure_projection(model, query);
+        // A geometry change re-applies the viewport visibility rule to this
+        // same owner (design D3/D4): re-arm the selected node's visibility so
+        // the crate's `KeepInView` policy scrolls the minimum needed at the
+        // new height instead of leaving the selection outside a clamped
+        // viewport. A settled-content change already re-arms through
+        // `reconcile`, and a no-op frame does not touch the offset.
+        if *last_area != Some(area) {
+            if let Some(id) = state.selected_id() {
+                state.select_by_id(model, query, id);
+            }
+            *last_area = Some(area);
+        }
         // Mirror the crate's resolved layout for this fixed configuration so
         // the renderer can budget titles before the widget renders: the
         // vertical scrollbar takes one column when the projection overflows,
