@@ -403,7 +403,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     KeybindAction {
         id: "panel_right",
         section: KeySection::Display,
-        default_chords: &["Right"],
+        default_chords: &["Ctrl+Right"],
         gate: KeyGate::PanelFocusQueue,
         policy: "panel_right",
         rebindable: true,
@@ -412,7 +412,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     KeybindAction {
         id: "panel_left",
         section: KeySection::Display,
-        default_chords: &["Left"],
+        default_chords: &["Ctrl+Left"],
         gate: KeyGate::PanelFocusLibraryBoth,
         policy: "panel_left",
         rebindable: true,

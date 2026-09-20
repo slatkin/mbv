@@ -148,7 +148,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     snapshot.panel_focus = crate::app::PanelFocus::Queue;
     assert_eq!(
         resolve_router_outcome_with_focused(
-            KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
+            KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL),
             &snapshot,
             None
         , &default_keybinds()),

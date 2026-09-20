@@ -1462,9 +1462,9 @@ impl LibraryContentOwner for MusicContent {
             // Right expands a collapsed artist root; Left collapses a focused
             // expanded root or returns a leaf to its artist parent. These fire
             // only when the track pane does not hold local focus, and only
-            // after the router's fall-through — in the Both layout the central
-            // `panel_left` precedence still claims plain Left before the tree
-            // ever sees it. Right on an already expanded root (the artist
+            // after the router's fall-through — the panel switch is the Ctrl
+            // chord (`panel_left`/`panel_right`), so the bare arrows always
+            // reach the tree. Right on an already expanded root (the artist
             // Workspace entry) is task 6.4 and stays unhandled here.
             Key::Left if !self.track_focused => {
                 if self.browser.selected_is_artist() {

@@ -635,9 +635,9 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
 }
 
 /// `h`/`l` are not tree chords: Grouped Music maps only the arrow chords
-/// (Left/Right) to parent/child movement, and the central router may still
-/// claim Left ahead of the leaf (the Both-layout `panel_left`). This pins that
-/// no extra letter alias leaks into the tree.
+/// (Left/Right) to parent/child movement, and the panel-focus switch is the
+/// Ctrl chord (`panel_left`), so the bare horizontal arrows always reach the
+/// leaf. This pins that no extra letter alias leaks into the tree.
 #[test]
 fn horizontal_letter_aliases_fall_through_unclaimed() {
     let mut model = Model::new(make_music_group_app());
