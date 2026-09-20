@@ -58,6 +58,12 @@ use crate::app::ui_util::trunc_str;
 /// column interface).
 pub(in crate::app) const YEAR_GUTTER_WIDTH: u16 = 6;
 
+/// The neighbour album-artwork window (task 6.5, design D4): the shell
+/// prefetches up to one visible album leaf behind the selected leaf and up to
+/// three ahead.
+const NEIGHBOUR_PREFETCH_BEHIND: usize = 1;
+const NEIGHBOUR_PREFETCH_AHEAD: usize = 3;
+
 /// The stable semantic identity one arena node is interned by (design D2).
 /// Artist roots intern by the settled catalog's `ArtistKey` — the resolved
 /// `ArtistItems` identity or the deterministic fallback grouping key — so
@@ -931,6 +937,41 @@ impl MusicTreeBrowser {
             .iter()
             .map(|node| self.model.target_of(node.id()).map(str::to_owned))
             .collect()
+    }
+
+    /// The neighbour album-artwork targets the shell prefetches (task 6.5,
+    /// design D4): from the **latest completed paint**'s visible projection,
+    /// up to one album leaf behind the selected leaf and up to three ahead, in
+    /// visible order, skipping artist roots and the selected leaf itself. The
+    /// owner resolves the window here so the shell receives stable targets and
+    /// never a cursor or enough tree state to re-resolve one.
+    ///
+    /// `None` when no paint completed (retained geometry is not the painted
+    /// projection), when an artist root is focused (the shipped suppression),
+    /// or when the window has no album leaf.
+    pub(in crate::app) fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
+        if !self.paint_complete || self.selected_is_artist() {
+            return None;
+        }
+        let nodes = self.state.projection().nodes();
+        let selected_index = nodes
+            .iter()
+            .position(|node| Some(node.id()) == self.state.selected_id())?;
+        let target_of =
+            |node: &ProjectedNode<usize>| self.model.target_of(node.id()).map(str::to_owned);
+        let mut targets: Vec<String> = nodes[..selected_index]
+            .iter()
+            .rev()
+            .filter_map(target_of)
+            .take(NEIGHBOUR_PREFETCH_BEHIND)
+            .collect();
+        targets.extend(
+            nodes[selected_index + 1..]
+                .iter()
+                .filter_map(target_of)
+                .take(NEIGHBOUR_PREFETCH_AHEAD),
+        );
+        (!targets.is_empty()).then_some(targets)
     }
 
     /// Invalidates the retained paint geometry: until the next view completes

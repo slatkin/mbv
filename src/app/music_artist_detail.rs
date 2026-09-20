@@ -73,7 +73,6 @@ pub(super) struct ArtistSummary {
 }
 
 impl ArtistSummary {
-    #[allow(dead_code)] // consumed by the task-6.4 Hero wiring
     pub(super) fn year_span(&self) -> Option<String> {
         match (self.year_start, self.year_end) {
             (Some(start), Some(end)) if start != end => Some(format!("{start}\u{2013}{end}")),
@@ -87,26 +86,25 @@ impl ArtistSummary {
 /// tracks of that album only, in disc/track order.
 #[derive(Clone)]
 pub(super) struct ArtistTrackGroup {
-    #[allow(dead_code)] // album identity read by the task-6.4 Hero wiring
     pub(super) album_id: String,
     pub(super) album_title: String,
     pub(super) tracks: Vec<EmbyItem>,
 }
 
-/// The shell-owned projection for one focused artist root. Read by the
-/// task-6.4 Hero/Workspace content switch; the Workspace rows are consumed
-/// already by `MusicContent::set_content` (task 6.3).
+/// The shell-owned projection for one focused artist root. Its summary facts
+/// and artwork feed the Music Hero's artist arm and its grouped rows the
+/// canonical track Workspace (`MusicContent`, task 6.4).
 #[derive(Clone)]
 pub(super) struct ArtistDetailProjection {
     pub(super) target: MusicArtistTarget,
-    /// Immediate artist facts (task 6.2); read by the task-6.4 Hero wiring.
-    #[allow(dead_code)]
+    /// Immediate artist facts (task 6.2): the Hero's artist name, in-scope
+    /// album count, and year span.
     pub(super) summary: ArtistSummary,
     pub(super) track_groups: Vec<ArtistTrackGroup>,
-    /// Projected artwork state (task 6.2); read by the task-6.4 Hero wiring.
-    #[allow(dead_code)]
+    /// Projected artwork state (task 6.2) painted by the Hero's artist arm.
     pub(super) artwork: HeroImageState,
-    #[allow(dead_code)] // reserved for the task-6.4 Hero image projection
+    /// The artist's typed image cache key; with a stable artist ID it builds
+    /// the Hero's artwork source (task 6.4), and a fallback root has none.
     pub(super) artwork_cache_key: Option<String>,
 }
 

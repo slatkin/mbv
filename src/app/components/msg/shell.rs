@@ -59,11 +59,26 @@ pub enum ShellRequest {
         origin: SelectionOrigin,
         unresolved_targets: Vec<String>,
     },
-    /// Activate the selected album in non-Wide mode by opening its Library
+    /// Activate the focused album in non-Wide mode by opening its Library
     /// Hero overlay. Carries the component-resolved album so the shell effect
     /// never re-reads a cursor.
     MusicAlbumActivate {
         item: EmbyItem,
+    },
+    /// Activate the focused artist root's detail in non-Wide mode by opening
+    /// its Library Hero overlay and focusing the artist-track Workspace
+    /// (Right on an already expanded root, task 6.4). Carries the
+    /// component-resolved target so the shell never re-reads a tree cursor.
+    MusicArtistActivate {
+        target: super::intents::MusicArtistTarget,
+    },
+    /// The Grouped Music tree's neighbour album-artwork window from its
+    /// latest completed paint (task 6.5, design D4): ordered stable album
+    /// targets — up to one visible leaf behind and three ahead of the
+    /// selected leaf. The shell applies the existing idle gate and fetches
+    /// these targets; it receives no tree cursor and re-resolves no window.
+    MusicNeighbourPrefetch {
+        targets: Vec<String>,
     },
     /// Activate the focused inline album track (Enter, or Ctrl+P while a
     /// track is focused): carries the owner-resolved album and track

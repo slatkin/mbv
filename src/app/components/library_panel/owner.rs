@@ -159,6 +159,23 @@ pub(in crate::app) trait LibraryContentOwner {
         false
     }
 
+    /// Whether the panel's Enter-in-non-Wide path may open the overlay for the
+    /// current browser selection. Defaults to the Hero-availability pair, so
+    /// every existing owner keeps its Enter behavior; Grouped Music overrides
+    /// it because its artist roots are hero-bearing (double-click and Right
+    /// open their overlay) while Enter is the root's expansion toggle.
+    fn hero_overlay_enter_available(&mut self) -> bool {
+        self.hero_overlay_available() || self.hero_overlay_target_available()
+    }
+
+    /// A typed request the owner resolved from the frame it just painted, or
+    /// `None`. The panel delivers it after `view` through its deferred-message
+    /// seam (Grouped Music's completed-paint neighbour artwork window, task
+    /// 6.5). Owners that resolve nothing post-paint keep the default.
+    fn post_paint_message(&mut self) -> Option<Msg> {
+        None
+    }
+
     /// Whether this destination's browser rows are hero-bearing in non-Wide
     /// geometry, so Enter/double-click may open the Library Hero overlay
     /// (default). Owners whose rows are themselves the leaf content — the

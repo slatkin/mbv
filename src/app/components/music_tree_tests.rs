@@ -696,3 +696,92 @@ fn album_selection_persistence_changes_only_with_the_resolved_album() {
         Some("album-3")
     );
 }
+
+/// Task 6.5 (design D4): the neighbour artwork window resolves from the
+/// latest completed paint's visible projection — one album leaf behind the
+/// selected leaf, three ahead, in visible order, skipping artist roots.
+#[test]
+fn neighbour_prefetch_window_is_one_behind_three_ahead_over_visible_leaves() {
+    let model = MusicTreeModel::from_entries(&viewport_entries());
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_all_roots();
+    browser.select_album_target("alpha-5");
+
+    // No completed paint means no painted projection to key the window off.
+    assert_eq!(browser.neighbour_prefetch_targets(), None);
+
+    frame(&mut browser, 8);
+    assert_eq!(
+        browser.neighbour_prefetch_targets(),
+        Some(vec![
+            "alpha-4".to_string(),
+            "alpha-6".to_string(),
+            "alpha-7".to_string(),
+            "alpha-8".to_string(),
+        ])
+    );
+}
+
+/// Task 6.5: the window clamps at the visible edges and crosses artist roots
+/// without ever naming one — only album leaf targets cross the boundary.
+#[test]
+fn neighbour_prefetch_window_clamps_at_edges_and_skips_artist_roots() {
+    let model = MusicTreeModel::from_entries(&viewport_entries());
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_all_roots();
+
+    browser.select_album_target("alpha-0");
+    frame(&mut browser, 8);
+    assert_eq!(
+        browser.neighbour_prefetch_targets(),
+        Some(vec![
+            "alpha-1".to_string(),
+            "alpha-2".to_string(),
+            "alpha-3".to_string(),
+        ]),
+        "the first visible leaf has no behind neighbour"
+    );
+
+    browser.select_album_target("alpha-11");
+    frame(&mut browser, 8);
+    assert_eq!(
+        browser.neighbour_prefetch_targets(),
+        Some(vec![
+            "alpha-10".to_string(),
+            "beta-0".to_string(),
+            "beta-1".to_string(),
+            "beta-2".to_string(),
+        ]),
+        "the window crosses roots but skips every artist root"
+    );
+}
+
+/// Task 6.5: an artist-root focus ships no neighbour request, and an
+/// invalidated (unpainted) projection cannot key the window.
+#[test]
+fn neighbour_prefetch_is_suppressed_for_an_artist_root_or_an_unpainted_frame() {
+    let model = MusicTreeModel::from_entries(&viewport_entries());
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_all_roots();
+    frame(&mut browser, 8);
+
+    browser.select_id(alpha_root);
+    frame(&mut browser, 8);
+    assert_eq!(
+        browser.neighbour_prefetch_targets(),
+        None,
+        "an artist-root focus ships no neighbour request"
+    );
+
+    browser.select_album_target("alpha-5");
+    frame(&mut browser, 8);
+    assert!(browser.neighbour_prefetch_targets().is_some());
+    browser.invalidate();
+    assert_eq!(
+        browser.neighbour_prefetch_targets(),
+        None,
+        "an invalidated (unpainted) projection cannot key the window"
+    );
+}

@@ -771,7 +771,16 @@ fn draw_music_frame(harness: &mut TickHarness) {
 
 /// The mounted Music app at one Panel-mode fixture, drawn once.
 fn mounted_music_at(width: u16, height: u16) -> (TickHarness, ComponentId) {
-    let mut app = crate::app::render::make_music_group_app();
+    mounted_music_app_at(crate::app::render::make_music_group_app(), width, height)
+}
+
+/// The mounted Music app for a supplied fixture at one Panel-mode geometry,
+/// drawn once.
+fn mounted_music_app_at(
+    mut app: crate::app::App,
+    width: u16,
+    height: u16,
+) -> (TickHarness, ComponentId) {
     app.terminal_width = width;
     app.terminal_height = height;
     app.panel_focus = PanelFocus::Library;
@@ -784,6 +793,31 @@ fn mounted_music_at(width: u16, height: u16) -> (TickHarness, ComponentId) {
     harness.model_mut().sync_mounted_surfaces();
     draw_music_frame(&mut harness);
     (harness, ComponentId::Library)
+}
+
+fn music_panel_mut(harness: &mut TickHarness) -> &mut crate::app::components::library_panel::LibraryPanel {
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .expect("library panel mounted")
+        .as_any_mut()
+        .downcast_mut::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("LibraryPanel")
+}
+
+/// Inject one key through the real router, dispatch every surviving message
+/// through the shell, and re-run the production sync pass.
+fn tick_key(harness: &mut TickHarness, code: Key) {
+    harness.inject(key(code));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
 }
 
 /// Task 2.3: at every Panel mode the Grouped Music browser's one owner and
@@ -1020,5 +1054,303 @@ fn enter_on_a_mounted_artist_workspace_row_plays_its_album_group() {
             .collect::<Vec<_>>(),
         ["artist-track-1"],
         "the activated row's artist-cache album group becomes the queue"
+    );
+}
+
+// ── Tasks 6.4/6.5: artist Workspace entry, atomic Hero switch, prefetch ──
+
+/// A grouped Music app with five Alpha albums in settled order
+/// (album-1..album-5), one cached track each: deterministic artist groups,
+/// album titles, and neighbour window.
+fn mounted_neighbour_app() -> crate::app::App {
+    let mut app = crate::app::render::make_music_group_app();
+    app.image_protocol_enabled = true;
+    {
+        let level = app.libs[0].nav_stack.last_mut().expect("album level");
+        level.items[0].name = "Album 1".into();
+        for number in 2..=5 {
+            let mut album =
+                crate::app::tests::make_item(&format!("Album {number}"), "MusicAlbum");
+            album.id = format!("album-{number}");
+            album.artist = "Alpha".into();
+            album.production_year = 2001;
+            level.items.push(album);
+        }
+        level.total_count = 5;
+    }
+    for number in 1..=5 {
+        let mut track = crate::app::tests::make_item(&format!("Track {number}"), "Audio");
+        track.id = format!("track-{number}");
+        track.album_id = format!("album-{number}");
+        app.album_tracks_cache
+            .insert(format!("album-{number}"), vec![track]);
+    }
+    app
+}
+
+/// Task 6.4: Right on a collapsed artist root only expands it; a later Right
+/// enters the artist Workspace — non-Wide through the Library Hero overlay,
+/// whose artist Hero and grouped Workspace paint in the same push.
+#[test]
+fn right_on_a_collapsed_artist_root_expands_first_then_opens_its_workspace() {
+    let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), 81, 30);
+    // The first Left leaves the adopted album leaf for Alpha's root and
+    // requests its detail; the second collapses the expanded root.
+    tick_key(&mut harness, Key::Left);
+    assert!(
+        harness.model().test_music_owner().selected_is_artist(),
+        "Left moves the leaf to its artist parent"
+    );
+    tick_key(&mut harness, Key::Left);
+    let root = harness
+        .model()
+        .test_music_owner()
+        .browser
+        .selected_id()
+        .expect("artist root selected");
+    assert!(
+        !harness
+            .model()
+            .test_music_owner()
+            .browser
+            .root_is_expanded(root),
+        "Left collapses the expanded root"
+    );
+
+    // First Right: expansion only, no overlay.
+    tick_key(&mut harness, Key::Right);
+    assert!(
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .root_is_expanded(root),
+        "the first Right expands the root"
+    );
+    assert!(
+        !music_panel(&harness).test_hero_overlay_open(),
+        "expanding must not open the overlay"
+    );
+
+    // Later Right: the artist Workspace opens in the Library Hero overlay.
+    tick_key(&mut harness, Key::Right);
+    assert!(
+        music_panel(&harness).test_hero_overlay_open(),
+        "the later Right opens the artist Library Hero overlay"
+    );
+    let hero = music_panel_mut(&mut harness)
+        .active_hero_data()
+        .expect("the overlay paints the artist Hero");
+    assert_eq!(hero.facts.title, "Alpha");
+    assert_eq!(
+        hero.facts.meta_rows,
+        vec!["5 albums".to_string(), "2001".to_string()]
+    );
+    assert_eq!(
+        harness.model().test_music_owner().track_list.rows().len(),
+        10,
+        "five album headings plus five grouped track rows"
+    );
+}
+
+/// Task 6.4: in Wide geometry the later Right enters the inline artist-track
+/// Workspace locally, with no overlay and no request.
+#[test]
+fn right_on_an_expanded_artist_root_enters_the_wide_workspace() {
+    let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), 160, 40);
+    tick_key(&mut harness, Key::Left);
+    assert!(harness.model().test_music_owner().selected_is_artist());
+    assert!(
+        !harness.model().test_music_owner().track_focused(),
+        "the tree rail still owns the focus"
+    );
+
+    tick_key(&mut harness, Key::Right);
+    assert!(
+        harness.model().test_music_owner().track_focused(),
+        "Wide Right takes the inline artist Workspace's cursor"
+    );
+    assert!(!music_panel(&harness).test_hero_overlay_open());
+}
+
+/// Task 6.4: the Wide Hero and its Workspace switch atomically between the
+/// album and artist arms — the title, facts, and rows never come from
+/// different selections.
+#[test]
+fn artist_and_album_hero_workspaces_switch_atomically_in_wide() {
+    let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), 160, 40);
+
+    {
+        let album = music_panel_mut(&mut harness)
+            .active_hero_data()
+            .expect("album hero");
+        assert_eq!(album.facts.title, "Album 1");
+        assert_eq!(
+            album.facts.meta_rows,
+            vec!["Alpha".to_string(), "2001".to_string()]
+        );
+    }
+    assert_eq!(
+        harness.model().test_music_owner().track_list.rows().len(),
+        1,
+        "the album Workspace paints that album's track"
+    );
+
+    tick_key(&mut harness, Key::Left);
+    {
+        let artist = music_panel_mut(&mut harness)
+            .active_hero_data()
+            .expect("artist hero");
+        assert_eq!(artist.facts.title, "Alpha");
+        assert_eq!(
+            artist.facts.meta_rows,
+            vec!["5 albums".to_string(), "2001".to_string()]
+        );
+    }
+    assert_eq!(
+        harness.model().test_music_owner().track_list.rows().len(),
+        10,
+        "the artist Workspace replaces the album rows in the same push"
+    );
+    assert!(matches!(
+        harness.model().test_music_owner().track_list.rows().first(),
+        Some(crate::app::components::media_list::MediaListRow::Heading { text }) if text == "Album 1"
+    ));
+
+    tick_key(&mut harness, Key::Down);
+    {
+        let album = music_panel_mut(&mut harness)
+            .active_hero_data()
+            .expect("album hero returns");
+        assert_eq!(album.facts.title, "Album 1");
+    }
+    assert_eq!(
+        harness.model().test_music_owner().track_list.rows().len(),
+        1
+    );
+}
+
+/// Task 6.5 (design D4): the tree resolves the neighbour window from its
+/// completed paint and emits the typed payload in visible order in both
+/// presentations; the shell re-resolves no cursor.
+#[test]
+fn neighbour_prefetch_payload_is_the_painted_trees_order_in_both_presentations() {
+    for (width, height) in [(160u16, 40u16), (81, 30)] {
+        let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), width, height);
+        // The production loop drains the panel's post-paint message before the
+        // next frame; clear the adopt-frame request so this test observes the
+        // payload for the selection it makes.
+        let (mut music_resize, mut tv_resize) = (false, false);
+        harness
+            .model_mut()
+            .drain_deferred_library_message(&mut music_resize, &mut tv_resize);
+        assert!(
+            harness
+                .model_mut()
+                .test_music_owner_mut()
+                .browser
+                .select_album_target("album-3"),
+            "{width}x{height}: the fixture interns album-3"
+        );
+        harness.model_mut().sync_mounted_surfaces();
+        assert_eq!(
+            harness
+                .model()
+                .test_music_owner()
+                .browser
+                .selected_album_target(),
+            Some("album-3"),
+            "{width}x{height}: the selection survives the sync"
+        );
+        draw_music_frame(&mut harness);
+
+        match music_panel_mut(&mut harness).take_deferred_msg() {
+            Some(Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets })) => {
+                assert_eq!(
+                    targets,
+                    vec![
+                        "album-2".to_string(),
+                        "album-4".to_string(),
+                        "album-5".to_string(),
+                    ],
+                    "{width}x{height}: one behind and three ahead over the visible leaves"
+                );
+            }
+            other => panic!("{width}x{height}: expected the neighbour request, got {other:?}"),
+        }
+    }
+}
+
+/// Task 6.5: the shell applies the existing idle gate to the typed targets —
+/// a closed gate suppresses every fetch — and an artist-root focus ships no
+/// request at all.
+#[test]
+fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
+    let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), 160, 40);
+    let (mut music_resize, mut tv_resize) = (false, false);
+    // Clear the adopt-frame request (the production loop drains between
+    // frames), then select the album whose window this test asserts.
+    harness
+        .model_mut()
+        .drain_deferred_library_message(&mut music_resize, &mut tv_resize);
+    assert!(
+        harness
+            .model_mut()
+            .test_music_owner_mut()
+            .browser
+            .select_album_target("album-3")
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    // Drop the selected hero's own non-idle fetch so the assertions isolate
+    // the neighbour window's reservations.
+    harness.model_mut().app.card_image_loading.clear();
+    draw_music_frame(&mut harness);
+    harness
+        .model_mut()
+        .drain_deferred_library_message(&mut music_resize, &mut tv_resize);
+    for key in ["album-2:P", "album-4:P", "album-5:P"] {
+        assert!(
+            harness.model().app.card_image_loading.contains(key),
+            "{key} prefetches while the idle gate is open"
+        );
+    }
+    assert!(
+        !harness.model().app.card_image_loading.contains("album-1:P"),
+        "a leaf outside the window is not prefetched"
+    );
+
+    // A fresh navigation closes the idle gate: the tree still resolves and
+    // emits the window, but the shell makes no reservation for it.
+    harness.model_mut().app.card_image_loading.clear();
+    harness.model_mut().app.last_nav_at = std::time::Instant::now();
+    draw_music_frame(&mut harness);
+    let before = harness.model().app.card_image_fetch_calls;
+    let targets = match music_panel_mut(&mut harness).take_deferred_msg() {
+        Some(Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets })) => targets,
+        other => panic!("expected the neighbour request, got {other:?}"),
+    };
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets }),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert_eq!(
+        harness.model().app.card_image_fetch_calls,
+        before,
+        "the shell's idle gate makes no fetch reservation"
+    );
+    assert!(harness.model().app.card_image_loading.is_empty());
+
+    // An artist-root focus emits no neighbour request at all.
+    harness
+        .model_mut()
+        .test_music_owner_mut()
+        .browser
+        .select_first_visible();
+    harness.model_mut().sync_mounted_surfaces();
+    draw_music_frame(&mut harness);
+    assert!(
+        music_panel_mut(&mut harness).take_deferred_msg().is_none(),
+        "an artist-root focus ships no neighbour request"
     );
 }

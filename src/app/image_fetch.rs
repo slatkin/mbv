@@ -431,6 +431,37 @@ impl App {
         }
         self.fetch_card_image(cache_key, item_id, series_id, types);
     }
+
+    /// Pre-warm the neighbour album artwork the Grouped Music tree resolved
+    /// from its latest completed paint (task 6.5, design D4). The typed
+    /// targets are the tree's ordered stable album identities (an opaque
+    /// `id\0index` target for duplicate rows); the shell derives the album ID
+    /// and walks the shared `{id}:P` album-art chain the hero projection
+    /// consumes — it re-resolves no tree cursor or window. Each fetch keeps
+    /// the existing idle gate (`fetch_list_card_image_when_idle`), so rapid
+    /// navigation suppresses the whole window.
+    pub(in crate::app) fn prefetch_neighbour_album_art(&mut self, targets: &[String]) {
+        if !self.images_enabled() {
+            return;
+        }
+        for target in targets {
+            // The tree's duplicate-row targets are opaque `id\0index` strings;
+            // the album ID before the occurrence suffix is what the `{id}:P`
+            // album-art chain keys on (the same split
+            // `music_artist_detail::target_album_id` performs for the track
+            // caches).
+            let album_id = target.split('\0').next().unwrap_or(target);
+            if album_id.is_empty() {
+                continue;
+            }
+            self.fetch_list_card_image_when_idle(
+                format!("{album_id}:P"),
+                album_id.to_string(),
+                String::new(),
+                crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES,
+            );
+        }
+    }
 }
 
 /// Track rows per album that feed the majority vote (design D2): the

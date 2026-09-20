@@ -102,6 +102,19 @@ pub struct MusicArtistTarget {
     pub revision: u64,
 }
 
+impl MusicArtistTarget {
+    /// Whether two targets address the same artist source, ignoring the
+    /// settled revision. The shell binds a projection to the owner-resolved
+    /// target's revision at push time, so the revision is a shell staleness
+    /// axis; presentation identity is the artist identity, display name, and
+    /// in-scope album set.
+    pub(in crate::app) fn same_source(&self, other: &Self) -> bool {
+        self.artist_id == other.artist_id
+            && self.artist_name == other.artist_name
+            && self.album_targets == other.album_targets
+    }
+}
+
 /// Closed set of podcast episode action intents (task 5.3d.7). The component
 /// emits the intent matched from Space/Enter/Ctrl+A; the shell runs the App
 /// play/enqueue effect directly — episodes are the tab's leaf rows, so there

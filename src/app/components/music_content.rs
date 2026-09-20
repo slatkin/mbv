@@ -11,7 +11,8 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
+    ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroFacts, HeroImageState,
+    LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
 use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
@@ -107,6 +108,62 @@ fn build_artist_track_rows(
     rows
 }
 
+/// The snapshot identity that produced the track Workspace's current rows
+/// (task 6.4): one album leaf's album snapshot or one artist root's settled
+/// detail projection. The Hero facts and the Workspace rows resolve through
+/// the same selection, so a stale snapshot can never paint under a new title.
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum WorkspaceOwner {
+    Album(String),
+    Artist(MusicArtistTarget),
+}
+
+/// The focused artist root's Hero content (task 6.4, design D7): settled
+/// summary facts plus the projected artwork state. An ID-backed root's
+/// artwork source carries the typed artist cache key so the panel's hero
+/// projection walks the existing image boundary; a fallback root has no
+/// source and paints the shared no-artwork placeholder.
+fn artist_hero_data(
+    detail: &crate::app::music_artist_detail::ArtistDetailProjection,
+) -> HeroContentData {
+    let summary = &detail.summary;
+    let mut meta_rows = vec![format!(
+        "{} album{}",
+        summary.album_count,
+        if summary.album_count == 1 { "" } else { "s" }
+    )];
+    if let Some(span) = summary.year_span() {
+        meta_rows.push(span);
+    }
+    HeroContentData {
+        facts: HeroFacts {
+            title: summary.name.clone(),
+            meta_rows,
+            duration_row: None,
+            links: Vec::new(),
+            artwork: HeroArtwork {
+                shape: ArtworkShape::Square,
+                source: detail.artwork_cache_key.as_ref().and_then(|cache_key| {
+                    detail
+                        .target
+                        .artist_id
+                        .as_ref()
+                        .map(|artist_id| ArtworkSource::Emby {
+                            item_id: artist_id.clone(),
+                            series_id: String::new(),
+                            image_types: vec!["Primary".into()],
+                            cache_key: cache_key.clone(),
+                        })
+                }),
+                decoration: None,
+                image: detail.artwork.clone(),
+            },
+        },
+        overview: None,
+        credits: None,
+    }
+}
+
 /// The plain Music content owner. Its tree browser owns the Grouped Music
 /// album selection, expansion, viewport, and marks (one owner across Wide,
 /// Narrow, and Mini); the track `MediaList` carrier retains its Workspace
@@ -124,7 +181,14 @@ pub struct MusicContent {
     /// pane). Pushed each sync pass beside the track-focus clear; narrow
     /// selects the Library Hero overlay instead.
     pub(in crate::app) inline_track_focus_enabled: bool,
-    last_album_id: Option<String>,
+    /// The snapshot identity that produced the Workspace rows currently in
+    /// `track_list` (task 6.4). A different title never paints those rows.
+    track_rows_owner: Option<WorkspaceOwner>,
+    /// A Wide artist-Workspace entry armed before the artist's track rows
+    /// arrived: Right on an expanded root takes the pane's focus as soon as
+    /// the resolved root's rows land (the overlay path re-focuses on arrival
+    /// through its own open-transition bit).
+    pending_artist_workspace_focus: bool,
     /// The artist identity last carried to the shell on a typed
     /// artist-track request (design D7). Moving onto a different root emits;
     /// returning to the last reported one relies on the shell's projection
@@ -162,7 +226,8 @@ impl MusicContent {
             track_list: MediaListCarrier::new(),
             track_focused: false,
             inline_track_focus_enabled: false,
-            last_album_id: None,
+            track_rows_owner: None,
+            pending_artist_workspace_focus: false,
             last_artist_request: None,
             inline_search: InlineSearch::new(),
             // There is no honest library identity before the panel's first
@@ -175,24 +240,6 @@ impl MusicContent {
     }
 
     pub(in crate::app) fn set_content(&mut self, context: MusicWideRenderCtx) {
-        let artist_changed = match (&self.context.artist_detail, &context.artist_detail) {
-            (Some(previous), Some(next)) => previous.target != next.target,
-            (Some(_), None) | (None, Some(_)) => true,
-            (None, None) => false,
-        };
-        let album_changed = self.last_album_id.as_deref()
-            != context
-                .selected_album
-                .as_ref()
-                .map(|album| album.id.as_str());
-        if album_changed {
-            self.track_focused = false;
-        }
-        self.last_album_id = context
-            .selected_album
-            .as_ref()
-            .map(|album| album.id.clone());
-
         // Content projection never carries framework focus; preserve the
         // component-owned value across the shell snapshot swap.
         let focused = self.context.focused;
@@ -222,29 +269,93 @@ impl MusicContent {
                 self.browser.select_album_target(&target);
             }
         }
-        let track_rows = self
-            .context
-            .artist_detail
-            .as_ref()
-            .map(build_artist_track_rows)
-            .unwrap_or_else(|| {
-                build_track_rows(self.context.album_tracks.as_deref().unwrap_or_default())
-            });
-        // The overlay's Workspace can outrun the album's track fetch: the open
+        // The Workspace rows and the Hero facts resolve from the same tree
+        // selection (`resolved_workspace`/`resolved_hero_data`), so a
+        // snapshot for another album or artist never paints under this title.
+        let rows_arrived = self.reconcile_workspace_rows();
+        // The overlay's Workspace can outrun the track fetch: the open
         // transition cannot take the focus while the rows are still empty, so
         // it is taken the moment they arrive. Only the empty-to-non-empty edge
         // fires, so an explicit Esc (or any later push) never re-seizes the
         // focus the user left behind.
-        let track_rows_arrived = self.track_list.rows().is_empty() && !track_rows.is_empty();
-        if self.track_list.rows() != track_rows.as_slice() {
-            self.track_list.set_content(track_rows);
-        }
-        if album_changed || artist_changed {
-            self.track_list.select_first();
-        }
-        if track_rows_arrived && self.hero_overlay_open {
+        if rows_arrived && self.hero_overlay_open {
             self.enter_track_focus();
         }
+    }
+
+    /// The Workspace rows the current tree selection owns, from that
+    /// selection's own snapshot only (task 6.4): an artist root reads its
+    /// matching projected detail groups, an album leaf reads the pushed album
+    /// snapshot when it is that leaf's. Between pushes a local move resolves
+    /// to empty rows, so the prior title's tracks never paint under the new
+    /// one.
+    fn resolved_workspace(&self) -> (Option<WorkspaceOwner>, Vec<MediaListRow<String>>) {
+        if self.browser.selected_is_artist() {
+            let owner = self.artist_detail_target().map(WorkspaceOwner::Artist);
+            let rows = self
+                .current_artist_detail()
+                .map(build_artist_track_rows)
+                .unwrap_or_default();
+            return (owner, rows);
+        }
+        let Some(selected) = self.selected_item() else {
+            return (None, Vec::new());
+        };
+        let tracks: &[EmbyItem] = match self.context.selected_album.as_ref() {
+            Some(pushed) if pushed.id == selected.id => {
+                self.context.album_tracks.as_deref().unwrap_or_default()
+            }
+            _ => &[],
+        };
+        (
+            Some(WorkspaceOwner::Album(selected.id)),
+            build_track_rows(tracks),
+        )
+    }
+
+    /// The projected artist detail when it belongs to the tree's current
+    /// artist root. The shell binds the projection to the owner-resolved
+    /// target at push time; a local move onto a different root between pushes
+    /// must not paint the prior root's summary, artwork, or groups.
+    fn current_artist_detail(
+        &self,
+    ) -> Option<&crate::app::music_artist_detail::ArtistDetailProjection> {
+        self.context.artist_detail.as_ref().filter(|detail| {
+            self.artist_detail_target()
+                .is_some_and(|target| target.same_source(&detail.target))
+        })
+    }
+
+    /// Rebuild `track_list` from the resolved Workspace and report whether it
+    /// went empty-to-non-empty (the overlay/artist-entry arrival edge). A
+    /// changed owner clears any stale pane focus and re-seats the cursor; a
+    /// pending Wide artist-Workspace entry takes the focus once the resolved
+    /// root's rows exist.
+    fn reconcile_workspace_rows(&mut self) -> bool {
+        let (owner, rows) = self.resolved_workspace();
+        let owner_changed = self.track_rows_owner != owner;
+        if owner_changed {
+            self.track_focused = false;
+        }
+        let arrived = self.track_list.rows().is_empty() && !rows.is_empty();
+        if self.track_list.rows() != rows.as_slice() {
+            self.track_list.set_content(rows);
+        }
+        if owner_changed {
+            self.track_list.select_first();
+        }
+        if self.pending_artist_workspace_focus {
+            if matches!(&owner, Some(WorkspaceOwner::Artist(_)))
+                && !self.track_list.rows().is_empty()
+            {
+                self.pending_artist_workspace_focus = false;
+                self.enter_track_focus();
+            } else if !matches!(&owner, Some(WorkspaceOwner::Artist(_))) {
+                self.pending_artist_workspace_focus = false;
+            }
+        }
+        self.track_rows_owner = owner;
+        arrived
     }
 
     /// The settled album projection the tree owner reconciles: one entry per
@@ -453,6 +564,16 @@ impl MusicContent {
             self.track_list.select_first();
         }
     }
+    /// Right on an expanded artist root in Wide geometry (task 6.4): take the
+    /// inline artist-track Workspace's cursor. When the resolved root's rows
+    /// have not arrived yet, arm the entry so the next content push takes it —
+    /// the component-local twin of the shell's album Enter re-arm.
+    fn enter_artist_workspace_focus(&mut self) {
+        self.enter_track_focus();
+        if !self.track_focused {
+            self.pending_artist_workspace_focus = true;
+        }
+    }
     pub(in crate::app) fn clear_track_focus(&mut self) {
         self.track_focused = false;
     }
@@ -496,7 +617,7 @@ impl MusicContent {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
         let target = self.track_list.selected_target()?;
-        if let Some(detail) = self.context.artist_detail.as_ref() {
+        if let Some(detail) = self.current_artist_detail() {
             return detail
                 .track_groups
                 .iter()
@@ -510,13 +631,13 @@ impl MusicContent {
             .position(|track| track.id == *target)
     }
     /// The Workspace row projection that owns a track target: the focused
-    /// artist root's projected groups first (an artist root's push clears
-    /// `selected_album`/`album_tracks`, so its rows have no album snapshot),
-    /// otherwise the selected album's cached tracks. Every row behaviour
-    /// resolves through this one owner, so an artist track row and an album
-    /// track row share the same paths.
+    /// artist root's matching projected groups first (an artist root's push
+    /// clears `selected_album`/`album_tracks`, so its rows have no album
+    /// snapshot), otherwise the selected album's cached tracks. Every row
+    /// behaviour resolves through this one owner, so an artist track row and
+    /// an album track row share the same paths.
     fn workspace_track_item(&self, target: &str) -> Option<EmbyItem> {
-        if let Some(detail) = self.context.artist_detail.as_ref() {
+        if let Some(detail) = self.current_artist_detail() {
             return detail
                 .track_groups
                 .iter()
@@ -539,7 +660,7 @@ impl MusicContent {
     /// `album_id`).
     fn focused_track_album_id(&self) -> Option<String> {
         let target = self.track_list.selected_target()?;
-        if let Some(detail) = self.context.artist_detail.as_ref() {
+        if let Some(detail) = self.current_artist_detail() {
             return detail
                 .track_groups
                 .iter()
@@ -558,10 +679,7 @@ impl MusicContent {
     fn artist_workspace_focused(&self) -> bool {
         self.track_focused
             && self.browser.selected_is_artist()
-            && self.context.artist_detail.as_ref().is_some_and(|detail| {
-                self.artist_detail_target()
-                    .is_some_and(|target| target == detail.target)
-            })
+            && self.current_artist_detail().is_some()
     }
 
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
@@ -569,7 +687,21 @@ impl MusicContent {
         self.workspace_track_item(target)
     }
 
+    /// The Hero pane's content for the tree's current selection, or `None`
+    /// when nothing hero-bearing resolves. Both arms read the one snapshot
+    /// the current selection owns (task 6.4), so the Hero title and its
+    /// Workspace switch atomically in Wide and the Library Hero overlay: an
+    /// artist root's facts come from its matching detail projection, an album
+    /// leaf's from the album arm, and an artist root without a matching
+    /// projection has no honest Hero yet (the push that follows its focus
+    /// supplies one).
     fn resolved_hero_data(&self) -> Option<HeroContentData> {
+        if let Some(detail) = self.current_artist_detail() {
+            return Some(artist_hero_data(detail));
+        }
+        if self.browser.selected_is_artist() {
+            return None;
+        }
         let album = self.selected_item()?;
         // Grouped Music's rows are Emby `Folder` items, so the type-based
         // `emby_artwork_policy` cannot recognise them as albums: the Music
@@ -586,14 +718,12 @@ impl MusicContent {
                 data.facts.meta_rows.push(year.to_string());
             }
         }
+        data.facts.artwork.image = self.hero_image.clone();
         Some(data)
     }
 
     pub(in crate::app) fn hero_data(&mut self) -> Option<HeroContentData> {
-        self.resolved_hero_data().map(|mut data| {
-            data.facts.artwork.image = self.hero_image.clone();
-            data
-        })
+        self.resolved_hero_data()
     }
 
     pub(in crate::app) fn set_hero_image(&mut self, state: HeroImageState) {
@@ -601,12 +731,15 @@ impl MusicContent {
     }
 
     pub(in crate::app) fn panel_content(&mut self) -> LibraryPanelContent<'_> {
+        // The Workspace and the Hero must describe the same tree selection:
+        // reconcile the rows before building either, so a local move between
+        // pushes cannot paint the prior title's tracks (task 6.4).
+        self.reconcile_workspace_rows();
         // Copy the selected snapshot and focus bit before borrowing either
         // list mutably for the returned slots.
         let focused = self.context.focused;
         let track_focused = self.track_focused;
-        let hero = self.resolved_hero_data().map(|mut data| {
-            data.facts.artwork.image = self.hero_image.clone();
+        let hero = self.resolved_hero_data().map(|data| {
             HeroContent {
                 facts: data.facts,
                 // Music has no separate overview box when the album does not
@@ -673,6 +806,15 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn hero_overlay_target_available(&mut self) -> bool {
+        // Both hero-bearing tree rows can own the overlay before their Hero
+        // snapshot materializes: an album leaf and an artist root.
+        self.selected_item().is_some() || self.browser.selected_is_artist()
+    }
+
+    fn hero_overlay_enter_available(&mut self) -> bool {
+        // Enter is the album leaf's overlay entry; an artist root's Enter
+        // toggles its expansion (its overlay entry is Right on the already
+        // expanded root).
         self.selected_item().is_some()
     }
 
@@ -970,15 +1112,23 @@ impl LibraryContentOwner for MusicContent {
                     None
                 }
             }
-            Key::Right if !self.track_focused => {
-                if self.browser.selected_is_artist() {
-                    if let Some(root) = self.browser.selected_id() {
-                        if !self.browser.root_is_expanded(root) {
-                            self.browser.expand_root(root);
-                        }
-                    }
+            // Right on an artist root (task 2.4/task 6.4): a collapsed root
+            // expands first; only a later Right on the already expanded root
+            // enters its artist Workspace — Wide takes the inline pane's
+            // cursor locally, non-Wide asks the shell to open the Library
+            // Hero overlay and focus the same Workspace.
+            Key::Right if !self.track_focused && self.browser.selected_is_artist() => {
+                let root = self.browser.selected_id()?;
+                if !self.browser.root_is_expanded(root) {
+                    self.browser.expand_root(root);
+                    return None;
                 }
-                None
+                if self.inline_track_focus_enabled {
+                    self.enter_artist_workspace_focus();
+                    return None;
+                }
+                self.artist_detail_target()
+                    .map(|target| Msg::Shell(ShellRequest::MusicArtistActivate { target }))
             }
             _ => None,
         }
@@ -1039,6 +1189,14 @@ impl LibraryContentOwner for MusicContent {
             self.enter_track_focus();
         }
         self.hero_overlay_open = open;
+    }
+
+    fn post_paint_message(&mut self) -> Option<Msg> {
+        // Task 6.5 (design D4): the tree owner resolved the neighbour album
+        // artwork window from the frame it just painted; the shell applies
+        // the existing idle gate and fetches the typed targets.
+        let targets = self.browser.neighbour_prefetch_targets()?;
+        Some(Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets }))
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

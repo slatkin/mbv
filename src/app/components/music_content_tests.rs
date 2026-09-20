@@ -90,7 +90,6 @@ fn content_exposes_tracks_as_the_workspace() {
 
 #[test]
 fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
-    use crate::app::components::msg::MusicArtistTarget;
     use crate::app::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
@@ -103,13 +102,15 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
     let mut second = make_item("Same Title", "Audio");
     second.id = "track-2".into();
     second.album_id = album.id.clone();
+    let mut owner = MusicContent::new();
+    owner.set_content(context(album, "overview"));
+    // Artist rows belong to the focused artist root (task 6.4): the detail
+    // projection must carry the tree-resolved target, so the fixture focuses
+    // the root first and binds the projection to it.
+    owner.browser.select_first_visible();
+    let target = owner.artist_detail_target().expect("artist root selected");
     let detail = ArtistDetailProjection {
-        target: MusicArtistTarget {
-            artist_id: Some("artist-1".into()),
-            artist_name: "Artist".into(),
-            album_targets: vec![album.id.clone()],
-            revision: 7,
-        },
+        target,
         summary: ArtistSummary {
             name: "Artist".into(),
             album_count: 1,
@@ -117,18 +118,17 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
             year_end: Some(2001),
         },
         track_groups: vec![ArtistTrackGroup {
-            album_id: album.id.clone(),
-            album_title: album.name.clone(),
+            album_id: "album-1".into(),
+            album_title: "Album".into(),
             tracks: vec![first.clone(), second.clone()],
         }],
         artwork: HeroImageState::None,
         artwork_cache_key: None,
     };
-    let mut ctx = context(album, "overview");
+    let mut ctx = owner.context.clone();
     ctx.selected_album = None;
     ctx.album_tracks = None;
     ctx.artist_detail = Some(detail);
-    let mut owner = MusicContent::new();
     owner.set_content(ctx);
 
     assert!(matches!(
@@ -143,6 +143,233 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
         .map(String::as_str)
         .collect();
     assert_eq!(items, ["track-1", "track-2"]);
+}
+
+/// Task 6.4 (design D7): an artist root's Hero content is the shell-projected
+/// summary and artwork — name, in-scope album count, year span, and the
+/// stable-ID artwork source — with the projected groups as its Workspace.
+#[test]
+fn artist_root_hero_uses_the_projected_summary_and_artwork() {
+    use crate::app::components::library_panel::content::ArtworkSource;
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    press(&mut owner, Key::Home);
+    let target = owner.artist_detail_target().expect("artist root selected");
+    let mut track = make_item("Track One", "Audio");
+    track.id = "alpha-track-1".into();
+    track.album_id = "a-0".into();
+    let cache_key = "artist:1:music-library:artist-Alpha:Primary".to_string();
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 2,
+            year_start: Some(2001),
+            year_end: Some(2003),
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "a-0".into(),
+            album_title: "a-0".into(),
+            tracks: vec![track],
+        }],
+        artwork: HeroImageState::Loading,
+        artwork_cache_key: Some(cache_key.clone()),
+    });
+    owner.set_content(ctx);
+
+    {
+        let content = owner.content();
+        let hero = content.hero.expect("artist hero");
+        assert_eq!(hero.facts.title, "Alpha");
+        assert_eq!(
+            hero.facts.meta_rows,
+            vec!["2 albums".to_string(), "2001\u{2013}2003".to_string()]
+        );
+        assert_eq!(
+            hero.facts.artwork.shape,
+            super::super::library_panel::ArtworkShape::Square
+        );
+        assert_eq!(hero.facts.artwork.image, HeroImageState::Loading);
+        match hero.facts.artwork.source.as_ref() {
+            Some(ArtworkSource::Emby {
+                item_id,
+                image_types,
+                cache_key: key,
+                ..
+            }) => {
+                assert_eq!(item_id, "artist-Alpha");
+                assert_eq!(image_types, &vec!["Primary".to_string()]);
+                assert_eq!(key, &cache_key);
+            }
+            other => panic!("expected the artist artwork source, got {other:?}"),
+        }
+        assert!(
+            hero.workspace.is_some(),
+            "the artist Hero carries its Workspace"
+        );
+    }
+    assert!(matches!(
+        owner.track_list.rows().first(),
+        Some(MediaListRow::Heading { text }) if text == "a-0"
+    ));
+}
+
+/// Task 6.4 (design D7): a fallback artist root has no stable Service ID, so
+/// its Hero keeps the summary facts with the explicit no-artwork
+/// presentation (no borrowed album image) and its projected rows.
+#[test]
+fn fallback_artist_hero_uses_the_no_artwork_presentation() {
+    use crate::app::music_artist_detail::{ArtistDetailProjection, ArtistSummary};
+
+    let mut owner = MusicContent::new();
+    owner.set_content(context(make_item("Album", "MusicAlbum"), ""));
+    owner.browser.select_first_visible();
+    let target = owner.artist_detail_target().expect("fallback artist root");
+    assert_eq!(target.artist_id, None, "the fixture root has no Service ID");
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Artist".into(),
+            album_count: 1,
+            year_start: Some(2024),
+            year_end: Some(2024),
+        },
+        track_groups: Vec::new(),
+        artwork: HeroImageState::None,
+        artwork_cache_key: None,
+    });
+    owner.set_content(ctx);
+
+    let content = owner.content();
+    let hero = content.hero.expect("fallback artist hero");
+    assert_eq!(hero.facts.title, "Artist");
+    assert_eq!(
+        hero.facts.meta_rows,
+        vec!["1 album".to_string(), "2024".to_string()]
+    );
+    assert!(
+        hero.facts.artwork.source.is_none(),
+        "no borrowed artwork source"
+    );
+    assert_eq!(hero.facts.artwork.image, HeroImageState::None);
+}
+
+/// Task 6.4: a projected artist detail that no longer belongs to the tree's
+/// current root never paints its summary, artwork, or groups — the Hero is
+/// absent rather than stale.
+#[test]
+fn a_stale_artist_detail_never_paints_under_the_new_root() {
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut owner = tree_owner(&[("Alpha", &["a-0"]), ("Beta", &["b-0"])]);
+    press(&mut owner, Key::Home);
+    // The projection belongs to Beta while the tree focuses Alpha.
+    let beta_target = MusicArtistTarget {
+        artist_id: Some("artist-Beta".into()),
+        artist_name: "Beta".into(),
+        album_targets: vec!["b-0".into()],
+        revision: owner.context.catalog_revision,
+    };
+    let mut track = make_item("Beta Track", "Audio");
+    track.id = "beta-track".into();
+    track.album_id = "b-0".into();
+    let mut ctx = owner.context.clone();
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target: beta_target,
+        summary: ArtistSummary {
+            name: "Beta".into(),
+            album_count: 1,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "b-0".into(),
+            album_title: "b-0".into(),
+            tracks: vec![track.clone()],
+        }],
+        artwork: HeroImageState::None,
+        artwork_cache_key: None,
+    });
+    owner.set_content(ctx);
+
+    {
+        let content = owner.content();
+        assert!(
+            content.hero.is_none(),
+            "no stale Beta Hero paints under Alpha"
+        );
+    }
+    assert!(
+        owner.track_list.rows().is_empty(),
+        "no stale Beta group rows paint under Alpha"
+    );
+    assert!(
+        owner.workspace_track_item("beta-track").is_none(),
+        "the stale track is not resolvable for activation"
+    );
+}
+
+/// Task 6.4: a local album move between pushes resolves no rows until the new
+/// album's snapshot arrives — the prior album's tracks never paint under the
+/// new title.
+#[test]
+fn a_local_album_move_never_paints_the_prior_albums_tracks() {
+    let mut owner = tree_owner_with_tracks(
+        &[("Alpha", &["a-0", "a-1"])],
+        Some(vec![make_item("Old Track", "Audio")]),
+    );
+    assert_eq!(owner.track_list.rows().len(), 1, "fixture rows for a-0");
+
+    press(&mut owner, Key::Down);
+    assert_eq!(owner.browser.selected_album_target(), Some("a-1"));
+    {
+        let content = owner.content();
+        assert!(content.hero.is_some(), "the new leaf's title still paints");
+    }
+    assert!(
+        owner.track_list.rows().is_empty(),
+        "the prior album's rows must not paint under a-1"
+    );
+
+    // The a-1 push supplies its own snapshot and rows.
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = owner.selected_item();
+    ctx.album_tracks = Some(vec![make_item("New Track", "Audio")]);
+    owner.set_content(ctx);
+    assert_eq!(owner.track_list.rows().len(), 1);
+}
+
+/// Task 6.4: artist roots are hero-bearing rows (double-click/Right own the
+/// overlay), while Enter stays their expansion toggle and only an album leaf
+/// keeps the Enter overlay entry.
+#[test]
+fn artist_roots_own_the_overlay_but_enter_stays_their_expansion_toggle() {
+    use crate::app::components::library_panel::owner::LibraryContentOwner;
+
+    let mut owner = artist_workspace_owner();
+    assert!(
+        owner.hero_overlay_target_available(),
+        "an artist root is a hero-bearing row"
+    );
+    assert!(
+        !owner.hero_overlay_enter_available(),
+        "Enter toggles an artist root, never the overlay"
+    );
+
+    let mut album_owner = tree_owner(&[("Alpha", &["a-0"])]);
+    assert!(album_owner.hero_overlay_enter_available());
+    assert!(album_owner.hero_overlay_target_available());
 }
 
 #[test]
@@ -776,7 +1003,7 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
 }
 
 #[test]
-fn right_expands_a_collapsed_artist_root_only() {
+fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
     let mut owner = tree_owner(&[("Alpha", &["a-0"]), ("Beta", &["b-0"])]);
     // Home selects Alpha's (already expanded) root; Down twice reaches Beta's
     // collapsed root.
@@ -787,6 +1014,8 @@ fn right_expands_a_collapsed_artist_root_only() {
     assert!(owner.browser.selected_is_artist());
     assert!(!owner.browser.root_is_expanded(root));
 
+    // The first Right on the collapsed root expands it and nothing else
+    // (task 6.4): the artist Workspace is entered only by a later Right.
     assert_eq!(
         press(&mut owner, Key::Right),
         None,
@@ -796,13 +1025,101 @@ fn right_expands_a_collapsed_artist_root_only() {
         owner.browser.root_is_expanded(root),
         "Right expands the root"
     );
+    assert!(
+        !owner.track_focused(),
+        "the first Right must not enter the Workspace"
+    );
 
-    // Right on an already expanded root is the artist-Workspace entry
-    // (task 6.4): it must stay a local no-op here, not a second expansion or
-    // a destructive collapse.
-    assert_eq!(press(&mut owner, Key::Right), None);
+    // The later Right on the already expanded root enters the artist
+    // Workspace: non-Wide asks the shell to open its Library Hero overlay for
+    // the component-resolved root; it never re-expands or collapses.
+    match press(&mut owner, Key::Right) {
+        Some(Msg::Shell(ShellRequest::MusicArtistActivate { target })) => {
+            assert_eq!(target.artist_name, "Beta");
+            assert_eq!(target.album_targets, vec!["b-0".to_string()]);
+        }
+        other => panic!("expected the artist Workspace entry, got {other:?}"),
+    }
     assert!(owner.browser.root_is_expanded(root));
     assert_eq!(owner.browser.selected_id(), Some(root));
+}
+
+/// Task 6.4: in Wide geometry the later Right on an expanded artist root takes
+/// the inline artist-track Workspace's focus locally, with no shell request.
+#[test]
+fn wide_right_on_an_expanded_artist_root_takes_the_inline_workspace_focus() {
+    let mut owner = artist_workspace_owner();
+    owner.set_inline_track_focus_enabled(true);
+    let root = owner.browser.selected_id().expect("artist root selected");
+    assert!(owner.browser.root_is_expanded(root));
+    assert!(!owner.track_focused());
+
+    assert_eq!(press(&mut owner, Key::Right), None);
+    assert!(
+        owner.track_focused(),
+        "Wide Right enters the artist Workspace"
+    );
+}
+
+/// Task 6.4: a Wide artist-Workspace entry armed while the root's rows are
+/// still loading takes the focus when the rows arrive, without a second key.
+#[test]
+fn wide_right_waits_for_the_artist_rows_before_taking_the_pane_focus() {
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut owner = tree_owner(&[("Alpha", &["a-0"])]);
+    press(&mut owner, Key::Home);
+    let target = owner.artist_detail_target().expect("artist root selected");
+    owner.set_inline_track_focus_enabled(true);
+
+    // Loading projection: the root is expanded but its groups are empty.
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target: target.clone(),
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 1,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: Vec::new(),
+        artwork: HeroImageState::None,
+        artwork_cache_key: None,
+    });
+    owner.set_content(ctx);
+    assert_eq!(press(&mut owner, Key::Right), None);
+    assert!(
+        !owner.track_focused(),
+        "no rows exist yet, so the entry stays armed"
+    );
+
+    // The rows land: the armed entry takes the focus on the same push.
+    let mut track = make_item("Track One", "Audio");
+    track.id = "alpha-track-1".into();
+    track.album_id = "a-0".into();
+    let mut ctx = owner.context.clone();
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 1,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "a-0".into(),
+            album_title: "a-0".into(),
+            tracks: vec![track],
+        }],
+        artwork: HeroImageState::None,
+        artwork_cache_key: None,
+    });
+    owner.set_content(ctx);
+    assert!(owner.track_focused(), "the armed entry takes the focus");
 }
 
 /// Carry-over correction from task 2.3: the persisted flat-flow offset is a

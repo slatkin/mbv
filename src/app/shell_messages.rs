@@ -62,6 +62,31 @@ impl Model {
                         }
                         self.push_music_workspace_content();
                     }
+                    ShellRequest::MusicArtistActivate { target } => {
+                        // Right on an already expanded artist root (task 6.4):
+                        // non-Wide geometry opens the artist's Library Hero
+                        // overlay and focuses its Workspace. The shell re-reads
+                        // no tree cursor; it only confirms the owner still
+                        // resolves that artist before opening.
+                        if self.app.tab.emby_library_index().is_some()
+                            && !self.app.is_right_panel_wide()
+                            && self.music_owner().is_some_and(|owner| {
+                                owner
+                                    .artist_detail_target()
+                                    .is_some_and(|current| current.same_source(&target))
+                            })
+                        {
+                            self.open_library_hero_overlay();
+                        }
+                        self.push_music_workspace_content();
+                    }
+                    ShellRequest::MusicNeighbourPrefetch { targets } => {
+                        // Task 6.5 (design D4): the payload is the tree's own
+                        // ordered neighbour window from its completed paint.
+                        // The fetch applies the existing idle gate; the shell
+                        // receives no tree cursor and re-resolves nothing.
+                        self.app.prefetch_neighbour_album_art(&targets);
+                    }
                     ShellRequest::MusicArtistTracks { target } => {
                         // Design D7 (tasks 6.1/6.2): one focus transition
                         // requests both concerns. The track request arms the
