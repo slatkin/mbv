@@ -211,6 +211,13 @@ fn played_tracks_project_the_ordinary_state() {
 /// `(artist, [album target…])` in settled order; the derived title is the
 /// target so assertions can name leaves.
 fn tree_owner(artists: &[(&str, &[&str])]) -> MusicContent {
+    tree_owner_with_tracks(artists, None)
+}
+
+fn tree_owner_with_tracks(
+    artists: &[(&str, &[&str])],
+    album_tracks: Option<Vec<EmbyItem>>,
+) -> MusicContent {
     let mut items: Vec<EmbyItem> = Vec::new();
     let mut album_info: Vec<(String, String, String)> = Vec::new();
     let mut artist_keys: Vec<crate::app::music_grouping::ArtistKey> = Vec::new();
@@ -241,7 +248,7 @@ fn tree_owner(artists: &[(&str, &[&str])]) -> MusicContent {
         album_info,
         artist_keys,
         order,
-        None,
+        album_tracks,
     );
     let mut owner = MusicContent::new();
     owner.set_content(ctx);
@@ -353,6 +360,48 @@ fn enter_toggles_an_artist_root_and_activates_an_album_leaf() {
         }
         other => panic!("expected album activation, got {other:?}"),
     }
+}
+
+/// Task 2.4 correction: an album-leaf Enter focuses the Wide inline track
+/// pane, but moving the tree selection onto an artist root must not let the
+/// stale pane focus swallow the root's Enter toggle. Before the fix the
+/// `track_focused` Enter arm matched first and short-circuited through
+/// `selected_item()?` (which is `None` for a root), so Enter did nothing.
+#[test]
+fn enter_toggles_a_root_reached_while_the_track_pane_holds_focus() {
+    let mut owner = tree_owner_with_tracks(
+        &[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])],
+        Some(vec![make_item("t-0", "Audio"), make_item("t-1", "Audio")]),
+    );
+    owner.set_inline_track_focus_enabled(true);
+
+    // Album-leaf Enter focuses the inline track pane (Wide).
+    assert_eq!(owner.browser.selected_album_target(), Some("a-0"));
+    assert_eq!(press(&mut owner, Key::Enter), None);
+    assert!(
+        owner.track_focused(),
+        "album-leaf Enter focuses the track pane"
+    );
+
+    // Wide `Home` is not track-focus gated and moves the tree selection onto
+    // the Alpha artist root while the pane still holds focus.
+    press(&mut owner, Key::Home);
+    assert!(owner.browser.selected_is_artist());
+    let root = owner.browser.selected_id().expect("artist root selected");
+    assert!(owner.browser.root_is_expanded(root));
+
+    // The stale pane must not swallow Enter: the root toggles instead.
+    assert_eq!(press(&mut owner, Key::Enter), None);
+    assert!(
+        !owner.browser.root_is_expanded(root),
+        "Enter collapses the focused root"
+    );
+    // An artist root resolves no album, so no Hero/Workspace is projected and
+    // the previous album's tracks cannot paint under the root.
+    assert!(
+        owner.panel_content().hero.is_none(),
+        "no stale album Workspace paints under an artist root"
+    );
 }
 
 #[test]

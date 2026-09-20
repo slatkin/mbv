@@ -565,6 +565,18 @@ impl LibraryContentOwner for MusicContent {
             };
         }
         match key.code {
+            // An artist root is a grouping row, not an album: Enter toggles its
+            // persistent expansion (task 2.4). This must precede the track-pane
+            // Enter arm: a root reached while the inline pane still holds focus
+            // (Wide `Home`/`End` are not track-focus gated) would otherwise
+            // short-circuit through the pane arm's `selected_item()?` -- `None`
+            // for a root -- and swallow the chord.
+            Key::Enter if self.browser.selected_is_artist() => {
+                if let Some(root) = self.browser.selected_id() {
+                    self.browser.toggle_root(root);
+                }
+                None
+            }
             Key::Enter if self.track_focused => {
                 let track = self.selected_track_item()?;
                 let album = self.selected_item()?;
@@ -572,16 +584,6 @@ impl LibraryContentOwner for MusicContent {
                     album_id: album.id,
                     track,
                 }))
-            }
-            // An artist root is a grouping row, not an album: Enter toggles its
-            // persistent expansion (task 2.4). This must precede the
-            // inline-track-focus arm so a root focus can never focus a stale
-            // track pane left over from a previous album.
-            Key::Enter if self.browser.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_id() {
-                    self.browser.toggle_root(root);
-                }
-                None
             }
             Key::Enter if self.track_list.rows().is_empty() => self
                 .selected_item()
