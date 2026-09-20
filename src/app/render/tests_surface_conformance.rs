@@ -543,7 +543,7 @@ fn non_wide_column_body_paints_the_fixed_backdrop_in_every_focus_state() {
 /// `unify-narrow-library-with-wide-browser-pane` 4.4: the list's scrollbar
 /// column paints only while the list is focused and overflowing, so it is
 /// absent from an unfocused frame. In a focused overflowing Narrow frame it
-/// must resolve the selected-row surface (`#2d353b`) — the same fill the Wide
+/// must resolve the selected-row backdrop role — the same fill the Wide
 /// Browser-pane list's column carries — never the list box's own fill beside
 /// it.
 #[test]
@@ -578,7 +578,7 @@ fn focused_overflowing_narrow_scrollbar_column_paints_the_selected_row_surface()
     let first_row = pane.list_panel.y + super::arrangements::wide_hero::PANE_PAD_Y;
     let unselected_row = first_row + 3;
 
-    let selected_fill = palette::surface_colors(palette::Surface::SelectedRow, true).fill;
+    let selected_fill = palette::SURFACE_BACKDROP;
     assert_eq!(
         buffer[(scrollbar_x, unselected_row)].bg,
         selected_fill,
