@@ -94,7 +94,9 @@ Alternative rejected: adapting the current `InlineSearch` carrier. Its flat resu
 
 Artist roots never cross the shell as playable targets. For play, enqueue, shuffle, and context requests, the tree owner walks the root's settled child leaves and returns ordered album targets. Expansion does not affect action scope. An active filter restricts the walk to matching visible leaves.
 
-Root multi-selection is modified-click only: Ctrl+Click toggles album leaves, and artist-root toggles apply mark operations to the same visible child leaves. Aggregate root state is derived from child marks. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
+The multi-selection design (descoped, see below) was modified-click only: Ctrl+Click toggles album leaves, and artist-root toggles apply mark operations to the same visible child leaves. Aggregate root state is derived from child marks. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
+
+No multi-selection UI ships in this PoC (user decision 2026-09-20): modified-click toggles, root tri-state marks, selection summaries, and bulk-action wiring are skipped, alongside the already-descoped Visual mode and range selection. The tree retains only its single selected node. Revisit after PoC acceptance if wanted.
 
 Alternative rejected: storing selected artist IDs. Their meaning changes with filtering and would force the shell to re-resolve component-local scope.
 
@@ -131,7 +133,7 @@ The implementation is not allowed to bypass a missing extension point with a sec
 Tests are added only where they protect realistic failures:
 
 - pure model/filter cases: stable-ID reconciliation, ancestor retention, stable ordering, filter restoration, and visible-descendant materialization;
-- Interactive Component cases: expansion/navigation, typed album intents, multi-selection aggregate state, viewport continuity, and latest-frame hit resolution;
+- Interactive Component cases: expansion/navigation, typed album intents, viewport continuity, and latest-frame hit resolution;
 - Render Component/buffer cases: semantic row differences, full-row selection, zebra reset, metadata/marquee bounds, scrollbar, and narrow clipping;
 - mounted tick/mouse cases: one painter, routing/focus, responsive owner reuse, latest-frame delivery, and stale artist completion rejection.
 
@@ -144,7 +146,6 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 - **[The dependency has limited adoption and a short release history]** → Current registry metadata shows one owner, low download volume, and two yanked earlier versions ([lib.rs](https://lib.rs/crates/tui-treelistview), [crates.io API](https://crates.io/api/v1/crates/tui-treelistview)); keep the integration destination-local, pin exactly, and retain dependency rejection for the case where the tree's core behavior proves impossible.
 - **[Artist identity is absent, ambiguous, or omitted by a Service]** → Request `ArtistItems` explicitly, accept only a name-matching pair, retain equal-name groups separately, and use a deterministic fallback key when no match exists; never perform effect lookup by name. Unsupported artist-ID queries propagate to the shell's per-album aggregation fallback.
 - **[Artist completions paint beneath a new selection]** → Key requests and visible application by destination, Service generation, settled revision, and artist ID; cache valid data separately from presentation.
-- **[Filtering and marks expose hidden actions]** → Intersect tree multi-selection with the visible album projection whenever a debounced filter revision applies, and materialize every root action from that same projection.
 - **[Node arena grows during a long retained session]** → Reset it when destination identity changes; accept monotonic growth within one retained destination rather than risk ID reuse. Revisit compaction only if measured catalog churn makes it material.
 - **[`music_content.rs` becomes harder to maintain]** → Put model, filter, identity arena, and rendering adapter in destination-specific sibling modules; keep `MusicContent` to orchestration and typed translation.
 - **[Concurrent page-navigation change claims Grouped Music]** → Its canonical Heading behavior can land in either order; this change removes the Music album flow from `MediaList`, so no destination branch or ordering dependency is needed.
@@ -156,7 +157,7 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 2. Request and retain `ArtistItems` identity in parsed music data and add the fallback-safe Audio-by-artist client operation; defer the advisory live Emby mapping check to terminal acceptance.
 3. Settle the verified identity into stable tree keys.
 4. Replace only the Grouped Music album carrier with the tree owner; keep both track Workspaces canonical.
-5. Add local filtering, root action materialization, multi-selection, and current-frame mouse handling.
+5. Add local filtering, root action materialization, and current-frame mouse handling.
 6. Add shell-owned lazy artist detail/artwork/track projection with stale guards.
 7. Complete focused automated evidence, repository checks, and live user review in Wide, Narrow, Mini, and Library Hero overlay Panel states.
 8. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection of the dependency's core capability, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.

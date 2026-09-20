@@ -5,7 +5,7 @@ Grouped Music presents a settled artist hierarchy as a flat list whose artist la
 ## What Changes
 
 - **BREAKING (Grouped Music interaction):** replace the Grouped Music album `MediaList` with a two-level tree whose focusable artist roots expand or collapse and whose album leaves retain existing album activation.
-- Add artist-root play, enqueue, shuffle, context, and multi-selection behavior, resolving roots to their visible album descendants in settled display order.
+- Add artist-root play, enqueue, shuffle, and context behavior, resolving roots to their visible album descendants in settled display order. (No multi-selection UI ships in this PoC — user decision 2026-09-20; modified-click toggles, Visual mode, and range selection are descoped and revisited after PoC acceptance.)
 - Replace Grouped Music's flat full-corpus Inline Search presentation with an in-place, 300 ms debounced fuzzy tree filter over the current settled tree. Matching preserves settled order, retains artist ancestors, force-expands matching paths, and restores pre-filter selection and expansion on dismissal.
 - Add an artist Hero with artwork and summary metadata plus an artist Workspace containing the in-scope tracks grouped under non-selectable album headings. Album Hero and Workspace behavior remains unchanged. In non-Wide geometry, selected artist or album detail uses the existing Library Hero overlay rather than retaining Grouped Music's album-only inline-row Hero, because a focusable artist root needs the same complete Workspace-bearing detail surface as its Wide presentation.
 - Retain stable Emby artist identity in music data, with deterministic fallback identity for albums whose Service payload has no artist identity.
@@ -26,7 +26,6 @@ Grouped Music presents a settled artist hierarchy as a flat list whose artist la
 - `music-library-hero`: Adds artist-focused Hero and grouped-track Workspace content alongside the existing album-focused detail behavior and removes Grouped Music's album-only narrow inline-row Hero.
 - `library-hero-overlay`: Extends non-Wide overlay entry from canonical browser rows to Grouped Music artist roots and album leaves.
 - `inline-library-search`: Defines Grouped Music's deliberate in-place current-tree filtering exception while all other destinations retain flat full-library results.
-- `media-list-multi-select`: Extends uniform selection outcomes to the Grouped Music tree, including root aggregate state and visible-descendant materialization, without making artist identities effect targets.
 
 ## Impact
 
