@@ -5,8 +5,7 @@ use ratatui::layout::Rect;
 pub(in crate::app) struct WideLibraryPanes {
     /// The full-width Selector band reserved above both panes (D1/D3/D5):
     /// the pill row and its one-row parent-background spacer, spanning the
-    /// whole panel width. The Wide skeleton's band painter aligns the pill
-    /// row to the panel's left content edge (D5).
+    /// whole panel width, pill row flush to the panel's left edge.
     pub pills_area: Rect,
     pub spacer_area: Rect,
     /// The band-reduced area the Hero/Browser split was computed over; both

@@ -106,8 +106,13 @@ fn draw_skeleton(
 }
 
 fn browser_pane(area: Rect) -> crate::app::render::arrangements::wide_hero::WideHeroBrowserPane {
+    use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
     let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
-    wide_browser_pane(panes.pills_area, panes.spacer_area, panes.browser_panel)
+    WideHeroBrowserPane {
+        pills_area: panes.pills_area,
+        spacer_area: panes.spacer_area,
+        list_panel: panes.browser_panel,
+    }
 }
 
 #[test]
@@ -209,10 +214,10 @@ fn hero_pane_starts_below_the_full_width_selector_band() {
     );
 }
 
-/// Task 2.1 (D3/D5): the Wide Selector band's pill row is aligned to the
-/// panel's left content edge and its own surface spans across both panes, and
-/// the Browser list box carries no internal pill reserve — its fill starts at
-/// the Browser pane's own top and reaches the panel border.
+/// Task 2.1 (D3/D5): the Wide Selector band's pill row spans the panel's full
+/// width across both panes, and the Browser list box carries no internal pill
+/// reserve — its fill starts at the Browser pane's own top and reaches the
+/// panel border.
 #[test]
 fn selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
@@ -233,10 +238,10 @@ fn selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve() {
     let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
     let pill_row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
 
-    // The pill row starts at the panel's left content edge (D5) and its own
-    // surface reaches the panel's right edge, i.e. across the hero/browser
-    // gap into the Browser pane.
-    assert_eq!(geo.selector_bar.x, AREA.x + PANE_PAD_X);
+    // The pill row starts flush at the panel's left edge and its own surface
+    // reaches the panel's right edge, i.e. across the hero/browser gap into
+    // the Browser pane.
+    assert_eq!(geo.selector_bar.x, AREA.x);
     assert_eq!(geo.selector_bar.right(), panes.pills_area.right());
     assert!(panes.browser_panel.x > panes.hero_panel.right());
     assert_eq!(
@@ -248,8 +253,8 @@ fn selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve() {
         pill_row_bg,
         "the pill row paints across the Browser pane too"
     );
-    // The panel's left inset columns are outside the pill row's surface.
-    assert_ne!(buf[(AREA.x, geo.selector_bar.y)].bg, pill_row_bg);
+    // The pill row's surface covers the panel's left edge column.
+    assert_eq!(buf[(AREA.x, geo.selector_bar.y)].bg, pill_row_bg);
 
     // No internal pill reserve in the Wide path (D3): the list box starts at
     // the Browser pane's own top (already below the band) and its fill
