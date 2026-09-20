@@ -7,6 +7,7 @@
 //! painters until the later Music panel slices move painting and registration.
 
 use mbv_core::api::EmbyItem;
+use std::collections::HashMap;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::inline_search::{InlineSearch, InlineSearchHost};
@@ -23,7 +24,7 @@ use super::media_list::{
 };
 use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
-use super::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
+use super::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack};
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::trunc_str;
 
@@ -210,6 +211,12 @@ pub struct MusicContent {
     /// its open transition; ordinary pushes never focus or re-focus the
     /// track pane, and an explicit shell focus clear always wins.
     hero_overlay_open: bool,
+    /// Full cached track items projected for the tree. The browser receives
+    /// only stable targets/labels; this retained shell projection resolves a
+    /// selected tree track through the existing playback request arm even
+    /// after the shell changes its selected-album snapshot.
+    tree_tracks: HashMap<String, Vec<EmbyItem>>,
+    tree_track_revision: Option<u64>,
 }
 
 impl MusicContent {
@@ -240,6 +247,8 @@ impl MusicContent {
             selection_origin: None,
             hero_image: HeroImageState::None,
             hero_overlay_open: false,
+            tree_tracks: HashMap::new(),
+            tree_track_revision: None,
         }
     }
 
@@ -250,6 +259,24 @@ impl MusicContent {
         self.context = context;
         self.context.focused = focused;
 
+        self.project_tree_tracks();
+        let tracks_by_album = self
+            .tree_tracks
+            .iter()
+            .map(|(album, tracks)| {
+                (
+                    album.clone(),
+                    tracks
+                        .iter()
+                        .map(|track| MusicTreeTrack {
+                            target: track.id.clone(),
+                            title: track.name.clone(),
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+        self.browser.set_track_items(tracks_by_album);
         let album_rows = self.tree_entries();
         self.browser.reconcile(&album_rows);
         // A fresh owner (or a destination whose tree has no selection yet)
@@ -381,6 +408,76 @@ impl MusicContent {
         if self.pending_artist_workspace_focus.is_some() && !still_on_root {
             self.pending_artist_workspace_focus = None;
         }
+    }
+
+    /// Refreshes the component's projected view of the shell-owned artist
+    /// cache. It is retained across a local move onto an album child because
+    /// the shell's next album snapshot does not itself carry the artist cache.
+    fn project_tree_tracks(&mut self) {
+        if self.tree_track_revision != Some(self.context.catalog_revision) {
+            self.tree_tracks.clear();
+            self.tree_track_revision = Some(self.context.catalog_revision);
+        }
+        if let Some(detail) = self.current_artist_detail() {
+            let groups = detail.track_groups.clone();
+            self.tree_tracks.clear();
+            for group in groups {
+                for (index, album) in self.context.list.items.iter().enumerate() {
+                    if album.id == group.album_id {
+                        if let Some(target) = self.context.album_targets.get(index) {
+                            self.tree_tracks
+                                .insert(target.clone(), group.tracks.clone());
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        // A local move onto an album may replace the artist projection with
+        // the ordinary album snapshot. If its existing album-track cache is
+        // now present, fold that same cache into the tree branch; this is the
+        // existing fetch path, not a tree request.
+        let (Some(album), Some(tracks)) = (
+            self.context.selected_album.as_ref(),
+            self.context.album_tracks.as_ref(),
+        ) else {
+            return;
+        };
+        if let Some(index) = self
+            .context
+            .list
+            .items
+            .iter()
+            .position(|item| item.id == album.id)
+        {
+            if let Some(target) = self.context.album_targets.get(index) {
+                self.tree_tracks.insert(target.clone(), tracks.clone());
+            }
+        }
+    }
+
+    /// Resolves a selected tree track to the full cached item used by the
+    /// existing `MusicTrackActivate` arm. The tree contributes only stable
+    /// album/track identity; playback resolution remains in the shell.
+    fn selected_tree_track(&self) -> Option<(String, EmbyItem)> {
+        let (album_target, track_target) = self.browser.selected_track_identity()?;
+        let track = self
+            .tree_tracks
+            .get(album_target)?
+            .iter()
+            .find(|track| track.id == track_target)?
+            .clone();
+        let album_id = if track.album_id.is_empty() {
+            album_target
+                .split('\0')
+                .next()
+                .unwrap_or(album_target)
+                .to_string()
+        } else {
+            track.album_id.clone()
+        };
+        Some((album_id, track))
     }
 
     /// The settled album projection the tree owner reconciles: one entry per
@@ -974,6 +1071,13 @@ impl LibraryContentOwner for MusicContent {
                     track,
                 }))
             }
+            Key::Enter if self.browser.selected_is_track() => {
+                let (album_id, track) = self.selected_tree_track()?;
+                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+                    album_id,
+                    track,
+                }))
+            }
             Key::Enter if self.track_list.rows().is_empty() => self
                 .selected_item()
                 .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
@@ -1147,6 +1251,17 @@ impl LibraryContentOwner for MusicContent {
                 } else {
                     None
                 }
+            }
+            // Right first expands cached track children on an album node;
+            // the shell already owns any missing album-track fetch and this
+            // local operation only projects settled cache data.
+            Key::Right if !self.track_focused && !self.browser.selected_is_artist() => {
+                if let Some(id) = self.browser.selected_id() {
+                    if !self.browser.node_is_expanded(id) {
+                        self.browser.expand_node(id);
+                    }
+                }
+                None
             }
             // Right on an artist root (task 2.4/task 6.4): a collapsed root
             // expands first; only a later Right on the already expanded root

@@ -10,9 +10,10 @@
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
+use std::collections::HashMap;
 use tui_treelistview::{TreeGlyphs, TreeMarkState, TreeModel, TreeRevision};
 
-use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
+use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::music_grouping::ArtistKey;
 
@@ -783,5 +784,43 @@ fn neighbour_prefetch_is_suppressed_for_an_artist_root_or_an_unpainted_frame() {
         browser.neighbour_prefetch_targets(),
         None,
         "an invalidated (unpainted) projection cannot key the window"
+    );
+}
+
+#[test]
+fn cached_tracks_project_as_ordered_depth_two_children() {
+    let entries = vec![alpha("album-1", "First Album")];
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
+    browser.set_track_items(HashMap::from([(
+        "album-1".to_string(),
+        vec![
+            MusicTreeTrack {
+                target: "track-1".into(),
+                title: "Track One".into(),
+            },
+            MusicTreeTrack {
+                target: "track-2".into(),
+                title: "Track Two".into(),
+            },
+        ],
+    )]));
+    browser.reconcile(&entries);
+    let root = browser.selected_id().expect("root selected");
+    browser.expand_root(root);
+    let album = browser.projected_nodes()[1].id();
+    browser.expand_node(album);
+    assert_eq!(browser.projection_len(), 4);
+    assert_eq!(browser.projected_nodes()[1].level(), 1);
+    assert_eq!(browser.projected_nodes()[2].level(), 2);
+    assert_eq!(browser.projected_nodes()[3].level(), 2);
+    browser.select_index(2);
+    assert_eq!(
+        browser.selected_track_identity(),
+        Some(("album-1", "track-1"))
+    );
+    browser.select_index(3);
+    assert_eq!(
+        browser.selected_track_identity(),
+        Some(("album-1", "track-2"))
     );
 }

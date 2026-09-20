@@ -900,6 +900,23 @@ fn enter_activates_an_artist_workspace_track_from_its_group() {
 }
 
 #[test]
+fn enter_activates_a_cached_tree_track_through_the_existing_arm() {
+    let mut owner = artist_workspace_owner();
+    owner.expand_all_tree_roots();
+    press(&mut owner, Key::Home);
+    press(&mut owner, Key::Down);
+    press(&mut owner, Key::Down);
+
+    match press(&mut owner, Key::Enter) {
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) => {
+            assert_eq!(album_id, "a-0");
+            assert_eq!(track.id, "alpha-track-1");
+        }
+        other => panic!("expected cached tree track activation, got {other:?}"),
+    }
+}
+
+#[test]
 fn hero_double_click_activates_an_artist_workspace_track() {
     let mut owner = artist_workspace_owner();
     let area = Rect::new(0, 0, 30, 4);

@@ -74,6 +74,7 @@ const NEIGHBOUR_PREFETCH_AHEAD: usize = 3;
 pub(in crate::app) enum MusicNodeKey {
     Artist(ArtistKey),
     Album(String),
+    Track { album: String, track: String },
 }
 
 /// One settled album leaf's domain projection: the stable target the shell
@@ -93,6 +94,15 @@ pub(in crate::app) struct MusicTreeEntry {
     pub(in crate::app) semantic_state: MediaSemanticState,
 }
 
+/// A cached track projected below an album leaf. The browser only needs the
+/// stable Workspace target and label; the owning Music component retains the
+/// full `EmbyItem` to resolve activation through the existing playback arm.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(in crate::app) struct MusicTreeTrack {
+    pub(in crate::app) target: String,
+    pub(in crate::app) title: String,
+}
+
 enum MusicNode {
     Artist {
         /// The node's own settled identity (node-to-domain translation, D2).
@@ -104,6 +114,11 @@ enum MusicNode {
         year: Option<String>,
         target: String,
         semantic_state: MediaSemanticState,
+    },
+    Track {
+        album_target: String,
+        target: String,
+        title: String,
     },
 }
 
@@ -155,6 +170,17 @@ impl MusicTreeModel {
     /// one `ArtistKey` form one artist root, with roots in first-occurrence
     /// order and leaves in settled order.
     pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) {
+        self.reconcile_with_tracks(entries, &HashMap::new());
+    }
+
+    /// Reconciles the settled album projection plus the already cached track
+    /// children. The map is keyed by the stable album target, so duplicate
+    /// album IDs remain distinct tree branches.
+    pub(in crate::app) fn reconcile_with_tracks(
+        &mut self,
+        entries: &[MusicTreeEntry],
+        tracks_by_album: &HashMap<String, Vec<MusicTreeTrack>>,
+    ) {
         let mut next_roots = Vec::new();
         let mut next_children: HashMap<usize, Vec<usize>> = HashMap::new();
         let mut next_leaf_position: HashMap<usize, usize> = HashMap::new();
@@ -179,9 +205,16 @@ impl MusicTreeModel {
                 &entry.semantic_state,
                 &mut display_changed,
             );
-            let siblings = next_children.entry(root).or_default();
-            siblings.push(leaf);
-            next_leaf_position.insert(leaf, siblings.len() - 1);
+            let position = next_children.entry(root).or_default().len();
+            next_children.entry(root).or_default().push(leaf);
+            next_leaf_position.insert(leaf, position);
+            let track_ids = tracks_by_album
+                .get(&entry.target)
+                .into_iter()
+                .flatten()
+                .map(|track| self.intern_track(&entry.target, track, &mut display_changed))
+                .collect();
+            next_children.insert(leaf, track_ids);
         }
 
         let mut children = vec![Vec::new(); self.nodes.len()];
@@ -236,6 +269,35 @@ impl MusicTreeModel {
     }
 
     /// Interns (or refreshes the display data of) one album leaf.
+    fn intern_track(
+        &mut self,
+        album_target: &str,
+        track: &MusicTreeTrack,
+        display_changed: &mut bool,
+    ) -> usize {
+        let node_key = MusicNodeKey::Track {
+            album: album_target.to_string(),
+            track: track.target.clone(),
+        };
+        if let Some(id) = self.intern.get(&node_key).copied() {
+            if let Some(MusicNode::Track { title, .. }) = self.nodes.get_mut(id) {
+                if title != &track.title {
+                    *title = track.title.clone();
+                    *display_changed = true;
+                }
+            }
+            return id;
+        }
+        let id = self.nodes.len();
+        self.nodes.push(MusicNode::Track {
+            album_target: album_target.to_string(),
+            target: track.target.clone(),
+            title: track.title.clone(),
+        });
+        self.intern.insert(node_key, id);
+        id
+    }
+
     fn intern_album(
         &mut self,
         target: &str,
@@ -324,20 +386,42 @@ impl MusicTreeModel {
     pub(in crate::app) fn title_of(&self, id: usize) -> &str {
         match &self.nodes[id] {
             MusicNode::Artist { name, .. } => name,
-            MusicNode::Album { title, .. } => title,
+            MusicNode::Album { title, .. } | MusicNode::Track { title, .. } => title,
         }
     }
 
     pub(in crate::app) fn year_of(&self, id: usize) -> Option<&str> {
         match &self.nodes[id] {
             MusicNode::Album { year, .. } => year.as_deref().filter(|year| !year.is_empty()),
-            MusicNode::Artist { .. } => None,
+            MusicNode::Artist { .. } | MusicNode::Track { .. } => None,
         }
     }
 
     pub(in crate::app) fn target_of(&self, id: usize) -> Option<&str> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { target, .. }) => Some(target),
+            _ => None,
+        }
+    }
+
+    /// Resolves an album identity for an album or one of its track children.
+    pub(in crate::app) fn album_target_of(&self, id: usize) -> Option<&str> {
+        match self.nodes.get(id) {
+            Some(MusicNode::Album { target, .. }) => Some(target),
+            Some(MusicNode::Track { album_target, .. }) => Some(album_target),
+            _ => None,
+        }
+    }
+
+    /// Resolves the stable `(album target, track target)` identity of a track
+    /// node. Track rows never use projection indexes as identities.
+    pub(in crate::app) fn track_identity_of(&self, id: usize) -> Option<(&str, &str)> {
+        match self.nodes.get(id) {
+            Some(MusicNode::Track {
+                album_target,
+                target,
+                ..
+            }) => Some((album_target, target)),
             _ => None,
         }
     }
@@ -369,7 +453,9 @@ impl TreeModel for MusicTreeModel {
     fn children(&self, id: usize) -> TreeChildren<'_, usize> {
         match &self.nodes[id] {
             MusicNode::Artist { .. } => TreeChildren::Loaded(&self.children[id]),
-            MusicNode::Album { .. } => TreeChildren::Leaf,
+            MusicNode::Album { .. } if self.children[id].is_empty() => TreeChildren::Leaf,
+            MusicNode::Album { .. } => TreeChildren::Loaded(&self.children[id]),
+            MusicNode::Track { .. } => TreeChildren::Leaf,
         }
     }
 
@@ -567,6 +653,11 @@ pub(in crate::app) struct MusicTreeBrowser {
     model: MusicTreeModel,
     query: TreeQuery<MusicTreeFilter>,
     state: TreeListViewState<usize>,
+    /// Cached track projections already settled by the shell. The tree never
+    /// fetches; retaining this projection lets a local move from an artist
+    /// root onto a child keep the rows visible while the shell switches its
+    /// album snapshot.
+    track_items: HashMap<String, Vec<MusicTreeTrack>>,
     focused: bool,
     /// The display setting pushed by the shell sync pass: the tree's expansion
     /// glyphs follow it (Nerd Font angles when on, the crate's Unicode set
@@ -603,6 +694,7 @@ impl MusicTreeBrowser {
             model,
             query,
             state,
+            track_items: HashMap::new(),
             focused: true,
             use_nerd_fonts: false,
             marquee_key: String::new(),
@@ -623,7 +715,7 @@ impl MusicTreeBrowser {
     /// Returns whether the projection was rebuilt: a no-op reconciliation
     /// leaves the cached projection, offset, and arming untouched.
     pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) -> bool {
-        self.model.reconcile(entries);
+        self.model.reconcile_with_tracks(entries, &self.track_items);
         let rebuilt = self.state.ensure_projection(&self.model, &self.query);
         self.state.ensure_mark_states(&self.model);
         if rebuilt {
@@ -633,6 +725,16 @@ impl MusicTreeBrowser {
             self.invalidate();
         }
         rebuilt
+    }
+
+    /// Replaces the cached track projection for the focused artist. This is
+    /// called only with shell-projected cache data; no request originates in
+    /// the tree owner.
+    pub(in crate::app) fn set_track_items(
+        &mut self,
+        tracks_by_album: HashMap<String, Vec<MusicTreeTrack>>,
+    ) {
+        self.track_items = tracks_by_album;
     }
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
@@ -653,9 +755,34 @@ impl MusicTreeBrowser {
     }
 
     pub(in crate::app) fn expand_root(&mut self, root: usize) {
-        self.state.set_expanded(root, None, true);
+        self.expand_node(root);
+    }
+
+    /// Expands an artist or cached-track album node without changing
+    /// selection. Track children are loaded from the existing projection;
+    /// this operation never starts a fetch.
+    pub(in crate::app) fn expand_node(&mut self, id: usize) {
+        let parent = self
+            .state
+            .projection()
+            .nodes()
+            .iter()
+            .find(|node| node.id() == id)
+            .and_then(|node| node.parent());
+        self.state.set_expanded(id, parent, true);
         self.state.ensure_projection(&self.model, &self.query);
         self.invalidate();
+    }
+
+    pub(in crate::app) fn node_is_expanded(&self, id: usize) -> bool {
+        let parent = self
+            .state
+            .projection()
+            .nodes()
+            .iter()
+            .find(|node| node.id() == id)
+            .and_then(|node| node.parent());
+        self.state.node_is_expanded(id, parent)
     }
 
     /// Collapses an artist root (task 2.4 Left): its leaves leave the visible
@@ -758,7 +885,15 @@ impl MusicTreeBrowser {
     pub(in crate::app) fn selected_album_target(&self) -> Option<&str> {
         self.state
             .selected_id()
-            .and_then(|id| self.model.target_of(id))
+            .and_then(|id| self.model.album_target_of(id))
+    }
+
+    /// The selected track's stable album and track targets, if the tree is on
+    /// a track item rather than an artist or album row.
+    pub(in crate::app) fn selected_track_identity(&self) -> Option<(&str, &str)> {
+        self.state
+            .selected_id()
+            .and_then(|id| self.model.track_identity_of(id))
     }
 
     /// The selected artist root's settled identity (design D7): the stable
@@ -904,6 +1039,12 @@ impl MusicTreeBrowser {
         self.state
             .selected_id()
             .is_some_and(|id| self.model.is_artist(id))
+    }
+
+    pub(in crate::app) fn selected_is_track(&self) -> bool {
+        self.state
+            .selected_id()
+            .is_some_and(|id| self.model.track_identity_of(id).is_some())
     }
 
     /// Whether the owner has any selected node (the shell projection adopts
