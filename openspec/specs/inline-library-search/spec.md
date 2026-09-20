@@ -51,150 +51,152 @@ The search key SHALL have no effect while the library panel is not the focused p
 
 ### Requirement: Typing edits the query and re-filters the list in place
 
-While the input box is open, printable characters SHALL be appended to the query and SHALL NOT be interpreted as library list shortcuts. Each change to the query SHALL re-score the corpus and replace the rendered list contents with the matches.
+While the input box is open, printable characters SHALL be appended to the query and SHALL NOT be interpreted as library list shortcuts. Each change to the query SHALL re-score the active destination's corpus after a 300 ms debounce; typed characters SHALL appear immediately.
 
-Matching SHALL be fuzzy, scored against each item's display name, and results SHALL be ordered by descending match score. An empty query SHALL show no results: the result list SHALL stay empty, without a loading indicator, until the first query character is typed.
+For destinations other than Grouped Music, matching SHALL apply the shared word-local fuzzy rule: every word of the query SHALL match inside a single word of the item's display name, in order, with no letter taken from a different word; the fuzzy matcher's scoring over those accepted word matches SHALL be retained. Results SHALL remain ordered by descending match score, an empty query SHALL show no results, and scored results SHALL reset selection to the first result.
 
-The scored results SHALL update after typing pauses for a short debounce interval (300 ms) rather than on every keystroke; the typed characters themselves SHALL appear in the input box immediately.
-
-The selection SHALL reset to the first result whenever the scored results re-fire.
+For Grouped Music, matching SHALL operate on the current settled tree as specified by `grouped-music-tree-browser`: every node SHALL match under the same word-local rule against only its own searchable text — artist roots their name, album leaves their album title and year, track items their track title; score SHALL be only a visibility predicate; settled order SHALL be preserved; a match SHALL keep exactly the ancestors needed to reach it; and an empty query SHALL show the complete tree. A Grouped Music query change SHALL preserve the selected tree node when it remains visible and otherwise select a valid visible node.
 
 #### Scenario: Typing a query
+- **WHEN** the user types characters into the open search box on another searchable destination
+- **THEN** the characters appear immediately
+- **AND** after the debounce the list shows fuzzy matches ordered by descending score
 
-- **WHEN** the user types characters into the open search box
-- **THEN** the characters SHALL appear in the input box immediately
-- **AND** after the typing debounce elapses, the list below SHALL show only items whose names fuzzy-match the query, ordered by descending score
+#### Scenario: Typing a Grouped Music query
+- **WHEN** the user types characters into the open search box on Grouped Music
+- **THEN** the characters appear immediately
+- **AND** after the debounce the tree hides nonmatching album leaves while preserving settled order and matching artist ancestors
 
 #### Scenario: A list shortcut letter is typed
-
 - **WHEN** the user types a character that is otherwise a library list shortcut
-- **THEN** it SHALL be inserted into the query
-- **AND** the library list action bound to that character SHALL NOT run
+- **THEN** it is inserted into the query
+- **AND** the library list action bound to that character does not run
 
 #### Scenario: Opening search with an empty query
+- **WHEN** the user opens Inline Search outside Grouped Music and has not typed anything
+- **THEN** the result list is empty and no corpus load starts
 
-- **WHEN** the user opens Inline Search and has not typed anything
-- **THEN** the result list SHALL be empty and no corpus load SHALL start
+#### Scenario: Opening Grouped Music filtering with an empty query
+- **WHEN** the user opens Inline Search on Grouped Music and has not typed anything
+- **THEN** the complete settled tree remains visible with no loading indicator
 
 #### Scenario: Query emptied by deletion
+- **WHEN** the user deletes back to an empty query without dismissing search
+- **THEN** a non-Music flat result list is empty, while Grouped Music shows its complete settled tree
+- **AND** no loading indicator is shown
 
-- **WHEN** the user deletes back to an empty query without dismissing the search
-- **THEN** the result list SHALL be empty and no loading indicator SHALL show
 
 ### Requirement: The corpus spans the whole library, not the visible page
 
-The corpus SHALL be the library's full item set, independent of lazy pagination and independent of any active letter-range filter. Opening search SHALL NOT start the full-library fetch; the fetch SHALL start with the first query character, and once it is running the input box SHALL show a loading indicator until it completes.
+Outside Grouped Music, the corpus SHALL be the library's full item set, independent of lazy pagination and any active letter-range filter. Opening search SHALL NOT start the full-library fetch; the fetch SHALL start with the first query character, and once it is running the input box SHALL show a loading indicator until it completes. A non-Grouped-Music library configured for recursive album search SHALL use its album index as the corpus, matching against each album's indexed search text rather than its bare display name.
 
-A library configured for recursive album search SHALL use its album index as the corpus, matching against each album's indexed search text rather than its bare display name.
+Grouped Music SHALL instead use only its current settled tree as the corpus. Opening or editing that filter SHALL NOT start a full-library fetch, bypass the active music-group pill, or include albums outside the settled snapshot.
 
 #### Scenario: Only part of the library has been paged in
-
-- **WHEN** the user types the first query character on a library whose items are only partly loaded
-- **THEN** the full item set SHALL be fetched
-- **AND** the input box SHALL show a loading indicator until the fetch completes
+- **WHEN** the user types the first query character outside Grouped Music on a library whose items are only partly loaded
+- **THEN** the full item set is fetched
+- **AND** the input box shows a loading indicator until the fetch completes
 
 #### Scenario: A letter-range filter is active
+- **WHEN** the user opens search while a letter-range filter narrows a non-Music library view
+- **THEN** the corpus spans the entire library, not the filtered range
 
-- **WHEN** the user opens search while a letter-range filter narrows the library view
-- **THEN** the corpus SHALL span the entire library, not the filtered range
+#### Scenario: Grouped Music uses its settled snapshot
+- **WHEN** the user filters Grouped Music while only one music-group pill's settled tree is active
+- **THEN** matching considers only albums in that settled tree
+- **AND** no full-library or recursive album-index request starts
 
 #### Scenario: Corpus still loading
+- **WHEN** a query changes outside Grouped Music while its full-library corpus fetch is still in flight
+- **THEN** the view indicates loading rather than presenting an empty result set as final
 
-- **WHEN** the query changes while the corpus fetch is still in flight
-- **THEN** the view SHALL indicate that loading is in progress rather than presenting an empty result set as final
 
 ### Requirement: Results render as a flat list on every library type
 
-While search is open, results SHALL render as a single flat list through the shared canonical media-list presentation (the same fixed-row list control every library list uses), so selection styling, zebra striping, and theme roles match the media-list default rather than a bespoke search renderer. No grouping applied by the underlying browse view — artist-grouped album headers or letter headers — SHALL be applied to search results, and no `Heading` or `Spacer` rows SHALL be projected into the search result flow.
+Outside Grouped Music, results SHALL render through the same fixed-row canonical media-list control used by library lists, not a bespoke search renderer, so selection styling, zebra striping, and theme roles match the media-list default. No grouping applied by the underlying browse view SHALL be applied to those results, and no `Heading` or `Spacer` rows SHALL be projected. Results SHALL NOT be reordered, mismatched, or omitted as a consequence of browse-view grouping; every displayed row SHALL show the item that matched the query. Those provider-neutral result rows SHALL use stable opaque item targets, the matched display label, and a trailing release year on playable leaves when known; they SHALL be ordered by match score and SHALL paint the Library panel's loading or empty placeholders as appropriate.
 
-Results SHALL be provider-neutral rows addressed by stable opaque targets (the matched items' ids), with each row's primary label the item's display label (an indexed album's display label, not its bare name) and a trailing release year on playable leaves when known — the same row content the search previously rendered, restyled by the canonical painter.
-
-Results SHALL NOT be reordered, mismatched, or omitted as a consequence of any grouping the browse view would otherwise apply. Every displayed row SHALL show the item that actually matched the query.
-
-When the result set is empty, the results area SHALL paint the same placeholder states the Library panel paints for an empty list box: a loading placeholder while the corpus fetch is outstanding and an empty placeholder once the query is settled with no matches.
+Grouped Music SHALL retain and filter its shallow artist/album tree in the same Library panel browser slot. It SHALL not create a flat search-result owner, duplicate input, or second painter. Tree filtering SHALL use the visual and ownership contracts in `grouped-music-tree-browser`.
 
 #### Scenario: Searching a grouped music library
-
-- **WHEN** the user searches a music library whose browse view groups albums under artist headers
-- **THEN** every album matching the query SHALL appear, ordered by match score
-- **AND** each row SHALL display the album it matched, not a different album
-- **AND** no artist headers SHALL be drawn
+- **WHEN** the user filters a Grouped Music tree
+- **THEN** matching artist roots and album leaves remain in the tree in settled order
+- **AND** no flat result list or duplicate browser is painted
 
 #### Scenario: Searching a letter-grouped library
-
-- **WHEN** the user searches a library whose browse view groups items under letter headers
-- **THEN** results SHALL render as a flat list with no letter headers
+- **WHEN** the user searches another library whose browse view groups items under letter headers
+- **THEN** results render as a flat list with no letter headers
 
 #### Scenario: Selected search results use the canonical selected-row bar
-
-- **WHEN** search results are painted with the Library panel focused
-- **THEN** the selected result row SHALL paint the canonical selected-row bar across its full row width, and unfocused search results SHALL paint the bar nowhere
-- **AND** result rows SHALL zebra-stripe like every other library list
+- **WHEN** search results or a filtered Grouped Music tree are painted with the Library panel focused
+- **THEN** the selected flat result row paints the canonical selected-row bar, while the selected tree node paints the tree's own focused-node treatment
+- **AND** an unfocused result control paints no cursor bar
 
 #### Scenario: Empty results while the corpus loads
-
-- **WHEN** a query is typed while the corpus fetch is still in flight and no result rows are resolvable yet
-- **THEN** the results area SHALL paint a loading placeholder rather than an empty result set presented as final
+- **WHEN** a query is typed outside Grouped Music while the corpus fetch is still in flight and no result rows are resolvable
+- **THEN** the results area paints a loading placeholder rather than a final empty state
 
 #### Scenario: Query matches nothing
-
-- **WHEN** the scored results for the current query are empty
-- **THEN** the results area SHALL paint the empty placeholder
-- **AND** the search SHALL stay open
+- **WHEN** the current query has no matches
+- **THEN** the results area paints the empty placeholder and search stays open
 
 #### Scenario: Search dismissed on a grouped library
+- **WHEN** the user dismisses search on any grouped library
+- **THEN** its ordinary grouped presentation returns with its pre-filter navigation state restored where possible
 
-- **WHEN** the user dismisses search on a library whose browse view groups its items
-- **THEN** the grouped presentation SHALL return unchanged
 
 ### Requirement: Results are navigable and activatable without leaving search
 
-While the input box is open, Up and Down SHALL move the selection through the result list, the page keys SHALL move it by one viewport, and Home and End SHALL jump to the first and last result.
+While the input box is open, Up and Down SHALL move the active result selection, page keys SHALL move it by the active control's viewport semantics, and Home and End SHALL jump to its first and last visible selectable target. Cursor movement SHALL NOT alter the query, and typing SHALL NOT alter the cursor except where a changed result projection invalidates the selected target.
 
-Cursor movement SHALL NOT alter the query, and typing SHALL NOT alter the cursor beyond the reset that a query change causes.
+Outside Grouped Music, result rows SHALL retain ordinary context-menu and Ctrl+P, Ctrl+S, and Ctrl+A actions. Pressing Enter on an album result SHALL dismiss Inline Search, restore the standard library presentation, focus that album at its ordinary natural position, and enable its track-selection mode. Pressing Enter on a Series result SHALL dismiss Inline Search, navigate to the Series' natural place, and open its Workspace in Wide presentation or Library Hero overlay in Narrow presentation. Other results SHALL retain existing activation behavior.
 
-A result row reached by a mouse-down that began in the Inline Search bar SHALL retain its ordinary row context-menu actions and its Ctrl+P, Ctrl+S, and Ctrl+A shortcut actions.
-
-Pressing Enter on a selected album result SHALL dismiss Inline Search, restore the standard library presentation, focus that album at its ordinary natural pill/list position, and enable that album's track-selection mode. Pressing Enter on a selected Series result SHALL dismiss Inline Search, navigate the library list to the Series' natural place -- the cursor resting on it and its letter-range pill group marked when the pill row is shown -- and open the Series' workspace in Wide presentation or the Library Hero overlay in Narrow presentation. Results that are neither album nor Series results SHALL retain their existing activation behavior.
+In Grouped Music, keyboard and pointer actions SHALL remain tree actions: artist roots expand, collapse, and resolve visible descendants; album leaves retain album actions. Filtering SHALL remain open until explicitly dismissed or an existing album activation requires dismissal.
 
 #### Scenario: Moving through results
+- **WHEN** the user presses Down with flat results showing
+- **THEN** selection moves to the next result and the query is unchanged
 
-- **WHEN** the user presses Down with results showing
-- **THEN** the selection SHALL move to the next result
-- **AND** the query SHALL be unchanged
+#### Scenario: Moving through a filtered tree
+- **WHEN** the user presses Down with the Grouped Music filter open
+- **THEN** focus moves to the next visible artist root or album leaf and the query is unchanged
 
 #### Scenario: Result row actions after search-bar mouse-down
-
-- **WHEN** the user presses the mouse in the Inline Search bar and then targets a result row
-- **THEN** that row's context-menu actions and Ctrl+P, Ctrl+S, and Ctrl+A actions SHALL remain available
+- **WHEN** the user presses the mouse in the Inline Search bar and then targets a flat result row
+- **THEN** that row's context-menu actions and Ctrl+P, Ctrl+S, and Ctrl+A actions remain available
 
 #### Scenario: Activating a result
+- **WHEN** the user presses the activation key on a selected non-album flat result
+- **THEN** the application acts on that item as it would from the unfiltered library list
 
-- **WHEN** the user presses the activation key on a selected non-album result
-- **THEN** the application SHALL act on that item as it would from the unfiltered library list
+#### Scenario: Enter on a filtered artist root
+- **WHEN** the user presses Enter on an artist root while Grouped Music filtering is active
+- **THEN** that root toggles its filter-session expansion
+- **AND** the query remains open and unchanged
+
+#### Scenario: Enter on a filtered Grouped Music album
+- **WHEN** the user presses Enter on an album leaf while Grouped Music filtering is active
+- **THEN** filtering closes and the unfiltered tree focuses that album
+- **AND** album-track selection is enabled
 
 #### Scenario: Enter on an album result
-
-- **WHEN** the user presses Enter on a selected album result
-- **THEN** Inline Search SHALL close
-- **AND** the standard library presentation SHALL focus that album in its ordinary natural pill/list position
-- **AND** track-selection mode SHALL be enabled for that album
+- **WHEN** the user presses Enter on a selected flat album result
+- **THEN** Inline Search closes, the standard library presentation focuses that album, and track-selection mode is enabled
 
 #### Scenario: Enter on a Series result
-
 - **WHEN** the user presses Enter on a selected Series result
-- **THEN** Inline Search SHALL close
-- **AND** the library list SHALL rest its cursor on that Series with its letter-range pill group marked
-- **AND** the Series' workspace SHALL open in Wide presentation, or the Library Hero overlay SHALL open in Narrow presentation, with the workspace's episode selection active in both
+- **THEN** Inline Search closes and the library list rests on that Series at its natural position
+- **AND** its Workspace opens in Wide presentation or the Library Hero overlay opens in Narrow presentation
 
 #### Scenario: Navigating an empty result set
-
 - **WHEN** the query matches nothing and the user presses Up or Down
-- **THEN** nothing SHALL happen and the search SHALL stay open
+- **THEN** nothing happens and search stays open
+
 
 ### Requirement: Open search survives responsive presentation transitions
 
-An open Inline Search session SHALL remain open when the selected Emby destination changes between Normal and Wide presentation without changing destinations. The query and selected result SHALL be preserved, the same full-library corpus SHALL remain in effect, and the selected result SHALL remain visible after the results are laid out for the new presentation.
+An open Inline Search session SHALL remain open when the selected Emby destination changes between Normal and Wide presentation without changing destinations. The query and selected result SHALL be preserved and remain visible after the active control is laid out for the new presentation.
+
+Outside Grouped Music, the same full-library corpus SHALL remain in effect. In Grouped Music, the same settled-tree corpus, selected visible node, and filter-forced expansion SHALL remain in effect through the transition; the single retained tree owner SHALL clamp its viewport to the new geometry without turning filter-forced expansion into persistent expansion.
 
 The input box and results SHALL move with the destination's library list; they SHALL NOT remain painted over the pane or area used by the previous presentation.
 
@@ -218,25 +220,33 @@ The input box and results SHALL move with the destination's library list; they S
 - **THEN** exactly one search input and one result list SHALL be painted in the current library-list area
 - **AND** no search content SHALL be painted in the prior presentation's area
 
+#### Scenario: Grouped Music filter survives a responsive transition
+
+- **WHEN** an open Grouped Music filter crosses a responsive presentation transition
+- **THEN** its query, settled-tree corpus, selected visible node, and filter-forced expansion SHALL be unchanged
+- **AND** the same tree owner SHALL clamp its viewport to keep the selected node visible in the new geometry
+
+
 ### Requirement: Dismissing search restores the unfiltered list
 
-Pressing the dismiss key SHALL close the input box and restore the library list to its unfiltered contents, presentation, and prior navigation position. Pressing the delete key on an already-empty query SHALL dismiss the search the same way.
+Pressing the dismiss key SHALL close the input box and restore the destination's unfiltered presentation and prior navigation position. Pressing the delete key on an already-empty query SHALL dismiss the search the same way. Dismissal SHALL discard the query and transient filter projection; reopening search SHALL start from an empty query.
 
-Dismissal SHALL discard the query and results; reopening search SHALL start from an empty query.
+For Grouped Music, dismissal SHALL restore persistent artist expansion and the pre-filter selected stable node when it still exists. Filter-forced expansion SHALL NOT become persistent expansion.
 
 #### Scenario: Dismissing with the dismiss key
-
 - **WHEN** the user presses the dismiss key while the search box is open
-- **THEN** the box SHALL close
-- **AND** the library list SHALL show its unfiltered items in their normal order and grouping
+- **THEN** the box closes and the destination shows its unfiltered contents in ordinary order and grouping
+
+#### Scenario: Grouped Music restores its anchor
+- **WHEN** the user dismisses a Grouped Music filter after matching paths were force-expanded
+- **THEN** persistent artist expansion is restored
+- **AND** the pre-filter selected node is restored when still present
 
 #### Scenario: Deleting past the start of the query
-
 - **WHEN** the query is empty and the user presses the delete key
-- **THEN** the search SHALL be dismissed
+- **THEN** search is dismissed
 
 #### Scenario: Reopening after dismissal
-
 - **WHEN** the user dismisses search and immediately reopens it
-- **THEN** the query SHALL be empty
+- **THEN** the query is empty
 
