@@ -9,7 +9,7 @@ Covers the library-panel surface behaviour that landed with the 2026-09-20 tweak
 In non-Wide geometry the Library panel SHALL compose the Wide browser pane's own rows — the Selector
 row, the optional List controls row, and the list box — through the same browser-pane composition and
 the same surface identities the Wide list pane uses, with the Hero pane absent. The non-Wide list box
-SHALL be filled with the `LibraryPanel` pair and SHALL stripe with the `MainContentBox` pair, exactly
+SHALL be filled with the `LibraryPanel` pair and SHALL stripe with the `LibraryColumn` pair, exactly
 as the Wide Browser-pane list does; it SHALL NOT carry a body fill or a scrollbar-column fill of its
 own. The non-Wide library column body — the panel placement, the Selector row's spacer row, the status
 band's padding rows and the list's scrollbar column — SHALL resolve the `LibraryColumn` surface
@@ -52,7 +52,7 @@ fixed-column arm.
 
 - **WHEN** a non-Wide library list renders in either focus state
 - **THEN** its list box carries the `LibraryPanel` fill for that state
-- **AND** its alternating rows carry the `MainContentBox` fill for that state
+- **AND** its alternating rows carry the `LibraryColumn` fill for that state
 - **AND** its scrollbar column carries the same fill the Wide Browser-pane list's column carries
 
 #### Scenario: A very short non-Wide panel keeps one row
@@ -78,5 +78,5 @@ fixed-column arm.
 
 - **WHEN** the terminal is narrow enough for the mini view
 - **THEN** the library pane resolves the same `LibraryColumn` pair against the panel's focus bit as
-  Narrow, and the same `LibraryPanel`/`MainContentBox` list-box pair
+  Narrow, and the same `LibraryPanel`/`LibraryColumn` list-box pair
 - **AND** there is no Mini-specific paint bit or resting-only override

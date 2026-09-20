@@ -562,17 +562,20 @@ _Avoid_: separate detail block, split, side-by-side, hero-on-side, hero-on-left,
 hero-on-right
 
 **Hero pane**:
-The `#333c43` `SURFACE_RESTING` fill of Wide hero's right pane — the
-container surface itself, independent of what is painted inside it.
+The fixed `#1e2326` `Palette::Ink` dark sheet of Wide hero's right pane — the
+container surface itself, independent of what is painted inside it. The sheet
+is fixed in both focus states (it does not lighten with the panel's focus bit)
+and is the same dark chrome the Library Hero overlay paints when the same hero
+is shown over a non-Wide browser.
 _Avoid_: recessed box, hero panel, detail panel
 
 **Main content box**:
 The `#2d353b` `SURFACE_BACKDROP` inset within a Hero pane or Library Hero
 overlay, holding kind-dependent body content at one shared padding
 value. It holds overview text and, for a Movie in the Wide Hero pane, the
-Cast and crew table in the same box. Distinct from the Hero pane it sits
-inside: the pane is the outer container fill, the box is the inner content
-inset.
+Cast and crew table in the same box. Distinct from the fixed dark Hero pane
+sheet it sits inside: the pane is the outer container fill, the box is the
+inner content inset.
 _Avoid_: overview box, recessed box
 
 **Provider-link row**:

@@ -81,6 +81,11 @@ Play, enqueue, shuffle, and context actions invoked on an artist root SHALL reso
 - **WHEN** a filter leaves two of an artist's five albums visible and the user invokes play on that artist root
 - **THEN** only those two albums are materialized in settled display order
 
+#### Scenario: A name-only filtered artist action is inert
+- **WHEN** a filter matches only an artist's name, so none of its album leaves match and none are visible
+- **AND** the user invokes play or enqueue on that artist root while the filter is active
+- **THEN** the action resolves to no visible album leaves and emits no playback or queue effect targets
+
 ### Requirement: Fuzzy filtering narrows the settled tree in place
 Pressing `/` on the focused Grouped Music browser SHALL open the existing one-row Inline Search bar while retaining the tree in the browser area. Query text SHALL appear immediately and, after a 300 ms debounce, every node SHALL be matched under the same shared word-local fuzzy rule as the other library searches — every word of the query SHALL match inside a single word of the node's own searchable text — with each level matching only its own identity: an artist root against its name, an album leaf against its album title and year, and a cached track item against its track title. A score SHALL determine only whether a node matches; artist, album, and track order SHALL remain settled order.
 
