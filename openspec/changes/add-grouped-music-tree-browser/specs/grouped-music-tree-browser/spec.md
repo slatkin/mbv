@@ -5,9 +5,9 @@ Provide a shallow, directly navigable artist-and-album tree for Grouped Music, i
 ## ADDED Requirements
 
 ### Requirement: Grouped Music projects one stable shallow tree
-The Grouped Music browser SHALL present each settled artist group as a focusable artist root with its settled albums as leaf children. It SHALL preserve settled artist and album order. Artist identity SHALL use stable Service identity when available so equal display names remain distinct, and SHALL use a deterministic fallback identity when the Service supplies none. Stable artist identity SHALL come only from `ArtistItems` pairs carried on album/item payloads; IDs obtained from an `/Artists` listing SHALL NOT be mixed into artist keys, artwork requests, or artist-track queries. Album leaves SHALL retain their existing stable album targets.
+The Grouped Music browser SHALL present each settled artist group as a focusable artist root with its settled albums as leaf children, and each album leaf MAY present its cached tracks as selectable track items ordered by disc/track order (three-level projection: artist → album → track). It SHALL preserve settled artist and album order. Artist identity SHALL use stable Service identity when available so equal display names remain distinct, and SHALL use a deterministic fallback identity when the Service supplies none. Stable artist identity SHALL come only from `ArtistItems` pairs carried on album/item payloads; IDs obtained from an `/Artists` listing SHALL NOT be mixed into artist keys, artwork requests, or artist-track queries. Album leaves SHALL retain their existing stable album targets.
 
-The tree SHALL have one owner for its selected node, expansion, viewport, and current-frame hit geometry. Ordinary settled-catalog replacement SHALL preserve the selected node and expansion state by stable identity. When the selected node survives, its prior viewport row SHALL be preserved when projection bounds permit; otherwise the viewport SHALL apply only the minimum scroll needed to keep it visible and clamp at projection bounds. A responsive presentation change SHALL reuse that owner and apply the same visibility rule rather than copying state into another control.
+The tree SHALL have one owner for its selected node, expansion, viewport, and current-frame hit geometry. Track items SHALL be projected only from the shell-owned artist-detail cache (and the per-album track cache on the fallback path) already established for the focused artist; the tree SHALL NOT issue track fetches of its own, and an album without cached tracks SHALL simply present no track children. Ordinary settled-catalog replacement SHALL preserve the selected node and expansion state by stable identity. When the selected node survives, its prior viewport row SHALL be preserved when projection bounds permit; otherwise the viewport SHALL apply only the minimum scroll needed to keep it visible and clamp at projection bounds. A responsive presentation change SHALL reuse that owner and apply the same visibility rule rather than copying state into another control.
 
 #### Scenario: Equal artist names remain distinct
 - **WHEN** two settled artist groups have the same display name but different stable Service identities
@@ -29,8 +29,13 @@ The tree SHALL have one owner for its selected node, expansion, viewport, and cu
 - **THEN** no artist key, artwork request, or artist-track query uses that ID
 - **AND** the root's identity still comes only from `ArtistItems` or the deterministic fallback
 
+#### Scenario: Track nodes come from the cache without refetch
+- **WHEN** an album leaf expands to its track items
+- **THEN** those items are projected from the shell-owned cached track data for the focused artist in disc/track order
+- **AND** the tree issues no track fetch of its own and shows no track children for an album with no cached tracks
+
 ### Requirement: Artist roots and album leaves have distinct navigation
-Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
+Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior. Enter on a track item SHALL activate that track through the same playback arms the album-track Workspace uses, with no new playback or admission path. Album-leaf and artist-root navigation and activation behaviors SHALL be unchanged by the presence of track items. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
 
 #### Scenario: Collapse removes descendants from navigation
 - **WHEN** the user collapses a focused artist root
@@ -49,6 +54,15 @@ Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. 
 #### Scenario: Album activation is preserved
 - **WHEN** the user presses Enter on an album leaf
 - **THEN** the existing album Hero and album-track Workspace behavior is invoked
+
+#### Scenario: Track activation uses the existing playback arms
+- **WHEN** the user presses Enter on a track item under an album leaf
+- **THEN** playback starts from that track through the same arms the Workspace track rows use
+- **AND** artist-root and album-leaf behaviors are unchanged
+
+#### Scenario: Hero and Workspace remain the full-album surface
+- **WHEN** track items are visible in the tree
+- **THEN** the album Hero and album-track Workspaces remain available and unchanged as the full-album listening surface
 
 ### Requirement: Artist actions resolve visible album descendants
 Play, enqueue, shuffle, and context actions invoked on an artist root SHALL resolve to that root's album leaves in settled display order. All settled child albums are in scope regardless of expansion. Artist identities SHALL never be emitted as playback, queue, or context effect targets.

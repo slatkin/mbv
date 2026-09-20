@@ -141,6 +141,12 @@ Tests are added only where they protect realistic failures:
 
 Existing tests are adapted or replaced rather than duplicated. No snapshot suite, live Service fixture, real filesystem/config, sleep-based debounce, or smoke test is added. Debounce is tested by injecting the clock instant directly.
 
+### D10. Project album tracks as selectable tree nodes
+
+The tree projection deepens from the two-level artist→album shape to three levels: artist root → album leaf → track items, with each album's tracks ordered by disc/track order as the canonical album-track order. Track rows are provider-neutral selectable `Item`s carrying the same stable track targets the album-track Workspace already uses; no parallel track list or second identity space is introduced. Track nodes are projected from the shell-owned artist-detail cache established in D7 (the per-album track fetches feeding the same cache on the fallback path) — the tree never refetches: it re-projects whatever settled track data the shell has already cached for the focused artist, and an album with no cached tracks simply shows no track children. Activating a track node routes through the existing playback arms shared with the Workspace track rows — no new playback path, admission path, or effect variant is added. The Hero header and album-track Workspaces deliberately REMAIN the full-album listening surface, unchanged; the user explicitly accepts the resulting double functionality (a track can be started from the tree in one motion, and the whole album can still be listened to via Hero/Workspace) as the price of same-motion track access.
+
+Alternative rejected: removing the Hero/Workspace track projection once tracks live in the tree. Rejected because the Hero/Workspace remains the full-album listening surface the user wants for whole-album playback, and because it would discard the already-accepted Hero/Workspace behaviors this change otherwise leaves intact.
+
 ## Risks / Trade-offs
 
 - **[Crate visuals differ from the canonical flat lists]** → Accept the tree as its own presentation (selection extent, zebra rhythm, scrollbar focus behavior), keep customization inside the crate's supported interfaces, and treat rough visual edges as PoC-evaluation work rather than gate failures; remove the dependency only if core behavior or ownership is impossible, never by adding a parallel renderer.
