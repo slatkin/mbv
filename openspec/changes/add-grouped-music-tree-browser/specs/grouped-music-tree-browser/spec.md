@@ -1,6 +1,6 @@
 ## Purpose
 
-Provide a shallow, directly navigable artist-and-album tree for Grouped Music, including local fuzzy filtering and group-scoped actions, without changing other library lists.
+Provide a shallow, directly navigable artist-and-album tree for Grouped Music, including group-scoped actions, without changing other library lists. (In-place fuzzy filtering is deferred from this PoC per user decision 2026-09-20; Grouped Music keeps its pre-change Inline Search behavior.)
 
 ## ADDED Requirements
 
@@ -30,7 +30,7 @@ The tree SHALL have one owner for its selected node, expansion, viewport, and cu
 - **AND** the root's identity still comes only from `ArtistItems` or the deterministic fallback
 
 ### Requirement: Artist roots and album leaves have distinct navigation
-Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior; when filtering is active, it SHALL first dismiss the filter and focus the album in the unfiltered tree before enabling album-track selection. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
+Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
 
 #### Scenario: Collapse removes descendants from navigation
 - **WHEN** the user collapses a focused artist root
@@ -50,42 +50,13 @@ Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. 
 - **WHEN** the user presses Enter on an album leaf
 - **THEN** the existing album Hero and album-track Workspace behavior is invoked
 
-#### Scenario: Filtered album activation dismisses filtering
-- **WHEN** the user presses Enter on an album leaf while Grouped Music filtering is active
-- **THEN** filtering closes and the unfiltered tree focuses that album
-- **AND** the existing album-track selection behavior is enabled
-
 ### Requirement: Artist actions resolve visible album descendants
-Play, enqueue, shuffle, and context actions invoked on an artist root SHALL resolve to that root's visible album leaves in settled display order. While no filter is active, all settled child albums are visible regardless of expansion. While a filter is active, only matching visible child albums are in scope. Artist identities SHALL never be emitted as playback, queue, or context effect targets.
+Play, enqueue, shuffle, and context actions invoked on an artist root SHALL resolve to that root's album leaves in settled display order. All settled child albums are in scope regardless of expansion. Artist identities SHALL never be emitted as playback, queue, or context effect targets.
 
-#### Scenario: Action on a collapsed unfiltered artist
-- **WHEN** an artist root is collapsed with no filter active and the user invokes enqueue
+#### Scenario: Action on a collapsed artist
+- **WHEN** an artist root is collapsed and the user invokes enqueue
 - **THEN** every settled child album is materialized in display order
 - **AND** only album identities cross the effect boundary
-
-#### Scenario: Filtered artist action uses visible matches
-- **WHEN** a filter leaves two of an artist's five albums visible and the user invokes play on that artist root
-- **THEN** only those two albums are materialized in settled display order
-
-### Requirement: Fuzzy filtering narrows the settled tree in place
-Pressing `/` on the focused Grouped Music browser SHALL open the existing one-row Inline Search bar while retaining the tree in the browser area. Query text SHALL appear immediately and, after a 300 ms debounce, fuzzy-match each album leaf against artist name, album title, and year. A score SHALL determine only whether a leaf matches; artist and album order SHALL remain settled order.
-
-An artist root SHALL remain visible when any child leaf matches, and matching paths SHALL be force-expanded without overwriting persistent expansion. An empty query SHALL show the complete tree. Opening a filter SHALL retain an anchor to the selected node; clearing or dismissing it SHALL restore that node when it still exists and restore persistent expansion. The corpus SHALL be only the current settled tree; filtering SHALL start no full-library fetch.
-
-#### Scenario: Artist name reveals its albums
-- **WHEN** the debounced query fuzzy-matches an artist name
-- **THEN** that artist root and its matching album leaves remain visible in settled order
-- **AND** the matching path is expanded for the filter session
-
-#### Scenario: Empty query shows the tree
-- **WHEN** the filter is open with an empty query
-- **THEN** the complete settled tree remains visible
-- **AND** no corpus-loading state or Service request starts
-
-#### Scenario: Dismiss restores persistent state
-- **WHEN** filtering force-expanded a persistently collapsed root and the user dismisses the filter
-- **THEN** that root returns to its persistent collapsed state
-- **AND** the pre-filter selected node is restored when it still exists
 
 ### Requirement: Tree input stays inside existing ownership boundaries
 The mounted Music destination SHALL remain the sole event boundary. Keyboard precedence SHALL remain in the Keyboard Router, and Grouped Music SHALL translate only eligible local chords into tree operations. Pointer gestures SHALL resolve artist or album targets only from geometry retained by the latest completed tree render. The tree SHALL receive no Service client, Player owner, `App`, credentials, raw screen coordinate for deferred resolution, or second shell cursor.

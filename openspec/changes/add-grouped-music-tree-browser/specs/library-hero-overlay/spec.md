@@ -2,7 +2,7 @@
 
 ### Requirement: Enter opens the selected item's Hero in the Library pane
 
-In every geometry where the Wide Hero arrangement does not apply, pressing Enter on a selected hero-bearing canonical browser row SHALL open a Library Hero overlay for that item. A Grouped Music album leaf SHALL retain that Enter behavior; an artist root SHALL instead open the overlay when Right is pressed on the already expanded root, because Enter toggles its expansion. The overlay SHALL present the same Hero header, metadata, overview, artwork, provider links, and optional Workspace content that the selected target's Wide Hero pane presents. Inline Search results and an active Grouped Music tree filter SHALL retain their specified activation behavior and SHALL NOT open the overlay.
+In every geometry where the Wide Hero arrangement does not apply, pressing Enter on a selected hero-bearing canonical browser row SHALL open a Library Hero overlay for that item. A Grouped Music album leaf SHALL retain that Enter behavior; an artist root SHALL instead open the overlay when Right is pressed on the already expanded root, because Enter toggles its expansion. The overlay SHALL present the same Hero header, metadata, overview, artwork, provider links, and optional Workspace content that the selected target's Wide Hero pane presents.
 
 For an item, artist root, or album leaf with a Workspace, opening the overlay SHALL give focus to its constituent media list. For an item without a Workspace, opening SHALL give focus to the Hero overlay and a subsequent Enter SHALL perform the item's existing activation behavior.
 
@@ -16,15 +16,9 @@ Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast t
 
 #### Scenario: Grouped Music artist root opens focused Workspace
 
-- **WHEN** the user presses Right on an already expanded artist root in non-Wide Grouped Music with no tree filter active
+- **WHEN** the user presses Right on an already expanded artist root in non-Wide Grouped Music
 - **THEN** the Library Hero overlay opens for that artist root
 - **AND** its grouped artist-track Workspace holds focus
-
-#### Scenario: Filtered Grouped Music album dismisses into its overlay
-
-- **WHEN** the user presses Enter on an album leaf while a non-Wide Grouped Music tree filter is active
-- **THEN** the same key action dismisses the filter and focuses that album in the unfiltered tree
-- **AND** its Library Hero overlay opens with the album-track Workspace focused
 
 #### Scenario: Leaf requires a second Enter
 
@@ -40,7 +34,7 @@ Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast t
 
 #### Scenario: Grouped Music tree double-click opens detail first
 
-- **WHEN** the user double-clicks an artist root or album leaf in non-Wide Grouped Music with no tree filter active
+- **WHEN** the user double-clicks an artist root or album leaf in non-Wide Grouped Music
 - **THEN** its Library Hero overlay opens without directly running a root playback action or album activation
 - **AND** the corresponding artist-track or album-track Workspace holds focus
 

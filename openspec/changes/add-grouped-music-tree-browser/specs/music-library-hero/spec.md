@@ -140,14 +140,14 @@ Each visible wide-mode Workspace track SHALL have a logical mouse target coverin
 
 ### Requirement: Grouped Music pre-warms neighbour album artwork
 
-While grouped Music is visible and image fetching is idle-gated open, the system SHALL initiate artwork fetches for album leaves neighbouring the painted selected album leaf in visible tree order: up to one behind and up to three ahead, skipping the selected album itself. This SHALL apply in both non-Wide and Wide presentations. The neighbour window SHALL be keyed off the visible projection actually being painted, not a separately resolved cursor. Artist-root focus and active in-place tree filtering SHALL NOT initiate neighbour album prefetch.
+While grouped Music is visible and image fetching is idle-gated open, the system SHALL initiate artwork fetches for album leaves neighbouring the painted selected album leaf in visible tree order: up to one behind and up to three ahead, skipping the selected album itself. This SHALL apply in both non-Wide and Wide presentations. The neighbour window SHALL be keyed off the visible projection actually being painted, not a separately resolved cursor. Artist-root focus SHALL NOT initiate neighbour album prefetch. (The filter-based suppression clause is deferred with the Grouped Music filtering deferral — user decision 2026-09-20.)
 
 #### Scenario: Scrolling narrow grouped albums warms neighbours
-- **WHEN** the user moves focus to an album leaf in the non-Wide grouped Music tree while image fetches are idle-allowed and no filter is active
+- **WHEN** the user moves focus to an album leaf in the non-Wide grouped Music tree while image fetches are idle-allowed
 - **THEN** artwork fetches are initiated for neighbouring album leaves in the visible ±3-ahead/±1-behind window
 
 #### Scenario: Scrolling the wide right rail warms neighbours
-- **WHEN** the user moves focus to an album leaf in the wide grouped Music tree while image fetches are idle-allowed and no filter is active
+- **WHEN** the user moves focus to an album leaf in the wide grouped Music tree while image fetches are idle-allowed
 - **THEN** artwork fetches are initiated for neighbouring album leaves in the same visible window
 
 #### Scenario: Rapid navigation suppresses prefetch
@@ -155,5 +155,5 @@ While grouped Music is visible and image fetching is idle-gated open, the system
 - **THEN** no neighbour artwork fetches are initiated
 
 #### Scenario: Search grid suppresses prefetch
-- **WHEN** an artist root is focused or the in-place Grouped Music tree filter is active
+- **WHEN** an artist root is focused
 - **THEN** no neighbour album-artwork prefetch is initiated from the tree projection
