@@ -304,10 +304,24 @@ impl App {
         let Some(key) = self.artist_detail_key(&destination, &target) else {
             return;
         };
-        if self.artist_artwork_status.contains_key(&key) {
-            return;
-        }
         let cache_key = artist_artwork_cache_key(&key.destination, key.generation, &key.artist_id);
+        if let Some(status) = self.artist_artwork_status.get(&key) {
+            // `Loading` and `None` are terminal for this identity. `Ready` is
+            // terminal only while the decoded bitmap is still cached: the
+            // image LRU (`shell_run`) can evict it, and a `Ready` status
+            // without its `card_image_states` entry would project
+            // `HeroImageState::None` forever for this revision. Treat that
+            // cache miss as un-cached and re-arm, matching the album card
+            // path, whose `card_image_states` membership is its fetch dedup.
+            let bitmap_cached = self
+                .card_image_states
+                .get(&cache_key)
+                .is_some_and(|entry| entry.img.is_some());
+            if *status != ArtistArtworkStatus::Ready || bitmap_cached {
+                return;
+            }
+            self.artist_artwork_status.remove(&key);
+        }
         if let Some(entry) = self.card_image_states.get(&cache_key) {
             self.artist_artwork_status.insert(
                 key,
@@ -722,6 +736,68 @@ mod tests {
             detail.track_groups.is_empty(),
             "a still-loading ID query must not leak per-album rows under the artist"
         );
+    }
+
+    #[test]
+    fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
+        let (mut app, _context, target, destination) = settled_artist_app();
+        app.image_protocol_enabled = true;
+        // A configured-but-unroutable client: a re-armed fetch's loading
+        // reservation is observable synchronously without a live server.
+        let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+        client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+            server_url: "http://127.0.0.1:1".into(),
+            user_id: "user-id".into(),
+            token: "token".into(),
+        });
+        app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+            std::sync::Mutex::new(client),
+        ));
+        let key = app
+            .artist_detail_key(&destination, &target)
+            .expect("artist ID key");
+        let cache_key = artist_artwork_cache_key(&destination, key.generation, &key.artist_id);
+        // A completed artist fetch: the decoded bitmap is cached and the
+        // status is terminal for this source identity.
+        app.card_image_states.insert(
+            cache_key.clone(),
+            crate::app::images::CachedImage {
+                img: Some(image::DynamicImage::ImageRgba8(
+                    image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])),
+                )),
+                protocols: HashMap::new(),
+                cover_box: None,
+                applied_logo_key: None,
+            },
+        );
+        app.artist_artwork_status
+            .insert(key.clone(), ArtistArtworkStatus::Ready);
+        app.request_artist_artwork(destination.clone(), target.clone());
+        assert_eq!(
+            app.artist_artwork_status.get(&key),
+            Some(&ArtistArtworkStatus::Ready),
+            "a cached Ready bitmap stays terminal and starts no redundant fetch"
+        );
+        assert!(
+            app.artist_artwork_requests.is_empty(),
+            "a cached Ready bitmap registers no request identity"
+        );
+
+        // The image LRU (`shell_run`) evicts the decoded bitmap while the
+        // status stays `Ready`; without the re-arm the projection would fall
+        // back to `HeroImageState::None` forever for this revision.
+        app.card_image_states.remove(&cache_key);
+        app.request_artist_artwork(destination, target);
+        assert_eq!(
+            app.artist_artwork_status.get(&key),
+            Some(&ArtistArtworkStatus::Loading),
+            "a Ready status without its bitmap is a cache miss and re-arms"
+        );
+        assert!(
+            app.card_image_loading.contains(&cache_key),
+            "the re-armed request reserves its stable-ID cache key"
+        );
+        assert_eq!(app.artist_artwork_requests.get(&cache_key), Some(&key));
     }
 
     #[test]

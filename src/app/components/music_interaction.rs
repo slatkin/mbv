@@ -158,9 +158,9 @@ impl MusicContent {
             LibrarySlotEvent::HeroActivate => {
                 if self.track_focused {
                     let track = self.selected_track_item()?;
-                    let album = self.selected_item()?;
+                    let album_id = self.focused_track_album_id()?;
                     Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                        album_id: album.id,
+                        album_id,
                         track,
                     }))
                 } else {
@@ -188,30 +188,23 @@ impl MusicContent {
                     self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
                     (matches!(input, MediaListSurfaceInput::DoubleClick(_))).then(|| {
                         let track_target = self.track_list.selected_target()?;
-                        let track = self
-                            .context
-                            .album_tracks
-                            .as_deref()
-                            .unwrap_or_default()
-                            .iter()
-                            .find(|track| &track.id == track_target)
-                            .cloned()?;
-                        let album = self.selected_item()?;
+                        let track = self.workspace_track_item(track_target)?;
+                        let album_id = self.focused_track_album_id()?;
                         Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                            album_id: album.id.clone(),
+                            album_id,
                             track,
                         }))
                     })?
                 }
                 MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();
-                    let item = self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target)?.clone();
+                    let item = self.workspace_track_item(&target)?;
                     let outcome = self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
                     let _ = ();
                     let items = match outcome.external_intent {
                         Some(RowIntent::ContextSelection(targets)) => targets
                             .into_iter()
-                            .filter_map(|target| self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target).cloned())
+                            .filter_map(|target| self.workspace_track_item(&target))
                             .collect(),
                         _ => vec![item],
                     };

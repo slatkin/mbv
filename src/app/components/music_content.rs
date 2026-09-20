@@ -503,22 +503,64 @@ impl MusicContent {
             .iter()
             .position(|track| track.id == *target)
     }
-    pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
-        let target = self.track_list.selected_target()?;
+    /// The Workspace row projection that owns a track target: the focused
+    /// artist root's projected groups first (an artist root's push clears
+    /// `selected_album`/`album_tracks`, so its rows have no album snapshot),
+    /// otherwise the selected album's cached tracks. Every row behaviour
+    /// resolves through this one owner, so an artist track row and an album
+    /// track row share the same paths.
+    fn workspace_track_item(&self, target: &str) -> Option<EmbyItem> {
         if let Some(detail) = self.context.artist_detail.as_ref() {
             return detail
                 .track_groups
                 .iter()
                 .flat_map(|group| group.tracks.iter())
-                .find(|track| track.id == *target)
+                .find(|track| track.id == target)
                 .cloned();
         }
         self.context
             .album_tracks
-            .as_deref()?
+            .as_deref()
+            .unwrap_or_default()
             .iter()
-            .find(|track| track.id == *target)
+            .find(|track| track.id == target)
             .cloned()
+    }
+
+    /// The album identity that owns the focused Workspace track: the selected
+    /// album leaf's own ID, or the projected group the artist root's track
+    /// came from (the projection already carries each group's settled
+    /// `album_id`).
+    fn focused_track_album_id(&self) -> Option<String> {
+        let target = self.track_list.selected_target()?;
+        if let Some(detail) = self.context.artist_detail.as_ref() {
+            return detail
+                .track_groups
+                .iter()
+                .find(|group| group.tracks.iter().any(|track| track.id == *target))
+                .map(|group| group.album_id.clone());
+        }
+        self.selected_item().map(|album| album.id)
+    }
+
+    /// Whether the focused track pane holds the selected artist root's own
+    /// Workspace (task 6.3 projects its rows from `artist_detail`). A pane
+    /// left over from an album while the tree selection has already moved
+    /// onto a root is not that Workspace: there Enter keeps toggling the root
+    /// (task 2.4) instead of resolving a track from a snapshot that no longer
+    /// addresses the focused node.
+    fn artist_workspace_focused(&self) -> bool {
+        self.track_focused
+            && self.browser.selected_is_artist()
+            && self.context.artist_detail.as_ref().is_some_and(|detail| {
+                self.artist_detail_target()
+                    .is_some_and(|target| target == detail.target)
+            })
+    }
+
+    pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
+        let target = self.track_list.selected_target()?;
+        self.workspace_track_item(target)
     }
 
     fn resolved_hero_data(&self) -> Option<HeroContentData> {
@@ -729,12 +771,12 @@ impl LibraryContentOwner for MusicContent {
         }
         match key.code {
             // An artist root is a grouping row, not an album: Enter toggles its
-            // persistent expansion (task 2.4). This must precede the track-pane
-            // Enter arm: a root reached while the inline pane still holds focus
-            // (Wide `Home`/`End` are not track-focus gated) would otherwise
-            // short-circuit through the pane arm's `selected_item()?` -- `None`
-            // for a root -- and swallow the chord.
-            Key::Enter if self.browser.selected_is_artist() => {
+            // persistent expansion (task 2.4) while the tree rail owns the
+            // focus. Once the focused pane is this root's own artist Workspace
+            // (task 6.3), Enter belongs to the focused track below; a pane left
+            // over from an album is not that Workspace and must not swallow the
+            // chord through the track arm's track/album resolution.
+            Key::Enter if self.browser.selected_is_artist() && !self.artist_workspace_focused() => {
                 if let Some(root) = self.browser.selected_id() {
                     self.browser.toggle_root(root);
                 }
@@ -742,9 +784,9 @@ impl LibraryContentOwner for MusicContent {
             }
             Key::Enter if self.track_focused => {
                 let track = self.selected_track_item()?;
-                let album = self.selected_item()?;
+                let album_id = self.focused_track_album_id()?;
                 Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                    album_id: album.id,
+                    album_id,
                     track,
                 }))
             }
@@ -827,40 +869,25 @@ impl LibraryContentOwner for MusicContent {
                     .external_intent
                 {
                     Some(RowIntent::ContextSelection(targets)) => {
-                        Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Emby(
-                                targets
-                                    .into_iter()
-                                    .filter_map(|target| {
-                                        self.context
-                                            .album_tracks
-                                            .as_deref()
-                                            .unwrap_or_default()
-                                            .iter()
-                                            .find(|track| track.id == target)
-                                            .cloned()
-                                    })
-                                    .collect(),
-                            ),
+                        let items: Vec<EmbyItem> = targets
+                            .into_iter()
+                            .filter_map(|target| self.workspace_track_item(&target))
+                            .collect();
+                        (!items.is_empty()).then_some(Msg::Shell(ShellRequest::RowContextMenu(
+                            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                             None,
                         )))
                     }
-                    Some(RowIntent::Context(target)) => self
-                        .context
-                        .album_tracks
-                        .as_deref()
-                        .unwrap_or_default()
-                        .iter()
-                        .find(|track| track.id == target)
-                        .cloned()
-                        .map(|track| {
+                    Some(RowIntent::Context(target)) => {
+                        self.workspace_track_item(&target).map(|track| {
                             Msg::Shell(ShellRequest::RowContextMenu(
                                 crate::app::types_context_menu::ContextMenuTargets::Emby(vec![
                                     track,
                                 ]),
                                 None,
                             ))
-                        }),
+                        })
+                    }
                     _ => None,
                 }
             }
