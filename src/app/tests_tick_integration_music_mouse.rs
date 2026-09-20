@@ -284,16 +284,9 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
                 .expect("painted tree node");
             let row = music
                 .browser
-                .projected_nodes()
-                .iter()
-                .position(|candidate| candidate.id() == node.id())
-                .expect("painted tree row")
-                .checked_sub(music.browser.offset())
-                .expect("tree node is inside the painted viewport");
-            (
-                list_area.x,
-                list_area.y.saturating_add(row as u16),
-            )
+                .row_rect_for(node.id())
+                .expect("painted tree row");
+            (row.x, row.y)
         };
         (point_for(None), point_for(Some("album-1")))
     };

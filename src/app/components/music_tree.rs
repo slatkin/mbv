@@ -850,10 +850,7 @@ impl MusicTreeBrowser {
     /// Latest-completed-render hit resolution: the node id and its projection
     /// row for the row under `at`, if any.
     pub(in crate::app) fn hit_node(&self, at: Position) -> Option<(usize, usize)> {
-        if !self.paint_complete {
-            return None;
-        }
-        match self.state.hit_test(at)? {
+        match self.hit_test(at)? {
             TreeHit::Row { id, index, .. } => Some((id, index)),
             TreeHit::Header { .. } | TreeHit::VerticalScrollbar | TreeHit::HorizontalScrollbar => {
                 None
@@ -887,17 +884,12 @@ impl MusicTreeBrowser {
         let _ = self.state.select_last();
     }
 
-    /// The selected row's one-line rect from the latest completed view, when
-    /// the node is visible (the panel's retained selected-row geometry).
-    pub(in crate::app) fn selected_row_rect(&self) -> Option<Rect> {
+    fn row_rect_for_index(&self, index: usize) -> Option<Rect> {
         if !self.paint_complete {
             return None;
         }
         let area = self.last_area?;
-        let row = self
-            .state
-            .selected_index()?
-            .checked_sub(self.state.offset())?;
+        let row = index.checked_sub(self.state.offset())?;
         if row as u16 >= area.height {
             return None;
         }
@@ -907,6 +899,26 @@ impl MusicTreeBrowser {
             width: area.width,
             height: 1,
         })
+    }
+
+    /// The selected row's one-line rect from the latest completed view, when
+    /// the node is visible (the panel's retained selected-row geometry).
+    pub(in crate::app) fn selected_row_rect(&self) -> Option<Rect> {
+        self.state
+            .selected_index()
+            .and_then(|index| self.row_rect_for_index(index))
+    }
+
+    /// A visible node's one-line rect from the latest completed view.
+    #[cfg(test)]
+    pub(in crate::app) fn row_rect_for(&self, id: usize) -> Option<Rect> {
+        let index = self
+            .state
+            .projection()
+            .nodes()
+            .iter()
+            .position(|node| node.id() == id)?;
+        self.row_rect_for_index(index)
     }
 
     /// Whether the latest completed view's retained geometry claims `at`.
