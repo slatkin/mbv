@@ -165,7 +165,7 @@ pub const DURATION: Color = Palette::Iris.color(); // the sage
 /// podcast browser's `17 Sep 26` gutter. Its own role rather than the
 /// `DURATION` time column's, so a duration edit cannot move the dates; a date
 /// is metadata about the item, not a playback time.
-pub const ROW_DATE_FG: Color = Palette::Yellow.color(); // muted gold (#e6b768)
+pub const ROW_DATE_FG: Color = Palette::Iris.color(); // sage (#a7c080)
 
 /// The primary (context/container) part of a split media-list row — the
 /// podcast an episode row came from. Its own role rather than

@@ -552,11 +552,14 @@ fn glyph_prefix_width(level: usize) -> usize {
 /// (level, tail stack, expansion glyph selection, mark state, selected bit)
 /// and composes the label line through `tree_label_line`, then applies mbv's
 /// semantic roles: hierarchy glyphs in the muted role, artist roots in the
-/// metadata role, ordinary album leaves in the primary role, marks in the
-/// positive status role, the top-level group zebra fill on the whole cell, and the
+/// cream role, ordinary album leaves in the level-one accent role, track rows
+/// in the level-two error role, marks in the positive status role, the top-level
+/// group zebra fill on the whole cell, and the
 /// focused selected row's marquee window computed for this frame.
 struct MusicTreeLabelRenderer<'a> {
     tree_col_width: u16,
+    left_text_inset: usize,
+    right_text_inset: usize,
     zebra_fill: ratatui::style::Color,
     /// The focused selected row's marquee spans for this frame (`None` when
     /// unfocused or nothing is selected). Computed in `view` so the renderer
@@ -590,6 +593,8 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
             self.selected_title_budget
         } else {
             (self.tree_col_width as usize)
+                .saturating_sub(self.left_text_inset)
+                .saturating_sub(self.right_text_inset)
                 .saturating_sub(glyph_prefix_width(context.level))
                 .saturating_sub(gutter)
         };
@@ -609,6 +614,14 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
                 .expect("a nested tree row has a prefix span");
             prefix.content = prefix.content.chars().skip(2).collect::<String>().into();
         }
+        // The tree widget paints the full claim rectangle so row fills bleed
+        // through the parent panel's side pads. Keep the text at the inset
+        // content rectangle by adding only the parent-provided left inset to
+        // the label line.
+        if self.left_text_inset > 0 {
+            line.spans
+                .insert(0, Span::raw(" ".repeat(self.left_text_inset)));
+        }
         let composed = line.spans.len();
 
         if context.render.is_selected {
@@ -626,7 +639,7 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
 
         // Pad the name slot to its budget, then paint the album year once in
         // the right-aligned fixed six-column gutter at the row's right edge in
-        // the `STATUS_AVAILABLE` role, followed by its two-column trailing
+        // the `ROW_DATE_FG` role, followed by its two-column trailing
         // gap. A yearless row appends nothing, so its title keeps the full
         // width (the pinned gutter contract).
         let painted: usize = line.spans[composed..]
@@ -643,7 +656,7 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
                     trunc_str(year, YEAR_GUTTER_WIDTH as usize),
                     width = YEAR_GUTTER_WIDTH as usize
                 ),
-                Style::default().fg(palette::STATUS_AVAILABLE),
+                Style::default().fg(palette::ROW_DATE_FG),
             ));
             line.spans
                 .push(Span::raw(" ".repeat(YEAR_GUTTER_TRAILING_SPACE)));
@@ -747,16 +760,25 @@ fn name_role(
         TreeMarkState::Marked => palette::STATUS_AVAILABLE,
         TreeMarkState::Partial => palette::TEXT_ACCENT_MUTED,
         TreeMarkState::Unmarked if level == 0 => palette::MUSIC_HEADER,
-        TreeMarkState::Unmarked => model
-            .semantic_state_of(id)
-            .map_or(palette::TEXT_PRIMARY, semantic_role),
+        TreeMarkState::Unmarked => {
+            let ordinary = match level {
+                1 => palette::TEXT_FOCUS_ACCENT,
+                _ => palette::STATUS_ERROR,
+            };
+            model
+                .semantic_state_of(id)
+                .map_or(ordinary, |state| semantic_role(state, ordinary))
+        }
     }
 }
 
-/// The playback-live semantic palette applied to a tree album leaf. Music
-/// rows otherwise keep the ordinary primary role; active/now-playing rows
-/// retain emphasis without an inline progress slot.
-fn semantic_role(state: &MediaSemanticState) -> ratatui::style::Color {
+/// The playback-live semantic palette applied to a tree row. Music rows
+/// otherwise keep their ordinary depth colour; active/now-playing rows retain
+/// emphasis without an inline progress slot.
+fn semantic_role(
+    state: &MediaSemanticState,
+    ordinary: ratatui::style::Color,
+) -> ratatui::style::Color {
     if matches!(
         state,
         MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
@@ -764,8 +786,9 @@ fn semantic_role(state: &MediaSemanticState) -> ratatui::style::Color {
         palette::TEXT_EMPHASIS
     } else {
         // `Played` is normalized out of the arena, but the fallback remains
-        // primary if a future caller supplies another non-live state.
-        palette::TEXT_PRIMARY
+        // the row's ordinary depth colour if a future caller supplies another
+        // non-live state.
+        ordinary
     }
 }
 
@@ -1634,7 +1657,8 @@ impl MusicTreeBrowser {
             height: content_rect.height,
             ..claim_rect
         };
-        let row_area = content_rect;
+        let left_text_inset = content_rect.x.saturating_sub(claim_rect.x) as usize;
+        let right_text_inset = claim_rect.right().saturating_sub(content_rect.right()) as usize;
 
         // A geometry change re-applies the viewport visibility rule to this
         // same owner (design D3/D4): re-arm the selected node's visibility so
@@ -1652,21 +1676,21 @@ impl MusicTreeBrowser {
             rearm_selection_visibility_for(state);
             *last_area = Some(content_rect);
         }
-        // `tui-treelistview` resolves the primary column inside `tree_area`,
-        // not `paint_area`: when overflow has room beyond the claimed area,
-        // the adapter gives the crate one extra column so its own scrollbar
-        // lands outside the painted content. Budget labels from that same
-        // resolved cell width, after removing the crate-owned scrollbar.
+        // `tui-treelistview` resolves the primary column inside the full
+        // claim rectangle. The content rectangle still owns the row-flow
+        // height and the text's side insets; the extra column keeps the
+        // crate's discarded scrollbar outside the claim when there is room.
         let overflow = state.visible_len() > content_rect.height as usize;
-        let tree_area = if overflow && row_area.right() < frame.area().right() {
+        let tree_area = if overflow && paint_area.right() < frame.area().right() {
             Rect {
-                width: row_area.width.saturating_add(1),
-                ..row_area
+                width: paint_area.width.saturating_add(1),
+                ..paint_area
             }
         } else {
-            row_area
+            paint_area
         };
         let tree_col_width = tree_area.width.saturating_sub(u16::from(overflow));
+        let text_inset = left_text_inset.saturating_add(right_text_inset);
 
         // The focused selected row's marquee window, computed once per frame
         // through the shared marquee primitive (design D8). The clock keys on
@@ -1681,6 +1705,7 @@ impl MusicTreeBrowser {
             let gutter = usize::from(model.year_of(node.id()).is_some())
                 * (YEAR_GUTTER_WIDTH as usize + YEAR_GUTTER_TRAILING_SPACE);
             (tree_col_width as usize)
+                .saturating_sub(text_inset)
                 .saturating_sub(glyph_prefix_width(node.level()))
                 .saturating_sub(gutter)
         });
@@ -1717,6 +1742,8 @@ impl MusicTreeBrowser {
             .collect();
         let label = MusicTreeLabelRenderer {
             tree_col_width,
+            left_text_inset,
+            right_text_inset,
             zebra_fill,
             selected_title_spans,
             selected_title_budget,

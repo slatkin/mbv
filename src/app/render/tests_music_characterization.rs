@@ -9,10 +9,13 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;
 use ratatui::Terminal;
+use std::collections::HashMap;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
 use crate::app::components::media_list::MediaSemanticState;
-use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
+use crate::app::components::music_tree::{
+    MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack,
+};
 use crate::app::music_grouping::ArtistKey;
 
 /// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
@@ -582,7 +585,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
         );
     }
     let title_x = list_area.x + 6;
-    assert_eq!(buf[(title_x, selected_y)].fg, palette::TEXT_PRIMARY);
+    assert_eq!(buf[(title_x, selected_y)].fg, palette::TEXT_FOCUS_ACCENT);
     assert!(
         !buf[(title_x, selected_y)].modifier.contains(Modifier::BOLD),
         "the selected title is not bold"
@@ -732,8 +735,8 @@ fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
 
     assert_eq!(
         buf[(4, 1)].fg,
-        palette::TEXT_PRIMARY,
-        "a played music row remains ordinary primary text"
+        palette::TEXT_FOCUS_ACCENT,
+        "a played music row remains the ordinary album colour"
     );
     assert_eq!(
         buf[(4, 2)].fg,
@@ -742,8 +745,42 @@ fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
     );
 }
 
+#[test]
+fn music_tree_depth_roles_use_ordinary_level_colours() {
+    let key = ArtistKey::Service("depth-role-artist".into());
+    let entries = vec![MusicTreeEntry {
+        artist: "Depth Artist".into(),
+        artist_key: key,
+        title: "Depth Album".into(),
+        year: None,
+        target: "depth-album".into(),
+        semantic_state: MediaSemanticState::Ordinary,
+    }];
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
+    browser.set_track_items(HashMap::from([(
+        "depth-album".to_string(),
+        vec![MusicTreeTrack {
+            target: "depth-track".into(),
+            title: "Depth Track".into(),
+        }],
+    )]));
+    browser.reconcile(&entries);
+    let root = browser.projected_nodes()[0].id();
+    browser.expand_root(root);
+    let album = browser.projected_nodes()[1].id();
+    browser.expand_node(album);
+    browser.set_focused(false);
+
+    let area = Rect::new(0, 0, 40, 3);
+    let term = music_tree_frame(&mut browser, area, area.width, area.height);
+    let buf = term.backend().buffer();
+    assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER);
+    assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
+    assert_eq!(buf[(5, 2)].fg, palette::STATUS_ERROR);
+}
+
 /// The pinned year-gutter contract (design D8), painted through the crate's
-/// label/column seams: one right-aligned fixed six-column `STATUS_AVAILABLE`
+/// label/column seams: one right-aligned fixed six-column `ROW_DATE_FG`
 /// cell on a year-bearing album row followed by a two-column trailing gap,
 /// reserved nowhere on the artist root or the yearless leaf (their titles
 /// reach the last column), and no inline or second year column. The state
@@ -800,7 +837,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER, "root title role");
 
     // Year-bearing leaf: the title stops before the gutter, and the year
-    // right-aligns in the fixed six-column `STATUS_AVAILABLE` cell before
+    // right-aligns in the fixed six-column `ROW_DATE_FG` cell before
     // its two-column trailing gap.
     let yeared_row = &rows[1];
     assert!(
@@ -822,16 +859,20 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
         Some('…'),
         "the yeared title truncates before the gutter: {yeared_row:?}"
     );
-    assert_eq!(buf[(4, 1)].fg, palette::TEXT_PRIMARY, "leaf title role");
+    assert_eq!(
+        buf[(4, 1)].fg,
+        palette::TEXT_FOCUS_ACCENT,
+        "leaf title role"
+    );
     assert_eq!(
         buf[(gutter as u16 - 1, 1)].fg,
-        palette::TEXT_PRIMARY,
-        "an ordinary album leaf keeps the primary role"
+        palette::TEXT_FOCUS_ACCENT,
+        "an ordinary album leaf keeps the level-one album role"
     );
     assert_eq!(
         buf[(gutter as u16 + 4, 1)].fg,
-        palette::STATUS_AVAILABLE,
-        "the year paints in the STATUS_AVAILABLE role"
+        palette::ROW_DATE_FG,
+        "the year paints in the ROW_DATE_FG role"
     );
 
     // Yearless leaf: no gutter is reserved, so its long title reaches the

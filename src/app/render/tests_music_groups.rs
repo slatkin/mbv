@@ -395,11 +395,24 @@ fn music_tree_panel_inset_keeps_rows_inside_claim_and_scrollbar_at_claim_edge() 
         "tree title starts at the panel's two-column inset: {row:?}"
     );
 
-    // The row content leaves the right inset clear; the shared scrollbar stays
-    // at the full-width claim edge rather than moving into the inset.
+    // The selected bar and the group's zebra band both bleed through the
+    // claim rectangle's side pads while the title remains at the content
+    // rectangle's two-column inset.
     assert_eq!(
-        term.backend().buffer()[(claim.right() - 2, content.y)].symbol(),
-        " "
+        term.backend().buffer()[(claim.x, content.y)].bg,
+        palette::SELECTED_ROW_BG
+    );
+    assert_eq!(
+        term.backend().buffer()[(claim.right() - 1, content.y)].bg,
+        palette::SELECTED_ROW_BG
+    );
+    assert_eq!(
+        term.backend().buffer()[(claim.x, content.y + 1)].bg,
+        palette::music_tree_zebra(true)
+    );
+    assert_eq!(
+        term.backend().buffer()[(claim.right() - 1, content.y + 1)].bg,
+        palette::music_tree_zebra(true)
     );
     let scrollbar_x = if claim.right() < MUSIC_TREE_NON_WIDE_WIDTH {
         claim.right()
