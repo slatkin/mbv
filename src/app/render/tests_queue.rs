@@ -600,12 +600,17 @@ fn queue_playback_panel_unmounts_in_library_only() {
 #[test]
 fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     /// Screen positions of `title` painted on a live (now-playing) row,
-    /// located by the row's aqua play glyph.
+    /// located by its play glyph. Unselected rows use Aqua; a selected row's
+    /// marker uses the selected-row Ink foreground.
     fn now_playing_cells(buf: &ratatui::buffer::Buffer, title: &str) -> Vec<(u16, u16)> {
         let mut hits = Vec::new();
         for y in 0..buf.area().height {
             let has_icon = (0..buf.area().width).any(|x| {
-                buf[(x, y)].symbol() == "▶" && buf[(x, y)].style().fg == Some(palette::ACCENT)
+                buf[(x, y)].symbol() == "▶"
+                    && matches!(
+                        buf[(x, y)].style().fg,
+                        Some(palette::ACCENT) | Some(palette::SELECTED_ROW_FG)
+                    )
             });
             if !has_icon {
                 continue;

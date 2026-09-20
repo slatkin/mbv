@@ -677,9 +677,12 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         // bar (the style half of the canonical multi-selection contract; task
         // 4.2 drives the marks), overriding its group band; otherwise the
         // header and every descendant share their top-level group's phase. The
-        // selected bar also resolves its text to Ink; the focused selected
-        // row's equivalent highlight comes from the crate's `highlight_style`.
-        if multi_select_bar(model, id, mark) {
+        // Every selected bar resolves its row content to Ink, including a
+        // playback-live title; the equivalent row highlight from the crate is
+        // kept as a second line of defence for cells the label does not own.
+        if (context.render.is_selected && self.selected_title_spans.is_some())
+            || multi_select_bar(model, id, mark)
+        {
             for span in line.spans.iter_mut().skip(composed) {
                 span.style = span.style.fg(palette::SELECTED_ROW_FG);
             }

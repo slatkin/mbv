@@ -119,7 +119,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 }
                 _ => {}
             }
-            if let Some(pct) = progress {
+            if let Some(pct) = progress.clone() {
                 trailing_pieces.push((pct, palette::TEXT_METADATA));
             }
             // `Collection` rows never show a duration, even if one is
@@ -235,10 +235,15 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::styled(icon, Style::default().fg(palette::ACCENT)));
             }
             spans.extend(title_spans);
+            let mut progress_span_index = None;
             if !trailing_pieces.is_empty() {
                 for (text, color) in &trailing_pieces {
                     spans.push(Span::raw(" "));
+                    let index = spans.len();
                     spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                    if progress.as_deref() == Some(text.as_str()) {
+                        progress_span_index = Some(index);
+                    }
                 }
             }
             if let Some(date) = published {
@@ -277,12 +282,12 @@ pub(in crate::app) fn media_list_row<Target>(
             }
             // Canonical selected bars are Iris: use the dedicated Ink
             // foreground rather than allowing ordinary title/metadata roles
-            // to compete with the selection. The live-playback marker remains
-            // Aqua so a selected now-playing row keeps its state distinction.
+            // to compete with the selection. The live-playback marker and
+            // progress percentage retain their own semantic roles.
             if paint_selected {
                 if let Some(fg) = selected_row_foreground(selected_bg) {
                     for (index, span) in spans.iter_mut().enumerate() {
-                        if live_icon.is_some() && index == 1 {
+                        if progress_span_index == Some(index) {
                             continue;
                         }
                         span.style.fg = Some(fg);

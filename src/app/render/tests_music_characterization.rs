@@ -751,6 +751,32 @@ fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
 }
 
 #[test]
+fn music_tree_selected_live_row_uses_selected_foreground() {
+    let key = ArtistKey::Service("selected-live-artist".into());
+    let entries = vec![MusicTreeEntry {
+        artist: "Selected Live Artist".into(),
+        artist_key: key,
+        title: "Now Playing Album".into(),
+        year: None,
+        target: "selected-live-album".into(),
+        semantic_state: MediaSemanticState::NowPlaying {
+            progress: Some(crate::app::components::media_list::ActiveProgress::new(47)),
+        },
+    }];
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
+    browser.expand_root(browser.projected_nodes()[0].id());
+    browser.select_index(1);
+    let area = Rect::new(0, 0, 40, 2);
+    let term = music_tree_frame(&mut browser, area, area.width, area.height);
+
+    assert_eq!(
+        term.backend().buffer()[(4, 1)].fg,
+        palette::SELECTED_ROW_FG,
+        "selected live-playback tree rows use the Ink bar foreground"
+    );
+}
+
+#[test]
 fn music_tree_depth_roles_use_ordinary_level_colours() {
     let key = ArtistKey::Service("depth-role-artist".into());
     let entries = vec![MusicTreeEntry {
