@@ -338,7 +338,8 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
 
     // Clipping: scrolled so the unselected long album leaf paints at the
     // viewport's last row, it truncates with an ellipsis, its year sits
-    // right-aligned inside the fixed six-column gutter, and no glyph lands
+    // right-aligned inside the fixed six-column gutter with a two-column
+    // trailing gap, and no glyph lands
     // outside the browser rectangle.
     browser.scroll_to((long_row + 1).saturating_sub(list_area.height as usize));
     let term = music_tree_frame(
@@ -354,10 +355,16 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         long_row_text.contains('\u{2026}'),
         "long title truncates: {long_row_text}"
     );
-    let gutter_start = list_area.right() - crate::app::components::music_tree::YEAR_GUTTER_WIDTH;
-    let gutter_text: String = music_tree_row_text(&term, long_y, gutter_start, list_area.right())
-        .trim()
-        .to_string();
+    let gutter_start =
+        list_area.right() - crate::app::components::music_tree::YEAR_GUTTER_WIDTH - 2;
+    let gutter_text: String = music_tree_row_text(
+        &term,
+        long_y,
+        gutter_start,
+        gutter_start + crate::app::components::music_tree::YEAR_GUTTER_WIDTH,
+    )
+    .trim()
+    .to_string();
     assert_eq!(
         gutter_text,
         MUSIC_TREE_LONG_TITLE_YEAR.to_string(),
@@ -695,9 +702,10 @@ fn gutter_entries() -> Vec<MusicTreeEntry> {
 
 /// The pinned year-gutter contract (design D8), painted through the crate's
 /// label/column seams: one right-aligned fixed six-column `STATUS_AVAILABLE`
-/// cell on a year-bearing album row, reserved nowhere on the artist root or
-/// the yearless leaf (their titles reach the last column), and no inline or
-/// second year column. The state glyph and title roles are pinned here too.
+/// cell on a year-bearing album row followed by a two-column trailing gap,
+/// reserved nowhere on the artist root or the yearless leaf (their titles
+/// reach the last column), and no inline or second year column. The state
+/// glyph and title roles are pinned here too.
 #[test]
 fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     const WIDTH: u16 = 40;
@@ -729,8 +737,8 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
 
     // Three rows in three lines never overflow, so no scrollbar takes a
     // column: the tree column is the full browser width and the gutter is its
-    // last six columns.
-    let gutter = (WIDTH - crate::app::components::music_tree::YEAR_GUTTER_WIDTH) as usize;
+    // six-column date plus its two-column trailing gap.
+    let gutter = (WIDTH - crate::app::components::music_tree::YEAR_GUTTER_WIDTH - 2) as usize;
     let rows: Vec<String> = (0..3)
         .map(|y| music_tree_row_text(&term, y, 0, WIDTH))
         .collect();
@@ -750,16 +758,22 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER, "root title role");
 
     // Year-bearing leaf: the title stops before the gutter, and the year
-    // right-aligns in the fixed six-column `STATUS_AVAILABLE` cell.
+    // right-aligns in the fixed six-column `STATUS_AVAILABLE` cell before
+    // its two-column trailing gap.
     let yeared_row = &rows[1];
     assert!(
-        yeared_row.starts_with("    "),
-        "the leaf keeps plain-space indentation: {yeared_row:?}"
+        yeared_row.starts_with("  "),
+        "the leaf keeps the reduced plain-space indentation: {yeared_row:?}"
     );
     assert_eq!(
         music_tree_row_slice(yeared_row, gutter, 6),
         format!("{GUTTER_YEAR:>6}"),
-        "the year is right-aligned in the last six columns: {yeared_row:?}"
+        "the year is right-aligned before its trailing gap: {yeared_row:?}"
+    );
+    assert_eq!(
+        music_tree_row_slice(yeared_row, gutter + 6, 2),
+        "  ",
+        "the year keeps its two-column trailing gap"
     );
     assert_eq!(
         yeared_row.chars().nth(gutter - 1),
@@ -773,7 +787,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
         "an ordinary album leaf keeps the emphasis role"
     );
     assert_eq!(
-        buf[(gutter as u16 + 2, 1)].fg,
+        buf[(gutter as u16 + 4, 1)].fg,
         palette::STATUS_AVAILABLE,
         "the year paints in the STATUS_AVAILABLE role"
     );
@@ -815,16 +829,19 @@ fn music_tree_overflow_with_room_keeps_cell_budget_aligned() {
     let term = music_tree_frame(&mut browser, area, FRAME_WIDTH, area.height);
     let row = music_tree_row_text(&term, 1, 0, WIDTH);
 
-    assert_eq!(row.chars().take(4).collect::<String>(), "    ");
+    assert_eq!(row.chars().take(2).collect::<String>(), "  ");
     assert_eq!(
-        row.chars().skip(4).take(30).collect::<String>(),
+        row.chars().skip(2).take(30).collect::<String>(),
         GUTTER_YEARED.chars().take(30).collect::<String>(),
         "marquee receives the full tree-cell budget before the year gutter"
     );
     assert_eq!(
-        row.chars().skip((WIDTH - 6) as usize).collect::<String>(),
+        row.chars()
+            .skip((WIDTH - 6 - 2) as usize)
+            .take(6)
+            .collect::<String>(),
         format!("{GUTTER_YEAR:>6}"),
-        "year remains right-aligned at the claimed area's edge"
+        "year remains right-aligned before its trailing gap"
     );
     assert_eq!(
         term.backend().buffer()[(WIDTH, 1)].fg,
@@ -838,7 +855,7 @@ fn music_tree_overflow_with_room_keeps_cell_budget_aligned() {
 #[test]
 fn music_tree_uses_plain_indentation_in_every_state() {
     const WIDTH: u16 = 40;
-    const PLAIN_LEAF_PREFIX: &str = "    ";
+    const PLAIN_LEAF_PREFIX: &str = "  ";
 
     let area = Rect::new(0, 0, WIDTH, 3);
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));

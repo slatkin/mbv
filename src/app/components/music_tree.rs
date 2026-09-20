@@ -54,10 +54,13 @@ use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
 use crate::app::ui_util::trunc_str;
 
-/// The album year's fixed right-aligned gutter width (design D8: this
+/// The album year's fixed right-aligned date width (design D8: this
 /// change's pinned metadata-gutter contract, painted through the crate's
 /// column interface).
 pub(in crate::app) const YEAR_GUTTER_WIDTH: u16 = 6;
+
+/// The spacing after a rendered year before the row's trailing edge.
+const YEAR_GUTTER_TRAILING_SPACE: usize = 2;
 
 /// The neighbour album-artwork window (task 6.5, design D4): the shell
 /// prefetches up to one visible album leaf behind the selected leaf and up to
@@ -497,7 +500,9 @@ fn glyph_prefix_width(level: usize) -> usize {
     if level == 0 {
         0
     } else {
-        3 * level + 1
+        // The renderer trims two columns from the crate's plain-space leaf
+        // prefix; keep the title budget in step with that composition.
+        3 * level + 1 - 2
     }
 }
 
@@ -528,10 +533,11 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         glyphs: &TreeGlyphs<'a>,
     ) -> Cell<'a> {
         let year = model.year_of(id);
-        // The pinned year-gutter contract (design D8): the six-column gutter
-        // is reserved only on rows that carry a year, so a yearless row's
-        // title budget keeps those columns.
-        let gutter = usize::from(year.is_some()) * YEAR_GUTTER_WIDTH as usize;
+        // The pinned year-gutter contract (design D8): the six-column date
+        // plus its trailing gap is reserved only on rows that carry a year,
+        // so a yearless row's title budget keeps those columns.
+        let gutter =
+            usize::from(year.is_some()) * (YEAR_GUTTER_WIDTH as usize + YEAR_GUTTER_TRAILING_SPACE);
         let budget = if context.render.is_selected {
             self.selected_title_budget
         } else {
@@ -545,6 +551,16 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         // carry this frame's marquee window.
         let mut line = tree_label_line(context, TreeLabelPrefix::borrowed(""), glyphs);
         line.spans.pop(); // the empty borrowed name span; its separator stays
+        if context.level > 0 {
+            // Grouped Music keeps the tree's plain-space hierarchy but drops
+            // the two excess leading columns from every non-root row. The
+            // glyphs remain crate-owned; only this label composition changes.
+            let prefix = line
+                .spans
+                .first_mut()
+                .expect("a nested tree row has a prefix span");
+            prefix.content = prefix.content.chars().skip(2).collect::<String>().into();
+        }
         let composed = line.spans.len();
 
         if context.render.is_selected {
@@ -562,8 +578,9 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
 
         // Pad the name slot to its budget, then paint the album year once in
         // the right-aligned fixed six-column gutter at the row's right edge in
-        // the `STATUS_AVAILABLE` role. A yearless row appends nothing, so its
-        // title keeps the full width (the pinned gutter contract).
+        // the `STATUS_AVAILABLE` role, followed by its two-column trailing
+        // gap. A yearless row appends nothing, so its title keeps the full
+        // width (the pinned gutter contract).
         let painted: usize = line.spans[composed..]
             .iter()
             .map(|span| span.content.width())
@@ -580,6 +597,8 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
                 ),
                 Style::default().fg(palette::STATUS_AVAILABLE),
             ));
+            line.spans
+                .push(Span::raw(" ".repeat(YEAR_GUTTER_TRAILING_SPACE)));
         }
 
         // Everything the crate composed raw (guides, expansion glyph,
@@ -1323,16 +1342,16 @@ impl MusicTreeBrowser {
         // The focused selected row's marquee window, computed once per frame
         // through the shared marquee primitive (design D8). The clock keys on
         // the marqueed title text, exactly like the media-list painter. The
-        // window budget matches the renderer's own per-row budget: the six
-        // gutter columns are reserved only when the selected row carries a
-        // year (the pinned gutter contract).
+        // window budget matches the renderer's own per-row budget: the
+        // six-column date plus trailing gap is reserved only when the selected
+        // row carries a year (the pinned gutter contract).
         let selected = state
             .selected_index()
             .and_then(|index| state.projection().nodes().get(index).copied());
         state.ensure_mark_states(model);
         let selected_title_budget = selected.map_or(0, |node| {
-            let gutter =
-                usize::from(model.year_of(node.id()).is_some()) * YEAR_GUTTER_WIDTH as usize;
+            let gutter = usize::from(model.year_of(node.id()).is_some())
+                * (YEAR_GUTTER_WIDTH as usize + YEAR_GUTTER_TRAILING_SPACE);
             (tree_col_width as usize)
                 .saturating_sub(glyph_prefix_width(node.level()))
                 .saturating_sub(gutter)
@@ -1360,10 +1379,10 @@ impl MusicTreeBrowser {
             _marker: std::marker::PhantomData,
         };
 
-        // One primary tree column: the pinned six-column year gutter is painted
-        // inside that cell by the label renderer, so it can be reserved per row
-        // (no gutter on artist roots or yearless leaves) and no second or
-        // inline year column exists.
+        // One primary tree column: the pinned six-column year gutter and its
+        // trailing gap are painted inside that cell by the label renderer, so
+        // they can be reserved per row (no gutter on artist roots or yearless
+        // leaves) and no second or inline year column exists.
         let columns = TreeColumnSet::new(vec![ColumnDef::tree(
             "",
             ColumnWidth::flexible(1, u16::MAX)

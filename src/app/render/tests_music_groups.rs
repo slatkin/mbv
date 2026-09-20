@@ -267,10 +267,16 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
         long_row_text.contains('\u{2026}'),
         "long title truncates at {MUSIC_TREE_NON_WIDE_WIDTH}: {long_row_text}"
     );
-    let gutter_start = list_area.right() - crate::app::components::music_tree::YEAR_GUTTER_WIDTH;
-    let gutter_text: String = music_tree_row_text(&term, long_y, gutter_start, list_area.right())
-        .trim()
-        .to_string();
+    let gutter_start =
+        list_area.right() - crate::app::components::music_tree::YEAR_GUTTER_WIDTH - 2;
+    let gutter_text: String = music_tree_row_text(
+        &term,
+        long_y,
+        gutter_start,
+        gutter_start + crate::app::components::music_tree::YEAR_GUTTER_WIDTH,
+    )
+    .trim()
+    .to_string();
     assert_eq!(
         gutter_text,
         MUSIC_TREE_LONG_TITLE_YEAR.to_string(),
