@@ -54,6 +54,8 @@ Decision trace: D1, D7, D9.
 
 Decision trace: D8, D9.
 
+Note (2026-09-20): the 7.4 tweak round's tweak batch (uncommitted at reconcile time, user-owned as part of this change) landed: the shared word-local fuzzy acceptance rule (`src/app/fuzzy_match.rs`) for every library search, per-node Grouped Music filter matching (each level matches only its own text; matched albums no longer drag their track rows), the restored library browser zebra stripe on `Surface::LibraryColumn`, the fixed dark `HeroPane` sheet shared with the Library Hero overlay, and `LibraryColumn`/`PillRowGap` following the panel focus bit. The affected delta specs were reconciled to this behavior; row 7.5 syncs them.
+
 - [x] 7.1 Update or remove superseded Grouped Music flat-list/search tests in this change, while retaining existing canonical Heading/page-navigation behavior for other destinations; verify the targeted `mbv` test families pass without editing or depending on the separate `group-aware-page-navigation` change.
 - [x] 7.2 Add the precise focusable Music artist-root term to `CONTEXT.md` while preserving `Group heading` as the non-selectable canonical-list term, and verify proposal, design, specs, code names, and glossary use the distinction consistently by review.
 - [x] 7.3 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-core`, `cargo nextest run -p mbv`, and a targeted `cargo llvm-cov` review of the new model/filter/artist-completion paths; fix regressions and record any proven pre-existing failures.

@@ -82,14 +82,19 @@ Play, enqueue, shuffle, and context actions invoked on an artist root SHALL reso
 - **THEN** only those two albums are materialized in settled display order
 
 ### Requirement: Fuzzy filtering narrows the settled tree in place
-Pressing `/` on the focused Grouped Music browser SHALL open the existing one-row Inline Search bar while retaining the tree in the browser area. Query text SHALL appear immediately and, after a 300 ms debounce, fuzzy-match each album leaf against artist name, album title, and year. A score SHALL determine only whether a leaf matches; artist and album order SHALL remain settled order.
+Pressing `/` on the focused Grouped Music browser SHALL open the existing one-row Inline Search bar while retaining the tree in the browser area. Query text SHALL appear immediately and, after a 300 ms debounce, every node SHALL be matched under the same shared word-local fuzzy rule as the other library searches — every word of the query SHALL match inside a single word of the node's own searchable text — with each level matching only its own identity: an artist root against its name, an album leaf against its album title and year, and a cached track item against its track title. A score SHALL determine only whether a node matches; artist, album, and track order SHALL remain settled order.
 
-An artist root SHALL remain visible when any child leaf matches, and matching paths SHALL be force-expanded without overwriting persistent expansion. A filter SHALL NOT change which track items an album leaf projects; track items follow their album leaf's visibility and expansion in the filtered projection. An empty query SHALL show the complete tree. Opening a filter SHALL retain an anchor to the selected node; clearing or dismissing it SHALL restore that node when it still exists and restore persistent expansion. The corpus SHALL be only the current settled tree; filtering SHALL start no full-library fetch.
+An artist root SHALL remain visible when it matches or when any descendant matches, and matching paths SHALL be force-expanded without overwriting persistent expansion. A match SHALL bring no other row with it: a matched album leaf SHALL NOT drag its track children into the projection, and a track row SHALL appear in the filtered projection only through its own title match. An empty query SHALL show the complete tree. Opening a filter SHALL retain an anchor to the selected node; clearing or dismissing it SHALL restore that node when it still exists and restore persistent expansion. The corpus SHALL be only the current settled tree; filtering SHALL start no full-library fetch.
 
-#### Scenario: Artist name reveals its albums
-- **WHEN** the debounced query fuzzy-matches an artist name
-- **THEN** that artist root and its matching album leaves remain visible in settled order
-- **AND** the matching path is expanded for the filter session
+#### Scenario: An artist name surfaces its root
+- **WHEN** the debounced query fuzzy-matches an artist's name
+- **THEN** that artist root remains visible and is expanded for the filter session
+- **AND** its album leaves stay hidden unless they match on their own album title or year
+
+#### Scenario: A matched album does not drag its tracks
+- **WHEN** the debounced query matches an album leaf that has cached track items
+- **THEN** that leaf and its artist root remain visible without its track rows
+- **AND** a track row appears only when the query matches its own track title
 
 #### Scenario: Empty query shows the tree
 - **WHEN** the filter is open with an empty query

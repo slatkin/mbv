@@ -4,9 +4,9 @@
 
 While the input box is open, printable characters SHALL be appended to the query and SHALL NOT be interpreted as library list shortcuts. Each change to the query SHALL re-score the active destination's corpus after a 300 ms debounce; typed characters SHALL appear immediately.
 
-For destinations other than Grouped Music, matching SHALL remain fuzzy-scored against each item's display name, results SHALL remain ordered by descending match score, an empty query SHALL show no results, and scored results SHALL reset selection to the first result.
+For destinations other than Grouped Music, matching SHALL apply the shared word-local fuzzy rule: every word of the query SHALL match inside a single word of the item's display name, in order, with no letter taken from a different word; the fuzzy matcher's scoring over those accepted word matches SHALL be retained. Results SHALL remain ordered by descending match score, an empty query SHALL show no results, and scored results SHALL reset selection to the first result.
 
-For Grouped Music, matching SHALL operate on the current settled tree as specified by `grouped-music-tree-browser`: album leaves SHALL match composite artist, album-title, and year text; score SHALL be only a visibility predicate; settled order SHALL be preserved; artist ancestors SHALL remain visible; and an empty query SHALL show the complete tree. A Grouped Music query change SHALL preserve the selected tree node when it remains visible and otherwise select a valid visible node.
+For Grouped Music, matching SHALL operate on the current settled tree as specified by `grouped-music-tree-browser`: every node SHALL match under the same word-local rule against only its own searchable text — artist roots their name, album leaves their album title and year, track items their track title; score SHALL be only a visibility predicate; settled order SHALL be preserved; a match SHALL keep exactly the ancestors needed to reach it; and an empty query SHALL show the complete tree. A Grouped Music query change SHALL preserve the selected tree node when it remains visible and otherwise select a valid visible node.
 
 #### Scenario: Typing a query
 - **WHEN** the user types characters into the open search box on another searchable destination
