@@ -101,7 +101,7 @@ pub const TEXT_EMPHASIS: Color = Palette::Cream.color(); // warm emphasis text (
 pub const TEXT_FOCUS_ACCENT: Color = Palette::Yellow.color(); // focused-row title accent
 pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title (the first metadata line)
 /// Grouped Music's artist/album and section-header text.
-pub const MUSIC_HEADER: Color = Palette::Clay.color();
+pub const MUSIC_HEADER: Color = Palette::Yellow.color();
 pub const TEXT_ON_ACCENT: Color = Palette::Grey1.color(); // near-black text painted on a colored surface
 pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playing"/confirmed value text;
                                                               // deliberately not the focused surface's
@@ -156,7 +156,7 @@ pub const DURATION: Color = Palette::Iris.color(); // the sage
 /// podcast browser's `17 Sep 26` gutter. Its own role rather than the
 /// `DURATION` time column's, so a duration edit cannot move the dates; a date
 /// is metadata about the item, not a playback time.
-pub const ROW_DATE_FG: Color = Palette::Yellow.color(); // muted gold (#dbbc7f)
+pub const ROW_DATE_FG: Color = Palette::Yellow.color(); // muted gold (#e6b768)
 
 /// The primary (context/container) part of a split media-list row — the
 /// podcast an episode row came from. Its own role rather than

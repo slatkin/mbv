@@ -635,6 +635,39 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
 }
 
 #[test]
+fn music_workspace_header_uses_its_role_without_bold_modifier() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut workspace_list = StubList::with_rows(vec!["Track 1"]);
+    let mut content = LibraryPanelContent {
+        selector: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Album"),
+            overview: None,
+            credits: None,
+            workspace: Some(Workspace {
+                header: Some("TRACKLIST"),
+                selector: None,
+                list: &mut workspace_list,
+                focused: false,
+            }),
+        }),
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let (box_panel, _) = geo.workspace.expect("workspace box painted");
+    let content_y = box_panel.y + PANE_PAD_Y;
+    let content_x = box_panel.x + PANE_PAD_X;
+    let header = &buf[(content_x, content_y)];
+
+    assert_eq!(
+        palette::MUSIC_HEADER,
+        ratatui::style::Color::Rgb(0xe6, 0xb7, 0x68)
+    );
+    assert_eq!(header.fg, palette::MUSIC_HEADER);
+    assert!(!header.modifier.contains(ratatui::style::Modifier::BOLD));
+}
+
+#[test]
 fn ready_hero_reports_the_reserved_image_box_inside_the_hero_area() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
     let mut facts = hero_facts("Dune");

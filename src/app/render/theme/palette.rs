@@ -23,7 +23,7 @@
 
 use ratatui::style::Color;
 
-/// The 19 approved palette variants, in name-table order (hue families,
+/// The 20 approved palette variants, in name-table order (hue families,
 /// dark-to-light within each family; see
 /// `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 ///
@@ -47,6 +47,7 @@ pub(in crate::app) enum Palette {
     Purple,
     Red,
     Orange,
+    #[allow(dead_code)]
     Clay,
     Yellow,
     Cream,
@@ -102,7 +103,7 @@ impl Palette {
             Palette::Red => Color::Rgb(0xe5, 0x7e, 0x80),
             Palette::Orange => Color::Rgb(0xe5, 0x98, 0x75),
             Palette::Clay => Color::Rgb(0xdd, 0x9a, 0x78),
-            Palette::Yellow => Color::Rgb(0xdb, 0xbc, 0x7f),
+            Palette::Yellow => Color::Rgb(0xe6, 0xb7, 0x68),
             Palette::Cream => Color::Rgb(0xfa, 0xed, 0xcd),
             Palette::White => Color::Rgb(0xfd, 0xf6, 0xe3),
         }

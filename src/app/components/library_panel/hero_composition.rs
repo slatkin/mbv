@@ -112,16 +112,15 @@ pub(in crate::app) fn paint_library_hero_content(
 }
 
 fn paint_workspace_header(f: &mut Frame, content: Rect, header: &str) {
+    let style = if header == "TRACKLIST" {
+        Style::default().fg(palette::MUSIC_HEADER)
+    } else {
+        Style::default()
+            .fg(palette::TEXT_METADATA)
+            .add_modifier(ratatui::style::Modifier::BOLD)
+    };
     f.render_widget(
-        Paragraph::new(header).style(
-            Style::default()
-                .fg(if header == "TRACKLIST" {
-                    palette::MUSIC_HEADER
-                } else {
-                    palette::TEXT_METADATA
-                })
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ),
+        Paragraph::new(header).style(style),
         Rect {
             height: 1,
             ..content
