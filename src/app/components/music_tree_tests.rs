@@ -13,6 +13,7 @@ use ratatui::Terminal;
 use tui_treelistview::{TreeFilterConfig, TreeMarkState, TreeRevision};
 
 use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
+use crate::app::components::media_list::MediaSemanticState;
 use crate::app::music_grouping::ArtistKey;
 
 fn entry(
@@ -28,6 +29,7 @@ fn entry(
         title: title.to_string(),
         year: (!year.is_empty()).then(|| year.to_string()),
         target: target.to_string(),
+        semantic_state: MediaSemanticState::Ordinary,
     }
 }
 

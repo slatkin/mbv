@@ -530,3 +530,40 @@ fn restored_album_selection_lands_visible_behind_many_artist_roots() {
          a4 leaf rounds forward to artist 5's root"
     );
 }
+
+/// Task 3.1: the tree projection sources every album leaf's semantics through
+/// `MediaSemanticState::from_emby`, whose music collapse keeps an album
+/// `Ordinary`, so raw played/resume fields can never decorate a Music tree row.
+#[test]
+fn tree_entries_collapse_raw_played_and_resume_facts_to_ordinary() {
+    let mut album = make_item("Played Album", "MusicAlbum");
+    album.id = "album-played".into();
+    album.artist = "Alpha".into();
+    album.played = true;
+    album.playback_position_ticks = 120_000_000;
+    album.runtime_ticks = 240_000_000;
+    let ctx = MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![album], 0),
+        None,
+        String::new(),
+        Vec::new(),
+        0,
+        vec![("Alpha".into(), "2001".into(), "Played Album".into())],
+        vec![crate::app::music_grouping::ArtistKey::Service(
+            "artist-Alpha".into(),
+        )],
+        vec![0],
+        None,
+    );
+    let mut owner = MusicContent::new();
+    owner.set_content(ctx);
+
+    let entries = owner.tree_entries();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].title, "Played Album");
+    assert_eq!(
+        entries[0].semantic_state,
+        MediaSemanticState::Ordinary,
+        "raw played/resume facts never decorate a Music tree leaf"
+    );
+}

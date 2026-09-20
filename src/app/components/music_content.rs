@@ -198,7 +198,9 @@ impl MusicContent {
 
     /// The settled album projection the tree owner reconciles: one entry per
     /// album in settled order, carrying the stable album target, the settled
-    /// display text, and the album's stable artist identity (design D2/D3).
+    /// display text, the album's stable artist identity (design D2/D3), and
+    /// the canonical semantic state derived through
+    /// [`MediaSemanticState::from_emby`] (music collapse keeps it ordinary).
     fn tree_entries(&self) -> Vec<MusicTreeEntry> {
         self.context
             .album_order
@@ -207,12 +209,20 @@ impl MusicContent {
                 let (artist, year, name) = self.context.album_info.get(index)?;
                 let artist_key = self.context.album_artist_keys.get(index)?.clone();
                 let target = self.context.album_targets.get(index)?;
+                let semantic_state = self
+                    .context
+                    .list
+                    .items
+                    .get(index)
+                    .map(MediaSemanticState::from_emby)
+                    .unwrap_or(MediaSemanticState::Ordinary);
                 Some(MusicTreeEntry {
                     artist: artist.clone(),
                     artist_key,
                     title: name.clone(),
                     year: (!year.is_empty()).then(|| year.clone()),
                     target: target.clone(),
+                    semantic_state,
                 })
             })
             .collect()

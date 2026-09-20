@@ -17,6 +17,7 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
+use crate::app::components::media_list::MediaSemanticState;
 use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::components::ComponentId;
 use crate::app::music_grouping::ArtistKey;
@@ -96,6 +97,10 @@ fn spike_browser(model: &Model) -> MusicTreeBrowser {
                 title: name.clone(),
                 year: (!year.is_empty()).then(|| year.clone()),
                 target: ctx.album_targets[index].clone(),
+                // The spike projects the fixture's settled album facts; the
+                // real pane derives this through `MediaSemanticState::from_emby`
+                // (music collapse keeps it ordinary).
+                semantic_state: MediaSemanticState::Ordinary,
             }
         })
         .collect();
@@ -136,6 +141,42 @@ fn row_y(browser: &MusicTreeBrowser, list_area: Rect, projection_row: usize) -> 
 fn row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -> String {
     let buf = term.backend().buffer();
     (x0..x1).map(|x| buf[(x, y)].symbol().to_string()).collect()
+}
+
+/// The tree's hierarchy/branch/state glyphs (the crate's Unicode set).
+fn hierarchy_glyph(c: char) -> bool {
+    matches!(c, '▶' | '▼' | '•' | '├' | '└' | '│' | '─')
+}
+
+/// Every visible node row keeps a hierarchy glyph and at least one title cell
+/// and paints nothing past the browser rect (task 3.1's row contract).
+fn assert_hierarchy_and_title_within(
+    term: &Terminal<TestBackend>,
+    row_y: u16,
+    list_area: Rect,
+    frame_width: u16,
+) {
+    let row = row_text(term, row_y, list_area.x, list_area.right());
+    assert!(
+        row.chars().any(hierarchy_glyph),
+        "row keeps a hierarchy glyph: {row:?}"
+    );
+    assert!(
+        row.chars()
+            .any(|c| !c.is_whitespace() && !hierarchy_glyph(c) && c != '…'),
+        "row keeps at least one title cell: {row:?}"
+    );
+    let outside = row_text(term, row_y, list_area.right(), frame_width);
+    assert!(
+        outside.chars().all(|c| c == ' '),
+        "nothing overruns the browser rect: {outside:?}"
+    );
+}
+
+/// A character-column slice of a row (glyphs are single-width, so char index
+/// matches display column here).
+fn row_slice(row: &str, start: usize, len: usize) -> String {
+    row.chars().skip(start).take(len).collect()
 }
 
 fn row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::style::Color {
@@ -196,6 +237,21 @@ fn wide_fixture_spike_proves_the_visual_contracts() {
     let term = render_one_frame(&mut browser, list_area, WIDE_WIDTH, WIDE_HEIGHT);
     let buf = term.backend().buffer();
     assert_eq!(browser.offset(), 0, "a top selection needs no scroll");
+
+    // The selected artist root keeps its hierarchy glyph and at least one
+    // title cell and paints nothing past the browser rect (task 3.1).
+    assert_hierarchy_and_title_within(&term, list_area.y, list_area, WIDE_WIDTH);
+    // The overflowing projection's scrollbar takes the `SCROLLBAR` role; the
+    // crate exposes no scrollbar style field, so the block style's foreground
+    // (applied to the whole browser area) is what its unstyled scrollbar
+    // inherits.
+    let scrollbar_cell = &buf[(list_area.right() - 1, list_area.y + 1)];
+    assert_ne!(scrollbar_cell.symbol(), " ");
+    assert_eq!(
+        scrollbar_cell.fg,
+        palette::SCROLLBAR,
+        "the crate's scrollbar takes the SCROLLBAR role"
+    );
 
     // Group-relative zebra: each group's first member takes the secondary
     // fill, every second member reverts, and the phase resets across the
@@ -262,6 +318,7 @@ fn wide_fixture_spike_proves_the_visual_contracts() {
         LONG_TITLE_YEAR.to_string(),
         "year right-aligned in the fixed gutter"
     );
+    assert_hierarchy_and_title_within(&term, long_y, list_area, WIDE_WIDTH);
 
     // Frame B: selecting the second Beta leaf scrolls it into view; its bar
     // spans the full row and overrides the zebra, and Beta's first leaf
@@ -286,13 +343,24 @@ fn wide_fixture_spike_proves_the_visual_contracts() {
     assert_ne!(palette::SELECTED_ROW_BG, fill);
 
     // Aggregate marks: one of Beta's two leaves marked leaves the Beta root
-    // Partial; marking the second lifts it to Marked.
+    // Partial; marking the second lifts it to Marked, and each aggregate state
+    // paints its own semantic role on the root's title.
     browser.set_marked(BETA_LEAF_0, true);
-    render_one_frame(&mut browser, list_area, WIDE_WIDTH, WIDE_HEIGHT);
+    let term = render_one_frame(&mut browser, list_area, WIDE_WIDTH, WIDE_HEIGHT);
     assert_eq!(browser.mark_state(BETA_ROOT), TreeMarkState::Partial);
+    assert_eq!(
+        term.backend().buffer()[(list_area.x + 2, row_y(&browser, list_area, BETA_ROOT))].fg,
+        palette::TEXT_ACCENT_MUTED,
+        "a Partial artist root paints the muted aggregate role"
+    );
     browser.set_marked(BETA_LEAF_1, true);
-    render_one_frame(&mut browser, list_area, WIDE_WIDTH, WIDE_HEIGHT);
+    let term = render_one_frame(&mut browser, list_area, WIDE_WIDTH, WIDE_HEIGHT);
     assert_eq!(browser.mark_state(BETA_ROOT), TreeMarkState::Marked);
+    assert_eq!(
+        term.backend().buffer()[(list_area.x + 2, row_y(&browser, list_area, BETA_ROOT))].fg,
+        palette::STATUS_AVAILABLE,
+        "a Marked artist root paints the positive aggregate role"
+    );
 }
 
 #[test]
@@ -388,6 +456,12 @@ fn non_wide_fixture_spike_proves_the_visual_contracts() {
     browser.select_index(ALPHA_ROOT);
     let term = render_one_frame(&mut browser, list_area, NON_WIDE_WIDTH, NON_WIDE_HEIGHT);
     let buf = term.backend().buffer();
+    assert_hierarchy_and_title_within(&term, list_area.y, list_area, NON_WIDE_WIDTH);
+    assert_eq!(
+        buf[(list_area.right() - 1, list_area.y + 1)].fg,
+        palette::SCROLLBAR,
+        "the narrow scrollbar takes the SCROLLBAR role"
+    );
 
     // The Alpha phase alternates from its first member.
     let fill = zebra_fill(true);
@@ -440,6 +514,7 @@ fn non_wide_fixture_spike_proves_the_visual_contracts() {
         outside.chars().all(|c| c == ' '),
         "nothing overruns the browser rect: '{outside}'"
     );
+    assert_hierarchy_and_title_within(&term, long_y, list_area, NON_WIDE_WIDTH);
 
     // Scrollbar on the overflowing projection.
     assert_ne!(buf[(list_area.right() - 1, list_area.y + 1)].symbol(), " ");
@@ -479,4 +554,128 @@ fn non_wide_fixture_spike_proves_the_visual_contracts() {
     browser.set_marked(BETA_LEAF_1, true);
     render_one_frame(&mut browser, list_area, NON_WIDE_WIDTH, NON_WIDE_HEIGHT);
     assert_eq!(browser.mark_state(BETA_ROOT), TreeMarkState::Marked);
+}
+
+/// A controlled one-artist corpus for the exact gutter cases: a long artist
+/// root, a long year-bearing album, and a long yearless album, all wider than
+/// the row so every slot is exercised at the clipping boundary.
+const GUTTER_ARTIST: &str = "The Long Collective Artist Name That Will Not Fit One Row";
+const GUTTER_YEARED: &str = "A Yeared Album Title Long Enough To Want A Gutter";
+const GUTTER_YEARLESS: &str = "A Yearless Album Title Long Enough To Fill The Row";
+const GUTTER_YEAR: &str = "2007";
+
+fn gutter_entries() -> Vec<MusicTreeEntry> {
+    let key = ArtistKey::Service("gutter-artist".into());
+    vec![
+        MusicTreeEntry {
+            artist: GUTTER_ARTIST.into(),
+            artist_key: key.clone(),
+            title: GUTTER_YEARED.into(),
+            year: Some(GUTTER_YEAR.into()),
+            target: "gutter-yeared".into(),
+            semantic_state: MediaSemanticState::Ordinary,
+        },
+        MusicTreeEntry {
+            artist: GUTTER_ARTIST.into(),
+            artist_key: key,
+            title: GUTTER_YEARLESS.into(),
+            year: None,
+            target: "gutter-yearless".into(),
+            semantic_state: MediaSemanticState::Ordinary,
+        },
+    ]
+}
+
+/// The pinned year-gutter contract (design D8), painted through the crate's
+/// label/column seams: one right-aligned fixed six-column `STATUS_AVAILABLE`
+/// cell on a year-bearing album row, reserved nowhere on the artist root or
+/// the yearless leaf (their titles reach the last column), and no inline or
+/// second year column. The state glyph and title roles are pinned here too.
+#[test]
+fn year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
+    const WIDTH: u16 = 40;
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
+    let root = browser.projected_nodes()[0].id();
+    assert!(
+        browser.target_of(root).is_none(),
+        "level 0 is the artist root"
+    );
+    browser.expand_root(root);
+    assert_eq!(browser.projection_len(), 3);
+    // Unfocused so no row marquees: every row paints its ordinary truncation,
+    // which is what makes the per-row budget observable.
+    browser.set_focused(false);
+
+    let area = Rect::new(0, 0, WIDTH, 3);
+    let term = render_one_frame(&mut browser, area, WIDTH, 3);
+    let buf = term.backend().buffer();
+
+    // Three rows in three lines never overflow, so no scrollbar takes a
+    // column: the tree column is the full browser width and the gutter is its
+    // last six columns.
+    let gutter = (WIDTH - crate::app::components::music_tree::YEAR_GUTTER_WIDTH) as usize;
+    let rows: Vec<String> = (0..3).map(|y| row_text(&term, y, 0, WIDTH)).collect();
+
+    // Artist root: an ordinary grouping row in the metadata role, its long
+    // title using the full width (no gutter reserved).
+    let root_row = &rows[0];
+    assert!(
+        root_row.starts_with('▼'),
+        "the expanded root keeps its state glyph: {root_row:?}"
+    );
+    assert_eq!(
+        root_row.chars().last(),
+        Some('…'),
+        "the root title reaches the last column (no gutter): {root_row:?}"
+    );
+    assert_eq!(buf[(0, 0)].fg, palette::TEXT_MUTED, "root state glyph role");
+    assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA, "root title role");
+
+    // Year-bearing leaf: the title stops before the gutter, and the year
+    // right-aligns in the fixed six-column `STATUS_AVAILABLE` cell.
+    let yeared_row = &rows[1];
+    assert!(
+        yeared_row.starts_with("├── • "),
+        "the leaf keeps its guides and state glyph: {yeared_row:?}"
+    );
+    assert_eq!(
+        row_slice(yeared_row, gutter, 6),
+        format!("{GUTTER_YEAR:>6}"),
+        "the year is right-aligned in the last six columns: {yeared_row:?}"
+    );
+    assert_eq!(
+        yeared_row.chars().nth(gutter - 1),
+        Some('…'),
+        "the yeared title truncates before the gutter: {yeared_row:?}"
+    );
+    assert_eq!(buf[(4, 1)].fg, palette::TEXT_MUTED, "leaf state glyph role");
+    assert_eq!(
+        buf[(gutter as u16 - 1, 1)].fg,
+        palette::TEXT_EMPHASIS,
+        "an ordinary album leaf keeps the emphasis role"
+    );
+    assert_eq!(
+        buf[(gutter as u16 + 2, 1)].fg,
+        palette::STATUS_AVAILABLE,
+        "the year paints in the STATUS_AVAILABLE role"
+    );
+
+    // Yearless leaf: no gutter is reserved, so its long title reaches the
+    // last column and the gutter columns carry title text, never a year.
+    let yearless_row = &rows[2];
+    assert_eq!(
+        yearless_row.chars().last(),
+        Some('…'),
+        "the yearless title uses the full width: {yearless_row:?}"
+    );
+    let yearless_gutter = row_slice(yearless_row, gutter, 6);
+    assert!(
+        !yearless_gutter.chars().any(|c| c.is_ascii_digit())
+            && !yearless_gutter.contains(GUTTER_YEAR),
+        "the yearless row reserves no year: {yearless_gutter:?}"
+    );
+    assert!(
+        !rows.iter().any(|row| row.contains('%')),
+        "music tree rows never paint resume progress"
+    );
 }

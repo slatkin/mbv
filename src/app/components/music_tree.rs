@@ -24,16 +24,19 @@
 //! Layout arithmetic the view relies on (mirroring the crate's
 //! `resolve_layout` for this configuration, asserted by the spike tests):
 //! borderless block, no header, empty highlight symbol, `column_spacing` 0,
-//! horizontal scrolling disabled, one fixed six-column year gutter — so the
-//! tree column takes every remaining column and the vertical scrollbar takes
-//! exactly one column when the projection overflows.
+//! horizontal scrolling disabled, one primary tree column — so the tree
+//! column takes every remaining column and the vertical scrollbar takes
+//! exactly one column when the projection overflows. The pinned six-column
+//! year gutter (design D8) is painted inside that tree cell: one right-aligned
+//! fixed-width cell per row, reserved only on rows that carry a year, so a
+//! yearless row's title keeps the full width.
 
 use std::collections::HashMap;
 use std::time::Instant;
 
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Style;
-use ratatui::text::{Line, Span};
+use ratatui::text::Span;
 use ratatui::widgets::{Cell, StatefulWidget};
 use tui_treelistview::{
     tree_label_line, ColumnDef, ColumnWidth, ProjectedNode, TreeChildren, TreeColumnSet,
@@ -41,6 +44,9 @@ use tui_treelistview::{
     TreeMarkState, TreeModel, TreeQuery, TreeRevision, TreeRowContext,
 };
 
+use unicode_width::UnicodeWidthStr;
+
+use crate::app::components::media_list::MediaSemanticState;
 use crate::app::music_grouping::ArtistKey;
 use crate::app::palette::{self, Surface};
 use crate::app::render::components::marquee::marquee_spans;
@@ -73,6 +79,11 @@ pub(in crate::app) struct MusicTreeEntry {
     pub(in crate::app) title: String,
     pub(in crate::app) year: Option<String>,
     pub(in crate::app) target: String,
+    /// The settled item's canonical semantic state, derived at the projection
+    /// boundary through [`MediaSemanticState::from_emby`]. Music collapse
+    /// keeps every album leaf `Ordinary`, so the label renderer can never
+    /// re-derive played/resume decoration from raw item fields.
+    pub(in crate::app) semantic_state: MediaSemanticState,
 }
 
 enum MusicNode {
@@ -85,6 +96,7 @@ enum MusicNode {
         title: String,
         year: Option<String>,
         target: String,
+        semantic_state: MediaSemanticState,
     },
 }
 
@@ -157,6 +169,7 @@ impl MusicTreeModel {
                 &entry.target,
                 &entry.title,
                 entry.year.as_deref(),
+                &entry.semantic_state,
                 &mut display_changed,
             );
             let siblings = next_children.entry(root).or_default();
@@ -221,6 +234,7 @@ impl MusicTreeModel {
         target: &str,
         title: &str,
         year: Option<&str>,
+        semantic_state: &MediaSemanticState,
         display_changed: &mut bool,
     ) -> usize {
         let node_key = MusicNodeKey::Album(target.to_string());
@@ -228,12 +242,17 @@ impl MusicTreeModel {
             if let Some(MusicNode::Album {
                 title: existing_title,
                 year: existing_year,
+                semantic_state: existing_state,
                 ..
             }) = self.nodes.get_mut(id)
             {
-                if existing_title != title || existing_year.as_deref() != year {
+                if existing_title != title
+                    || existing_year.as_deref() != year
+                    || existing_state != semantic_state
+                {
                     *existing_title = title.to_string();
                     *existing_year = year.map(str::to_string);
+                    *existing_state = semantic_state.clone();
                     *display_changed = true;
                 }
             }
@@ -244,6 +263,7 @@ impl MusicTreeModel {
             title: title.to_string(),
             year: year.map(str::to_string),
             target: target.to_string(),
+            semantic_state: semantic_state.clone(),
         });
         self.intern.insert(node_key, id);
         id
@@ -303,6 +323,15 @@ impl MusicTreeModel {
     pub(in crate::app) fn target_of(&self, id: usize) -> Option<&str> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { target, .. }) => Some(target),
+            _ => None,
+        }
+    }
+
+    /// The album leaf's canonical semantic state; artist roots are ordinary
+    /// grouping rows and carry none.
+    pub(in crate::app) fn semantic_state_of(&self, id: usize) -> Option<&MediaSemanticState> {
+        match self.nodes.get(id) {
+            Some(MusicNode::Album { semantic_state, .. }) => Some(semantic_state),
             _ => None,
         }
     }
@@ -375,11 +404,17 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         context: &TreeRowContext<'_>,
         glyphs: &TreeGlyphs<'a>,
     ) -> Cell<'a> {
-        let title = model.title_of(id);
+        let year = model.year_of(id);
+        // The pinned year-gutter contract (design D8): the six-column gutter
+        // is reserved only on rows that carry a year, so a yearless row's
+        // title budget keeps those columns.
+        let gutter = usize::from(year.is_some()) * YEAR_GUTTER_WIDTH as usize;
         let budget = if context.render.is_selected {
             self.selected_title_budget
         } else {
-            (self.tree_col_width as usize).saturating_sub(glyph_prefix_width(context.level))
+            (self.tree_col_width as usize)
+                .saturating_sub(glyph_prefix_width(context.level))
+                .saturating_sub(gutter)
         };
 
         // The crate composes the hierarchy guides and expansion glyph; the
@@ -397,13 +432,39 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         if line.spans.len() == composed {
             // Ordinary truncation: whole-title ellipsis cut to the budget.
             line.spans.push(Span::styled(
-                trunc_str(title, budget).to_string(),
-                Style::default().fg(name_role(model, context)),
+                trunc_str(model.title_of(id), budget).to_string(),
+                Style::default().fg(name_role(model, id, context.level, context.node.mark)),
             ));
         }
 
-        // Everything the crate composed raw (guides, state glyph, separators)
-        // takes the muted hierarchy role; the name spans above keep theirs.
+        // Pad the name slot to its budget, then paint the album year once in
+        // the right-aligned fixed six-column gutter at the row's right edge in
+        // the `STATUS_AVAILABLE` role. A yearless row appends nothing, so its
+        // title keeps the full width (the pinned gutter contract).
+        let painted: usize = line.spans[composed..]
+            .iter()
+            .map(|span| span.content.width())
+            .sum();
+        if let Some(pad) = budget.checked_sub(painted).filter(|pad| *pad > 0) {
+            line.spans.push(Span::raw(" ".repeat(pad)));
+        }
+        if let Some(year) = year {
+            line.spans.push(Span::styled(
+                format!(
+                    "{:>width$}",
+                    trunc_str(year, YEAR_GUTTER_WIDTH as usize),
+                    width = YEAR_GUTTER_WIDTH as usize
+                ),
+                Style::default().fg(palette::STATUS_AVAILABLE),
+            ));
+        }
+
+        // Everything the crate composed raw (guides, expansion glyph,
+        // separators) takes the muted hierarchy role; the name spans above
+        // keep theirs. The crate supplies no glyph-style parameter: the state
+        // glyph is an unstyled `Span::raw`, so the label renderer's own cell is
+        // the supported seam for it (the state glyph is styleable only here,
+        // while the guides also arrive through `line_style`).
         for span in line.spans.iter_mut().take(composed) {
             span.style = span.style.fg(palette::TEXT_MUTED);
         }
@@ -416,25 +477,37 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
     }
 }
 
-/// The row's name role: marks override the semantic base (artist roots in the
-/// metadata role, album leaves in the emphasis role); the exact mark visual
-/// treatment is task 3.1/4.2 scope — the gate proves the renderer can see and
-/// paint the aggregated mark state.
-fn name_role(model: &MusicTreeModel, context: &TreeRowContext<'_>) -> ratatui::style::Color {
-    if context.node.mark != TreeMarkState::Unmarked {
-        palette::STATUS_AVAILABLE
-    } else if matches!(model.nodes_at_context(context), Some(true)) {
-        palette::TEXT_METADATA
-    } else {
-        palette::TEXT_EMPHASIS
+/// The row's name role, resolved only from semantic inputs: the crate's mark
+/// state, the row's hierarchy level, and an album leaf's canonical
+/// [`MediaSemanticState`]. Nothing here reads a raw `EmbyItem` played/resume
+/// field, and music collapse keeps every leaf `Ordinary`.
+fn name_role(
+    model: &MusicTreeModel,
+    id: usize,
+    level: usize,
+    mark: TreeMarkState,
+) -> ratatui::style::Color {
+    match mark {
+        TreeMarkState::Marked => palette::STATUS_AVAILABLE,
+        TreeMarkState::Partial => palette::TEXT_ACCENT_MUTED,
+        TreeMarkState::Unmarked if level == 0 => palette::TEXT_METADATA,
+        TreeMarkState::Unmarked => model
+            .semantic_state_of(id)
+            .map_or(palette::TEXT_EMPHASIS, semantic_role),
     }
 }
 
-impl MusicTreeModel {
-    /// Whether the row is an artist root, derived from the row's own context
-    /// position: roots sit at level 0.
-    fn nodes_at_context(&self, context: &TreeRowContext<'_>) -> Option<bool> {
-        Some(context.level == 0)
+/// The canonical media-list semantic palette applied to a tree album leaf: an
+/// ordinary leaf keeps the emphasis role, a played one mutes, and an active
+/// one keeps the emphasis role without any inline progress decoration (the
+/// tree paints no progress slot).
+fn semantic_role(state: &MediaSemanticState) -> ratatui::style::Color {
+    match state {
+        MediaSemanticState::Ordinary => palette::TEXT_EMPHASIS,
+        MediaSemanticState::Played => palette::TEXT_MUTED,
+        MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. } => {
+            palette::TEXT_EMPHASIS
+        }
     }
 }
 
@@ -872,26 +945,41 @@ impl MusicTreeBrowser {
         // Mirror the crate's resolved layout for this fixed configuration so
         // the renderer can budget titles before the widget renders: the
         // vertical scrollbar takes one column when the projection overflows,
-        // and the year gutter takes its fixed six columns.
+        // and the primary tree column takes every remaining column (the
+        // six-column year gutter is painted inside it, per row).
         let overflow = usize::from(state.visible_len() > area.height as usize);
-        let table_width = area.width.saturating_sub(overflow as u16);
-        let tree_col_width = table_width.saturating_sub(YEAR_GUTTER_WIDTH);
+        let tree_col_width = area.width.saturating_sub(overflow as u16);
 
         // The focused selected row's marquee window, computed once per frame
         // through the shared marquee primitive (design D8). The clock keys on
-        // the marqueed title text, exactly like the media-list painter.
+        // the marqueed title text, exactly like the media-list painter. The
+        // window budget matches the renderer's own per-row budget: the six
+        // gutter columns are reserved only when the selected row carries a
+        // year (the pinned gutter contract).
         let selected = state
             .selected_index()
             .and_then(|index| state.projection().nodes().get(index).copied());
+        state.ensure_mark_states(model);
+        let selected_title_budget = selected.map_or(0, |node| {
+            let gutter =
+                usize::from(model.year_of(node.id()).is_some()) * YEAR_GUTTER_WIDTH as usize;
+            (tree_col_width as usize)
+                .saturating_sub(glyph_prefix_width(node.level()))
+                .saturating_sub(gutter)
+        });
         let selected_title_spans = selected.filter(|_| *focused).map(|node| {
             let title = model.title_of(node.id());
-            let budget = (tree_col_width as usize).saturating_sub(glyph_prefix_width(node.level()));
-            let parts = vec![(title.to_string(), palette::TEXT_EMPHASIS)];
-            marquee_spans(title, &parts, budget, marquee_key, marquee_started, false)
+            let role = name_role(model, node.id(), node.level(), state.mark_state(node.id()));
+            let parts = vec![(title.to_string(), role)];
+            marquee_spans(
+                title,
+                &parts,
+                selected_title_budget,
+                marquee_key,
+                marquee_started,
+                false,
+            )
         });
-        let selected_title_budget = selected
-            .map(|node| (tree_col_width as usize).saturating_sub(glyph_prefix_width(node.level())))
-            .unwrap_or(0);
 
         let zebra_fill = palette::surface_colors(Surface::SidebarBody, *focused).fill;
         let label = MusicTreeLabelRenderer {
@@ -902,33 +990,15 @@ impl MusicTreeBrowser {
             _marker: std::marker::PhantomData,
         };
 
-        // The year gutter: one right-aligned fixed six-column cell in the
-        // `STATUS_AVAILABLE` role, zebra-filled with its row, no gutter
-        // reserved on artist roots or yearless leaves.
-        let year_renderer =
-            move |model: &MusicTreeModel, id: usize, _context: &TreeRowContext<'_>| match model
-                .year_of(id)
-            {
-                Some(year) => {
-                    let mut style = Style::default().fg(palette::STATUS_AVAILABLE);
-                    if model.is_striped(id) {
-                        style = style.bg(zebra_fill);
-                    }
-                    Cell::from(
-                        Line::from(Span::styled(year.to_string(), style))
-                            .alignment(ratatui::layout::Alignment::Right),
-                    )
-                }
-                None => Cell::default(),
-            };
-        let columns = TreeColumnSet::new(vec![
-            ColumnDef::tree(
-                "",
-                ColumnWidth::flexible(1, u16::MAX)
-                    .expect("the tree column's width range is always valid"),
-            ),
-            ColumnDef::data_owned("Year", ColumnWidth::fixed(YEAR_GUTTER_WIDTH), year_renderer),
-        ])
+        // One primary tree column: the pinned six-column year gutter is painted
+        // inside that cell by the label renderer, so it can be reserved per row
+        // (no gutter on artist roots or yearless leaves) and no second or
+        // inline year column exists.
+        let columns = TreeColumnSet::new(vec![ColumnDef::tree(
+            "",
+            ColumnWidth::flexible(1, u16::MAX)
+                .expect("the tree column's width range is always valid"),
+        )])
         .expect("the tree adapter's column set is always valid")
         .without_header();
 
@@ -952,16 +1022,24 @@ fn rearm_selection_visibility_for(state: &mut TreeListViewState<usize>) {
 /// no header, no highlight symbol, no horizontal scroll; the focused
 /// selected row paints the canonical `SELECTED_ROW_BG` bar across the whole
 /// row (the crate applies it after row cells, so it overrides the zebra);
-/// hierarchy guides take the muted role via `line_style`.
+/// hierarchy guides take the muted role via `line_style` and the aggregate
+/// mark states take the positive/muted-accent roles. The block style carries
+/// the `SCROLLBAR` foreground because the crate paints its scrollbar with an
+/// unstyled `Scrollbar::default()` and exposes no scrollbar style field: the
+/// block style is applied to the whole browser area first, so the scrollbar
+/// glyphs inherit it. The buffer cases pin that inheritance.
 fn tree_style(focused: bool) -> tui_treelistview::TreeListViewStyle<'static> {
     use tui_treelistview::{TreeHorizontalScroll, TreeListViewStyle, TreeRowRendering};
     TreeListViewStyle {
+        block_style: Style::default().fg(palette::SCROLLBAR),
         highlight_style: if focused {
             Style::default().bg(palette::SELECTED_ROW_BG)
         } else {
             Style::default()
         },
         line_style: Style::default().fg(palette::TEXT_MUTED),
+        marked_style: Style::default().fg(palette::STATUS_AVAILABLE),
+        partial_mark_style: Style::default().fg(palette::TEXT_ACCENT_MUTED),
         highlight_symbol: "",
         borders: ratatui::widgets::Borders::NONE,
         column_spacing: 0,
