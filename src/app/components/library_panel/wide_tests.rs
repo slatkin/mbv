@@ -180,6 +180,34 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
     );
 }
 
+/// Task 1.3 (D2): the Wide skeleton hands the band-reduced content area to the
+/// hero painter, so the hero pane's fill starts below the full-width Selector
+/// band instead of at the raw panel top.
+#[test]
+fn hero_pane_starts_below_the_full_width_selector_band() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut content = LibraryPanelContent {
+        selector: Some(SelectorRow {
+            pills: vec!["All".into()],
+            active: Some(0),
+        }),
+        controls: None,
+        list: ListSlot::Media(&mut list),
+        hero: None,
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    // The band is reserved at the full panel width above both panes...
+    assert_eq!(panes.pills_area.width, AREA.width);
+    assert_eq!(panes.spacer_area.width, AREA.width);
+    // ...and the hero pane's fill begins exactly at the band's bottom.
+    assert_eq!(geo.hero.y, panes.spacer_area.bottom());
+    assert_eq!(
+        buf[(geo.hero.x, geo.hero.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
+}
+
 #[test]
 fn list_controls_row_moves_the_list_box_down_one_row() {
     let mut list = StubList::with_rows(vec!["Alpha"]);

@@ -310,6 +310,7 @@ pub(in crate::app) fn render_wide_skeleton(
     terminal_height: u16,
 ) -> Option<WideSkeletonGeometry> {
     let WideLibraryPanes {
+        content_area,
         hero_panel,
         browser_panel,
         browser_area,
@@ -334,8 +335,10 @@ pub(in crate::app) fn render_wide_skeleton(
     // Hero pane: always the resting fill. It never takes the focused
     // surface when the media list (or its Workspace) holds focus — only
     // the list box above flips with the panel's focus. A focused Workspace
-    // still shows through its own content-box tint.
-    let hero_area = wide_hero_hero_pane(f, area, false, override_width)?;
+    // still shows through its own content-box tint. It is fed the band-reduced
+    // `content_area` (D2), so the hero starts below the full-width Selector
+    // band instead of at the raw panel top.
+    let hero_area = wide_hero_hero_pane(f, content_area, false, override_width);
 
     let mut geometry = WideSkeletonGeometry {
         browser: browser_panel,
