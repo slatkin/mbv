@@ -72,7 +72,7 @@ Alternative rejected: rebuilding IDs from row position, which makes selection an
 
 ### D4. Map mbv input explicitly; do not enable the crate keymap
 
-The existing Keyboard Router keeps precedence. Once it returns local fall-through, `MusicContent` maps the confirmed chords to tree view actions. `/`, printable filter text, Visual mode, context actions, and track Workspace focus remain destination-local semantic operations. No crate keymap or second routing table receives terminal events.
+The existing Keyboard Router keeps precedence. Once it returns local fall-through, `MusicContent` maps the confirmed chords to tree view actions. `/`, printable filter text, context actions, and track Workspace focus remain destination-local semantic operations. No crate keymap or second routing table receives terminal events.
 
 The crate's latest-render `hit_test` resolves artist/album targets inside the browser rectangle. `MusicContent` keeps gesture recognition and sends already-resolved targets to local operations or typed requests, matching ADR 0024. Geometry is invalidated on content or area changes before the next view.
 
@@ -86,7 +86,7 @@ Reuse `SkimMatcherV2` and the existing 300 ms duration without creating a second
 
 Each album leaf has precomputed searchable text containing artist, album title, and year. On debounce expiry, the filter records the matching album node IDs; the tree query retains ancestors and force-expands matching paths while leaving persistent expansion untouched. Scores are discarded after match/no-match classification, preserving settled order.
 
-Opening the filter snapshots the selected node. Empty text disables filtering and shows the full tree. Dismissal restores the snapshot if present and persistent expansion. Filtering masks stored marks outside the visible album projection rather than deleting them: status, aggregate root state, painting, ranges, and bulk actions use only visible marks while the filter is active; dismissal reveals surviving pre-filter marks without adding newly hidden albums. Query changes perform no shell request.
+Opening the filter snapshots the selected node. Empty text disables filtering and shows the full tree. Dismissal restores the snapshot if present and persistent expansion. Filtering masks stored marks outside the visible album projection rather than deleting them: status, aggregate root state, painting, and bulk actions use only visible marks while the filter is active; dismissal reveals surviving pre-filter marks without adding newly hidden albums. Query changes perform no shell request.
 
 Alternative rejected: adapting the current `InlineSearch` carrier. Its flat result owner, full-corpus fetch lifecycle, relevance order, and empty-result behavior are the semantics this exception replaces. Alternative rejected: extracting a generic search framework for one new caller.
 
@@ -94,9 +94,11 @@ Alternative rejected: adapting the current `InlineSearch` carrier. Its flat resu
 
 Artist roots never cross the shell as playable targets. For play, enqueue, shuffle, and context requests, the tree owner walks the root's settled child leaves and returns ordered album targets. Expansion does not affect action scope. An active filter restricts the walk to matching visible leaves.
 
-Root multi-selection applies mark operations to the same visible child leaves. Aggregate root state is derived from child marks. Range selection walks visible album leaves and skips roots. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
+Root multi-selection is modified-click only: Ctrl+Click toggles album leaves, and artist-root toggles apply mark operations to the same visible child leaves. Aggregate root state is derived from child marks. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
 
 Alternative rejected: storing selected artist IDs. Their meaning changes with filtering and would force the shell to re-resolve component-local scope.
+
+Visual mode and range selection are descoped from this PoC (user decision 2026-09-20); revisit after PoC acceptance if wanted.
 
 ### D7. Add artist detail without giving the component Service authority
 
