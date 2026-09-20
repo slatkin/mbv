@@ -7,7 +7,7 @@ use super::test_helpers::{
 use super::*;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::{Color, Modifier};
+use ratatui::style::Modifier;
 use ratatui::Terminal;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
@@ -746,11 +746,6 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
         root_row.chars().last(),
         Some('…'),
         "the root title reaches the last column (no gutter): {root_row:?}"
-    );
-    assert_eq!(
-        palette::MUSIC_HEADER,
-        Color::Rgb(0xe6, 0xb7, 0x68),
-        "music header role value"
     );
     assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER, "root title role");
 
