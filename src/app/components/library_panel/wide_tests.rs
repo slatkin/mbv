@@ -713,6 +713,8 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
         }),
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let pill_row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
 
     // The search box occupies the Selector row's place: query text in the
     // bar rect, and no selector pill painted there instead.
@@ -721,6 +723,11 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
     assert!(
         !text_in(&buf, geo.selector_bar, "\u{25e2}"),
         "no selector pill under the search box"
+    );
+    assert_eq!(
+        buf[(panes.browser_panel.x, geo.selector_bar.y)].bg,
+        pill_row_bg,
+        "the pill row paints across the Browser pane too"
     );
     // The results occupy the list box through the canonical fixed-row
     // presentation; the carrier retained the row-flow rect the skeleton
