@@ -1,6 +1,7 @@
 use super::test_helpers::*;
 use super::*;
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
+use crate::app::components::media_list::queue_row_zebra;
 use crate::app::components::music_tree::MusicTreeBrowser;
 use crate::app::components::ComponentId;
 use crate::app::shell::Model;
@@ -154,10 +155,9 @@ fn assert_music_tree_title_fg(
     );
 }
 
-/// The zebra fill the tree resolves for its rows: the focused Green2 fill
-/// settles to the tree's `#272e33` fill when focus moves elsewhere.
+/// The Queue zebra role shared by the tree.
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
-    palette::music_tree_zebra(focused)
+    queue_row_zebra(focused)
 }
 
 /// The long album's node id, found by its title in the arena (its settled
@@ -423,9 +423,9 @@ fn music_tree_panel_inset_keeps_rows_inside_claim_and_scrollbar_at_claim_edge() 
         "tree title starts at the panel's two-column inset: {row:?}"
     );
 
-    // The selected bar and the group's zebra band both bleed through the
-    // claim rectangle's side pads while the title remains at the content
-    // rectangle's two-column inset.
+    // The selected bar bleeds through the claim rectangle's side pads, while
+    // the group's zebra band stops at the content rectangle's two-column
+    // insets.
     assert_eq!(
         term.backend().buffer()[(claim.x, content.y)].bg,
         palette::SELECTED_ROW_BG
@@ -436,11 +436,15 @@ fn music_tree_panel_inset_keeps_rows_inside_claim_and_scrollbar_at_claim_edge() 
     );
     assert_eq!(
         term.backend().buffer()[(claim.x, content.y + 1)].bg,
-        palette::music_tree_zebra(true)
+        ratatui::style::Color::Reset
+    );
+    assert_eq!(
+        term.backend().buffer()[(claim.x + 2, content.y + 1)].bg,
+        music_tree_zebra_fill(true)
     );
     assert_eq!(
         term.backend().buffer()[(claim.right() - 1, content.y + 1)].bg,
-        palette::music_tree_zebra(true)
+        ratatui::style::Color::Reset
     );
     let scrollbar_x = if claim.right() < MUSIC_TREE_NON_WIDE_WIDTH {
         claim.right()

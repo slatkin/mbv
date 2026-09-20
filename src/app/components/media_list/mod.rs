@@ -4,6 +4,7 @@
 //! owner. Painting lives in `crate::app::render::components::media_list`.
 
 use crate::app::components::library_panel::LibraryKey;
+use crate::app::palette;
 use crate::app::ui_util::move_cursor;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
@@ -229,6 +230,24 @@ pub enum SelectedRowSurface {
 pub struct ZebraStripe {
     pub focused: Color,
     pub unfocused: Color,
+}
+
+/// The Queue's row palette, shared by the Queue and Grouped Music tree so
+/// their base and zebra fills cannot drift apart. The base fill is the
+/// recessed QueuePanel surface; the stripe is the QueueColumn surface.
+pub(crate) fn queue_row_background(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueuePanel, focused).fill
+}
+
+pub(crate) fn queue_row_zebra(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueueColumn, focused).fill
+}
+
+pub(crate) fn queue_row_zebra_stripe() -> ZebraStripe {
+    ZebraStripe {
+        focused: queue_row_zebra(true),
+        unfocused: queue_row_zebra(false),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

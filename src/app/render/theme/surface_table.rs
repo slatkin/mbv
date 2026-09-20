@@ -152,6 +152,8 @@ pub(super) const fn row(surface: Surface) -> Row {
         // `components/browser/paint.rs:108`, `tv_wide.rs:312`,
         // `music_wide.rs:581`, `audiobookshelf_book.rs:197`,
         // `audiobookshelf_podcast.rs:264`, `feeds.rs:211`, `home.rs:370`.
+        // Its focused fill is a deliberate Slate sheet deviation, resolved
+        // centrally in `surface_resolve`; resting remains the table value.
         Surface::LibraryPanel => Row {
             level: Level::ContentBody,
             focus: FocusSource::LibraryColumn,

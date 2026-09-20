@@ -1,4 +1,5 @@
 use super::chrome::thin_vertical_thumb;
+use crate::app::components::media_list::queue_row_background;
 #[cfg(test)]
 use crate::app::TabSelection;
 use crate::app::{palette, App};
@@ -190,7 +191,7 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
     // only paint its background.
     fill_surface(f, area, palette::Surface::QueueColumn, focused);
     let box_area = crate::app::render::arrangements::queue::queue_list_box(area);
-    let inner = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
+    let inner = queue_row_background(focused);
     f.render_widget(Block::default().style(Style::default().bg(inner)), box_area);
 
     area

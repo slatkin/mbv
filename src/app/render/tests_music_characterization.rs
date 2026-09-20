@@ -12,7 +12,9 @@ use ratatui::Terminal;
 use std::collections::HashMap;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
-use crate::app::components::media_list::MediaSemanticState;
+use crate::app::components::media_list::{
+    queue_row_background, queue_row_zebra, MediaSemanticState,
+};
 use crate::app::components::music_tree::{
     MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack,
 };
@@ -211,10 +213,13 @@ fn assert_music_tree_scrollbar_matches_shared(
     }
 }
 
-/// The zebra fill the tree resolves for its rows: the focused Green2 fill
-/// settles to the tree's `#272e33` fill when focus moves elsewhere.
+/// The Queue row roles shared by the tree: base fill and zebra stripe.
+fn music_tree_row_fill(focused: bool) -> ratatui::style::Color {
+    queue_row_background(focused)
+}
+
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
-    palette::music_tree_zebra(focused)
+    queue_row_zebra(focused)
 }
 
 /// The long album's node id, found by its title in the arena (its settled
@@ -395,14 +400,14 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
             "selected-row bar reaches column {x}"
         );
     }
-    assert_ne!(
+    assert_eq!(
         music_tree_row_bg(
             &term,
             probe_x,
             music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0)
         ),
-        fill,
-        "Beta leaf 0 keeps the neighbouring unstriped phase"
+        music_tree_row_fill(true),
+        "Beta leaf 0 uses the Queue base fill"
     );
     assert_ne!(palette::SELECTED_ROW_BG, fill);
 

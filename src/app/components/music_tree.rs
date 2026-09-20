@@ -51,7 +51,9 @@ use tui_treelistview::{
 
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::media_list::MediaSemanticState;
+use crate::app::components::media_list::{
+    queue_row_background, queue_row_zebra, MediaSemanticState,
+};
 use crate::app::music_grouping::ArtistKey;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
@@ -554,13 +556,14 @@ fn glyph_prefix_width(level: usize) -> usize {
 /// semantic roles: hierarchy glyphs in the muted role, artist roots in the
 /// cream role, ordinary album leaves in the level-one accent role, track rows
 /// in the level-two error role, marks in the positive status role, the top-level
-/// group zebra fill on the whole cell, and the
-/// focused selected row's marquee window computed for this frame. Canonical
-/// selected bars resolve their text to the selected-row Ink role.
+/// group zebra fill inside the text insets, and the focused selected row's
+/// marquee window computed for this frame. Canonical selected bars resolve
+/// their text to the selected-row Ink role.
 struct MusicTreeLabelRenderer<'a> {
     tree_col_width: u16,
     left_text_inset: usize,
     right_text_inset: usize,
+    row_background: ratatui::style::Color,
     zebra_fill: ratatui::style::Color,
     /// The focused selected row's marquee spans for this frame (`None` when
     /// unfocused or nothing is selected). Computed in `view` so the renderer
@@ -692,8 +695,31 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
             style = style
                 .bg(palette::SELECTED_ROW_BG)
                 .fg(palette::SELECTED_ROW_FG);
-        } else if model.is_striped(id) {
-            style = style.bg(self.zebra_fill);
+        } else {
+            // Match the Queue's row palette, while keeping zebra bands inside
+            // the panel's two-column text insets. The selected bar is the one
+            // deliberate full-bleed exception and is applied as the Cell
+            // style above.
+            let row_fill = if model.is_striped(id) {
+                self.zebra_fill
+            } else {
+                self.row_background
+            };
+            let first_painted_span = usize::from(self.left_text_inset > 0);
+            for span in line.spans.iter_mut().skip(first_painted_span) {
+                span.style = span.style.bg(row_fill);
+            }
+            let painted_width: usize = line.spans[first_painted_span..]
+                .iter()
+                .map(|span| span.content.width())
+                .sum();
+            let target_width = (self.tree_col_width as usize).saturating_sub(self.right_text_inset);
+            if target_width > painted_width {
+                line.spans.push(Span::styled(
+                    " ".repeat(target_width - painted_width),
+                    Style::default().bg(row_fill),
+                ));
+            }
         }
         Cell::from(line).style(style)
     }
@@ -1739,7 +1765,8 @@ impl MusicTreeBrowser {
             )
         });
 
-        let zebra_fill = palette::music_tree_zebra(*focused);
+        let row_background = queue_row_background(*focused);
+        let zebra_fill = queue_row_zebra(*focused);
         let visible_mark_states = state
             .projection()
             .nodes()
@@ -1755,6 +1782,7 @@ impl MusicTreeBrowser {
             tree_col_width,
             left_text_inset,
             right_text_inset,
+            row_background,
             zebra_fill,
             selected_title_spans,
             selected_title_budget,
@@ -1801,6 +1829,50 @@ impl MusicTreeBrowser {
             }
         }
         StatefulWidget::render(widget, tree_area, &mut tree_buffer, state);
+        // The tree crate applies a cell background across its full primary
+        // column. Restore the parent buffer in the two side pads for ordinary
+        // rows so zebra/base bands stop at the same insets as the Queue list;
+        // selected and marked rows intentionally remain full-bleed.
+        let selected_row = (*focused).then(|| state.selected_index()).flatten();
+        let projection = state.projection().nodes();
+        let visible_start = state.offset();
+        let visible_end = visible_start.saturating_add(content_rect.height as usize);
+        {
+            let target = frame.buffer_mut();
+            for (projection_row, node) in projection
+                .iter()
+                .enumerate()
+                .skip(visible_start)
+                .take(visible_end.saturating_sub(visible_start))
+            {
+                let full_bleed = selected_row == Some(projection_row)
+                    || multi_select_bar(
+                        model,
+                        node.id(),
+                        computed_mark_state(model, query, state, selection_order, node.id()),
+                    );
+                if full_bleed {
+                    continue;
+                }
+                let y = tree_area.y + (projection_row - visible_start) as u16;
+                for x in paint_area.x..content_rect.x {
+                    if let (Some(source), Some(destination)) = (
+                        target.cell(Position { x, y }),
+                        tree_buffer.cell_mut(Position { x, y }),
+                    ) {
+                        destination.clone_from(source);
+                    }
+                }
+                for x in content_rect.right()..paint_area.right() {
+                    if let (Some(source), Some(destination)) = (
+                        target.cell(Position { x, y }),
+                        tree_buffer.cell_mut(Position { x, y }),
+                    ) {
+                        destination.clone_from(source);
+                    }
+                }
+            }
+        }
         let crate_scrollbar_x = overflow.then(|| tree_area.right().saturating_sub(1));
         {
             let target = frame.buffer_mut();

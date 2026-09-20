@@ -120,18 +120,6 @@ pub const SELECTED_ROW_BG: Color = Palette::Iris.color();
 /// independent from the ordinary title and metadata hierarchy.
 pub const SELECTED_ROW_FG: Color = Palette::Ink.color();
 
-/// Grouped Music's secondary tree-row fill. Kept as a role so the tree
-/// renderer never owns a raw colour or a destination-specific surface choice.
-/// The zebra is brighter while the tree has focus and settles to the content
-/// tree-specific `#272e33` fill when focus moves elsewhere.
-pub fn music_tree_zebra(focused: bool) -> Color {
-    if focused {
-        Palette::Green2.color()
-    } else {
-        Palette::Slate.color()
-    }
-}
-
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours
 // the Emby hero headers already used, defined once so destinations cannot style

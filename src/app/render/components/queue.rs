@@ -1,4 +1,6 @@
-use crate::app::components::media_list::{WideMediaList, WideMediaListPaintPolicy, ZebraStripe};
+use crate::app::components::media_list::{
+    queue_row_zebra_stripe, WideMediaList, WideMediaListPaintPolicy,
+};
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
@@ -28,12 +30,9 @@ pub(in crate::app) fn render_queue_body(
 ) {
     match presentation {
         QueuePresentation::Wide(list) => {
-            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused).with_zebra(
-                ZebraStripe {
-                    focused: palette::surface_colors(palette::Surface::QueueColumn, true).fill,
-                    unfocused: palette::surface_colors(palette::Surface::QueueColumn, false).fill,
-                },
-            ));
+            list.set_paint_policy(
+                WideMediaListPaintPolicy::for_queue(focused).with_zebra(queue_row_zebra_stripe()),
+            );
             Component::view(list, frame, area);
         }
     }

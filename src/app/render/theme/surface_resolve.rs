@@ -49,7 +49,12 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     );
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     if follow_focus {
-        SurfaceColors::fill(if row.soft {
+        SurfaceColors::fill(if surface == Surface::LibraryPanel {
+            // The focused Library panel deliberately keeps the Slate sheet
+            // rather than adopting the focused column fill; the unfocused
+            // value remains the surface table's resting value below.
+            Palette::Slate.color()
+        } else if row.soft {
             // The soft content-body surface fill: its own value, not the
             // scrollbar's `SCROLLBAR`, whose `Palette::Green2` value it
             // shares today — the two are equal today and independently
@@ -108,7 +113,7 @@ mod tests {
             Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
-            Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
+            Surface::LibraryPanel => (Palette::Slate.color(), SURFACE_RESTING),
             Surface::QueuePanel => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::MainContentBox => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
@@ -186,10 +191,16 @@ mod tests {
                     focused, SURFACE_FOCUSED,
                     "{surface:?} shares the column/pane focused fill"
                 ),
-                Level::ContentBody => assert_eq!(
-                    focused, SURFACE_FOCUSED,
-                    "{surface:?} shares the content-body focused fill"
-                ),
+                Level::ContentBody => {
+                    if surface == Surface::LibraryPanel {
+                        assert_eq!(focused, Palette::Slate.color());
+                    } else {
+                        assert_eq!(
+                            focused, SURFACE_FOCUSED,
+                            "{surface:?} shares the content-body focused fill"
+                        );
+                    }
+                }
                 Level::Recess => assert_eq!(
                     focused, SURFACE_FOCUSED,
                     "{surface:?} shares the recess focused fill"
