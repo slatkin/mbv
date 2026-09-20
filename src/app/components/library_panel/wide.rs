@@ -18,8 +18,8 @@ use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
 use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
 use crate::app::render::{
-    render_placeholder, render_search_box, wide_hero_browser_pane, wide_hero_hero_pane,
-    PillBarWindow, PANE_PAD_X, PANE_PAD_Y,
+    render_placeholder, render_search_box, wide_hero_hero_pane, PillBarWindow, PANE_PAD_X,
+    PANE_PAD_Y,
 };
 
 use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
@@ -109,6 +109,27 @@ pub(in crate::app) struct BrowserPaneGeometry {
     /// The selected row's rect from the list slot's view, when one painted
     /// (the context-menu anchor's painted truth).
     pub(in crate::app) selected: Option<Rect>,
+}
+
+/// The Wide Browser pane's row geometry (D3/D5): the panel's full-width
+/// Selector band — its pill row aligned to the panel's left content edge —
+/// followed by the Browser pane's own full rect as the list box, so the Wide
+/// path keeps no internal pill reserve. The non-Wide skeleton keeps using
+/// `wide_hero_browser_pane` for its own single-pane reserve.
+fn wide_browser_pane(
+    pills_area: Rect,
+    spacer_area: Rect,
+    browser_panel: Rect,
+) -> WideHeroBrowserPane {
+    WideHeroBrowserPane {
+        pills_area: Rect {
+            x: pills_area.x.saturating_add(PANE_PAD_X),
+            width: pills_area.width.saturating_sub(PANE_PAD_X),
+            ..pills_area
+        },
+        spacer_area,
+        list_panel: browser_panel,
+    }
 }
 
 /// Paints the Browser pane (Selector row, optional List controls row, list
@@ -288,11 +309,12 @@ pub(in crate::app) fn paint_browser_pane(
 /// role-rect geometry, or `None` when `area` does not fit the shared Wide
 /// presentation (the Narrow skeleton, task 5.7, owns that breakpoint).
 ///
-/// Rows top-to-bottom in the Browser pane: the Selector row (one pill bar +
-/// the panel's spacer, reserved even without a `SelectorRow`), the optional
-/// List controls row, and the list box (fill, then the list presentation or
-/// the `ListSlot::Empty` placeholder). While
-/// `ListSlot::Search` is active, the search box paints in the Selector row's
+/// The Selector row is the panel's full-width band above both panes: its pill
+/// bar is aligned to the panel's left content edge and its spacer spans the
+/// whole width. Rows top-to-bottom in the Browser pane below the band: the
+/// optional List controls row, and the list box (fill, then the list
+/// presentation or the `ListSlot::Empty` placeholder). While
+/// `ListSlot::Search` is active, the search box paints in the Selector band's
 /// rect and the results in the list box, and the rest of the panel is
 /// unchanged.
 #[allow(clippy::too_many_arguments)]
@@ -310,13 +332,14 @@ pub(in crate::app) fn render_wide_skeleton(
     terminal_height: u16,
 ) -> Option<WideSkeletonGeometry> {
     let WideLibraryPanes {
+        pills_area,
+        spacer_area,
         content_area,
         hero_panel,
         browser_panel,
-        browser_area,
         ..
     } = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, override_width)?;
-    let pane = wide_hero_browser_pane(browser_panel, browser_area);
+    let pane = wide_browser_pane(pills_area, spacer_area, browser_panel);
 
     // List box focus: the panel's bit, minus the Workspace. When the hero's
     // media list holds focus the browser list drops its green and rests —

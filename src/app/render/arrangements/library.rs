@@ -5,11 +5,9 @@ use ratatui::layout::Rect;
 pub(in crate::app) struct WideLibraryPanes {
     /// The full-width Selector band reserved above both panes (D1/D3/D5):
     /// the pill row and its one-row parent-background spacer, spanning the
-    /// whole panel width. Read by the band's painter in the Wide skeleton
-    /// (a later unit); until then the unit-1 tests are the only readers.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// whole panel width. The Wide skeleton's band painter aligns the pill
+    /// row to the panel's left content edge (D5).
     pub pills_area: Rect,
-    #[cfg_attr(not(test), allow(dead_code))]
     pub spacer_area: Rect,
     /// The band-reduced area the Hero/Browser split was computed over; both
     /// panes tile it. The Wide skeleton feeds it to the hero painter (D2) so
@@ -18,7 +16,6 @@ pub(in crate::app) struct WideLibraryPanes {
     pub hero_panel: Rect,
     pub browser_panel: Rect,
     pub hero_area: Rect,
-    pub browser_area: Rect,
 }
 
 pub(in crate::app) fn wide_library_panes(
@@ -43,12 +40,6 @@ pub(in crate::app) fn wide_library_panes(
         browser: browser_panel,
     } = wide_hero::wide_hero_presentation(content_area, override_width);
     let hero_area = padded_rect(hero_panel, pad_x, pad_y);
-    let browser_area = Rect {
-        x: browser_panel.x,
-        y: browser_panel.y.saturating_add(pad_y),
-        width: browser_panel.width,
-        height: browser_panel.height.saturating_sub(pad_y * 2),
-    };
     Some(WideLibraryPanes {
         pills_area,
         spacer_area,
@@ -56,7 +47,6 @@ pub(in crate::app) fn wide_library_panes(
         hero_panel,
         browser_panel,
         hero_area,
-        browser_area,
     })
 }
 
@@ -106,7 +96,7 @@ mod tests {
         };
         let panes = wide_library_panes(area, 2, 1, None).expect("wide area");
         assert_eq!(panes.hero_area.x, panes.hero_panel.x + 2);
-        assert_eq!(panes.browser_area.y, panes.browser_panel.y + 1);
+        assert_eq!(panes.hero_area.y, panes.hero_panel.y + 1);
         assert!(wide_library_panes(
             Rect {
                 height: WIDE_HERO_MIN_AREA_HEIGHT,

@@ -108,7 +108,7 @@ fn draw_skeleton(
 
 fn browser_pane(area: Rect) -> crate::app::render::arrangements::wide_hero::WideHeroBrowserPane {
     let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
-    wide_hero_browser_pane(panes.browser_panel, panes.browser_area)
+    wide_browser_pane(panes.pills_area, panes.spacer_area, panes.browser_panel)
 }
 
 #[test]
@@ -197,14 +197,77 @@ fn hero_pane_starts_below_the_full_width_selector_band() {
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
     let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
-    // The band is reserved at the full panel width above both panes...
-    assert_eq!(panes.pills_area.width, AREA.width);
-    assert_eq!(panes.spacer_area.width, AREA.width);
-    // ...and the hero pane's fill begins exactly at the band's bottom.
+    // Component-layer claim: the hero's own painted surface starts exactly at
+    // the band's bottom, and the spacer row above it is not hero fill. The
+    // band's full-width placement is the arrangement claim owned by
+    // `library.rs::band_carve_keeps_the_breakpoint_and_pushes_both_panes_below_it`.
     assert_eq!(geo.hero.y, panes.spacer_area.bottom());
+    assert_ne!(
+        buf[(geo.hero.x, panes.spacer_area.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill,
+        "the spacer row above the hero is not hero fill"
+    );
     assert_eq!(
         buf[(geo.hero.x, geo.hero.y)].bg,
         palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
+}
+
+/// Task 2.1 (D3/D5): the Wide Selector band's pill row is aligned to the
+/// panel's left content edge and its own surface spans across both panes, and
+/// the Browser list box carries no internal pill reserve — its fill starts at
+/// the Browser pane's own top and reaches the panel border.
+#[test]
+fn selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut content = LibraryPanelContent {
+        selector: Some(SelectorRow {
+            pills: vec!["All".into()],
+            active: Some(0),
+        }),
+        controls: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Dune"),
+            overview: None,
+            credits: None,
+            workspace: None,
+        }),
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let pill_row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
+
+    // The pill row starts at the panel's left content edge (D5) and its own
+    // surface reaches the panel's right edge, i.e. across the hero/browser
+    // gap into the Browser pane.
+    assert_eq!(geo.selector_bar.x, AREA.x + PANE_PAD_X);
+    assert_eq!(geo.selector_bar.right(), panes.pills_area.right());
+    assert!(panes.browser_panel.x > panes.hero_panel.right());
+    assert_eq!(
+        buf[(geo.selector_bar.x, geo.selector_bar.y)].bg,
+        pill_row_bg
+    );
+    assert_eq!(
+        buf[(panes.browser_panel.x, geo.selector_bar.y)].bg,
+        pill_row_bg,
+        "the pill row paints across the Browser pane too"
+    );
+    // The panel's left inset columns are outside the pill row's surface.
+    assert_ne!(buf[(AREA.x, geo.selector_bar.y)].bg, pill_row_bg);
+
+    // No internal pill reserve in the Wide path (D3): the list box starts at
+    // the Browser pane's own top (already below the band) and its fill
+    // reaches the pane's bottom border.
+    assert_eq!(geo.list_panel.y, panes.browser_panel.y);
+    assert_eq!(geo.list_panel.bottom(), panes.browser_panel.bottom());
+    assert_eq!(geo.list_panel.right(), AREA.right());
+    let list_bg = palette::surface_colors(palette::Surface::LibraryPanel, false).fill;
+    assert_eq!(buf[(geo.list_panel.x, geo.list_panel.y)].bg, list_bg);
+    assert_eq!(
+        buf[(geo.list_panel.x, geo.list_panel.bottom() - 1)].bg,
+        list_bg,
+        "the list-box fill reaches the Browser pane's border"
     );
 }
 
