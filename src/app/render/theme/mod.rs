@@ -123,7 +123,15 @@ pub const SELECTED_ROW_BG: Color = Palette::Slate.color(); // its own role, deli
 
 /// Grouped Music's secondary tree-row fill. Kept as a role so the tree
 /// renderer never owns a raw colour or a destination-specific surface choice.
-pub const MUSIC_TREE_ZEBRA: Color = Palette::Green2.color();
+/// The zebra is brighter while the tree has focus and settles to the content
+/// surface's Storm value when focus moves elsewhere.
+pub fn music_tree_zebra(focused: bool) -> Color {
+    if focused {
+        Palette::Green2.color()
+    } else {
+        Palette::Storm.color()
+    }
+}
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours

@@ -1311,7 +1311,7 @@ impl MusicTreeBrowser {
             )
         });
 
-        let zebra_fill = palette::MUSIC_TREE_ZEBRA;
+        let zebra_fill = palette::music_tree_zebra(*focused);
         let label = MusicTreeLabelRenderer {
             tree_col_width,
             zebra_fill,

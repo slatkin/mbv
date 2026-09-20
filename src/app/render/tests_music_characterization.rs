@@ -162,11 +162,10 @@ fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::s
     term.backend().buffer()[(x, y)].bg
 }
 
-/// The zebra fill the tree resolves for its rows: the canonical grouped
-/// list's fixed resting-content Storm in both focus states.
+/// The zebra fill the tree resolves for its rows: the focused Green2 fill
+/// settles to the resting-content Storm when focus moves elsewhere.
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
-    let _ = focused;
-    palette::MUSIC_TREE_ZEBRA
+    palette::music_tree_zebra(focused)
 }
 
 /// The long album's node id, found by its title in the arena (its settled
@@ -540,8 +539,9 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     );
 
     // Unfocused: the cursor row paints no bar. Its stripe still alternates,
-    // and the SidebarBody stripe is the fixed resting value in both states.
+    // but settles from the focused Green2 fill to the resting Storm fill.
     browser.set_focused(false);
+    let unfocused_zebra = music_tree_zebra_fill(false);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -554,7 +554,8 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
         palette::SELECTED_ROW_BG,
         "an unfocused tree paints no bar for its cursor row"
     );
-    assert_eq!(music_tree_row_bg(&term, title_x, cursor_y), zebra);
+    assert_ne!(unfocused_zebra, zebra, "focus changes the zebra role");
+    assert_eq!(music_tree_row_bg(&term, title_x, cursor_y), unfocused_zebra);
 
     // Unfocused multi-selection: with the cursor moved off the marked album
     // leaf, the mark alone paints the bar across its whole row, again
