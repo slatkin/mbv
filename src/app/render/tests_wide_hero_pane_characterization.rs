@@ -71,11 +71,11 @@ fn tv_wide_left_pane_unconditional_fill_shared_inset() {
 
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::resolve_surface_focus(false)
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
     );
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
-        palette::resolve_surface_focus(false)
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
     );
 }
 
@@ -138,16 +138,19 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
     let (terminal, hero) = render_feeds_panel(vec![feed_entry("entry-1", "Entry One")]);
     assert!(hero.width > 0 && hero.height > 0);
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
+    assert_eq!(
+        buffer[(hero.x, hero.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
     );
 }
 
 /// Feeds (task 7.2): the wide right hero pane fill is unconditional (D1) --
-/// with no selectable entry the panel still fills `SURFACE_RESTING` (D3:
-/// read-only, never focus-green) around the empty-slot placeholder. Feeds
+/// with no selectable entry the panel still fills the Hero pane's own sheet
+/// (D3: read-only, never focus-green) around the empty-slot placeholder. Feeds
 /// paints through the shared panel skeleton now, so `hero_area` is published
 /// whether or not a hero exists.
 #[test]
@@ -155,10 +158,13 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     let (terminal, hero) = render_feeds_panel(vec![]);
     assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
+    assert_eq!(
+        buffer[(hero.x, hero.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
     );
     assert!(buffer_to_string(&terminal).contains("Press r to load feeds"));
 }

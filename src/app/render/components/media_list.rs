@@ -532,7 +532,10 @@ mod wide_row_regression_tests {
             heading("C"),
             item("c1", "C1", None),
         ]);
-        let pair = stripe(palette::Surface::MainContentBox);
+        // The production browser stripe: the library column's fill for the
+        // paint's focus bit (the Grouped Music tree's alternation tone),
+        // against the `LibraryPanel` box fill the panel paints underneath.
+        let pair = stripe(palette::Surface::LibraryColumn);
         let other = stripe(palette::Surface::LibraryPanel);
         assert_ne!(pair.focused, other.focused);
         assert_ne!(pair.unfocused, other.unfocused);

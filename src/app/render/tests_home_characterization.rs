@@ -121,11 +121,12 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
-/// 5.11): the browser list paints no zebra, so the selected first row
-/// paints the bar and the row below it rests on the `LibraryPanel` box
-/// fill. Unfocused rows keep the pane fill and paint no bar.
+/// 5.11): the browser list stripes like every other library (restored
+/// 2026-09-20), so the selected first row paints the bar and the striped row
+/// below it carries the library column's fill. Unfocused rows keep the pane
+/// fill, the stripe, and paint no bar.
 #[test]
-fn wide_home_paints_no_zebra_with_the_selected_bar() {
+fn wide_home_stripes_its_browser_list_with_the_selected_bar() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {
@@ -149,9 +150,8 @@ fn wide_home_paints_no_zebra_with_the_selected_bar() {
         )
     };
 
-    // The browser list paints no zebra: the row below the selected one
-    // rests on the `LibraryPanel` box fill; the selected first row paints
-    // the bar.
+    // The browser list stripes: the row below the selected one carries the
+    // library column's focused fill; the selected first row paints the bar.
     let (selected, plain) = bgs(true);
     assert_eq!(
         selected,
@@ -160,8 +160,8 @@ fn wide_home_paints_no_zebra_with_the_selected_bar() {
     );
     assert_eq!(
         plain,
-        Some(palette::surface_colors(palette::Surface::LibraryPanel, true).fill),
-        "the row below the selected one rests on the pane fill"
+        Some(palette::surface_colors(palette::Surface::LibraryColumn, true).fill),
+        "the row below the selected one carries the stripe"
     );
 
     let (selected, plain) = bgs(false);
@@ -172,7 +172,7 @@ fn wide_home_paints_no_zebra_with_the_selected_bar() {
     );
     assert_eq!(
         plain,
-        Some(palette::surface_colors(palette::Surface::LibraryPanel, false).fill),
-        "the unfocused row below keeps the pane fill"
+        Some(palette::surface_colors(palette::Surface::LibraryColumn, false).fill),
+        "the unfocused row below carries the stripe"
     );
 }

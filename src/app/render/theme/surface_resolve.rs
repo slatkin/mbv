@@ -105,9 +105,9 @@ mod tests {
     fn pinned_fills(surface: Surface) -> (Color, Color) {
         match surface {
             Surface::QueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::LibraryColumn => (SURFACE_BACKDROP, SURFACE_BACKDROP),
+            Surface::LibraryColumn => (SURFACE_FOCUSED, SURFACE_BACKDROP),
             Surface::WideSplitGutter => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::HeroPane => (SURFACE_FOCUSED, SURFACE_RESTING),
+            Surface::HeroPane => (Palette::Ink.color(), Palette::Ink.color()),
             Surface::SelectedRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
@@ -131,7 +131,7 @@ mod tests {
             Surface::PillChip => (PILL_BG, PILL_BG),
             Surface::PillChipSelected => (PILL_SELECTED_BG, PILL_SELECTED_BG),
             Surface::QueueScopePillSelected => (ACCENT, ACCENT),
-            Surface::PillRowGap => (SURFACE_BACKDROP, SURFACE_BACKDROP),
+            Surface::PillRowGap => (SURFACE_FOCUSED, SURFACE_BACKDROP),
             Surface::SidebarBand => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::TabBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::PopupFrame => (SURFACE_FOCUSED, SURFACE_FOCUSED),
@@ -204,11 +204,14 @@ mod tests {
                     focused, SURFACE_FOCUSED,
                     "{surface:?} shares the recess focused fill"
                 ),
-                Level::ChromeBand | Level::Popup => {
-                    panic!(
-                        "{surface:?}: only column/pane, content body and recess are focus-driven"
-                    )
-                }
+                Level::ChromeBand => assert_eq!(
+                    focused, SURFACE_FOCUSED,
+                    "{surface:?} shares the chrome band focused fill"
+                ),
+                Level::Popup => panic!(
+                    "{surface:?}: only column/pane, content body, recess and chrome \
+                     band are focus-driven"
+                ),
             }
         }
 

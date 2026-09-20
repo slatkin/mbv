@@ -11,10 +11,7 @@
 //! re-derived from this tree, not from the declined branch (D6). The special
 //! sites of design D3 are enumerated here, with their current evidence:
 //!
-//! (a) **Fixed-fill sites** (focused == resting): the library column gutter
-//!     (`render/components/chrome.rs:39`, `SURFACE_BACKDROP` in every frame on
-//!     main) and the wide Music browser container
-//!     (`render/components/music_wide.rs:549`); the wide hero split gap
+//! (a) **Fixed-fill sites** (focused == resting): the wide hero split gap
 //!     (`components/wide_hero_boundary.rs:121`); the selected-row punch-through
 //!     (`render/components/widgets.rs:136`, `list_rows.rs:341,354,383,469`,
 //!     `media_list/wide.rs:202,268`); the context menu's selected row
@@ -77,14 +74,15 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // Main never follows focus here: the shell paints the right column's
-        // whole gutter as the app backdrop in every frame
-        // (`render/components/chrome.rs:39`) and the wide Music browser
-        // container does the same (`render/components/music_wide.rs:549`), so
-        // the row is fixed at `SURFACE_BACKDROP`.
+        // The right column's whole gutter and body: the shell paints it in
+        // `shell_library_panel.rs`'s `library_body_fill`, which passes the
+        // panel's own focus bit, so the column lightens to the level's
+        // `SURFACE_FOCUSED` fill while the library panel holds focus. Resting
+        // it keeps the app backdrop the column has always painted (declared
+        // as a deviation below).
         Surface::LibraryColumn => Row {
             level: Level::ColumnPane,
-            focus: FocusSource::Fixed,
+            focus: FocusSource::LibraryColumn,
             soft: false,
             resting: SURFACE_BACKDROP,
         },
@@ -96,15 +94,17 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_BACKDROP,
         },
-        // `CONTEXT.md` defines the Hero pane as the `#333c43` resting fill of
-        // Wide hero's right pane, so this is the level default, not a
-        // deviation. The call site is the `ReadOnly` / `Workspace(held)` match
-        // at `render/arrangements/wide_hero.rs:302-303`.
+        // The Wide hero's sheet: the same dark chrome the Library Hero
+        // overlay paints when the same hero is shown over a non-Wide browser,
+        // for every destination (user decision 2026-09-20). It is the sheet
+        // the hero content repaints its own background with, not a
+        // focus-reactive content surface, so the row is fixed: the pane no
+        // longer lightens with the panel bit.
         Surface::HeroPane => Row {
             level: Level::ColumnPane,
-            focus: FocusSource::LibraryColumn,
+            focus: FocusSource::Fixed,
             soft: false,
-            resting: SURFACE_RESTING,
+            resting: Palette::Ink.color(),
         },
         // The library punch-through: the backdrop beneath the list panel
         // shows through, never the panel's focus green. Evidence:
@@ -308,11 +308,16 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: ACCENT,
         },
-        // Home's pill-bar spacer band paints the backdrop today
-        // (`render/components/home.rs:402`).
+        // The Selector row's spacer band: the panel showing through, so it
+        // follows the panel's own focus bit and resolves the column body's
+        // value — focused the level's `SURFACE_FOCUSED` fill, resting the app
+        // backdrop. The one chrome band that follows focus, because it is a
+        // reserved row *inside* the panel rather than structural chrome
+        // around it (ui-design-language: "the spacer row SHALL inherit the
+        // parent panel background").
         Surface::PillRowGap => Row {
             level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
+            focus: FocusSource::LibraryColumn,
             soft: false,
             resting: SURFACE_BACKDROP,
         },
@@ -369,9 +374,9 @@ impl Surface {
 pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     (
         Surface::LibraryColumn,
-        "main paints the library column's gutter and the wide Music browser \
-         container as the app backdrop (`SURFACE_BACKDROP`) in every frame; \
-         neither follows panel focus",
+        "the library column rests as the app backdrop (`SURFACE_BACKDROP`) \
+         rather than the column/pane level's resting value; its focused half \
+         takes `SURFACE_FOCUSED`",
     ),
     (
         Surface::WideSplitGutter,
@@ -391,6 +396,11 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     (
         Surface::QueuePanel,
         "the queue panel's recessed resting box paints the app backdrop",
+    ),
+    (
+        Surface::HeroPane,
+        "the Wide hero's sheet paints the Library Hero overlay's dark chrome \
+         (`Palette::Ink`), not the column/pane level's resting value",
     ),
     (
         Surface::MainContentBox,

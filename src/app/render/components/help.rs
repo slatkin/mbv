@@ -360,12 +360,33 @@ pub(in crate::app) struct HelpRenderGeometry {
     pub panel_area: ratatui::layout::Rect,
 }
 
+/// The chord column's width for one keybind set: the widest rendered chord
+/// plus the two-column gap before its label, floored at the historical
+/// alignment so short sets look unchanged.
+///
+/// Measured from the rows themselves (built once at zero width, where the
+/// padding is a no-op) rather than a second chord table, so a rebind cannot
+/// overflow the column — `Ctrl+Left / Ctrl+Right` did, running straight into
+/// "Switch panels".
+pub(in crate::app) fn help_key_width(keybinds: &Keybinds) -> usize {
+    const FLOOR: usize = 16;
+    const GAP: usize = 2;
+    let widest = build_help_sections(0, keybinds)
+        .iter()
+        .flat_map(|(_, lines)| lines.iter())
+        .filter_map(|line| line.spans.get(1))
+        .map(|span| span.content.chars().count())
+        .max()
+        .unwrap_or(FLOOR);
+    widest.saturating_add(GAP).max(FLOOR)
+}
+
 /// The rendered Playback section's row texts (padded key column + label),
 /// one per declared Playback action, in registry order. Test seam for the
 /// render-layer tests that pin help to the registry (design D7).
 #[cfg(test)]
-pub(in crate::app::render) fn playback_help_rows(key_w: usize, keybinds: &Keybinds) -> Vec<String> {
-    section_help_rows(key_w, keybinds, HelpSection::Playback)
+pub(in crate::app::render) fn playback_help_rows(keybinds: &Keybinds) -> Vec<String> {
+    section_help_rows(keybinds, HelpSection::Playback)
 }
 
 /// The rendered Global section's row texts (padded key column + label),
@@ -373,13 +394,13 @@ pub(in crate::app::render) fn playback_help_rows(key_w: usize, keybinds: &Keybin
 /// render-layer tests that pin the Global/prefix presentation to the
 /// registry (task 7.4, design D7).
 #[cfg(test)]
-pub(in crate::app::render) fn global_help_rows(key_w: usize, keybinds: &Keybinds) -> Vec<String> {
-    section_help_rows(key_w, keybinds, HelpSection::Global)
+pub(in crate::app::render) fn global_help_rows(keybinds: &Keybinds) -> Vec<String> {
+    section_help_rows(keybinds, HelpSection::Global)
 }
 
 #[cfg(test)]
-fn section_help_rows(key_w: usize, keybinds: &Keybinds, section: HelpSection) -> Vec<String> {
-    let (_, lines) = build_help_sections(key_w, keybinds)
+fn section_help_rows(keybinds: &Keybinds, section: HelpSection) -> Vec<String> {
+    let (_, lines) = build_help_sections(help_key_width(keybinds), keybinds)
         .into_iter()
         .find(|(name, _)| *name == section)
         .expect("help section exists");
@@ -407,7 +428,7 @@ pub(in crate::app) fn render_help_panel(
     let panel_area = area.unwrap_or_else(|| f.area());
     let content =
         chrome::render_panel_shell_at(f, panel_area, "KEYBOARD SHORTCUTS", "[↑↓]scroll [Esc]close");
-    let key_w = 16usize;
+    let key_w = help_key_width(keybinds);
 
     let mut sections: [Option<Vec<Line<'static>>>; 7] = std::array::from_fn(|_| None);
     for (name, lines) in build_help_sections(key_w, keybinds) {

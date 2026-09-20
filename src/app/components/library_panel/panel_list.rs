@@ -38,11 +38,15 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
             PanelListPaintPolicy::Wide { focused } => {
-                // The browser list paints no zebra: queue and Workspace
-                // lists keep their stripes; the library browser rests on
-                // its surface fill.
-                self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::new(focused));
+                // Every library browser list stripes again (7038e430 dropped
+                // it; restored 2026-09-20), in the Grouped Music tree's style:
+                // the stripe is the library column's own fill for this focus
+                // bit — focused `SURFACE_FOCUSED`, the same tone the music
+                // tree's rows alternate with, resting the app backdrop.
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::new(focused)
+                        .with_zebra(zebra_stripe(Surface::LibraryColumn)),
+                );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
                 // Fixed Storm stripes in both focus states; the focused
@@ -250,6 +254,44 @@ mod panel_list_tests {
                 buf[(area.x + 2, area.y + 1)].bg,
                 palette::SURFACE_RESTING,
                 "striped row, focused={focused}"
+            );
+        }
+    }
+
+    /// The browser-list stripe pair, pinned to the Grouped Music tree's own
+    /// alternation: the second row carries the library column's fill for the
+    /// paint's focus bit, so a focused browser list alternates `SURFACE_FOCUSED`
+    /// against the `LibraryPanel` box fill exactly as the music rows do.
+    #[test]
+    fn browser_stripes_zebra_rows_like_the_music_tree() {
+        let mut carrier = MediaListCarrier::new();
+        carrier.set_content(vec![item("a"), item("b")]);
+        let area = Rect::new(0, 0, 20, 2);
+        let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+
+        for focused in [true, false] {
+            terminal
+                .draw(|f| {
+                    PanelList::set_paint_policy(
+                        &mut carrier,
+                        PanelListPaintPolicy::Wide { focused },
+                    );
+                    PanelList::view(&mut carrier, f, area);
+                })
+                .unwrap();
+            let buf = terminal.backend().buffer();
+            // The ungrouped alternation opens on the box fill, so row 1
+            // carries the stripe; the 2-column quiet indent keeps the parent
+            // background, so the stripe is read from the title column.
+            assert_eq!(
+                buf[(area.x + 2, area.y + 1)].bg,
+                palette::surface_colors(palette::Surface::LibraryColumn, focused).fill,
+                "striped row, focused={focused}"
+            );
+            assert_ne!(
+                buf[(area.x + 2, area.y + 1)].bg,
+                palette::surface_colors(palette::Surface::LibraryPanel, focused).fill,
+                "the stripe must be visible against the box fill, focused={focused}"
             );
         }
     }
