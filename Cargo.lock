@@ -2566,11 +2566,12 @@ dependencies = [
 
 [[package]]
 name = "ratatui-image"
-version = "11.0.8"
+version = "11.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "399baa06251282b0c1bbb5762848cf98a6b7b84f44af7f0daf3213ace16df4f0"
+checksum = "9593d10c61ec2007f429d1fafc4f4a19fecdbae4d06b531a2d505227fb82f5ea"
 dependencies = [
  "base64-simd",
+ "flate2",
  "icy_sixel",
  "image",
  "rand 0.8.6",
@@ -3331,9 +3332,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.16.3"
+version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b81c0cb5fce14f53e49c1d4da0c508334ff12040221bb8ab01b2dabd91d04b6e"
+checksum = "6ecfad6c3abc80a577f2b91c1e412ee57e7a060d430b553c1b0c940974ebcd49"
 dependencies = [
  "unicode-width",
 ]
