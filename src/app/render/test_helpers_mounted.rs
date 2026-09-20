@@ -4,7 +4,6 @@ use super::super::*;
 use super::buffer_to_string;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::media_list::MediaSemanticState;
-use crate::app::components::music_content::MusicContent;
 use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::ComponentId;
@@ -103,32 +102,6 @@ pub fn mounted_music_tree_browser(model: &Model) -> MusicTreeBrowser {
         })
         .collect();
     MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries))
-}
-
-pub fn mounted_music_layout(model: &Model) -> PaintedRowGeometry {
-    model
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("library panel mounted")
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .expect("LibraryPanel")
-        .test_painted_layout()
-}
-
-/// The album-scroll offset the mounted `MusicWorkspaceComponent` settled on.
-pub fn mounted_music_scroll(model: &Model) -> usize {
-    model.test_music_owner().album_scroll()
-}
-
-/// The mounted Music album control's complete current-frame flow targets.
-pub fn mounted_music_flow_targets(model: &Model) -> Vec<Option<String>> {
-    model.test_music_owner().album_flow_targets()
-}
-
-/// Flow rows occupied by a source album index in the mounted Music control.
-pub fn mounted_music_album_target_rows(model: &Model, target: usize) -> Vec<usize> {
-    model.test_music_owner().album_target_rows(target)
 }
 
 /// The panel-hosted TV owner (task 8.4: reached through the mounted

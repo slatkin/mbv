@@ -650,17 +650,6 @@ impl MusicContent {
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
-    pub(in crate::app) fn album_target_rows(&self, target: usize) -> Vec<usize> {
-        self.album_flow_targets()
-            .iter()
-            .enumerate()
-            .filter_map(|(row, value)| {
-                (value.as_deref() == self.context.album_targets.get(target).map(String::as_str))
-                    .then_some(row)
-            })
-            .collect()
-    }
-
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
         let target = self.track_list.selected_target()?;

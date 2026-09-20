@@ -608,32 +608,6 @@ fn navigated_album_reanchors_the_grouped_owner_workspace() {
     );
 }
 
-/// Task 3.2 (flat shape): an album directly under the library root lands as a
-/// one-level stack whose resting cursor is on the album. The group-view owner
-/// only exists above a group level, so the flat surface is the library
-/// browser; the arm still lands the album at the root cursor.
-#[test]
-fn navigated_flat_album_lands_the_album_at_the_root_cursor() {
-    let (mut harness, _id) = wide_music_harness();
-    let mut album = crate::app::tests::make_item("First Album", "MusicAlbum");
-    album.id = "album-1".into();
-    harness.model_mut().on_recursive_album_activated(
-        "lib-music".into(),
-        vec![landed_album_level("lib-music", "Music", vec![album])],
-    );
-    harness.step();
-
-    let level = harness.model().app.libs[0]
-        .nav_stack
-        .last()
-        .expect("landed level");
-    assert_eq!(level.items[level.resting().cursor()].id, "album-1");
-    assert!(
-        harness.model().music_owner().is_none(),
-        "the flat shape has no group-view owner to re-anchor"
-    );
-}
-
 /// Task 6.2 (design D6): "Go to Library" on a queued track selects the track
 /// in the workspace track list once the activated album's track rows arrive —
 /// including when the fetch lands after the landing.

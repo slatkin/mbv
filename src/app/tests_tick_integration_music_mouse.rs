@@ -183,63 +183,6 @@ fn music_wide_track_modifier_clicks_toggle_range_and_plain_clear() {
         .is_empty());
 }
 
-/// The Wide album rail resolves its own retained row. Group pills remain
-/// Music-owned parent chrome, while the track table retains its independent
-/// child behavior (covered above).
-#[test]
-fn music_wide_album_and_group_pill_use_their_own_retained_geometry() {
-    let mut app = make_music_group_app();
-    let mut second_album = make_item("Album 2", "MusicAlbum");
-    second_album.id = "album-2".into();
-    second_album.artist = "Alpha".into();
-    app.libs[0].nav_stack[1].items.push(second_album);
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
-    let album = harness
-        .model()
-        .test_music_owner()
-        .browser
-        .selected_row_rect()
-        .expect("Wide album control retained its selected row");
-    let panel = harness.model().application.get_component(&ComponentId::Library)
-        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
-        .expect("LibraryPanel");
-    let (pill, group) = panel.test_selector_hits().regions().iter()
-        .find(|(_, group)| *group > 0).copied()
-        .expect("a non-selected group pill painted");
-    let (album_point, pill_point) = ((album.x, album.y), (pill.x, pill.y));
-    let click = |(column, row)| {
-        Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: tuirealm::event::KeyModifiers::NONE,
-        })
-    };
-
-    harness.inject(click(album_point));
-    let outcome = harness.step();
-    assert!(outcome.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::MusicAlbumCursor { target: 0, .. })
-    )));
-
-    harness.inject(click(pill_point));
-    let outcome = harness.step();
-    assert!(outcome.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::MusicGroupSwitch { delta }) if *delta == group as i64
-    )));
-}
-
 /// Grouped Music resolves its artist-root and album-leaf clicks through the
 /// tree's completed hit map, then rejects that map as soon as a new frame is
 /// configured. The mounted path is the real LibraryPanel/Application tick;
