@@ -197,14 +197,6 @@ pub(in crate::app) struct SelectorRow {
     pub active: Option<usize>,
 }
 
-/// One List controls row (design D8): a plain-text label, such as the
-/// home-video item count. Selectable pills belong only in the Selector row.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(in crate::app) struct ListControls {
-    /// Plain-text label, right-aligned in the row.
-    pub label: String,
-}
-
 /// The list box's content for one frame (design D3).
 pub(in crate::app) enum ListSlot<'a> {
     /// The active canonical media-list presentation.
@@ -247,8 +239,6 @@ pub(in crate::app) struct LibraryPanelContent<'a> {
     /// The Browser pane's primary browse selector, if the destination
     /// supplies one.
     pub selector: Option<SelectorRow>,
-    /// The optional List controls row.
-    pub controls: Option<ListControls>,
     /// The list box's content.
     pub list: ListSlot<'a>,
     /// The Hero pane's content, if the destination shows one.

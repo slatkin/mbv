@@ -99,7 +99,6 @@ impl Model {
         // is painted.
         self.app.ensure_feed_home_video_group_level(index);
         let feed_group_view = self.app.is_feed_home_video_group_view(index);
-        let home_video = self.app.is_home_video_view(index) && !feed_group_view;
         let show_letter_pills = self.app.should_show_letter_pills(index);
         let (items, total_count, library_total, letter_filter, loading, cursor, scroll) =
             if feed_group_view {
@@ -156,7 +155,6 @@ impl Model {
             letter_filter,
             loading,
             group_pills: feed_group_view,
-            home_video,
             show_letter_pills,
             feed_groups,
             feed_group_cursor,

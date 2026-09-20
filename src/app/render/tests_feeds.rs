@@ -89,7 +89,8 @@ fn area_contains(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> boo
 }
 
 /// The panel paints one Selector row containing watched-filter and feed-group
-/// pills, plus the policy hero header — no destination chrome.
+/// pills, plus the policy hero header — no destination chrome. The shared
+/// skeleton owns the no-secondary-row contract.
 #[test]
 fn feeds_paints_one_pill_bar_and_the_policy_header() {
     let mut panel = panel_with(feed_owner(), true);
@@ -108,8 +109,6 @@ fn feeds_paints_one_pill_bar_and_the_policy_header() {
         group_hits.iter().all(|(rect, _)| rect.height == 1),
         "the Selector row is one pill bar"
     );
-    assert!(wide.controls.is_none(), "Feeds has no List controls row");
-
     // The policy hero header paints the selected entry's title in the hero
     // pane (the artwork policy arm itself is covered by `feeds_content`).
     assert!(
@@ -169,22 +168,16 @@ fn w_key_changes_the_filter() {
     assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
 }
 
-/// Without subscriptions the panel paints neither the Selector bar nor the
-/// List controls row, only the empty-slot placeholder.
+/// Without subscriptions the panel paints neither the Selector bar nor a
+/// secondary row, only the empty-slot placeholder. Secondary-row absence is
+/// owned by the shared skeleton characterization.
 #[test]
 fn feeds_without_subscriptions_paints_no_pill_bar() {
     let mut panel = panel_with(FeedsContent::new(), false);
     let terminal = terminal_for(&mut panel, 120, 30);
-    let wide = panel
-        .test_wide_geometry()
-        .expect("the panel painted a Wide skeleton");
     assert!(
         panel.test_selector_hits().regions().is_empty(),
         "no Selector bar without subscriptions"
-    );
-    assert!(
-        wide.controls.is_none(),
-        "no controls row without subscriptions"
     );
     let output = buffer_to_string(&terminal);
     assert!(

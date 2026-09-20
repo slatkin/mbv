@@ -108,7 +108,6 @@ impl LibraryContentOwner for FixtureOwner {
                 pills: vec!["All".into(), "New".into()],
                 active: Some(0),
             }),
-            controls: None,
             list: ListSlot::Media(&mut self.carrier),
             hero: Some(HeroContent {
                 facts: HeroFacts {

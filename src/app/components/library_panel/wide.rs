@@ -1,8 +1,8 @@
 //! The Wide Library panel skeleton (task 5.2, design D4): the Hero pane
 //! (always the resting surface; only the focused list flips with focus —
 //! the browser list rests while the Workspace media list holds it)
-//! | gap | Browser pane (Selector row, List controls row, list
-//! box). One skeleton for every Wide library destination: destinations supply
+//! | gap | Browser pane (Selector row, list box). One skeleton for every Wide
+//! library destination: destinations supply
 //! typed [`LibraryPanelContent`] and paint nothing themselves.
 //!
 //! The list box paints through the current carrier's fixed Wide presentation
@@ -25,8 +25,7 @@ use crate::app::render::{
 use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
 use super::hero_composition::{full_width_claim, paint_library_hero_content};
 use super::slots::{
-    paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
-    SELECTOR_ROW_PREFIX,
+    paint_pill_bar_row, paint_pill_row_gap, paint_selector_row, SELECTOR_ROW_PREFIX,
 };
 
 /// The skeleton's retained irregular-chrome hit registries, one per painted
@@ -36,7 +35,6 @@ use super::slots::{
 #[derive(Debug, Default)]
 pub(in crate::app) struct SkeletonHits {
     pub selector: HitRegions<usize>,
-    pub controls: HitRegions<usize>,
     pub workspace_selector: HitRegions<usize>,
     pub links: HitRegions<usize>,
 }
@@ -68,9 +66,6 @@ pub(in crate::app) struct WideSkeletonGeometry {
     /// supplies no `SelectorRow` (the Inline Search box takes it).
     #[cfg_attr(not(test), allow(dead_code))]
     pub selector_bar: Rect,
-    /// The List controls row's rect, when the destination supplies content.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub controls: Option<Rect>,
     /// The list box's full panel rect (fill + border).
     pub list_panel: Rect,
     /// The list box's inset row-flow rect.
@@ -100,8 +95,6 @@ pub(in crate::app) struct BrowserPaneGeometry {
     /// The Selector row's pill-bar rect, reserved even when the destination
     /// supplies no `SelectorRow` (the Inline Search box takes it).
     pub(in crate::app) selector_bar: Rect,
-    /// The List controls row's rect, when the destination supplies content.
-    pub(in crate::app) controls: Option<Rect>,
     /// The list box's full panel rect (fill + border).
     pub(in crate::app) list_panel: Rect,
     /// The list box's inset row-flow rect.
@@ -132,8 +125,8 @@ fn wide_browser_pane(
     }
 }
 
-/// Paints the Browser pane (Selector row, optional List controls row, list
-/// box) and returns the role rects it placed. Pure painting over the supplied
+/// Paints the Browser pane (Selector row and list box) and returns the role
+/// rects it placed. Pure painting over the supplied
 /// pane geometry; the hero pane and workspace content are painted elsewhere.
 pub(in crate::app) fn paint_browser_pane(
     f: &mut Frame,
@@ -185,28 +178,8 @@ pub(in crate::app) fn paint_browser_pane(
         (_, true) => paint_pill_row_gap(f, pane.spacer_area, palette::Surface::PillRowGap, false),
     }
 
-    // List controls row: reserved only when the destination supplies
-    // content; without it the rows below move up (spec scenario).
-    let (list_panel, controls_area) = match &content.controls {
-        Some(controls) if pane.list_panel.height > 0 => {
-            let row = Rect {
-                height: 1,
-                ..pane.list_panel
-            };
-            paint_list_controls_row(f, row, controls, &mut hits.controls);
-            (
-                Rect {
-                    y: row.bottom(),
-                    height: pane.list_panel.height.saturating_sub(1),
-                    ..pane.list_panel
-                },
-                Some(row),
-            )
-        }
-        _ => (pane.list_panel, None),
-    };
-
     // List box: fill, then the slot's content in the inset row-flow rect.
+    let list_panel = pane.list_panel;
     crate::app::render::components::widgets::fill_surface(
         f,
         list_panel,
@@ -298,7 +271,6 @@ pub(in crate::app) fn paint_browser_pane(
 
     BrowserPaneGeometry {
         selector_bar: pane.pills_area,
-        controls: controls_area,
         list_panel,
         list_area,
         selected,
@@ -311,9 +283,8 @@ pub(in crate::app) fn paint_browser_pane(
 ///
 /// The Selector row is the panel's full-width band above both panes: its pill
 /// bar is aligned to the panel's left content edge and its spacer spans the
-/// whole width. Rows top-to-bottom in the Browser pane below the band: the
-/// optional List controls row, and the list box (fill, then the list
-/// presentation or the `ListSlot::Empty` placeholder). While
+/// whole width. The list box fills the Browser pane below the band (then the
+/// list presentation or the `ListSlot::Empty` placeholder). While
 /// `ListSlot::Search` is active, the search box paints in the Selector band's
 /// rect and the results in the list box, and the rest of the panel is
 /// unchanged.
@@ -367,7 +338,6 @@ pub(in crate::app) fn render_wide_skeleton(
         browser: browser_panel,
         hero: hero_panel,
         selector_bar: browser.selector_bar,
-        controls: browser.controls,
         list_panel: browser.list_panel,
         list_area: browser.list_area,
         hero_area,

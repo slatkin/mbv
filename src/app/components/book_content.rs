@@ -433,7 +433,6 @@ impl BookContent {
         };
         LibraryPanelContent {
             selector,
-            controls: None,
             list,
             hero,
         }
@@ -480,9 +479,7 @@ impl BookContent {
                 }
                 _ => None,
             },
-            LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::ControlPicked(_) => {
-                None
-            }
+            LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
             LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
                 ShellRequest::AudiobookshelfBookIntent(if self.chapter_focused {
                     AudiobookshelfBookIntent::ActivateChapter(self.chapter_target())
@@ -730,7 +727,8 @@ mod tests {
         let content = owner.content();
         let selector = content.selector.expect("expected a selector row");
         assert_eq!(selector.pills.len(), bucket_count);
-        assert!(content.controls.is_none());
+        // Secondary-row absence is owned by the shared panel skeleton test;
+        // this owner test covers only the surname-bucket selector projection.
     }
 
     #[test]
