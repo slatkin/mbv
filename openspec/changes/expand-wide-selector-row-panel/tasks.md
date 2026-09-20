@@ -12,9 +12,9 @@ before any TUI/render change per AGENTS.md). Decision IDs (D1–D7) reference
 
 ## 2. Paint the full-width Selector band; drop the Wide internal pill reserve (D3, D5)
 
-- [ ] 2.1 In the Wide path (`render_wide_skeleton`/`paint_browser_pane`, `library_panel/wide.rs`), feed the full-width band's `pills_area`/`spacer_area` (aligned to `PANE_PAD_X`, D5) to the pill painter and pass the **`browser_panel`** rect (the full un-inset pane, D3) as `list_panel`, with no internal pill reserve. Verify with a buffer test: pills span from the panel's left inset across both panes; the list-box fill starts at the Browser pane's top and reaches its border.
-- [ ] 2.2 Confirm Narrow is untouched: `render_narrow_skeleton` still calls `wide_hero_browser_pane(area, area)` and reserves its own full-width band. Verify existing narrow buffer tests still pass.
-- [ ] 2.3 Migrate the `WideLibraryPanes` consumers to the new shape: `library_panel/wide_tests.rs:110-111`, `src/app/render/tests_wide_hero_split_override.rs:88-89,112-113`, `src/app/render/tests_wide_hero_pane_characterization.rs:69`. Verify `cargo nextest run -p mbv` compiles these targets.
+- [x] 2.1 In the Wide path (`render_wide_skeleton`/`paint_browser_pane`, `library_panel/wide.rs`), feed the full-width band's `pills_area`/`spacer_area` (aligned to `PANE_PAD_X`, D5) to the pill painter and pass the **`browser_panel`** rect (the full un-inset pane, D3) as `list_panel`, with no internal pill reserve. Verify with a buffer test: pills span from the panel's left inset across both panes; the list-box fill starts at the Browser pane's top and reaches its border.
+- [x] 2.2 Confirm Narrow is untouched: `render_narrow_skeleton` still calls `wide_hero_browser_pane(area, area)` and reserves its own full-width band. Verify existing narrow buffer tests still pass.
+- [x] 2.3 Migrate the `WideLibraryPanes` consumers to the new shape: `library_panel/wide_tests.rs:110-111`, `src/app/render/tests_wide_hero_split_override.rs:88-89,112-113`, `src/app/render/tests_wide_hero_pane_characterization.rs:69`. Verify `cargo nextest run -p mbv` compiles these targets.
 
 ## 3. Make the split drag independent of the band (D4)
 
