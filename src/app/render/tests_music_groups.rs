@@ -138,6 +138,22 @@ fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::s
     term.backend().buffer()[(x, y)].bg
 }
 
+fn assert_music_tree_title_fg(
+    term: &Terminal<TestBackend>,
+    area: Rect,
+    y: u16,
+    title: &str,
+    expected: ratatui::style::Color,
+) {
+    let row = music_tree_row_text(term, y, area.x, area.right());
+    let x = row.find(title).expect("tree title painted") as u16 + area.x;
+    assert_eq!(
+        term.backend().buffer()[(x, y)].fg,
+        expected,
+        "tree title {title:?} keeps its selection foreground"
+    );
+}
+
 /// The zebra fill the tree resolves for its rows: the focused Green2 fill
 /// settles to the tree's `#272e33` fill when focus moves elsewhere.
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
@@ -314,12 +330,24 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
             "selected-row bar reaches column {x}"
         );
     }
+    let beta_leaf_0_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0);
+    let beta_leaf_1_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_1);
+    assert_music_tree_title_fg(
+        &term,
+        list_area,
+        beta_leaf_1_y,
+        "Beta Nights",
+        palette::SELECTED_ROW_FG,
+    );
+    assert_music_tree_title_fg(
+        &term,
+        list_area,
+        beta_leaf_0_y,
+        "Beta Session",
+        palette::TEXT_FOCUS_ACCENT,
+    );
     assert_ne!(
-        music_tree_row_bg(
-            &term,
-            probe_x,
-            music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0)
-        ),
+        music_tree_row_bg(&term, probe_x, beta_leaf_0_y),
         fill,
         "Beta leaf 0 keeps the neighbouring group's unstriped band"
     );
