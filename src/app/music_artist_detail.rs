@@ -941,6 +941,35 @@ mod tests {
     }
 
     #[test]
+    fn cached_artist_artwork_is_adopted_without_a_fetch() {
+        let (mut app, _context, target, destination) = settled_artist_app();
+        app.image_protocol_enabled = true;
+        let key = app
+            .artist_detail_key(&destination, &target)
+            .expect("artist ID key");
+        let cache_key = artist_artwork_cache_key(&destination, key.generation, &key.artist_id);
+        app.card_image_states.insert(
+            cache_key,
+            crate::app::images::CachedImage {
+                img: Some(image::DynamicImage::ImageRgba8(
+                    image::RgbaImage::from_pixel(4, 4, image::Rgba([1, 2, 3, 255])),
+                )),
+                protocols: HashMap::new(),
+                cover_box: None,
+                applied_logo_key: None,
+            },
+        );
+
+        app.request_artist_artwork(destination, target);
+
+        assert_eq!(
+            app.artist_artwork_status.get(&key),
+            Some(&ArtistArtworkStatus::Ready)
+        );
+        assert!(app.artist_artwork_requests.is_empty());
+    }
+
+    #[test]
     fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
         let (mut app, _context, target, destination) = settled_artist_app();
         app.image_protocol_enabled = true;
@@ -993,6 +1022,66 @@ mod tests {
     }
 
     #[test]
+    fn artist_request_without_client_caches_a_failed_completion() {
+        let (mut app, _context, target, destination) = settled_artist_app();
+        let key = app
+            .artist_detail_key(&destination, &target)
+            .expect("artist ID key");
+
+        app.request_artist_tracks(destination, target);
+
+        assert!(app.artist_detail_loading.is_empty());
+        assert!(app
+            .artist_detail_cache
+            .get(&key)
+            .is_some_and(|entry| entry.failed));
+    }
+
+    #[test]
+    fn artist_artwork_completion_requires_the_current_identity() {
+        let (mut app, _context, target, destination) = settled_artist_app();
+        let generation = app.emby_runtime.generation();
+        let key = app
+            .artist_detail_key(&destination, &target)
+            .expect("artist ID key");
+        let cache_key = artist_artwork_cache_key(&destination, key.generation, &key.artist_id);
+
+        app.handle_artist_artwork_fetched(
+            destination.clone(),
+            generation,
+            key.artist_id.clone(),
+            key.revision,
+            cache_key.clone(),
+            true,
+        );
+        assert_eq!(
+            app.artist_artwork_status.get(&key),
+            Some(&ArtistArtworkStatus::Ready)
+        );
+
+        app.handle_artist_artwork_fetched(
+            destination.clone(),
+            generation,
+            key.artist_id.clone(),
+            key.revision,
+            "stale-cache-key".into(),
+            false,
+        );
+        app.handle_artist_artwork_fetched(
+            destination,
+            generation,
+            key.artist_id.clone(),
+            key.revision - 1,
+            cache_key,
+            false,
+        );
+        assert_eq!(
+            app.artist_artwork_status.get(&key),
+            Some(&ArtistArtworkStatus::Ready)
+        );
+    }
+
+    #[test]
     fn stale_artist_completion_is_rejected_and_cache_hit_does_not_refetch() {
         let (mut app, _context, target, destination) = settled_artist_app();
         let generation = app.emby_runtime.generation();
@@ -1016,6 +1105,55 @@ mod tests {
         app.request_artist_tracks(destination, target);
         assert!(app.artist_detail_loading.is_empty());
         assert!(app.artist_detail_cache.contains_key(&key));
+    }
+
+    #[test]
+    fn current_artist_completion_replaces_older_revision_cache() {
+        let (mut app, _context, _target, destination) = settled_artist_app();
+        let generation = app.emby_runtime.generation();
+        let old_key = ArtistDetailKey {
+            destination: destination.clone(),
+            generation: generation.value(),
+            artist_id: "artist-alpha".into(),
+            revision: 6,
+        };
+        app.artist_detail_cache
+            .insert(old_key.clone(), ArtistDetailCacheEntry::default());
+
+        let mut later = make_item("Later", "Audio");
+        later.id = "track-later".into();
+        later.album_id = "album-1".into();
+        let mut earlier = make_item("Earlier", "Audio");
+        earlier.id = "track-earlier".into();
+        earlier.album_id = "album-1".into();
+        app.handle_artist_tracks_fetched(
+            destination.clone(),
+            generation,
+            "artist-alpha".into(),
+            7,
+            Ok(vec![later, earlier]),
+        );
+
+        let current_key = ArtistDetailKey {
+            destination,
+            generation: generation.value(),
+            artist_id: "artist-alpha".into(),
+            revision: 7,
+        };
+        assert!(!app.artist_detail_cache.contains_key(&old_key));
+        let current = app
+            .artist_detail_cache
+            .get(&current_key)
+            .expect("current completion is cached");
+        assert!(!current.failed);
+        assert_eq!(
+            current
+                .tracks
+                .iter()
+                .map(|track| track.id.as_str())
+                .collect::<Vec<_>>(),
+            ["track-earlier", "track-later"]
+        );
     }
 
     #[test]
