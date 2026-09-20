@@ -521,6 +521,7 @@ struct MusicTreeLabelRenderer<'a> {
     /// itself can stay `&self` inside the crate's trait signature.
     selected_title_spans: Option<Vec<Span<'static>>>,
     selected_title_budget: usize,
+    visible_mark_states: HashMap<usize, TreeMarkState>,
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
@@ -532,6 +533,11 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         context: &TreeRowContext<'_>,
         glyphs: &TreeGlyphs<'a>,
     ) -> Cell<'a> {
+        let mark = self
+            .visible_mark_states
+            .get(&id)
+            .copied()
+            .unwrap_or(TreeMarkState::Unmarked);
         let year = model.year_of(id);
         // The pinned year-gutter contract (design D8): the six-column date
         // plus its trailing gap is reserved only on rows that carry a year,
@@ -572,7 +578,7 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
             // Ordinary truncation: whole-title ellipsis cut to the budget.
             line.spans.push(Span::styled(
                 trunc_str(model.title_of(id), budget).to_string(),
-                Style::default().fg(name_role(model, id, context.level, context.node.mark)),
+                Style::default().fg(name_role(model, id, context.level, mark)),
             ));
         }
 
@@ -618,7 +624,7 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         // focused selected row's bar comes from the crate's `highlight_style`,
         // applied after this cell.
         let mut style = Style::default();
-        if multi_select_bar(model, id, context.node.mark) {
+        if multi_select_bar(model, id, mark) {
             style = style.bg(palette::SELECTED_ROW_BG);
         } else if model.is_striped(id) {
             style = style.bg(self.zebra_fill);
@@ -634,6 +640,55 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
 /// alone.
 fn multi_select_bar(model: &MusicTreeModel, id: usize, mark: TreeMarkState) -> bool {
     mark == TreeMarkState::Marked && model.target_of(id).is_some()
+}
+
+/// Derives marks from the owner selection rather than the crate's full-model
+/// aggregation. This keeps hidden album marks out of a filtered root's
+/// Partial/Marked state while preserving them in `selection_order`.
+fn computed_mark_state(
+    model: &MusicTreeModel,
+    query: &TreeQuery<MusicTreeFilter>,
+    state: &TreeListViewState<usize>,
+    selection_order: &[String],
+    id: usize,
+) -> TreeMarkState {
+    let visible = |candidate| {
+        matches!(query.filter_config(), TreeFilterConfig::Disabled)
+            || state
+                .projection()
+                .nodes()
+                .iter()
+                .any(|node| node.id() == candidate)
+    };
+    let marked = |candidate| {
+        model
+            .target_of(candidate)
+            .is_some_and(|target| selection_order.iter().any(|item| item == target))
+    };
+    if model.target_of(id).is_some() {
+        return if visible(id) && marked(id) {
+            TreeMarkState::Marked
+        } else {
+            TreeMarkState::Unmarked
+        };
+    }
+    let Some(children) = model.is_artist(id).then(|| &model.children[id]) else {
+        return TreeMarkState::Unmarked;
+    };
+    let children: Vec<usize> = children
+        .iter()
+        .copied()
+        .filter(|child| model.target_of(*child).is_some() && visible(*child))
+        .collect();
+    let any = children.iter().any(|child| marked(*child));
+    let all = !children.is_empty() && children.iter().all(|child| marked(*child));
+    if all {
+        TreeMarkState::Marked
+    } else if any {
+        TreeMarkState::Partial
+    } else {
+        TreeMarkState::Unmarked
+    }
 }
 
 /// The row's name role, resolved only from semantic inputs: the crate's mark
@@ -701,6 +756,10 @@ pub(in crate::app) struct MusicTreeBrowser {
     /// persistence (design D3 step 5). An artist-root focus resolves to no
     /// album and never clears or overwrites it.
     last_reported_album: Option<String>,
+    /// Album targets in the order they were added to the tree selection. The
+    /// dependency stores marks as a set, so this owner-local order is the
+    /// source of truth for ordered multi-selection membership.
+    selection_order: Vec<String>,
     /// Whether the latest `view` completed and retained hit geometry (the
     /// panel's `set_paint_policy`/`set_geometry`/`clamp_viewport` invalidate
     /// it before the next view, so a skipped frame claims no point).
@@ -729,6 +788,7 @@ impl MusicTreeBrowser {
             configured_geometry: None,
             last_area: None,
             last_reported_album: None,
+            selection_order: Vec::new(),
             paint_complete: false,
         }
     }
@@ -744,8 +804,15 @@ impl MusicTreeBrowser {
     /// leaves the cached projection, offset, and arming untouched.
     pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) -> bool {
         self.model.reconcile_with_tracks(entries, &self.track_items);
+        self.selection_order.retain(|target| {
+            self.model
+                .roots
+                .iter()
+                .flat_map(|root| self.model.children[*root].iter())
+                .any(|id| self.model.target_of(*id) == Some(target.as_str()))
+        });
         let rebuilt = self.state.ensure_projection(&self.model, &self.query);
-        self.state.ensure_mark_states(&self.model);
+        self.sync_manual_marks();
         if rebuilt {
             // The crate's hit map belongs to the completed frame, not to the
             // newly reconciled projection. Do not let a settled content push
@@ -980,7 +1047,7 @@ impl MusicTreeBrowser {
             None => TreeFilterConfig::Disabled,
         });
         self.state.ensure_projection(&self.model, &self.query);
-        self.state.ensure_mark_states(&self.model);
+        self.sync_manual_marks();
         self.invalidate();
     }
 
@@ -1007,20 +1074,101 @@ impl MusicTreeBrowser {
 
     /// Stores a mark on an album leaf. Artist roots derive their aggregate
     /// state from child leaves and are never stored as mark targets (design
-    /// D6), so marking one is a no-op.
+    /// D6), so marking one is a no-op. The owner retains membership separately
+    /// because the tree dependency's mark set has no insertion order.
     pub(in crate::app) fn set_marked(&mut self, id: usize, marked: bool) -> bool {
-        if self.model.target_of(id).is_none() {
+        let Some(target) = self.model.target_of(id).map(str::to_owned) else {
+            return false;
+        };
+        let was_marked = self.selection_order.iter().any(|item| item == &target);
+        if was_marked == marked {
             return false;
         }
-        let changed = self.state.set_marked(id, marked);
-        if changed {
-            self.state.ensure_mark_states(&self.model);
+        if marked {
+            self.selection_order.push(target);
+        } else {
+            self.selection_order.retain(|item| item != &target);
+        }
+        self.sync_manual_marks();
+        true
+    }
+
+    /// Toggles an album leaf, or all currently visible album descendants of an
+    /// artist root. The caller must resolve the target from the latest paint
+    /// before invoking this operation; this method only mutates stable node
+    /// identities.
+    pub(in crate::app) fn toggle_mark(&mut self, id: usize) -> bool {
+        if let Some(target) = self.model.target_of(id).map(str::to_owned) {
+            let marked = self.selection_order.iter().any(|item| item == &target);
+            return self.set_marked(id, !marked);
+        }
+        if !self.model.is_artist(id) {
+            return false;
+        }
+        let descendants = self.visible_album_ids(id);
+        if descendants.is_empty() {
+            return false;
+        }
+        let all_marked = descendants.iter().all(|child| {
+            self.model
+                .target_of(*child)
+                .is_some_and(|target| self.selection_order.iter().any(|item| item == target))
+        });
+        let mut changed = false;
+        for child in descendants {
+            changed |= self.set_marked(child, !all_marked);
         }
         changed
     }
 
+    /// Resolves a modified click against the latest completed tree frame,
+    /// selects the clicked node, and only then toggles its album/root mark.
+    /// Resolution is deliberately complete before any local mutation.
+    pub(in crate::app) fn toggle_mark_at(&mut self, at: Position) -> Option<usize> {
+        let (id, index) = self.hit_node(at)?;
+        self.state.select_index(Some(index));
+        self.toggle_mark(id);
+        Some(id)
+    }
+
+    /// Album targets selected in insertion order. Hidden marks are masked while
+    /// a filter is active but remain in `selection_order` for dismissal.
+    pub(in crate::app) fn selected_album_targets(&self) -> Vec<String> {
+        self.selection_order
+            .iter()
+            .filter(|target| {
+                self.model
+                    .node_id(&MusicNodeKey::Album((*target).clone()))
+                    .is_some_and(|id| self.album_is_visible(id))
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Album targets selected in the current settled tree display order. This
+    /// is the order boundary-crossing actions should use, independent of click
+    /// order.
+    pub(in crate::app) fn selected_album_targets_in_display_order(&self) -> Vec<String> {
+        self.model
+            .roots
+            .iter()
+            .flat_map(|root| self.model.children[*root].iter())
+            .copied()
+            .filter(|id| self.album_is_visible(*id))
+            .filter_map(|id| self.model.target_of(id))
+            .filter(|target| self.selection_order.iter().any(|item| item == target))
+            .map(str::to_owned)
+            .collect()
+    }
+
     pub(in crate::app) fn mark_state(&self, id: usize) -> TreeMarkState {
-        self.state.mark_state(id)
+        computed_mark_state(
+            &self.model,
+            &self.query,
+            &self.state,
+            &self.selection_order,
+            id,
+        )
     }
 
     /// The node's painted title (the tree render tests locate rows by title
@@ -1159,7 +1307,49 @@ impl MusicTreeBrowser {
     /// Clears every stored album mark and refreshes the derived aggregate
     /// state (destination-switch selection clear).
     pub(in crate::app) fn clear_marks(&mut self) {
+        if self.selection_order.is_empty() {
+            return;
+        }
+        self.selection_order.clear();
+        self.sync_manual_marks();
+    }
+
+    /// Returns the album leaves currently visible beneath an artist root. An
+    /// active filter masks hidden descendants without changing stored marks.
+    fn visible_album_ids(&self, root: usize) -> Vec<usize> {
+        self.model.children[root]
+            .iter()
+            .copied()
+            .filter(|id| self.model.target_of(*id).is_some())
+            .filter(|id| self.album_is_visible(*id))
+            .collect()
+    }
+
+    fn album_is_visible(&self, id: usize) -> bool {
+        if matches!(self.query.filter_config(), TreeFilterConfig::Disabled) {
+            return true;
+        }
+        self.state
+            .projection()
+            .nodes()
+            .iter()
+            .any(|node| node.id() == id)
+    }
+
+    /// Rebuilds the crate's mark cache from the owner selection. During a
+    /// filter session only visible album marks are handed to the dependency;
+    /// hidden membership remains in `selection_order` and is restored when the
+    /// filter is dismissed.
+    fn sync_manual_marks(&mut self) {
         self.state.clear_marks();
+        for target in &self.selection_order {
+            let Some(id) = self.model.node_id(&MusicNodeKey::Album(target.clone())) else {
+                continue;
+            };
+            if self.album_is_visible(id) {
+                self.state.set_marked(id, true);
+            }
+        }
         self.state.ensure_mark_states(&self.model);
     }
 
@@ -1282,6 +1472,7 @@ impl MusicTreeBrowser {
     /// viewport scrolling, row painting, scrollbars, and the latest-render
     /// hit map.
     pub(in crate::app) fn view(&mut self, frame: &mut ratatui::Frame, area: Rect) {
+        self.state.ensure_projection(&self.model, &self.query);
         let Self {
             model,
             query,
@@ -1291,6 +1482,7 @@ impl MusicTreeBrowser {
             marquee_started,
             configured_geometry,
             last_area,
+            selection_order,
             ..
         } = self;
         let (claim_rect, content_rect) = configured_geometry.unwrap_or((area, area));
@@ -1306,7 +1498,6 @@ impl MusicTreeBrowser {
         };
         let row_area = content_rect;
 
-        state.ensure_projection(model, query);
         // A geometry change re-applies the viewport visibility rule to this
         // same owner (design D3/D4): re-arm the selected node's visibility so
         // the crate's `KeepInView` policy scrolls the minimum needed at the
@@ -1348,7 +1539,6 @@ impl MusicTreeBrowser {
         let selected = state
             .selected_index()
             .and_then(|index| state.projection().nodes().get(index).copied());
-        state.ensure_mark_states(model);
         let selected_title_budget = selected.map_or(0, |node| {
             let gutter = usize::from(model.year_of(node.id()).is_some())
                 * (YEAR_GUTTER_WIDTH as usize + YEAR_GUTTER_TRAILING_SPACE);
@@ -1358,7 +1548,12 @@ impl MusicTreeBrowser {
         });
         let selected_title_spans = selected.filter(|_| *focused).map(|node| {
             let title = model.title_of(node.id());
-            let role = name_role(model, node.id(), node.level(), state.mark_state(node.id()));
+            let role = name_role(
+                model,
+                node.id(),
+                node.level(),
+                computed_mark_state(model, query, state, selection_order, node.id()),
+            );
             let parts = vec![(title.to_string(), role)];
             marquee_spans(
                 title,
@@ -1371,11 +1566,23 @@ impl MusicTreeBrowser {
         });
 
         let zebra_fill = palette::music_tree_zebra(*focused);
+        let visible_mark_states = state
+            .projection()
+            .nodes()
+            .iter()
+            .map(|node| {
+                (
+                    node.id(),
+                    computed_mark_state(model, query, state, selection_order, node.id()),
+                )
+            })
+            .collect();
         let label = MusicTreeLabelRenderer {
             tree_col_width,
             zebra_fill,
             selected_title_spans,
             selected_title_budget,
+            visible_mark_states,
             _marker: std::marker::PhantomData,
         };
 
@@ -1498,8 +1705,12 @@ fn tree_style(focused: bool) -> tui_treelistview::TreeListViewStyle<'static> {
             Style::default()
         },
         line_style: Style::default().fg(palette::TEXT_MUTED),
-        marked_style: Style::default().fg(palette::STATUS_AVAILABLE),
-        partial_mark_style: Style::default().fg(palette::TEXT_ACCENT_MUTED),
+        // Mark foregrounds are resolved by the destination label renderer so
+        // filtered roots can use their visible-only aggregate state. The
+        // crate's row-level mark styles stay neutral rather than reapplying
+        // its full-model aggregate over that semantic role.
+        marked_style: Style::default(),
+        partial_mark_style: Style::default(),
         highlight_symbol: "",
         borders: ratatui::widgets::Borders::NONE,
         column_spacing: 0,

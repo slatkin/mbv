@@ -109,13 +109,21 @@ impl MusicContent {
                             self.album_selection_request(AlbumCursorKind::Move)
                         }
                         MediaListSurfaceInput::Click(at)
-                        | MediaListSurfaceInput::ToggleClick(at)
                         | MediaListSurfaceInput::RangeClick(at) => {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
                             let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.clear_marks();
                             self.browser.select_index(index);
+                            self.album_selection_request(AlbumCursorKind::Move)
+                        }
+                        MediaListSurfaceInput::ToggleClick(at) => {
+                            // Resolve the latest painted row before changing
+                            // either focus or membership. Artist roots toggle
+                            // their visible album descendants; they never
+                            // become effect or Queue targets.
+                            self.browser.toggle_mark_at(at)?;
                             self.album_selection_request(AlbumCursorKind::Move)
                         }
                         MediaListSurfaceInput::DoubleClick(at) => {

@@ -698,6 +698,18 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target: 0, .. }))
     ));
     assert_eq!(owner.browser.selected_album_target(), Some("a-0"));
+
+    // A modified click resolves the current painted row first, toggles only
+    // the album leaf, and never emits a playback or Queue request.
+    assert!(owner
+        .on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ToggleClick(
+            album_0_at,
+        )))
+        .is_none());
+    assert_eq!(
+        owner.browser.selected_album_targets(),
+        vec!["a-0".to_string()]
+    );
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
             at: album_0_at,
@@ -740,6 +752,16 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
             && (x, y) == (root_at.x, root_at.y)
     ));
     assert!(owner.browser.selected_is_artist());
+
+    // Artist modified-click scopes the operation to its currently visible
+    // album descendants, not to an artist or Queue identity.
+    let _ = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ToggleClick(
+        root_at,
+    )));
+    assert_eq!(
+        owner.browser.selected_album_targets_in_display_order(),
+        vec!["a-0".to_string(), "a-1".to_string()]
+    );
 }
 
 #[test]

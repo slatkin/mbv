@@ -763,6 +763,72 @@ fn neighbour_prefetch_is_suppressed_for_an_artist_root_or_an_unpainted_frame() {
 }
 
 #[test]
+fn modified_selection_keeps_added_order_and_derives_artist_tri_state() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let alpha_root = artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("root");
+    let album_1 = album_id(&model, "album-1").expect("album-1");
+    let album_2 = album_id(&model, "album-2").expect("album-2");
+    let mut browser = MusicTreeBrowser::new(model);
+
+    // Membership is album-only and retains the order in which leaves were
+    // added, even though the crate's internal mark set is unordered.
+    assert!(browser.set_marked(album_2, true));
+    assert!(browser.set_marked(album_1, true));
+    assert_eq!(
+        browser.selected_album_targets(),
+        vec!["album-2".to_string(), "album-1".to_string()]
+    );
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+    browser.expand_root(alpha_root);
+    assert_eq!(
+        browser.selected_album_targets_in_display_order(),
+        vec!["album-1".to_string(), "album-2".to_string()]
+    );
+
+    // Toggling the artist root removes all visible descendants; a second
+    // toggle adds them back in settled child order.
+    assert!(browser.toggle_mark(alpha_root));
+    assert!(browser.selected_album_targets().is_empty());
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Unmarked);
+    assert!(browser.toggle_mark(alpha_root));
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+    assert_eq!(
+        browser.selected_album_targets(),
+        vec!["album-1".to_string(), "album-2".to_string()]
+    );
+}
+
+#[test]
+fn filtered_artist_toggle_masks_hidden_marks_without_losing_them() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let alpha_root = artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("root");
+    let album_1 = album_id(&model, "album-1").expect("album-1");
+    let album_2 = album_id(&model, "album-2").expect("album-2");
+    let mut browser = MusicTreeBrowser::new(model);
+
+    // Keep a mark on the album hidden by the active filter, then toggle the
+    // visible root. The root sees only its matching descendant.
+    assert!(browser.set_marked(album_2, true));
+    browser.set_filter_matches(Some(&[album_1]));
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Unmarked);
+    assert!(browser.toggle_mark(alpha_root));
+    assert_eq!(
+        browser.selected_album_targets(),
+        vec!["album-1".to_string()]
+    );
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+
+    // Dismissing the filter reveals the surviving hidden mark without adding
+    // any new album membership.
+    browser.set_filter_matches(None);
+    assert_eq!(
+        browser.selected_album_targets(),
+        vec!["album-2".to_string(), "album-1".to_string()]
+    );
+    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+}
+
+#[test]
 fn cached_tracks_project_as_ordered_depth_two_children() {
     let entries = vec![alpha("album-1", "First Album")];
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
