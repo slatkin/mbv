@@ -18,7 +18,7 @@ before any TUI/render change per AGENTS.md). Decision IDs (D1–D7) reference
 
 ## 3. Make the split drag independent of the band (D4)
 
-- [ ] 3.1 In `panel_view.rs`, change the split-gap rect to the content band's vertical extent (`y: geometry.hero.y`, `height: geometry.hero.height`) instead of `area.y`/`area.height` (D4). Verify with a `tests_tick_integration` case: a press in the gutter columns within the pill/spacer rows does not start a split drag; a drag in the content band does.
+- [x] 3.1 In `panel_view.rs`, change the split-gap rect to the content band's vertical extent (`y: geometry.hero.y`, `height: geometry.hero.height`) instead of `area.y`/`area.height` (D4). Verify with a `tests_tick_integration` case: a press in the gutter columns within the pill/spacer rows does not start a split drag; a drag in the content band does.
 
 ## 4. Excise the List controls row and its event (D6)
 
