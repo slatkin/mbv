@@ -91,10 +91,9 @@ pub(in crate::app) struct MusicTreeEntry {
     pub(in crate::app) title: String,
     pub(in crate::app) year: Option<String>,
     pub(in crate::app) target: String,
-    /// The settled item's canonical semantic state, derived at the projection
-    /// boundary through [`MediaSemanticState::from_emby`]. Music collapse
-    /// keeps every album leaf `Ordinary`, so the label renderer can never
-    /// re-derive played/resume decoration from raw item fields.
+    /// The settled item's playback-live semantic state. Stored played/unplayed
+    /// facts never enter the tree; only `Active`/`NowPlaying` distinctions are
+    /// retained for the label renderer.
     pub(in crate::app) semantic_state: MediaSemanticState,
 }
 
@@ -314,6 +313,13 @@ impl MusicTreeModel {
         semantic_state: &MediaSemanticState,
         display_changed: &mut bool,
     ) -> usize {
+        // Music rows never track played/unplayed. Normalize at the tree-model
+        // boundary as a second line of defence for test/builders that provide
+        // a raw `Played` state; playback-live states remain unchanged.
+        let semantic_state = match semantic_state {
+            MediaSemanticState::Played => MediaSemanticState::Ordinary,
+            state => state.clone(),
+        };
         let node_key = MusicNodeKey::Album(target.to_string());
         if let Some(id) = self.intern.get(&node_key).copied() {
             if let Some(MusicNode::Album {
@@ -325,11 +331,11 @@ impl MusicTreeModel {
             {
                 if existing_title != title
                     || existing_year.as_deref() != year
-                    || existing_state != semantic_state
+                    || existing_state != &semantic_state
                 {
                     *existing_title = title.to_string();
                     *existing_year = year.map(str::to_string);
-                    *existing_state = semantic_state.clone();
+                    *existing_state = semantic_state;
                     *display_changed = true;
                 }
             }
@@ -434,8 +440,9 @@ impl MusicTreeModel {
         }
     }
 
-    /// The album leaf's canonical semantic state; artist roots are ordinary
-    /// grouping rows and carry none.
+    /// The album leaf's playback-live semantic state; artist roots are
+    /// ordinary grouping rows and carry none. Played/unplayed is normalized
+    /// away before a state reaches the arena.
     pub(in crate::app) fn semantic_state_of(&self, id: usize) -> Option<&MediaSemanticState> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { semantic_state, .. }) => Some(semantic_state),
@@ -692,9 +699,9 @@ fn computed_mark_state(
 }
 
 /// The row's name role, resolved only from semantic inputs: the crate's mark
-/// state, the row's hierarchy level, and an album leaf's canonical
+/// state, the row's hierarchy level, and an album leaf's playback-live
 /// [`MediaSemanticState`]. Nothing here reads a raw `EmbyItem` played/resume
-/// field, and music collapse keeps every leaf `Ordinary`.
+/// field; music rows are always ordinary unless playback is live.
 fn name_role(
     model: &MusicTreeModel,
     id: usize,
@@ -711,17 +718,19 @@ fn name_role(
     }
 }
 
-/// The canonical media-list semantic palette applied to a tree album leaf: an
-/// ordinary leaf keeps the emphasis role, a played one mutes, and an active
-/// one keeps the emphasis role without any inline progress decoration (the
-/// tree paints no progress slot).
+/// The playback-live semantic palette applied to a tree album leaf. Music
+/// rows otherwise keep the ordinary primary role; active/now-playing rows
+/// retain emphasis without an inline progress slot.
 fn semantic_role(state: &MediaSemanticState) -> ratatui::style::Color {
-    match state {
-        MediaSemanticState::Ordinary => palette::TEXT_PRIMARY,
-        MediaSemanticState::Played => palette::TEXT_MUTED,
-        MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. } => {
-            palette::TEXT_EMPHASIS
-        }
+    if matches!(
+        state,
+        MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
+    ) {
+        palette::TEXT_EMPHASIS
+    } else {
+        // `Played` is normalized out of the arena, but the fallback remains
+        // primary if a future caller supplies another non-live state.
+        palette::TEXT_PRIMARY
     }
 }
 

@@ -25,6 +25,29 @@ fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
 }
 
 #[test]
+fn tree_entries_ignore_played_album_state_but_keep_live_progress() {
+    let mut played = make_item("Album", "Folder");
+    played.played = true;
+    let mut owner = MusicContent::new();
+    owner.set_content(context(played, ""));
+    assert_eq!(
+        owner.tree_entries()[0].semantic_state,
+        MediaSemanticState::Ordinary,
+        "music tree album rows never inherit stored played state"
+    );
+
+    let mut active = make_item("Album", "Folder");
+    active.playback_position_ticks = 500;
+    active.runtime_ticks = 1000;
+    owner.set_content(context(active, ""));
+    assert_eq!(
+        owner.tree_entries()[0].semantic_state,
+        MediaSemanticState::active(Some(50)),
+        "music tree retains live playback progress"
+    );
+}
+
+#[test]
 fn content_uses_square_artwork_for_an_album() {
     let mut owner = MusicContent::new();
     owner.set_content(context(make_item("Album", "MusicAlbum"), "overview"));
@@ -1288,11 +1311,10 @@ fn restored_album_selection_lands_visible_behind_many_artist_roots() {
     );
 }
 
-/// Task 3.1: the tree projection sources every album leaf's semantics through
-/// `MediaSemanticState::from_emby`, whose music collapse keeps an album
-/// `Ordinary`, so raw played/resume fields can never decorate a Music tree row.
+/// Music tree album leaves ignore stored played state while retaining the
+/// playback-live position as `Active`.
 #[test]
-fn tree_entries_collapse_raw_played_and_resume_facts_to_ordinary() {
+fn tree_entries_ignore_played_but_keep_live_progress() {
     let mut album = make_item("Played Album", "MusicAlbum");
     album.id = "album-played".into();
     album.artist = "Alpha".into();
@@ -1320,8 +1342,8 @@ fn tree_entries_collapse_raw_played_and_resume_facts_to_ordinary() {
     assert_eq!(entries[0].title, "Played Album");
     assert_eq!(
         entries[0].semantic_state,
-        MediaSemanticState::Ordinary,
-        "raw played/resume facts never decorate a Music tree leaf"
+        MediaSemanticState::active(Some(50)),
+        "stored played state never suppresses live playback emphasis"
     );
 }
 

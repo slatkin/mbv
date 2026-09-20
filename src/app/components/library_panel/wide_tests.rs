@@ -661,7 +661,7 @@ fn music_workspace_header_uses_its_role_without_bold_modifier() {
 
     assert_eq!(
         palette::MUSIC_HEADER,
-        ratatui::style::Color::Rgb(0xe6, 0xb7, 0x68)
+        ratatui::style::Color::Rgb(0xe6, 0xe6, 0xe6)
     );
     assert_eq!(header.fg, palette::MUSIC_HEADER);
     assert!(!header.modifier.contains(ratatui::style::Modifier::BOLD));

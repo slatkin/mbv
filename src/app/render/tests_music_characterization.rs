@@ -700,6 +700,46 @@ fn gutter_entries() -> Vec<MusicTreeEntry> {
     ]
 }
 
+#[test]
+fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
+    let key = ArtistKey::Service("semantic-artist".into());
+    let entries = vec![
+        MusicTreeEntry {
+            artist: "Semantic Artist".into(),
+            artist_key: key.clone(),
+            title: "Played Album".into(),
+            year: None,
+            target: "played-album".into(),
+            semantic_state: MediaSemanticState::Played,
+        },
+        MusicTreeEntry {
+            artist: "Semantic Artist".into(),
+            artist_key: key,
+            title: "Active Album".into(),
+            year: None,
+            target: "active-album".into(),
+            semantic_state: MediaSemanticState::active(Some(50)),
+        },
+    ];
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
+    browser.expand_root(browser.projected_nodes()[0].id());
+    browser.set_focused(false);
+    let area = Rect::new(0, 0, 40, 3);
+    let term = music_tree_frame(&mut browser, area, 40, 3);
+    let buf = term.backend().buffer();
+
+    assert_eq!(
+        buf[(4, 1)].fg,
+        palette::TEXT_PRIMARY,
+        "a played music row remains ordinary primary text"
+    );
+    assert_eq!(
+        buf[(4, 2)].fg,
+        palette::TEXT_EMPHASIS,
+        "live playback keeps tree-row emphasis"
+    );
+}
+
 /// The pinned year-gutter contract (design D8), painted through the crate's
 /// label/column seams: one right-aligned fixed six-column `STATUS_AVAILABLE`
 /// cell on a year-bearing album row followed by a two-column trailing gap,
