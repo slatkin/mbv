@@ -51,7 +51,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     if follow_focus {
         SurfaceColors::fill(if surface == Surface::LibraryPanel {
             // The focused Library panel uses the Green2 content-body sheet;
-            // its resting arm remains the Slate value from the surface table.
+            // its resting arm remains the Storm value from the surface table.
             Palette::Green2.color()
         } else if row.soft {
             // The soft content-body surface fill: its own value, not the
@@ -64,11 +64,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
             row.level.focused_fill()
         })
     } else {
-        SurfaceColors::fill(if surface == Surface::LibraryPanel {
-            Palette::Slate.color()
-        } else {
-            row.resting
-        })
+        SurfaceColors::fill(row.resting)
     }
 }
 
@@ -116,7 +112,7 @@ mod tests {
             Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
-            Surface::LibraryPanel => (Palette::Green2.color(), Palette::Slate.color()),
+            Surface::LibraryPanel => (Palette::Green2.color(), SURFACE_RESTING),
             Surface::QueuePanel => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::MainContentBox => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
@@ -216,12 +212,12 @@ mod tests {
             }
         }
 
-        // The library column and panel both rest at Slate, while their
-        // focused arms remain distinct surface roles.
+        // The library column rests at Slate while the panel rests at Storm,
+        // and their focused arms remain distinct surface roles.
         let column = surface_colors(Surface::LibraryColumn, false).fill;
         let content = surface_colors(Surface::LibraryPanel, false).fill;
         assert_eq!(column, Palette::Slate.color());
-        assert_eq!(content, Palette::Slate.color());
+        assert_eq!(content, Palette::Storm.color());
     }
 
     /// The soft content body is the table's one declared variant: it takes the

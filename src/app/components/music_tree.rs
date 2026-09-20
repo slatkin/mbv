@@ -544,9 +544,10 @@ fn glyph_prefix_width(level: usize) -> usize {
     if level == 0 {
         0
     } else {
-        // The renderer trims two columns from the crate's plain-space leaf
-        // prefix; keep the title budget in step with that composition.
-        3 * level + 1 - 2
+        // The renderer trims two columns from album prefixes and four from
+        // track prefixes; keep the title budget in step with that composition.
+        let trimmed = if level == 2 { 4 } else { 2 };
+        3 * level + 1 - trimmed
     }
 }
 
@@ -555,7 +556,7 @@ fn glyph_prefix_width(level: usize) -> usize {
 /// and composes the label line through `tree_label_line`, then applies mbv's
 /// semantic roles: hierarchy glyphs in the muted role, artist roots in the
 /// cream role, ordinary album leaves in the level-one accent role, track rows
-/// in the level-two error role, marks in the positive status role, the top-level
+/// in the level-two aqua role, marks in the positive status role, the top-level
 /// group zebra fill inside the text insets, and the focused selected row's
 /// marquee window computed for this frame. Canonical selected bars resolve
 /// their text to the selected-row Ink role.
@@ -610,13 +611,23 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         line.spans.pop(); // the empty borrowed name span; its separator stays
         if context.level > 0 {
             // Grouped Music keeps the tree's plain-space hierarchy but drops
-            // the two excess leading columns from every non-root row. The
-            // glyphs remain crate-owned; only this label composition changes.
-            let prefix = line
-                .spans
-                .first_mut()
-                .expect("a nested tree row has a prefix span");
-            prefix.content = prefix.content.chars().skip(2).collect::<String>().into();
+            // two excess leading columns from album rows and two more from
+            // track rows. The glyphs remain crate-owned; only this label
+            // composition changes.
+            let mut remaining = if context.level == 2 { 4 } else { 2 };
+            for prefix in line.spans.iter_mut().take(context.level) {
+                let removed = remaining.min(prefix.content.chars().count());
+                prefix.content = prefix
+                    .content
+                    .chars()
+                    .skip(removed)
+                    .collect::<String>()
+                    .into();
+                remaining -= removed;
+                if remaining == 0 {
+                    break;
+                }
+            }
         }
         // The tree widget paints the full claim rectangle so row fills bleed
         // through the parent panel's side pads. Keep the text at the inset
@@ -800,7 +811,7 @@ fn name_role(
         TreeMarkState::Unmarked => {
             let ordinary = match level {
                 1 => palette::TEXT_FOCUS_ACCENT,
-                _ => palette::STATUS_ERROR,
+                _ => palette::ACCENT,
             };
             model
                 .semantic_state_of(id)
