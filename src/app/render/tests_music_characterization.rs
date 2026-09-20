@@ -7,6 +7,7 @@ use super::test_helpers::{
 use super::*;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Modifier;
 use ratatui::Terminal;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
@@ -479,6 +480,115 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
     );
 }
 
+/// The selected-row bar's focus and multi-selection treatment at the Wide
+/// fixture: a focused selection paints the bar across the whole row and
+/// overrides a striped row's zebra, every span keeps the ordinary non-bold
+/// foreground, an unfocused tree paints no bar for its cursor row, and a
+/// multi-selected (marked) album leaf paints the bar even while unfocused.
+/// The artist root, the Heading-equivalent grouping row, keeps the surface
+/// fill and never takes the bar.
+#[test]
+fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
+    let mut model = mounted_model_at(
+        make_music_tree_group_app(),
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let _ = draw_mounted_frame(&mut model, MUSIC_TREE_WIDE_WIDTH, MUSIC_TREE_WIDE_HEIGHT);
+    let list_area = mounted_music_wide_geometry(&model).list_area;
+    let mut browser = mounted_music_tree_browser(&model);
+    browser.expand_root(MUSIC_TREE_ALPHA_ROOT);
+    browser.expand_root(MUSIC_TREE_BETA_ROOT);
+    let table_right = list_area.x + list_area.width - 1;
+    let zebra = music_tree_zebra_fill(true);
+    assert_ne!(palette::SELECTED_ROW_BG, zebra, "the bar is not the stripe");
+
+    // Focused single selection of Beta's striped first member: the bar spans
+    // the whole content row (the scrollbar column keeps the parent
+    // background) and overrides the zebra stripe, and the title keeps the
+    // ordinary emphasis foreground with no bold modifier.
+    browser.select_index(MUSIC_TREE_BETA_LEAF_0);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let selected_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0);
+    let buf = term.backend().buffer();
+    for x in list_area.x..table_right {
+        assert_eq!(
+            buf[(x, selected_y)].bg,
+            palette::SELECTED_ROW_BG,
+            "selected-row bar reaches column {x}"
+        );
+    }
+    let title_x = list_area.x + 6;
+    assert_eq!(buf[(title_x, selected_y)].fg, palette::TEXT_EMPHASIS);
+    assert!(
+        !buf[(title_x, selected_y)].modifier.contains(Modifier::BOLD),
+        "the selected title is not bold"
+    );
+
+    // The artist root above the selection is the Heading-equivalent grouping
+    // row: it keeps the surface fill, never the stripe and never the bar.
+    let root_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_ROOT);
+    let root_bg = music_tree_row_bg(&term, list_area.x + 10, root_y);
+    assert_ne!(root_bg, zebra, "the artist root is not striped");
+    assert_ne!(
+        root_bg,
+        palette::SELECTED_ROW_BG,
+        "the artist root has no bar"
+    );
+
+    // Unfocused: the cursor row paints no bar. Its stripe still alternates,
+    // and the SidebarBody stripe is the fixed resting value in both states.
+    browser.set_focused(false);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let cursor_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0);
+    assert_ne!(
+        term.backend().buffer()[(title_x, cursor_y)].bg,
+        palette::SELECTED_ROW_BG,
+        "an unfocused tree paints no bar for its cursor row"
+    );
+    assert_eq!(music_tree_row_bg(&term, title_x, cursor_y), zebra);
+
+    // Unfocused multi-selection: with the cursor moved off the marked album
+    // leaf, the mark alone paints the bar across its whole row, again
+    // overriding the zebra stripe.
+    browser.select_index(MUSIC_TREE_BETA_LEAF_1);
+    browser.set_marked(MUSIC_TREE_BETA_LEAF_0, true);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let marked_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0);
+    let buf = term.backend().buffer();
+    for x in list_area.x..table_right {
+        assert_eq!(
+            buf[(x, marked_y)].bg,
+            palette::SELECTED_ROW_BG,
+            "multi-selected bar reaches column {x}"
+        );
+    }
+    assert_ne!(
+        buf[(
+            title_x,
+            music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_1)
+        )]
+            .bg,
+        palette::SELECTED_ROW_BG,
+        "an unmarked, unfocused cursor row paints no bar"
+    );
+}
+
 /// A controlled one-artist corpus for the exact gutter cases: a long artist
 /// root, a long year-bearing album, and a long yearless album, all wider than
 /// the row so every slot is exercised at the clipping boundary.
@@ -602,5 +712,81 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     assert!(
         !rows.iter().any(|row| row.contains('%')),
         "music tree rows never paint resume progress"
+    );
+}
+
+/// A controlled two-album corpus whose titles both overflow a narrow row, so
+/// the shared marquee primitive can be observed to reset its clock when the
+/// selection moves between distinct titles.
+const RESET_TITLE_FIRST: &str = "A First Album Title Long Enough To Marquee Across The Browser Row";
+const RESET_TITLE_SECOND: &str =
+    "A Second Album Title Long Enough To Marquee Across The Browser Row";
+
+fn reset_entries() -> Vec<MusicTreeEntry> {
+    let key = ArtistKey::Service("reset-artist".into());
+    vec![
+        MusicTreeEntry {
+            artist: "Reset Artist".into(),
+            artist_key: key.clone(),
+            title: RESET_TITLE_FIRST.into(),
+            year: None,
+            target: "reset-first".into(),
+            semantic_state: MediaSemanticState::Ordinary,
+        },
+        MusicTreeEntry {
+            artist: "Reset Artist".into(),
+            artist_key: key,
+            title: RESET_TITLE_SECOND.into(),
+            year: None,
+            target: "reset-second".into(),
+            semantic_state: MediaSemanticState::Ordinary,
+        },
+    ]
+}
+
+/// The shared marquee clock keys on the marqueed title text: changing the
+/// selection to a row with a different title resets the clock to the frame's
+/// start, so the new title paints its hold window instead of inheriting the
+/// previous row's scroll position. The clock is injected directly (no sleeps);
+/// the hold window is what the reset produces.
+#[test]
+fn music_tree_title_clock_resets_when_the_selection_changes() {
+    const WIDTH: u16 = 40;
+    let area = Rect::new(0, 0, WIDTH, 3);
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&reset_entries()));
+    let root = browser.projected_nodes()[0].id();
+    browser.expand_root(root);
+    assert_eq!(browser.projection_len(), 3);
+    let first = browser.projected_nodes()[1].id();
+    let second = browser.projected_nodes()[2].id();
+
+    fn name_slot(row: &str) -> &str {
+        row.split_once("\u{2022} ")
+            .map(|(_, rest)| rest)
+            .unwrap_or(row)
+    }
+
+    // Select the first title and inject a mid-scroll clock: its window has
+    // travelled eight columns, not its hold start.
+    browser.select_id(first);
+    browser.set_marquee_clock_for_test(RESET_TITLE_FIRST, 600 + 150 * 8);
+    let term = music_tree_frame(&mut browser, area, WIDTH, 3);
+    let first_row = music_tree_row_text(&term, 1, 0, WIDTH);
+    let first_name = name_slot(&first_row);
+    assert!(
+        first_name.starts_with(&RESET_TITLE_FIRST[8..20]),
+        "the injected clock is mid-scroll: {first_name}"
+    );
+
+    // Select the second title without touching the clock. Its title text
+    // differs, so the primitive resets the clock and it paints its hold
+    // window from the start.
+    browser.select_id(second);
+    let term = music_tree_frame(&mut browser, area, WIDTH, 3);
+    let second_row = music_tree_row_text(&term, 2, 0, WIDTH);
+    let second_name = name_slot(&second_row);
+    assert!(
+        second_name.starts_with(&RESET_TITLE_SECOND[..12]),
+        "the new title's clock reset to its hold start: {second_name}"
     );
 }

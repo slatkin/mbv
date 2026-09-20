@@ -469,12 +469,29 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
             span.style = span.style.fg(palette::TEXT_MUTED);
         }
 
+        // The row's fill: a multi-selected album leaf paints the selected-row
+        // bar (the style half of the canonical multi-selection contract; task
+        // 4.2 drives the marks), overriding its zebra stripe; otherwise a
+        // grouped member stripes by its group-relative phase and an artist
+        // root keeps the surface fill. The focused selected row's bar comes
+        // from the crate's `highlight_style`, applied after this cell.
         let mut style = Style::default();
-        if model.is_striped(id) {
+        if multi_select_bar(model, id, context.node.mark) {
+            style = style.bg(palette::SELECTED_ROW_BG);
+        } else if model.is_striped(id) {
             style = style.bg(self.zebra_fill);
         }
         Cell::from(line).style(style)
     }
+}
+
+/// Whether a row paints the selected-row bar as part of the tree's
+/// multi-selection. Album leaves are the only stored multi-selection
+/// identities; an artist root is the Heading-equivalent grouping row, keeps
+/// its surface fill, and shows its aggregate state through its name role
+/// alone.
+fn multi_select_bar(model: &MusicTreeModel, id: usize, mark: TreeMarkState) -> bool {
+    mark == TreeMarkState::Marked && model.target_of(id).is_some()
 }
 
 /// The row's name role, resolved only from semantic inputs: the crate's mark
