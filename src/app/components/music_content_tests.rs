@@ -272,6 +272,115 @@ fn selected_row(owner: &MusicContent) -> usize {
         .expect("the selected node is projected")
 }
 
+fn paint_tree(owner: &mut MusicContent, area: Rect) {
+    let mut terminal =
+        Terminal::new(TestBackend::new(area.width, area.height)).expect("tree terminal");
+    terminal
+        .draw(|frame| owner.browser.view(frame, area))
+        .expect("tree frame");
+}
+
+fn tree_point(owner: &MusicContent, area: Rect, id: usize) -> Position {
+    let row = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .position(|node| node.id() == id)
+        .expect("node is projected");
+    let visible_row = row
+        .checked_sub(owner.browser.offset())
+        .expect("node is inside the painted viewport");
+    Position::new(area.x, area.y.saturating_add(visible_row as u16))
+}
+
+#[test]
+fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
+    owner.expand_all_tree_roots();
+    let area = Rect::new(0, 0, 48, 8);
+    paint_tree(&mut owner, area);
+
+    let root = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| owner.browser.target_of(node.id()).is_none())
+        .expect("artist root")
+        .id();
+    let album_0 = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
+        .expect("first album leaf")
+        .id();
+    let album_1 = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| owner.browser.target_of(node.id()) == Some("a-1"))
+        .expect("second album leaf")
+        .id();
+    let root_at = tree_point(&owner, area, root);
+    let album_0_at = tree_point(&owner, area, album_0);
+
+    // A click resolves the painted artist row, changes local selection, and
+    // does not manufacture an album request for the grouping root.
+    assert_eq!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+            root_at
+        ))),
+        None
+    );
+    assert!(owner.browser.selected_is_artist());
+
+    // The same completed frame resolves a leaf click to its stable album
+    // target, then wheel keeps the existing one-visible-row step semantics.
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+            album_0_at
+        ))),
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target: 0, .. }))
+    ));
+    assert_eq!(owner.browser.selected_album_target(), Some("a-0"));
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+            at: album_0_at,
+            delta: 1,
+        })),
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target: 1, .. }))
+    ));
+    assert_eq!(owner.browser.selected_id(), Some(album_1));
+
+    // Double-click and right-click resolve the row under the latest retained
+    // geometry, rather than the previously focused node.
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
+            album_0_at
+        ))),
+        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item })) if item.id == "a-0"
+    ));
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
+            album_0_at
+        ))),
+        Some(Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            Some((x, y)),
+        ))) if items.len() == 1 && items[0].id == "a-0" && (x, y) == (album_0_at.x, album_0_at.y)
+    ));
+
+    // A right-click on an artist root still resolves that root first, but the
+    // task-4.1-scoped artist context action has no album target yet.
+    assert_eq!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
+            root_at
+        ))),
+        None
+    );
+    assert!(owner.browser.selected_is_artist());
+}
+
 #[test]
 fn home_end_and_page_move_over_the_tree_visible_nodes() {
     let mut owner = tree_owner(&[

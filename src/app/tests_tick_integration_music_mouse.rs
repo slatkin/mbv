@@ -239,3 +239,128 @@ fn music_wide_album_and_group_pill_use_their_own_retained_geometry() {
         Msg::Shell(ShellRequest::MusicGroupSwitch { delta }) if *delta == group as i64
     )));
 }
+
+/// Grouped Music resolves its artist-root and album-leaf clicks through the
+/// tree's completed hit map, then rejects that map as soon as a new frame is
+/// configured. The mounted path is the real LibraryPanel/Application tick;
+/// there is no shell-side album row geometry to fall back to.
+#[test]
+fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
+    let mut app = make_music_group_app();
+    let mut second_album = make_item("Second Album", "MusicAlbum");
+    second_album.id = "album-2".into();
+    second_album.artist = "Alpha".into();
+    app.libs[0].nav_stack[1].items.push(second_album);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+
+    let list_area = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.test_list_rect())
+        .expect("Music tree list geometry");
+    let (root_point, album_point) = {
+        let music = harness.model().test_music_owner();
+        let point_for = |target: Option<&str>| {
+            let node = music
+                .browser
+                .projected_nodes()
+                .iter()
+                .find(|node| music.browser.target_of(node.id()) == target)
+                .expect("painted tree node");
+            let row = music
+                .browser
+                .projected_nodes()
+                .iter()
+                .position(|candidate| candidate.id() == node.id())
+                .expect("painted tree row")
+                .checked_sub(music.browser.offset())
+                .expect("tree node is inside the painted viewport");
+            (
+                list_area.x,
+                list_area.y.saturating_add(row as u16),
+            )
+        };
+        (point_for(None), point_for(Some("album-1")))
+    };
+    assert!(list_area.contains(ratatui::layout::Position::new(
+        root_point.0,
+        root_point.1
+    )));
+    assert!(list_area.contains(ratatui::layout::Position::new(
+        album_point.0,
+        album_point.1
+    )));
+
+    let click = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        })
+    };
+
+    // The artist root is a painted, focusable tree row but not an album
+    // target, so its click changes only the component-local selection.
+    harness.inject(click(root_point.0, root_point.1));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().all(|message| {
+        !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
+    }));
+    assert!(harness.model().test_music_owner().selected_is_artist());
+
+    // The same completed frame resolves the leaf's stable album identity.
+    harness.inject(click(album_point.0, album_point.1));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::MusicAlbumCursor { target: 0, .. })
+    )));
+    assert_eq!(
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .selected_album_target(),
+        Some("album-1")
+    );
+
+    // A content/geometry transition invalidates the completed tree result
+    // before the replacement frame paints. The mounted parent still receives
+    // the event through Application::tick, but MusicContent claims no stale
+    // row and emits no cursor request.
+    harness
+        .model_mut()
+        .test_music_owner_mut()
+        .browser
+        .invalidate();
+    harness.inject(click(album_point.0, album_point.1));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().all(|message| {
+        !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
+    }));
+    assert_eq!(
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .selected_album_target(),
+        Some("album-1"),
+        "the stale click did not mutate the tree selection"
+    );
+}

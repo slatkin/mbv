@@ -587,6 +587,12 @@ impl MusicTreeBrowser {
         self.model.reconcile(entries);
         let rebuilt = self.state.ensure_projection(&self.model, &self.query);
         self.state.ensure_mark_states(&self.model);
+        if rebuilt {
+            // The crate's hit map belongs to the completed frame, not to the
+            // newly reconciled projection. Do not let a settled content push
+            // claim a point until the next view has completed.
+            self.invalidate();
+        }
         rebuilt
     }
 
@@ -597,6 +603,7 @@ impl MusicTreeBrowser {
     pub(in crate::app) fn expand_root(&mut self, root: usize) {
         self.state.set_expanded(root, None, true);
         self.state.ensure_projection(&self.model, &self.query);
+        self.invalidate();
     }
 
     /// Collapses an artist root (task 2.4 Left): its leaves leave the visible
@@ -605,6 +612,7 @@ impl MusicTreeBrowser {
     pub(in crate::app) fn collapse_root(&mut self, root: usize) {
         self.state.set_expanded(root, None, false);
         self.state.ensure_projection(&self.model, &self.query);
+        self.invalidate();
     }
 
     /// Toggles an artist root's persistent expansion (task 2.4 Enter). This is
@@ -677,7 +685,11 @@ impl MusicTreeBrowser {
     /// Selects a node by stable identity, loading its ancestor path, and arms
     /// the viewport to keep it visible (design D3 step 4).
     pub(in crate::app) fn select_id(&mut self, id: usize) -> bool {
-        self.state.select_by_id(&self.model, &self.query, id)
+        let selected = self.state.select_by_id(&self.model, &self.query, id);
+        if selected {
+            self.invalidate();
+        }
+        selected
     }
 
     pub(in crate::app) fn select_index(&mut self, index: usize) {
@@ -755,6 +767,7 @@ impl MusicTreeBrowser {
     #[cfg(test)]
     pub(in crate::app) fn scroll_to(&mut self, offset: usize) {
         self.state.set_offset(offset);
+        self.invalidate();
     }
 
     /// Expands every artist root (component-test fixture for the tree's
@@ -763,6 +776,7 @@ impl MusicTreeBrowser {
     pub(in crate::app) fn expand_all_roots(&mut self) {
         let _ = self.state.expand_all(&self.model);
         self.state.ensure_projection(&self.model, &self.query);
+        self.invalidate();
     }
 
     /// Whether the selected node is an artist root (task 2.3: an artist focus
@@ -787,7 +801,11 @@ impl MusicTreeBrowser {
         let Some(id) = self.model.node_id(&MusicNodeKey::Album(target.to_string())) else {
             return false;
         };
-        self.state.select_by_id(&self.model, &self.query, id)
+        let selected = self.state.select_by_id(&self.model, &self.query, id);
+        if selected {
+            self.invalidate();
+        }
+        selected
     }
 
     /// The current visible projection's album targets: `Some(target)` per album
@@ -832,6 +850,9 @@ impl MusicTreeBrowser {
     /// Latest-completed-render hit resolution: the node id and its projection
     /// row for the row under `at`, if any.
     pub(in crate::app) fn hit_node(&self, at: Position) -> Option<(usize, usize)> {
+        if !self.paint_complete {
+            return None;
+        }
         match self.state.hit_test(at)? {
             TreeHit::Row { id, index, .. } => Some((id, index)),
             TreeHit::Header { .. } | TreeHit::VerticalScrollbar | TreeHit::HorizontalScrollbar => {
@@ -890,7 +911,7 @@ impl MusicTreeBrowser {
 
     /// Whether the latest completed view's retained geometry claims `at`.
     pub(in crate::app) fn claims_point(&self, at: Position) -> bool {
-        self.paint_complete && self.state.hit_test(at).is_some()
+        self.hit_test(at).is_some()
     }
 
     /// Arms the crate's `KeepInView` rule for the current selection without
@@ -903,7 +924,9 @@ impl MusicTreeBrowser {
     }
 
     pub(in crate::app) fn hit_test(&self, position: Position) -> Option<TreeHit<usize>> {
-        self.state.hit_test(position)
+        self.paint_complete
+            .then(|| self.state.hit_test(position))
+            .flatten()
     }
 
     pub(in crate::app) fn projection_len(&self) -> usize {

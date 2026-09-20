@@ -8,7 +8,7 @@
 //! album-selection persistence guard.
 
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use tui_treelistview::{TreeFilterConfig, TreeMarkState, TreeRevision};
 
@@ -347,6 +347,48 @@ fn assert_selection_visible(browser: &MusicTreeBrowser, height: usize) {
         "selection row {selected} outside the viewport {offset}..{}",
         offset + height
     );
+}
+
+#[test]
+fn tree_hit_geometry_is_claimable_only_after_the_latest_view() {
+    let entries = base_entries();
+    let model = MusicTreeModel::from_entries(&entries);
+    let alpha_root =
+        artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.expand_root(alpha_root);
+
+    let point = Position::new(1, 0);
+    frame(&mut browser, 5);
+    assert!(browser.claims_point(point));
+    assert!(browser.hit_node(point).is_some());
+    assert!(browser.hit_test(point).is_some());
+
+    // An explicit invalidation models a content/area configuration that has
+    // happened after the last completed frame. Every pointer-resolution seam
+    // must reject the old row until a new view completes.
+    browser.invalidate();
+    assert!(!browser.claims_point(point));
+    assert!(browser.hit_node(point).is_none());
+    assert!(browser.hit_test(point).is_none());
+
+    frame(&mut browser, 5);
+    assert!(browser.claims_point(point));
+
+    // A settled content replacement invalidates the completed hit map too,
+    // even when the surviving root still paints at the same row.
+    assert!(browser.reconcile(&[alpha("album-1", "Renamed Album")]));
+    assert!(!browser.claims_point(point));
+    assert!(browser.hit_test(point).is_none());
+
+    frame(&mut browser, 5);
+    assert!(browser.claims_point(point));
+
+    // The panel's viewport/geometry configuration is another invalidation
+    // boundary; the old frame cannot claim while the replacement is pending.
+    browser.clamp_viewport_to(2);
+    assert!(!browser.claims_point(point));
+    assert!(browser.hit_test(point).is_none());
 }
 
 #[test]
