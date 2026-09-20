@@ -11,7 +11,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use std::collections::HashMap;
-use tui_treelistview::{TreeGlyphs, TreeMarkState, TreeModel, TreeRevision};
+use tui_treelistview::{TreeMarkState, TreeModel, TreeRevision};
 
 use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack};
 use crate::app::components::media_list::MediaSemanticState;
@@ -348,31 +348,6 @@ fn assert_selection_visible(browser: &MusicTreeBrowser, height: usize) {
         "selection row {selected} outside the viewport {offset}..{}",
         offset + height
     );
-}
-
-/// The tree's one glyph-selection decision: the crate's Unicode set exactly
-/// when the display setting is off, and the same set with only the expansion
-/// pair swapped for Nerd Font angles when it is on.
-#[test]
-fn tree_glyphs_override_only_the_expansion_pair_when_nerd_fonts_are_on() {
-    let unicode = TreeGlyphs::unicode();
-    assert_eq!(
-        super::tree_glyphs(false),
-        unicode,
-        "the off state is exactly the crate's Unicode set"
-    );
-
-    let nerd = super::tree_glyphs(true);
-    assert_eq!(nerd.expanded, "\u{f135a}", "Nerd Font angle-down");
-    assert_eq!(nerd.collapsed, "\u{f1359}", "Nerd Font angle-right");
-    assert_eq!(nerd.branch, unicode.branch);
-    assert_eq!(nerd.branch_last, unicode.branch_last);
-    assert_eq!(nerd.vert, unicode.vert);
-    assert_eq!(nerd.indent, unicode.indent);
-    assert_eq!(nerd.empty, unicode.empty);
-    assert_eq!(nerd.leaf, unicode.leaf);
-    assert_eq!(nerd.unloaded, unicode.unloaded);
-    assert_eq!(nerd.loading, unicode.loading);
 }
 
 #[test]

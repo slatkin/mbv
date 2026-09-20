@@ -659,11 +659,6 @@ pub(in crate::app) struct MusicTreeBrowser {
     /// album snapshot.
     track_items: HashMap<String, Vec<MusicTreeTrack>>,
     focused: bool,
-    /// The display setting pushed by the shell sync pass: the tree's expansion
-    /// glyphs follow it (Nerd Font angles when on, the crate's Unicode set
-    /// when off). Only the glyph pair changes; every other glyph keeps the
-    /// crate default.
-    use_nerd_fonts: bool,
     marquee_key: String,
     marquee_started: Instant,
     /// The rect of the latest frame, so a geometry change re-applies the
@@ -696,7 +691,6 @@ impl MusicTreeBrowser {
             state,
             track_items: HashMap::new(),
             focused: true,
-            use_nerd_fonts: false,
             marquee_key: String::new(),
             marquee_started: Instant::now(),
             last_area: None,
@@ -739,19 +733,6 @@ impl MusicTreeBrowser {
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
-    }
-
-    /// The shell's display-setting projection: whether the terminal renders
-    /// Nerd Font glyphs. The next view resolves the tree's expansion glyphs
-    /// from it.
-    pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
-        self.use_nerd_fonts = use_nerd_fonts;
-    }
-
-    /// Test-only: the display setting the shell sync pass last projected.
-    #[cfg(test)]
-    pub(in crate::app) fn use_nerd_fonts_for_test(&self) -> bool {
-        self.use_nerd_fonts
     }
 
     pub(in crate::app) fn expand_root(&mut self, root: usize) {
@@ -1266,7 +1247,6 @@ impl MusicTreeBrowser {
             query,
             state,
             focused,
-            use_nerd_fonts,
             marquee_key,
             marquee_started,
             last_area,
@@ -1351,7 +1331,7 @@ impl MusicTreeBrowser {
         .without_header();
 
         let widget = TreeListView::new(model, query, &label, &columns, tree_style(*focused))
-            .glyphs(tree_glyphs(*use_nerd_fonts));
+            .glyphs(tree_glyphs());
         StatefulWidget::render(widget, area, frame.buffer_mut(), state);
         self.paint_complete = true;
     }
@@ -1367,17 +1347,10 @@ fn rearm_selection_visibility_for(state: &mut TreeListViewState<usize>) {
     }
 }
 
-/// The tree's glyph set: the crate's Unicode defaults with only the expansion
-/// pair swapped for Nerd Font angles when the setting is on. This is the
-/// tree's one glyph-selection decision — every row and both focus states paint
-/// through it, and no painter picks a glyph independently.
-fn tree_glyphs(use_nerd_fonts: bool) -> TreeGlyphs<'static> {
-    let mut glyphs = TreeGlyphs::unicode();
-    if use_nerd_fonts {
-        glyphs.expanded = "\u{f135a}";
-        glyphs.collapsed = "\u{f1359}";
-    }
-    glyphs
+/// The tree's glyph set. Every row and both focus states paint through the
+/// ASCII set, so the tree never requires Unicode or Nerd Font support.
+fn tree_glyphs() -> TreeGlyphs<'static> {
+    TreeGlyphs::ascii()
 }
 
 /// The tree's visual configuration through `TreeListViewStyle`: no border,

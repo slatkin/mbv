@@ -9,7 +9,6 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;
 use ratatui::Terminal;
-use rstest::rstest;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
 use crate::app::components::media_list::MediaSemanticState;
@@ -124,9 +123,9 @@ fn music_tree_row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -
     (x0..x1).map(|x| buf[(x, y)].symbol().to_string()).collect()
 }
 
-/// The tree's hierarchy/branch/state glyphs (the crate's Unicode set).
+/// The tree's hierarchy/branch/state glyphs (the crate's ASCII set).
 fn music_tree_hierarchy_glyph(c: char) -> bool {
-    matches!(c, '▶' | '▼' | '•' | '├' | '└' | '│' | '─')
+    matches!(c, '>' | 'v' | '*' | '?' | '~' | '|' | '-' | '`')
 }
 
 /// Every visible node row keeps a hierarchy glyph and at least one title cell
@@ -410,9 +409,7 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
     // The marquee window strips to the row's name slot (after the hierarchy
     // glyph prefix the crate composes).
     fn name_slot(row: &str) -> &str {
-        row.split_once("\u{2022} ")
-            .map(|(_, rest)| rest)
-            .unwrap_or(row)
+        row.split_once("* ").map(|(_, rest)| rest).unwrap_or(row)
     }
 
     // Hold phase: the window rests on the title's beginning — no ellipsis.
@@ -656,7 +653,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     // title using the full width (no gutter reserved).
     let root_row = &rows[0];
     assert!(
-        root_row.starts_with('▼'),
+        root_row.starts_with('v'),
         "the expanded root keeps its state glyph: {root_row:?}"
     );
     assert_eq!(
@@ -671,7 +668,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     // right-aligns in the fixed six-column `STATUS_AVAILABLE` cell.
     let yeared_row = &rows[1];
     assert!(
-        yeared_row.starts_with("├── • "),
+        yeared_row.starts_with("|-- * "),
         "the leaf keeps its guides and state glyph: {yeared_row:?}"
     );
     assert_eq!(
@@ -716,26 +713,15 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     );
 }
 
-/// The `use_nerd_fonts` display setting alone selects the expansion glyph pair
-/// this painter renders: the Nerd Font angles when on, the crate's Unicode set
-/// when off. Every other glyph — the album leaf's state glyph and the
-/// hierarchy guides — keeps the crate's Unicode default in both states.
-#[rstest]
-#[case(false, '▼', '▶')]
-#[case(true, '\u{f135a}', '\u{f1359}')]
-fn music_tree_expansion_glyphs_follow_the_nerd_font_setting(
-    #[case] use_nerd_fonts: bool,
-    #[case] expanded: char,
-    #[case] collapsed: char,
-) {
+/// The tree always uses ASCII expansion and hierarchy glyphs regardless of
+/// the global Nerd Font display setting used by other surfaces.
+#[test]
+fn music_tree_uses_ascii_glyphs_in_every_state() {
     const WIDTH: u16 = 40;
-    const UNICODE_LEAF_PREFIX: &str = "├── • ";
+    const ASCII_LEAF_PREFIX: &str = "|-- * ";
 
     let area = Rect::new(0, 0, WIDTH, 3);
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
-    browser.set_use_nerd_fonts(use_nerd_fonts);
-    // Unfocused so no row marquees and the root's state glyph stays the first
-    // painted cell.
     browser.set_focused(false);
     let root = browser.projected_nodes()[0].id();
     assert!(
@@ -743,32 +729,17 @@ fn music_tree_expansion_glyphs_follow_the_nerd_font_setting(
         "level 0 is the artist root"
     );
 
-    // A collapsed artist root paints the collapsed glyph.
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let collapsed_root_row = music_tree_row_text(&term, 0, 0, WIDTH);
-    assert_eq!(
-        collapsed_root_row.chars().next(),
-        Some(collapsed),
-        "collapsed root glyph (use_nerd_fonts={use_nerd_fonts}): {collapsed_root_row:?}"
-    );
+    assert_eq!(collapsed_root_row.chars().next(), Some('>'));
 
-    // An expanded artist root paints the expanded glyph, and its album leaf
-    // keeps the crate's Unicode guides and leaf glyph.
     browser.expand_root(root);
     assert_eq!(browser.projection_len(), 3);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let root_row = music_tree_row_text(&term, 0, 0, WIDTH);
-    assert_eq!(
-        root_row.chars().next(),
-        Some(expanded),
-        "expanded root glyph (use_nerd_fonts={use_nerd_fonts}): {root_row:?}"
-    );
+    assert_eq!(root_row.chars().next(), Some('v'));
     let leaf_row = music_tree_row_text(&term, 1, 0, WIDTH);
-    assert!(
-        leaf_row.starts_with(UNICODE_LEAF_PREFIX),
-        "the album leaf keeps the crate's guides and leaf glyph \
-         (use_nerd_fonts={use_nerd_fonts}): {leaf_row:?}"
-    );
+    assert!(leaf_row.starts_with(ASCII_LEAF_PREFIX), "{leaf_row:?}");
 }
 
 /// A controlled two-album corpus whose titles both overflow a narrow row, so
@@ -817,9 +788,7 @@ fn music_tree_title_clock_resets_when_the_selection_changes() {
     let second = browser.projected_nodes()[2].id();
 
     fn name_slot(row: &str) -> &str {
-        row.split_once("\u{2022} ")
-            .map(|(_, rest)| rest)
-            .unwrap_or(row)
+        row.split_once("* ").map(|(_, rest)| rest).unwrap_or(row)
     }
 
     // Select the first title and inject a mid-scroll clock: its window has

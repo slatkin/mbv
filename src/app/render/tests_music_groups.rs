@@ -62,9 +62,9 @@ fn music_tree_row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -
     (x0..x1).map(|x| buf[(x, y)].symbol().to_string()).collect()
 }
 
-/// The tree's hierarchy/branch/state glyphs (the crate's Unicode set).
+/// The tree's hierarchy/branch/state glyphs (the crate's ASCII set).
 fn music_tree_hierarchy_glyph(c: char) -> bool {
-    matches!(c, '▶' | '▼' | '•' | '├' | '└' | '│' | '─')
+    matches!(c, '>' | 'v' | '*' | '?' | '~' | '|' | '-' | '`')
 }
 
 /// Every visible node row keeps a hierarchy glyph and at least one title cell
