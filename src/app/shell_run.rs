@@ -31,6 +31,14 @@ impl Model {
         self.sync_status_bar_panel();
         self.sync_queue_card_geometry();
         self.sync_queue_playback_panel();
+        // The Music workspace re-projects every sync pass: navigation
+        // landings, track-fetch arrivals, focus requests, and breakpoint
+        // flips all land in App state, and the owner only picks them up
+        // through this push (the re-anchor, deep-selection, and
+        // track-focus one-shots are consumed here). Event writers push
+        // too, but the sync pass is the backstop that direct App writers
+        // (and the tests driving them) rely on.
+        self.push_music_workspace_content();
         // Task 8.4: the TV owner is installed/pushed before the panel's
         // owner-retention and active-pointer pass below.
         self.sync_tv_content();

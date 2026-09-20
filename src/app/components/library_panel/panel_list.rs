@@ -130,9 +130,10 @@ mod panel_list_tests {
     /// The selected-row bar is intentionally identical across the browser
     /// arms; arm-specific stripe colours are owned by the Render Component
     /// regressions in `src/app/render/components/media_list.rs` and its
-    /// Wide-arm tests. The Workspace arm is the exception: its bar takes the
-    /// sheet's Ink chrome instead of the shared Slate bar, unified across
-    /// the Wide Hero pane and the Library Hero overlay.
+    /// Wide-arm tests. The Workspace arm is the exception: while focused its
+    /// bar takes the Iris accent instead of the shared Slate bar, unified
+    /// across the Wide Hero pane and the Library Hero overlay (unfocused it
+    /// keeps the sheet's Ink chrome).
     #[test]
     fn wide_selected_rows_paint_the_bar_in_both_slots() {
         let mut carrier = MediaListCarrier::new();
@@ -165,8 +166,8 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::PILL_ROW_BG,
-            "the Workspace's selected-row bar takes the sheet's Ink chrome"
+            palette::ACCENT_ACTIVE,
+            "the focused Workspace's selected-row bar takes the Iris accent"
         );
     }
 
