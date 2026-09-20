@@ -77,9 +77,9 @@ impl Component for LibraryPanel {
                 // against the panel's own content area.
                 let gap = ratatui::layout::Rect {
                     x: geometry.hero.right(),
-                    y: area.y,
+                    y: geometry.hero.y,
                     width: geometry.browser.x.saturating_sub(geometry.hero.right()),
-                    height: area.height,
+                    height: geometry.hero.height,
                 };
                 self.split = (gap.width > 0 && gap.height > 0).then_some(SplitGeometry {
                     gap,
