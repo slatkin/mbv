@@ -28,7 +28,7 @@ use ratatui::style::Color;
 /// `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 ///
 /// `Copy` is required: const-context indexing out of `ALL` moves the value
-/// (design.md spike outcomes, task 1.1).
+/// (see the palette table drift tests below).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub(in crate::app) enum Palette {
     Grey1,

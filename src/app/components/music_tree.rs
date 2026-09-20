@@ -1,4 +1,4 @@
-//! Grouped Music's destination-specific tree adapter (task 1.1, design D1/D8).
+//! Grouped Music's destination-specific tree adapter (design D1/D8).
 //!
 //! This module is the one boundary between mbv and the locked
 //! `tui-treelistview` 0.2.2 dependency. It owns the destination-local node
@@ -7,22 +7,22 @@
 //! seams only — no crate keymap, no second painter, no raw colours (every
 //! style resolves an existing `palette` role here, inside the owning layer).
 //!
-//! Task 1.1 scope was the dependency gate: the spike renders one frame at the
-//! existing Wide and smallest supported non-Wide Library-panel fixtures and
-//! proves the full-row selected bar, group-relative zebra, scrollbar, focused
-//! marquee, clipping, latest-render hit testing, and aggregate marks. Task 2.2
-//! adds the one state owner over that model: settled-catalog reconciliation
-//! (selection, expansion, marks, viewport continuity) and responsive geometry
-//! reconciliation, plus the album-selection persistence guard. The tree is not
-//! yet wired into `MusicContent` or the `PanelList` surface (tasks 2.3/2.4/
-//! 5.2); nothing outside this module and its tests uses it.
+//! The tree render tests (`render::tests_music_characterization` and
+//! `render::tests_music_groups`) paint one frame each at the existing Wide and
+//! smallest supported non-Wide Library-panel fixtures and cover the full-row
+//! selected bar, group-relative zebra, scrollbar, focused marquee, clipping,
+//! latest-render hit testing, and aggregate marks. Task 2.2 added the one state
+//! owner over that model: settled-catalog reconciliation (selection,
+//! expansion, marks, viewport continuity) and responsive geometry
+//! reconciliation, plus the album-selection persistence guard. `MusicContent`
+//! drives that owner as the Grouped Music browser.
 
-// Until tasks 2.x wire the tree into the Grouped Music browser, only the
-// spike tests reach this module; the allowance lapses at that integration.
+// Some tree accessors are still reached only by tests; the allowance lapses
+// once every Grouped Music integration path uses them.
 #![cfg_attr(not(test), allow(dead_code))]
 //!
 //! Layout arithmetic the view relies on (mirroring the crate's
-//! `resolve_layout` for this configuration, asserted by the spike tests):
+//! `resolve_layout` for this configuration, asserted by the tree render tests):
 //! borderless block, no header, empty highlight symbol, `column_spacing` 0,
 //! horizontal scrolling disabled, one primary tree column — so the tree
 //! column takes every remaining column and the vertical scrollbar takes
@@ -719,8 +719,8 @@ impl MusicTreeBrowser {
         self.state.mark_state(id)
     }
 
-    /// The node's painted title (the spike tests locate rows by title rather
-    /// than by hard-coded settled sort positions).
+    /// The node's painted title (the tree render tests locate rows by title
+    /// rather than by hard-coded settled sort positions).
     #[cfg(test)]
     pub(in crate::app) fn title_of(&self, id: usize) -> &str {
         self.model.title_of(id)
@@ -899,8 +899,8 @@ impl MusicTreeBrowser {
 
     /// Injects the marquee clock directly (no sleeps): `key` must be the
     /// title the selected row marquees, `elapsed_ms` the age of its start
-    /// time. The spike's no-sleep marquee proof and the later title-clock
-    /// reset coverage both go through here.
+    /// time. The no-sleep marquee coverage and the later title-clock reset
+    /// coverage both go through here.
     #[cfg(test)]
     pub(in crate::app) fn set_marquee_clock_for_test(&mut self, key: &str, elapsed_ms: u64) {
         self.marquee_key.clear();

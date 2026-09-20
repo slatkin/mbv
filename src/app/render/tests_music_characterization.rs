@@ -1,10 +1,18 @@
 use super::test_helpers::{
-    buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
+    buffer_to_string, draw_mounted_frame, make_music_group_app, make_music_tree_group_app,
+    mounted_model_at, mounted_music_tree_browser, mounted_music_wide_geometry,
+    MUSIC_TREE_ALPHA_ROOT, MUSIC_TREE_BETA_LEAF_0, MUSIC_TREE_BETA_LEAF_1, MUSIC_TREE_BETA_ROOT,
+    MUSIC_TREE_EXPANDED_PROJECTION_LEN, MUSIC_TREE_LONG_TITLE, MUSIC_TREE_LONG_TITLE_YEAR,
 };
 use super::*;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
+use tui_treelistview::{TreeHit, TreeMarkState};
+
+use crate::app::components::media_list::MediaSemanticState;
+use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
+use crate::app::music_grouping::ArtistKey;
 
 /// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
 /// now (task 3.8), so route the narrow characterization renders through the
@@ -81,5 +89,518 @@ fn narrow_grouped_music_shows_group_pill_bar() {
     assert!(
         output.contains("Beta"),
         "group pill labels must paint:\n{output}"
+    );
+}
+
+// --- Grouped Music tree rows ---------------------------------------------
+
+/// The Wide Library-panel fixture the Grouped Music tree row tests paint into.
+const MUSIC_TREE_WIDE_WIDTH: u16 = 160;
+const MUSIC_TREE_WIDE_HEIGHT: u16 = 40;
+
+/// One tree frame: the tree adapter painting into the mounted Library panel's
+/// reserved browser rect on a fresh buffer.
+fn music_tree_frame(
+    browser: &mut MusicTreeBrowser,
+    area: Rect,
+    width: u16,
+    height: u16,
+) -> Terminal<TestBackend> {
+    let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
+    term.draw(|f| browser.view(f, area)).unwrap();
+    term
+}
+
+/// The buffer y of a projection row in the latest frame (the row must be
+/// visible: `projection_row` in `browser.offset()..offset + viewport`).
+fn music_tree_row_y(browser: &MusicTreeBrowser, list_area: Rect, projection_row: usize) -> u16 {
+    list_area.y + (projection_row - browser.offset()) as u16
+}
+
+fn music_tree_row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -> String {
+    let buf = term.backend().buffer();
+    (x0..x1).map(|x| buf[(x, y)].symbol().to_string()).collect()
+}
+
+/// The tree's hierarchy/branch/state glyphs (the crate's Unicode set).
+fn music_tree_hierarchy_glyph(c: char) -> bool {
+    matches!(c, '▶' | '▼' | '•' | '├' | '└' | '│' | '─')
+}
+
+/// Every visible node row keeps a hierarchy glyph and at least one title cell
+/// and paints nothing past the browser rect (the tree's row contract).
+fn assert_music_tree_row_within(
+    term: &Terminal<TestBackend>,
+    row_y: u16,
+    list_area: Rect,
+    frame_width: u16,
+) {
+    let row = music_tree_row_text(term, row_y, list_area.x, list_area.right());
+    assert!(
+        row.chars().any(music_tree_hierarchy_glyph),
+        "row keeps a hierarchy glyph: {row:?}"
+    );
+    assert!(
+        row.chars()
+            .any(|c| !c.is_whitespace() && !music_tree_hierarchy_glyph(c) && c != '…'),
+        "row keeps at least one title cell: {row:?}"
+    );
+    let outside = music_tree_row_text(term, row_y, list_area.right(), frame_width);
+    assert!(
+        outside.chars().all(|c| c == ' '),
+        "nothing overruns the browser rect: {outside:?}"
+    );
+}
+
+/// A character-column slice of a row (glyphs are single-width, so char index
+/// matches display column here).
+fn music_tree_row_slice(row: &str, start: usize, len: usize) -> String {
+    row.chars().skip(start).take(len).collect()
+}
+
+fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::style::Color {
+    term.backend().buffer()[(x, y)].bg
+}
+
+/// The zebra fill the tree resolves for its rows: the canonical grouped
+/// list's fixed resting-content Storm in both focus states.
+fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
+    palette::surface_colors(palette::Surface::SidebarBody, focused).fill
+}
+
+/// The long album's node id, found by its title in the arena (its settled
+/// sort position is not load-bearing).
+fn music_tree_long_leaf_id(browser: &MusicTreeBrowser) -> usize {
+    (0..browser.projection_len() * 2)
+        .find(|&id| browser.title_of(id) == MUSIC_TREE_LONG_TITLE)
+        .expect("long album interned")
+}
+
+/// A node's projection row, if visible in the settled projection.
+fn music_tree_projection_row_of(browser: &MusicTreeBrowser, id: usize) -> usize {
+    browser
+        .projected_nodes()
+        .iter()
+        .position(|node| node.id() == id)
+        .expect("node projected")
+}
+
+/// The tree's row contracts at the Wide Library-panel fixture, painted through
+/// the crate's supported model/state/renderer/style seams: the full-row
+/// selected bar, group-relative zebra, scrollbar, clipping with the fixed year
+/// gutter, latest-render hit testing, and aggregate marks.
+#[test]
+fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
+    let mut model = mounted_model_at(
+        make_music_tree_group_app(),
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let _ = draw_mounted_frame(&mut model, MUSIC_TREE_WIDE_WIDTH, MUSIC_TREE_WIDE_HEIGHT);
+    let list_area = mounted_music_wide_geometry(&model).list_area;
+    assert!(
+        list_area.width > 10 && list_area.height > 4,
+        "wide browser rect reserved"
+    );
+
+    let mut browser = mounted_music_tree_browser(&model);
+    browser.expand_root(MUSIC_TREE_ALPHA_ROOT);
+    browser.expand_root(MUSIC_TREE_BETA_ROOT);
+    assert_eq!(browser.projection_len(), MUSIC_TREE_EXPANDED_PROJECTION_LEN);
+    let long_leaf = music_tree_long_leaf_id(&browser);
+    let long_row = music_tree_projection_row_of(&browser, long_leaf);
+    // The stable album target the shell keys survives into the tree leaf.
+    assert_eq!(browser.target_of(long_leaf), Some("album-long"));
+
+    // Frame A rests at the top with the root selected, so the zebra rows
+    // below it paint unselected.
+    browser.select_index(MUSIC_TREE_ALPHA_ROOT);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let buf = term.backend().buffer();
+    assert_eq!(browser.offset(), 0, "a top selection needs no scroll");
+
+    // The selected artist root keeps its hierarchy glyph and at least one
+    // title cell and paints nothing past the browser rect.
+    assert_music_tree_row_within(&term, list_area.y, list_area, MUSIC_TREE_WIDE_WIDTH);
+    // The overflowing projection's scrollbar takes the `SCROLLBAR` role; the
+    // crate exposes no scrollbar style field, so the block style's foreground
+    // (applied to the whole browser area) is what its unstyled scrollbar
+    // inherits.
+    let scrollbar_cell = &buf[(list_area.right() - 1, list_area.y + 1)];
+    assert_ne!(scrollbar_cell.symbol(), " ");
+    assert_eq!(
+        scrollbar_cell.fg,
+        palette::SCROLLBAR,
+        "the crate's scrollbar takes the SCROLLBAR role"
+    );
+
+    // Group-relative zebra: each group's first member takes the secondary
+    // fill, every second member reverts, and the phase resets across the
+    // group boundary (Beta's first leaf stripes again after Alpha's 41).
+    let fill = music_tree_zebra_fill(true);
+    let probe_x = list_area.x + 10;
+    assert_eq!(
+        music_tree_row_bg(&term, probe_x, list_area.y + 1),
+        fill,
+        "Alpha leaf 0 stripes"
+    );
+    assert_ne!(
+        music_tree_row_bg(&term, probe_x, list_area.y + 2),
+        fill,
+        "Alpha leaf 1 rests"
+    );
+
+    // Scrollbar: the overflowing projection paints the crate's vertical
+    // scrollbar in the column right of the table.
+    assert_ne!(
+        buf[(list_area.right() - 1, list_area.y + 1)].symbol(),
+        " ",
+        "vertical scrollbar painted"
+    );
+
+    // Latest-render hit testing: the painted second row (frame A is at the
+    // top, so it is the row at the viewport's first line) resolves its node,
+    // and a point on the scrollbar resolves to the scrollbar region.
+    let second_row_id = browser.projected_nodes()[1].id();
+    match browser.hit_test(Position {
+        x: list_area.x + 5,
+        y: list_area.y + 1,
+    }) {
+        Some(TreeHit::Row { id, .. }) if id == second_row_id => {}
+        other => panic!("expected the painted row's node, got {other:?}"),
+    }
+    assert!(matches!(
+        browser.hit_test(Position {
+            x: list_area.right() - 1,
+            y: list_area.y + 1
+        }),
+        Some(TreeHit::VerticalScrollbar)
+    ));
+
+    // Clipping: scrolled so the unselected long album leaf paints at the
+    // viewport's last row, it truncates with an ellipsis, its year sits
+    // right-aligned inside the fixed six-column gutter, and no glyph lands
+    // outside the browser rectangle.
+    browser.scroll_to((long_row + 1).saturating_sub(list_area.height as usize));
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let long_y = music_tree_row_y(&browser, list_area, long_row);
+    let table_right = list_area.x + list_area.width - 1;
+    let long_row_text = music_tree_row_text(&term, long_y, list_area.x, list_area.right());
+    assert!(
+        long_row_text.contains('\u{2026}'),
+        "long title truncates: {long_row_text}"
+    );
+    let gutter_start = table_right - crate::app::components::music_tree::YEAR_GUTTER_WIDTH;
+    let gutter_text: String = music_tree_row_text(&term, long_y, gutter_start, table_right)
+        .trim()
+        .to_string();
+    assert_eq!(
+        gutter_text,
+        MUSIC_TREE_LONG_TITLE_YEAR.to_string(),
+        "year right-aligned in the fixed gutter"
+    );
+    assert_music_tree_row_within(&term, long_y, list_area, MUSIC_TREE_WIDE_WIDTH);
+
+    // Frame B: selecting the second Beta leaf scrolls it into view; its bar
+    // spans the full row and overrides the zebra, and Beta's first leaf
+    // stripes again above it (the group-relative reset).
+    browser.select_index(MUSIC_TREE_BETA_LEAF_1);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let buf = term.backend().buffer();
+    assert!(browser.offset() > 0, "the bottom Beta leaf forces a scroll");
+    let beta_bar_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_1);
+    for x in list_area.x..table_right {
+        assert_eq!(
+            buf[(x, beta_bar_y)].bg,
+            palette::SELECTED_ROW_BG,
+            "selected-row bar reaches column {x}"
+        );
+    }
+    assert_eq!(
+        music_tree_row_bg(
+            &term,
+            probe_x,
+            music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0)
+        ),
+        fill,
+        "Beta leaf 0 stripes again"
+    );
+    assert_ne!(palette::SELECTED_ROW_BG, fill);
+
+    // Aggregate marks: one of Beta's two leaves marked leaves the Beta root
+    // Partial; marking the second lifts it to Marked, and each aggregate state
+    // paints its own semantic role on the root's title.
+    browser.set_marked(MUSIC_TREE_BETA_LEAF_0, true);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    assert_eq!(
+        browser.mark_state(MUSIC_TREE_BETA_ROOT),
+        TreeMarkState::Partial
+    );
+    assert_eq!(
+        term.backend().buffer()[(
+            list_area.x + 2,
+            music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_ROOT)
+        )]
+            .fg,
+        palette::TEXT_ACCENT_MUTED,
+        "a Partial artist root paints the muted aggregate role"
+    );
+    browser.set_marked(MUSIC_TREE_BETA_LEAF_1, true);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    assert_eq!(
+        browser.mark_state(MUSIC_TREE_BETA_ROOT),
+        TreeMarkState::Marked
+    );
+    assert_eq!(
+        term.backend().buffer()[(
+            list_area.x + 2,
+            music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_ROOT)
+        )]
+            .fg,
+        palette::STATUS_AVAILABLE,
+        "a Marked artist root paints the positive aggregate role"
+    );
+}
+
+/// The focused selected row marquees its title through the injected clock (no
+/// sleeps) while an unfocused row truncates with an ellipsis instead.
+#[test]
+fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
+    let mut model = mounted_model_at(
+        make_music_tree_group_app(),
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let _ = draw_mounted_frame(&mut model, MUSIC_TREE_WIDE_WIDTH, MUSIC_TREE_WIDE_HEIGHT);
+    let list_area = mounted_music_wide_geometry(&model).list_area;
+
+    let mut browser = mounted_music_tree_browser(&model);
+    browser.expand_root(MUSIC_TREE_ALPHA_ROOT);
+    let long_leaf = music_tree_long_leaf_id(&browser);
+    let long_row = music_tree_projection_row_of(&browser, long_leaf);
+    browser.select_index(long_row);
+
+    // The marquee window strips to the row's name slot (after the hierarchy
+    // glyph prefix the crate composes).
+    fn name_slot(row: &str) -> &str {
+        row.split_once("\u{2022} ")
+            .map(|(_, rest)| rest)
+            .unwrap_or(row)
+    }
+
+    // Hold phase: the window rests on the title's beginning — no ellipsis.
+    browser.set_marquee_clock_for_test(MUSIC_TREE_LONG_TITLE, 0);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let resting_row = music_tree_row_text(
+        &term,
+        music_tree_row_y(&browser, list_area, long_row),
+        list_area.x,
+        list_area.right(),
+    );
+    let resting = name_slot(&resting_row);
+    assert!(
+        resting.starts_with(&MUSIC_TREE_LONG_TITLE[..12]),
+        "hold shows the title start: {resting}"
+    );
+    assert!(
+        !resting.contains('\u{2026}'),
+        "the marquee window carries no ellipsis"
+    );
+
+    // Seven steps past the hold: the window has travelled seven columns.
+    browser.set_marquee_clock_for_test(MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let scrolled_row = music_tree_row_text(
+        &term,
+        music_tree_row_y(&browser, list_area, long_row),
+        list_area.x,
+        list_area.right(),
+    );
+    let scrolled = name_slot(&scrolled_row);
+    assert!(
+        scrolled.starts_with(&MUSIC_TREE_LONG_TITLE[7..14]),
+        "the focused title window advanced: {scrolled}"
+    );
+
+    // Unfocused, the same row truncates with an ellipsis instead of marqueeing.
+    browser.set_focused(false);
+    browser.set_marquee_clock_for_test(MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    let unfocused_row = music_tree_row_text(
+        &term,
+        music_tree_row_y(&browser, list_area, long_row),
+        list_area.x,
+        list_area.right(),
+    );
+    let unfocused = name_slot(&unfocused_row);
+    assert!(
+        unfocused.contains('\u{2026}'),
+        "unfocused title truncates: {unfocused}"
+    );
+}
+
+/// A controlled one-artist corpus for the exact gutter cases: a long artist
+/// root, a long year-bearing album, and a long yearless album, all wider than
+/// the row so every slot is exercised at the clipping boundary.
+const GUTTER_ARTIST: &str = "The Long Collective Artist Name That Will Not Fit One Row";
+const GUTTER_YEARED: &str = "A Yeared Album Title Long Enough To Want A Gutter";
+const GUTTER_YEARLESS: &str = "A Yearless Album Title Long Enough To Fill The Row";
+const GUTTER_YEAR: &str = "2007";
+
+fn gutter_entries() -> Vec<MusicTreeEntry> {
+    let key = ArtistKey::Service("gutter-artist".into());
+    vec![
+        MusicTreeEntry {
+            artist: GUTTER_ARTIST.into(),
+            artist_key: key.clone(),
+            title: GUTTER_YEARED.into(),
+            year: Some(GUTTER_YEAR.into()),
+            target: "gutter-yeared".into(),
+            semantic_state: MediaSemanticState::Ordinary,
+        },
+        MusicTreeEntry {
+            artist: GUTTER_ARTIST.into(),
+            artist_key: key,
+            title: GUTTER_YEARLESS.into(),
+            year: None,
+            target: "gutter-yearless".into(),
+            semantic_state: MediaSemanticState::Ordinary,
+        },
+    ]
+}
+
+/// The pinned year-gutter contract (design D8), painted through the crate's
+/// label/column seams: one right-aligned fixed six-column `STATUS_AVAILABLE`
+/// cell on a year-bearing album row, reserved nowhere on the artist root or
+/// the yearless leaf (their titles reach the last column), and no inline or
+/// second year column. The state glyph and title roles are pinned here too.
+#[test]
+fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
+    const WIDTH: u16 = 40;
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
+    let root = browser.projected_nodes()[0].id();
+    assert!(
+        browser.target_of(root).is_none(),
+        "level 0 is the artist root"
+    );
+    browser.expand_root(root);
+    assert_eq!(browser.projection_len(), 3);
+    // Unfocused so no row marquees: every row paints its ordinary truncation,
+    // which is what makes the per-row budget observable.
+    browser.set_focused(false);
+
+    let area = Rect::new(0, 0, WIDTH, 3);
+    let term = music_tree_frame(&mut browser, area, WIDTH, 3);
+    let buf = term.backend().buffer();
+
+    // Three rows in three lines never overflow, so no scrollbar takes a
+    // column: the tree column is the full browser width and the gutter is its
+    // last six columns.
+    let gutter = (WIDTH - crate::app::components::music_tree::YEAR_GUTTER_WIDTH) as usize;
+    let rows: Vec<String> = (0..3)
+        .map(|y| music_tree_row_text(&term, y, 0, WIDTH))
+        .collect();
+
+    // Artist root: an ordinary grouping row in the metadata role, its long
+    // title using the full width (no gutter reserved).
+    let root_row = &rows[0];
+    assert!(
+        root_row.starts_with('▼'),
+        "the expanded root keeps its state glyph: {root_row:?}"
+    );
+    assert_eq!(
+        root_row.chars().last(),
+        Some('…'),
+        "the root title reaches the last column (no gutter): {root_row:?}"
+    );
+    assert_eq!(buf[(0, 0)].fg, palette::TEXT_MUTED, "root state glyph role");
+    assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA, "root title role");
+
+    // Year-bearing leaf: the title stops before the gutter, and the year
+    // right-aligns in the fixed six-column `STATUS_AVAILABLE` cell.
+    let yeared_row = &rows[1];
+    assert!(
+        yeared_row.starts_with("├── • "),
+        "the leaf keeps its guides and state glyph: {yeared_row:?}"
+    );
+    assert_eq!(
+        music_tree_row_slice(yeared_row, gutter, 6),
+        format!("{GUTTER_YEAR:>6}"),
+        "the year is right-aligned in the last six columns: {yeared_row:?}"
+    );
+    assert_eq!(
+        yeared_row.chars().nth(gutter - 1),
+        Some('…'),
+        "the yeared title truncates before the gutter: {yeared_row:?}"
+    );
+    assert_eq!(buf[(4, 1)].fg, palette::TEXT_MUTED, "leaf state glyph role");
+    assert_eq!(
+        buf[(gutter as u16 - 1, 1)].fg,
+        palette::TEXT_EMPHASIS,
+        "an ordinary album leaf keeps the emphasis role"
+    );
+    assert_eq!(
+        buf[(gutter as u16 + 2, 1)].fg,
+        palette::STATUS_AVAILABLE,
+        "the year paints in the STATUS_AVAILABLE role"
+    );
+
+    // Yearless leaf: no gutter is reserved, so its long title reaches the
+    // last column and the gutter columns carry title text, never a year.
+    let yearless_row = &rows[2];
+    assert_eq!(
+        yearless_row.chars().last(),
+        Some('…'),
+        "the yearless title uses the full width: {yearless_row:?}"
+    );
+    let yearless_gutter = music_tree_row_slice(yearless_row, gutter, 6);
+    assert!(
+        !yearless_gutter.chars().any(|c| c.is_ascii_digit())
+            && !yearless_gutter.contains(GUTTER_YEAR),
+        "the yearless row reserves no year: {yearless_gutter:?}"
+    );
+    assert!(
+        !rows.iter().any(|row| row.contains('%')),
+        "music tree rows never paint resume progress"
     );
 }
