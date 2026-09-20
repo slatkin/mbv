@@ -6,9 +6,9 @@ before any TUI/render change per AGENTS.md). Decision IDs (D1–D7) reference
 
 ## 1. Reserve the full-width band and split below it (D1, D2, D7)
 
-- [ ] 1.1 Expose the pill-band height from `wide_hero.rs` (D7): add a `pub(in crate::app)` accessor (const or `pill_band_height()` fn) equal to `WIDE_HERO_PILLS_ROW_HEIGHT + WIDE_HERO_PILLS_GAP_ROWS`; do not duplicate the literal. Verify `cargo check -p mbv`.
-- [ ] 1.2 In `wide_library_panes` (`render/arrangements/library.rs`) implement fit-first-then-carve (D1): check the breakpoint on the **uncarved** `area`, then carve the band off the top (full width), then split the reduced `content_area`; expose the band rect(s) and `content_area` on `WideLibraryPanes`. Verify with a rect test at raw heights 7, 8, 9: Wide is chosen at exactly the same heights as before this change (no 2-row shift), and when chosen, hero/browser `y` == band bottom and band width == `area.width`.
-- [ ] 1.3 Thread the reduced `content_area` from `render_wide_skeleton` into `wide_hero_hero_pane` (D2), replacing the raw `area`. Verify with a buffer test: the hero pane's top row is below the pill/spacer rows.
+- [x] 1.1 Expose the pill-band height from `wide_hero.rs` (D7): add a `pub(in crate::app)` accessor (const or `pill_band_height()` fn) equal to `WIDE_HERO_PILLS_ROW_HEIGHT + WIDE_HERO_PILLS_GAP_ROWS`; do not duplicate the literal. Verify `cargo check -p mbv`.
+- [x] 1.2 In `wide_library_panes` (`render/arrangements/library.rs`) implement fit-first-then-carve (D1): check the breakpoint on the **uncarved** `area`, then carve the band off the top (full width), then split the reduced `content_area`; expose the band rect(s) and `content_area` on `WideLibraryPanes`. Verify with a rect test at raw heights 7, 8, 9: Wide is chosen at exactly the same heights as before this change (no 2-row shift), and when chosen, hero/browser `y` == band bottom and band width == `area.width`.
+- [x] 1.3 Thread the reduced `content_area` from `render_wide_skeleton` into `wide_hero_hero_pane` (D2), replacing the raw `area`. Verify with a buffer test: the hero pane's top row is below the pill/spacer rows.
 
 ## 2. Paint the full-width Selector band; drop the Wide internal pill reserve (D3, D5)
 
