@@ -103,6 +103,14 @@ pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title
 /// Grouped Music's artist and section-header text, matching the standard
 /// emphasis colour used by queue and movie list headers.
 pub const MUSIC_HEADER: Color = Palette::Cream.color();
+/// The Workspace box's header label (`TRACKLIST`) in a music album Hero. Its
+/// own role rather than `MUSIC_HEADER`, the music tree's artist/section role
+/// it used to borrow: this one row reads as a label, not as the tree's
+/// emphasis text, and an emphasis edit must not move it. Deliberately its own
+/// over the shared metadata blue it matches today (`TEXT_METADATA`, and the
+/// `PILL_SELECTED_BG` chip fill): equal today and independently editable, so
+/// a metadata-colour edit moves metadata alone.
+pub const WORKSPACE_HEADER_FG: Color = Palette::Foam.color();
 pub const TEXT_ON_ACCENT: Color = Palette::Grey1.color(); // near-black text painted on a colored surface
 pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playing"/confirmed value text;
                                                               // deliberately not the focused surface's

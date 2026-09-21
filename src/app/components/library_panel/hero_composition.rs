@@ -114,7 +114,10 @@ pub(in crate::app) fn paint_library_hero_content(
 
 fn paint_workspace_header(f: &mut Frame, content: Rect, header: WorkspaceHeader) {
     let (label, style) = match header {
-        WorkspaceHeader::Tracklist => (header.label(), Style::default().fg(palette::MUSIC_HEADER)),
+        WorkspaceHeader::Tracklist => (
+            header.label(),
+            Style::default().fg(palette::WORKSPACE_HEADER_FG),
+        ),
     };
     f.render_widget(
         Paragraph::new(label).style(style),

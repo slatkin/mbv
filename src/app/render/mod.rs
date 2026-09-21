@@ -94,7 +94,7 @@ pub(crate) use theme::{
     SCROLLBAR, SELECTED_ROW_BG, SELECTED_ROW_FG, SPLIT_ROW_CONTEXT_FG, SPLIT_ROW_TITLE_FG,
     STATUS_AVAILABLE, STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT,
     TEXT_HERO_TITLE, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,
-    TEXT_STRONG,
+    TEXT_STRONG, WORKSPACE_HEADER_FG,
 };
 // Task 4.2: the retired role names and the value-aliased resolver survive only
 // as test-fed re-exports — each is pinned by a frozen pre-existing test file

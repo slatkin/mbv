@@ -616,7 +616,7 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
     );
     assert_eq!(
         buf[(content_x, content_y)].style().fg,
-        Some(palette::MUSIC_HEADER)
+        Some(palette::WORKSPACE_HEADER_FG)
     );
     assert_eq!(buf[(content_x, content_y)].bg, fill);
 
@@ -670,10 +670,10 @@ fn music_workspace_header_uses_its_role_without_bold_modifier() {
     let header = &buf[(content_x, content_y)];
 
     assert_eq!(
-        palette::MUSIC_HEADER,
-        ratatui::style::Color::Rgb(0xfa, 0xed, 0xcd)
+        palette::WORKSPACE_HEADER_FG,
+        ratatui::style::Color::Rgb(0x3a, 0x94, 0xc5)
     );
-    assert_eq!(header.fg, palette::MUSIC_HEADER);
+    assert_eq!(header.fg, palette::WORKSPACE_HEADER_FG);
     assert!(!header.modifier.contains(ratatui::style::Modifier::BOLD));
 }
 
