@@ -46,6 +46,13 @@ impl LibraryContentOwner for MusicContent {
         self.browser.clear_marks();
     }
 
+    fn double_click_opens_hero_overlay(&mut self) -> bool {
+        // Grouped Music resolves double-clicks in the tree owner: expandable
+        // rows toggle locally and track rows retain their pre-U4 no-op path,
+        // so the panel must not pre-empt them with a Hero overlay.
+        false
+    }
+
     fn hero_overlay_target_available(&mut self) -> bool {
         // Both hero-bearing tree rows can own the overlay before their Hero
         // snapshot materializes: an album leaf and an artist root.
@@ -53,10 +60,12 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn hero_overlay_enter_available(&mut self) -> bool {
-        // Enter is the album leaf's overlay entry; an artist root's Enter
-        // toggles its expansion (its overlay entry is Right on the already
-        // expanded root).
-        self.selected_item().is_some()
+        // An unfiltered artist root enters the same Hero/Workspace path as
+        // Right on an expanded root. While filtering, Enter remains local to
+        // the tree so the panel cannot bypass the filter interaction.
+        (!self.browser.filter_active()
+            && self.browser.selected_is_artist())
+            || self.selected_item().is_some()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
@@ -101,10 +110,7 @@ impl LibraryContentOwner for MusicContent {
             // carrier. Keep the legacy host hook usable for focused harnesses
             // that explicitly seed that carrier while exercising unrelated
             // activation plumbing; the panel still always paints the tree.
-            if self.browser.filter_active()
-                && !self.inline_search.has_pool_entries()
-                && self.inline_search.results_len() == 0
-            {
+            if self.local_filter_owns_input() {
                 return self.on_filter_key(key);
             }
             if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -175,31 +181,25 @@ impl LibraryContentOwner for MusicContent {
             };
         }
         match key.code {
-            // An artist root is a grouping row, not an album: Enter toggles its
-            // persistent expansion (task 2.4) while the tree rail owns the
-            // focus. Once the focused pane is this root's own artist Workspace
-            // (task 6.3), Enter belongs to the focused track below; a pane left
-            // over from an album is not that Workspace and must not swallow the
-            // chord through the track arm's track/album resolution.
+            // Unfiltered artist Enter uses the same Hero entry as Right on an
+            // expanded root in Wide geometry. The panel owns the non-Wide
+            // Enter interception and opens the Library Hero overlay before
+            // this owner sees the chord; the filter keeps its local expansion
+            // behavior in `on_filter_key`. Once the focused pane is this
+            // root's own artist Workspace, Enter belongs to the focused track
+            // below.
             Key::Enter if self.browser.selected_is_artist() && !self.artist_workspace_focused() => {
-                if let Some(root) = self.browser.selected_id() {
-                    self.browser.toggle_root(root);
+                if self.inline_track_focus_enabled {
+                    self.enter_artist_workspace_focus();
                 }
                 None
             }
-            Key::Enter if self.track_focused => {
-                let track = self.selected_track_item()?;
-                let album_id = self.focused_track_album_id()?;
-                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                    album_id,
-                    track,
-                }))
-            }
+            Key::Enter if self.track_focused => self.workspace_track_activation(),
             Key::Enter if self.browser.selected_is_track() => {
-                let (album_id, track) = self.selected_tree_track()?;
-                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                    album_id,
-                    track,
+                let (album_target, track_id) = self.selected_tree_track()?;
+                Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                    album_target,
+                    track_id,
                 }))
             }
             Key::Enter if self.track_list.rows().is_empty() => self
@@ -288,14 +288,14 @@ impl LibraryContentOwner for MusicContent {
                             .into_iter()
                             .filter_map(|target| self.workspace_track_item(&target))
                             .collect();
-                        (!items.is_empty()).then_some(Msg::Shell(ShellRequest::RowContextMenu(
+                        (!items.is_empty()).then_some(Msg::Shell(ShellRequest::MusicRowContextMenu(
                             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                             None,
                         )))
                     }
                     Some(RowIntent::Context(target)) => {
                         self.workspace_track_item(&target).map(|track| {
-                            Msg::Shell(ShellRequest::RowContextMenu(
+                            Msg::Shell(ShellRequest::MusicRowContextMenu(
                                 crate::app::types_context_menu::ContextMenuTargets::Emby(vec![
                                     track,
                                 ]),
@@ -312,13 +312,13 @@ impl LibraryContentOwner for MusicContent {
                     if items.is_empty() {
                         return None;
                     }
-                    Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
                         crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                         None,
                     )))
                 } else {
                     self.selected_item().map(|item| {
-                        Msg::Shell(ShellRequest::RowContextMenu(
+                        Msg::Shell(ShellRequest::MusicRowContextMenu(
                             crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
                             None,
                         ))

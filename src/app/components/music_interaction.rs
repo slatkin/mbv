@@ -1,4 +1,20 @@
 impl MusicContent {
+    /// Whether the destination's own tree filter owns pointer/keyboard input.
+    /// Production Grouped Music filtering paints the tree and leaves the flat
+    /// Inline Search carrier empty, so input must resolve through the
+    /// current-frame tree geometry rather than the compatibility carrier path
+    /// (design D5).
+    fn local_filter_owns_input(&self) -> bool {
+        self.browser.filter_active()
+            && !self.inline_search.has_pool_entries()
+            && self.inline_search.results_len() == 0
+    }
+
+    fn pointer_album_selection_request(&mut self, kind: AlbumCursorKind) -> Option<Msg> {
+        self.album_selection_request(kind)
+            .or(Some(Msg::Shell(ShellRequest::LibraryPanelFocus)))
+    }
+
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
@@ -6,7 +22,8 @@ impl MusicContent {
                 (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
             }
             LibrarySlotEvent::List(input) => {
-                if self.inline_search.is_active() {
+                let filtered_tree = self.local_filter_owns_input();
+                if self.inline_search.is_active() && !filtered_tree {
                     // Inline Search pointer handling (design.md D4): the
                     // panel-normalized input delegates to the session's
                     // embedded carrier like every other list — a click
@@ -26,19 +43,18 @@ impl MusicContent {
                             );
                             Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                         }
-                        MediaListSurfaceInput::Click(at)
-                        | MediaListSurfaceInput::ToggleClick(at)
-                        | MediaListSurfaceInput::RangeClick(at) => {
-                            let target = search.results_mut().resolve_current_point(at)?.clone();
-                            // Design D4 non-goal: a search session has no
-                            // multi-selection UI, so a modifier click selects
-                            // exactly the clicked row and never toggles or
-                            // extends a range into `multi_selection`.
-                            search
-                                .results_mut()
-                                .delegate_operation(MediaListOperation::Select(target));
-                            None
-                        }
+                        // When the destination's own filter owns pointer
+                        // input, the branch below resolves the current-frame
+                        // filtered tree geometry and focuses Library through
+                        // `pointer_album_selection_request`. This flat Inline
+                        // Search carrier path resolves only wheel,
+                        // double-click and context-click, so a plain or
+                        // modified click must not mutate it: the framework
+                        // delivers after mutation, and discarding the message
+                        // would leave a losing selection change behind.
+                        MediaListSurfaceInput::Click(_)
+                        | MediaListSurfaceInput::ToggleClick(_)
+                        | MediaListSurfaceInput::RangeClick(_) => None,
                         MediaListSurfaceInput::DoubleClick(at) => {
                             let target = search.results_mut().resolve_current_point(at)?.clone();
                             let outcome = search.results_mut().delegate_operation(
@@ -79,7 +95,7 @@ impl MusicContent {
                             match outcome.external_intent {
                                 Some(RowIntent::Context(target)) => {
                                     search.item_for_target(&target).map(|item| {
-                                        Msg::Shell(ShellRequest::RowContextMenu(
+                                        Msg::Shell(ShellRequest::MusicRowContextMenu(
                                             crate::app::types_context_menu::ContextMenuTargets::Emby(
                                                 vec![item],
                                             ),
@@ -106,7 +122,7 @@ impl MusicContent {
                                 return None;
                             }
                             self.browser.move_selection(delta);
-                            self.album_selection_request(AlbumCursorKind::Move)
+                            self.pointer_album_selection_request(AlbumCursorKind::Move)
                         }
                         MediaListSurfaceInput::Click(at)
                         | MediaListSurfaceInput::RangeClick(at) => {
@@ -116,7 +132,7 @@ impl MusicContent {
                             let (_id, index) = self.browser.hit_node(at)?;
                             self.browser.clear_marks();
                             self.browser.select_index(index);
-                            self.album_selection_request(AlbumCursorKind::Move)
+                            self.pointer_album_selection_request(AlbumCursorKind::Move)
                         }
                         MediaListSurfaceInput::ToggleClick(at) => {
                             // Resolve the latest painted row before changing
@@ -124,16 +140,39 @@ impl MusicContent {
                             // their visible album descendants; they never
                             // become effect or Queue targets.
                             self.browser.toggle_mark_at(at)?;
-                            self.album_selection_request(AlbumCursorKind::Move)
+                            self.pointer_album_selection_request(AlbumCursorKind::Move)
                         }
                         MediaListSurfaceInput::DoubleClick(at) => {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (_id, index) = self.browser.hit_node(at)?;
+                            let (id, index) = self.browser.hit_node(at)?;
+                            if self.browser.model_is_track(id) {
+                                // Resolve the stable identity from the resolved
+                                // node before any local mutation, so a track
+                                // gesture never changes the selection and then
+                                // returns no message.
+                                let (album_target, track_id) =
+                                    self.browser.track_identity_of(id)?;
+                                let album_target = album_target.to_string();
+                                let track_id = track_id.to_string();
+                                self.browser.select_index(index);
+                                return Some(Msg::Shell(
+                                    ShellRequest::MusicTreeTrackActivate {
+                                        album_target,
+                                        track_id,
+                                    },
+                                ));
+                            }
                             self.browser.select_index(index);
-                            self.selected_item()
-                                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                            if self.browser.model_is_artist(id) {
+                                self.browser.toggle_root(id);
+                                return Some(Msg::Shell(ShellRequest::LibraryPanelFocus));
+                            }
+                            if self.browser.node_has_children(id) {
+                                self.browser.toggle_node(id);
+                            }
+                            Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
                         }
                         MediaListSurfaceInput::ContextClick(at) => {
                             if !self.browser.claims_point(at) {
@@ -157,7 +196,7 @@ impl MusicContent {
                                 if items.is_empty() && unresolved_targets.is_empty() {
                                     return None;
                                 }
-                                return Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                return Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
                                     crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                                     Some((at.x, at.y)),
                                 )));
@@ -172,13 +211,13 @@ impl MusicContent {
                                 if items.is_empty() {
                                     return None;
                                 }
-                                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
                                     crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                                     Some((at.x, at.y)),
                                 )))
                             } else {
                                 let item = self.selected_item()?;
-                                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
                                     crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
                                     Some((at.x, at.y)),
                                 )))
@@ -191,12 +230,7 @@ impl MusicContent {
             LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
             LibrarySlotEvent::HeroActivate => {
                 if self.track_focused {
-                    let track = self.selected_track_item()?;
-                    let album_id = self.focused_track_album_id()?;
-                    Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                        album_id,
-                        track,
-                    }))
+                    self.workspace_track_activation()
                 } else {
                     self.selected_item()
                         .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
@@ -220,15 +254,8 @@ impl MusicContent {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     self.track_focused = true;
                     self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
-                    (matches!(input, MediaListSurfaceInput::DoubleClick(_))).then(|| {
-                        let track_target = self.track_list.selected_target()?;
-                        let track = self.workspace_track_item(track_target)?;
-                        let album_id = self.focused_track_album_id()?;
-                        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                            album_id,
-                            track,
-                        }))
-                    })?
+                    (matches!(input, MediaListSurfaceInput::DoubleClick(_)))
+                        .then(|| self.workspace_track_activation())?
                 }
                 MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();
@@ -242,7 +269,7 @@ impl MusicContent {
                             .collect(),
                         _ => vec![item],
                     };
-                    Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), Some((at.x, at.y)))))
+                    Some(Msg::Shell(ShellRequest::MusicRowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), Some((at.x, at.y)))))
                 },
                 _ => None,
             },

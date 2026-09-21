@@ -27,6 +27,11 @@ use crate::app::types_playback::QueueScope;
 // quit, switch panels, toast. Fleshed out per-surface as components convert.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShellRequest {
+    /// Pull Library focus to the resolved Music tree gesture when it has no
+    /// other shell-side effect (repeat selection, local expansion/claim, or
+    /// a clamped wheel). The tree owner emits this instead of a second
+    /// message alongside an effect request.
+    LibraryPanelFocus,
     MusicAlbumCursor {
         target: usize,
         kind: AlbumCursorKind,
@@ -80,6 +85,13 @@ pub enum ShellRequest {
     MusicNeighbourPrefetch {
         targets: Vec<String>,
     },
+    /// Activate a track in the Grouped Music tree. The component carries only
+    /// stable tree/track identities; the shell resolves cached playable items
+    /// and feeds the resulting PendingQueueAction through its playback path.
+    MusicTreeTrackActivate {
+        album_target: String,
+        track_id: String,
+    },
     /// Activate the focused inline album track (Enter, or Ctrl+P while a
     /// track is focused): carries the owner-resolved album and track
     /// identities; the shell plays the track through the album queue path
@@ -88,6 +100,16 @@ pub enum ShellRequest {
         album_id: String,
         track: EmbyItem,
     },
+    /// Activate a focused artist Workspace track. The shell resolves the
+    /// ordered discography and chosen EmbyItem from the projected detail.
+    MusicArtistTrackActivate {
+        target: super::intents::MusicArtistTarget,
+        track_id: String,
+    },
+    /// Open a context menu for already-resolved Music targets. This keeps
+    /// Music's focus-before-menu policy in one shell arm without changing the
+    /// generic RowContextMenu behavior used by other destinations.
+    MusicRowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
     MusicGroupSwitch {

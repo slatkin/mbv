@@ -1,6 +1,19 @@
 use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel};
 
+/// The shared eligibility gate for the grouped Music owner, consumed by
+/// `is_music_group_view` and grouped landing validation. Keep this in sync
+/// with the shape that `is_music_group_view` exposes to the shell: the
+/// configured path must begin at the grouping level, have a group and album
+/// level on the stack.
+fn is_grouped_music_path(music_levels: &[String], nav_stack: &[BrowseLevel]) -> bool {
+    music_levels.first().is_some_and(|level| level == "group")
+        && nav_stack.len() >= 2
+        && music_levels
+            .get(nav_stack.len() - 1)
+            .is_some_and(|level| level == "album")
+}
+
 impl App {
     /// True when mbv should show the combined music group view:
     /// a group-selector bar at top with the album list below.
@@ -19,12 +32,53 @@ impl App {
             return false;
         }
         let lib = &self.libs[lib_idx];
-        // Need at least a group level and an album level on the stack.
-        if lib.nav_stack.len() < 2 {
-            return false;
+        is_grouped_music_path(&self.music_levels, &lib.nav_stack)
+    }
+
+    /// D7: validate a prepared recursive-album landing before its drain
+    /// commits anything. The target library must still exist and the prepared
+    /// stack must reproduce the configured `music.levels` album shape through
+    /// the shared `is_grouped_music_path` gate used by the view and landing
+    /// validation. A
+    /// miss is a rejected apply: the caller flashes the library error and
+    /// leaves the active tab, nav stack, saved Library position, and
+    /// retained-owner selection unchanged.
+    pub(super) fn validate_grouped_music_landing(
+        &self,
+        library_id: &str,
+        nav_stack: &[BrowseLevel],
+    ) -> Result<(), String> {
+        let could_not_build =
+            || format!("Could not build the configured music path for '{library_id}'");
+        let lib = self
+            .libs
+            .iter()
+            .find(|lib| lib.library.id == library_id)
+            .ok_or_else(|| format!("Could not find library {library_id}"))?;
+        if self.music_levels.is_empty()
+            || self.music_levels.last().map(String::as_str) != Some("album")
+        {
+            return Err("Could not resolve the configured music album level".into());
         }
-        // The top nav level must be the album-folder level.
-        self.is_viewing_album_folders(lib_idx)
+        if nav_stack.len() != self.music_levels.len()
+            || lib.library.collection_type != "music"
+            || !is_grouped_music_path(&self.music_levels, nav_stack)
+        {
+            return Err(could_not_build());
+        }
+        // Each level must hang off the selected item of the level above,
+        // rooted at the library, with a resting item at every step.
+        let mut parent_id = lib.library.id.as_str();
+        for level in nav_stack {
+            if level.parent_id != parent_id {
+                return Err(could_not_build());
+            }
+            let Some(item) = level.items.get(level.resting().cursor()) else {
+                return Err(could_not_build());
+            };
+            parent_id = item.id.as_str();
+        }
+        Ok(())
     }
 
     /// Switch to the previous (`delta == -1`) or next (`delta == 1`) group

@@ -188,7 +188,9 @@ mod settings_tests;
 #[path = "test_helpers.rs"]
 mod test_helpers;
 #[cfg(test)]
-pub(crate) use test_helpers::{make_movie_app, make_music_group_app, make_queue_app};
+pub(crate) use test_helpers::{
+    make_movie_app, make_music_group_app, make_music_group_app_with_second_album, make_queue_app,
+};
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

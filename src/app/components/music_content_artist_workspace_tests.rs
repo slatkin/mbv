@@ -72,31 +72,49 @@ fn enter_activates_an_artist_workspace_track_from_its_group() {
     assert!(owner.track_focused(), "the artist Workspace holds focus");
 
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) => {
-            assert_eq!(
-                album_id, "a-0",
-                "the projected group's settled album identity crosses"
-            );
-            assert_eq!(track.id, "alpha-track-1");
+        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+            assert_eq!(target.artist_name, "Alpha");
+            assert_eq!(target.album_targets, ["a-0", "a-1"]);
+            assert_eq!(track_id, "alpha-track-1");
         }
         other => panic!("expected artist track activation, got {other:?}"),
     }
 }
 
 #[test]
-fn enter_activates_a_cached_tree_track_through_the_existing_arm() {
+fn hero_activate_activates_an_artist_workspace_track() {
+    let mut owner = artist_workspace_owner();
+    owner.set_inline_track_focus_enabled(true);
+    owner.enter_track_focus();
+
+    match owner.on_slot_event(LibrarySlotEvent::HeroActivate) {
+        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+            assert_eq!(target.artist_name, "Alpha");
+            assert_eq!(track_id, "alpha-track-1");
+        }
+        other => panic!("expected artist Hero activation, got {other:?}"),
+    }
+}
+
+#[test]
+fn enter_activates_a_cached_tree_track_through_the_grouped_resolver() {
     let mut owner = artist_workspace_owner();
     owner.expand_all_tree_roots();
     press(&mut owner, Key::Home);
     press(&mut owner, Key::Down);
     press(&mut owner, Key::Down);
 
+    // A tree track carries only stable identities: the shell-owned grouped
+    // resolver picks the cached queue according to the autoload policy.
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) => {
-            assert_eq!(album_id, "a-0");
-            assert_eq!(track.id, "alpha-track-1");
+        Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+            album_target,
+            track_id,
+        })) => {
+            assert_eq!(album_target, "a-0");
+            assert_eq!(track_id, "alpha-track-1");
         }
-        other => panic!("expected cached tree track activation, got {other:?}"),
+        other => panic!("expected grouped tree track activation, got {other:?}"),
     }
 }
 
@@ -110,9 +128,10 @@ fn hero_double_click_activates_an_artist_workspace_track() {
         MediaListSurfaceInput::DoubleClick(Position { x: 0, y: 1 }),
     ));
     match message {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) => {
-            assert_eq!(album_id, "a-0");
-            assert_eq!(track.id, "alpha-track-1");
+        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+            assert_eq!(target.artist_name, "Alpha");
+            assert_eq!(target.album_targets, ["a-0", "a-1"]);
+            assert_eq!(track_id, "alpha-track-1");
         }
         other => panic!("expected artist track activation, got {other:?}"),
     }
@@ -125,7 +144,7 @@ fn artist_workspace_track_context_menu_resolves_projected_groups() {
     owner.enter_track_focus();
 
     match press(&mut owner, Key::Char('.')) {
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
             None,
         ))) => {
@@ -146,7 +165,7 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
         MediaListSurfaceInput::ContextClick(Position { x: 0, y: 1 }),
     ));
     match message {
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
             Some((0, 1)),
         ))) => {
@@ -158,16 +177,19 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
 }
 
 #[test]
-fn artist_workspace_root_still_toggles_while_the_rail_owns_the_focus() {
+fn artist_workspace_root_enter_is_handled_by_the_non_wide_panel_gate() {
     let mut owner = artist_workspace_owner();
     let root = owner.browser.selected_id().expect("artist root selected");
     assert!(owner.browser.root_is_expanded(root));
     assert!(!owner.track_focused(), "the rail owns the focus");
 
+    // The mounted non-Wide panel intercepts this chord before the owner and
+    // opens the Library Hero overlay itself. A direct owner therefore has no
+    // request to emit on this geometry.
     assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(
-        !owner.browser.root_is_expanded(root),
-        "Enter on the artist root still toggles expansion"
+        owner.browser.root_is_expanded(root),
+        "unfiltered Enter preserves expansion"
     );
 }
 

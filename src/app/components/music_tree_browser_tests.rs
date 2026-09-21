@@ -8,6 +8,7 @@ use super::tests::{
 };
 use super::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack};
 use crate::app::music_grouping::ArtistKey;
+use ratatui::layout::Position;
 use std::collections::HashMap;
 use tui_treelistview::{TreeMarkState, TreeModel};
 
@@ -302,10 +303,12 @@ fn filter_matches_each_level_on_its_own_text_and_hides_everything_below_it() {
             MusicTreeTrack {
                 target: "track-1".into(),
                 title: "Track One".into(),
+                search_title: "Track One".into(),
             },
             MusicTreeTrack {
                 target: "track-2".into(),
-                title: "Devil Track".into(),
+                title: "2. Devil Track".into(),
+                search_title: "Devil Track".into(),
             },
         ],
     );
@@ -342,8 +345,12 @@ fn filter_matches_each_level_on_its_own_text_and_hides_everything_below_it() {
     browser.apply_filter_query("Devil Track");
     assert_eq!(
         visible(&browser),
-        ["Devil Band", "Devil Soup", "Devil Track"]
+        ["Devil Band", "Devil Soup", "2. Devil Track"]
     );
+
+    // The painted number is not part of the track's searchable title.
+    browser.apply_filter_query("2.");
+    assert!(visible(&browser).is_empty());
 
     browser.apply_filter_query("Track One");
     assert_eq!(visible(&browser), ["Devil Band", "Devil Soup", "Track One"]);
@@ -474,6 +481,7 @@ fn matching_album_hides_cached_track_children_in_the_filtered_projection() {
         vec![MusicTreeTrack {
             target: "track-1".into(),
             title: "Track".into(),
+            search_title: "Track".into(),
         }],
     );
     model.reconcile_with_tracks(&entries, &tracks);
@@ -528,10 +536,12 @@ fn cached_tracks_project_as_ordered_depth_two_children() {
             MusicTreeTrack {
                 target: "track-1".into(),
                 title: "Track One".into(),
+                search_title: "Track One".into(),
             },
             MusicTreeTrack {
                 target: "track-2".into(),
                 title: "Track Two".into(),
+                search_title: "Track Two".into(),
             },
         ],
     )]));
@@ -553,5 +563,58 @@ fn cached_tracks_project_as_ordered_depth_two_children() {
     assert_eq!(
         browser.selected_track_identity(),
         Some(("album-1", "track-2"))
+    );
+}
+
+/// Row 5.2: every settled content push re-applies the active filter, and the
+/// crate advances its filter revision on every write. An unchanged match set
+/// must keep the current projection and its completed-frame hit geometry, so a
+/// filtered pointer gesture still resolves; a genuinely different match set
+/// must drop that geometry until the next paint.
+#[test]
+fn an_unchanged_filter_reapplication_keeps_completed_frame_hit_geometry() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let album_1 = album_id(&model, "album-1").expect("album-1 interned");
+    let album_2 = album_id(&model, "album-2").expect("album-2 interned");
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.open_filter();
+    browser.apply_filter_query("First");
+    frame(&mut browser, 6);
+    let row = browser
+        .row_rect_for(album_1)
+        .expect("filtered match painted a row");
+    let at = Position { x: row.x, y: row.y };
+    assert_eq!(
+        browser.hit_node(at).map(|(id, _)| id),
+        Some(album_1),
+        "the filtered row resolves through the completed frame"
+    );
+
+    // The same query re-applied (what a settled content push does) leaves the
+    // projection alone, so the painted row still resolves.
+    browser.apply_filter_query("First");
+    assert_eq!(
+        browser.hit_node(at).map(|(id, _)| id),
+        Some(album_1),
+        "a no-op filter re-application keeps the current-frame hit rows"
+    );
+
+    // A different match set rebuilds the projection: the retained row no
+    // longer claims input until the replacement frame paints.
+    browser.apply_filter_query("Second");
+    assert_eq!(
+        browser.hit_node(at),
+        None,
+        "a changed filtered projection invalidates the stale hit map"
+    );
+    frame(&mut browser, 6);
+    let row = browser
+        .row_rect_for(album_2)
+        .expect("the new match painted a row");
+    assert_eq!(
+        browser
+            .hit_node(Position { x: row.x, y: row.y })
+            .map(|(id, _)| id),
+        Some(album_2)
     );
 }

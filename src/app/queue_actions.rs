@@ -260,6 +260,65 @@ impl App {
         }
     }
 
+    /// Design D6 predicate: executing `action` would replace a populated
+    /// playback-target queue (local or directly controlled remote), so the
+    /// caller must confirm before the replacement runs. An empty target queue
+    /// needs no confirmation. Only a `PlayItems` payload is gated; a bare
+    /// clear already owns its own confirmation flow.
+    pub(super) fn queue_replacement_needs_confirmation(&self, action: &PendingQueueAction) -> bool {
+        matches!(action, PendingQueueAction::PlayItems { .. })
+            && self.playback_queue().total_queue_len() > 0
+    }
+
+    /// Design D6 entry point for a resolved queue replacement: an empty target
+    /// queue executes immediately, a populated one stores the complete action
+    /// and asks first. Local saved-playlist protection is not part of this
+    /// gate; the confirmed execution still runs it through
+    /// `replace_queue_or_prompt`.
+    ///
+    /// The gated payload goes into its own `pending_queue_replacement` slot,
+    /// never the save-deferral `pending_queue_action`: only the
+    /// `ReplacePopulatedQueue` confirmation arm reads it, so an in-flight
+    /// playlist save (whose completion consumes the shared deferral slot)
+    /// cannot fire a replacement the user never confirmed.
+    pub(super) fn request_queue_replacement(&mut self, action: PendingQueueAction) {
+        if self.queue_replacement_needs_confirmation(&action) {
+            self.pending_queue_replacement = Some(action);
+            self.ask_confirm(ConfirmModal {
+                title: " Replace Queue ".into(),
+                message: "Replace the current queue?".into(),
+                hint: "[y] Confirm    [Esc] Cancel".into(),
+                on_confirm: ConfirmAction::ReplacePopulatedQueue,
+            });
+        } else {
+            self.execute_queue_replacement(action);
+        }
+    }
+
+    /// Executes one already-resolved replacement through the existing playback
+    /// and admission executor. A directly-controlled owner holds the target
+    /// queue itself, so the executor's local-metadata gate never stages it or
+    /// writes its source label; both happen here, in the same order the
+    /// shipped album/artist track paths use (`replace_playback_queue`, then
+    /// submission). Local saved-playlist protection still runs through
+    /// `replace_queue_or_prompt`, which may raise its own save/discard prompt
+    /// as a second step before this payload executes.
+    pub(super) fn execute_queue_replacement(&mut self, action: PendingQueueAction) {
+        if self.has_direct_remote_queue() {
+            if let PendingQueueAction::PlayItems {
+                items,
+                start_idx,
+                source,
+                ..
+            } = &action
+            {
+                self.queue_source = source.clone();
+                self.replace_playback_queue(items.clone(), *start_idx);
+            }
+        }
+        self.replace_queue_or_prompt(action);
+    }
+
     fn clear_remote_queue(&mut self) {
         self.advance_remote_queue_lineage();
         self.player.clear_queue();

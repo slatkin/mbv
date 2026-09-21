@@ -19,8 +19,8 @@ use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTrailing, MediaSemanticState, RowIntent, SelectionOrigin,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
+    MediaSemanticState, RowIntent, SelectionOrigin,
 };
 use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
@@ -155,9 +155,11 @@ impl MusicContent {
                     album.clone(),
                     tracks
                         .iter()
-                        .map(|track| MusicTreeTrack {
+                        .enumerate()
+                        .map(|(index, track)| MusicTreeTrack {
                             target: track.id.clone(),
-                            title: track.name.clone(),
+                            title: track_row_label(track, index),
+                            search_title: track.name.clone(),
                         })
                         .collect(),
                 )
@@ -315,6 +317,10 @@ impl MusicContent {
     /// have not arrived yet, arm the entry so the next content push takes it —
     /// the component-local twin of the shell's album Enter re-arm.
     fn enter_artist_workspace_focus(&mut self) {
+        // A tree move can leave the previous album Workspace focused until the
+        // next panel projection. Reconcile now so an artist root never adopts
+        // that stale carrier as its own Workspace.
+        self.reconcile_workspace_rows();
         self.enter_track_focus();
         if !self.track_focused {
             // Arm with the focused root's resolved identity (design D7): the
@@ -476,10 +482,10 @@ impl MusicContent {
                 None
             }
             Key::Enter if self.browser.selected_is_track() => {
-                let (album_id, track) = self.selected_tree_track()?;
-                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                    album_id,
-                    track,
+                let (album_target, track_id) = self.selected_tree_track()?;
+                Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                    album_target,
+                    track_id,
                 }))
             }
             Key::Enter => {

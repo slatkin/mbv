@@ -250,6 +250,7 @@ pub(crate) fn make_app_stub() -> App {
         queue_source: crate::config::QueueSource::Unknown,
         queue_dirty: false,
         pending_queue_action: None,
+        pending_queue_replacement: None,
         pending_local_play: None,
         use_nerd_fonts: false,
         indicator_style: Default::default(),

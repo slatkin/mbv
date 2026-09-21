@@ -750,7 +750,7 @@ impl LibraryPanel {
                     && self
                         .owners
                         .active_mut()
-                        .is_some_and(|owner| owner.browser_rows_are_hero_bearing());
+                        .is_some_and(|owner| owner.double_click_opens_hero_overlay());
                 if overlay_attempt {
                     if let Some(message) = self.open_hero_from_browser(Some(at)) {
                         return Some(message);

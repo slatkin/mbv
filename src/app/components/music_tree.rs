@@ -251,6 +251,9 @@ impl MusicTreeBrowser {
         self.filter_query.clear();
         self.filter_query.push_str(query);
         if query.is_empty() {
+            if matches!(self.query.filter_config(), TreeFilterConfig::Disabled) {
+                return;
+            }
             self.set_filter_matches(None);
             return;
         }
@@ -268,6 +271,19 @@ impl MusicTreeBrowser {
                 })
             })
             .collect();
+        // Every settled content push re-applies the active filter, and the
+        // crate advances its filter revision on every write. An unchanged
+        // match set therefore keeps the current projection (and the
+        // current-frame hit rows a filtered pointer gesture resolves against)
+        // instead of rebuilding and invalidating it for nothing.
+        let unchanged = !matches!(self.query.filter_config(), TreeFilterConfig::Disabled)
+            && self.query.filter().matching.len() == matching.len()
+            && matching
+                .iter()
+                .all(|id| self.query.filter().matching.contains(id));
+        if unchanged {
+            return;
+        }
         self.set_filter_matches(Some(&matching));
     }
 
@@ -310,6 +326,31 @@ impl MusicTreeBrowser {
     pub(in crate::app) fn node_is_expanded(&self, id: usize) -> bool {
         let parent = self.projected_parent_of(id);
         self.state.node_is_expanded(id, parent)
+    }
+
+    /// Whether the settled projection has children for this node. This is a
+    /// local cache fact used by pointer expansion; it never starts a fetch.
+    pub(in crate::app) fn node_has_children(&self, id: usize) -> bool {
+        self.model
+            .children
+            .get(id)
+            .is_some_and(|children| !children.is_empty())
+    }
+
+    /// Whether the node is a cached track. A track double-click claims the
+    /// gesture and emits `MusicTreeTrackActivate` with the node's stable
+    /// identity, which the shell plays through the grouped-track resolver.
+    pub(in crate::app) fn model_is_track(&self, id: usize) -> bool {
+        self.model.track_identity_of(id).is_some()
+    }
+
+    /// Toggle an artist or cached-track album node without changing selection.
+    pub(in crate::app) fn toggle_node(&mut self, id: usize) {
+        let parent = self.projected_parent_of(id);
+        let expanded = self.state.node_is_expanded(id, parent);
+        self.state.set_expanded(id, parent, !expanded);
+        self.state.ensure_projection(&self.model, &self.query);
+        self.invalidate();
     }
 
     /// Collapses an artist root (task 2.4 Left): its leaves leave the visible

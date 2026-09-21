@@ -319,7 +319,17 @@ pub struct App {
     pub(super) playlists_open_loading: bool,
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
+    /// Deferred queue replacement awaiting the save/discard answer, then the
+    /// `PlaylistMutationComplete` boundary. Owned by `replace_queue_or_prompt`
+    /// and its existing callers (`ClearQueue`, the album/artist track paths,
+    /// the notification/quit auto-save routes).
     pub(super) pending_queue_action: Option<PendingQueueAction>,
+    /// A resolved, not-yet-confirmed queue replacement held by the D6
+    /// populated-queue gate (`ConfirmAction::ReplacePopulatedQueue`). This is
+    /// the gate's own slot: its only reader is that confirmation arm, so the
+    /// save-deferral boundary (`SessionEvent::PlaylistMutationComplete`) can
+    /// never pick a gated payload up and execute it unconfirmed.
+    pub(super) pending_queue_replacement: Option<PendingQueueAction>,
     /// Deferred explicit play awaiting the section-5 local fall-through prompt.
     pub(super) pending_local_play: Option<PendingQueueAction>,
     pub(super) use_nerd_fonts: bool,

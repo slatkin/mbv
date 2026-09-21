@@ -1,6 +1,15 @@
 // Included into `music_content` via `include!` (the module's doc and
 // imports live there, beside the split's other parts).
 
+pub(in crate::app) fn track_row_label(track: &EmbyItem, index: usize) -> String {
+    let number = if track.index_number > 0 {
+        track.index_number
+    } else {
+        index as i64 + 1
+    };
+    format!("{number}. {}", track.name)
+}
+
 fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     tracks
         .iter()
@@ -10,17 +19,12 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
 }
 
 fn track_row(track: &EmbyItem, index: usize) -> MediaListRow<String> {
-    let number = if track.index_number > 0 {
-        track.index_number
-    } else {
-        index as i64 + 1
-    };
     let trailing = (track.runtime_ticks > 0)
         .then(|| fmt_duration_gutter(track.runtime_ticks / TICKS_PER_SECOND))
         .map(MediaListTrailing::Gutter);
     MediaListRow::Item {
         target: track.id.clone(),
-        primary: format!("{number}. {}", track.name),
+        primary: track_row_label(track, index),
         secondary: None,
         trailing,
         duration: None,
@@ -142,6 +146,17 @@ impl MusicContent {
         })
     }
 
+    /// Expose the current shell-projected artist detail to the shell's
+    /// playback resolver without carrying queue data across the component
+    /// message boundary.
+    pub(in crate::app) fn artist_detail_for_target(
+        &self,
+        target: &MusicArtistTarget,
+    ) -> Option<&crate::app::music_artist_detail::ArtistDetailProjection> {
+        self.current_artist_detail()
+            .filter(|detail| detail.target.same_source(target))
+    }
+
     /// Rebuild `track_list` from the resolved Workspace and report whether it
     /// went empty-to-non-empty (the overlay/artist-entry arrival edge). A
     /// changed owner clears any stale pane focus and re-seats the cursor; a
@@ -241,27 +256,15 @@ impl MusicContent {
         }
     }
 
-    /// Resolves a selected tree track to the full cached item used by the
-    /// existing `MusicTrackActivate` arm. The tree contributes only stable
-    /// album/track identity; playback resolution remains in the shell.
-    fn selected_tree_track(&self) -> Option<(String, EmbyItem)> {
+    /// Resolves the selected tree track to stable identities only. The shell
+    /// owns the cached Emby items and resolves the playback queue.
+    fn selected_tree_track(&self) -> Option<(String, String)> {
         let (album_target, track_target) = self.browser.selected_track_identity()?;
-        let track = self
-            .tree_tracks
+        self.tree_tracks
             .get(album_target)?
             .iter()
-            .find(|track| track.id == track_target)?
-            .clone();
-        let album_id = if track.album_id.is_empty() {
-            album_target
-                .split('\0')
-                .next()
-                .unwrap_or(album_target)
-                .to_string()
-        } else {
-            track.album_id.clone()
-        };
-        Some((album_id, track))
+            .find(|track| track.id == track_target)?;
+        Some((album_target.to_string(), track_target.to_string()))
     }
 
     /// The settled album projection the tree owner reconciles: one entry per
@@ -453,6 +456,27 @@ impl MusicContent {
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
         let target = self.track_list.selected_target()?;
         self.workspace_track_item(target)
+    }
+
+    /// Resolves a focused Workspace track as an artist-track activation when
+    /// the pane belongs to an artist root, otherwise as the ordinary album
+    /// track activation. All Workspace gestures use this one fallback so the
+    /// stable artist identity gate and album-item resolution cannot drift.
+    fn workspace_track_activation(&self) -> Option<Msg> {
+        if self.artist_workspace_focused() {
+            if let (Some(target), Some(track_id)) = (
+                self.artist_detail_target(),
+                self.track_list.selected_target().cloned(),
+            ) {
+                return Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+                    target,
+                    track_id,
+                }));
+            }
+        }
+        let track = self.selected_track_item()?;
+        let album_id = self.focused_track_album_id()?;
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track }))
     }
 
     /// Select the album whose existing artwork path supplies an artist Hero.

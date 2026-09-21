@@ -17,14 +17,13 @@ impl Model {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        (library.library.collection_type == "music"
-            && self.app.is_music_group_view(index)
-            && self.app.is_viewing_album_folders(index))
-        .then(|| LibraryKey::Service {
-            service: ServiceKind::Emby,
-            library_id: library.library.id.clone(),
-            kind: LibraryKind::Music,
-        })
+        (library.library.collection_type == "music" && self.app.is_music_group_view(index)).then(
+            || LibraryKey::Service {
+                service: ServiceKind::Emby,
+                library_id: library.library.id.clone(),
+                kind: LibraryKind::Music,
+            },
+        )
     }
 
     pub fn music_owner(&self) -> Option<&MusicContent> {
@@ -83,6 +82,19 @@ impl Model {
         library_id: String,
         nav_stack: Vec<BrowseLevel>,
     ) {
+        // D7: validate the target library and the prepared stack BEFORE any
+        // commit. A rejected apply reports through the existing library-error
+        // path (which also drops the deferred tab switch) and leaves the
+        // active tab, nav stack, saved Library position, and retained-owner
+        // selection untouched -- never a silent no-op or a partial landing.
+        if let Err(error) = self
+            .app
+            .validate_grouped_music_landing(&library_id, &nav_stack)
+        {
+            self.app.pending_track_selection = None;
+            self.app.handle_lib_event(super::LibEvent::Error(error));
+            return;
+        }
         let library_id_lookup = library_id.clone();
         self.app
             .handle_lib_event(super::LibEvent::RecursiveAlbumActivated {

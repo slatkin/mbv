@@ -603,7 +603,7 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
         code: Key::Char('.'),
         modifiers: KeyModifiers::NONE,
     });
-    let Some(Msg::Shell(ShellRequest::RowContextMenu(
+    let Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
         crate::app::types_context_menu::ContextMenuTargets::Emby(mut items),
         anchor,
     ))) = message
@@ -615,7 +615,7 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
     assert_eq!(item.item_type, "MusicAlbum");
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
-        Msg::Shell(ShellRequest::RowContextMenu(
+        Msg::Shell(ShellRequest::MusicRowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
             None,
         )),
@@ -725,7 +725,7 @@ fn album_row_right_click_requests_the_album_context_menu() {
         }));
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(_),
             Some(_),
         )))

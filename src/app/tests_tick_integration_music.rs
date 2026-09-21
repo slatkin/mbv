@@ -260,12 +260,14 @@ fn enter_on_inline_search_album_result_defers_to_async_activation() {
     let album = album_row("album-1", "First Album");
     harness.model_mut().app.album_indexes.insert(
         "lib-music".into(),
-        crate::app::AlbumIndexState::Ready(vec![crate::app::AlbumSearchEntry {
-            album: album.clone(),
-            ancestors: Vec::new(),
-            display_label: "First Album".into(),
-            search_text: "first album".into(),
-        }]),
+        crate::app::AlbumIndexState::Ready(std::sync::Arc::new(crate::app::AlbumIndex::new(
+            vec![crate::app::AlbumSearchEntry {
+                album: album.clone(),
+                ancestors: Vec::new(),
+                display_label: "First Album".into(),
+                search_text: "first album".into(),
+            }],
+        ))),
     );
     {
         let workspace = harness.model_mut().test_music_owner_mut();

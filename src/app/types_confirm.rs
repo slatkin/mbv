@@ -8,15 +8,28 @@ pub(super) enum ConfirmAction {
     ClearQueue,
     RemoveActiveQueueItem(usize),
     RescanLibrary(usize),
-    SaveOverwritePlaylist { existing_id: String, name: String },
+    SaveOverwritePlaylist {
+        existing_id: String,
+        name: String,
+    },
     DiscardOrSaveDirtyPlaylist,
     PlayLocallyInstead,
-    DeletePlaylist { id: String, name: String },
+    DeletePlaylist {
+        id: String,
+        name: String,
+    },
     RemoveFeedSubscription(usize),
     RemoveEmby,
     ReplaceEmby(mbv_core::service_runtime::SetupGeneration),
     RemoveAudiobookshelf,
     ReplaceAudiobookshelf(mbv_core::service_runtime::SetupGeneration),
+    /// Design D6: a resolved queue replacement that would discard a populated
+    /// target queue. The payload is the already-resolved
+    /// `pending_queue_replacement` slot, so confirming executes exactly that
+    /// action through the existing playback/admission executor and cannot
+    /// re-resolve into a second one. That slot is private to this arm; the
+    /// save-deferral `pending_queue_action` slot stays with its own callers.
+    ReplacePopulatedQueue,
 }
 
 /// State for the shared confirmation-modal overlay: a centered, bordered

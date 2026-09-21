@@ -148,7 +148,8 @@ fn confirm_key_dismisses(action: &ConfirmAction, key: KeyCode) -> bool {
         ConfirmAction::ClearQueue
         | ConfirmAction::RemoveActiveQueueItem(_)
         | ConfirmAction::RescanLibrary(_)
-        | ConfirmAction::RemoveFeedSubscription(_) => true,
+        | ConfirmAction::RemoveFeedSubscription(_)
+        | ConfirmAction::ReplacePopulatedQueue => true,
         ConfirmAction::SaveOverwritePlaylist { .. } | ConfirmAction::DeletePlaylist { .. } => {
             matches!(key, KeyCode::Char('y') | KeyCode::Esc)
         }

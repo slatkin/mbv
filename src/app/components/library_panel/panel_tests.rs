@@ -264,6 +264,16 @@ fn selector_move_updates_only_private_hover_identity_and_returns_no_message() {
 }
 
 #[test]
+fn double_click_hero_policy_defaults_to_hero_bearing_and_music_overrides() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut generic = FixtureOwner::new(log);
+    assert!(generic.double_click_opens_hero_overlay());
+
+    let mut music = crate::app::components::MusicContent::new();
+    assert!(!music.double_click_opens_hero_overlay());
+}
+
+#[test]
 fn list_click_delegates_to_the_active_owner() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();

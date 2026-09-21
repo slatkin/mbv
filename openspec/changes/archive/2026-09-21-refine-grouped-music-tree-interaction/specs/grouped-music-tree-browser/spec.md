@@ -88,7 +88,7 @@ Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. 
 
 #### Scenario: Track Enter with an empty queue plays immediately
 - **WHEN** the user presses Enter on a track item and the target queue is empty
-- **THEN** playback starts without a confirmation prompt
+- **THEN** playback starts immediately: the empty target queue skips the queue-replacement confirmation prompt, while the save/discard protection for an unsaved local queue change still applies as it does for every other queue-replacing flow
 
 #### Scenario: Hero and Workspace remain the full-album surface
 - **WHEN** track items are visible in the tree
@@ -116,7 +116,7 @@ The mounted Music destination SHALL remain the sole event boundary. Keyboard pre
 
 ### Requirement: Tree double-click expands an expandable node and plays a track
 
-A double-click on a Grouped Music tree node SHALL toggle the persistent expansion of an expandable node: an artist root, or an album leaf with cached track children. This SHALL apply both with and without the local tree filter active; filter-forced visibility remains in effect until filtering closes. An album leaf without cached track children SHALL claim the gesture without changing state. None of those gestures SHALL open a Hero. A double-click on a track item SHALL use the same album-track resolution and playback executor as the tree's Enter chord, after the same populated-queue confirmation gate. When the target queue that playback would replace is populated, that activation SHALL ask for confirmation before replacing it, regardless of whether the target Player owner is local or directly controlled; an empty target queue SHALL play without confirmation. Grouped Music tree double-click SHALL NOT perform the ordinary album-leaf activation or open the Library Hero overlay.
+A double-click on a Grouped Music tree node SHALL toggle the persistent expansion of an expandable node: an artist root, or an album leaf with cached track children. This SHALL apply both with and without the local tree filter active; filter-forced visibility remains in effect until filtering closes. An album leaf without cached track children SHALL claim the gesture without changing state. None of those gestures SHALL open a Hero. A double-click on a track item SHALL use the same album-track resolution and playback executor as the tree's Enter chord, after the same populated-queue confirmation gate. When the target queue that playback would replace is populated, that activation SHALL ask for confirmation before replacing it, regardless of whether the target Player owner is local or directly controlled; an empty target queue SHALL skip the queue-replacement confirmation, while the save/discard protection that guards an unsaved local queue change SHALL still apply on the local path as it does for every other queue-replacing flow. Grouped Music tree double-click SHALL NOT perform the ordinary album-leaf activation or open the Library Hero overlay.
 
 #### Scenario: Double-click expands an artist root
 - **WHEN** the user double-clicks an artist root
@@ -133,7 +133,7 @@ A double-click on a Grouped Music tree node SHALL toggle the persistent expansio
 
 #### Scenario: Double-click a track with an empty queue plays immediately
 - **WHEN** the user double-clicks a track item while the queue is empty
-- **THEN** playback starts without a confirmation prompt
+- **THEN** playback starts immediately: the empty target queue skips the queue-replacement confirmation prompt, while the save/discard protection for an unsaved local queue change still applies as it does for every other queue-replacing flow
 
 #### Scenario: Filtered double-click keeps tree semantics
 - **WHEN** the local tree filter is active and the user double-clicks a visible artist root, album leaf, or track item

@@ -1,4 +1,6 @@
 use mbv_core::api::EmbyItem;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct AlbumPathPart {
@@ -38,10 +40,32 @@ impl AlbumSearchEntry {
 }
 
 #[derive(Clone, Debug)]
+pub(super) struct AlbumIndex {
+    pub(super) entries: Vec<AlbumSearchEntry>,
+    positions: HashMap<String, usize>,
+}
+
+impl AlbumIndex {
+    pub(super) fn new(entries: Vec<AlbumSearchEntry>) -> Self {
+        let mut positions = HashMap::with_capacity(entries.len());
+        for (index, entry) in entries.iter().enumerate() {
+            positions.entry(entry.album.id.clone()).or_insert(index);
+        }
+        Self { entries, positions }
+    }
+
+    pub(super) fn get(&self, album_id: &str) -> Option<&AlbumSearchEntry> {
+        self.positions
+            .get(album_id)
+            .and_then(|index| self.entries.get(*index))
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(super) enum AlbumIndexState {
     Unavailable,
     Loading { rebuild_pending: bool },
-    Ready(Vec<AlbumSearchEntry>),
+    Ready(Arc<AlbumIndex>),
 }
 
 /// TV series detail data for inline rendering.
