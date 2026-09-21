@@ -74,17 +74,41 @@ pub enum LaunchPanelFocus {
     Queue,
 }
 
-/// Selected main Selector pill, tagged per destination. Each payload is an
-/// opaque stable key (Service content ID or stable pill label) — never a
-/// row index. Matching on the destination variant is what makes
-/// cross-destination resolution impossible.
+/// Selected main Selector pill, tagged per destination. Each payload is a
+/// stable identity — never a row index. Home and Emby carry narrowed keys
+/// (tasks 2.1): Home sections resolve to the persisted section source, Emby
+/// letter pills to their closed bucket label and Emby group pills to the
+/// group folder's content ID. Feeds and Audiobookshelf keep opaque keys
+/// until task 2.2 narrows them the same way. Matching on the destination
+/// variant is what makes cross-destination resolution impossible.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "destination", rename_all = "snake_case")]
 pub enum SelectorIdentity {
-    Home { key: String },
+    Home { key: HomeSelectorKey },
     Feeds { key: String },
-    Emby { key: String },
+    Emby { key: EmbySelectorKey },
     Audiobookshelf { key: String },
+}
+
+/// Stable Home section identity (task 2.1): Continue Watching is a fixed
+/// scope, while each latest section resolves to its persisted source key
+/// (`emby:<id>`, `abs:<id>`, `feeds`) — never a pill index or title.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HomeSelectorKey {
+    Continue,
+    Section(String),
+}
+
+/// Stable generic-Emby pill identity (task 2.1): letter pills are a closed
+/// bucket set, so the bucket label is enum-like and stable; feed/home-video
+/// group pills are dynamic, so they resolve to the group folder's Service
+/// content ID — never a pill index or group display name.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmbySelectorKey {
+    Letter(String),
+    Group(String),
 }
 
 /// Selected library item, tagged per destination. Each payload is the

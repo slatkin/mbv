@@ -146,6 +146,14 @@ impl Model {
             .as_ref()
             .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
             .unwrap_or_default();
+        // The launch snapshot (task 2.1) resolves the selected group pill
+        // to its folder content ID, never to the display name above, so
+        // the push carries the aligned IDs alongside the painted names.
+        let feed_group_ids: Vec<String> = self.app.libs[index]
+            .feed_home_video
+            .as_ref()
+            .map(|s| s.groups.iter().map(|g| g.folder.id.clone()).collect())
+            .unwrap_or_default();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
         let poster_window = items.clone();
         let push = BrowserOwnerPush {
@@ -157,6 +165,7 @@ impl Model {
             group_pills: feed_group_view,
             show_letter_pills,
             feed_groups,
+            feed_group_ids,
             feed_group_cursor,
         };
         let identity = self.emby_library_owner_identity(index);

@@ -443,6 +443,7 @@ fn movie_credits_reach_library_panel_content_through_browser_owner() {
         group_pills: false,
         show_letter_pills: false,
         feed_groups: Vec::new(),
+        feed_group_ids: Vec::new(),
         feed_group_cursor: 0,
     });
 

@@ -15,9 +15,10 @@ include!("config_emby_lifecycle.rs");
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod tests {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     use super::*;
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
+    #[allow(unused_imports)]
     use std::time::{SystemTime, UNIX_EPOCH};
     include!("config_tests_settings.rs");
     include!("config_tests_keybinds.rs");

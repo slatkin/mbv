@@ -4,6 +4,8 @@
 // scratch directories (uuid-qualified, removed on drop), so no test
 // touches env overrides, the real state dir, or a sibling test's files.
 
+// Consumed by the migration/teardown coverage added in tasks 2.2/2.3.
+#[allow(dead_code)]
 fn launch_state_sample() -> TuiLaunchState {
     TuiLaunchState {
         version: TUI_LAUNCH_STATE_VERSION,
@@ -13,7 +15,7 @@ fn launch_state_sample() -> TuiLaunchState {
         },
         panel_focus: LaunchPanelFocus::Library,
         selector: Some(SelectorIdentity::Emby {
-            key: "A-C".to_string(),
+            key: EmbySelectorKey::Letter("A\u{2013}C".to_string()),
         }),
         item: Some(LibraryItemIdentity::Emby {
             id: "movie-2".to_string(),
@@ -21,13 +23,15 @@ fn launch_state_sample() -> TuiLaunchState {
     }
 }
 
+// Consumed by the migration/teardown coverage added in tasks 2.2/2.3.
+#[allow(dead_code)]
 fn launch_state_queue_focus_sample() -> TuiLaunchState {
     TuiLaunchState {
         version: TUI_LAUNCH_STATE_VERSION,
         tab: TabIdentity::Home,
         panel_focus: LaunchPanelFocus::Queue,
         selector: Some(SelectorIdentity::Home {
-            key: "continue".to_string(),
+            key: HomeSelectorKey::Continue,
         }),
         item: None,
     }

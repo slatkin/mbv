@@ -31,6 +31,7 @@ use crate::app::types_context_menu::ContextMenuTargets;
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::trunc_str;
+use mbv_core::config::{HomeSelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_core::playback_queue::QueueItem;
 
 /// The embedded content owner for the Home destination (design D2). Plain
@@ -615,6 +616,30 @@ impl LibraryContentOwner for HomeContent {
         }
     }
 
+    /// Bounded read-only launch-state identities (task 2.1): the current
+    /// section pill as a stable source key — Continue Watching as the fixed
+    /// scope, a latest section as its persisted `pref_key` — plus the
+    /// shared carrier's stable item target. No pill index or title crosses;
+    /// an empty section reports no item.
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        let selector = if self.section == 0 {
+            Some(SelectorIdentity::Home {
+                key: HomeSelectorKey::Continue,
+            })
+        } else {
+            self.source_for_section(self.section)
+                .map(|source| SelectorIdentity::Home {
+                    key: HomeSelectorKey::Section(source.pref_key()),
+                })
+        };
+        let item = self
+            .carrier
+            .selected_target()
+            .cloned()
+            .map(|id| LibraryItemIdentity::Home { id });
+        (selector, item)
+    }
+
     /// The current hero's content data, for the shell's image projection
     /// (task 5.10).
     fn hero_data(&mut self) -> Option<HeroContentData> {
@@ -872,5 +897,124 @@ mod tests {
             is_finished: false,
             cover_path: None,
         }
+    }
+
+    /// Task 2.1: the bounded read-only launch-state query on the Home owner.
+    /// The section pill resolves to a stable source key — Continue Watching as
+    /// the fixed scope, a latest section as its persisted `pref_key` — and the
+    /// item to the shared carrier's stable target. No section index or title
+    /// crosses; an empty section reports no item.
+    use mbv_core::config::{HomeSelectorKey, LibraryItemIdentity, SelectorIdentity};
+
+    fn continue_owner(ids: &[&str]) -> HomeContent {
+        let mut owner = HomeContent::new();
+        owner.set_content(
+            ids.iter()
+                .map(|id| {
+                    let mut item = make_item("Continue item", "Movie");
+                    item.id = id.to_string();
+                    QueueItem::Emby(Box::new(item))
+                })
+                .collect(),
+            Vec::new(),
+            false,
+            HashMap::new(),
+        );
+        owner
+    }
+
+    #[test]
+    fn continue_section_reports_the_fixed_scope_and_first_item_target() {
+        let owner = continue_owner(&["cw-1", "cw-2"]);
+        assert_eq!(
+            owner.launch_snapshot(),
+            (
+                Some(SelectorIdentity::Home {
+                    key: HomeSelectorKey::Continue,
+                }),
+                Some(LibraryItemIdentity::Home {
+                    id: "cw-1".to_string(),
+                })
+            )
+        );
+    }
+
+    #[test]
+    fn latest_section_reports_its_source_key_not_its_index_or_title() {
+        let mut episode = make_item("Pilot", "Episode");
+        episode.id = "ep1".into();
+        let mut owner = HomeContent::new();
+        owner.set_content(
+            Vec::new(),
+            vec![(
+                "Latest Movies".into(),
+                HomeLatestSource::Emby("lib-movies".into()),
+                vec![QueueItem::Emby(Box::new(episode))],
+            )],
+            false,
+            HashMap::new(),
+        );
+        assert!(
+            owner.restore_section(&HomeLatestSource::Emby("lib-movies".into())),
+            "the pushed section must exist"
+        );
+        assert_eq!(
+            owner.launch_snapshot(),
+            (
+                Some(SelectorIdentity::Home {
+                    key: HomeSelectorKey::Section("emby:lib-movies".to_string()),
+                }),
+                Some(LibraryItemIdentity::Home {
+                    id: "ep1".to_string(),
+                })
+            )
+        );
+    }
+
+    #[test]
+    fn empty_home_reports_the_continue_scope_with_no_item() {
+        let owner = continue_owner(&[]);
+        assert_eq!(
+            owner.launch_snapshot(),
+            (
+                Some(SelectorIdentity::Home {
+                    key: HomeSelectorKey::Continue,
+                }),
+                None,
+            ),
+            "an empty section still paints its pill, but selects no item"
+        );
+    }
+
+    #[test]
+    fn feeds_latest_section_reports_the_feeds_source_key() {
+        let mut owner = HomeContent::new();
+        owner.set_content(
+            Vec::new(),
+            vec![(
+                "Latest Episodes".into(),
+                HomeLatestSource::Feeds,
+                vec![feed_entry("Entry Title", Some(SUBSCRIPTION_URL))],
+            )],
+            false,
+            HashMap::new(),
+        );
+        assert!(
+            owner.restore_section(&HomeLatestSource::Feeds),
+            "the pushed section must exist"
+        );
+        let (selector, item) = owner.launch_snapshot();
+        assert_eq!(
+            selector,
+            Some(SelectorIdentity::Home {
+                key: HomeSelectorKey::Section("feeds".to_string()),
+            })
+        );
+        assert_eq!(
+            item,
+            Some(LibraryItemIdentity::Home {
+                id: "guid-Entry Title".to_string(),
+            })
+        );
     }
 }

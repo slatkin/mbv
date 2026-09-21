@@ -36,6 +36,7 @@ use super::media_list::{
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
+use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 
 /// Browse identity used to decide when a projected position should be applied.
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -85,6 +86,10 @@ pub(in crate::app) struct BrowserOwnerPush {
     pub group_pills: bool,
     pub show_letter_pills: bool,
     pub feed_groups: Vec<String>,
+    /// The group folders' Service content IDs, aligned 1:1 with
+    /// `feed_groups` (task 2.1): the launch snapshot resolves the selected
+    /// group pill to its content ID, never to the display name above.
+    pub feed_group_ids: Vec<String>,
     pub feed_group_cursor: usize,
 }
 
@@ -101,6 +106,7 @@ pub(in crate::app) struct EmbyLibraryContent {
     group_pills: bool,
     show_letter_pills: bool,
     feed_groups: Vec<String>,
+    feed_group_ids: Vec<String>,
     feed_group_cursor: usize,
     /// The one shared canonical owner of the active level's rows; the panel
     /// drives its Wide/Inline presentation from its own breakpoint (design
@@ -136,6 +142,7 @@ impl EmbyLibraryContent {
             group_pills: false,
             show_letter_pills: false,
             feed_groups: Vec::new(),
+            feed_group_ids: Vec::new(),
             feed_group_cursor: 0,
             carrier: MediaListCarrier::new(),
             last_identity: None,
@@ -159,6 +166,7 @@ impl EmbyLibraryContent {
         self.group_pills = push.group_pills;
         self.show_letter_pills = push.show_letter_pills;
         self.feed_groups = push.feed_groups;
+        self.feed_group_ids = push.feed_group_ids;
         self.feed_group_cursor = push.feed_group_cursor;
         self.feed_owner();
     }
@@ -709,6 +717,42 @@ impl LibraryContentOwner for EmbyLibraryContent {
 
     fn inline_search_active(&self) -> bool {
         self.inline_search.is_active()
+    }
+
+    /// Bounded read-only launch-state identities (task 2.1): the current
+    /// main-Selector pill as a stable key — the closed letter bucket's
+    /// label, or the selected feed/home-video group's folder content ID —
+    /// plus the shared carrier's stable item target. The "All" group pill
+    /// and the unfiltered letter view are the unfiltered scope, so they
+    /// report no selector (restoration falls back to the first pill); a
+    /// destination with no pills, or an empty list, reports absence the
+    /// same way. No pill index, group display name, or row position
+    /// crosses.
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        let selector = if self.group_pills {
+            self.feed_group_cursor.checked_sub(1).and_then(|group| {
+                self.feed_group_ids
+                    .get(group)
+                    .cloned()
+                    .map(|id| SelectorIdentity::Emby {
+                        key: EmbySelectorKey::Group(id),
+                    })
+            })
+        } else if self.show_letter_pills {
+            self.letter_filter
+                .as_ref()
+                .map(|filter| SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Letter(filter.label.to_owned()),
+                })
+        } else {
+            None
+        };
+        let item = self
+            .carrier
+            .selected_target()
+            .cloned()
+            .map(|id| LibraryItemIdentity::Emby { id });
+        (selector, item)
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
