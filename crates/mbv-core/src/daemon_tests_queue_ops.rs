@@ -311,6 +311,121 @@ fn unified_queue_remove_non_active_slot_keeps_active_and_forwards_removal() {
 }
 
 #[test]
+fn unified_queue_remove_slots_applies_the_range_and_publishes_one_snapshot() {
+    let player = cold_player();
+    let cmd_rx = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, _reply_rx) = mpsc::channel();
+
+    let mut owner = owner_with(
+        vec![
+            emby_qi("a", "Video", "Movie"),
+            emby_qi("b", "Video", "Movie"),
+            emby_qi("c", "Video", "Movie"),
+        ],
+        0,
+    );
+    let active = owner.core.queue.active_slot_id();
+    let b_slot = owner.core.queue.slots()[1].slot_id;
+    let c_slot = owner.core.queue.slots()[2].slot_id;
+    run_queue_cmd(
+        CtrlCmd::UnifiedQueueRemoveSlots {
+            slot_ids: vec![
+                crate::ctrl::slot_id_to_u64(b_slot),
+                crate::ctrl::slot_id_to_u64(c_slot),
+            ],
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
+    );
+
+    assert_eq!(
+        owner
+            .core
+            .queue
+            .slots()
+            .iter()
+            .map(|s| s.item.id())
+            .collect::<Vec<_>>(),
+        vec!["a"],
+    );
+    assert_eq!(owner.core.queue.active_slot_id(), active, "active slot unchanged");
+    // The whole range is one published snapshot, not one per removed slot.
+    match recv_event(&client_rx) {
+        CtrlEvent::UnifiedQueueState(state) => assert_eq!(state.slots.len(), 1),
+        _ => panic!("expected UnifiedQueueState"),
+    }
+    assert!(client_rx.try_recv().is_err(), "no second snapshot");
+    // The player run still receives one command per removed slot.
+    match cmd_rx.recv().unwrap() {
+        PlayerCommand::QueueRemove(sid) => assert_eq!(sid, b_slot),
+        _ => panic!("expected QueueRemove"),
+    }
+    match cmd_rx.recv().unwrap() {
+        PlayerCommand::QueueRemove(sid) => assert_eq!(sid, c_slot),
+        _ => panic!("expected QueueRemove"),
+    }
+}
+
+#[test]
+fn unified_queue_remove_slots_skips_unknown_ids_and_no_ops_when_empty() {
+    let player = cold_player();
+    let cmd_rx = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, _reply_rx) = mpsc::channel();
+
+    let mut owner = owner_with(vec![emby_qi("a", "Video", "Movie")], 0);
+    let a_slot = owner.core.queue.slots()[0].slot_id;
+    run_queue_cmd(
+        CtrlCmd::UnifiedQueueRemoveSlots {
+            slot_ids: vec![999_999],
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
+    );
+    assert_eq!(owner.core.queue.len(), 1);
+    assert!(cmd_rx.try_recv().is_err());
+    assert!(client_rx.try_recv().is_err(), "no snapshot for a no-op batch");
+
+    // An active slot in the batch is removed with the rest.
+    run_queue_cmd(
+        CtrlCmd::UnifiedQueueRemoveSlots {
+            slot_ids: vec![
+                crate::ctrl::slot_id_to_u64(a_slot),
+                999_999,
+            ],
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
+    );
+    assert!(owner.core.queue.is_empty());
+    match recv_event(&client_rx) {
+        CtrlEvent::UnifiedQueueState(state) => assert!(state.slots.is_empty()),
+        _ => panic!("expected UnifiedQueueState"),
+    }
+    match cmd_rx.recv().unwrap() {
+        PlayerCommand::SubmitQueue { items, .. } => assert!(items.is_empty()),
+        _ => panic!("expected SubmitQueue for the emptied queue"),
+    }
+}
+
+#[test]
 fn unified_queue_remove_active_slot_keeps_queue_when_others_remain() {
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();

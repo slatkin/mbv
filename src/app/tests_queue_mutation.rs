@@ -178,6 +178,145 @@ fn queue_edit_forwards_to_local_daemon_while_daemon_is_idle() {
 }
 
 #[test]
+fn queue_bulk_removal_sends_one_owner_edit_for_the_whole_range() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(2), make_items(5));
+    // The remote tab is the playing queue; edits reach the owner over ctrl.
+    let (first, second) = {
+        let tab = app.remote_player_tab.as_ref().unwrap();
+        (tab.slot_id_at(1).unwrap(), tab.slot_id_at(2).unwrap())
+    };
+
+    app.remove_slots_from_queue(QueueScope::Remote, &[first, second]);
+
+    assert_eq!(
+        app.remote_player_tab
+            .as_ref()
+            .unwrap()
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id0", "id3", "id4"]
+    );
+    // One batch command, not one per removed slot.
+    match cmd_rx.try_recv() {
+        Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueRemoveSlots { slot_ids }) => {
+            assert_eq!(
+                slot_ids,
+                vec![
+                    mbv_core::ctrl::slot_id_to_u64(first),
+                    mbv_core::ctrl::slot_id_to_u64(second),
+                ]
+            );
+        }
+        _ => panic!("expected one UnifiedQueueRemoveSlots"),
+    }
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "bulk removal must not also send per-slot commands"
+    );
+}
+
+#[test]
+fn shell_bulk_remove_request_reaches_the_owner_as_one_edit() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(2), make_items(4));
+    let mut model = Model::new(app);
+    model.app.set_queue_scope(QueueScope::Remote);
+    let (second, third) = {
+        let tab = model.app.remote_player_tab.as_ref().unwrap();
+        (tab.slot_id_at(1).unwrap(), tab.slot_id_at(2).unwrap())
+    };
+
+    model.handle_queue_request(crate::app::components::QueueRequest::RemoveSelection {
+        scope: QueueScope::Remote,
+        slot_ids: vec![second, third],
+    });
+
+    assert_eq!(
+        model
+            .app
+            .remote_player_tab
+            .as_ref()
+            .unwrap()
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id0", "id3"]
+    );
+    match cmd_rx.try_recv() {
+        Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueRemoveSlots { slot_ids }) => {
+            assert_eq!(
+                slot_ids,
+                vec![
+                    mbv_core::ctrl::slot_id_to_u64(second),
+                    mbv_core::ctrl::slot_id_to_u64(third),
+                ]
+            );
+        }
+        _ => panic!("expected one UnifiedQueueRemoveSlots"),
+    }
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "the shell handler must not also send per-slot commands"
+    );
+}
+
+#[test]
+fn bulk_removal_rests_the_cursor_on_the_item_before_the_range() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.set_items(make_items(5), 0);
+    // Cursor is deliberately far from the range: the rule is about the range,
+    // not about preserving wherever the user was.
+    app.player_tab.queue_cursor = 4;
+    let (a, b) = {
+        let tab = &app.player_tab;
+        (tab.slot_id_at(1).unwrap(), tab.slot_id_at(2).unwrap())
+    };
+
+    app.remove_slots_from_queue(QueueScope::Local, &[a, b]);
+
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id0", "id3", "id4"]
+    );
+    assert_eq!(app.player_tab.queue_cursor, 0, "item before the range");
+}
+
+#[test]
+fn bulk_removal_from_the_queue_head_rests_the_cursor_on_the_first_survivor() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.set_items(make_items(5), 0);
+    app.player_tab.queue_cursor = 3;
+    let head: Vec<_> = (0..2)
+        .map(|index| app.player_tab.slot_id_at(index).unwrap())
+        .collect();
+
+    app.remove_slots_from_queue(QueueScope::Local, &head);
+
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id2", "id3", "id4"]
+    );
+    assert_eq!(
+        app.player_tab.queue_cursor, 0,
+        "nothing precedes the range, so the first survivor takes the cursor"
+    );
+}
+
+#[test]
 fn attached_session_remove_stays_local_and_does_not_replay_daemon_queue() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut daemon_items = make_items(2);

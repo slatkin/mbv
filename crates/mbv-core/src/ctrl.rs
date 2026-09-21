@@ -318,6 +318,13 @@ pub enum CtrlCmd {
     UnifiedQueueRemoveSlot {
         slot_id: u64,
     },
+    /// Remove every listed slot as one queue edit. The owner applies all of
+    /// them before publishing a single queue snapshot, so a bulk removal is
+    /// never observable as a sequence of shrinking queues. Unknown slot
+    /// identities are skipped; an empty list is a no-op.
+    UnifiedQueueRemoveSlots {
+        slot_ids: Vec<u64>,
+    },
     /// Move the slot identified by `slot_id` to `to_index`.
     UnifiedQueueMoveSlot {
         slot_id: u64,
