@@ -163,7 +163,7 @@ pub const SPLIT_ROW_TITLE_FG: Color = Palette::Grey2.color(); // light grey (#9e
 
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = Palette::Orange.color();
-pub const INDICATOR_AUDIO_FG: Color = Palette::Purple.color();
+pub const INDICATOR_AUDIO_FG: Color = Palette::Mauve.color();
 
 // Playback panel
 pub const PLAYBACK_VALUE_FG: Color = Palette::Iris.color(); // title/codec value
