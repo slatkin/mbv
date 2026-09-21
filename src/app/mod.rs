@@ -26,6 +26,7 @@ mod feed_tab_actions;
 mod feeds_manage_actions;
 mod fuzzy_match;
 mod home_actions;
+mod home_latest;
 pub(crate) mod images;
 mod input;
 mod input_browse_dispatch;

@@ -21,6 +21,23 @@ use std::sync::Mutex;
 pub static SYS_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
+fn home_latest_launch_state_missing_or_malformed_has_no_baseline_and_round_trips() {
+    let _guard = TestStateDirGuard::new();
+    let path = home_latest_launch_path();
+    assert_eq!(load_home_latest_launch(), None);
+
+    std::fs::write(&path, "not json").unwrap();
+    assert_eq!(load_home_latest_launch(), None);
+    std::fs::write(&path, r#"{"version":99,"launch_secs":1234}"#).unwrap();
+    assert_eq!(load_home_latest_launch(), None);
+
+    save_home_latest_launch(1234).unwrap();
+    assert_eq!(load_home_latest_launch(), Some(1234));
+    save_home_latest_launch(5678).unwrap();
+    assert_eq!(load_home_latest_launch(), Some(5678));
+}
+
+#[test]
 fn is_system_instance_false_without_env_var() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
     std::env::remove_var("MBV_SYSTEM");

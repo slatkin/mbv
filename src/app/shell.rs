@@ -6,6 +6,7 @@ use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,
 };
+use super::home_latest::{capture_launch_window, current_launch_secs, HomeLatestLaunchWindow};
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
@@ -117,6 +118,10 @@ pub struct Model {
     /// `HomeComponent`; App-internal writers deliver computed snapshots via
     /// lib_tx; `loading` mirrors the deleted `App.home_loading`.
     pub(super) home_content: HomeContent,
+    /// Frozen Home Latest launch interval for this TUI run. This is separate
+    /// from the exit-only TuiLaunchState navigation snapshot.
+    #[allow(dead_code)]
+    pub(super) home_latest_launch_window: HomeLatestLaunchWindow,
     /// Shell-owned semantic Home section preference and one-time restore marker.
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     pub(super) home_section_pending: Option<HomeLatestSource>,
@@ -550,6 +555,15 @@ impl Model {
         app: App,
         listener_cfg: EventListenerCfg<UserEvent>,
     ) -> Self {
+        Self::new_with_listener_at(app, listener_cfg, current_launch_secs())
+    }
+
+    pub(in crate::app) fn new_with_listener_at(
+        app: App,
+        listener_cfg: EventListenerCfg<UserEvent>,
+        current_launch: u64,
+    ) -> Self {
+        let home_latest_launch_window = capture_launch_window(current_launch);
         let application = Application::init(listener_cfg);
         let home_section = App::load_prefs()["home_section"]
             .as_str()
@@ -569,6 +583,7 @@ impl Model {
             music_workspace_reanchor: false,
             feeds_manage: None,
             home_content: HomeContent::new(),
+            home_latest_launch_window,
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
             home_context_item: None,
