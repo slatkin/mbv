@@ -185,13 +185,6 @@ pub(in crate::app) trait LibraryContentOwner {
         true
     }
 
-    /// Whether a narrow browser double-click should be intercepted by the
-    /// panel to open the Hero overlay. Destinations with their own pointer
-    /// semantics can opt out while retaining the ordinary row policy.
-    fn double_click_opens_hero_overlay(&mut self) -> bool {
-        self.browser_rows_are_hero_bearing()
-    }
-
     fn inline_search_active(&self) -> bool {
         false
     }

@@ -183,12 +183,12 @@ fn music_wide_track_modifier_clicks_toggle_range_and_plain_clear() {
         .is_empty());
 }
 
-/// Grouped Music resolves its artist-root and album-leaf clicks through the
-/// tree's completed hit map, then rejects that map as soon as a new frame is
-/// configured. The mounted path is the real LibraryPanel/Application tick;
-/// there is no shell-side album row geometry to fall back to.
+/// A mounted Grouped Music tree click focuses Library, while a click on an
+/// already-focused Queue leaves Queue focused. Context clicks also cross the
+/// Music-specific focus-before-menu shell boundary; generic Queue context
+/// requests remain generic.
 #[test]
-fn music_tree_click_moves_focus_to_library_and_other_panel_click_does_not() {
+fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     let mut app = make_music_group_app();
     app.panel_mode = PanelMode::Both;
     app.panel_focus = PanelFocus::Queue;
@@ -218,6 +218,14 @@ fn music_tree_click_moves_focus_to_library_and_other_panel_click_does_not() {
             modifiers: tuirealm::event::KeyModifiers::NONE,
         })
     };
+    let right_click = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Right),
+            column,
+            row,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        })
+    };
 
     let list_area = harness
         .model()
@@ -232,6 +240,31 @@ fn music_tree_click_moves_focus_to_library_and_other_panel_click_does_not() {
         .expect("painted Music list area");
     assert!(list_area.contains(ratatui::layout::Position::new(tree_point.0, tree_point.1)));
     assert!(harness.model().mouse_subscribed.contains(&ComponentId::Library));
+
+    // Queue's ordinary context request remains the generic shell variant and
+    // does not acquire Library focus merely because Music has a special arm.
+    let queue_point = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::QueueComponent>()
+        })
+        .and_then(|queue| queue.selected_row_rect())
+        .expect("painted queue row");
+    harness.inject(right_click(queue_point.x, queue_point.y));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Queue(_),
+            Some((x, y)),
+        )) if *x == queue_point.x && *y == queue_point.y
+    )));
+    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Queue);
+
     harness.inject(click(tree_point.0, tree_point.1));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
@@ -247,28 +280,29 @@ fn music_tree_click_moves_focus_to_library_and_other_panel_click_does_not() {
     assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Library);
 
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
-    let queue_point = harness
-        .model()
-        .application
-        .get_component(&ComponentId::Queue)
-        .and_then(|component| {
-            component
-                .as_any()
-                .downcast_ref::<crate::app::components::QueueComponent>()
-        })
-        .and_then(|queue| queue.selected_row_rect())
-        .expect("painted queue row");
-    harness.inject(click(queue_point.x, queue_point.y));
+    harness.inject(right_click(tree_point.0, tree_point.1));
     let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::MusicRowContextMenu(_, Some((x, y))))
+            if *x == tree_point.0 && *y == tree_point.1
+    )));
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in outcome.messages {
         harness
             .model_mut()
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
-    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Queue);
+    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Library);
+    harness.model_mut().sync_mounted_surfaces();
+    let menu_id = ComponentId::Overlay(crate::app::components::OverlayId::ContextMenu);
+    assert!(harness.model().application.mounted(&menu_id));
 }
 
+/// Grouped Music resolves its artist-root and album-leaf clicks through the
+/// tree's completed hit map, then rejects that map as soon as a new frame is
+/// configured. The mounted path is the real LibraryPanel/Application tick;
+/// there is no shell-side album row geometry to fall back to.
 #[test]
 fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     let mut app = make_music_group_app();

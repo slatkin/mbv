@@ -31,19 +31,16 @@ impl MusicContent {
                             );
                             Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                         }
-                        MediaListSurfaceInput::Click(at)
-                        | MediaListSurfaceInput::ToggleClick(at)
-                        | MediaListSurfaceInput::RangeClick(at) => {
-                            let target = search.results_mut().resolve_current_point(at)?.clone();
-                            // Design D4 non-goal: a search session has no
-                            // multi-selection UI, so a modifier click selects
-                            // exactly the clicked row and never toggles or
-                            // extends a range into `multi_selection`.
-                            search
-                                .results_mut()
-                                .delegate_operation(MediaListOperation::Select(target));
-                            None
-                        }
+                        // Production Grouped Music filtering paints the tree,
+                        // not the legacy flat result carrier. Until filtered
+                        // tree hit geometry owns pointer focus in §5.2, do
+                        // not mutate the carrier when no request can be
+                        // emitted: the framework delivers after mutation and
+                        // discarding the message would otherwise leave a
+                        // losing selection change behind.
+                        MediaListSurfaceInput::Click(_)
+                        | MediaListSurfaceInput::ToggleClick(_)
+                        | MediaListSurfaceInput::RangeClick(_) => None,
                         MediaListSurfaceInput::DoubleClick(at) => {
                             let target = search.results_mut().resolve_current_point(at)?.clone();
                             let outcome = search.results_mut().delegate_operation(
@@ -135,26 +132,10 @@ impl MusicContent {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (id, index) = self.browser.hit_node(at)?;
+                            let (_id, index) = self.browser.hit_node(at)?;
                             self.browser.select_index(index);
-                            if self.browser.model_is_artist(id) {
-                                self.browser.toggle_root(id);
-                                return Some(Msg::Shell(ShellRequest::LibraryPanelFocus));
-                            }
-                            if self.browser.selected_is_track() {
-                                return self
-                                    .selected_tree_track()
-                                    .map(|(album_id, track)| {
-                                        Msg::Shell(ShellRequest::MusicTrackActivate {
-                                            album_id,
-                                            track,
-                                        })
-                                    });
-                            }
-                            if self.browser.node_has_children(id) {
-                                self.browser.toggle_node(id);
-                            }
-                            Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
+                            self.selected_item()
+                                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
                         }
                         MediaListSurfaceInput::ContextClick(at) => {
                             if !self.browser.claims_point(at) {

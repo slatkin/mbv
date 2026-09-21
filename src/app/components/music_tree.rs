@@ -312,24 +312,6 @@ impl MusicTreeBrowser {
         self.state.node_is_expanded(id, parent)
     }
 
-    /// Whether the settled projection has children for this node. This is a
-    /// local cache fact used by pointer expansion; it never starts a fetch.
-    pub(in crate::app) fn node_has_children(&self, id: usize) -> bool {
-        self.model
-            .children
-            .get(id)
-            .is_some_and(|children| !children.is_empty())
-    }
-
-    /// Toggle an artist or cached-track album node without changing selection.
-    pub(in crate::app) fn toggle_node(&mut self, id: usize) {
-        let parent = self.projected_parent_of(id);
-        let expanded = self.state.node_is_expanded(id, parent);
-        self.state.set_expanded(id, parent, !expanded);
-        self.state.ensure_projection(&self.model, &self.query);
-        self.invalidate();
-    }
-
     /// Collapses an artist root (task 2.4 Left): its leaves leave the visible
     /// projection while the selection stays on the root, and the crate's
     /// projection rebuild re-arms the viewport visibility rule.
