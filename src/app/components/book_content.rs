@@ -554,11 +554,9 @@ impl LibraryContentOwner for BookContent {
             .state
             .buckets
             .get(self.selected_bucket)
-            .and_then(|bucket| self.state.books.get(bucket.start))
-            .map(|book| SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::BookBucket(
-                    AudiobookshelfBookBucket::from_sort_key(&book.author_sort_key),
-                ),
+            .and_then(|bucket| AudiobookshelfBookBucket::from_bucket_index(bucket.index))
+            .map(|bucket| SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::BookBucket(bucket),
             });
         let item = self
             .carrier
@@ -781,6 +779,32 @@ mod tests {
             owner.launch_snapshot().1,
             Some(LibraryItemIdentity::Audiobookshelf {
                 id: "book-d".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn launch_snapshot_uses_the_fixed_index_for_non_ascii_led_surnames() {
+        let mut owner = BookContent::new();
+        owner.set_content(
+            &state_with_books(vec![
+                book("book-symbol", "'N Sync"),
+                book("book-ae", "Ædegaard"),
+                book("book-umlaut", "Über"),
+            ]),
+            false,
+        );
+        let last_bucket = owner
+            .state
+            .buckets
+            .last()
+            .expect("expected a populated surname bucket");
+        assert_eq!(last_bucket.index, 1);
+        assert_eq!(owner.selected_bucket, owner.state.buckets.len() - 1);
+        assert_eq!(
+            owner.launch_snapshot().0,
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::BookBucket(AudiobookshelfBookBucket::DToF),
             })
         );
     }

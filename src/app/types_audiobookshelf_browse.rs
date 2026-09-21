@@ -284,6 +284,9 @@ const SURNAME_BUCKET_UPPER: [char; 8] = ['c', 'f', 'i', 'l', 'o', 'r', 'u', 'z']
 /// surname-sorted `books` list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct SurnameBucket {
+    /// Position in the fixed label/range table, independent of the populated
+    /// buckets vec's position after empty ranges are omitted.
+    pub index: usize,
     pub label: &'static str,
     pub start: usize,
     pub end: usize,
@@ -321,6 +324,7 @@ pub(super) fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<Surname
         };
         if end > start {
             buckets.push(SurnameBucket {
+                index: i,
                 label: SURNAME_BUCKET_LABELS[i],
                 start,
                 end,

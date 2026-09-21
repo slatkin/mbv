@@ -152,22 +152,21 @@ pub enum AudiobookshelfBookBucket {
 }
 
 impl AudiobookshelfBookBucket {
-    pub fn from_sort_key(sort_key: &str) -> Self {
-        match sort_key
-            .chars()
-            .find(|character| character.is_ascii_alphabetic())
-            .map(|character| character.to_ascii_lowercase())
-            .unwrap_or('a')
-        {
-            'a'..='c' => Self::AToC,
-            'd'..='f' => Self::DToF,
-            'g'..='i' => Self::GToI,
-            'j'..='l' => Self::JToL,
-            'm'..='o' => Self::MToO,
-            'p'..='r' => Self::PToR,
-            's'..='u' => Self::SToU,
-            _ => Self::VToZ,
-        }
+    /// Resolve the bucket's stable identity from its position in the fixed
+    /// surname-range table. Empty ranges are omitted from the presented pill
+    /// row, so callers must carry this table index rather than a pill index.
+    pub fn from_bucket_index(index: usize) -> Option<Self> {
+        Some(match index {
+            0 => Self::AToC,
+            1 => Self::DToF,
+            2 => Self::GToI,
+            3 => Self::JToL,
+            4 => Self::MToO,
+            5 => Self::PToR,
+            6 => Self::SToU,
+            7 => Self::VToZ,
+            _ => return None,
+        })
     }
 }
 
