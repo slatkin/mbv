@@ -29,6 +29,17 @@ use config::load_config;
 use mbv_core::api::EmbyClient;
 use mbv_core::{applog, player, remote_player};
 
+/// Captures the launch window, initializes image pickers, and runs the TUI
+/// with the launch window available to the model.
+fn run_tui(mut app: App) {
+    let launch_window = capture_launch_window(current_launch_secs());
+    app.init_image_pickers();
+    if let Err(e) = Model::new_with_launch_window(app, launch_window).run() {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
+}
+
 /// Shared by both daemon-connection call sites in `main()` below: run the
 /// TUI as a thin client of a connected daemon, exiting with an error if the
 /// event loop itself fails. Callers still `return` after calling this so
@@ -43,15 +54,6 @@ use mbv_core::{applog, player, remote_player};
 /// wired to a no-op in `crates/mbvd/src/main.rs`), so this client is the
 /// only thing that will ever own the name for a daemon-connected session,
 /// whether the daemon is local or genuinely remote.
-fn run_tui(mut app: App) {
-    let launch_window = capture_launch_window(current_launch_secs());
-    app.init_image_pickers();
-    if let Err(e) = Model::new_with_launch_window(app, launch_window).run() {
-        eprintln!("Error: {e}");
-        std::process::exit(1);
-    }
-}
-
 fn run_remote_app(
     client: Option<EmbyClient>,
     remote: remote_player::RemotePlayer,
