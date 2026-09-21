@@ -88,6 +88,9 @@ pub struct LibraryPanel {
     /// painted gap arms a drag; pane presses never arm it (the
     /// legacy split-boundary rule this gesture moved in from).
     split_gestures: MouseGestureState,
+    /// Whether the current split gesture changed the resolved width. Used to
+    /// emit one persistence request at drag end, never for intermediate moves.
+    split_changed: bool,
     /// The library surface's own gesture recognizer for slot events.
     gestures: MouseGestureState,
     /// The projected hero image paint the last view retained (task 5.10,
@@ -140,6 +143,7 @@ impl LibraryPanel {
             painted_area: None,
             split: None,
             split_gestures: MouseGestureState::new(),
+            split_changed: false,
             gestures: MouseGestureState::new(),
             image_paint: None,
             deferred_msg: None,
@@ -310,7 +314,7 @@ impl LibraryPanel {
     /// without a fresh press stays inert once eligibility returns.
     pub(in crate::app) fn sync_mouse_eligibility(&mut self, eligible: bool) {
         if !eligible {
-            self.split_gestures = MouseGestureState::new();
+            self.reset_split_gesture();
         }
     }
 
@@ -603,18 +607,44 @@ impl LibraryPanel {
         result
     }
 
-    /// The split drag's resolved message: a live-only `ResizeListPaneLive`
-    /// with the pointer-resolved width, identical to the boundary gesture
-    /// this moved in from.
+    /// The split drag's resolved message: live width changes during the
+    /// gesture, followed by one persistence request at drag end when a width
+    /// actually changed.
+    fn reset_split_gesture(&mut self) {
+        self.split_gestures = MouseGestureState::new();
+        self.split_changed = false;
+    }
+
+    /// Reset the split gesture only if the event is a press/release
+    /// boundary, so an abandoned drag can't outlive its owning gesture.
+    fn reset_boundary_gesture(&mut self, gesture_boundary: bool) {
+        if gesture_boundary {
+            self.reset_split_gesture();
+        }
+    }
+
     fn split_gesture_msg(
         &mut self,
         gesture: MouseGesture,
         at: ratatui::layout::Position,
     ) -> Option<Msg> {
-        let split = self.split.as_ref()?;
+        let Some(split) = self.split.as_ref() else {
+            self.reset_split_gesture();
+            return None;
+        };
         match gesture {
             // Press-and-release without motion changes nothing.
-            MouseGesture::Click { .. } if split.gap.contains(at) => None,
+            MouseGesture::Click { .. } if split.gap.contains(at) => {
+                self.split_changed = false;
+                None
+            }
+            // A second press in the gap is a double click, not a changed
+            // drag. Clear the changed bit so its later release cannot emit
+            // an end request for an earlier drag.
+            MouseGesture::DoubleClick(_) => {
+                self.split_changed = false;
+                None
+            }
             // A recognized `Drag` implies an armed press inside the gap, so
             // every drag resolves -- tracking necessarily continues outside
             // the gap once the pointer leaves it.
@@ -628,9 +658,11 @@ impl LibraryPanel {
                     return None;
                 }
                 self.split.as_mut()?.width = width;
+                self.split_changed = true;
                 Some(Msg::Shell(ShellRequest::ResizeListPaneLive(width)))
             }
-            // Live-only: there is nothing to persist, so `DragEnd` is a no-op.
+            MouseGesture::DragEnd => std::mem::take(&mut self.split_changed)
+                .then_some(Msg::Shell(ShellRequest::ResizeListPaneEnd(split.width))),
             _ => None,
         }
     }
@@ -815,6 +847,8 @@ impl LibraryPanel {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+        let gesture_boundary =
+            matches!(mouse.kind, MouseEventKind::Down(_) | MouseEventKind::Up(_));
         if matches!(mouse.kind, MouseEventKind::Moved) {
             let at = Position::new(mouse.column, mouse.row);
             self.hovered_selector = self.hits.selector.resolve(at).copied();
@@ -823,15 +857,20 @@ impl LibraryPanel {
         }
         // The panel resolves only geometry it painted; an unpainted frame
         // (no migrated owner) claims nothing.
-        let painted_area = self.painted_area?;
+        let Some(painted_area) = self.painted_area else {
+            self.reset_boundary_gesture(gesture_boundary);
+            return None;
+        };
         let at = Position::new(mouse.column, mouse.row);
         if !painted_area.contains(at) {
+            self.reset_boundary_gesture(gesture_boundary);
             return None;
         }
         // The overlay owns the Library pane's current-frame gesture. A
         // backdrop click dismisses and is consumed; covered browser geometry
         // is never replayed into the list.
         if self.hero_overlay_open {
+            self.reset_boundary_gesture(gesture_boundary);
             if !matches!(mouse.kind, MouseEventKind::Moved)
                 && !self
                     .overlay_geometry
@@ -854,28 +893,29 @@ impl LibraryPanel {
         match mouse.kind {
             // A left press inside the painted gap arms only the split drag;
             // a press outside never arms it, so pane gestures are untouched.
-            MouseEventKind::Down(MouseButton::Left) if self.split_hit(at) => self
-                .split_gestures
-                .recognize(mouse)
-                .and_then(|gesture| self.split_gesture_msg(gesture, at)),
+            MouseEventKind::Down(MouseButton::Left) if self.split_hit(at) => {
+                let gesture = self.split_gestures.recognize(mouse);
+                gesture.and_then(|gesture| self.split_gesture_msg(gesture, at))
+            }
+            MouseEventKind::Down(_) => {
+                self.reset_split_gesture();
+                self.surface_gesture(mouse)
+            }
             // A recognized `Drag` implies an armed press: whichever
             // recognizer armed it consumes the continuation, so the split
             // drag tracks outside the gap and pane gestures never see a
-            // gap-armed drag.
-            MouseEventKind::Drag(MouseButton::Left) => {
-                if let Some(msg) = self
-                    .split_gestures
-                    .recognize(mouse)
-                    .and_then(|gesture| self.split_gesture_msg(gesture, at))
-                {
+            // gap-armed drag. Release closes whichever gesture armed; a
+            // changed gap gesture emits its one persistence request, while a
+            // click or pane gesture remains inert at this boundary.
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
+                let gesture = self.split_gestures.recognize(mouse);
+                let unowned = gesture.is_none();
+                if let Some(msg) = gesture.and_then(|gesture| self.split_gesture_msg(gesture, at)) {
                     return Some(msg);
                 }
-                self.surface_gesture(mouse)
-            }
-            // Release closes whichever gesture armed; a gap-armed release is
-            // a live-only no-op and a surface-armed release claims nothing.
-            MouseEventKind::Up(MouseButton::Left) => {
-                let _ = self.split_gestures.recognize(mouse);
+                if unowned {
+                    self.reset_split_gesture();
+                }
                 self.surface_gesture(mouse)
             }
             _ => self.surface_gesture(mouse),

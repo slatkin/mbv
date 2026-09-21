@@ -87,6 +87,7 @@ impl App {
                 // the split untouched (design.md "Refresh reset lives in the
                 // library-side refresh arm").
                 self.list_pane_width = None;
+                self.save_prefs();
                 match self.tab {
                     TabSelection::Home => {
                         match self.fetch_home() {

@@ -14,6 +14,10 @@ use ratatui_image::picker::Picker;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
+fn list_pane_width_from_prefs(prefs: &serde_json::Value) -> Option<u16> {
+    prefs["list_pane_width"].as_u64().map(|v| v as u16)
+}
+
 impl App {
     /// Construct a local player and its worker channels through the ordinary
     /// startup path. The fall-through path uses this before it tears down an
@@ -158,8 +162,7 @@ impl App {
                 .or_else(|| prefs["power_left_width"].as_u64())
                 .map(|v| (v as u16).max(LEFT_WIDTH_DEFAULT))
                 .unwrap_or(LEFT_WIDTH_DEFAULT),
-            // Session-only; every launch starts at the default Wide hero split.
-            list_pane_width: None,
+            list_pane_width: list_pane_width_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
@@ -684,5 +687,27 @@ impl App {
         );
         self.image_picker = Some(picker);
         self.halfblock_picker = Some(Picker::halfblocks());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::list_pane_width_from_prefs;
+
+    #[test]
+    fn list_pane_width_pref_accepts_width_and_rejects_empty_or_invalid_values() {
+        assert_eq!(
+            list_pane_width_from_prefs(&serde_json::json!({ "list_pane_width": 42 })),
+            Some(42)
+        );
+        assert_eq!(
+            list_pane_width_from_prefs(&serde_json::json!({ "list_pane_width": null })),
+            None
+        );
+        assert_eq!(list_pane_width_from_prefs(&serde_json::json!({})), None);
+        assert_eq!(
+            list_pane_width_from_prefs(&serde_json::json!({ "list_pane_width": "42" })),
+            None
+        );
     }
 }

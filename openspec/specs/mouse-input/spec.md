@@ -451,7 +451,7 @@ The resize target SHALL use the existing gap without adding a divider, gutter, h
 
 A dedicated Interactive Component SHALL be the sole painter and gesture owner of the gap columns. The panes' hit geometry SHALL exclude the gap. The boundary owner SHALL receive mouse events through normal component subscriptions, follow the same overlay arbitration as other panel surfaces, recognize the gesture locally, and emit resolved widths. The shell SHALL NOT re-resolve raw pointer coordinates. Pane row dragging and other pane mouse gestures SHALL remain independently owned and SHALL NOT activate from the gap columns.
 
-The resulting split SHALL be a single in-memory session width shared by every Wide hero surface: switching between wide surfaces SHALL apply the same split, clamped to each surface's valid range. The split SHALL NOT be persisted: it SHALL NOT be written to preferences or config, and SHALL return to the default split after the application restarts. Refreshing the current view SHALL revert the split to the default ratio. When the terminal is resized, the split SHALL be clamped to the valid range at the new size each time it is applied, not reverted.
+The resulting split SHALL be a single width shared by every Wide hero surface: switching between wide surfaces SHALL apply the same split, clamped to each surface's valid range. When a split drag ends, the resolved width SHALL be written to preferences; intermediate drag positions SHALL NOT be written. After the application restarts, the split SHALL be restored from preferences, clamped to the valid range at the current size. Refreshing the current library view SHALL revert the split to the default ratio AND clear the persisted value, so a subsequent restart stays at the default. When the terminal is resized, the split SHALL be clamped to the valid range at the new size each time it is applied, not reverted.
 
 #### Scenario: Drag resizes by one column
 
@@ -487,6 +487,7 @@ The resulting split SHALL be a single in-memory session width shared by every Wi
 - **WHEN** the user refreshes the active library view
 - **THEN** the split returns to the default arrangement ratio on that surface
 - **AND** the session width override is cleared
+- **AND** the persisted value is cleared, so a subsequent restart stays at the default ratio
 
 #### Scenario: Refreshing the queue leaves the split alone
 
@@ -501,9 +502,15 @@ The resulting split SHALL be a single in-memory session width shared by every Wi
 
 #### Scenario: The split is never persisted
 
+- **WHEN** a split drag is in progress through intermediate pointer positions
+- **THEN** no preference or config value is written until the drag ends
+- **AND** only the resolved width at drag end is persisted
+
+#### Scenario: The split persists across restarts
+
 - **WHEN** a split drag ends
-- **THEN** no preference or config value is written
-- **AND** after the application restarts the split is at the default ratio
+- **THEN** the resolved width is written to preferences
+- **AND** after the application restarts the split is restored from preferences, clamped to the valid range at the current size
 
 #### Scenario: Terminal resize clamps and preserves
 

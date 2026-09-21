@@ -122,6 +122,22 @@ fn build_restores_panel_focus_from_prefs_for_both_values() {
 }
 
 #[test]
+fn build_restores_list_pane_width_from_prefs_for_width_and_empty_values() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    for (prefs, expected) in [
+        (serde_json::json!({ "list_pane_width": 42 }), Some(42)),
+        (serde_json::json!({ "list_pane_width": null }), None),
+        (serde_json::json!({}), None),
+    ] {
+        std::fs::write(crate::config::prefs_path(), prefs.to_string()).expect("write prefs");
+
+        let app = make_built_app();
+
+        assert_eq!(app.list_pane_width, expected);
+    }
+}
+
+#[test]
 fn build_always_starts_on_home_without_affecting_saved_queue_state() {
     let _guard = crate::config::TestStateDirGuard::new();
     std::fs::write(

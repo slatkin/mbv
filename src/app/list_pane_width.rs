@@ -1,4 +1,4 @@
-//! Session-only Wide hero list-pane width override.
+//! Persisted Wide hero list-pane width override.
 //!
 //! Mirrors `queue_column_width.rs`: one clamp against the shared arrangement's
 //! minimum pane width, applied on every read. Unlike the queue column the

@@ -117,7 +117,7 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
     assert!(!app.feed_tab.loading);
 }
 
-/// Refreshing the active library view clears the session-only Wide hero split
+/// Refreshing the active library view clears the persisted Wide hero split
 /// override, reverting the surface to the shared arrangement's default ratio.
 #[test]
 fn refresh_current_view_reverts_the_wide_split_to_default() {
@@ -125,12 +125,17 @@ fn refresh_current_view_reverts_the_wide_split_to_default() {
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app.list_pane_width = Some(64);
+    app.save_prefs();
 
     app.refresh_current_view();
 
     assert_eq!(
         app.list_pane_width, None,
         "a library refresh must clear the Wide hero split override"
+    );
+    assert!(
+        App::load_prefs()["list_pane_width"].is_null(),
+        "a library refresh must clear the persisted Wide hero split override"
     );
 }
 
