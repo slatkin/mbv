@@ -623,7 +623,24 @@ fn home_path_and_books_tab_produce_identical_content_for_one_book() {
         books_tab.facts.meta_rows,
         vec!["Author book-9", "01:00:00", "50%"]
     );
+    assert_eq!(books_tab.facts.duration_row, Some(1));
+    assert_eq!(
+        books_tab.facts.progress_row,
+        Some(2),
+        "the percentage row is flagged so the painter can colour it"
+    );
     assert_eq!(books_tab.facts.artwork.shape, ArtworkShape::Portrait);
+}
+
+/// A finished book shows the `Finished` word instead of a percentage, so it
+/// flags no progress row — the word must not paint in the progress colour.
+#[test]
+fn finished_book_flags_no_progress_row() {
+    let mut book = book_item("book-9");
+    book.is_finished = true;
+    let content = hero_content_abs_book(&book);
+    assert!(content.facts.meta_rows.iter().any(|row| row == "Finished"));
+    assert_eq!(content.facts.progress_row, None);
 }
 
 // Fixtures.

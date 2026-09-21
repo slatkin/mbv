@@ -112,7 +112,7 @@ pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playi
                                                               // text-colour edit moves the text alone
                                                               // (unify-surface-colour-neutral task 4.2)
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
-pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, pct, badges)
+pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the
 /// punch-through and the gutter-accent-only title treatment).
 pub const SELECTED_ROW_BG: Color = Palette::Iris.color();
@@ -183,6 +183,13 @@ pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = Palette::Grey2.color(); // unplayed seek/progress track
+/// The resume-progress percentage text (`47%`) of a media-list row and of a
+/// hero metadata row. Its own role rather than the shared metadata blue
+/// (`TEXT_METADATA`, `Palette::Foam`) it used to take, and deliberately its
+/// own role over the resolution glyph's `Palette::Orange` value it shares
+/// today (`INDICATOR_RESOLUTION_FG`): the two are equal today and
+/// independently editable, so an indicator edit moves the indicator alone.
+pub const PROGRESS_PERCENT: Color = Palette::Orange.color();
 
 // Chrome
 /// Library/chrome scrollbar track/thumb; a former value alias of the soft

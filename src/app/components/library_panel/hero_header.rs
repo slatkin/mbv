@@ -266,9 +266,11 @@ pub(in crate::app) fn paint_hero_pane_content(
 /// The one title/meta painter for all three arms: the title in
 /// [`palette::TEXT_HERO_TITLE`], then each meta row in
 /// `HERO_META_ROLES[cycle % 3]` — except the duration row
-/// (`HeroFacts::duration_row`), painted the `DURATION` role and skipped by
-/// the cycle — wrapped to the text block's width (truncation and wrapping
-/// owned here, design D5). The Landscape arm instead packs the entries
+/// (`HeroFacts::duration_row`) and the resume-percentage row
+/// (`HeroFacts::progress_row`), painted the `DURATION` and `PROGRESS_PERCENT`
+/// roles and skipped by the cycle — wrapped to the text block's width
+/// (truncation and wrapping owned here, design D5). The Landscape arm instead
+/// packs the entries
 /// into [`paint_title_and_meta_grid`]'s two columns when `grid` carries
 /// [`landscape_grid_columns`]' widths. Returns the first unpainted row.
 fn paint_title_and_meta(
@@ -288,6 +290,8 @@ fn paint_title_and_meta(
     for (index, row) in facts.meta_rows.iter().enumerate() {
         let fg = if facts.duration_row == Some(index) {
             palette::DURATION
+        } else if facts.progress_row == Some(index) {
+            palette::PROGRESS_PERCENT
         } else {
             let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()];
             cycle += 1;
@@ -393,6 +397,7 @@ mod hero_header_tests {
             title: "Dune".into(),
             meta_rows: vec!["2021".into()],
             duration_row: None,
+            progress_row: None,
             links: Vec::new(),
             artwork: HeroArtwork {
                 shape,
@@ -561,6 +566,7 @@ mod hero_header_tests {
                 title: "Dune".into(),
                 meta_rows: vec!["2021".into()],
                 duration_row: None,
+                progress_row: None,
                 links: Vec::new(),
                 artwork: HeroArtwork {
                     shape,
@@ -650,6 +656,7 @@ mod hero_header_tests {
             title: "T".into(),
             meta_rows: vec!["a".into(), "b".into(), "c".into(), "d".into()],
             duration_row: None,
+            progress_row: None,
             links: Vec::new(),
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
@@ -730,6 +737,43 @@ mod hero_header_tests {
             buf[(AREA.right() - 1, y0 + 1)].style().fg,
             Some(palette::HERO_META_ROLES[1]),
             "the cycle skips the duration row"
+        );
+    }
+
+    /// The resume-percentage row paints the `PROGRESS_PERCENT` role (the
+    /// orange) and the cycle skips it, so the metadata rows around it keep
+    /// adjacent cycle colours.
+    #[test]
+    fn progress_row_paints_the_progress_role_and_the_cycle_skips_it() {
+        let mut pane_facts = facts(ArtworkShape::Landscape);
+        pane_facts.meta_rows = vec!["a".into(), "47%".into(), "c".into()];
+        pane_facts.progress_row = Some(1);
+        let pane = HeroContent {
+            facts: pane_facts,
+            overview: None,
+            credits: None,
+            workspace: None,
+        };
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
+        let buf = draw_pane(AREA.width, AREA.height, &pane);
+        // Grid entries [Dune, a, 47%, c]: the percentage row keeps its grid
+        // cell and the cycle still skips it.
+        let y0 = artwork.bottom() + 1;
+        assert_eq!(
+            buf[(AREA.right() - 1, y0)].style().fg,
+            Some(palette::HERO_META_ROLES[0]),
+            "row before the progress row keeps its cycle colour"
+        );
+        assert_eq!(buf[(AREA.x, y0 + 1)].symbol(), "4");
+        assert_eq!(
+            buf[(AREA.x, y0 + 1)].style().fg,
+            Some(palette::PROGRESS_PERCENT),
+            "the percentage row paints the progress role"
+        );
+        assert_eq!(
+            buf[(AREA.right() - 1, y0 + 1)].style().fg,
+            Some(palette::HERO_META_ROLES[1]),
+            "the cycle skips the progress row"
         );
     }
 

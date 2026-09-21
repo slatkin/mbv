@@ -76,7 +76,7 @@ pub(in crate::app) fn media_list_row<Target>(
             ..
         } => {
             // Canonical row geometry:
-            // `[2-col indent][title…]  [FOAM progress]  [green gutter]  [gold duration]`
+            // `[2-col indent][title…]  [orange progress]  [green gutter]  [gold duration]`
             // with the title at column 2 and quiet gaps before the right-aligned
             // metadata columns.
 
@@ -105,15 +105,15 @@ pub(in crate::app) fn media_list_row<Target>(
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
             // The inline metadata pieces contain only the active row's
-            // percentage, which stays FOAM-coloured. Gutter metadata uses
-            // the fixed right-aligned green column below.
+            // percentage, which paints the progress role. Gutter metadata
+            // uses the fixed right-aligned green column below.
             let mut trailing_pieces: Vec<(String, Color)> = Vec::new();
             let gutter = match trailing {
                 Some(MediaListTrailing::Gutter(text)) if !text.is_empty() => Some(text.as_str()),
                 _ => None,
             };
             if let Some(pct) = progress.clone() {
-                trailing_pieces.push((pct, palette::TEXT_METADATA));
+                trailing_pieces.push((pct, palette::PROGRESS_PERCENT));
             }
             // `Collection` rows never show a duration, even if one is
             // projected — one enforcement point so parents can't re-diverge.

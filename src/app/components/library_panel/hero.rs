@@ -314,6 +314,7 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
             title: item.name.clone(),
             meta_rows,
             duration_row,
+            progress_row: None,
             links,
             artwork: emby_artwork_policy(item),
         };
@@ -328,6 +329,7 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
         title: item.name.clone(),
         meta_rows,
         duration_row,
+        progress_row: None,
         links: Vec::new(),
         artwork: emby_artwork_policy(item),
     };
@@ -368,11 +370,12 @@ pub(in crate::app) fn hero_content_queue(item: &QueueItem) -> HeroContentData {
 /// `audiobookshelf_book_queue_item`); narrator/year fields return with the
 /// tab's conversion in task 10.1.
 pub(in crate::app) fn hero_content_abs_book(book: &AudiobookshelfBookQueueItem) -> HeroContentData {
-    let (meta_rows, duration_row) = abs_book_meta_rows(book);
+    let (meta_rows, duration_row, progress_row) = abs_book_meta_rows(book);
     let facts = HeroFacts {
         title: book.title.clone(),
         meta_rows,
         duration_row,
+        progress_row,
         links: Vec::new(),
         artwork: abs_book_artwork_policy(book),
     };
@@ -383,9 +386,12 @@ pub(in crate::app) fn hero_content_abs_book(book: &AudiobookshelfBookQueueItem) 
     }
 }
 
-fn abs_book_meta_rows(book: &AudiobookshelfBookQueueItem) -> (Vec<String>, Option<usize>) {
+fn abs_book_meta_rows(
+    book: &AudiobookshelfBookQueueItem,
+) -> (Vec<String>, Option<usize>, Option<usize>) {
     let mut rows = Vec::new();
     let mut duration_row = None;
+    let mut progress_row = None;
     if let Some(author) = book.author.as_deref().filter(|a| !a.is_empty()) {
         rows.push(author.to_string());
     }
@@ -399,9 +405,10 @@ fn abs_book_meta_rows(book: &AudiobookshelfBookQueueItem) -> (Vec<String>, Optio
         let pct = ((book.position_ticks as f64 * 100.0 / book.duration_ticks.unwrap() as f64)
             .floor() as u8)
             .clamp(1, 99);
+        progress_row = Some(rows.len());
         rows.push(format!("{pct}%"));
     }
-    (rows, duration_row)
+    (rows, duration_row, progress_row)
 }
 
 /// The Audiobookshelf podcast episode producer (design D7, row 3.5): the
@@ -430,6 +437,7 @@ pub(in crate::app) fn hero_content_abs_episode(
         title: episode.title.clone(),
         meta_rows,
         duration_row,
+        progress_row: None,
         links: Vec::new(),
         artwork: abs_episode_artwork_policy(episode),
     };
@@ -458,6 +466,7 @@ pub(in crate::app) fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
             .map(|ticks| vec![fmt_duration_hms(ticks as i64 / TICKS_PER_SECOND)])
             .unwrap_or_default(),
         duration_row: has_duration.then_some(0),
+        progress_row: None,
         links: Vec::new(),
         artwork: feed_artwork_policy(entry),
     };

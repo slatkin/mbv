@@ -113,12 +113,15 @@ pub(in crate::app) enum HeroImageState {
 /// Plain hero facts (design D3): one title, ordered plain-text meta rows
 /// (coloured by position by the panel, never styled by the destination), the
 /// meta row holding the duration (painted the `DURATION` role instead of its
-/// cycle colour), and the policy-built artwork.
+/// cycle colour), the meta row holding a resume percentage (painted the
+/// `PROGRESS_PERCENT` role instead of its cycle colour), and the policy-built
+/// artwork.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroFacts {
     pub title: String,
     pub meta_rows: Vec<String>,
     pub duration_row: Option<usize>,
+    pub progress_row: Option<usize>,
     pub links: Vec<HeroLink>,
     pub artwork: HeroArtwork,
 }

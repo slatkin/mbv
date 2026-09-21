@@ -398,7 +398,7 @@ mod wide_row_regression_tests {
 
         let badge_x = 2 + "Resume ".len() as u16;
         assert_eq!(buf[(badge_x, 2)].symbol(), "4");
-        assert_eq!(buf[(badge_x, 2)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(badge_x, 2)].fg, palette::PROGRESS_PERCENT);
     }
 
     /// A framed parent may claim a full-width panel while reserving a
@@ -1226,7 +1226,7 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn selected_now_playing_marker_uses_ink_but_progress_keeps_metadata_role() {
+    fn selected_now_playing_marker_uses_ink_but_progress_keeps_the_progress_role() {
         use crate::app::components::media_list::ActiveProgress;
 
         let rect = Rect::new(0, 0, 40, 1);
@@ -1257,8 +1257,8 @@ mod wide_row_regression_tests {
         let progress_x = (0..rect.width)
             .find(|&x| buf[(x, 0)].symbol() == "4")
             .expect("selected progress percentage");
-        assert_eq!(buf[(progress_x, 0)].fg, palette::TEXT_METADATA);
-        assert_eq!(buf[(progress_x + 1, 0)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(progress_x, 0)].fg, palette::PROGRESS_PERCENT);
+        assert_eq!(buf[(progress_x + 1, 0)].fg, palette::PROGRESS_PERCENT);
     }
 
     #[test]
@@ -1390,7 +1390,7 @@ mod wide_row_regression_tests {
         );
         let progress_x = 18;
         assert_eq!(buf[(progress_x, 0)].symbol(), "4");
-        assert_eq!(buf[(progress_x, 0)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(progress_x, 0)].fg, palette::PROGRESS_PERCENT);
         let gutter_x = 38;
         assert_eq!(buf[(gutter_x, 0)].symbol(), " ");
         assert_eq!(buf[(gutter_x + 1, 0)].symbol(), " ");
@@ -1406,7 +1406,7 @@ mod wide_row_regression_tests {
         assert!(resume.contains("2:00"));
         let progress_x = 15;
         assert_eq!(buf[(progress_x, 1)].symbol(), "1");
-        assert_eq!(buf[(progress_x, 1)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(progress_x, 1)].fg, palette::PROGRESS_PERCENT);
         assert_eq!(buf[(gutter_x + 2, 1)].symbol(), "2");
         assert_eq!(buf[(gutter_x + 2, 1)].fg, palette::STATUS_AVAILABLE);
         let duration_x = rect.width - 2 - 4;

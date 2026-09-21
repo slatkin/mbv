@@ -31,6 +31,7 @@ fn facts(shape: ArtworkShape) -> HeroFacts {
         title: "Dune".into(),
         meta_rows: vec!["2021".into()],
         duration_row: None,
+        progress_row: None,
         links: Vec::new(),
         artwork: HeroArtwork {
             shape,
@@ -277,6 +278,7 @@ fn hovered_link_uses_foam_underline() {
         title: "Title".into(),
         meta_rows: vec!["IMDb".into()],
         duration_row: None,
+        progress_row: None,
         links: vec![HeroLink {
             name: "IMDb".into(),
             url: "https://imdb.test".into(),
@@ -367,6 +369,7 @@ fn grid_links_register_at_the_right_aligned_label() {
         title: "Title".into(),
         meta_rows: vec!["2021".into(), "2h".into(), "IMDb".into()],
         duration_row: None,
+        progress_row: None,
         links: vec![HeroLink {
             name: "IMDb".into(),
             url: "https://imdb.test".into(),
@@ -414,6 +417,7 @@ fn link_outside_box_is_not_overlaid() {
         title: "Title".into(),
         meta_rows: vec!["Link".into()],
         duration_row: None,
+        progress_row: None,
         links: vec![HeroLink {
             name: "Link".into(),
             url: "https://example.test".into(),

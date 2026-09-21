@@ -25,6 +25,7 @@ fn facts(shape: ArtworkShape) -> HeroFacts {
         title: "Dune".into(),
         meta_rows: vec!["2021".into()],
         duration_row: None,
+        progress_row: None,
         links: Vec::new(),
         artwork: HeroArtwork {
             shape,

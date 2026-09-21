@@ -89,6 +89,7 @@ fn artist_hero_data(
             title: summary.name.clone(),
             meta_rows,
             duration_row: None,
+            progress_row: None,
             links: Vec::new(),
             artwork,
         },

@@ -446,11 +446,11 @@ pub enum MediaListRow<Target> {
         secondary: Option<String>,
         /// Gutter metadata rendered in the fixed right-aligned green column.
         /// Inline progress percentages are derived from `semantic_state` in
-        /// the FOAM (`TEXT_METADATA`) role. Distinct from `duration`, the
+        /// the orange (`PROGRESS_PERCENT`) role. Distinct from `duration`, the
         /// right-aligned deep gold time slot.
         trailing: Option<MediaListTrailing>,
         /// A duration/time string. Rendered as a distinct right-aligned
-        /// deep gold (`DURATION`) element, never as FOAM `trailing`.
+        /// deep gold (`DURATION`) element, never as `trailing`.
         duration: Option<String>,
         /// Drill-in container vs. playable leaf; gates the duration slot.
         kind: MediaKind,

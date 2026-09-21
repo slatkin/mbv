@@ -94,6 +94,7 @@ impl LibraryContentOwner for FixtureOwner {
                         Vec::new()
                     },
                     duration_row: None,
+                    progress_row: None,
                     artwork: crate::app::components::library_panel::HeroArtwork {
                         shape: crate::app::components::library_panel::ArtworkShape::Landscape,
                         source: None,
