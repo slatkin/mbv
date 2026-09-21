@@ -2,7 +2,9 @@ use super::test_helpers::*;
 use super::*;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::PlaybackStripAreas;
-use crate::app::tests::{make_app_stub, make_items, make_local_daemon_app_stub, make_remote_app_stub};
+use crate::app::tests::{
+    make_app_stub, make_items, make_local_daemon_app_stub, make_remote_app_stub,
+};
 use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -60,11 +62,12 @@ fn emby_status_glyph_color_tracks_service_state() {
 }
 
 #[test]
-fn stay_alive_glyph_is_red_whenever_a_daemon_owns_playback() {
-    // The heart reports playback ownership, not the endpoint kind: bare
-    // mode (in-process player) is grey, any daemon-owned player — managed
-    // local daemon or a TCP/Unix mbvd — is red. Daemon lost (yellow) wins
-    // over a still-remote player.
+fn stay_alive_heart_is_red_by_mode_not_by_current_connection() {
+    // The heart reports stay-alive mode (the daemon outlives this client),
+    // not which daemon currently owns playback: bare mode and a plain
+    // non-stay-alive daemon connection are grey, a stay-alive client is red
+    // even after its playback has been routed to another daemon, and a lost
+    // daemon is yellow.
     fn heart_color(app: &App) -> ratatui::style::Color {
         app.status_bar_right_spans()
             .iter()
@@ -76,15 +79,34 @@ fn stay_alive_glyph_is_red_whenever_a_daemon_owns_playback() {
     }
     assert_eq!(heart_color(&make_app_stub()), palette::TEXT_MUTED);
     assert_eq!(
+        heart_color(&make_remote_app_stub(make_items(1), make_items(1))),
+        palette::TEXT_MUTED,
+        "a non-stay-alive daemon connection must not light the heart"
+    );
+    assert_eq!(
         heart_color(&make_local_daemon_app_stub(make_items(1))),
         palette::STATUS_ERROR
     );
-    assert_eq!(
-        heart_color(&make_remote_app_stub(make_items(1), make_items(1))),
-        palette::STATUS_ERROR
+
+    // Stay-alive client routed to another daemon: still stay-alive mode.
+    let mut routed = make_local_daemon_app_stub(make_items(1));
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    routed.switch_to_library_route(
+        "music",
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
-    let mut lost = make_local_daemon_app_stub(make_items(1));
-    lost.dim_backdrop_active = true;
+    assert!(!routed.is_local_daemon());
+    assert_eq!(heart_color(&routed), palette::STATUS_ERROR);
+
+    // Daemon lost while in stay-alive mode.
+    let lost = make_local_daemon_app_stub(make_items(1));
+    lost.player
+        .as_remote()
+        .unwrap()
+        .disconnected_flag()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
     assert_eq!(heart_color(&lost), palette::TEXT_FOCUS_ACCENT);
 }
 

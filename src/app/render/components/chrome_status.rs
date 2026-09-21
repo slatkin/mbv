@@ -389,16 +389,21 @@ impl App {
     /// always visible, coloured by state. Built shell-side
     /// (task 2.2); the mounted `StatusBarPanel` positions and paints it.
     pub(in crate::app) fn status_bar_right_spans(&self) -> Vec<Span<'static>> {
-        let username = {
+        let (username, stay_alive) = {
             let config = self.config.lock().unwrap();
-            config.username.clone()
+            (config.username.clone(), config.stay_alive)
         };
-        let alive_color = if self.dim_backdrop_active {
-            palette::TEXT_FOCUS_ACCENT
-        } else if self.player.is_remote() {
-            palette::STATUS_ERROR
-        } else {
+        // Stay-alive indicator: red whenever this process runs in stay-alive
+        // mode (the daemon persists after quit), yellow when that daemon is
+        // lost, grey when stay-alive is off. Deliberately independent of the
+        // current player target: a stay-alive client that routes playback to
+        // another daemon is still in stay-alive mode.
+        let alive_color = if !stay_alive {
             palette::TEXT_MUTED
+        } else if self.player.is_remote_disconnected() {
+            palette::TEXT_FOCUS_ACCENT
+        } else {
+            palette::STATUS_ERROR
         };
         let mut right_spans: Vec<Span> = Vec::new();
         let source_label: Option<(String, Color)> = match &self.queue_source {
