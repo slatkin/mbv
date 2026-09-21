@@ -1026,8 +1026,14 @@ impl MusicTreeBrowser {
     }
 
     pub(in crate::app) fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
-        self.configured_geometry = Some((claim_rect, content_rect));
-        self.last_area = None;
+        // Only a real geometry change re-arms the selected-row visibility
+        // rule (design D3: re-anchor on discrete transitions only). Nulling
+        // `last_area` on every push would re-arm KeepInView every frame and
+        // snap any offset-only viewport scroll back to the selection.
+        if self.configured_geometry != Some((claim_rect, content_rect)) {
+            self.configured_geometry = Some((claim_rect, content_rect));
+            self.last_area = None;
+        }
         self.invalidate();
     }
 
@@ -1489,6 +1495,28 @@ impl MusicTreeBrowser {
         (!targets.is_empty()).then_some(targets)
     }
 
+    /// The painted viewport's deepest album target with the viewport height
+    /// in rows — the source-pagination hint the shell arms the next artist
+    /// page from (design D3). Derived from the **latest completed paint**, so
+    /// scrolling the viewport alone advances pagination exactly like a
+    /// selection move; the near-edge margin and page size are the shell's
+    /// decision, floored at this height so one fetch always fills the visible
+    /// list. `None` when no paint completed or no album leaf is visible.
+    pub(in crate::app) fn painted_edge_album_page(&self) -> Option<(String, usize)> {
+        if !self.paint_complete {
+            return None;
+        }
+        let nodes = self.state.projection().nodes();
+        let start = self.state.offset();
+        let height = self.last_area?.height as usize;
+        let end = start.saturating_add(height).min(nodes.len());
+        nodes[start..end]
+            .iter()
+            .rev()
+            .find_map(|node| self.model.target_of(node.id()).map(str::to_owned))
+            .map(|target| (target, height.max(1)))
+    }
+
     /// Invalidates the retained paint geometry: until the next view completes
     /// the owner claims no point (the canonical latest-render contract).
     pub(in crate::app) fn invalidate(&mut self) {
@@ -1499,6 +1527,12 @@ impl MusicTreeBrowser {
     /// then re-arms the selected node's visibility: the panel's per-frame
     /// `PanelList` viewport clamp for this owner. The crate re-applies the
     /// minimum scroll during the next render.
+    /// Clamps the viewport to a painted height without transferring owner
+    /// state: the panel's per-frame `PanelList` viewport clamp for this
+    /// owner. This re-arms no visibility rule — the panel clamps every sync,
+    /// and re-arming here would snap any offset-only viewport scroll back to
+    /// the selection before the next render; the selected-row visibility rule
+    /// re-arms on genuine geometry changes in `view` instead.
     pub(in crate::app) fn clamp_viewport_to(&mut self, viewport_height: usize) {
         self.invalidate();
         let max = self
@@ -1506,7 +1540,6 @@ impl MusicTreeBrowser {
             .visible_len()
             .saturating_sub(viewport_height.max(1));
         self.state.set_offset(self.state.offset().min(max));
-        self.rearm_selection_visibility();
     }
 
     /// Clears every stored album mark and refreshes the derived aggregate
@@ -1983,3 +2016,7 @@ fn tree_style(focused: bool) -> tui_treelistview::TreeListViewStyle<'static> {
 #[cfg(test)]
 #[path = "music_tree_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "music_tree_browser_tests.rs"]
+mod browser_tests;

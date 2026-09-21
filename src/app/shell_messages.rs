@@ -80,12 +80,22 @@ impl Model {
                         }
                         self.push_music_workspace_content();
                     }
-                    ShellRequest::MusicNeighbourPrefetch { targets } => {
-                        // Task 6.5 (design D4): the payload is the tree's own
-                        // ordered neighbour window from its completed paint.
-                        // The fetch applies the existing idle gate; the shell
-                        // receives no tree cursor and re-resolves nothing.
+                    ShellRequest::MusicNeighbourPrefetch { targets, page } => {
+                        // Task 6.5 (design D4): the artwork payload is the
+                        // tree's own ordered neighbour window from its
+                        // completed paint. The fetch applies the existing
+                        // idle gate. The painted edge (design D3) is the
+                        // tree's source-pagination hint: the same near-edge
+                        // gate arms the next artist page from what the frame
+                        // painted, so scrolling alone advances pagination,
+                        // floored at the painted viewport height.
                         self.app.prefetch_neighbour_album_art(&targets);
+                        if let Some(page) = page {
+                            if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                                self.app
+                                    .maybe_fetch_next_page_for_music_tree(lib_idx, &page);
+                            }
+                        }
                     }
                     ShellRequest::MusicArtistTracks { target } => {
                         // Artist-root movement is the Grouped Music browser's

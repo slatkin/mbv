@@ -1559,9 +1559,18 @@ impl LibraryContentOwner for MusicContent {
     fn post_paint_message(&mut self) -> Option<Msg> {
         // Task 6.5 (design D4): the tree owner resolved the neighbour album
         // artwork window from the frame it just painted; the shell applies
-        // the existing idle gate and fetches the typed targets.
-        let targets = self.browser.neighbour_prefetch_targets()?;
-        Some(Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets }))
+        // the existing idle gate and fetches the typed targets. The painted
+        // viewport edge doubles as the source-pagination hint (design D3):
+        // scrolling alone arms the next artist page, and the shell floors the
+        // margin and page size at the painted viewport height.
+        let targets = self.browser.neighbour_prefetch_targets();
+        let page = self.browser.painted_edge_album_page();
+        (targets.is_some() || page.is_some()).then(|| {
+            Msg::Shell(ShellRequest::MusicNeighbourPrefetch {
+                targets: targets.unwrap_or_default(),
+                page,
+            })
+        })
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

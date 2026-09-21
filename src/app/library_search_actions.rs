@@ -254,6 +254,47 @@ impl App {
     /// never re-read from the level, so the prefetch decision no longer
     /// depends on `BrowseLevel.cursor` (task 4.3, R7).
     pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize, cursor: usize) {
+        self.maybe_fetch_next_page_sized(lib_idx, cursor, PREFETCH_AHEAD, PAGE_SIZE);
+    }
+
+    /// The Grouped Music tree's painted-edge source pagination (design D3).
+    /// The hint carries the deepest painted album target and the tree's
+    /// viewport height in rows; the near-edge margin and page size floor at
+    /// that height, so the loaded edge arms before it can scroll into view
+    /// and one fetch always fills the visible list however tall the tree is.
+    pub(in crate::app) fn maybe_fetch_next_page_for_music_tree(
+        &mut self,
+        lib_idx: usize,
+        (target, viewport_rows): &(String, usize),
+    ) {
+        let Some(cursor) = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .and_then(|level| level.items.iter().position(|item| item.id == *target))
+        else {
+            return;
+        };
+        self.maybe_fetch_next_page_sized(
+            lib_idx,
+            cursor,
+            PREFETCH_AHEAD + viewport_rows,
+            PAGE_SIZE.max(*viewport_rows),
+        );
+    }
+
+    /// `maybe_fetch_next_page` with caller-chosen near-edge margin and page
+    /// size. `cursor` is the resolved position to threshold against (the
+    /// caller's live/resting cursor) — never re-read from the level, so the
+    /// prefetch decision no longer depends on `BrowseLevel.cursor` (task 4.3,
+    /// R7).
+    pub(in crate::app) fn maybe_fetch_next_page_sized(
+        &mut self,
+        lib_idx: usize,
+        cursor: usize,
+        ahead: usize,
+        limit: usize,
+    ) {
         let lib = &self.libs[lib_idx];
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,
@@ -274,7 +315,7 @@ impl App {
         // cursor on that hidden level. Paginate it to completion unconditionally.
         let is_feed_home_video_root =
             lib.nav_stack.len() == 1 && self.is_feed_home_video_library(lib_idx);
-        if !is_feed_home_video_root && cursor + PREFETCH_AHEAD < lvl.items.len() {
+        if !is_feed_home_video_root && cursor + ahead < lvl.items.len() {
             return;
         }
         let start_index = lvl.fetched_rows;
@@ -287,7 +328,7 @@ impl App {
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
         }
-        self.spawn_browse_page(
+        self.spawn_browse_page_sized(
             lib_idx,
             parent_id,
             start_index,
@@ -296,6 +337,7 @@ impl App {
             sort_by,
             sort_order,
             letter_filter,
+            limit,
         );
     }
 }
