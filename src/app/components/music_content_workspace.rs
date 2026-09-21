@@ -153,7 +153,7 @@ impl MusicContent {
         target: &MusicArtistTarget,
     ) -> Option<&crate::app::music_artist_detail::ArtistDetailProjection> {
         self.current_artist_detail()
-            .filter(|detail| detail.target == *target)
+            .filter(|detail| detail.target.same_source(target))
     }
 
     /// Rebuild `track_list` from the resolved Workspace and report whether it
@@ -457,14 +457,22 @@ impl MusicContent {
         self.workspace_track_item(target)
     }
 
-    fn artist_track_activation(&self) -> Option<Msg> {
-        if !self.artist_workspace_focused() {
-            return None;
+    /// Resolves a focused Workspace track as an artist-track activation when
+    /// the pane belongs to an artist root, otherwise as the ordinary album
+    /// track activation. All Workspace gestures use this one fallback so the
+    /// stable artist identity gate and album-item resolution cannot drift.
+    fn workspace_track_activation(&self) -> Option<Msg> {
+        if self.artist_workspace_focused() {
+            let target = self.artist_detail_target()?;
+            let track_id = self.track_list.selected_target()?.clone();
+            return Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+                target,
+                track_id,
+            }));
         }
-        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate {
-            target: self.artist_detail_target()?,
-            track_id: self.track_list.selected_target()?.clone(),
-        }))
+        let track = self.selected_track_item()?;
+        let album_id = self.focused_track_album_id()?;
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track }))
     }
 
     /// Select the album whose existing artwork path supplies an artist Hero.

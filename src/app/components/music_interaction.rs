@@ -230,16 +230,7 @@ impl MusicContent {
             LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
             LibrarySlotEvent::HeroActivate => {
                 if self.track_focused {
-                    if let Some(message) = self.artist_track_activation() {
-                        Some(message)
-                    } else {
-                        let track = self.selected_track_item()?;
-                        let album_id = self.focused_track_album_id()?;
-                        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                            album_id,
-                            track,
-                        }))
-                    }
+                    self.workspace_track_activation()
                 } else {
                     self.selected_item()
                         .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
@@ -263,19 +254,8 @@ impl MusicContent {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     self.track_focused = true;
                     self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
-                    (matches!(input, MediaListSurfaceInput::DoubleClick(_))).then(|| {
-                        if let Some(message) = self.artist_track_activation() {
-                            Some(message)
-                        } else {
-                            let track_target = self.track_list.selected_target()?;
-                            let track = self.workspace_track_item(track_target)?;
-                            let album_id = self.focused_track_album_id()?;
-                            Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                                album_id,
-                                track,
-                            }))
-                        }
-                    })?
+                    (matches!(input, MediaListSurfaceInput::DoubleClick(_)))
+                        .then(|| self.workspace_track_activation())?
                 }
                 MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();

@@ -1,13 +1,16 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
+use crate::app::components::msg::{Msg, MusicArtistTarget, ShellRequest};
 use crate::app::library_browse_actions::{
     build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
 };
+use crate::app::render::make_music_group_app_with_second_album;
+use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
+    FeedHomeVideoState, LibEvent, LibraryTab, PanelFocus, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
@@ -115,6 +118,113 @@ fn queued_track_ids(app: &App) -> Vec<String> {
         .collect();
     ids.sort();
     ids
+}
+
+fn artist_dispatch_model() -> (Model, MusicArtistTarget) {
+    let fixture = make_music_group_app_with_second_album();
+    let mut app = remote_playback_app();
+    app.tab = fixture.tab;
+    app.libs = fixture.libs;
+    app.music_levels = fixture.music_levels;
+    {
+        let level = app.libs[0].nav_stack.last_mut().expect("music albums");
+        for item in &mut level.items {
+            item.artist_items = vec![mbv_core::api::EmbyArtistRef {
+                name: "Alpha".into(),
+                id: "artist-alpha".into(),
+            }];
+        }
+        let mut catalog = crate::app::music_grouping::build_grouped_album_catalog(
+            &level.items,
+            &Default::default(),
+        );
+        catalog.revision = 7;
+        catalog.parent_id = level.parent_id.clone();
+        level.music_grouping = Some(crate::app::music_grouping::MusicGroupingState {
+            revision: 7,
+            candidate: None,
+            settled: Some(catalog),
+        });
+    }
+
+    let mut model = Model::new(app);
+    model.app.panel_focus = PanelFocus::Library;
+    model.sync_mounted_surfaces();
+    model.test_music_owner_mut().browser.select_first_visible();
+    let target = model
+        .test_music_owner()
+        .artist_detail_target()
+        .expect("artist target");
+    (model, target)
+}
+
+/// The direct shell arm accepts a revision-only artist rebind, resolves the
+/// stable track identity from the projected detail, and sends the complete
+/// flattened track order to the playback executor. A miss must not mutate it.
+#[test]
+fn artist_track_dispatch_resolves_revision_rebind_and_preserves_queue_on_miss() {
+    let (mut model, target) = artist_dispatch_model();
+    let mut first = make_item("First", "Audio");
+    first.id = "artist-track-1".into();
+    first.album_id = "album-1".into();
+    first.media_type = "Audio".into();
+    first.index_number = 1;
+    let mut selected = make_item("Selected", "Audio");
+    selected.id = "artist-track-2".into();
+    selected.album_id = "album-1".into();
+    selected.media_type = "Audio".into();
+    selected.index_number = 2;
+    let mut last = make_item("Last", "Audio");
+    last.id = "artist-track-3".into();
+    last.album_id = "album-1".into();
+    last.media_type = "Audio".into();
+    last.index_number = 3;
+    model.app.artist_detail_cache.insert(
+        artist_cache_key(&model.app, "artist-alpha"),
+        crate::app::music_artist_detail::ArtistDetailCacheEntry {
+            tracks: vec![last, first, selected],
+            failed: false,
+        },
+    );
+    model.push_music_workspace_content();
+
+    let mut rebound = target;
+    rebound.revision += 1;
+    let (mut music_resize, mut tv_resize) = (false, false);
+    model.handle_terminal_message(
+        Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+            target: rebound.clone(),
+            track_id: "artist-track-2".into(),
+        }),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert_eq!(
+        model
+            .app
+            .playback_queue()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["artist-track-1", "artist-track-2", "artist-track-3"],
+        "the dispatch arm sends the full flattened artist track order"
+    );
+    assert_eq!(model.app.playback_queue().queue_cursor, 1);
+
+    let queue_before_miss = queued_track_ids(&model.app);
+    let cursor_before_miss = model.app.playback_queue().queue_cursor;
+    model.handle_terminal_message(
+        Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+            target: rebound,
+            track_id: "missing-track".into(),
+        }),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert_eq!(queued_track_ids(&model.app), queue_before_miss);
+    assert_eq!(model.app.playback_queue().queue_cursor, cursor_before_miss);
+    assert!(model.app.status.contains("Library error"));
 }
 
 /// Task 6.3 correction: an artist root's Workspace rows are projected from the

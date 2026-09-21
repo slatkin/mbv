@@ -194,18 +194,7 @@ impl LibraryContentOwner for MusicContent {
                 }
                 None
             }
-            Key::Enter if self.track_focused => {
-                if let Some(message) = self.artist_track_activation() {
-                    Some(message)
-                } else {
-                    let track = self.selected_track_item()?;
-                    let album_id = self.focused_track_album_id()?;
-                    Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                        album_id,
-                        track,
-                    }))
-                }
-            }
+            Key::Enter if self.track_focused => self.workspace_track_activation(),
             Key::Enter if self.browser.selected_is_track() => {
                 let (album_target, track_id) = self.selected_tree_track()?;
                 Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
