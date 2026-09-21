@@ -22,5 +22,5 @@
 
 ## 5. Whole-crate verification
 
-- [ ] 5.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv` (and any other package touched). Verify: all three succeed with no warnings/failures.
+- [x] 5.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv` (and any other package touched). Verify: all three succeed with no warnings/failures.
 - [ ] 5.2 Manually run the app (`run` skill) and check a Movies/TV/Music/Generic list (year in gutter, green) and the Podcast episode list (date in gutter, green) side by side. Verify: both show a right-aligned green date/year column at the same row position, and group headings show no gutter.
