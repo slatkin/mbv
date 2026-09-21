@@ -37,10 +37,10 @@
 
 ## 6. Music "Go to Library" lands or reports
 
-- [ ] 6.1 Write a failing tick-level repro of the reported silent no-op using the user's shape (Grouped Music with a retained destination and a queued track) that pins the diagnosed root cause recorded in design D7: `NavigateLanding::Album` rebuilds its path from raw Emby ancestor depth rather than the configured `music.levels` album shape, so no Music owner is eligible and the projection returns early with no fallback painter or error; verify the repro fails on the current silent path before the fix
-- [ ] 6.2 Build the grouped Music landing completely before commit, then atomically apply its tab, nav stack, saved Library position, and retained-owner re-anchor; fix the diagnosed silent path and verify 6.1 now lands with the selected track while existing item-navigation tests still pass
-- [ ] 6.3 Add regression coverage that navigation into a previously mounted tree re-anchors to the resolved album and selects the navigated track in the Workspace; verify the new tick test passes
-- [ ] 6.4 Inject an apply-stage failure after album resolution and verify the existing library-error feedback appears while active tab, nav stack, saved Library position, and retained component selection remain byte-for-byte/structurally unchanged
+- [x] 6.1 Write a failing tick-level repro of the reported silent no-op using the user's shape (Grouped Music with a retained destination and a queued track) that pins the diagnosed root cause recorded in design D7: `NavigateLanding::Album` rebuilds its path from raw Emby ancestor depth rather than the configured `music.levels` album shape, so no Music owner is eligible and the projection returns early with no fallback painter or error; verify the repro fails on the current silent path before the fix
+- [x] 6.2 Build the grouped Music landing completely before commit, then atomically apply its tab, nav stack, saved Library position, and retained-owner re-anchor; fix the diagnosed silent path and verify 6.1 now lands with the selected track while existing item-navigation tests still pass
+- [x] 6.3 Add regression coverage that navigation into a previously mounted tree re-anchors to the resolved album and selects the navigated track in the Workspace; verify the new tick test passes
+- [x] 6.4 Inject an apply-stage failure after album resolution and verify the existing library-error feedback appears while active tab, nav stack, saved Library position, and retained component selection remain byte-for-byte/structurally unchanged
 
 ## 7. Verification
 
