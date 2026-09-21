@@ -27,6 +27,7 @@ use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit}
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{fmt_duration_gutter, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use ratatui::layout::Position;
 #[cfg(test)]
 use tuirealm::event::Key;
@@ -630,6 +631,29 @@ impl LibraryContentOwner for TvContent {
     }
     fn inline_search_active(&self) -> bool {
         self.inline_search.is_active()
+    }
+
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        // TV's season pills live in the Hero Workspace and are deliberately
+        // excluded from the bounded launch snapshot. Only the main letter
+        // Selector and the selected series belong here.
+        let selector = self.context.show_letter_pills.then(|| {
+            let key = self
+                .context
+                .list
+                .letter_filter
+                .as_ref()
+                .and_then(|filter| EmbyLetterBucket::from_index(filter.index))
+                .map(EmbySelectorKey::Letter)
+                .unwrap_or(EmbySelectorKey::Unfiltered);
+            SelectorIdentity::Emby { key }
+        });
+        let item = self
+            .carrier
+            .selected_target()
+            .cloned()
+            .map(|id| LibraryItemIdentity::Emby { id });
+        (selector, item)
     }
 
     fn focus_hero_workspace(&mut self) -> bool {

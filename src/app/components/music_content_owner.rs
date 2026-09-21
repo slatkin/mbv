@@ -96,6 +96,26 @@ impl LibraryContentOwner for MusicContent {
             .then_some(crate::app::components::media_list::SelectionSummary { count, origin })
     }
 
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        // Group pills are Music's main Selector. The artist/album/track tree
+        // is Workspace content, so it contributes no selector identity; its
+        // selected album target is the stable library-item identity.
+        let selector = self
+            .context
+            .groups
+            .get(self.context.group_cursor)
+            .cloned()
+            .map(|group| SelectorIdentity::Emby {
+                key: EmbySelectorKey::Group(group.id),
+            });
+        let item = self
+            .browser
+            .selected_album_target()
+            .map(str::to_owned)
+            .map(|id| LibraryItemIdentity::Emby { id });
+        (selector, item)
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }

@@ -289,6 +289,16 @@ fn node_to_domain_translation_maps_artist_keys_and_album_targets() {
     assert!(!model.is_artist(album_2));
 }
 
+#[test]
+fn browser_launch_identity_uses_tree_target_and_reports_artist_root_absence() {
+    let model = MusicTreeModel::from_entries(&base_entries());
+    let mut browser = MusicTreeBrowser::new(model);
+
+    assert_eq!(browser.selected_album_target(), None);
+    assert!(browser.select_album_target("album-1"));
+    assert_eq!(browser.selected_album_target(), Some("album-1"));
+}
+
 /// A two-artist corpus large enough to overflow a five-row viewport: Alpha
 /// and Beta with twelve albums each. Arena ids follow settled order (Alpha
 /// root, its leaves, Beta root, its leaves).

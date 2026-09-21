@@ -12,7 +12,7 @@ use super::tv_content::TvContent;
 use crate::app::components::LibraryKind;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
-use mbv_core::config::ServiceKind;
+use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity, ServiceKind};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -553,6 +553,48 @@ fn tv_episode_brackets_wrap_season_selection() {
         owner.selected_season(),
         Some(("series-id".into(), "season-0".into()))
     );
+}
+
+#[test]
+fn tv_launch_snapshot_uses_unfiltered_letter_scope_and_excludes_season_workspace() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-stable".into();
+    let mut owner = TvContent::new();
+    owner.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series], 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+    ));
+
+    assert_eq!(
+        owner.launch_snapshot(),
+        (
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Unfiltered,
+            }),
+            Some(LibraryItemIdentity::Emby {
+                id: "series-stable".into(),
+            }),
+        )
+    );
+}
+
+#[test]
+fn tv_launch_snapshot_reports_absence_without_letter_pills_or_series() {
+    let mut owner = TvContent::new();
+    owner.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(Vec::new(), 0),
+        None,
+        None,
+        0,
+        None,
+        false,
+    ));
+
+    assert_eq!(owner.launch_snapshot(), (None, None));
 }
 
 #[test]
