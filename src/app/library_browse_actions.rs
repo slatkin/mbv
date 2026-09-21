@@ -1,4 +1,4 @@
-use super::types_browse::BrowseResting;
+use super::types_browse::{AlbumIndexState, BrowseResting};
 use super::types_events::NavigateLanding;
 use super::ui_util::sort_episodes;
 use super::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE};
@@ -104,6 +104,7 @@ fn build_navigate_landing(
     item_type: &str,
     lib_id: &str,
     levels: &[String],
+    cached_album_entries: Option<&[AlbumSearchEntry]>,
 ) -> Result<NavigateLanding, String> {
     // The item's own record supplies the back-references (D1: no ancestors
     // round trip when present); the fetch doubles as the deleted-item check.
@@ -116,7 +117,7 @@ fn build_navigate_landing(
         log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
         resolve_reveal_target(item_type, &item, Some(&ancestors))
     })?;
-    landing_for_target(client, &item, reveal, lib_id, levels)
+    landing_for_target(client, &item, reveal, lib_id, levels, cached_album_entries)
 }
 
 /// The navigable ancestors inside the library: `get_ancestors` is
@@ -136,6 +137,7 @@ fn landing_for_target(
     reveal: RevealTarget,
     lib_id: &str,
     levels: &[String],
+    cached_album_entries: Option<&[AlbumSearchEntry]>,
 ) -> Result<NavigateLanding, String> {
     match reveal {
         RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
@@ -179,7 +181,8 @@ fn landing_for_target(
             // defined by `music.levels`, NOT the raw `get_ancestors` depth.
             // A walk miss is a configured-path failure (flash), never a
             // silent no-op.
-            let ancestors = configured_album_ancestors(client, lib_id, levels, &album)?;
+            let ancestors =
+                configured_album_ancestors(client, lib_id, levels, &album, cached_album_entries)?;
             // Deep selection (task 6.2, design D6): an Audio-track reveal
             // rides its own id on the Album landing.
             let track_id = item.is_audio().then(|| item.id.clone());
@@ -205,6 +208,7 @@ fn configured_album_ancestors(
     library_id: &str,
     levels: &[String],
     album: &EmbyItem,
+    cached_album_entries: Option<&[AlbumSearchEntry]>,
 ) -> Result<Vec<AlbumPathPart>, String> {
     if levels.last().map(String::as_str) != Some("album") {
         let ancestors = client.get_ancestors(&album.id)?;
@@ -217,6 +221,11 @@ fn configured_album_ancestors(
                 name: a.display_name(),
             })
             .collect());
+    }
+    if let Some(entries) = cached_album_entries {
+        if let Some(entry) = entries.iter().find(|entry| entry.album.id == album.id) {
+            return Ok(entry.ancestors.clone());
+        }
     }
     let mut fetch = |parent_id: &str, start: usize, limit: usize| {
         client.get_items_sorted(
@@ -702,6 +711,7 @@ impl App {
         };
         let tx = self.lib_tx.clone();
         let music_levels = self.music_levels.clone();
+        let album_indexes = self.album_indexes.clone();
         std::thread::spawn(move || {
             // Match library by collection_type since CollectionFolder IDs never appear in ancestors
             let target_ctype = match item_type.as_str() {
@@ -720,19 +730,29 @@ impl App {
                 }
             };
 
+            let cached_album_entries = match album_indexes.get(&lib_id) {
+                Some(AlbumIndexState::Ready(entries)) => Some(entries.as_slice()),
+                _ => None,
+            };
+
             // D1: resolve the reveal target and build the per-kind landing
             // before anything else. Any resolution failure sends the flash
             // path (task 4.2) and leaves the active tab unchanged.
-            let event =
-                match build_navigate_landing(&client, &item_id, &item_type, &lib_id, &music_levels)
-                {
-                    Ok(landing) => LibEvent::NavigateTo {
-                        lib_idx,
-                        landing,
-                        switch_tab: true,
-                    },
-                    Err(e) => LibEvent::Error(e),
-                };
+            let event = match build_navigate_landing(
+                &client,
+                &item_id,
+                &item_type,
+                &lib_id,
+                &music_levels,
+                cached_album_entries,
+            ) {
+                Ok(landing) => LibEvent::NavigateTo {
+                    lib_idx,
+                    landing,
+                    switch_tab: true,
+                },
+                Err(e) => LibEvent::Error(e),
+            };
             let _ = tx.send(event);
         });
     }

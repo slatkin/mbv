@@ -230,19 +230,7 @@ impl App {
         }
     }
 
-    pub(super) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
-        let mut tracks: Vec<EmbyItem> = self
-            .workspace_album_track_candidates(album_id)
-            .into_iter()
-            .find(|tracks| tracks.iter().any(|candidate| candidate.id == track.id))
-            .unwrap_or_default()
-            .into_iter()
-            .filter(is_playable)
-            .collect();
-        sort_audio_tracks(&mut tracks);
-        let Some(start_idx) = tracks.iter().position(|item| item.id == track.id) else {
-            return false;
-        };
+    fn replace_and_route_album_queue(&mut self, tracks: Vec<EmbyItem>, start_idx: usize) -> bool {
         if self.connected_session_id.is_none() && self.emby_snapshot().is_none() {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return false;
@@ -256,6 +244,22 @@ impl App {
         true
     }
 
+    pub(super) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
+        let mut tracks: Vec<EmbyItem> = self
+            .workspace_album_track_candidates(album_id)
+            .into_iter()
+            .find(|tracks| tracks.iter().any(|candidate| candidate.id == track.id))
+            .unwrap_or_default()
+            .into_iter()
+            .filter(is_playable)
+            .collect();
+        sort_audio_tracks(&mut tracks);
+        let Some(start_idx) = tracks.iter().position(|item| item.id == track.id) else {
+            return false;
+        };
+        self.replace_and_route_album_queue(tracks, start_idx)
+    }
+
     /// Play the complete artist Workspace sequence from its selected track.
     /// The caller has resolved this ordered sequence from the shell-owned
     /// artist-detail projection; this method deliberately reuses the existing
@@ -264,17 +268,7 @@ impl App {
         if tracks.is_empty() || start_idx >= tracks.len() {
             return false;
         }
-        if self.connected_session_id.is_none() && self.emby_snapshot().is_none() {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return false;
-        }
-        self.queue_source = crate::config::QueueSource::Album;
-        self.replace_playback_queue(tracks.clone(), start_idx);
-        self.play_items_routed(tracks, start_idx, crate::config::QueueSource::Album);
-        if !self.has_direct_remote_queue() {
-            self.save_queue_state();
-        }
-        true
+        self.replace_and_route_album_queue(tracks, start_idx)
     }
 
     pub(super) fn go_back(&mut self, lib_idx: usize) {

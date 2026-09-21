@@ -266,10 +266,8 @@ impl App {
     /// needs no confirmation. Only a `PlayItems` payload is gated; a bare
     /// clear already owns its own confirmation flow.
     pub(super) fn queue_replacement_needs_confirmation(&self, action: &PendingQueueAction) -> bool {
-        match action {
-            PendingQueueAction::PlayItems { .. } => self.playback_queue().total_queue_len() > 0,
-            PendingQueueAction::ClearQueue => false,
-        }
+        matches!(action, PendingQueueAction::PlayItems { .. })
+            && self.playback_queue().total_queue_len() > 0
     }
 
     /// Design D6 entry point for a resolved queue replacement: an empty target
