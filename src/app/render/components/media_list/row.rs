@@ -76,9 +76,9 @@ pub(in crate::app) fn media_list_row<Target>(
             ..
         } => {
             // Canonical row geometry:
-            // `[2-col indent][title…]  [FOAM trailing]  [gold duration]`
-            // with the title at column 2 and a quiet gap before the right-aligned
-            // duration.
+            // `[2-col indent][title…]  [FOAM progress]  [green gutter]  [gold duration]`
+            // with the title at column 2 and quiet gaps before the right-aligned
+            // metadata columns.
 
             let (fg, progress, live_icon) = match semantic_state {
                 // Now-playing rows lose the accent colour: the aqua play marker
@@ -104,21 +104,14 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
-            // The left-aligned metadata pieces, in paint order: the trailing
-            // slot's own role (a year is green), then the active row's
-            // percentage as its own FOAM piece. A publish date is the slot's
-            // right-aligned gutter instead, painted with the duration below.
+            // The inline metadata pieces contain only the active row's
+            // percentage, which stays FOAM-coloured. Gutter metadata uses
+            // the fixed right-aligned green column below.
             let mut trailing_pieces: Vec<(String, Color)> = Vec::new();
-            let mut published: Option<&str> = None;
-            match trailing {
-                Some(MediaListTrailing::Year(text)) if !text.is_empty() => {
-                    trailing_pieces.push((text.clone(), palette::STATUS_AVAILABLE));
-                }
-                Some(MediaListTrailing::Published(text)) if !text.is_empty() => {
-                    published = Some(text.as_str());
-                }
-                _ => {}
-            }
+            let gutter = match trailing {
+                Some(MediaListTrailing::Gutter(text)) if !text.is_empty() => Some(text.as_str()),
+                _ => None,
+            };
             if let Some(pct) = progress.clone() {
                 trailing_pieces.push((pct, palette::TEXT_METADATA));
             }
@@ -139,9 +132,9 @@ pub(in crate::app) fn media_list_row<Target>(
                 .map(|(text, _)| 1 + text.width())
                 .sum();
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
-            // The publish-date gutter is a fixed-width column, so it reserves
-            // its full width whatever the date string's own length is.
-            let date_reserve = usize::from(published.is_some()) * (QUIET_GAP + DATE_GUTTER_W);
+            // The metadata gutter is a fixed-width column, so it reserves
+            // its full width whatever the string's own length is.
+            let date_reserve = usize::from(gutter.is_some()) * (QUIET_GAP + DATE_GUTTER_W);
             let selected = selected && focused;
             // Every selected row paints the opaque bar edge to edge.
             let paint_selected = selected;
@@ -246,7 +239,7 @@ pub(in crate::app) fn media_list_row<Target>(
                     }
                 }
             }
-            if let Some(date) = published {
+            if let Some(gutter) = gutter {
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
                 let tail = DATE_GUTTER_W + duration.map_or(0, |dur| QUIET_GAP + dur.width());
                 let pad = content_w.saturating_sub(used + tail);
@@ -254,10 +247,10 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::styled(
                     format!(
                         "{:>width$}",
-                        trunc_str(date, DATE_GUTTER_W),
+                        trunc_str(gutter, DATE_GUTTER_W),
                         width = DATE_GUTTER_W
                     ),
-                    Style::default().fg(palette::ROW_DATE_FG),
+                    Style::default().fg(palette::STATUS_AVAILABLE),
                 ));
             }
             if let Some(dur) = duration {
@@ -311,9 +304,9 @@ fn selected_row_foreground(selected_bg: Color) -> Option<Color> {
 /// Columns the row's right inset reserves inside `inner_width`.
 const RIGHT_INSET: usize = 2;
 
-/// The fixed width of the right-aligned publish-date gutter (the podcast
+/// The fixed width of the right-aligned date-metadata gutter (the podcast
 /// browser's `17 Sep` column): the column is the same width for every row
-/// that carries a date, whatever the date string's own length is.
+/// that carries a year, date, or runtime, whatever the string's own length is.
 const DATE_GUTTER_W: usize = 6;
 
 /// The row's text-flow content width: every row type (items, headings, the

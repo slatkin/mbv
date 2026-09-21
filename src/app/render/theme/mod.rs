@@ -147,12 +147,6 @@ pub const STATUS_AVAILABLE: Color = Palette::Green.color(); // checkmarks, avail
 /// browse rows carry no time.
 pub const DURATION: Color = Palette::Iris.color(); // the sage
 
-/// The right-aligned publish-date column of a library browse row — the
-/// podcast browser's `17 Sep 26` gutter. Its own role rather than the
-/// `DURATION` time column's, so a duration edit cannot move the dates; a date
-/// is metadata about the item, not a playback time.
-pub const ROW_DATE_FG: Color = Palette::Iris.color(); // sage (#a7c080)
-
 /// The primary (context/container) part of a split media-list row — the
 /// podcast an episode row came from. Its own role rather than
 /// `PLAYBACK_CONTEXT_FG`, the playback strip's context role: browse lists

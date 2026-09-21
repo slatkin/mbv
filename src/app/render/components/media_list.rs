@@ -351,9 +351,8 @@ mod wide_row_regression_tests {
         }
     }
 
-    /// Group headings read as foam labels in every grouped list, and the
-    /// left-aligned trailing slot carries its own closed role: a release year
-    /// paints green, a progress badge stays foam.
+    /// Group headings read as foam labels in every grouped list, and date
+    /// metadata paints green in the fixed right-aligned gutter.
     #[test]
     fn heading_labels_are_foam_and_year_metadata_is_green() {
         let rect = Rect::new(0, 0, 40, 3);
@@ -366,7 +365,7 @@ mod wide_row_regression_tests {
                 target: "album".into(),
                 primary: "Album".into(),
                 secondary: None,
-                trailing: Some(MediaListTrailing::Year("2001".into())),
+                trailing: Some(MediaListTrailing::Gutter("2001".into())),
                 duration: None,
                 kind: MediaKind::Collection,
                 semantic_state: MediaSemanticState::Ordinary,
@@ -394,9 +393,8 @@ mod wide_row_regression_tests {
         assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA);
         assert!(buf[(2, 0)].modifier.contains(Modifier::BOLD));
 
-        let year_x = 2 + "Album ".len() as u16;
-        assert_eq!(buf[(year_x, 1)].symbol(), "2");
-        assert_eq!(buf[(year_x, 1)].fg, palette::STATUS_AVAILABLE);
+        assert_eq!(buf[(34, 1)].symbol(), "2");
+        assert_eq!(buf[(34, 1)].fg, palette::STATUS_AVAILABLE);
 
         let badge_x = 2 + "Resume ".len() as u16;
         assert_eq!(buf[(badge_x, 2)].symbol(), "4");
@@ -1050,7 +1048,7 @@ mod wide_row_regression_tests {
                 target: "dated".into(),
                 primary: "Show A".into(),
                 secondary: Some("Episode One".into()),
-                trailing: Some(MediaListTrailing::Published("17 Sep".into())),
+                trailing: Some(MediaListTrailing::Gutter("17 Sep".into())),
                 duration: None,
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
@@ -1081,7 +1079,7 @@ mod wide_row_regression_tests {
         // The gutter is the last six columns of the row's content: the row is
         // 40 wide with a two-column right inset, so it ends at column 37.
         assert_eq!(&dated[32..38], "17 Sep", "{dated:?}");
-        assert_eq!(buf[(32, 0)].fg, palette::ROW_DATE_FG);
+        assert_eq!(buf[(32, 0)].fg, palette::STATUS_AVAILABLE);
         assert!(
             !row_text(1).contains("Sep"),
             "a row without a date paints no gutter: {:?}",
@@ -1099,7 +1097,7 @@ mod wide_row_regression_tests {
             target: "dated".into(),
             primary: "Show A".into(),
             secondary: None,
-            trailing: Some(MediaListTrailing::Published("3 Sep".into())),
+            trailing: Some(MediaListTrailing::Gutter("3 Sep".into())),
             duration: None,
             kind: MediaKind::Media,
             semantic_state: MediaSemanticState::Ordinary,
@@ -1115,6 +1113,115 @@ mod wide_row_regression_tests {
             .map(|x| buf[(x, 0)].symbol().to_string())
             .collect();
         assert_eq!(&text[32..38], " 3 Sep", "{text:?}");
+    }
+
+    /// Release years and publish dates share the same fixed gutter placement
+    /// and green role once projected through the unified trailing variant.
+    #[test]
+    fn year_and_publish_date_paint_identically_in_the_gutter() {
+        let rect = Rect::new(0, 0, 40, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        let mut year_item = crate::app::tests::make_item("Year row", "Movie");
+        year_item.production_year = 2001;
+        let year_trailing = (!year_item.is_folder && year_item.production_year > 0)
+            .then(|| MediaListTrailing::Gutter(year_item.production_year.to_string()));
+        let published_trailing =
+            Some(MediaListTrailing::Gutter(year_item.production_year.to_string()));
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "year".into(),
+                primary: year_item.name,
+                secondary: None,
+                trailing: year_trailing,
+                duration: None,
+                kind: MediaKind::Collection,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "date".into(),
+                primary: "Date row".into(),
+                secondary: None,
+                trailing: published_trailing,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+        ]);
+
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        for x in 32..38 {
+            assert_eq!(buf[(x, 0)].symbol(), buf[(x, 1)].symbol());
+            assert_eq!(buf[(x, 0)].fg, palette::STATUS_AVAILABLE);
+            assert_eq!(buf[(x, 0)].fg, buf[(x, 1)].fg);
+        }
+    }
+
+    /// Workspace runtimes use the same six-column green gutter as dates and
+    /// years. Both sub-hour and hour-plus values remain right-aligned without
+    /// falling back to the Queue's gold duration slot.
+    #[test]
+    fn workspace_durations_paint_right_aligned_without_six_column_truncation() {
+        let rect = Rect::new(0, 0, 40, 4);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "track".into(),
+                primary: "Track".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("59:59".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "episode".into(),
+                primary: "Episode".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("1:01".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "chapter".into(),
+                primary: "Chapter".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("100:00".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "book".into(),
+                primary: "Book".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("1:00".into())),
+                duration: None,
+                kind: MediaKind::Collection,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        for (y, expected) in [(0, " 59:59"), (1, "  1:01"), (2, "100:00"), (3, "  1:00")] {
+            let gutter: String = (32..38).map(|x| buf[(x, y)].symbol().to_string()).collect();
+            assert_eq!(gutter, expected, "gutter row {y}");
+            let first = 38 - expected.chars().count() as u16;
+            for x in first..38 {
+                assert_eq!(buf[(x, y)].fg, palette::STATUS_AVAILABLE);
+            }
+        }
     }
 
     #[test]
@@ -1219,7 +1326,7 @@ mod wide_row_regression_tests {
     #[test]
     fn now_playing_row_paints_duration_like_other_rows() {
         use crate::app::components::media_list::{
-            ActiveProgress, MediaListRow, MediaListTrailing, MediaSemanticState,
+            ActiveProgress, MediaListRow, MediaSemanticState,
         };
 
         let rect = Rect::new(0, 0, 52, 3);
@@ -1229,7 +1336,7 @@ mod wide_row_regression_tests {
                 target: "playing".into(),
                 primary: "Playing title".into(),
                 secondary: None,
-                trailing: Some(MediaListTrailing::Year("FOAM".into())),
+                trailing: Some(MediaListTrailing::Gutter("2001".into())),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::NowPlaying {
@@ -1240,7 +1347,7 @@ mod wide_row_regression_tests {
                 target: "resume".into(),
                 primary: "Resume title".into(),
                 secondary: None,
-                trailing: None,
+                trailing: Some(MediaListTrailing::Gutter("2001".into())),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Active {
@@ -1269,20 +1376,38 @@ mod wide_row_regression_tests {
             "no throbber glyph on the now-playing row: {playing:?}"
         );
         assert!(
-            playing.contains("FOAM 47%"),
+            playing.contains("Playing title 47%"),
             "live progress rides the trailing text like other rows: {playing:?}"
+        );
+        assert!(
+            playing.contains("2001"),
+            "the production-year gutter follows inline progress: {playing:?}"
         );
         assert!(
             playing.contains("2:00"),
             "total time shows like other rows: {playing:?}"
         );
+        let progress_x = 18;
+        assert_eq!(buf[(progress_x, 0)].symbol(), "4");
+        assert_eq!(buf[(progress_x, 0)].fg, palette::TEXT_METADATA);
+        let gutter_x = 38;
+        assert_eq!(buf[(gutter_x, 0)].symbol(), " ");
+        assert_eq!(buf[(gutter_x + 1, 0)].symbol(), " ");
+        assert_eq!(buf[(gutter_x + 2, 0)].symbol(), "2");
+        assert_eq!(buf[(gutter_x + 2, 0)].fg, palette::STATUS_AVAILABLE);
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 0)].symbol(), "2");
         assert_eq!(buf[(duration_x, 0)].fg, palette::DURATION);
 
         let resume = row_text(1);
         assert!(resume.contains("Resume title 12%"));
+        assert!(resume.contains("2001"));
         assert!(resume.contains("2:00"));
+        let progress_x = 15;
+        assert_eq!(buf[(progress_x, 1)].symbol(), "1");
+        assert_eq!(buf[(progress_x, 1)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(gutter_x + 2, 1)].symbol(), "2");
+        assert_eq!(buf[(gutter_x + 2, 1)].fg, palette::STATUS_AVAILABLE);
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 1)].symbol(), "2");
         assert_eq!(buf[(duration_x, 1)].fg, palette::DURATION);

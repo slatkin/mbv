@@ -141,6 +141,21 @@ fn played_tracks_project_the_ordinary_state() {
     assert_eq!(states[2], &MediaSemanticState::Ordinary);
 }
 
+#[test]
+fn track_rows_project_runtime_in_the_green_gutter() {
+    let mut track = make_item("Track", "Audio");
+    track.runtime_ticks = 65 * TICKS_PER_SECOND;
+    let rows = build_track_rows(&[track]);
+    let MediaListRow::Item {
+        trailing, duration, ..
+    } = &rows[0]
+    else {
+        panic!("track rows are items");
+    };
+    assert_eq!(trailing, &Some(MediaListTrailing::Gutter("1:05".into())));
+    assert_eq!(duration, &None);
+}
+
 // ── Task 2.4: tree chord mapping through the component boundary ──────────
 
 /// A multi-artist Grouped Music owner whose tree starts on the first album of

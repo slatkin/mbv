@@ -62,7 +62,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
         primary,
         secondary: None,
         trailing: (!item.is_folder && item.production_year > 0)
-            .then(|| MediaListTrailing::Year(item.production_year.to_string())),
+            .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
         duration: None,
         kind: MediaKind::Collection,
         semantic_state: MediaSemanticState::from_emby(item),

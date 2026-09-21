@@ -6,7 +6,7 @@
 //! `MusicWorkspaceComponent` temporarily borrows this owner for its existing
 //! painters until the later Music panel slices move painting and registration.
 
-use mbv_core::api::EmbyItem;
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use std::collections::HashMap;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
@@ -20,13 +20,13 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaSemanticState, RowIntent, SelectionOrigin,
+    MediaListTrailing, MediaSemanticState, RowIntent, SelectionOrigin,
 };
 use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
 use super::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack};
 use crate::app::render::MusicWideRenderCtx;
-use crate::app::ui_util::trunc_str;
+use crate::app::ui_util::{fmt_duration_gutter, trunc_str};
 
 /// Strips the `Artist (Year) ` folder-name prefix from an album's display
 /// name, returning the bare title and resolved release year. Rehomed from the

@@ -35,8 +35,12 @@ group's rationale lives now:
 | `#48584e` | `Green2` | `SCROLLBAR` *(former alias of the soft fill)*, the soft content-body fill (`surface_resolve.rs`) | yes, on both |
 | `#3f3f3f` | `Grey2` | `BORDER_UNFOCUSED`, the `ArtworkLoadingPlaceholder` row (`surface_table.rs`) | yes, on the row |
 | `#35a77c` | `Aqua` | `ACCENT`, `PLAYBACK_TITLE_FG` | yes (`now-playing-media-type-titles` D2) |
-| `#dbbc7f` | `Yellow` | `TEXT_FOCUS_ACCENT`, `TEXT_HERO_TITLE`, `HERO_CREDITS_NAME`, `ROW_DATE_FG`, `PLAYBACK_CONTEXT_FG` | yes, on `PLAYBACK_CONTEXT_FG` (`now-playing-media-type-titles` D2) |
+| `#dbbc7f` | `Yellow` | `TEXT_FOCUS_ACCENT`, `TEXT_HERO_TITLE`, `HERO_CREDITS_NAME`, `PLAYBACK_CONTEXT_FG` | yes, on `PLAYBACK_CONTEXT_FG` (`now-playing-media-type-titles` D2) |
 | `#3a94c5` | `Foam` | `TEXT_METADATA`, `PILL_SELECTED_BG` | yes, on `PILL_SELECTED_BG` |
+
+(`ROW_DATE_FG` — formerly in the Yellow group — was deleted by
+`unify-row-metadata-gutter`; its split rationale collapsed into
+`STATUS_AVAILABLE`, which now carries the media-row date/year gutter.)
 
 Seven of the eight carry the rationale in a comment naming the *other*
 symbol and the change that split them:
