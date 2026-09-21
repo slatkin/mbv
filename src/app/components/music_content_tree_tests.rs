@@ -444,9 +444,13 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
 
     // The first click resolves the root's artist request; repeating the same
     // painted selection has no other effect and emits the single focus request.
-    let _ = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(root_at)));
+    let _ = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+        root_at,
+    )));
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(root_at))),
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+            root_at
+        ))),
         Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
     ));
 
@@ -454,9 +458,14 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     let was_expanded = owner.browser.root_is_expanded(root);
     paint_tree(&mut owner, area);
     let root_at = tree_point(&owner, area, root);
-    assert_eq!(owner.browser.hit_node(root_at).map(|(id, _)| id), Some(root));
+    assert_eq!(
+        owner.browser.hit_node(root_at).map(|(id, _)| id),
+        Some(root)
+    );
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(root_at))),
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
+            root_at
+        ))),
         Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
     ));
     assert_ne!(owner.browser.root_is_expanded(root), was_expanded);
@@ -476,7 +485,9 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     // A childless album claims double-click without opening a Hero or changing
     // expansion, and a wheel at the final row focuses even when movement clamps.
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(album_at))),
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
+            album_at
+        ))),
         Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
     ));
     let _ = owner.browser.take_album_selection_change();
