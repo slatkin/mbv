@@ -78,30 +78,6 @@ fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
 }
 
 #[test]
-fn audiobookshelf_status_glyph_color_tracks_service_state() {
-    use mbv_core::service_runtime::ServiceState;
-    let color = super::components::chrome::service_state_color;
-    assert_eq!(
-        color(ServiceState::Ready, palette::ACCENT_AUDIOBOOKSHELF),
-        palette::ACCENT_AUDIOBOOKSHELF
-    );
-    assert_eq!(
-        color(ServiceState::NotConfigured, palette::ACCENT_AUDIOBOOKSHELF),
-        palette::TEXT_MUTED
-    );
-    for state in [
-        ServiceState::Connecting,
-        ServiceState::NeedsAuthentication,
-        ServiceState::Unavailable,
-    ] {
-        assert_eq!(
-            color(state, palette::ACCENT_AUDIOBOOKSHELF),
-            palette::STATUS_ERROR
-        );
-    }
-}
-
-#[test]
 fn title_row_paints_the_plain_next_control() {
     let mut app = make_app_stub();
     app.use_nerd_fonts = false;

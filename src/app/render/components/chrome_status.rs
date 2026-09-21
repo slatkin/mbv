@@ -467,10 +467,10 @@ impl App {
                     .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
             ));
         }
-        // Service-state glyphs — Emby, Audiobookshelf, stay-alive — always
-        // visible, coloured by state (brand colour when active,
-        // grey when inactive; stay-alive daemon lost = yellow). One
-        // leading space per glyph, no trailing space.
+        // Service-state glyphs — Emby coloured by state (brand colour
+        // when active, grey when inactive), Audiobookshelf always
+        // yellow, stay-alive daemon lost = yellow. One leading space
+        // per glyph, no trailing space.
         right_spans.extend([
             Span::raw(" "),
             Span::styled(
@@ -483,10 +483,7 @@ impl App {
             Span::raw(" "),
             Span::styled(
                 "\u{EDE2}",
-                Style::default().fg(service_state_color(
-                    self.audiobookshelf_runtime.state,
-                    palette::ACCENT_AUDIOBOOKSHELF,
-                )),
+                Style::default().fg(palette::ACCENT_AUDIOBOOKSHELF),
             ),
             Span::raw(" "),
             Span::styled(
