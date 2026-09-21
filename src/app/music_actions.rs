@@ -27,6 +27,48 @@ impl App {
         self.is_viewing_album_folders(lib_idx)
     }
 
+    /// D7: validate a prepared recursive-album landing before its drain
+    /// commits anything. The target library must still exist and the prepared
+    /// stack must reproduce the configured `music.levels` album shape (the
+    /// same position gate `is_viewing_album_folders` applies after commit). A
+    /// miss is a rejected apply: the caller flashes the library error and
+    /// leaves the active tab, nav stack, saved Library position, and
+    /// retained-owner selection unchanged.
+    pub(super) fn validate_grouped_music_landing(
+        &self,
+        library_id: &str,
+        nav_stack: &[BrowseLevel],
+    ) -> Result<(), String> {
+        let could_not_build =
+            || format!("Could not build the configured music path for '{library_id}'");
+        let lib = self
+            .libs
+            .iter()
+            .find(|lib| lib.library.id == library_id)
+            .ok_or_else(|| format!("Could not find library {library_id}"))?;
+        if self.music_levels.is_empty()
+            || self.music_levels.last().map(String::as_str) != Some("album")
+        {
+            return Err("Could not resolve the configured music album level".into());
+        }
+        if nav_stack.len() != self.music_levels.len() {
+            return Err(could_not_build());
+        }
+        // Each level must hang off the selected item of the level above,
+        // rooted at the library, with a resting item at every step.
+        let mut parent_id = lib.library.id.as_str();
+        for level in nav_stack {
+            if level.parent_id != parent_id {
+                return Err(could_not_build());
+            }
+            let Some(item) = level.items.get(level.resting().cursor()) else {
+                return Err(could_not_build());
+            };
+            parent_id = item.id.as_str();
+        }
+        Ok(())
+    }
+
     /// Switch to the previous (`delta == -1`) or next (`delta == 1`) group
     /// while in the combined music group view. Pops the current album level,
     /// adjusts the group cursor (wraps around), then kicks off a fetch for

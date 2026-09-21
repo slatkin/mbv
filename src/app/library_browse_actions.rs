@@ -103,6 +103,7 @@ fn build_navigate_landing(
     item_id: &str,
     item_type: &str,
     lib_id: &str,
+    levels: &[String],
 ) -> Result<NavigateLanding, String> {
     // The item's own record supplies the back-references (D1: no ancestors
     // round trip when present); the fetch doubles as the deleted-item check.
@@ -115,7 +116,7 @@ fn build_navigate_landing(
         log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
         resolve_reveal_target(item_type, &item, Some(&ancestors))
     })?;
-    landing_for_target(client, &item, reveal, lib_id)
+    landing_for_target(client, &item, reveal, lib_id, levels)
 }
 
 /// The navigable ancestors inside the library: `get_ancestors` is
@@ -134,6 +135,7 @@ fn landing_for_target(
     item: &EmbyItem,
     reveal: RevealTarget,
     lib_id: &str,
+    levels: &[String],
 ) -> Result<NavigateLanding, String> {
     match reveal {
         RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
@@ -172,21 +174,12 @@ fn landing_for_target(
             if album.item_type != "MusicAlbum" && !album.is_folder {
                 return Err(format!("Item {album_id} is not an album"));
             }
-            // The recursive activation consumes the album-index entry shape:
-            // the album plus the folder chain between the library root and
-            // it. `get_ancestors` is nearest→root; drop the trailing library
-            // folder + AggregateFolder (same rule as `build_chain_nav_stack`)
-            // and reverse what's left to root→album.
-            let ancestors = client.get_ancestors(&album.id)?;
-            let inside = ancestors_inside_library(&ancestors);
-            let ancestors = inside
-                .iter()
-                .rev()
-                .map(|a| AlbumPathPart {
-                    id: a.id.clone(),
-                    name: a.display_name(),
-                })
-                .collect();
+            // The recursive activation consumes the configured album-index
+            // entry shape (D7): the album plus the root→album folder chain
+            // defined by `music.levels`, NOT the raw `get_ancestors` depth.
+            // A walk miss is a configured-path failure (flash), never a
+            // silent no-op.
+            let ancestors = configured_album_ancestors(client, lib_id, levels, &album)?;
             // Deep selection (task 6.2, design D6): an Audio-track reveal
             // rides its own id on the Album landing.
             let track_id = item.is_audio().then(|| item.id.clone());
@@ -197,6 +190,56 @@ fn landing_for_target(
             })
         }
     }
+}
+
+/// D7: the root→album ancestor path through the configured album-index
+/// shape. When `levels` names `album` as its terminal level, the same walk
+/// Grouped Music and Inline Search use (`build_album_index_with`) builds every
+/// configured level, filters each to folders, and yields the album's
+/// canonical path — so the activated nav-stack depth always matches the
+/// `is_viewing_album_folders` configured position. A library with no
+/// configured album level keeps the legacy raw physical chain (unconfigured
+/// music is out of the grouped landing's scope).
+fn configured_album_ancestors(
+    client: &EmbyClient,
+    library_id: &str,
+    levels: &[String],
+    album: &EmbyItem,
+) -> Result<Vec<AlbumPathPart>, String> {
+    if levels.last().map(String::as_str) != Some("album") {
+        let ancestors = client.get_ancestors(&album.id)?;
+        let inside = ancestors_inside_library(&ancestors);
+        return Ok(inside
+            .iter()
+            .rev()
+            .map(|a| AlbumPathPart {
+                id: a.id.clone(),
+                name: a.display_name(),
+            })
+            .collect());
+    }
+    let mut fetch = |parent_id: &str, start: usize, limit: usize| {
+        client.get_items_sorted(
+            parent_id,
+            None,
+            false,
+            start,
+            limit,
+            "SortName",
+            "Ascending",
+        )
+    };
+    let entries = build_album_index_with(library_id, levels, &mut fetch)?;
+    entries
+        .into_iter()
+        .find(|entry| entry.album.id == album.id)
+        .map(|entry| entry.ancestors)
+        .ok_or_else(|| {
+            format!(
+                "Could not reach '{}' through the configured music levels",
+                album.display_name()
+            )
+        })
 }
 
 /// Movie/generic ancestor-chain rebuild (D2: the Chain arm keeps this
@@ -658,6 +701,7 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
+        let music_levels = self.music_levels.clone();
         std::thread::spawn(move || {
             // Match library by collection_type since CollectionFolder IDs never appear in ancestors
             let target_ctype = match item_type.as_str() {
@@ -679,14 +723,16 @@ impl App {
             // D1: resolve the reveal target and build the per-kind landing
             // before anything else. Any resolution failure sends the flash
             // path (task 4.2) and leaves the active tab unchanged.
-            let event = match build_navigate_landing(&client, &item_id, &item_type, &lib_id) {
-                Ok(landing) => LibEvent::NavigateTo {
-                    lib_idx,
-                    landing,
-                    switch_tab: true,
-                },
-                Err(e) => LibEvent::Error(e),
-            };
+            let event =
+                match build_navigate_landing(&client, &item_id, &item_type, &lib_id, &music_levels)
+                {
+                    Ok(landing) => LibEvent::NavigateTo {
+                        lib_idx,
+                        landing,
+                        switch_tab: true,
+                    },
+                    Err(e) => LibEvent::Error(e),
+                };
             let _ = tx.send(event);
         });
     }

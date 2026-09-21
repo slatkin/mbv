@@ -1,5 +1,6 @@
 use super::library_browse_actions::{
     build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
+    retain_grouped_music_level_items,
 };
 use super::types_browse::BrowseResting;
 use super::{
@@ -105,6 +106,7 @@ impl App {
         };
         let library_id = lib.library.id.clone();
         let library_name = lib.library.display_name();
+        let grouped_music = self.is_grouped_music_library(lib_idx);
         let Some(client) = self.emby_snapshot() else {
             return false;
         };
@@ -136,19 +138,13 @@ impl App {
                     }
                 };
                 let total_count = items.len();
-                let Some(cursor) = items.iter().position(|item| item.id == target_id) else {
-                    let _ = tx.send(LibEvent::Error(format!(
-                        "Album path changed before activation: missing {target_id}"
-                    )));
-                    return;
-                };
-                nav_stack.push(BrowseLevel {
+                let mut level = BrowseLevel {
                     parent_id,
                     title,
                     fetched_rows: items.len(),
                     items,
                     total_count,
-                    resting: BrowseResting::new(cursor, 0),
+                    resting: BrowseResting::new(0, 0),
                     item_types: None,
                     unplayed_only: false,
                     sort_by: "SortName".into(),
@@ -158,7 +154,20 @@ impl App {
                     all_items: None,
                     letter_filter: None,
                     music_grouping: None,
-                });
+                };
+                // Grouped-state construction: apply the same boundary filter
+                // `handle_lib_loaded` applies to every group-view level
+                // before the prepared landing is published, so the built
+                // stack is what the tree would have shown.
+                retain_grouped_music_level_items(&mut level, grouped_music);
+                let Some(cursor) = level.items.iter().position(|item| item.id == target_id) else {
+                    let _ = tx.send(LibEvent::Error(format!(
+                        "Album path changed before activation: missing {target_id}"
+                    )));
+                    return;
+                };
+                level.resting = BrowseResting::new(cursor, 0);
+                nav_stack.push(level);
             }
             let _ = tx.send(LibEvent::RecursiveAlbumActivated {
                 library_id,

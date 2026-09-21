@@ -362,6 +362,52 @@ fn track_navigation_emits_the_album_landing_with_its_folder_chain() {
 }
 
 #[test]
+fn track_navigation_without_a_configured_album_path_flashes_and_keeps_the_tab() {
+    // Task 6.2 (design D7): a Music item whose album is not reachable through
+    // the configured `music.levels` album shape is a configured-path miss,
+    // not a silent no-op: the existing library-error flash fires and the
+    // active tab is unchanged.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_mock_emby(&http);
+    app.music_levels = vec!["group".into(), "album".into()];
+    app.tab = TabSelection::Home;
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"trk1","Name":"Song","Type":"Audio","AlbumId":"alb1"}]}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}]}"#,
+    );
+    // The configured walk: the library root has no group folder, so `alb1`
+    // is unreachable through `music.levels`.
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+
+    app.spawn_navigate_to_item(
+        "trk1".into(),
+        "Audio".into(),
+        vec![(0, "lib-music".into(), "music".into())],
+    );
+
+    let ev = app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("error event");
+    let LibEvent::Error(message) = ev else {
+        panic!("a configured-path miss must not land");
+    };
+    assert!(
+        message.contains("configured music levels"),
+        "the failure names the configured path: {message}"
+    );
+    app.handle_lib_event(LibEvent::Error(message));
+    assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
+    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert!(app.status.contains("Library error"), "{}", app.status);
+}
+
+#[test]
 fn album_id_resolving_to_a_non_album_record_is_a_resolve_failure() {
     // Task 2.3 (design D1 rule): a fetched reveal record that is neither a
     // MusicAlbum nor a folder (unmatched album folders parse as plain
