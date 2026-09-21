@@ -12,7 +12,7 @@
 //! its content type (Emby, ABS or Feeds), and its image state is the shell
 //! projection's (task 5.10): this owner never fetches.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
@@ -29,7 +29,7 @@ use super::media_list::{
 use crate::app::types_context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
-use crate::app::types_playback::HomeLatestSource;
+use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
 use crate::app::ui_util::trunc_str;
 use mbv_core::playback_queue::QueueItem;
 
@@ -37,7 +37,7 @@ use mbv_core::playback_queue::QueueItem;
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
 pub(in crate::app) struct HomeContent {
     continue_items: Vec<QueueItem>,
-    latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
+    latest: Vec<HomeLatestSection>,
     /// The one shared canonical owner of the active section's rows; the panel
     /// drives its Wide/Inline presentation from its own breakpoint.
     carrier: MediaListCarrier<String>,
@@ -46,6 +46,7 @@ pub(in crate::app) struct HomeContent {
     /// never enters components, so the shell resolves at assignment and the
     /// projection reads entries up by `feed_id`.
     feed_names: HashMap<String, String>,
+    visited_latest_sources: HashSet<HomeLatestSource>,
     section: usize,
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
@@ -60,6 +61,7 @@ impl HomeContent {
             carrier: MediaListCarrier::new(),
             loading: false,
             feed_names: HashMap::new(),
+            visited_latest_sources: HashSet::new(),
             section: 0,
             hero_image: HeroImageState::None,
         }
@@ -72,10 +74,15 @@ impl HomeContent {
     pub(in crate::app) fn set_content(
         &mut self,
         continue_items: Vec<QueueItem>,
-        latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
+        latest: Vec<HomeLatestSection>,
         loading: bool,
         feed_names: HashMap<String, String>,
     ) {
+        if let Some(source) = self.selected_latest_source().cloned() {
+            if latest.iter().any(|section| section.source == source) {
+                self.visited_latest_sources.insert(source);
+            }
+        }
         self.continue_items = continue_items;
         self.latest = latest;
         self.loading = loading;
@@ -107,7 +114,14 @@ impl HomeContent {
         }
         self.latest
             .get(section - 1)
-            .map(|(_, source, _)| source.clone())
+            .map(|section| section.source.clone())
+    }
+
+    fn selected_latest_source(&self) -> Option<&HomeLatestSource> {
+        (self.section > 0)
+            .then(|| self.latest.get(self.section - 1))
+            .flatten()
+            .map(|section| &section.source)
     }
 
     /// Restore a persisted pill selection once a section matching `source`
@@ -115,7 +129,12 @@ impl HomeContent {
     /// `push_home_content`). Returns `true` once restored (the shell clears
     /// the pending marker afterward).
     pub(in crate::app) fn restore_section(&mut self, source: &HomeLatestSource) -> bool {
-        if let Some(idx) = self.latest.iter().position(|(_, s, _)| s == source) {
+        if let Some(idx) = self
+            .latest
+            .iter()
+            .position(|section| section.source == *source)
+        {
+            self.visited_latest_sources.insert(source.clone());
             self.section = idx + 1;
             self.clamp_section();
             self.project_active_section();
@@ -130,7 +149,7 @@ impl HomeContent {
     fn current_item(&self) -> Option<QueueItem> {
         self.continue_items
             .iter()
-            .chain(self.latest.iter().flat_map(|(_, _, i)| i.iter()))
+            .chain(self.latest.iter().flat_map(|section| section.items.iter()))
             .nth(self.cursor())
             .cloned()
     }
@@ -157,7 +176,8 @@ impl HomeContent {
             return Some((0, self.continue_items.len()));
         }
         let mut pos = self.continue_items.len();
-        for (idx, (_, _, items)) in self.latest.iter().enumerate() {
+        for (idx, section) in self.latest.iter().enumerate() {
+            let items = &section.items;
             if idx + 1 == section_idx {
                 return Some((pos, items.len()));
             }
@@ -193,7 +213,7 @@ impl HomeContent {
         } else {
             self.latest
                 .get(self.section - 1)
-                .map(|(_, _, items)| items)
+                .map(|section| &section.items)
                 .unwrap_or(&self.continue_items)
         };
         let rows: Vec<MediaListRow<String>> = items
@@ -258,7 +278,7 @@ impl HomeContent {
             source: self
                 .latest
                 .get(self.section.saturating_sub(1))
-                .map(|(_, source, _)| source.pref_key()),
+                .map(|section| section.source.pref_key()),
             from_continue_watching: self.section == 0,
         }
     }
@@ -282,9 +302,15 @@ impl HomeContent {
             return false;
         };
         if resolved == self.section {
+            if let Some(source) = self.selected_latest_source().cloned() {
+                self.visited_latest_sources.insert(source);
+            }
             return false;
         }
         self.section = resolved;
+        if let Some(source) = self.selected_latest_source().cloned() {
+            self.visited_latest_sources.insert(source);
+        }
         // A discrete section change re-projects the active section and parks
         // the shared owner at its first row (no per-section cursor cache).
         self.project_active_section();
@@ -466,7 +492,7 @@ impl LibraryContentOwner for HomeContent {
                     .chain(
                         self.latest
                             .iter()
-                            .map(|(title, _, _)| trunc_str(title, 18).to_string()),
+                            .map(|section| trunc_str(&section.title, 18).to_string()),
                     )
                     .collect(),
                 active: Some(self.section),
@@ -477,7 +503,7 @@ impl LibraryContentOwner for HomeContent {
         } else {
             self.latest
                 .get(self.section - 1)
-                .is_none_or(|(_, _, items)| items.is_empty())
+                .is_none_or(|section| section.items.is_empty())
         };
         let list = if empty {
             ListSlot::Empty {
@@ -666,6 +692,17 @@ mod tests {
         })
     }
 
+    fn section(
+        title: &str,
+        source: HomeLatestSource,
+        items: Vec<QueueItem>,
+        has_new_content: bool,
+    ) -> HomeLatestSection {
+        let mut section = HomeLatestSection::new(title.into(), source, items);
+        section.has_new_content = has_new_content;
+        section
+    }
+
     fn owner_with_section(
         source: HomeLatestSource,
         items: Vec<QueueItem>,
@@ -678,7 +715,7 @@ mod tests {
             .collect();
         owner.set_content(
             Vec::new(),
-            vec![("Latest".into(), source.clone(), items)],
+            vec![section("Latest", source.clone(), items, false)],
             false,
             names,
         );
@@ -696,6 +733,49 @@ mod tests {
             } => (primary.clone(), secondary.clone()),
             other => panic!("expected an item row, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn selected_latest_sources_stay_visited_across_async_refresh_and_reorder() {
+        let first = HomeLatestSource::Emby("first".into());
+        let second = HomeLatestSource::Audiobookshelf("second".into());
+        let mut owner = HomeContent::new();
+        owner.set_content(
+            Vec::new(),
+            vec![
+                section("First", first.clone(), Vec::new(), true),
+                section("Second", second.clone(), Vec::new(), true),
+            ],
+            false,
+            HashMap::new(),
+        );
+
+        assert!(owner.select_section(1));
+        assert!(owner.visited_latest_sources.contains(&first));
+
+        // The selected source receives content after selection; identity, not
+        // its new index, keeps the acknowledgement in force.
+        owner.set_content(
+            Vec::new(),
+            vec![
+                section("Second", second.clone(), Vec::new(), true),
+                section("First", first.clone(), Vec::new(), true),
+            ],
+            false,
+            HashMap::new(),
+        );
+        assert!(owner.visited_latest_sources.contains(&first));
+        assert_eq!(owner.latest[1].source, first);
+
+        assert!(owner.restore_section(&second));
+        assert!(owner.visited_latest_sources.contains(&second));
+        owner.set_content(
+            Vec::new(),
+            vec![section("Second", second.clone(), Vec::new(), true)],
+            false,
+            HashMap::new(),
+        );
+        assert!(owner.visited_latest_sources.contains(&second));
     }
 
     #[test]

@@ -143,12 +143,7 @@ impl Model {
             .cloned()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let latest = self
-            .home_content
-            .latest
-            .iter()
-            .map(|(title, source, items)| (title.clone(), source.clone(), items.clone()))
-            .collect();
+        let latest = self.home_content.latest.to_vec();
         let loading = self.home_content.loading;
         // Feed names ride the snapshot (design D2) so the projection reads
         // them from the same assignment as the items.
@@ -257,7 +252,7 @@ mod tests {
         // The "books" section arrives; the next sync restores it into the
         // owner (section 1), clears the pending, and the reconcile records
         // the restored source in the semantic preference.
-        model.home_content.latest = vec![(
+        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
             vec![],
@@ -305,7 +300,7 @@ mod tests {
         model.home_content.continue_items = make_items(3);
         let mut folder = make_item("folder", "CollectionFolder");
         folder.is_folder = true;
-        model.home_content.latest = vec![(
+        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
@@ -369,14 +364,14 @@ mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
         model.home_content.latest = vec![
-            (
+            crate::app::types_playback::HomeLatestSection::new(
                 "Movies".into(),
                 crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
                 vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
                     make_item("Movie one", "Movie"),
                 ))],
             ),
-            (
+            crate::app::types_playback::HomeLatestSection::new(
                 "Podcasts".into(),
                 crate::app::types_playback::HomeLatestSource::Audiobookshelf("abs-pod".into()),
                 vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
@@ -410,7 +405,7 @@ mod tests {
     fn shell_home_unrelated_save_retains_selected_source() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
-        model.home_content.latest = vec![(
+        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
             "Movies".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
@@ -451,7 +446,7 @@ mod tests {
         model.home_content.continue_items = make_items(2);
         let mut folder = make_item("folder", "CollectionFolder");
         folder.is_folder = true;
-        model.home_content.latest = vec![(
+        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
             "Folder".into(),
             crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],

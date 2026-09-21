@@ -2,7 +2,7 @@ use mbv_core::api::EmbyClient;
 use mbv_core::playback_queue::QueueItem;
 use std::sync::{mpsc, Arc, Mutex};
 
-use super::types_playback::{HomeContent, HomeLatestSource};
+use super::types_playback::{HomeContent, HomeLatestSection, HomeLatestSource};
 use super::App;
 
 impl App {
@@ -18,7 +18,7 @@ impl App {
     pub(super) fn apply_emby_completion(
         &mut self,
         completion: super::service_startup::Completion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
+        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
         self.transition_emby_failure(
             Some(completion.generation),
@@ -32,7 +32,7 @@ impl App {
     pub(super) fn apply_emby_completion_with_secret_deleter(
         &mut self,
         completion: super::service_startup::Completion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
+        prior_latest: &[HomeLatestSection],
         delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(
@@ -47,7 +47,7 @@ impl App {
         &mut self,
         generation: Option<mbv_core::service_runtime::SetupGeneration>,
         result: Result<super::service_startup::Startup, mbv_core::service_runtime::EmbyFailure>,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
+        prior_latest: &[HomeLatestSection],
         delete_secret: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         use super::notify_actions::ToastSeverity;
@@ -167,7 +167,7 @@ impl App {
     pub(super) fn apply_emby_setup_completion(
         &mut self,
         completion: super::service_startup::SetupCompletion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
+        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
         self.apply_emby_setup_completion_inner(completion, true, prior_latest)
     }
@@ -176,7 +176,7 @@ impl App {
     pub(super) fn apply_emby_setup_completion_without_network(
         &mut self,
         completion: super::service_startup::SetupCompletion,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
+        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
         self.apply_emby_setup_completion_inner(completion, false, prior_latest)
     }
@@ -185,7 +185,7 @@ impl App {
         &mut self,
         completion: super::service_startup::SetupCompletion,
         start_network: bool,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
+        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
         use super::notify_actions::ToastSeverity;
         if !self.emby_runtime.accepts(completion.generation) {
@@ -292,7 +292,7 @@ impl App {
     pub(super) fn apply_emby_bootstrap(
         &mut self,
         bootstrap: mbv_core::service_runtime::EmbyBootstrap,
-        prior_latest: &[(String, HomeLatestSource, Vec<QueueItem>)],
+        prior_latest: &[HomeLatestSection],
     ) -> HomeContent {
         let continue_items = bootstrap.continue_items;
         self.rebuild_library_tabs_from_views(&bootstrap.views);
@@ -303,7 +303,7 @@ impl App {
         // Merge, not replace: drop only the Emby entries and splice the fresh
         // Emby entries back at their previous positions, leaving entries from
         // other providers (Audiobookshelf/Feeds) untouched (#543 Part 1).
-        let emby_sections: Vec<(String, HomeLatestSource, Vec<QueueItem>)> = bootstrap
+        let emby_sections: Vec<HomeLatestSection> = bootstrap
             .latest
             .into_iter()
             .filter(|section| {
@@ -311,7 +311,7 @@ impl App {
                 !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
             })
             .map(|section| {
-                (
+                HomeLatestSection::new(
                     section.title,
                     HomeLatestSource::Emby(section.view_id),
                     section

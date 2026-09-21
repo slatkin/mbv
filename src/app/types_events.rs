@@ -1,8 +1,7 @@
 use super::types_browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
 use super::types_feed::FeedHomeVideoGroup;
-use super::types_playback::{HomeContent, HomeLatestSource};
+use super::types_playback::{HomeContent, HomeLatestSection};
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::QueueItem;
 use mbv_core::service_runtime::SetupGeneration;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
@@ -284,13 +283,13 @@ pub(super) enum LibEvent {
     /// after a shelf fetch (task 5.3d). Cross-provider pill state lives in
     /// the Model, so the shell merges these into `home_content.latest` (the
     /// shared `merge_home_sections` splice) and re-projects.
-    AudiobookshelfLatestRebuilt(Vec<(String, HomeLatestSource, Vec<QueueItem>)>),
+    AudiobookshelfLatestRebuilt(Vec<HomeLatestSection>),
     /// The Feeds Latest pill section (at most one) rebuilt from the Feeds
     /// tab after a refresh (task 5.3d). Like `AudiobookshelfLatestRebuilt`,
     /// the shell merges it into Model-owned `latest` — the feed drain runs
     /// after the lib_rx drain, so this lands on the next loop pass (a
     /// bounded one-iteration latency on the Feeds pill).
-    FeedsLatestRebuilt(Vec<(String, HomeLatestSource, Vec<QueueItem>)>),
+    FeedsLatestRebuilt(Vec<HomeLatestSection>),
     Error(String),
 }
 

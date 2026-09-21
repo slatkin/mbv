@@ -1,3 +1,4 @@
+use super::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -156,6 +157,35 @@ impl HomeLatestSource {
     }
 }
 
+/// The shell-owned snapshot of one Home Latest section. `has_new_content`
+/// is evaluated against the frozen launch window whenever the shell assigns
+/// or merges a Home snapshot; it is never inferred by the component.
+#[derive(Clone, Debug)]
+pub(super) struct HomeLatestSection {
+    pub(super) title: String,
+    pub(super) source: HomeLatestSource,
+    pub(super) items: Vec<QueueItem>,
+    pub(super) has_new_content: bool,
+}
+
+impl HomeLatestSection {
+    pub(super) fn new(title: String, source: HomeLatestSource, items: Vec<QueueItem>) -> Self {
+        Self {
+            title,
+            source,
+            items,
+            has_new_content: false,
+        }
+    }
+
+    pub(super) fn recompute_new_content(&mut self, window: HomeLatestLaunchWindow) {
+        self.has_new_content = self
+            .items
+            .iter()
+            .any(|item| is_new_in_launch_window(item, window));
+    }
+}
+
 /// Model-owned Home content (task 5.3d): the authoritative snapshot the
 /// shell pushes to `HomeComponent` at its writers. Re-homed from the deleted
 /// `App.home` (`HomePane`) + `App.home_loading`; `loading` mirrors the old
@@ -163,7 +193,7 @@ impl HomeLatestSource {
 /// then set false synchronously after every content computation). The
 pub(super) struct HomeContent {
     pub(super) continue_items: Vec<EmbyItem>,
-    pub(super) latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
+    pub(super) latest: Vec<HomeLatestSection>,
     pub(super) loading: bool,
     /// Shell-resolved feed-id → display-name lookup (design D2): `Config`
     /// never enters components, so the shell resolves at assignment and the
