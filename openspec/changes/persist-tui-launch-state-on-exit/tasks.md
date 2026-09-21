@@ -3,7 +3,7 @@
 ## 1. Launch-state model and storage
 
 - [ ] 1.1 Add the versioned `TuiLaunchState`, stable tab/selector/item identity types, state path, tolerant loader, and process-unique atomic replacement writer in `mbv-core`; add focused filesystem tests proving round-trip, malformed/missing fallback, and two distinct temporary paths, then run `cargo nextest run -p mbv-core config`.
-- [ ] 1.2 Add `TUI launch state` to `CONTEXT.md` with its exit-snapshot meaning and exclusions, and verify terminology agrees with `Client`, `Session continuity`, `Library position`, and the three delta specs by direct review.
+- [x] 1.2 Add `TUI launch state` to `CONTEXT.md` with its exit-snapshot meaning and exclusions, and verify terminology agrees with `Client`, `Session continuity`, `Library position`, and the three delta specs by direct review.
 
 ## 2. Selected-destination snapshot extraction
 
