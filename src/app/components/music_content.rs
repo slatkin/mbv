@@ -519,12 +519,11 @@ impl MusicContent {
         self.context.list.items.get(index).cloned()
     }
 
-    /// Resolves the focused artist's settled album targets against the latest
-    /// content snapshot. A sync race may leave one target without an item; keep
-    /// the ordered items that still resolve and return the misses separately so
+    /// Resolves a set of settled album targets against the latest content
+    /// snapshot. A sync race may leave one target without an item; keep the
+    /// ordered items that still resolve and return the misses separately so
     /// the shell can surface feedback instead of silently dropping the action.
-    fn selected_artist_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
-        let targets = self.browser.selected_artist_album_targets()?;
+    fn resolve_album_targets(&self, targets: Vec<String>) -> (Vec<EmbyItem>, Vec<String>) {
         let mut items = Vec::with_capacity(targets.len());
         let mut unresolved_targets = Vec::new();
         for target in targets {
@@ -543,7 +542,14 @@ impl MusicContent {
             };
             items.push(item.clone());
         }
-        Some((items, unresolved_targets))
+        (items, unresolved_targets)
+    }
+
+    /// Resolves the focused artist's settled album targets against the latest
+    /// content snapshot.
+    fn selected_artist_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
+        let targets = self.browser.selected_artist_album_targets()?;
+        Some(self.resolve_album_targets(targets))
     }
 
     /// Resolves marked tree album leaves in settled display order. This is the
@@ -554,25 +560,7 @@ impl MusicContent {
         if targets.is_empty() {
             return None;
         }
-        let mut items = Vec::with_capacity(targets.len());
-        let mut unresolved_targets = Vec::new();
-        for target in targets {
-            let Some(index) = self
-                .context
-                .album_targets
-                .iter()
-                .position(|candidate| candidate == &target)
-            else {
-                unresolved_targets.push(target);
-                continue;
-            };
-            let Some(item) = self.context.list.items.get(index) else {
-                unresolved_targets.push(target);
-                continue;
-            };
-            items.push(item.clone());
-        }
-        Some((items, unresolved_targets))
+        Some(self.resolve_album_targets(targets))
     }
 
     fn artist_action(&self, action: MusicTreeAction) -> Option<Msg> {
@@ -768,7 +756,6 @@ impl MusicContent {
         self.browser.expand_all_roots();
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
         let target = self.track_list.selected_target()?;

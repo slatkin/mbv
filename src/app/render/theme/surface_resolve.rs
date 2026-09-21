@@ -49,11 +49,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     );
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     if follow_focus {
-        SurfaceColors::fill(if surface == Surface::LibraryPanel {
-            // The focused Library panel uses the Green2 content-body sheet;
-            // its resting arm remains the Storm value from the surface table.
-            Palette::Green2.color()
-        } else if row.soft {
+        SurfaceColors::fill(if row.soft {
             // The soft content-body surface fill: its own value, not the
             // scrollbar's `SCROLLBAR`, whose `Palette::Green2` value it
             // shares today — the two are equal today and independently
@@ -190,16 +186,10 @@ mod tests {
                     focused, SURFACE_FOCUSED,
                     "{surface:?} shares the column/pane focused fill"
                 ),
-                Level::ContentBody => {
-                    if surface == Surface::LibraryPanel {
-                        assert_eq!(focused, Palette::Green2.color());
-                    } else {
-                        assert_eq!(
-                            focused, SURFACE_FOCUSED,
-                            "{surface:?} shares the content-body focused fill"
-                        );
-                    }
-                }
+                Level::ContentBody => assert_eq!(
+                    focused, SURFACE_FOCUSED,
+                    "{surface:?} shares the content-body focused fill"
+                ),
                 Level::Recess => assert_eq!(
                     focused, SURFACE_FOCUSED,
                     "{surface:?} shares the recess focused fill"
