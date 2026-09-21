@@ -72,14 +72,27 @@ fn enter_activates_an_artist_workspace_track_from_its_group() {
     assert!(owner.track_focused(), "the artist Workspace holds focus");
 
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) => {
-            assert_eq!(
-                album_id, "a-0",
-                "the projected group's settled album identity crosses"
-            );
-            assert_eq!(track.id, "alpha-track-1");
+        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+            assert_eq!(target.artist_name, "Alpha");
+            assert_eq!(target.album_targets, ["a-0", "a-1"]);
+            assert_eq!(track_id, "alpha-track-1");
         }
         other => panic!("expected artist track activation, got {other:?}"),
+    }
+}
+
+#[test]
+fn hero_activate_activates_an_artist_workspace_track() {
+    let mut owner = artist_workspace_owner();
+    owner.set_inline_track_focus_enabled(true);
+    owner.enter_track_focus();
+
+    match owner.on_slot_event(LibrarySlotEvent::HeroActivate) {
+        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+            assert_eq!(target.artist_name, "Alpha");
+            assert_eq!(track_id, "alpha-track-1");
+        }
+        other => panic!("expected artist Hero activation, got {other:?}"),
     }
 }
 
@@ -110,9 +123,10 @@ fn hero_double_click_activates_an_artist_workspace_track() {
         MediaListSurfaceInput::DoubleClick(Position { x: 0, y: 1 }),
     ));
     match message {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) => {
-            assert_eq!(album_id, "a-0");
-            assert_eq!(track.id, "alpha-track-1");
+        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+            assert_eq!(target.artist_name, "Alpha");
+            assert_eq!(target.album_targets, ["a-0", "a-1"]);
+            assert_eq!(track_id, "alpha-track-1");
         }
         other => panic!("expected artist track activation, got {other:?}"),
     }

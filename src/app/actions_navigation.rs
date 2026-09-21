@@ -200,6 +200,27 @@ impl App {
         true
     }
 
+    /// Play the complete artist Workspace sequence from its selected track.
+    /// The caller has resolved this ordered sequence from the shell-owned
+    /// artist-detail projection; this method deliberately reuses the existing
+    /// Album queue source and routed playback executor.
+    pub(super) fn play_artist_tracks(&mut self, tracks: Vec<EmbyItem>, start_idx: usize) -> bool {
+        if tracks.is_empty() || start_idx >= tracks.len() {
+            return false;
+        }
+        if self.connected_session_id.is_none() && self.emby_snapshot().is_none() {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return false;
+        }
+        self.queue_source = crate::config::QueueSource::Album;
+        self.replace_playback_queue(tracks.clone(), start_idx);
+        self.play_items_routed(tracks, start_idx, crate::config::QueueSource::Album);
+        if !self.has_direct_remote_queue() {
+            self.save_queue_state();
+        }
+        true
+    }
+
     pub(super) fn go_back(&mut self, lib_idx: usize) {
         // Defensive bounds check; see `move_lib_cursor_rows` in
         // `lib_cursor_actions.rs` for the stale index contract. Never

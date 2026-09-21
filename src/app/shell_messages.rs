@@ -223,6 +223,29 @@ impl Model {
                         self.app.play_album_track(&album_id, &track);
                         self.push_music_workspace_content();
                     }
+                    ShellRequest::MusicArtistTrackActivate { target, track_id } => {
+                        let resolved = self.music_owner().and_then(|owner| {
+                            let detail = owner.artist_detail_for_target(&target)?;
+                            let tracks: Vec<mbv_core::api::EmbyItem> = detail
+                                .track_groups
+                                .iter()
+                                .flat_map(|group| group.tracks.iter())
+                                .filter(|track| crate::app::ui_util::is_playable(track))
+                                .cloned()
+                                .collect();
+                            let start_idx = tracks.iter().position(|track| track.id == track_id)?;
+                            Some((tracks, start_idx))
+                        });
+                        if let Some((tracks, start_idx)) = resolved {
+                            self.app.play_artist_tracks(tracks, start_idx);
+                        } else {
+                            self.app.flash(
+                                "Library error: artist track is no longer available".into(),
+                                ToastSeverity::Error,
+                            );
+                        }
+                        self.push_music_workspace_content();
+                    }
                     ShellRequest::MusicGroupSwitch { delta } => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
                             self.app.switch_music_group(lib_idx, delta);

@@ -88,6 +88,12 @@ pub enum ShellRequest {
         album_id: String,
         track: EmbyItem,
     },
+    /// Activate a focused artist Workspace track. The shell resolves the
+    /// ordered discography and chosen EmbyItem from the projected detail.
+    MusicArtistTrackActivate {
+        target: super::intents::MusicArtistTarget,
+        track_id: String,
+    },
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
     MusicGroupSwitch {

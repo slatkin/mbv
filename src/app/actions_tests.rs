@@ -154,6 +154,28 @@ fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
     );
 }
 
+#[test]
+fn artist_playback_keeps_preceding_tracks_queued_and_starts_at_selected_index() {
+    let mut app = remote_playback_app();
+    let mut first = make_item("First", "Audio");
+    first.id = "artist-track-1".into();
+    let mut selected = make_item("Selected", "Audio");
+    selected.id = "artist-track-2".into();
+    let mut last = make_item("Last", "Audio");
+    last.id = "artist-track-3".into();
+
+    assert!(app.play_artist_tracks(vec![first, selected, last], 1));
+    assert_eq!(
+        app.playback_queue()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["artist-track-1", "artist-track-2", "artist-track-3"]
+    );
+    assert_eq!(app.playback_queue().queue_cursor, 1);
+}
+
 /// Ordinary album browsing must not change: an `album_tracks_cache` entry
 /// still wins over the artist-cache fallback, even when the artist entry
 /// carries more tracks for the same album.

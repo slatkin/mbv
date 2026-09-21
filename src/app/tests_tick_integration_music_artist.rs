@@ -4,11 +4,20 @@ use super::landing::{draw_music_frame, mounted_music_app_at, music_panel, music_
 /// Tasks 6.1–6.3 correction: a Service `ArtistItems` root's Workspace rows come
 /// from the shell-owned artist-detail cache, never `album_tracks_cache`. Enter
 /// on a mounted artist Workspace row must cross the typed activation and play
-/// the row's album group through the shell dispatch arm's artist-cache
-/// resolution.
+/// the flattened artist discography through the shell dispatch arm's
+/// artist-detail resolution.
 #[test]
-fn enter_on_a_mounted_artist_workspace_row_plays_its_album_group() {
+fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_selected_index() {
     let mut app = crate::app::render::make_music_group_app();
+    let mut second_album = crate::app::tests::make_item("Second Album", "MusicAlbum");
+    second_album.id = "album-2".into();
+    second_album.artist = "Alpha".into();
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .expect("album level")
+        .items
+        .push(second_album);
     app.terminal_width = 160;
     app.terminal_height = 40;
     app.panel_focus = PanelFocus::Library;
@@ -53,19 +62,25 @@ fn enter_on_a_mounted_artist_workspace_row_plays_its_album_group() {
     let target = crate::app::components::msg::MusicArtistTarget {
         artist_id: Some("artist-alpha".into()),
         artist_name: "Alpha".into(),
-        album_targets: vec!["album-1".into()],
+        album_targets: vec!["album-1".into(), "album-2".into()],
         revision: 7,
     };
     let detail_key = app
         .artist_detail_key(&destination, &target)
         .expect("artist ID key");
-    let mut track = crate::app::tests::make_item("Artist Track", "Audio");
-    track.id = "artist-track-1".into();
-    track.album_id = "album-1".into();
+    let mut first = crate::app::tests::make_item("Artist Track One", "Audio");
+    first.id = "artist-track-1".into();
+    first.album_id = "album-1".into();
+    let mut selected = crate::app::tests::make_item("Artist Track Two", "Audio");
+    selected.id = "artist-track-2".into();
+    selected.album_id = "album-1".into();
+    let mut later = crate::app::tests::make_item("Artist Track Three", "Audio");
+    later.id = "artist-track-3".into();
+    later.album_id = "album-2".into();
     app.artist_detail_cache.insert(
         detail_key,
         crate::app::music_artist_detail::ArtistDetailCacheEntry {
-            tracks: vec![track],
+            tracks: vec![first, selected, later],
             failed: false,
         },
     );
@@ -88,13 +103,19 @@ fn enter_on_a_mounted_artist_workspace_row_plays_its_album_group() {
     harness.model_mut().push_music_workspace_content();
     harness.model_mut().test_music_owner_mut().enter_track_focus();
     assert!(harness.model().test_music_owner().track_focused());
+    tick_key(&mut harness, Key::Down);
 
     harness.inject(key(Key::Enter));
     let outcome = harness.step();
     let activate = outcome
         .messages
         .into_iter()
-        .find(|message| matches!(message, Msg::Shell(ShellRequest::MusicTrackActivate { .. })))
+        .find(|message| {
+            matches!(
+                message,
+                Msg::Shell(ShellRequest::MusicArtistTrackActivate { .. })
+            )
+        })
         .expect("Enter on the artist Workspace row activates its track");
     let (mut music_resize, mut tv_resize) = (false, false);
     harness
@@ -110,8 +131,13 @@ fn enter_on_a_mounted_artist_workspace_row_plays_its_album_group() {
             .iter()
             .map(|item| item.id.as_str())
             .collect::<Vec<_>>(),
-        ["artist-track-1"],
-        "the activated row's artist-cache album group becomes the queue"
+        ["artist-track-1", "artist-track-2", "artist-track-3"],
+        "the full flattened artist discography becomes the queue"
+    );
+    assert_eq!(
+        harness.model().app.playback_queue().queue_cursor,
+        1,
+        "playback starts at the selected artist track"
     );
 }
 
@@ -317,6 +343,24 @@ fn enter_on_an_unfiltered_artist_root_opens_the_non_wide_hero_workspace() {
         expanded,
         "Hero entry does not toggle expansion"
     );
+}
+
+#[test]
+fn artist_library_hero_track_activation_emits_artist_track_intent() {
+    let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), 81, 30);
+    tick_key(&mut harness, Key::Left);
+    tick_key(&mut harness, Key::Enter);
+    assert!(music_panel(&harness).test_hero_overlay_open());
+    assert!(harness.model().test_music_owner().track_focused());
+
+    harness.inject(key(Key::Enter));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().any(|message| {
+        matches!(
+            message,
+            Msg::Shell(ShellRequest::MusicArtistTrackActivate { .. })
+        )
+    }));
 }
 
 /// A filtered artist root keeps Enter local in both the Wide and non-Wide

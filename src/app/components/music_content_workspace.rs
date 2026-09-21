@@ -145,6 +145,17 @@ impl MusicContent {
         })
     }
 
+    /// Expose the current shell-projected artist detail to the shell's
+    /// playback resolver without carrying queue data across the component
+    /// message boundary.
+    pub(in crate::app) fn artist_detail_for_target(
+        &self,
+        target: &MusicArtistTarget,
+    ) -> Option<&crate::app::music_artist_detail::ArtistDetailProjection> {
+        self.current_artist_detail()
+            .filter(|detail| detail.target == *target)
+    }
+
     /// Rebuild `track_list` from the resolved Workspace and report whether it
     /// went empty-to-non-empty (the overlay/artist-entry arrival edge). A
     /// changed owner clears any stale pane focus and re-seats the cursor; a
@@ -456,6 +467,16 @@ impl MusicContent {
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
         let target = self.track_list.selected_target()?;
         self.workspace_track_item(target)
+    }
+
+    fn artist_track_activation(&self) -> Option<Msg> {
+        if !self.artist_workspace_focused() {
+            return None;
+        }
+        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+            target: self.artist_detail_target()?,
+            track_id: self.track_list.selected_target()?.clone(),
+        }))
     }
 
     /// Select the album whose existing artwork path supplies an artist Hero.
