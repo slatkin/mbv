@@ -1,6 +1,7 @@
 //! Shutdown/teardown handling, split out of `run_loop_events.rs` to keep that
 //! file within the repository's file-size limit.
 
+use crate::app::shell::Model;
 use crate::app::{App, QUIT_REQUESTED};
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
@@ -13,6 +14,16 @@ fn player_join_outer_bound(quit_timeout: Duration) -> Duration {
 fn join_visualizer_worker(handle: Option<JoinHandle<()>>) {
     if let Some(handle) = handle {
         crate::app::visualizer_worker::join_worker(handle);
+    }
+}
+
+impl Model {
+    /// Finish an orderly TUI teardown after taking the selected destination's
+    /// bounded launch snapshot. The App remains the persistence authority;
+    /// this shell query is the only reverse read from the mounted owner.
+    pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
+        let launch_state = self.launch_state_snapshot();
+        self.app.teardown(quit_timeout, Some(launch_state));
     }
 }
 
@@ -57,15 +68,10 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
-        self.teardown_inner(quit_timeout);
-    }
-
-    /// Persist the selected destination's bounded launch snapshot, then run
-    /// the normal orderly teardown. The shell supplies the snapshot only at
-    /// this discrete boundary; App never mirrors component-owned state while
-    /// the TUI is running.
-    pub(in crate::app) fn teardown_with_launch_state(
+    /// Persist the launch snapshot supplied by the shell at this discrete
+    /// orderly-exit boundary, then run the normal teardown. App never mirrors
+    /// component-owned state while the TUI is running.
+    pub(in crate::app) fn teardown(
         &mut self,
         quit_timeout: Duration,
         launch_state: Option<mbv_core::config::TuiLaunchState>,
@@ -75,7 +81,7 @@ impl App {
                 log::warn!(target: "launch_state", "failed to save TUI launch state: {error}");
             }
         }
-        self.teardown(quit_timeout);
+        self.teardown_inner(quit_timeout);
     }
 
     fn teardown_inner(&mut self, quit_timeout: Duration) {

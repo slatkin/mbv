@@ -1,6 +1,9 @@
 use super::*;
+use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::LibraryKey;
+use mbv_core::config::{FeedKind, FeedSubscription};
+use mbv_core::playback_queue::FeedEntry;
 use crate::app::tests::*;
 use rstest::rstest;
 
@@ -9,7 +12,7 @@ fn teardown_fast_when_player_thread_is_not_hung() {
     let mut app = make_app_stub();
 
     let started = std::time::Instant::now();
-    app.teardown(Duration::from_secs(5));
+    app.teardown(Duration::from_secs(5), None);
     let elapsed = started.elapsed();
 
     assert!(
@@ -39,6 +42,37 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
             );
         },
     );
+
+    let unselected_feed_item = FeedEntry {
+        guid: "unselected-feed-item".into(),
+        title: "Unselected feed item".into(),
+        enclosure_url: Some("https://example.test/unselected-feed-item.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(FeedKind::Audio),
+        feed_id: Some("unselected-feed-selector".into()),
+        position_ticks: 0,
+        played: false,
+    };
+    model.update_library_owner(
+        LibraryKey::Feeds,
+        || Box::new(FeedsContent::new()),
+        |owner| {
+            owner.set_content(FeedsOwnerPush {
+                subscriptions: vec![FeedSubscription {
+                    name: "Unselected feed".into(),
+                    url: "https://example.test/unselected-feed-selector".into(),
+                    kind: FeedKind::Audio,
+                }],
+                entries: vec![vec![unselected_feed_item.clone()]],
+                all_entries: vec![unselected_feed_item],
+                loading: false,
+            });
+            owner.cycle_group(1);
+        },
+    );
     model.sync_library_panel();
 
     model.teardown(Duration::from_secs(1));
@@ -61,8 +95,25 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
 
     let serialized = std::fs::read_to_string(mbv_core::config::tui_launch_state_path())
         .expect("serialized launch snapshot");
-    assert!(!serialized.contains("selected-queue-item"));
-    assert!(!serialized.contains("feeds"));
+    assert!(!serialized.contains("queue_cursor"));
+    assert!(!serialized.contains("queue_slot"));
+    assert!(!serialized.contains("unselected-feed-item"));
+    assert!(!serialized.contains("unselected-feed-selector"));
+}
+
+#[test]
+fn orderly_teardown_writes_known_launch_state_without_active_destination() {
+    let mut model = Model::new(make_app_stub());
+    model.app.tab = TabSelection::EmbyLibrary(0);
+    model.app.panel_focus = PanelFocus::Queue;
+
+    model.teardown(Duration::from_secs(1));
+
+    let state = mbv_core::config::load_tui_launch_state().expect("launch snapshot after teardown");
+    assert_eq!(state.tab, mbv_core::config::TabIdentity::Home);
+    assert_eq!(state.panel_focus, mbv_core::config::LaunchPanelFocus::Queue);
+    assert_eq!(state.selector, None);
+    assert_eq!(state.item, None);
 }
 
 #[test]
@@ -72,7 +123,7 @@ fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
     app.config.lock().unwrap().auto_reconnect = true;
     app.active_route = Some("music".to_string());
 
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     assert_eq!(
         crate::config::load_last_remote_connection().unwrap(),
@@ -91,7 +142,7 @@ fn teardown_persists_connected_session_when_auto_reconnect_enabled() {
     app.connected_session_id = Some(sess.id.clone());
     app.connected_session_state = Some(sess);
 
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     assert_eq!(
         crate::config::load_last_remote_connection().unwrap(),
@@ -115,7 +166,7 @@ fn teardown_persists_direct_remote_when_auto_reconnect_enabled() {
         remote_rx,
         &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
     );
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     assert_eq!(
         crate::config::load_last_remote_connection().unwrap(),
@@ -134,7 +185,7 @@ fn teardown_issues_no_stop_for_an_attached_cast_target() {
         super::types_cast::spawn_fake_cast_worker(super::types_cast::FakeCastTransport::default());
     app.set_cast_client("device-1", job_tx);
 
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     assert!(!calls.lock().unwrap().contains(&"stop".to_string()));
 }
@@ -150,7 +201,7 @@ fn teardown_clears_persisted_connection_when_exiting_local() {
     let mut app = make_app_stub();
     app.config.lock().unwrap().auto_reconnect = true;
 
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     assert_eq!(crate::config::load_last_remote_connection().unwrap(), None);
 }
@@ -167,7 +218,7 @@ fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
     assert!(!app.config.lock().unwrap().auto_reconnect);
     app.active_route = None;
 
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     // Feature is off: the file from before this test's own `app` even
     // existed must be left exactly as it was, not cleared just because
@@ -199,7 +250,7 @@ fn teardown_persists_a_reconnected_target_for_a_local_daemon_launch_that_moved_r
     ));
     app.active_route = Some("music".to_string());
 
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     assert_eq!(
         crate::config::load_last_remote_connection().unwrap(),
@@ -230,7 +281,7 @@ fn teardown_skips_persistence_for_an_explicit_remote_daemon_launch() {
     ));
     app.active_route = None;
 
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     assert_eq!(
         crate::config::load_last_remote_connection().unwrap(),
@@ -262,7 +313,7 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
     let mut app = make_local_daemon_app_stub(make_items(2));
     app.player_tab
         .set_items(make_items(3), app.player_tab.queue_cursor);
-    app.teardown(Duration::from_secs(1));
+    app.teardown(Duration::from_secs(1), None);
 
     let state = crate::config::load_queue_state().expect("existing daemon snapshot");
     assert_eq!(

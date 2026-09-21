@@ -20,15 +20,6 @@ use super::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    /// Finish an orderly TUI teardown after taking the selected destination's
-    /// bounded launch snapshot. The App remains the persistence authority;
-    /// this shell query is the only reverse read from the mounted owner.
-    pub(super) fn teardown(&mut self, quit_timeout: std::time::Duration) {
-        let launch_state = self.launch_state_snapshot();
-        self.app
-            .teardown_with_launch_state(quit_timeout, launch_state);
-    }
-
     /// The active library's [`LibraryKey`] from the resolved tab: the owner
     /// map's addressing key (design D2: `Home | Feeds | Service(LibraryKey)`).
     pub(super) fn active_library_key(&self) -> Option<LibraryKey> {
@@ -61,24 +52,37 @@ impl Model {
     /// Assemble the selected destination's bounded launch identities. This is
     /// a teardown-only query: the panel asks only its active owner, never any
     /// unselected destination.
-    pub(super) fn launch_state_snapshot(&self) -> Option<mbv_core::config::TuiLaunchState> {
-        let key = self.active_library_key()?;
-        let (selector, item) = self
-            .application
-            .get_component(&ComponentId::Library)
-            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(|panel| panel.launch_snapshot(&key))
+    pub(super) fn launch_state_snapshot(&self) -> mbv_core::config::TuiLaunchState {
+        let key = self.active_library_key();
+        let (selector, item) = key
+            .as_ref()
+            .and_then(|key| {
+                self.application
+                    .get_component(&ComponentId::Library)
+                    .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+                    .and_then(|panel| panel.launch_snapshot(key))
+            })
             .unwrap_or((None, None));
-        Some(mbv_core::config::TuiLaunchState {
+        // A service tab with an out-of-date catalog index has no stable
+        // destination identity to persist. Home is the first guaranteed tab,
+        // so it is the safe tab identity for this incomplete snapshot.
+        let tab = key.as_ref().map_or_else(
+            || match self.app.tab {
+                TabSelection::Feeds => mbv_core::config::TabIdentity::Feeds,
+                _ => mbv_core::config::TabIdentity::Home,
+            },
+            |key| key.tab_identity(),
+        );
+        mbv_core::config::TuiLaunchState {
             version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-            tab: key.tab_identity(),
+            tab,
             panel_focus: match self.app.effective_panel_focus() {
                 PanelFocus::Library => mbv_core::config::LaunchPanelFocus::Library,
                 PanelFocus::Queue => mbv_core::config::LaunchPanelFocus::Queue,
             },
             selector,
             item,
-        })
+        }
     }
 
     /// The active library's stable selection origin (design D6/D7): the
