@@ -682,27 +682,9 @@ impl LibraryContentOwner for TvContent {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }
-        if self.context.show_letter_pills {
-            self.context.list.letter_filter = match state.selector.as_ref() {
-                Some(SelectorIdentity::Emby {
-                    key: EmbySelectorKey::Letter(bucket),
-                }) => crate::app::render::LetterFilter::for_index(match bucket {
-                    EmbyLetterBucket::AToC => 0,
-                    EmbyLetterBucket::DToF => 1,
-                    EmbyLetterBucket::GToI => 2,
-                    EmbyLetterBucket::JToL => 3,
-                    EmbyLetterBucket::MToO => 4,
-                    EmbyLetterBucket::PToR => 5,
-                    EmbyLetterBucket::SToU => 6,
-                    EmbyLetterBucket::VToZ => 7,
-                    EmbyLetterBucket::Hash => 8,
-                }),
-                Some(SelectorIdentity::Emby {
-                    key: EmbySelectorKey::Unfiltered,
-                }) => None,
-                _ => Some(crate::app::render::LetterFilter::default_filter()),
-            };
-        }
+        // The shell applies the selector through App and pushes the resulting
+        // content before this item-level re-anchor. Keep selector state
+        // owned by that projection rather than mirroring it here.
         let selected = match state.item.as_ref() {
             Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
             _ => false,

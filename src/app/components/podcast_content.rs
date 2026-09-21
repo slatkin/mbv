@@ -513,27 +513,9 @@ impl LibraryContentOwner for PodcastContent {
     }
 
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
-        let pill = match state.selector.as_ref() {
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::PodcastFilter(filter),
-            }) => PillSelection::State(match filter {
-                AudiobookshelfPodcastFilter::All => AudiobookshelfEpisodeFilter::All,
-                AudiobookshelfPodcastFilter::Unplayed => AudiobookshelfEpisodeFilter::Unplayed,
-                AudiobookshelfPodcastFilter::Played => AudiobookshelfEpisodeFilter::Played,
-            }),
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::PodcastShow(id),
-            }) if self
-                .state
-                .shows
-                .iter()
-                .any(|show| &show.library_item_id == id) =>
-            {
-                PillSelection::Show(id.clone())
-            }
-            _ => PillSelection::State(AudiobookshelfEpisodeFilter::All),
-        };
-        self.set_pill(pill);
+        // The shell applies the selector through App and pushes the resulting
+        // content before this item-level re-anchor. The pill remains owned by
+        // that projection instead of being mirrored here.
         if let PillSelection::Show(id) = &self.pill {
             if !self.state.detail_cache.contains_key(id) {
                 return false;

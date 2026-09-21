@@ -311,6 +311,7 @@ fn browser_owner_reanchors_selector_before_item_and_falls_back_when_item_is_miss
     let mut owner = BrowserOwner::new(LibraryKind::Movies);
     let mut push = owner_push(make_items(3));
     push.show_letter_pills = true;
+    push.letter_filter = LetterFilter::for_index(2);
     owner.set_content(push);
     let state = TuiLaunchState {
         version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,

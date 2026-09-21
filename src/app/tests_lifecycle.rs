@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::home_content::HomeContent;
-use crate::app::components::LibraryKey;
+use crate::app::components::{ComponentId, LibraryKey};
 use mbv_core::config::{FeedKind, FeedSubscription, ServiceKind};
 use mbv_core::playback_queue::FeedEntry;
 use crate::app::tests::*;
@@ -91,6 +91,66 @@ fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
     assert_eq!(app.tab, TabSelection::Home);
     assert!(!app.pending_launch_tab_resolved);
     assert!(app.pending_launch_state.is_none());
+}
+
+#[test]
+fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target() {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Library;
+    app.player_tab.set_items(make_items(3), 0);
+    app.player_tab.queue_cursor = 99;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().app.pending_launch_tab_resolved = true;
+    harness.model_mut().app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Queue,
+        selector: None,
+        item: None,
+    });
+    harness.model_mut().update_home_owner(|home| {
+        home.set_content(
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
+                "Home item",
+                "Movie",
+            )))],
+            Vec::new(),
+            false,
+            std::collections::HashMap::new(),
+        );
+    });
+
+    // This is the production Application::tick path: the sync pass before
+    // the tick waits for destination readiness, then restores the saved Panel
+    // focus without supplying any Queue target.
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('z'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Queue),
+        "Queue receives framework focus after destination restoration"
+    );
+    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Queue);
+    assert_eq!(
+        harness.model().app.player_tab.queue_cursor,
+        0,
+        "Queue selection follows normal initialization, not launch state"
+    );
+    let queue = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::QueueComponent>()
+        })
+        .expect("Queue mounted");
+    assert_eq!(queue.test_cursor(), 0);
 }
 
 #[test]

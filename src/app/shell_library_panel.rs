@@ -197,6 +197,17 @@ impl Model {
             .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
             .is_some_and(|panel| panel.reanchor_launch_state(&key, &state));
         if applied {
+            let focus = match state.panel_focus {
+                mbv_core::config::LaunchPanelFocus::Library => PanelFocus::Library,
+                mbv_core::config::LaunchPanelFocus::Queue => PanelFocus::Queue,
+            };
+            self.app.set_panel_focus(focus);
+            // Queue focus is restored only after the selected destination has
+            // accepted its launch state. Re-run the normal Queue projection
+            // so its framework focus, frame state, and local selection follow
+            // the same path as an ordinary panel-focus change; no Queue
+            // target is carried by the launch snapshot.
+            self.sync_queue();
             self.app.pending_launch_state = None;
             self.app.pending_launch_tab_resolved = false;
         }

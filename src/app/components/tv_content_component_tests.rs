@@ -617,6 +617,7 @@ fn tv_reanchor_launch_state_falls_back_to_first_series_when_item_is_missing() {
         None,
         true,
     ));
+    owner.test_set_letter_filter(2);
     let state = mbv_core::config::TuiLaunchState {
         version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_core::config::TabIdentity::Home,
