@@ -55,32 +55,21 @@ fn resolve_group_album(
     }
 }
 
-/// Builds the stable artist identity for every album (parallel to
-/// `group_album_info`, design D2 of `add-grouped-music-tree-browser`). The
-/// Grouped Music tree owner is the only consumer.
-pub(in crate::app::render) fn group_album_artist_keys(
-    album_artist_cache: &HashMap<String, String>,
-    albums: &[mbv_core::api::EmbyItem],
-    catalog: Option<&GroupedAlbumCatalog>,
-) -> Vec<ArtistKey> {
-    (0..albums.len())
-        .map(|i| resolve_group_album(album_artist_cache, albums, catalog, i).3)
-        .collect()
-}
-
-/// Builds the `(artist, year, album_name)` display info for every album,
+/// Builds the `(artist, year, album_name)` display info and stable artist
+/// identity for every album (design D2 of `add-grouped-music-tree-browser`),
 /// consuming the settled catalog when available (no artist derivation) and
 /// falling back to a synchronous best-effort chain otherwise.
-pub(in crate::app::render) fn group_album_info(
+pub(in crate::app::render) fn group_album_plan(
     album_artist_cache: &HashMap<String, String>,
     albums: &[mbv_core::api::EmbyItem],
     catalog: Option<&GroupedAlbumCatalog>,
-) -> Vec<(String, String, String)> {
-    (0..albums.len())
-        .map(|i| {
-            let (artist, year, name, _) =
-                resolve_group_album(album_artist_cache, albums, catalog, i);
-            (artist, year, name)
-        })
-        .collect()
+) -> (Vec<(String, String, String)>, Vec<ArtistKey>) {
+    let mut info = Vec::with_capacity(albums.len());
+    let mut keys = Vec::with_capacity(albums.len());
+    for i in 0..albums.len() {
+        let (artist, year, name, key) = resolve_group_album(album_artist_cache, albums, catalog, i);
+        info.push((artist, year, name));
+        keys.push(key);
+    }
+    (info, keys)
 }

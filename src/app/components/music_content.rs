@@ -756,7 +756,7 @@ impl MusicContent {
         self.browser.expand_all_roots();
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
         let target = self.track_list.selected_target()?;
         if let Some(detail) = self.current_artist_detail() {

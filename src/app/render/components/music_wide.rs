@@ -108,11 +108,12 @@ impl App {
         let catalog = level
             .and_then(|level| level.music_grouping.as_ref())
             .and_then(|state| state.settled.clone());
-        let album_info = crate::app::render::screens::album_plan::group_album_info(
-            &self.album_artist_cache,
-            &albums,
-            catalog.as_ref(),
-        );
+        let (album_info, album_artist_keys) =
+            crate::app::render::screens::album_plan::group_album_plan(
+                &self.album_artist_cache,
+                &albums,
+                catalog.as_ref(),
+            );
         let album_order = catalog
             .as_ref()
             .map(|catalog| {
@@ -124,11 +125,6 @@ impl App {
                     .collect()
             })
             .unwrap_or_else(|| crate::app::render::sorted_group_album_order(&album_info));
-        let album_artist_keys = crate::app::render::screens::album_plan::group_album_artist_keys(
-            &self.album_artist_cache,
-            &albums,
-            catalog.as_ref(),
-        );
         let album_tracks = selected_album
             .as_ref()
             .and_then(|album| self.album_tracks_cache.get(&album.id).cloned());
