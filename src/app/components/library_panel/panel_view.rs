@@ -33,6 +33,7 @@ impl Component for LibraryPanel {
             &["ESC:Back"]
         };
         let Some(owner) = self.owners.active_mut() else {
+            self.reset_split_gesture();
             return;
         };
         let overview_scroll = owner.hero_scroll_offset();
@@ -178,6 +179,9 @@ impl Component for LibraryPanel {
         self.hits = hits;
         self.pill_windows = windows;
         self.painted_area = Some(area);
+        if self.split.is_none() {
+            self.reset_split_gesture();
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

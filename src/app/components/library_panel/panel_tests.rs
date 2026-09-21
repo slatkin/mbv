@@ -397,6 +397,86 @@ fn split_drag_started_outside_the_gap_emits_no_resize_request() {
     ));
 }
 
+#[test]
+fn interrupted_split_drag_does_not_claim_a_later_row_release_or_unchanged_drag() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    let _ = draw_panel(&mut panel);
+    let gap = panel.test_split_gap().expect("a wide split painted");
+    let list = panel.test_list_rect().expect("a wide list painted");
+
+    let _ = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        gap.x,
+        gap.y,
+    ));
+    assert!(matches!(
+        panel.on(&mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            gap.x + 6,
+            gap.y,
+        )),
+        Some(Msg::Shell(ShellRequest::ResizeListPaneLive(_)))
+    ));
+    // The release is dropped outside the painted area, abandoning the gap
+    // recognizer before it can emit its end request.
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Up(MouseButton::Left),
+            120,
+            gap.y,
+        )),
+        None
+    );
+
+    let _ = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        list.x,
+        list.y,
+    ));
+    assert_eq!(
+        log.borrow().events.last(),
+        Some(&LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+            ratatui::layout::Position::new(list.x, list.y),
+        )))
+    );
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Up(MouseButton::Left),
+            list.x,
+            list.y,
+        )),
+        None,
+        "the non-gap release remains with the surface gesture"
+    );
+
+    // A fresh drag that resolves the already-stored width emits neither a
+    // live update nor an end request.
+    let _ = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        gap.x,
+        gap.y,
+    ));
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Drag(MouseButton::Left),
+            gap.x + 6,
+            gap.y,
+        )),
+        None
+    );
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Up(MouseButton::Left),
+            gap.x + 6,
+            gap.y,
+        )),
+        None
+    );
+}
+
 /// Owner retention: dropping a key from the live set removes its owner;
 /// retained owners keep their state.
 #[test]

@@ -893,15 +893,21 @@ mod tests {
             .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
             .expect("draw test frame");
 
+        let content_width = harness
+            .model()
+            .library_panel_content_area()
+            .expect("library content area")
+            .width;
         let (mut music_resize, mut tv_resize) = (false, false);
         harness.model_mut().handle_terminal_message(
             Msg::Shell(ShellRequest::ResizeListPaneLive(42)),
             &mut music_resize,
             &mut tv_resize,
         );
-        assert!(
-            harness.model().app.list_pane_width.is_some(),
-            "Live updates the in-memory split width"
+        assert_eq!(
+            harness.model().app.list_pane_width,
+            crate::app::list_pane_width::normalize_list_pane_width(Some(42), content_width),
+            "Live stores the normalized in-memory split width"
         );
         assert_eq!(
             std::fs::read(crate::config::prefs_path()).expect("read live prefs"),
@@ -910,13 +916,14 @@ mod tests {
         );
 
         harness.model_mut().handle_terminal_message(
-            Msg::Shell(ShellRequest::ResizeListPaneEnd(43)),
+            Msg::Shell(ShellRequest::ResizeListPaneEnd(u16::MAX)),
             &mut music_resize,
             &mut tv_resize,
         );
-        assert!(
-            harness.model().app.list_pane_width.is_some(),
-            "End updates the in-memory split width"
+        assert_eq!(
+            harness.model().app.list_pane_width,
+            crate::app::list_pane_width::normalize_list_pane_width(Some(u16::MAX), content_width,),
+            "End stores the normalized (clamped) in-memory split width"
         );
         assert_ne!(
             std::fs::read(crate::config::prefs_path()).expect("read end prefs"),
