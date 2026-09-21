@@ -244,12 +244,13 @@ impl HomeContent {
                     // by identity, not by a title that can collide across
                     // episodes.
                     target: item.id().to_owned(),
-                    // The canonical state renders an active row's resume
-                    // percentage inline, so Home projects no separate badge.
+                    // Continue keeps its playback-oriented row presentation;
+                    // dated Latest rows use the canonical right-aligned gutter.
                     trailing: if self.section != 0 {
-                        provider_timestamp_secs(item).map(|timestamp| {
-                            MediaListTrailing::Gutter(fmt_publish_date_short(timestamp))
-                        })
+                        provider_timestamp_secs(item)
+                            .map(fmt_publish_date_short)
+                            .filter(|date| !date.is_empty())
+                            .map(MediaListTrailing::Gutter)
                     } else {
                         None
                     },
