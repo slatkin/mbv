@@ -117,26 +117,103 @@ fn loading_feeds_panel_owns_split_drag() {
 }
 
 #[test]
-fn split_drag_is_live_only_and_tracks_press_drag_release() {
+fn split_drag_is_live_only_and_persists_once_on_release() {
     let mut app = make_movie_app();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
+    std::fs::write(crate::config::prefs_path(), r#"{"sentinel":true}"#)
+        .expect("write initial prefs");
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
     let (gap, origin, content_width) = split(&harness);
-    let before = std::fs::read(crate::config::prefs_path()).ok();
+    let before = std::fs::read(crate::config::prefs_path()).expect("read initial prefs");
+
     harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
-    assert!(!harness.step().raw_messages.iter().any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
-    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x - 5, gap.y));
-    let expected = crate::app::list_pane_width::normalize_list_pane_width(Some(origin - (gap.x - 5)), content_width).unwrap();
+    assert!(!harness
+        .step()
+        .raw_messages
+        .iter()
+        .any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+
+    let first_column = gap.x - 2;
+    let first_expected = crate::app::list_pane_width::normalize_list_pane_width(
+        Some(origin - first_column),
+        content_width,
+    )
+    .unwrap();
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), first_column, gap.y));
     let outcome = harness.step();
-    assert!(outcome.raw_messages.iter().any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(w)) if *w == expected)));
+    assert!(outcome.raw_messages.iter().any(|m| matches!(
+        m,
+        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) if *width == first_expected
+    )));
     apply(&mut harness, outcome);
-    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x - 5, gap.y));
-    assert!(!harness.step().raw_messages.iter().any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+    assert_eq!(
+        std::fs::read(crate::config::prefs_path()).expect("read live prefs"),
+        before,
+        "the first live drag position must not write preferences"
+    );
+
+    let final_column = gap.x - 5;
+    let expected = crate::app::list_pane_width::normalize_list_pane_width(
+        Some(origin - final_column),
+        content_width,
+    )
+    .unwrap();
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), final_column, gap.y));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|m| matches!(
+        m,
+        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) if *width == expected
+    )));
+    apply(&mut harness, outcome);
+    assert_eq!(
+        std::fs::read(crate::config::prefs_path()).expect("read live prefs"),
+        before,
+        "the final live drag position must not write preferences"
+    );
+
+    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), final_column, gap.y));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|m| matches!(
+        m,
+        Msg::Shell(ShellRequest::ResizeListPaneEnd(width)) if *width == expected
+    )));
+    apply(&mut harness, outcome);
     assert_eq!(harness.model().app.list_pane_width, Some(expected));
-    assert_eq!(std::fs::read(crate::config::prefs_path()).ok(), before);
+    let after_release = std::fs::read(crate::config::prefs_path()).expect("read end prefs");
+    assert_ne!(after_release, before, "release must be the only preference write");
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&after_release)
+            .expect("parse saved prefs")["list_pane_width"]
+            .as_u64(),
+        Some(expected as u64),
+        "release persists the final resolved width"
+    );
+
+    // A second gesture with no motion must not rewrite the already-persisted
+    // split or emit a persistence request.
+    draw(&mut harness);
+    let (gap, _, _) = split(&harness);
+    let before_click = std::fs::read(crate::config::prefs_path()).expect("read saved prefs");
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
+    assert!(!harness.step().raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::ResizeListPaneEnd(_))
+    )));
+    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x, gap.y));
+    let outcome = harness.step();
+    assert!(!outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::ResizeListPaneEnd(_))
+    )));
+    apply(&mut harness, outcome);
+    assert_eq!(
+        std::fs::read(crate::config::prefs_path()).expect("read click prefs"),
+        before_click,
+        "a press-release without motion must not write preferences"
+    );
 }
 
 #[test]
