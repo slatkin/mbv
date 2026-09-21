@@ -463,12 +463,15 @@ impl MusicContent {
     /// stable artist identity gate and album-item resolution cannot drift.
     fn workspace_track_activation(&self) -> Option<Msg> {
         if self.artist_workspace_focused() {
-            let target = self.artist_detail_target()?;
-            let track_id = self.track_list.selected_target()?.clone();
-            return Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate {
-                target,
-                track_id,
-            }));
+            if let (Some(target), Some(track_id)) = (
+                self.artist_detail_target(),
+                self.track_list.selected_target().cloned(),
+            ) {
+                return Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+                    target,
+                    track_id,
+                }));
+            }
         }
         let track = self.selected_track_item()?;
         let album_id = self.focused_track_album_id()?;
