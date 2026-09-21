@@ -163,6 +163,11 @@ impl TvContent {
         let viewport_height = self.painted_viewport_height();
         self.carrier.clamp_viewport(viewport_height);
     }
+    #[cfg(test)]
+    pub(in crate::app) fn test_set_letter_filter(&mut self, index: usize) {
+        self.context.list.letter_filter = crate::app::render::LetterFilter::for_index(index);
+    }
+
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
         let grouped = !self.inline_search.is_active()

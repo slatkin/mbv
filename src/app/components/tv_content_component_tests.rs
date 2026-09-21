@@ -12,7 +12,9 @@ use super::tv_content::TvContent;
 use crate::app::components::LibraryKind;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
-use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity, ServiceKind};
+use mbv_core::config::{
+    EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity, ServiceKind,
+};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -559,6 +561,53 @@ fn tv_episode_brackets_wrap_season_selection() {
 fn tv_launch_snapshot_uses_unfiltered_letter_scope_and_excludes_season_workspace() {
     let mut series = make_item("Series", "Series");
     series.id = "series-stable".into();
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season],
+        episodes: Default::default(),
+    };
+    let mut owner = TvContent::new();
+    owner.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
+        Some(series),
+        Some(detail),
+        0,
+        None,
+        true,
+    ));
+
+    {
+        let content = owner.content();
+        let workspace = content
+            .hero
+            .as_ref()
+            .and_then(|hero| hero.workspace.as_ref())
+            .expect("selected TV series mounts a Hero Workspace");
+        let selector = workspace
+            .selector
+            .as_ref()
+            .expect("season detail mounts a Workspace selector row");
+        assert_eq!(selector.pills, vec!["Season 1"]);
+    }
+
+    assert_eq!(
+        owner.launch_snapshot(),
+        (
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Unfiltered,
+            }),
+            Some(LibraryItemIdentity::Emby {
+                id: "series-stable".into(),
+            }),
+        )
+    );
+}
+
+#[test]
+fn tv_launch_snapshot_uses_nonzero_letter_bucket_identity() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-stable".into();
     let mut owner = TvContent::new();
     owner.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series], 0),
@@ -568,12 +617,13 @@ fn tv_launch_snapshot_uses_unfiltered_letter_scope_and_excludes_season_workspace
         None,
         true,
     ));
+    owner.test_set_letter_filter(2);
 
     assert_eq!(
         owner.launch_snapshot(),
         (
             Some(SelectorIdentity::Emby {
-                key: EmbySelectorKey::Unfiltered,
+                key: EmbySelectorKey::Letter(EmbyLetterBucket::GToI),
             }),
             Some(LibraryItemIdentity::Emby {
                 id: "series-stable".into(),

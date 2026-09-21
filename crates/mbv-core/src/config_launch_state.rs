@@ -138,10 +138,11 @@ impl EmbyLetterBucket {
 
 /// Stable generic-Emby pill identity (task 2.1): letter pills are a closed
 /// bucket set, so the bucket identity is independent of its display label;
-/// feed/home-video group pills are dynamic, so they resolve to the group
-/// folder's Service content ID — never a pill index or group display name.
-/// `Unfiltered` distinguishes a shown, unfiltered pill row from a destination
-/// that has no pills at all (`TuiLaunchState::selector == None`).
+/// TV letter pills use the same fixed bucket identities, while feed/home-video
+/// group pills and Music artist group pills are dynamic, so they resolve to
+/// the group folder's Service content ID — never a pill index or group display
+/// name. `Unfiltered` distinguishes a shown, unfiltered pill row from a
+/// destination that has no pills at all (`TuiLaunchState::selector == None`).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EmbySelectorKey {
