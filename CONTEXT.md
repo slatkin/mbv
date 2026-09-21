@@ -351,10 +351,10 @@ _Avoid_: generic list, two-column list, Inline Search
 
 **Media-list row**:
 The one painted fixed-height row of a `MediaList` flow in every Panel mode. Its
-left-aligned metadata slot carries one closed role: a release year in the
-green metadata role or a progress badge in the FOAM one; its right-aligned
-duration slot is green.
-_Avoid_: wide media row, wide_media_row
+left-aligned metadata slot carries a progress badge in the FOAM role; its
+right-aligned gutter is one closed metadata role: a date/year in the green
+`STATUS_AVAILABLE` role, or a green duration on Queue rows.
+_Avoid_: wide media row, wide_media_row, left-aligned year slot
 
 **Group heading**:
 The non-selectable Heading row labelling a group of media-list Item rows (artist, feed age bucket, letter or surname bucket, season). Painted bold in the FOAM metadata role; unlike a media-list Item row it keeps the surface fill and never paints the selected-row bar. It is a visual label, never a selection or action target, and it takes its own place in the zebra alternation.
