@@ -1121,12 +1121,18 @@ mod wide_row_regression_tests {
     fn year_and_publish_date_paint_identically_in_the_gutter() {
         let rect = Rect::new(0, 0, 40, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
+        let mut year_item = crate::app::tests::make_item("Year row", "Movie");
+        year_item.production_year = 2001;
+        let year_trailing = (!year_item.is_folder && year_item.production_year > 0)
+            .then(|| MediaListTrailing::Gutter(year_item.production_year.to_string()));
+        let published_date = Some(year_item.production_year.to_string());
+        let published_trailing = published_date.map(MediaListTrailing::Gutter);
         list.set_content(vec![
             MediaListRow::Item {
                 target: "year".into(),
-                primary: "Year row".into(),
+                primary: year_item.name,
                 secondary: None,
-                trailing: Some(MediaListTrailing::Gutter("3 Sep".into())),
+                trailing: year_trailing,
                 duration: None,
                 kind: MediaKind::Collection,
                 semantic_state: MediaSemanticState::Ordinary,
@@ -1135,7 +1141,7 @@ mod wide_row_regression_tests {
                 target: "date".into(),
                 primary: "Date row".into(),
                 secondary: None,
-                trailing: Some(MediaListTrailing::Gutter("3 Sep".into())),
+                trailing: published_trailing,
                 duration: None,
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
@@ -1268,7 +1274,7 @@ mod wide_row_regression_tests {
                 target: "playing".into(),
                 primary: "Playing title".into(),
                 secondary: None,
-                trailing: None,
+                trailing: Some(MediaListTrailing::Gutter("2001".into())),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::NowPlaying {
@@ -1279,7 +1285,7 @@ mod wide_row_regression_tests {
                 target: "resume".into(),
                 primary: "Resume title".into(),
                 secondary: None,
-                trailing: None,
+                trailing: Some(MediaListTrailing::Gutter("2001".into())),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Active {
@@ -1312,16 +1318,34 @@ mod wide_row_regression_tests {
             "live progress rides the trailing text like other rows: {playing:?}"
         );
         assert!(
+            playing.contains("2001"),
+            "the production-year gutter follows inline progress: {playing:?}"
+        );
+        assert!(
             playing.contains("2:00"),
             "total time shows like other rows: {playing:?}"
         );
+        let progress_x = 18;
+        assert_eq!(buf[(progress_x, 0)].symbol(), "4");
+        assert_eq!(buf[(progress_x, 0)].fg, palette::TEXT_METADATA);
+        let gutter_x = 38;
+        assert_eq!(buf[(gutter_x, 0)].symbol(), " ");
+        assert_eq!(buf[(gutter_x + 1, 0)].symbol(), " ");
+        assert_eq!(buf[(gutter_x + 2, 0)].symbol(), "2");
+        assert_eq!(buf[(gutter_x + 2, 0)].fg, palette::STATUS_AVAILABLE);
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 0)].symbol(), "2");
         assert_eq!(buf[(duration_x, 0)].fg, palette::DURATION);
 
         let resume = row_text(1);
         assert!(resume.contains("Resume title 12%"));
+        assert!(resume.contains("2001"));
         assert!(resume.contains("2:00"));
+        let progress_x = 15;
+        assert_eq!(buf[(progress_x, 1)].symbol(), "1");
+        assert_eq!(buf[(progress_x, 1)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(gutter_x + 2, 1)].symbol(), "2");
+        assert_eq!(buf[(gutter_x + 2, 1)].fg, palette::STATUS_AVAILABLE);
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 1)].symbol(), "2");
         assert_eq!(buf[(duration_x, 1)].fg, palette::DURATION);

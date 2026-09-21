@@ -76,7 +76,7 @@ pub(in crate::app) fn media_list_row<Target>(
             ..
         } => {
             // Canonical row geometry:
-            // `[2-col indent][title…]  [green gutter]  [FOAM progress]  [gold duration]`
+            // `[2-col indent][title…]  [FOAM progress]  [green gutter]  [gold duration]`
             // with the title at column 2 and quiet gaps before the right-aligned
             // metadata columns.
 
