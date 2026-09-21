@@ -876,7 +876,7 @@ fn double_click_a_childless_album_claims_the_gesture_unchanged() {
         "a childless album double-click opens no Hero"
     );
     assert_eq!(playback_queue_ids(&harness), Vec::<String>::new());
-    assert!(harness.model().app.pending_queue_action.is_none());
+    assert!(harness.model().app.pending_queue_replacement.is_none());
 }
 
 /// Row 5.5: tree-track Enter feeds the one grouped resolver, whose autoload
@@ -954,12 +954,12 @@ fn tree_track_activation_with_a_populated_queue_confirms_before_replacing(
         "{kind:?}: the prompt changes no queue"
     );
     assert_eq!(harness.model().app.playback_queue().queue_cursor, 0);
-    assert!(harness.model().app.pending_queue_action.is_some());
+    assert!(harness.model().app.pending_queue_replacement.is_some());
 
     inject_key(&mut harness, Key::Char('y'));
 
     assert!(!confirm_mounted(&harness));
-    assert!(harness.model().app.pending_queue_action.is_none());
+    assert!(harness.model().app.pending_queue_replacement.is_none());
     assert_eq!(playback_queue_ids(&harness), ["track-1", "track-2"]);
     assert_eq!(harness.model().app.playback_queue().queue_cursor, 1);
 }
@@ -983,7 +983,7 @@ fn cancelling_the_replace_queue_confirmation_leaves_the_queue_unchanged() {
 
     assert!(!confirm_mounted(&harness));
     assert!(
-        harness.model().app.pending_queue_action.is_none(),
+        harness.model().app.pending_queue_replacement.is_none(),
         "cancellation leaves no executable payload behind"
     );
     assert_eq!(playback_queue_ids(&harness), ["existing"]);

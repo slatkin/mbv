@@ -170,14 +170,17 @@ impl App {
             // Design D6: the populated-queue gate. Confirming hands the stored
             // payload back to the one queue-replacement executor; every other
             // key cancels, so no executable payload can fire at a later step.
+            // The gate owns `pending_queue_replacement` exclusively — reading
+            // the shared deferral slot here would let a save-deferral payload
+            // masquerade as a confirmed replacement.
             ConfirmAction::ReplacePopulatedQueue => match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
-                    if let Some(action) = self.pending_queue_action.take() {
+                    if let Some(action) = self.pending_queue_replacement.take() {
                         self.execute_queue_replacement(action);
                     }
                 }
                 _ => {
-                    self.pending_queue_action = None;
+                    self.pending_queue_replacement = None;
                 }
             },
         }

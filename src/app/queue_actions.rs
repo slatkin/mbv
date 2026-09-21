@@ -277,9 +277,15 @@ impl App {
     /// and asks first. Local saved-playlist protection is not part of this
     /// gate; the confirmed execution still runs it through
     /// `replace_queue_or_prompt`.
+    ///
+    /// The gated payload goes into its own `pending_queue_replacement` slot,
+    /// never the save-deferral `pending_queue_action`: only the
+    /// `ReplacePopulatedQueue` confirmation arm reads it, so an in-flight
+    /// playlist save (whose completion consumes the shared deferral slot)
+    /// cannot fire a replacement the user never confirmed.
     pub(super) fn request_queue_replacement(&mut self, action: PendingQueueAction) {
         if self.queue_replacement_needs_confirmation(&action) {
-            self.pending_queue_action = Some(action);
+            self.pending_queue_replacement = Some(action);
             self.ask_confirm(ConfirmModal {
                 title: " Replace Queue ".into(),
                 message: "Replace the current queue?".into(),
