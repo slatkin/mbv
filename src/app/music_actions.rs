@@ -4,7 +4,8 @@ use super::{App, BrowseLevel};
 /// The shared eligibility gate for the grouped Music owner. Keep this in sync
 /// with the shape that `is_music_group_view` exposes to the shell: the
 /// configured path must begin at the grouping level, have a group and album
-/// level on the stack, and identify album folders at the current depth.
+/// level on the stack. This is the shared `is_grouped_music_path` gate consumed
+/// by `is_music_group_view` and grouped landing validation.
 fn is_grouped_music_path(music_levels: &[String], nav_stack: &[BrowseLevel]) -> bool {
     music_levels.first().is_some_and(|level| level == "group")
         && nav_stack.len() >= 2
@@ -36,8 +37,9 @@ impl App {
 
     /// D7: validate a prepared recursive-album landing before its drain
     /// commits anything. The target library must still exist and the prepared
-    /// stack must reproduce the configured `music.levels` album shape (the
-    /// same position gate `is_viewing_album_folders` applies after commit). A
+    /// stack must reproduce the configured `music.levels` album shape through
+    /// the shared `is_grouped_music_path` gate used by the view and landing
+    /// validation. A
     /// miss is a rejected apply: the caller flashes the library error and
     /// leaves the active tab, nav stack, saved Library position, and
     /// retained-owner selection unchanged.

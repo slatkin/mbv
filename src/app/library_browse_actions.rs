@@ -1,4 +1,4 @@
-use super::types_browse::{AlbumIndexState, BrowseResting};
+use super::types_browse::{AlbumIndex, AlbumIndexState, BrowseResting};
 use super::types_events::NavigateLanding;
 use super::ui_util::sort_episodes;
 use super::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE};
@@ -104,7 +104,7 @@ fn build_navigate_landing(
     item_type: &str,
     lib_id: &str,
     levels: &[String],
-    cached_album_entries: Option<&[AlbumSearchEntry]>,
+    cached_album_index: Option<&AlbumIndex>,
 ) -> Result<NavigateLanding, String> {
     // The item's own record supplies the back-references (D1: no ancestors
     // round trip when present); the fetch doubles as the deleted-item check.
@@ -117,7 +117,7 @@ fn build_navigate_landing(
         log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
         resolve_reveal_target(item_type, &item, Some(&ancestors))
     })?;
-    landing_for_target(client, &item, reveal, lib_id, levels, cached_album_entries)
+    landing_for_target(client, &item, reveal, lib_id, levels, cached_album_index)
 }
 
 /// The navigable ancestors inside the library: `get_ancestors` is
@@ -137,7 +137,7 @@ fn landing_for_target(
     reveal: RevealTarget,
     lib_id: &str,
     levels: &[String],
-    cached_album_entries: Option<&[AlbumSearchEntry]>,
+    cached_album_index: Option<&AlbumIndex>,
 ) -> Result<NavigateLanding, String> {
     match reveal {
         RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
@@ -182,7 +182,7 @@ fn landing_for_target(
             // A walk miss is a configured-path failure (flash), never a
             // silent no-op.
             let ancestors =
-                configured_album_ancestors(client, lib_id, levels, &album, cached_album_entries)?;
+                configured_album_ancestors(client, lib_id, levels, &album, cached_album_index)?;
             // Deep selection (task 6.2, design D6): an Audio-track reveal
             // rides its own id on the Album landing.
             let track_id = item.is_audio().then(|| item.id.clone());
@@ -208,7 +208,7 @@ fn configured_album_ancestors(
     library_id: &str,
     levels: &[String],
     album: &EmbyItem,
-    cached_album_entries: Option<&[AlbumSearchEntry]>,
+    cached_album_index: Option<&AlbumIndex>,
 ) -> Result<Vec<AlbumPathPart>, String> {
     if levels.last().map(String::as_str) != Some("album") {
         let ancestors = client.get_ancestors(&album.id)?;
@@ -222,8 +222,8 @@ fn configured_album_ancestors(
             })
             .collect());
     }
-    if let Some(entries) = cached_album_entries {
-        if let Some(entry) = entries.iter().find(|entry| entry.album.id == album.id) {
+    if let Some(index) = cached_album_index {
+        if let Some(entry) = index.get(&album.id) {
             return Ok(entry.ancestors.clone());
         }
     }
@@ -711,15 +711,22 @@ impl App {
         };
         let tx = self.lib_tx.clone();
         let music_levels = self.music_levels.clone();
-        let album_indexes = self.album_indexes.clone();
+        let target_ctype = match item_type.as_str() {
+            "Series" | "Episode" | "Season" => "tvshows",
+            "Movie" => "movies",
+            "Audio" | "MusicAlbum" | "MusicArtist" => "music",
+            _ => "",
+        };
+        let cached_album_index = libs
+            .iter()
+            .find(|(_, _, ctype)| ctype == target_ctype)
+            .and_then(|(_, library_id, _)| self.album_indexes.get(library_id))
+            .and_then(|state| match state {
+                AlbumIndexState::Ready(index) => Some(index.clone()),
+                _ => None,
+            });
         std::thread::spawn(move || {
             // Match library by collection_type since CollectionFolder IDs never appear in ancestors
-            let target_ctype = match item_type.as_str() {
-                "Series" | "Episode" | "Season" => "tvshows",
-                "Movie" => "movies",
-                "Audio" | "MusicAlbum" | "MusicArtist" => "music",
-                _ => "",
-            };
             let (lib_idx, lib_id) = match libs.iter().find(|(_, _, ctype)| ctype == target_ctype) {
                 Some((idx, id, _)) => (*idx, id.clone()),
                 None => {
@@ -728,11 +735,6 @@ impl App {
                     ));
                     return;
                 }
-            };
-
-            let cached_album_entries = match album_indexes.get(&lib_id) {
-                Some(AlbumIndexState::Ready(entries)) => Some(entries.as_slice()),
-                _ => None,
             };
 
             // D1: resolve the reveal target and build the per-kind landing
@@ -744,7 +746,7 @@ impl App {
                 &item_type,
                 &lib_id,
                 &music_levels,
-                cached_album_entries,
+                cached_album_index.as_deref(),
             ) {
                 Ok(landing) => LibEvent::NavigateTo {
                     lib_idx,

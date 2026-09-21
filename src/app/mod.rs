@@ -135,8 +135,8 @@ use self::resize::spawn_resize_worker;
 #[cfg(test)]
 use self::types_browse::restore_library_position;
 use self::types_browse::{
-    restore_library_position_with_fetched_rows, AlbumIndexState, AlbumPathPart, AlbumSearchEntry,
-    BrowseLevel, SeriesDetail,
+    restore_library_position_with_fetched_rows, AlbumIndex, AlbumIndexState, AlbumPathPart,
+    AlbumSearchEntry, BrowseLevel, SeriesDetail,
 };
 use self::types_confirm::{ConfirmAction, ConfirmModal};
 #[cfg(test)]

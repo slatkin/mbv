@@ -3,7 +3,7 @@ use super::types_browse::BrowseResting;
 use super::types_events::{NavigateLanding, PendingSeriesHandoff};
 use super::ui_util::sort_audio_tracks;
 use super::{
-    notify_actions::ToastSeverity, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
+    notify_actions::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
     FeedHomeVideoState, LibEvent, QueueScope,
 };
 use mbv_core::api::EmbyItem;
@@ -604,8 +604,12 @@ impl App {
                 } else {
                     match result {
                         Ok(entries) => {
-                            self.album_indexes
-                                .insert(library_id.clone(), AlbumIndexState::Ready(entries));
+                            self.album_indexes.insert(
+                                library_id.clone(),
+                                AlbumIndexState::Ready(std::sync::Arc::new(AlbumIndex::new(
+                                    entries,
+                                ))),
+                            );
                         }
                         Err(error) => {
                             self.album_indexes
