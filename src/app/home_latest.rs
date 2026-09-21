@@ -1,26 +1,37 @@
 use mbv_core::playback_queue::QueueItem;
 use std::time::{SystemTime, UNIX_EPOCH};
-use time::format_description::well_known::Iso8601;
 
 /// The launch-relative interval used by Home Latest for one TUI run.
 /// `previous` is intentionally immutable and separate from exit-only UI state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct HomeLatestLaunchWindow {
+pub(crate) struct HomeLatestLaunchWindow {
     pub(super) previous: Option<u64>,
     pub(super) current: u64,
 }
 
-pub(super) fn current_launch_secs() -> u64 {
+pub(crate) fn current_launch_secs() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
 }
 
-pub(super) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
+pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
+    if current == 0 {
+        log::warn!(target: "home_latest", "invalid non-positive launch cutoff; markers disabled");
+        return HomeLatestLaunchWindow {
+            previous: None,
+            current,
+        };
+    }
+
     let previous = mbv_core::config::load_home_latest_launch();
     if let Err(error) = mbv_core::config::save_home_latest_launch(current) {
         log::warn!(target: "home_latest", "could not save launch cutoff: {error}");
+        return HomeLatestLaunchWindow {
+            previous: None,
+            current,
+        };
     }
     HomeLatestLaunchWindow { previous, current }
 }
@@ -29,7 +40,7 @@ pub(super) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
 #[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     match item {
-        QueueItem::Emby(item) => parse_iso_timestamp(&item.date_added),
+        QueueItem::Emby(item) => super::feed_parse_date::parse_pub_date_secs(&item.date_added),
         QueueItem::Feed(entry) => entry.pub_date_secs,
         QueueItem::Audiobookshelf(episode) => episode.pub_date_secs,
         QueueItem::AudiobookshelfBook(_) => None,
@@ -43,22 +54,6 @@ pub(super) fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunch
     };
     provider_timestamp_secs(item)
         .is_some_and(|timestamp| previous < timestamp && timestamp <= window.current)
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
-fn parse_iso_timestamp(value: &str) -> Option<u64> {
-    let value = value.trim();
-    let timestamp = time::OffsetDateTime::parse(value, &Iso8601::DEFAULT)
-        .map(|date_time| date_time.unix_timestamp())
-        .or_else(|_| {
-            time::Date::parse(value, &Iso8601::DEFAULT).map(|date| {
-                date.with_time(time::Time::MIDNIGHT)
-                    .assume_utc()
-                    .unix_timestamp()
-            })
-        })
-        .ok()?;
-    timestamp.try_into().ok()
 }
 
 #[cfg(test)]
@@ -170,6 +165,29 @@ mod tests {
         assert_eq!(second.previous, Some(100));
         assert_eq!(second.current, 200);
         assert_eq!(mbv_core::config::load_home_latest_launch(), Some(200));
+    }
+
+    #[test]
+    fn failed_launch_replacement_disables_markers() {
+        let _guard = mbv_core::config::TestStateDirGuard::new();
+        capture_launch_window(100);
+        let path = mbv_core::config::home_latest_launch_path();
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+
+        let window = capture_launch_window(200);
+        assert_eq!(window.previous, None);
+        assert_eq!(mbv_core::config::load_home_latest_launch(), None);
+
+        std::fs::remove_dir(path).unwrap();
+    }
+
+    #[test]
+    fn non_positive_launch_does_not_create_a_baseline() {
+        let _guard = mbv_core::config::TestStateDirGuard::new();
+        let window = capture_launch_window(0);
+        assert_eq!(window.previous, None);
+        assert_eq!(mbv_core::config::load_home_latest_launch(), None);
     }
 
     #[rstest]

@@ -78,6 +78,9 @@ fn save_home_latest_launch_at(path: &std::path::Path, launch_secs: u64) -> Resul
 }
 
 pub fn save_home_latest_launch(launch_secs: u64) -> Result<(), String> {
+    if launch_secs == 0 {
+        return Err("launch timestamp must be positive".to_string());
+    }
     save_home_latest_launch_at(&home_latest_launch_path(), launch_secs)
 }
 

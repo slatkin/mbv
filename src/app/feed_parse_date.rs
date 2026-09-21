@@ -16,7 +16,12 @@ pub(super) fn parse_pub_date_secs(text: &str) -> Option<u64> {
             Some(rest) => Cow::Owned(format!("{rest}Z")),
             None => Cow::Borrowed(t),
         };
-        time::OffsetDateTime::parse(&t, &Iso8601::DEFAULT).ok()
+        time::OffsetDateTime::parse(&t, &Iso8601::DEFAULT)
+            .or_else(|_| {
+                time::Date::parse(t.as_ref(), &Iso8601::DEFAULT)
+                    .map(|date| date.with_time(time::Time::MIDNIGHT).assume_utc())
+            })
+            .ok()
     } else {
         time::OffsetDateTime::parse(t, &Rfc2822).ok()
     }?;
