@@ -2,7 +2,7 @@ use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::LibraryKey;
-use mbv_core::config::{FeedKind, FeedSubscription};
+use mbv_core::config::{FeedKind, FeedSubscription, ServiceKind};
 use mbv_core::playback_queue::FeedEntry;
 use crate::app::tests::*;
 use rstest::rstest;
@@ -20,6 +20,78 @@ fn teardown_fast_when_player_thread_is_not_hung() {
         "teardown against a player with no thread to join should return \
              promptly, not wait anywhere near the quit_timeout budget, took {elapsed:?}"
     );
+}
+
+#[test]
+fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab() {
+    let mut app = crate::app::render::make_movie_app();
+    app.tab = TabSelection::Home;
+    app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: ServiceKind::Emby,
+            library_id: "lib-movies".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: None,
+        item: None,
+    });
+    app.pending_launch_tab = Some(mbv_core::config::TabIdentity::ServiceLibrary {
+        kind: ServiceKind::Emby,
+        library_id: "lib-movies".into(),
+    });
+
+    app.resolve_library_tab_pending();
+    assert_eq!(app.tab, TabSelection::Home, "catalog identity is not ready yet");
+    assert!(app.pending_launch_tab.is_some());
+
+    app.emby_catalog_ready = true;
+    app.resolve_library_tab_pending();
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
+    assert!(app.pending_launch_tab.is_none());
+    assert!(app.pending_launch_state.is_some(), "destination state remains for 3.2");
+}
+
+#[test]
+fn pending_launch_tab_missing_from_catalog_falls_back_to_home() {
+    let mut app = crate::app::render::make_movie_app();
+    app.pending_launch_tab = Some(mbv_core::config::TabIdentity::ServiceLibrary {
+        kind: ServiceKind::Emby,
+        library_id: "gone".into(),
+    });
+    app.emby_catalog_ready = true;
+
+    app.resolve_library_tab_pending();
+
+    assert_eq!(app.tab, TabSelection::Home);
+    assert!(app.pending_launch_tab.is_none());
+}
+
+#[test]
+fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
+    let mut app = crate::app::render::make_movie_app();
+    app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: ServiceKind::Emby,
+            library_id: "lib-movies".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: None,
+        item: None,
+    });
+    app.pending_launch_tab = Some(mbv_core::config::TabIdentity::ServiceLibrary {
+        kind: ServiceKind::Emby,
+        library_id: "lib-movies".into(),
+    });
+
+    app.set_library_tab(0);
+    app.emby_catalog_ready = true;
+    app.resolve_library_tab_pending();
+
+    assert_eq!(app.tab, TabSelection::Home);
+    assert!(app.pending_launch_tab.is_none());
+    assert!(app.pending_launch_state.is_none());
 }
 
 #[test]
@@ -102,7 +174,7 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
 }
 
 #[test]
-fn orderly_teardown_writes_known_launch_state_without_active_destination() {
+fn orderly_teardown_preserves_stale_service_tab_family_without_active_destination() {
     let mut model = Model::new(make_app_stub());
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Queue;
@@ -110,7 +182,12 @@ fn orderly_teardown_writes_known_launch_state_without_active_destination() {
     model.teardown(Duration::from_secs(1));
 
     let state = mbv_core::config::load_tui_launch_state().expect("launch snapshot after teardown");
-    assert_eq!(state.tab, mbv_core::config::TabIdentity::Home);
+    assert_eq!(
+        state.tab,
+        mbv_core::config::TabIdentity::ServiceLibraryUnavailable {
+            kind: ServiceKind::Emby,
+        }
+    );
     assert_eq!(state.panel_focus, mbv_core::config::LaunchPanelFocus::Queue);
     assert_eq!(state.selector, None);
     assert_eq!(state.item, None);

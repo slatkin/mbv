@@ -77,6 +77,9 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap, prior_latest);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+                // The bootstrap is the live Emby catalog boundary. Launch-tab
+                // restoration is allowed to resolve stable identities only after it.
+                self.emby_catalog_ready = true;
                 // Warm the music group levels in the background (design D5 of
                 // `fix-music-artist-resolution-batching`); never gates startup.
                 self.spawn_music_group_warmup();
@@ -246,6 +249,8 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap, prior_latest);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+                // Setup completion also carries a fresh live Emby catalog.
+                self.emby_catalog_ready = true;
                 // Warm the music group levels in the background (design D5 of
                 // `fix-music-artist-resolution-batching`); never gates startup.
                 self.spawn_music_group_warmup();

@@ -1,12 +1,21 @@
 use super::{App, PanelFocus, TabSelection};
 use mbv_core::api::EmbyItem;
+use mbv_core::config::{ServiceKind, TabIdentity};
 
 impl App {
-    /// Applies the tab saved from the previous session once libraries have
-    /// loaded. Runs in the sync pass before any draw (task 1.1); the draw
-    /// path no longer writes `self.tab`.
+    /// Resolve the one startup launch intent against the current live
+    /// Service catalogs. Stable IDs are matched only after their owning
+    /// catalog has arrived; no saved presentation index is consulted.
+    ///
+    /// The tab identity is consumed here, while the complete snapshot stays
+    /// pending for destination-level restoration (task 3.2). Explicit tab
+    /// movement clears both levels in `apply_tab_position`.
     pub(super) fn resolve_library_tab_pending(&mut self) {
-        if self.library_tab_pending > 0
+        // Keep the pre-launch-state numeric fallback alive for the existing
+        // migration seam; task 4.2 will replace it with stable legacy
+        // identity recovery. New snapshots always take the branch below.
+        if self.pending_launch_tab.is_none()
+            && self.library_tab_pending > 0
             && (!self.libs.is_empty() || !self.audiobookshelf_libraries.is_empty())
         {
             let fp = self.feeds_tab_pos();
@@ -16,6 +25,82 @@ impl App {
             let pos = self.library_tab_pending.min(max_pos);
             self.tab = TabSelection::from_position_with_counts(pos, emby, audio, fp.is_some());
             self.library_tab_pending = 0;
+            return;
+        }
+        let Some(identity) = self.pending_launch_tab.clone() else {
+            return;
+        };
+        let resolved = match identity {
+            TabIdentity::Home => Some(TabSelection::Home),
+            TabIdentity::Feeds => {
+                if self.has_feeds_subscriptions() {
+                    Some(TabSelection::Feeds)
+                } else {
+                    Some(TabSelection::Home)
+                }
+            }
+            TabIdentity::ServiceLibrary { kind, library_id } => {
+                self.resolve_service_tab(kind, &library_id)
+            }
+            TabIdentity::ServiceLibraryUnavailable { kind } => self.resolve_first_service_tab(kind),
+        };
+        if let Some(tab) = resolved {
+            self.tab = tab;
+            self.pending_launch_tab = None;
+        }
+    }
+
+    fn resolve_service_tab(&self, kind: ServiceKind, library_id: &str) -> Option<TabSelection> {
+        match kind {
+            ServiceKind::Emby => {
+                if !self.emby_catalog_ready {
+                    return None;
+                }
+                Some(
+                    self.libs
+                        .iter()
+                        .position(|library| library.library.id == library_id)
+                        .map(TabSelection::EmbyLibrary)
+                        .unwrap_or(TabSelection::Home),
+                )
+            }
+            ServiceKind::Audiobookshelf => {
+                if !self.audiobookshelf_catalog_ready {
+                    return None;
+                }
+                Some(
+                    self.audiobookshelf_libraries
+                        .iter()
+                        .position(|library| library.id == library_id)
+                        .map(TabSelection::AudiobookshelfLibrary)
+                        .unwrap_or(TabSelection::Home),
+                )
+            }
+        }
+    }
+
+    fn resolve_first_service_tab(&self, kind: ServiceKind) -> Option<TabSelection> {
+        match kind {
+            ServiceKind::Emby => {
+                if !self.emby_catalog_ready {
+                    None
+                } else {
+                    self.libs
+                        .is_empty()
+                        .then_some(TabSelection::Home)
+                        .or(Some(TabSelection::EmbyLibrary(0)))
+                }
+            }
+            ServiceKind::Audiobookshelf => {
+                if !self.audiobookshelf_catalog_ready {
+                    None
+                } else {
+                    self.audiobookshelf_libraries
+                        .is_empty()
+                        .then_some(TabSelection::Home)
+                        .or(Some(TabSelection::AudiobookshelfLibrary(0)))
+                }
+            }
         }
     }
 
@@ -55,6 +140,11 @@ impl App {
         self.pending_navigate_tab_switch = None;
         self.pending_series_landing = None;
         self.pending_series_handoff = None;
+        // A user-selected tab owns the rest of the launch intent. Once the
+        // user moves explicitly, a later catalog refresh must not replay the
+        // saved tab or its destination identities.
+        self.pending_launch_tab = None;
+        self.pending_launch_state = None;
         self.tab = TabSelection::from_position_with_counts(
             pos,
             self.libs.len(),

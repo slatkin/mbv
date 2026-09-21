@@ -49,9 +49,11 @@ pub struct TuiLaunchState {
 }
 
 /// Stable identity of a selectable Library tab: the fixed Home/Feeds tabs,
-/// or a Service library keyed by Service kind plus library ID. A tab with
-/// no main Selector pills records `selector: None`; the loader resolves a
-/// missing tab to the first guaranteed tab in presentation order.
+/// or a Service library keyed by Service kind plus library ID. The
+/// unavailable Service marker is used only when orderly teardown observes a
+/// stale tab index with no live library ID to preserve. A tab with no main
+/// Selector pills records `selector: None`; the loader resolves a missing tab
+/// to the first guaranteed tab in presentation order.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TabIdentity {
@@ -61,6 +63,11 @@ pub enum TabIdentity {
         kind: ServiceKind,
         library_id: String,
     },
+    /// A Service tab was selected while its live catalog entry was no longer
+    /// available. This preserves the selected Service family without
+    /// inventing a library ID or silently rewriting the exit snapshot to
+    /// Home; restoration falls back against that Service's current catalog.
+    ServiceLibraryUnavailable { kind: ServiceKind },
 }
 
 /// Which Panel held focus at exit. Queue focus restores focus only — Queue

@@ -138,6 +138,28 @@ fn build_restores_list_pane_width_from_prefs_for_width_and_empty_values() {
 }
 
 #[test]
+fn build_loads_one_pending_launch_intent_without_selecting_a_stale_index() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let state = mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-movies".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: None,
+        item: None,
+    };
+    mbv_core::config::save_tui_launch_state(&state).expect("save launch state fixture");
+
+    let app = make_built_app();
+
+    assert_eq!(app.tab, TabSelection::Home);
+    assert_eq!(app.pending_launch_tab, Some(state.tab.clone()));
+    assert_eq!(app.pending_launch_state, Some(state));
+}
+
+#[test]
 fn build_always_starts_on_home_without_affecting_saved_queue_state() {
     let _guard = crate::config::TestStateDirGuard::new();
     std::fs::write(

@@ -63,13 +63,25 @@ impl Model {
                     .and_then(|panel| panel.launch_snapshot(key))
             })
             .unwrap_or((None, None));
-        // A service tab with an out-of-date catalog index has no stable
-        // destination identity to persist. Home is the first guaranteed tab,
-        // so it is the safe tab identity for this incomplete snapshot.
+        // Keep a stale Service selection as a Service-family identity rather
+        // than silently clobbering the completed exit snapshot to Home. There
+        // is no stable library ID once the live catalog entry is gone, so
+        // startup will resolve this bounded marker against that Service's
+        // current catalog and then apply the normal fallback.
         let tab = key.as_ref().map_or_else(
             || match self.app.tab {
                 TabSelection::Feeds => mbv_core::config::TabIdentity::Feeds,
-                _ => mbv_core::config::TabIdentity::Home,
+                TabSelection::EmbyLibrary(_) => {
+                    mbv_core::config::TabIdentity::ServiceLibraryUnavailable {
+                        kind: ServiceKind::Emby,
+                    }
+                }
+                TabSelection::AudiobookshelfLibrary(_) => {
+                    mbv_core::config::TabIdentity::ServiceLibraryUnavailable {
+                        kind: ServiceKind::Audiobookshelf,
+                    }
+                }
+                TabSelection::Home => mbv_core::config::TabIdentity::Home,
             },
             |key| key.tab_identity(),
         );

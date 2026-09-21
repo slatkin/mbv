@@ -51,6 +51,9 @@ impl App {
                     produced = true;
                     match completion.result {
                          Ok((libraries, progress, book_progress)) => {
+                             // This completion is the live Audiobookshelf
+                             // catalog boundary for stable tab restoration.
+                             self.audiobookshelf_catalog_ready = true;
                              self.audiobookshelf_libraries = libraries;
                              self.audiobookshelf_browse = self
                                  .audiobookshelf_libraries

@@ -217,6 +217,13 @@ pub struct App {
     pub(super) list_pane_width: Option<u16>,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
+    /// The one startup launch snapshot loaded from disk. The tab-level
+    /// identity is consumed once the live Service catalog resolves it; the
+    /// rest remains for destination-level restoration in task 3.2.
+    pub(super) pending_launch_state: Option<mbv_core::config::TuiLaunchState>,
+    pub(super) pending_launch_tab: Option<mbv_core::config::TabIdentity>,
+    pub(super) emby_catalog_ready: bool,
+    pub(super) audiobookshelf_catalog_ready: bool,
     /// Deferred tab switch for a `NavigateLanding::Album` landing (design D4
     /// of change `per-destination-item-navigation`): set when the recursive
     /// album activation spawns, consumed on its `RecursiveAlbumActivated`
