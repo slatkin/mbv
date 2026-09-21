@@ -324,6 +324,15 @@ impl RemotePlayer {
         self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
     }
 
+    /// Remove several slots in one owner edit, so the owner publishes one
+    /// queue snapshot instead of one per slot.
+    pub fn queue_remove_slots(&self, slot_ids: Vec<u64>) -> bool {
+        if slot_ids.is_empty() {
+            return true;
+        }
+        self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids })
+    }
+
     /// Move a slot by its stable identity to `to_index`.
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
         self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })

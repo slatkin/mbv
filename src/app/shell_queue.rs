@@ -253,14 +253,10 @@ impl Model {
                 }
             }
             QueueRequest::RemoveSelection { scope, slot_ids } => {
-                // Resolve each stable slot identity at execution time, as the
-                // context-menu RemoveSelection path does. Removing in queue
-                // order is safe because every lookup uses the current queue.
-                for slot_id in slot_ids {
-                    if let Some(index) = self.slot_index(scope, slot_id) {
-                        self.app.remove_from_queue(index);
-                    }
-                }
+                // One batch edit: the owner applies the whole range before
+                // publishing a queue snapshot, so the list does not shrink one
+                // row per removal.
+                self.app.remove_slots_from_queue(scope, &slot_ids);
             }
             QueueRequest::Move {
                 scope,
@@ -572,6 +568,35 @@ mod tests {
         model.sync_queue();
         assert_eq!(queue_cursor(&model), 1);
         assert!(model.app.pending_queue_cursor_reanchor.is_none());
+    }
+
+    #[test]
+    fn bulk_removal_reanchors_the_component_cursor_before_the_range() {
+        let mut app = make_app_stub();
+        app.player_tab.set_queue_items(emby_items(6), 0);
+        app.panel_focus = PanelFocus::Queue;
+        let mut model = Model::new(app);
+        model.sync_queue();
+        // Component cursor sits on the last row of the range about to go.
+        for _ in 0..4 {
+            press_down(&mut model);
+        }
+        assert_eq!(queue_cursor(&model), 4);
+
+        let slots: Vec<_> = (1..=4)
+            .map(|index| model.app.player_tab.slot_id_at(index).unwrap())
+            .collect();
+        model.handle_queue_request(crate::app::components::QueueRequest::RemoveSelection {
+            scope: QueueScope::Local,
+            slot_ids: slots,
+        });
+        model.sync_queue();
+
+        assert_eq!(
+            queue_cursor(&model),
+            0,
+            "the component adopts the cursor before the deleted range"
+        );
     }
 
     #[test]

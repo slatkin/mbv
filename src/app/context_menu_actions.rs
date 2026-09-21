@@ -75,18 +75,21 @@ impl App {
                 }
             }
             Some(ContextAction::RemoveSelection(targets)) => {
+                // Queue targets go through one batch edit so the owner
+                // publishes a single snapshot; Continue Watching targets are
+                // independent Service writes.
+                let mut queue_slot_ids = Vec::new();
                 for target in targets {
                     match target {
                         BulkRemoveTarget::ContinueWatching(item) => {
                             self.remove_from_continue_watching(*item)
                         }
-                        BulkRemoveTarget::Queue(slot_id) => {
-                            let scope = self.viewed_queue_scope();
-                            if let Some(pos) = self.slot_index(scope, slot_id) {
-                                self.remove_from_queue(pos);
-                            }
-                        }
+                        BulkRemoveTarget::Queue(slot_id) => queue_slot_ids.push(slot_id),
                     }
+                }
+                if !queue_slot_ids.is_empty() {
+                    let scope = self.viewed_queue_scope();
+                    self.remove_slots_from_queue(scope, &queue_slot_ids);
                 }
             }
             Some(ContextAction::MarkPlayedSelection(ids)) => {

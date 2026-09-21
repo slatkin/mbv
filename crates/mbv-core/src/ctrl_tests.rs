@@ -489,6 +489,19 @@ fn unified_queue_remove_slot_cmd_round_trips() {
 }
 
 #[test]
+fn unified_queue_remove_slots_cmd_round_trips() {
+    let cmd = CtrlCmd::UnifiedQueueRemoveSlots {
+        slot_ids: vec![4, 9],
+    };
+    let json = serde_json::to_string(&cmd).unwrap();
+    let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
+    match decoded {
+        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids } => assert_eq!(slot_ids, vec![4, 9]),
+        _ => panic!("expected UnifiedQueueRemoveSlots"),
+    }
+}
+
+#[test]
 fn unified_queue_move_slot_cmd_round_trips() {
     let cmd = CtrlCmd::UnifiedQueueMoveSlot {
         slot_id: 3,

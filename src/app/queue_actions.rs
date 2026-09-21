@@ -15,16 +15,13 @@ impl App {
     pub(super) fn remove_from_queue(&mut self, pos: usize) {
         let scope = self.viewed_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
-        let (active, current_idx) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx)
-        };
+        let active = self.player.status.lock().unwrap().active;
         if pos >= self.queue_for_scope(scope).total_queue_len() {
             let queue = self.queue_for_scope_mut(scope);
             queue.clamp_cursor();
             return;
         }
-        if controls_playback_queue && active && current_idx == pos {
+        if self.queue_pos_needs_active_confirm(scope, pos) {
             self.ask_confirm(ConfirmModal {
                 title: " Remove Item ".into(),
                 message: "Remove now-playing item and stop playback?".into(),
@@ -32,24 +29,6 @@ impl App {
                 on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
             });
             return;
-        }
-        if controls_playback_queue && !active {
-            let is_now_playing_remote = self
-                .connected_session_state
-                .as_ref()
-                .and_then(|s| s.now_playing_item_id.as_ref())
-                .zip(self.queue_for_scope(scope).emby_item_at(pos))
-                .map(|(npid, item)| item.id == *npid)
-                .unwrap_or(false);
-            if is_now_playing_remote {
-                self.ask_confirm(ConfirmModal {
-                    title: " Remove Item ".into(),
-                    message: "Remove now-playing item and stop playback?".into(),
-                    hint: "[y] Confirm    [Esc] Cancel".into(),
-                    on_confirm: ConfirmAction::RemoveActiveQueueItem(pos),
-                });
-                return;
-            }
         }
         let cursor_before = self.queue_for_scope(scope).queue_cursor;
         // Capture slot identity before removal so we can issue a
@@ -99,6 +78,133 @@ impl App {
             // item instead of leaving it on the item that shifted into this
             // slot. See `PlayerEvent::UnifiedQueueUpdated`.
             self.pending_queue_edit_cursor = Some(queue.queue_cursor);
+        }
+        self.advance_remote_queue_lineage();
+    }
+
+    /// Whether removing the slot at `pos` from `scope`'s playback queue needs
+    /// the dedicated now-playing confirmation: the slot is the actively
+    /// playing item, or the attached session reports it as the remote
+    /// now-playing item. Non-playback scopes never need it.
+    fn queue_pos_needs_active_confirm(&self, scope: QueueScope, pos: usize) -> bool {
+        if !self.queue_scope_is_playback(scope) {
+            return false;
+        }
+        let (active, current_idx) = {
+            let s = self.player.status.lock().unwrap();
+            (s.active, s.current_idx)
+        };
+        if active {
+            return current_idx == pos;
+        }
+        self.connected_session_state
+            .as_ref()
+            .and_then(|s| s.now_playing_item_id.as_ref())
+            .zip(self.queue_for_scope(scope).emby_item_at(pos))
+            .map(|(npid, item)| item.id == *npid)
+            .unwrap_or(false)
+    }
+
+    /// Remove the slots named by `slot_ids` from `scope`'s queue as one edit.
+    ///
+    /// Every slot is removed locally before the playback owner is told
+    /// anything, the owner receives one batch command, and the queue snapshot
+    /// is persisted once. The cursor comes to rest on the item that preceded
+    /// the deleted range; when the range started the queue there is nothing
+    /// before it, so the first item that followed takes the cursor instead.
+    ///
+    /// A selection that includes the now-playing row keeps the dedicated
+    /// per-row confirmation flow, because stopping playback is a decision the
+    /// user has to answer, not a plain edit.
+    pub(super) fn remove_slots_from_queue(
+        &mut self,
+        scope: QueueScope,
+        slot_ids: &[mbv_core::playback_queue::QueueSlotId],
+    ) {
+        let needs_confirm = slot_ids.iter().any(|slot_id| {
+            self.slot_index(scope, *slot_id)
+                .is_some_and(|pos| self.queue_pos_needs_active_confirm(scope, pos))
+        });
+        if needs_confirm {
+            for slot_id in slot_ids {
+                if let Some(pos) = self.slot_index(scope, *slot_id) {
+                    self.remove_from_queue(pos);
+                }
+            }
+            return;
+        }
+
+        let (active, _) = {
+            let s = self.player.status.lock().unwrap();
+            (s.active, s.current_idx)
+        };
+        let mut positions: Vec<usize> = slot_ids
+            .iter()
+            .filter_map(|slot_id| self.slot_index(scope, *slot_id))
+            .collect();
+        positions.sort_unstable();
+        positions.dedup();
+        if positions.is_empty() {
+            return;
+        }
+        // The cursor rests on the item that preceded the range. When the range
+        // started the queue there is nothing before it, so it rests on the
+        // first item that followed — which, after the removal, sits at index 0.
+        // Only slots at or after `positions[0]` are removed, so the preceding
+        // item keeps its index.
+        let cursor_after = positions[0].saturating_sub(1);
+
+        // Descending order keeps the remaining positions valid as slots go;
+        // the recorded undo positions are the pre-removal indices.
+        let mut removed_slots: Vec<mbv_core::playback_queue::QueueSlotId> = Vec::new();
+        for pos in positions.iter().rev() {
+            let Some(slot_id) = self.queue_for_scope(scope).slot_id_at(*pos) else {
+                continue;
+            };
+            let Some(item) = self.queue_for_scope_mut(scope).remove_slot_at(*pos) else {
+                continue;
+            };
+            self.undo_stack_for_scope_mut(scope)
+                .push(UndoEntry::Remove(*pos, item));
+            removed_slots.push(slot_id);
+        }
+        if removed_slots.is_empty() {
+            return;
+        }
+        // Hand the owner the range in its original queue order.
+        removed_slots.reverse();
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        {
+            let queue = self.queue_for_scope_mut(scope);
+            queue.queue_cursor = cursor_after;
+            queue.clamp_cursor();
+        }
+        // The mounted component owns the painted cursor and only adopts
+        // `App`'s value when a re-anchor is armed; without this it would keep
+        // the row the deleted range used to occupy and clamp there.
+        self.pending_queue_cursor_reanchor = Some(scope);
+        self.persist_local_queue_state_if_needed(scope);
+
+        let sent_queue_remove =
+            self.queue_scope_is_playback(scope) && self.queue_edit_reaches_player(scope, active);
+        if sent_queue_remove {
+            let raw_slot_ids: Vec<u64> = removed_slots
+                .iter()
+                .map(|slot_id| mbv_core::ctrl::slot_id_to_u64(*slot_id))
+                .collect();
+            // A remote owner takes the whole range in one edit. A local owner
+            // has no batch command and keeps one player command per slot; its
+            // internal queue edits are never published, so they stay atomic
+            // on screen either way.
+            if !self.player.queue_remove_slots(raw_slot_ids) {
+                for slot_id in &removed_slots {
+                    self.player
+                        .send_command(PlayerCommand::QueueRemove(*slot_id));
+                }
+            }
+            self.pending_queue_edit_cursor = Some(self.queue_for_scope(scope).queue_cursor);
         }
         self.advance_remote_queue_lineage();
     }

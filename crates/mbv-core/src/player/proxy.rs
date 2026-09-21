@@ -326,6 +326,16 @@ impl PlayerProxy {
         }
     }
 
+    /// Remove several slots in one remote edit, so the owner publishes one
+    /// queue snapshot rather than one per slot.  Returns `false` for local
+    /// players, which have no batch command and keep per-slot edits.
+    pub fn queue_remove_slots(&self, slot_ids: Vec<u64>) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.queue_remove_slots(slot_ids),
+        }
+    }
+
     /// Move a slot by stable identity on a remote peer that supports
     /// unified queue.  Returns `false` for local players.
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {

@@ -592,6 +592,52 @@ fn handle_ctrl(
                 player.send_command(PlayerCommand::QueueRemove(sid));
             }
         }
+        CtrlCmd::UnifiedQueueRemoveSlots { slot_ids } => {
+            // One canonical revision and one published snapshot for the whole
+            // edit: a client that selected a range must never observe the
+            // queue shrinking one row per round trip.
+            let mut removed = Vec::new();
+            let mut removed_active = false;
+            for slot_id in slot_ids {
+                let sid = QueueSlotId::from_raw(slot_id);
+                if queue.slot(sid).is_none() {
+                    continue;
+                }
+                if queue.active_slot_id() == Some(sid) {
+                    queue.remove_active_slot_confirmed(sid);
+                    removed_active = true;
+                } else {
+                    queue.remove_slot(sid);
+                }
+                removed.push(sid);
+            }
+            if removed.is_empty() {
+                return;
+            }
+            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+            if removed_active {
+                // Removing the playing slot forces a track change that carries
+                // no awaited transition identity, so anything in flight can
+                // never settle: interrupt it deliberately (same as the
+                // single-slot arm).
+                reset_slot_jumps(transitions, queued_transition_origin);
+            }
+            if queue.is_empty() {
+                player.send_command(PlayerCommand::SubmitQueue {
+                    items: Vec::new(),
+                    start_idx: 0,
+                });
+                player.stop();
+                reset_slot_jumps(transitions, queued_transition_origin);
+            } else {
+                // The player run keeps its own queue copy; its per-slot edits
+                // are not published, so one command per removed slot is fine
+                // and lets it resolve the active-slot hand-off itself.
+                for sid in removed {
+                    player.send_command(PlayerCommand::QueueRemove(sid));
+                }
+            }
+        }
         CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index } => {
             let sid = QueueSlotId::from_raw(slot_id);
             if queue.slot(sid).is_none() {
