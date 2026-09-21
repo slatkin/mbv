@@ -46,6 +46,13 @@ impl LibraryContentOwner for MusicContent {
         self.browser.clear_marks();
     }
 
+    fn double_click_opens_hero_overlay(&mut self) -> bool {
+        // Grouped Music resolves double-clicks in the tree owner: expandable
+        // rows toggle locally and track rows retain their pre-U4 no-op path,
+        // so the panel must not pre-empt them with a Hero overlay.
+        false
+    }
+
     fn hero_overlay_target_available(&mut self) -> bool {
         // Both hero-bearing tree rows can own the overlay before their Hero
         // snapshot materializes: an album leaf and an artist root.

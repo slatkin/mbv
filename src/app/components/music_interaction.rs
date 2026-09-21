@@ -132,10 +132,23 @@ impl MusicContent {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (_id, index) = self.browser.hit_node(at)?;
+                            let (id, index) = self.browser.hit_node(at)?;
+                            // A track double-click keeps the pre-U4 no-op
+                            // behavior. Resolve it before selecting so the
+                            // component never mutates and then returns no
+                            // message; grouped-track playback is §5 work.
+                            if self.browser.model_is_track(id) {
+                                return None;
+                            }
                             self.browser.select_index(index);
-                            self.selected_item()
-                                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                            if self.browser.model_is_artist(id) {
+                                self.browser.toggle_root(id);
+                                return Some(Msg::Shell(ShellRequest::LibraryPanelFocus));
+                            }
+                            if self.browser.node_has_children(id) {
+                                self.browser.toggle_node(id);
+                            }
+                            Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
                         }
                         MediaListSurfaceInput::ContextClick(at) => {
                             if !self.browser.claims_point(at) {
