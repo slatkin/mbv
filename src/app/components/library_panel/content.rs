@@ -196,6 +196,8 @@ impl HeroHeader {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) struct SelectorRow {
     pub pills: Vec<String>,
+    /// Parallel semantic marker flags; an empty vector leaves every pill unmarked.
+    pub markers: Vec<bool>,
     /// The selected pill's index; `None` paints no active pill.
     pub active: Option<usize>,
 }

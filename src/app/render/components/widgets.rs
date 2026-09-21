@@ -214,8 +214,8 @@ fn selector_pill_fg(selected: bool, hovered: bool) -> Color {
 
 /// The joined pill shell's display width: `◢ label ◤` = label width plus the
 /// chip's inner pads and the edge glyphs it actually paints.
-fn pill_shell_width(label: &str, inner_pad: usize, leading: bool) -> usize {
-    label.width() + inner_pad * 2 + usize::from(leading) + 1
+fn pill_shell_width(label: &str, marked: bool, inner_pad: usize, leading: bool) -> usize {
+    label.width() + usize::from(marked) + inner_pad * 2 + usize::from(leading) + 1
 }
 
 /// Push one joined pill shell (`◢ label ◤`) as spans. The edge glyphs take
@@ -230,6 +230,7 @@ fn pill_shell_width(label: &str, inner_pad: usize, leading: bool) -> usize {
 fn push_pill_shell(
     spans: &mut Vec<Span>,
     label: &str,
+    marked: bool,
     fg: Color,
     fill: Color,
     inner_pad: usize,
@@ -241,10 +242,19 @@ fn push_pill_shell(
     }
     let pad = " ".repeat(inner_pad);
     spans.push(Span::styled(
-        format!("{pad}{label}{pad}"),
+        format!("{pad}{label}"),
         Style::default().fg(fg).bg(fill),
     ));
-    spans.push(Span::styled("◤", Style::default().fg(fill).bg(trailing_bg)));
+    if marked {
+        spans.push(Span::styled(
+            "•",
+            Style::default().fg(palette::ACCENT_ACTIVE).bg(fill),
+        ));
+    }
+    spans.push(Span::styled(
+        format!("{pad}◤"),
+        Style::default().fg(fill).bg(trailing_bg),
+    ));
 }
 
 /// A horizontally-scrolling row of selector pills, shared by every
@@ -257,6 +267,8 @@ fn push_pill_shell(
 /// does not alter the pill visual).
 pub(in crate::app) struct PillBar<'a> {
     pub labels: &'a [String],
+    /// Parallel semantic marker flags; an empty slice leaves every pill unmarked.
+    pub markers: &'a [bool],
     pub ids: &'a [usize],
     pub selected_pos: usize,
     pub hovered: Option<usize>,
@@ -300,6 +312,10 @@ pub(in crate::app) fn render_pill_bar(
         bar.ids.len(),
         "render_pill_bar: labels and ids must be parallel"
     );
+    debug_assert!(
+        bar.markers.is_empty() || bar.markers.len() == bar.labels.len(),
+        "render_pill_bar: markers must be empty or parallel to labels"
+    );
     let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
     if area.width == 0 || area.height == 0 {
         return (selector_tabs, bar.window);
@@ -328,12 +344,15 @@ pub(in crate::app) fn render_pill_bar(
     let n = bar.labels.len();
     let bar_w = area.width as usize;
     let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
-    // Display width of each joined pill is "◢ label ◤" = label width + inner
-    // padding (2) + leading/trailing edge glyphs (2).
+    // Display width of each joined pill is "◢ label[•] ◤" = label width +
+    // optional marker width + inner padding (2) + edge glyphs (2).
     let pill_widths: Vec<usize> = bar
         .labels
         .iter()
-        .map(|l| pill_shell_width(l, 1, true))
+        .enumerate()
+        .map(|(idx, l)| {
+            pill_shell_width(l, bar.markers.get(idx).copied().unwrap_or(false), 1, true)
+        })
         .collect();
 
     // Greedy: how many pills fit starting at `start` within `avail` columns.
@@ -467,13 +486,14 @@ pub(in crate::app) fn render_pill_bar(
         let selected = abs_idx == bar.selected_pos;
         let is_last_pill = abs_idx + 1 == n;
         let hovered = bar.hovered == Some(abs_idx);
+        let marked = bar.markers.get(abs_idx).copied().unwrap_or(false);
         let chip = if selected {
             palette::Surface::PillChipSelected
         } else {
             palette::Surface::PillChip
         };
         let fill = palette::surface_colors(chip, selected).fill;
-        let pill_w = pill_shell_width(label, 1, true) as u16;
+        let pill_w = pill_shell_width(label, marked, 1, true) as u16;
         selector_tabs.push((
             Rect {
                 x: x_cursor,
@@ -504,6 +524,7 @@ pub(in crate::app) fn render_pill_bar(
         push_pill_shell(
             &mut spans,
             label,
+            marked,
             selector_pill_fg(selected, hovered),
             fill,
             1,
@@ -558,7 +579,7 @@ pub(in crate::app) fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&
     let widths: Vec<usize> = hints
         .iter()
         .enumerate()
-        .map(|(idx, hint)| pill_shell_width(hint, 0, idx == 0))
+        .map(|(idx, hint)| pill_shell_width(hint, false, 0, idx == 0))
         .collect();
     // The chips are centered on the row: the group is a fixed set of hints, not
     // a scrollable selector, so it has no reason to hug the left edge. When the
@@ -590,6 +611,7 @@ pub(in crate::app) fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&
         push_pill_shell(
             &mut spans,
             hint,
+            false,
             palette::TEXT_ON_ACCENT,
             fill,
             0,

@@ -144,11 +144,41 @@ pub fn render_pill_bar_hitboxes(
         .0
 }
 
+/// The hitbox helper with marker flags and the bar's retained overflow window.
+pub fn render_pill_bar_hitboxes_with_markers(
+    labels: &[String],
+    markers: &[bool],
+    ids: &[usize],
+    selected_pos: usize,
+    width: u16,
+) -> Vec<(Rect, usize)> {
+    render_pill_bar_hitboxes_with_markers_and_window(
+        labels,
+        markers,
+        ids,
+        selected_pos,
+        width,
+        PillBarWindow::default(),
+    )
+    .0
+}
+
 /// The hitbox helper with the bar's retained overflow window: returns the
 /// painted hitboxes plus the window to pass back on the next frame, so the
 /// sticky-window tests can drive two-frame sequences.
 pub fn render_pill_bar_hitboxes_with_window(
     labels: &[String],
+    ids: &[usize],
+    selected_pos: usize,
+    width: u16,
+    window: PillBarWindow,
+) -> (Vec<(Rect, usize)>, PillBarWindow) {
+    render_pill_bar_hitboxes_with_markers_and_window(labels, &[], ids, selected_pos, width, window)
+}
+
+fn render_pill_bar_hitboxes_with_markers_and_window(
+    labels: &[String],
+    markers: &[bool],
     ids: &[usize],
     selected_pos: usize,
     width: u16,
@@ -164,6 +194,7 @@ pub fn render_pill_bar_hitboxes_with_window(
             Rect::new(0, 0, width, 1),
             PillBar {
                 labels,
+                markers,
                 ids,
                 selected_pos,
                 hovered: None,

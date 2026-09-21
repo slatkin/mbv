@@ -158,6 +158,7 @@ pub(in crate::app) fn paint_browser_pane(
                 f,
                 pane.pills_area,
                 &[],
+                &[],
                 None,
                 None,
                 Some(SELECTOR_ROW_PREFIX),

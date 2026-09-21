@@ -568,11 +568,13 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 .collect();
             Some(SelectorRow {
                 pills,
+                markers: vec![],
                 active: Some(self.feed_group_cursor),
             })
         } else if self.show_letter_pills {
             Some(SelectorRow {
                 pills: LetterFilter::labels(),
+                markers: vec![],
                 active: Some(self.letter_filter.as_ref().map(|f| f.index).unwrap_or(0)),
             })
         } else {

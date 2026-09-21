@@ -27,6 +27,7 @@ pub(in crate::app) fn paint_pill_bar_row(
     f: &mut Frame,
     area: Rect,
     labels: &[String],
+    markers: &[bool],
     active: Option<usize>,
     hovered: Option<usize>,
     prefix: Option<&str>,
@@ -42,6 +43,7 @@ pub(in crate::app) fn paint_pill_bar_row(
         area,
         PillBar {
             labels,
+            markers,
             ids: &ids,
             selected_pos,
             hovered,
@@ -86,6 +88,7 @@ pub(in crate::app) fn paint_selector_row(
             f,
             bar_area,
             &row.pills,
+            &row.markers,
             row.active,
             hovered,
             Some(SELECTOR_ROW_PREFIX),
@@ -147,6 +150,7 @@ mod tests {
         let spacer = Rect::new(2, 2, 20, 1);
         let row = SelectorRow {
             pills: vec!["Movies".into(), "TV".into()],
+            markers: vec![],
             active: Some(1),
         };
         let mut hits = HitRegions::new();
@@ -190,11 +194,75 @@ mod tests {
     }
 
     #[test]
+    fn selector_row_marks_only_requested_unselected_pill_in_fitting_and_overflowed_rows() {
+        let row = SelectorRow {
+            pills: vec!["Continue".into(), "New".into(), "Other".into()],
+            markers: vec![false, true, false],
+            active: Some(0),
+        };
+
+        for (width, expected_ids) in [(40, vec![0, 1, 2]), (25, vec![0, 1])] {
+            let bar = Rect::new(0, 0, width, 1);
+            let spacer = Rect::new(0, 1, width, 1);
+            let mut hits = HitRegions::new();
+            let mut window = PillBarWindow::default();
+            let terminal = draw(width, 2, |f| {
+                paint_selector_row(
+                    f,
+                    bar,
+                    spacer,
+                    &row,
+                    None,
+                    &mut hits,
+                    &mut window,
+                    palette::Surface::PillRowGap,
+                    false,
+                );
+            });
+            let buf = terminal.backend().buffer();
+            assert_eq!(
+                hits.regions().iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+                expected_ids,
+                "painted pills at width {width}"
+            );
+            let marker = hits
+                .regions()
+                .iter()
+                .find(|(_, id)| *id == 1)
+                .map(|(rect, _)| *rect)
+                .expect("marked pill remains visible");
+            let marker_cells: Vec<_> = (marker.left()..marker.right())
+                .filter(|&x| buf[(x, marker.y)].symbol() == "•")
+                .collect();
+            assert_eq!(marker_cells.len(), 1, "one marker at width {width}");
+            assert_eq!(
+                buf[(marker_cells[0], marker.y)].style().fg,
+                Some(palette::ACCENT_ACTIVE)
+            );
+            assert!(
+                (hits.regions()[0].0.left()..hits.regions()[0].0.right())
+                    .all(|x| buf[(x, bar.y)].symbol() != "•"),
+                "Continue is never marked"
+            );
+            assert!(
+                hits.regions()
+                    .iter()
+                    .filter(|(_, id)| *id != 1)
+                    .all(|(rect, _)| {
+                        (rect.left()..rect.right()).all(|x| buf[(x, rect.y)].symbol() != "•")
+                    }),
+                "only the expected pill is marked"
+            );
+        }
+    }
+
+    #[test]
     fn selector_row_hover_precedes_resting_but_selected_wins() {
         let bar = Rect::new(2, 1, 20, 1);
         let spacer = Rect::new(2, 2, 20, 1);
         let row = SelectorRow {
             pills: vec!["Movies".into(), "TV".into()],
+            markers: vec![],
             active: Some(1),
         };
         let mut hits = HitRegions::new();
@@ -248,6 +316,7 @@ mod tests {
         let spacer = Rect::new(2, 2, 20, 1);
         let row = SelectorRow {
             pills: vec!["Movies".into(), "TV".into()],
+            markers: vec![],
             active: None,
         };
         let mut hits = HitRegions::new();
@@ -292,6 +361,7 @@ mod tests {
         let spacer = Rect::new(2, 2, 20, 1);
         let row = SelectorRow {
             pills: Vec::new(),
+            markers: vec![],
             active: None,
         };
         let mut hits = HitRegions::new();

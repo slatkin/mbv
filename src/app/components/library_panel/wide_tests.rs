@@ -123,6 +123,7 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
+            markers: vec![],
             active: Some(0),
         }),
         list: ListSlot::Media(&mut list),
@@ -193,6 +194,7 @@ fn hero_pane_starts_below_the_full_width_selector_band() {
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
+            markers: vec![],
             active: Some(0),
         }),
         list: ListSlot::Media(&mut list),
@@ -226,6 +228,7 @@ fn selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve() {
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
+            markers: vec![],
             active: Some(0),
         }),
         list: ListSlot::Media(&mut list),
@@ -291,6 +294,7 @@ fn workspace_selector_with_active_none_paints_no_active_pill() {
                 header: None,
                 selector: Some(SelectorRow {
                     pills: vec!["Seasons".into(), "Episodes".into()],
+                    markers: vec![],
                     active: None,
                 }),
                 list: &mut workspace_list,
@@ -750,6 +754,7 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
+            markers: vec![],
             active: Some(0),
         }),
         list: ListSlot::Search(&mut search),
@@ -1045,6 +1050,7 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
         let mut open_content = LibraryPanelContent {
             selector: Some(SelectorRow {
                 pills: vec!["All".into()],
+                markers: vec![],
                 active: Some(0),
             }),
             list: ListSlot::Search(&mut search),
@@ -1069,6 +1075,7 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
+            markers: vec![],
             active: Some(0),
         }),
         list: ListSlot::Media(&mut list),

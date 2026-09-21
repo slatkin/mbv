@@ -168,6 +168,7 @@ fn paint_workspace_box(
                 f,
                 bar,
                 &selector.pills,
+                &selector.markers,
                 selector.active,
                 None,
                 Some(WORKSPACE_SELECTOR_PREFIX),

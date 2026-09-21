@@ -485,6 +485,7 @@ impl LibraryContentOwner for HomeContent {
             // discoverable pill).
             Some(SelectorRow {
                 pills: vec!["Continue".into()],
+                markers: vec![false],
                 active: Some(0),
             })
         } else {
@@ -495,6 +496,14 @@ impl LibraryContentOwner for HomeContent {
                             .iter()
                             .map(|section| trunc_str(&section.title, 18).to_string()),
                     )
+                    .collect(),
+                markers: std::iter::once(false)
+                    .chain(self.latest.iter().enumerate().map(|(index, section)| {
+                        let pill_index = index + 1;
+                        section.has_new_content
+                            && !self.visited_latest_sources.contains(&section.source)
+                            && pill_index != self.section
+                    }))
                     .collect(),
                 active: Some(self.section),
             })
@@ -734,6 +743,33 @@ mod tests {
             } => (primary.clone(), secondary.clone()),
             other => panic!("expected an item row, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn selector_markers_skip_continue_selected_and_visited_latest_sources() {
+        let first = HomeLatestSource::Emby("first".into());
+        let second = HomeLatestSource::Audiobookshelf("second".into());
+        let mut owner = HomeContent::new();
+        owner.set_content(
+            Vec::new(),
+            vec![
+                section("First", first, Vec::new(), true),
+                section("Second", second, Vec::new(), true),
+            ],
+            false,
+            HashMap::new(),
+        );
+
+        let markers = owner.content().selector.expect("selector row").markers;
+        assert_eq!(markers, vec![false, true, true]);
+
+        assert!(owner.select_section(1));
+        let markers = owner.content().selector.expect("selector row").markers;
+        assert_eq!(markers, vec![false, false, true]);
+
+        assert!(owner.select_section(2));
+        let markers = owner.content().selector.expect("selector row").markers;
+        assert_eq!(markers, vec![false, false, false]);
     }
 
     #[test]
