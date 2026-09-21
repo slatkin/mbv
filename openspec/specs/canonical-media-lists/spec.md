@@ -7,8 +7,7 @@ Provide reusable embedded TuiRealm list controls with one owner for list interac
 ## Requirements
 
 ### Requirement: Shared rows are provider-neutral and bounded
-The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the container name of a split row, painted after the primary text), an optional metadata slot whose text role and placement are closed — a release year paints in the green (`STATUS_AVAILABLE`) metadata role immediately after the title, a publish date paints right-aligned in the fixed six-column date gutter in its own (`ROW_DATE_FG`) role, a progress badge in the FOAM metadata role — a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string (painted right-aligned in its own (`DURATION`) role, distinct from the
-green year role), and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Only the Queue list SHALL project a duration string; a library browse list row (Home, Podcast, TV, music, book, feeds) SHALL NOT carry one. A Heading SHALL paint its label bold in the FOAM metadata role, so every grouped list's group label reads the same. Heading and Spacer SHALL be excluded from selectable-target indexing. When a duration is shown it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. On Wide lists, `NowPlaying` rows SHALL be marked by an aqua right-pointing play glyph before the title (one space from it) rather than an accent-coloured title; their title text SHALL keep the ordinary colour. A `NowPlaying` row SHALL NOT carry a secondary title, so the split-row palette below never applies to one. `Active` rows SHALL not be marked by the play glyph. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
+The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the container name of a split row, painted after the primary text), an optional metadata slot whose text role and placement are closed — a release year or a publish date both paint right-aligned in the fixed six-column date gutter in the green (`STATUS_AVAILABLE`) role, a progress badge in the FOAM metadata role — a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string (painted right-aligned in its own (`DURATION`) role for the Queue, or right-aligned in the green gutter for hero workspace lists and the audiobook browser row), and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. The Queue list SHALL project its duration string in the gold `DURATION` slot; hero workspace lists (music tracklist, TV episode, book chapter) and audiobook browser rows SHALL project duration into the unified right-aligned green gutter in the `STATUS_AVAILABLE` role, in a minutes-precision `M:SS` (under an hour) or `H:MM` (at or over an hour) form so a six-column gutter never truncates; feed entries SHALL NOT carry a duration. A Heading SHALL paint its label bold in the FOAM metadata role, so every grouped list's group label reads the same. Heading and Spacer SHALL be excluded from selectable-target indexing. When the Queue shows a duration it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. On Wide lists, `NowPlaying` rows SHALL be marked by an aqua right-pointing play glyph before the title (one space from it) rather than an accent-coloured title; their title text SHALL keep the ordinary colour. A `NowPlaying` row SHALL NOT carry a secondary title, so the split-row palette below never applies to one. `Active` rows SHALL not be marked by the play glyph. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
 
 A row carrying a secondary title SHALL paint as a split row: the primary text (the container/context name) SHALL paint in the split-row context (`SPLIT_ROW_CONTEXT_FG`) role and the secondary title (the item's own name) SHALL paint in the split-row title (`SPLIT_ROW_TITLE_FG`) role, with one separating space. A row with no secondary title SHALL keep the ordinary title role for its primary text. A played split row SHALL mute the item title to the played (`TEXT_MUTED`) role while the context part keeps the split-row context role. No other semantic state SHALL move the split-row palette, and a `NowPlaying` row SHALL NOT carry a secondary title, so the palette never overrides the now-playing row's ordinary-colour title. A split row truncates as one string: its parts SHALL be cut as a unit with at most one trailing ellipsis, the context part keeping its full width and the item title absorbing the cut.
 
@@ -44,25 +43,36 @@ A row carrying a secondary title SHALL paint as a split row: the primary text (t
 
 #### Scenario: Trailing metadata carries its own role
 - **WHEN** a row carries a release year
-- **THEN** the year paints in the green metadata role immediately after the title
-- **AND** a row carrying a progress badge instead paints it in the FOAM metadata role
+- **THEN** the year paints right-aligned in the row's fixed six-column date gutter, in the green (`STATUS_AVAILABLE`) role
+- **AND** a row carrying a progress badge instead paints it inline next to the title in the FOAM metadata role
 
 #### Scenario: Publish date paints in the fixed right-aligned gutter
 - **WHEN** a row carries a publish date
-- **THEN** the date paints right-aligned in a six-column gutter at the row's right edge, in the date role, whatever the date string's own length is
+- **THEN** the date paints right-aligned in a six-column gutter at the row's right edge, in the same green (`STATUS_AVAILABLE`) role a release year uses, whatever the date string's own length is
 - **AND** the title's slot shrinks by that gutter so no column collides
-- **AND** a row carrying no publish date reserves no gutter and its title keeps the full slot
+- **AND** a row carrying no publish date and no release year reserves no gutter and its title keeps the full slot
 
 #### Scenario: Durations share one precise format
 - **WHEN** the Queue list shows a duration
 - **THEN** every row uses the same `M:SS`/`H:MM:SS` format
-- **AND** the duration paints in its own (`DURATION`) role, not the green metadata role
+- **AND** the duration paints in its own (`DURATION`) role, not the green gutter role
 - **AND** imprecise forms (`4m`, `1h12m`, unbounded `62:03`) never appear in list rows
 
+#### Scenario: Hero workspace durations paint in the green gutter
+- **WHEN** a hero workspace list row is projected with a duration (music track, TV episode, book chapter)
+- **THEN** the duration paints right-aligned in the unified six-column date gutter in the green (`STATUS_AVAILABLE`) role
+- **AND** it uses a minutes-precision format — `M:SS` under an hour, `H:MM` at or over an hour — so the gutter never truncates it
+- **AND** the Queue's gold `DURATION` slot requirement is unchanged
+
+#### Scenario: Audiobook browser rows carry total runtime in the gutter
+- **WHEN** an audiobook's browser list row is projected (where movies/TV show production year)
+- **THEN** the book's total runtime paints right-aligned in the green gutter in the same minutes-precision format
+- **AND** an hour-or-longer book's runtime still fits within the six columns
+
 #### Scenario: Library list rows carry no duration
-- **WHEN** a library list row is projected (Home, Podcast, TV episode, music track, book chapter, feed entry)
+- **WHEN** a library list row is projected (Home, Podcast, feed entry)
 - **THEN** it carries no duration string
-- **AND** its row paints no right-aligned duration slot (a publish-date gutter is not a duration)
+- **AND** its row paints no right-aligned duration slot (hero workspace durations and audiobook browser runtimes paint in the green gutter, not a duration slot)
 
 #### Scenario: Collections stay duration-free
 - **WHEN** a row is a navigable container (movie/series folder, album, show, book title)
@@ -83,6 +93,11 @@ A row carrying a secondary title SHALL paint as a split row: the primary text (t
 - **WHEN** a played row carries a secondary title
 - **THEN** the secondary title paints in the played muted role
 - **AND** the primary context text keeps the split-row context role
+
+#### Scenario: Group headings never carry a gutter
+- **WHEN** a Heading or Spacer row is rendered
+- **THEN** it reserves no date-gutter column, whatever the surrounding item rows carry
+- **AND** only selectable Item rows can carry a release year or publish date
 
 ### Requirement: WideMediaList owns fixed-row mechanics
 
@@ -138,7 +153,6 @@ It SHALL support Wide Hero browser rails except the Grouped Music tree browser, 
 - **WHEN** a fixed-row presentation is configured for a new frame or receives an empty or zero-area view
 - **THEN** its prior point claim and selected-row geometry are unavailable
 - **AND** a parent treats the presentation as having no list target until the current view finishes
-
 
 ### Requirement: Responsive handoff preserves an explicit anchor
 
@@ -229,7 +243,6 @@ Grouped Music album-track and artist-track Workspaces, Audiobookshelf Podcast ep
 - **AND** surname buckets, active-pane focus, images, content lookup, and absolute chapter-seek intents remain Book-owned
 - **AND** chapter/audio-part rows are not reseeded or reselected during painting
 
-
 ### Requirement: Audiobookshelf geometry has complete breakpoint fallbacks
 
 Audiobookshelf Book surfaces SHALL use the shared Wide hero or Inline arrangement at the established Wide/Normal breakpoints. Audiobookshelf Podcast surfaces SHALL use the shared Wide hero when it fits and their ordinary episode rows at every other geometry, because the podcast tab has no Inline hero. Both SHALL preserve the short-height fallback and hand off stable selected target and viewport anchor across breakpoint changes. Non-list repairs required to make the composition correct SHALL live in shared arrangements or the owning destination component, not a bespoke exception.
@@ -255,7 +268,6 @@ When grouped Music or an Audiobookshelf Podcast or Book destination meets the sh
 - **THEN** it uses the same predicate, pane framing, content spacing, and short-height fallback as TV/Movies
 - **AND** it does not introduce a destination-specific arrangement or breakpoint
 
-
 ### Requirement: One shared owner supports list-local extension
 
 Every in-scope logical canonical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its fixed-row presentation SHALL operate on that owner in Wide and non-Wide geometry rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
@@ -280,7 +292,6 @@ Parent destinations SHALL retain Service content, stable-target-to-domain lookup
 - **THEN** the destination or owning Panel remains authoritative for that chrome, Workspace, or overlay state
 - **AND** it projects the resulting media rows into the shared owner, or the settled Grouped Music catalog into the tree owner
 - **AND** provider-specific effects remain typed destination intents
-
 
 ### Requirement: Row-local input uses one delegation contract
 
