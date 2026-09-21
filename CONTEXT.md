@@ -218,6 +218,26 @@ search — across a close and reopen. Deliberately *not* offered; only playback
 continuity is.
 _Avoid_: terminal continuity, UI state
 
+**TUI launch state**:
+The one exit snapshot a completed TUI session leaves as the next launch's
+starting location. A TUI loads the saved snapshot once at startup, keeps its
+own launch-state changes in memory while running, and replaces the saved
+snapshot only as part of orderly exit — cursor, tab, pill, item, focus,
+refresh, and rendering activity never write it while open. When two TUIs
+diverge in memory and exit in sequence, the last completed exit wins, with no
+Client identity, merge, or daemon synchronization. An attached **Client**
+restores the same bounded snapshot as Bare mode. The snapshot holds exactly
+four things: the selected tab, that tab's selected main Selector pill, that
+pill's selected library item (stable identities where the destination supplies
+them, never presentation indices), and whether Library or Queue held Panel
+focus. It holds no state for unselected tabs, no Queue selection, no nested
+Workspace selector such as a TV season, no overlay or Sidebar, no search query
+or result, no multi-selection or Visual mode, no scroll offset, and no other
+transient presentation state. A bounded launch location, not **Session
+continuity**; and unlike **Library position**, only the selected tab is
+recorded, never per-library state for unselected tabs.
+_Avoid_: session state, saved session, launch preferences
+
 **Attach**:
 A Client establishing a ctrl connection to an existing Player owner. It is a
 control relationship, not login or Service setup; its handshake may present a
