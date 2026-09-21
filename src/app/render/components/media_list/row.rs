@@ -275,15 +275,17 @@ pub(in crate::app) fn media_list_row<Target>(
             }
             // Canonical selected bars are Iris: use the dedicated Ink
             // foreground rather than allowing ordinary title/metadata roles
-            // to compete with the selection. The live-playback marker and
-            // progress percentage retain their own semantic roles.
+            // to compete with the selection. The progress percentage keeps a
+            // role of its own, but the bar's own variant of it — the orange
+            // does not read on the light bar.
             if paint_selected {
                 if let Some(fg) = selected_row_foreground(selected_bg) {
                     for (index, span) in spans.iter_mut().enumerate() {
-                        if progress_span_index == Some(index) {
-                            continue;
-                        }
-                        span.style.fg = Some(fg);
+                        span.style.fg = Some(if progress_span_index == Some(index) {
+                            palette::SELECTED_ROW_PROGRESS_FG
+                        } else {
+                            fg
+                        });
                     }
                 }
             }

@@ -127,6 +127,13 @@ pub const SELECTED_ROW_BG: Color = Palette::Iris.color();
 /// Selected-row text on the Iris bar. Its own role keeps the bar's foreground
 /// independent from the ordinary title and metadata hierarchy.
 pub const SELECTED_ROW_FG: Color = Palette::Ink.color();
+/// The resume-progress percentage of a selected row: the bar's darker
+/// companion to `SELECTED_ROW_FG`, because the ordinary progress orange
+/// (`PROGRESS_PERCENT`) does not read on the light Iris bar. Its own role
+/// rather than the surfaces that share its `Palette::Storm` value today
+/// (`SURFACE_RESTING`, `HERO_CREDITS_STRIPE`): equal today and independently
+/// editable, so a resting-surface edit moves the surface alone.
+pub const SELECTED_ROW_PROGRESS_FG: Color = Palette::Storm.color();
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours

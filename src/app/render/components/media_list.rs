@@ -1225,40 +1225,67 @@ mod wide_row_regression_tests {
         }
     }
 
+    /// A row on the canonical Iris bar paints the bar's own foregrounds: Ink
+    /// for the text it carries, and the bar's darker progress role for a
+    /// resume percentage — the ordinary orange does not read on the light
+    /// bar. Both resume-carrying states ride the same path.
     #[test]
-    fn selected_now_playing_marker_uses_ink_but_progress_keeps_the_progress_role() {
+    fn selected_row_paints_its_own_progress_role_for_every_progress_state() {
         use crate::app::components::media_list::ActiveProgress;
 
-        let rect = Rect::new(0, 0, 40, 1);
-        let mut list: WideMediaList<String> = WideMediaList::new();
-        list.set_content(vec![MediaListRow::Item {
-            target: "playing".into(),
-            primary: "Playing title".into(),
-            secondary: None,
-            trailing: None,
-            duration: None,
-            kind: MediaKind::Media,
-            semantic_state: MediaSemanticState::NowPlaying {
+        for state in [
+            MediaSemanticState::NowPlaying {
                 progress: Some(ActiveProgress::new(47)),
             },
-        }]);
+            MediaSemanticState::Active {
+                progress: Some(ActiveProgress::new(12)),
+            },
+        ] {
+            let now_playing = matches!(state, MediaSemanticState::NowPlaying { .. });
+            let rect = Rect::new(0, 0, 40, 1);
+            let mut list: WideMediaList<String> = WideMediaList::new();
+            list.set_content(vec![MediaListRow::Item {
+                target: "playing".into(),
+                primary: "Playing title".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: state,
+            }]);
 
-        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
-        terminal
-            .draw(|f| {
-                render_wide_media_list(f, rect, rect, &mut list, true, palette::SELECTED_ROW_BG);
-            })
-            .unwrap();
-        let buf = terminal.backend().buffer();
-        let marker_x = (0..rect.width)
-            .find(|&x| buf[(x, 0)].symbol() == "▶")
-            .expect("selected now-playing marker");
-        assert_eq!(buf[(marker_x, 0)].fg, palette::SELECTED_ROW_FG);
-        let progress_x = (0..rect.width)
-            .find(|&x| buf[(x, 0)].symbol() == "4")
-            .expect("selected progress percentage");
-        assert_eq!(buf[(progress_x, 0)].fg, palette::PROGRESS_PERCENT);
-        assert_eq!(buf[(progress_x + 1, 0)].fg, palette::PROGRESS_PERCENT);
+            let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+            terminal
+                .draw(|f| {
+                    render_wide_media_list(
+                        f,
+                        rect,
+                        rect,
+                        &mut list,
+                        true,
+                        palette::SELECTED_ROW_BG,
+                    );
+                })
+                .unwrap();
+            let buf = terminal.backend().buffer();
+            match (0..rect.width).find(|&x| buf[(x, 0)].symbol() == "▶") {
+                Some(marker_x) => {
+                    assert!(now_playing, "only a now-playing row carries the marker");
+                    assert_eq!(buf[(marker_x, 0)].fg, palette::SELECTED_ROW_FG);
+                }
+                None => assert!(!now_playing, "the now-playing marker must paint"),
+            }
+            let progress_x = (0..rect.width)
+                .find(|&x| matches!(buf[(x, 0)].symbol(), "4" | "1"))
+                .expect("selected progress percentage");
+            for x in progress_x..progress_x + 2 {
+                assert_eq!(
+                    buf[(x, 0)].fg,
+                    palette::SELECTED_ROW_PROGRESS_FG,
+                    "the bar carries its own progress role"
+                );
+            }
+        }
     }
 
     #[test]
