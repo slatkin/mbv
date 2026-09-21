@@ -290,3 +290,18 @@ fn played_episode_rows_project_the_shared_played_state() {
     assert_eq!(states[0], &MediaSemanticState::Played);
     assert_eq!(states[1], &MediaSemanticState::Ordinary);
 }
+
+#[test]
+fn episode_rows_project_runtime_in_the_green_gutter() {
+    let mut episode = make_item("Episode", "Episode");
+    episode.runtime_ticks = 3_661 * mbv_core::api::TICKS_PER_SECOND;
+    let rows = build_episode_rows(&[episode]);
+    let MediaListRow::Item {
+        trailing, duration, ..
+    } = &rows[0]
+    else {
+        panic!("episode rows are items");
+    };
+    assert_eq!(trailing, &Some(MediaListTrailing::Gutter("1:01".into())));
+    assert_eq!(duration, &None);
+}

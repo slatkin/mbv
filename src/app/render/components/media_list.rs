@@ -1162,6 +1162,68 @@ mod wide_row_regression_tests {
         }
     }
 
+    /// Workspace runtimes use the same six-column green gutter as dates and
+    /// years. Both sub-hour and hour-plus values remain right-aligned without
+    /// falling back to the Queue's gold duration slot.
+    #[test]
+    fn workspace_durations_paint_right_aligned_without_six_column_truncation() {
+        let rect = Rect::new(0, 0, 40, 4);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "track".into(),
+                primary: "Track".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("59:59".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "episode".into(),
+                primary: "Episode".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("1:01".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "chapter".into(),
+                primary: "Chapter".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("100:00".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "book".into(),
+                primary: "Book".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Gutter("1:00".into())),
+                duration: None,
+                kind: MediaKind::Collection,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        for (y, expected) in [(0, " 59:59"), (1, "  1:01"), (2, "100:00"), (3, "  1:00")] {
+            let gutter: String = (32..38).map(|x| buf[(x, y)].symbol().to_string()).collect();
+            assert_eq!(gutter, expected, "gutter row {y}");
+            let first = 38 - expected.chars().count() as u16;
+            for x in first..38 {
+                assert_eq!(buf[(x, y)].fg, palette::STATUS_AVAILABLE);
+            }
+        }
+    }
+
     #[test]
     fn selected_now_playing_marker_uses_ink_but_progress_keeps_metadata_role() {
         use crate::app::components::media_list::ActiveProgress;

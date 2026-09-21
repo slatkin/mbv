@@ -162,6 +162,19 @@ pub fn fmt_duration_short(s: i64) -> String {
     }
 }
 
+/// Format a duration for the green media-list gutter: `M:SS` under an hour,
+/// or `H:MM` at/over an hour. The latter deliberately drops seconds so the
+/// value fits the gutter's six columns. Extremely large values clamp the hour
+/// component to keep the result bounded to six columns.
+pub fn fmt_duration_gutter(s: i64) -> String {
+    let s = s.max(0);
+    if s >= 3600 {
+        format!("{}:{:02}", (s / 3600).min(999), (s % 3600) / 60)
+    } else {
+        format!("{}:{:02}", s / 60, s % 60)
+    }
+}
+
 /// Format a duration as zero-padded clock time — `HH:MM:SS`, or `MM:SS`
 /// when under an hour. The hero meta-row duration format; the colour is the
 /// painter's `DURATION` role. Examples: "00:45", "03:05", "59:59",
@@ -218,7 +231,22 @@ pub fn trunc_str(s: &str, max: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{fmt_publish_date, fmt_publish_date_short};
+    use super::{fmt_duration_gutter, fmt_publish_date, fmt_publish_date_short};
+
+    #[test]
+    fn gutter_duration_uses_minutes_precision_and_fits_six_columns() {
+        for (seconds, expected) in [(0, "0:00"), (90, "1:30"), (3599, "59:59")] {
+            let formatted = fmt_duration_gutter(seconds);
+            assert_eq!(formatted, expected);
+            assert!(unicode_width::UnicodeWidthStr::width(formatted.as_str()) <= 6);
+        }
+        for (seconds, expected) in [(3600, "1:00"), (3661, "1:01"), (360_000, "100:00")] {
+            let formatted = fmt_duration_gutter(seconds);
+            assert_eq!(formatted, expected);
+            assert!(unicode_width::UnicodeWidthStr::width(formatted.as_str()) <= 6);
+        }
+        assert!(fmt_duration_gutter(i64::MAX).len() <= 6);
+    }
 
     /// The row gutter's format: day and abbreviated month, so the fixed
     /// six-column gutter stays narrow (the hero's meta row keeps the year).

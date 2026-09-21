@@ -13,7 +13,8 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
+    MediaSemanticState,
 };
 use super::msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -21,7 +22,7 @@ use super::msg::{
 };
 use crate::app::audiobookshelf_browse_actions::audiobookshelf_book_queue_item;
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
-use crate::app::ui_util::clean_overview;
+use crate::app::ui_util::{clean_overview, fmt_duration_gutter};
 
 /// Canonical row projection for one book's chapter/audio-part detail: one
 /// selectable `Item` per visible row, keyed by its stable row discriminator.
@@ -37,17 +38,25 @@ fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaLis
             // number or the audio-part index -- never the `enumerate()` display
             // position, so a detail refresh that re-composes `visible_rows`
             // cannot resolve a stale target to a different row (design.md D4).
-            let (target, primary) = match row {
-                BookRow::Chapter { id, title, .. } => (id, title),
-                BookRow::AudioFile { index, .. } => (index, format!("Part {index}")),
+            let (target, primary, duration_seconds) = match row {
+                BookRow::Chapter {
+                    id,
+                    start,
+                    end,
+                    title,
+                } => (id, title, end - start),
+                BookRow::AudioFile {
+                    index, duration, ..
+                } => (index, format!("Part {index}"), duration),
             };
+            let trailing = (duration_seconds > 0.0)
+                .then(|| fmt_duration_gutter(duration_seconds as i64))
+                .map(MediaListTrailing::Gutter);
             MediaListRow::Item {
                 target,
                 primary,
                 secondary: None,
-                trailing: None,
-                // Library lists carry no time column (only the Queue list and
-                // the sessions modal show one).
+                trailing,
                 duration: None,
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
@@ -788,5 +797,14 @@ mod tests {
             .is_some_and(|hero| hero.workspace.is_some());
         assert!(has_workspace);
         assert_eq!(owner.chapter_list.rows().len(), 1);
+        let MediaListRow::Item { trailing, .. } = &owner.chapter_list.rows()[0] else {
+            panic!("chapter rows are items");
+        };
+        assert_eq!(trailing, &Some(MediaListTrailing::Gutter("1:00".into())));
+
+        let MediaListRow::Item { trailing, .. } = &owner.carrier.rows()[0] else {
+            panic!("book rows are items");
+        };
+        assert_eq!(trailing, &Some(MediaListTrailing::Gutter("1:00".into())));
     }
 }

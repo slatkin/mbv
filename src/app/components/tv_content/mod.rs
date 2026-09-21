@@ -25,8 +25,8 @@ use super::media_list::{
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
-use crate::app::ui_util::natural_sort_key;
-use mbv_core::api::EmbyItem;
+use crate::app::ui_util::{fmt_duration_gutter, natural_sort_key};
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use ratatui::layout::Position;
 #[cfg(test)]
 use tuirealm::event::Key;
@@ -82,9 +82,9 @@ pub(in crate::app) struct TvContent {
 }
 
 /// Build the embedded episode `WideMediaList`'s rows from a season's
-/// episodes (task 4.2d): the canonical control's row content. Library lists
-/// carry no time column, so no duration is projected. The row state comes
-/// from the one canonical derivation.
+/// episodes (task 4.2d): the canonical control's row content. Episode
+/// runtimes use the shared green gutter; the row state comes from the one
+/// canonical derivation.
 fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
         .iter()
@@ -95,11 +95,14 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
             } else {
                 index as i64 + 1
             };
+            let trailing = (episode.runtime_ticks > 0)
+                .then(|| fmt_duration_gutter(episode.runtime_ticks / TICKS_PER_SECOND))
+                .map(MediaListTrailing::Gutter);
             MediaListRow::Item {
                 target: episode.id.clone(),
                 primary: format!("{number}. {}", episode.name),
                 secondary: None,
-                trailing: None,
+                trailing,
                 duration: None,
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::from_emby(episode),

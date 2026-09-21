@@ -418,16 +418,17 @@ pub enum RowIntent<Target> {
     ContextSelection(Vec<Target>),
 }
 
-/// Date metadata a row paints in the fixed-width right-aligned gutter, with
-/// the green metadata role baked in (one closed vocabulary: rows never carry
-/// raw colours). Resume/live progress is not trailing metadata: it comes from
-/// the row's [`MediaSemanticState`], so `Active`/`NowPlaying` render it inline.
-/// A row without date metadata reserves no gutter.
+/// Metadata a row paints in the fixed-width right-aligned gutter, with the
+/// green metadata role baked in (one closed vocabulary: rows never carry raw
+/// colours). This carries release dates/years and minutes-precision durations;
+/// resume/live progress is not trailing metadata: it comes from the row's
+/// [`MediaSemanticState`], so `Active`/`NowPlaying` render it inline. A row
+/// without gutter metadata reserves no gutter.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListTrailing {
-    /// The item's release year or publish date, painted right-aligned in the
-    /// fixed-width gutter in the green (`STATUS_AVAILABLE`) metadata role,
-    /// left of the duration when a row carries both.
+    /// The item's release year, publish date, or minutes-precision runtime,
+    /// painted right-aligned in the fixed-width gutter in the green
+    /// (`STATUS_AVAILABLE`) metadata role.
     Gutter(String),
 }
 
@@ -443,10 +444,10 @@ pub enum MediaListRow<Target> {
         /// in aqua (`PLAYBACK_TITLE_FG`); a played row mutes only the
         /// secondary to (`TEXT_MUTED`).
         secondary: Option<String>,
-        /// Date metadata rendered in the fixed right-aligned gutter. Inline
-        /// progress percentages are derived from `semantic_state` in the FOAM
-        /// (`TEXT_METADATA`) role. Distinct from `duration`, the right-aligned
-        /// deep gold time slot.
+        /// Gutter metadata rendered in the fixed right-aligned green column.
+        /// Inline progress percentages are derived from `semantic_state` in
+        /// the FOAM (`TEXT_METADATA`) role. Distinct from `duration`, the
+        /// right-aligned deep gold time slot.
         trailing: Option<MediaListTrailing>,
         /// A duration/time string. Rendered as a distinct right-aligned
         /// deep gold (`DURATION`) element, never as FOAM `trailing`.

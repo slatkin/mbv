@@ -105,8 +105,8 @@ pub(in crate::app) fn media_list_row<Target>(
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
             // The inline metadata pieces contain only the active row's
-            // percentage, which stays FOAM-coloured. A year or publish date
-            // uses the fixed right-aligned green gutter below.
+            // percentage, which stays FOAM-coloured. Gutter metadata uses
+            // the fixed right-aligned green column below.
             let mut trailing_pieces: Vec<(String, Color)> = Vec::new();
             let gutter = match trailing {
                 Some(MediaListTrailing::Gutter(text)) if !text.is_empty() => Some(text.as_str()),
@@ -132,7 +132,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 .map(|(text, _)| 1 + text.width())
                 .sum();
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
-            // The date/year gutter is a fixed-width column, so it reserves
+            // The metadata gutter is a fixed-width column, so it reserves
             // its full width whatever the string's own length is.
             let date_reserve = usize::from(gutter.is_some()) * (QUIET_GAP + DATE_GUTTER_W);
             let selected = selected && focused;

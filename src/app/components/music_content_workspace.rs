@@ -15,13 +15,14 @@ fn track_row(track: &EmbyItem, index: usize) -> MediaListRow<String> {
     } else {
         index as i64 + 1
     };
-    // Library lists carry no time column (only the Queue list and the
-    // sessions modal show one).
+    let trailing = (track.runtime_ticks > 0)
+        .then(|| fmt_duration_gutter(track.runtime_ticks / TICKS_PER_SECOND))
+        .map(MediaListTrailing::Gutter);
     MediaListRow::Item {
         target: track.id.clone(),
         primary: format!("{number}. {}", track.name),
         secondary: None,
-        trailing: None,
+        trailing,
         duration: None,
         kind: MediaKind::Media,
         // The one canonical state derivation.
