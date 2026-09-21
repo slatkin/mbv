@@ -158,16 +158,16 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
 }
 
 #[test]
-fn artist_workspace_root_enter_uses_the_hero_entry_while_the_rail_owns_focus() {
+fn artist_workspace_root_enter_is_handled_by_the_non_wide_panel_gate() {
     let mut owner = artist_workspace_owner();
     let root = owner.browser.selected_id().expect("artist root selected");
     assert!(owner.browser.root_is_expanded(root));
     assert!(!owner.track_focused(), "the rail owns the focus");
 
-    assert!(matches!(
-        press(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::MusicArtistActivate { .. }))
-    ));
+    // The mounted non-Wide panel intercepts this chord before the owner and
+    // opens the Library Hero overlay itself. A direct owner therefore has no
+    // request to emit on this geometry.
+    assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(
         owner.browser.root_is_expanded(root),
         "unfiltered Enter preserves expansion"

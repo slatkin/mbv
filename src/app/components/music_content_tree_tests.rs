@@ -503,19 +503,16 @@ fn up_and_down_move_across_artist_roots_and_album_leaves() {
 }
 
 #[test]
-fn enter_enters_an_unfiltered_artist_hero_and_activates_an_album_leaf() {
+fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
     press(&mut owner, Key::Home);
     let root = owner.browser.selected_id().expect("artist root selected");
     // The initial album adoption expanded the first root's path.
     assert!(owner.browser.root_is_expanded(root));
 
-    match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicArtistActivate { target })) => {
-            assert_eq!(target.artist_name, "Alpha")
-        }
-        other => panic!("expected artist Hero entry, got {other:?}"),
-    }
+    // The mounted non-Wide panel owns the unfiltered Hero entry before the
+    // owner sees Enter; the direct owner has no request to emit.
+    assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(
         owner.browser.root_is_expanded(root),
         "unfiltered Enter leaves expansion unchanged"
@@ -572,9 +569,17 @@ fn enter_enters_a_root_reached_while_the_track_pane_holds_focus() {
     let root = owner.browser.selected_id().expect("artist root selected");
     assert!(owner.browser.root_is_expanded(root));
 
-    // The stale pane must not swallow Enter: the unfiltered root uses Hero
-    // entry and leaves its expansion unchanged.
+    // The stale pane must not swallow Enter: the unfiltered root reconciles
+    // away the album carrier and arms the artist Workspace entry instead.
     assert_eq!(press(&mut owner, Key::Enter), None);
+    assert!(
+        owner.pending_artist_workspace_focus_for_test(),
+        "artist-root Enter arms entry when its rows have not landed"
+    );
+    assert!(
+        !owner.track_focused(),
+        "stale album rows never retain track focus under an artist root"
+    );
     assert!(
         owner.browser.root_is_expanded(root),
         "Enter preserves the focused root's expansion"

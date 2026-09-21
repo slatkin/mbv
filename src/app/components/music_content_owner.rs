@@ -178,24 +178,17 @@ impl LibraryContentOwner for MusicContent {
         }
         match key.code {
             // Unfiltered artist Enter uses the same Hero entry as Right on an
-            // expanded root: Wide takes the inline Workspace cursor, while
-            // non-Wide asks the panel to open the Library Hero overlay. The
-            // filter keeps its local expansion behavior and never enters a
-            // Hero. Once the focused pane is this root's own artist Workspace,
-            // Enter belongs to the focused track below.
+            // expanded root in Wide geometry. The panel owns the non-Wide
+            // Enter interception and opens the Library Hero overlay before
+            // this owner sees the chord; the filter keeps its local expansion
+            // behavior in `on_filter_key`. Once the focused pane is this
+            // root's own artist Workspace, Enter belongs to the focused track
+            // below.
             Key::Enter if self.browser.selected_is_artist() && !self.artist_workspace_focused() => {
-                if self.browser.filter_active() {
-                    if let Some(root) = self.browser.selected_id() {
-                        self.browser.toggle_root(root);
-                    }
-                    None
-                } else if self.inline_track_focus_enabled {
+                if self.inline_track_focus_enabled {
                     self.enter_artist_workspace_focus();
-                    None
-                } else {
-                    self.artist_detail_target()
-                        .map(|target| Msg::Shell(ShellRequest::MusicArtistActivate { target }))
                 }
+                None
             }
             Key::Enter if self.track_focused => {
                 let track = self.selected_track_item()?;

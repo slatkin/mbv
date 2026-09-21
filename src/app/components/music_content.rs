@@ -315,6 +315,10 @@ impl MusicContent {
     /// have not arrived yet, arm the entry so the next content push takes it —
     /// the component-local twin of the shell's album Enter re-arm.
     fn enter_artist_workspace_focus(&mut self) {
+        // A tree move can leave the previous album Workspace focused until the
+        // next panel projection. Reconcile now so an artist root never adopts
+        // that stale carrier as its own Workspace.
+        self.reconcile_workspace_rows();
         self.enter_track_focus();
         if !self.track_focused {
             // Arm with the focused root's resolved identity (design D7): the
