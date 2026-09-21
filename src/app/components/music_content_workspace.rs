@@ -1,6 +1,15 @@
 // Included into `music_content` via `include!` (the module's doc and
 // imports live there, beside the split's other parts).
 
+pub(in crate::app) fn track_row_label(track: &EmbyItem, index: usize) -> String {
+    let number = if track.index_number > 0 {
+        track.index_number
+    } else {
+        index as i64 + 1
+    };
+    format!("{number}. {}", track.name)
+}
+
 fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     tracks
         .iter()
@@ -10,17 +19,12 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
 }
 
 fn track_row(track: &EmbyItem, index: usize) -> MediaListRow<String> {
-    let number = if track.index_number > 0 {
-        track.index_number
-    } else {
-        index as i64 + 1
-    };
     let trailing = (track.runtime_ticks > 0)
         .then(|| fmt_duration_gutter(track.runtime_ticks / TICKS_PER_SECOND))
         .map(MediaListTrailing::Gutter);
     MediaListRow::Item {
         target: track.id.clone(),
-        primary: format!("{number}. {}", track.name),
+        primary: track_row_label(track, index),
         secondary: None,
         trailing,
         duration: None,

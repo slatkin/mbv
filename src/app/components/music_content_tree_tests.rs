@@ -165,6 +165,45 @@ fn track_rows_project_runtime_in_the_green_gutter() {
     assert_eq!(duration, &None);
 }
 
+#[test]
+fn tree_tracks_use_numbered_workspace_labels_with_index_fallback() {
+    let mut indexed = make_item("Indexed Track", "Audio");
+    indexed.id = "track-indexed".into();
+    indexed.index_number = 7;
+    let mut fallback = make_item("Fallback Track", "Audio");
+    fallback.id = "track-fallback".into();
+    fallback.index_number = 0;
+
+    let rows = build_track_rows(&[indexed.clone(), fallback.clone()]);
+    let labels: Vec<&str> = rows
+        .iter()
+        .map(|row| match row {
+            MediaListRow::Item { primary, .. } => primary.as_str(),
+            _ => panic!("track rows are items"),
+        })
+        .collect();
+    assert_eq!(labels, ["7. Indexed Track", "2. Fallback Track"]);
+
+    let mut owner = tree_owner_with_tracks(&[("Alpha", &["a-0"])], Some(vec![indexed, fallback]));
+    owner.expand_all_tree_roots();
+    let album_id = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
+        .expect("album leaf")
+        .id();
+    owner.browser.expand_node(album_id);
+    let labels: Vec<&str> = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .filter(|node| owner.browser.title_of(node.id()).contains("Track"))
+        .map(|node| owner.browser.title_of(node.id()))
+        .collect();
+    assert_eq!(labels, ["7. Indexed Track", "2. Fallback Track"]);
+}
+
 // ── Task 2.4: tree chord mapping through the component boundary ──────────
 
 /// A multi-artist Grouped Music owner whose tree starts on the first album of

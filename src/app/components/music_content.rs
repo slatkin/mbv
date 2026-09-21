@@ -155,9 +155,10 @@ impl MusicContent {
                     album.clone(),
                     tracks
                         .iter()
-                        .map(|track| MusicTreeTrack {
+                        .enumerate()
+                        .map(|(index, track)| MusicTreeTrack {
                             target: track.id.clone(),
-                            title: track.name.clone(),
+                            title: track_row_label(track, index),
                         })
                         .collect(),
                 )

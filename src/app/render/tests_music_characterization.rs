@@ -9,16 +9,21 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;
 use ratatui::Terminal;
+use rstest::rstest;
 use std::collections::HashMap;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
+use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
 use crate::app::components::media_list::{
     queue_row_background, queue_row_zebra, MediaSemanticState,
 };
+use crate::app::components::music_content::track_row_label;
 use crate::app::components::music_tree::{
     MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack,
 };
+use crate::app::components::ComponentId;
 use crate::app::music_grouping::ArtistKey;
+use crate::app::shell::Model;
 
 /// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
 /// now (task 3.8), so route the narrow characterization renders through the
@@ -26,6 +31,104 @@ use crate::app::music_grouping::ArtistKey;
 fn render_narrow_music(app: App, width: u16, height: u16) -> String {
     let mut model = mounted_model_at(app, width, height);
     draw_mounted_frame(&mut model, width, height)
+}
+
+fn mounted_music_narrow_geometry(model: &Model) -> WideSkeletonGeometry {
+    model
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("LibraryPanel")
+        .test_narrow_geometry()
+        .expect("non-Wide Music skeleton painted")
+}
+
+#[rstest]
+#[case::wide(160, 40)]
+#[case::smallest_non_wide(crate::app::TWO_COLUMN_THRESHOLD - 1, 30)]
+fn numbered_tree_track_labels_are_painted_at_fixture_widths(
+    #[case] width: u16,
+    #[case] height: u16,
+) {
+    let mut indexed = crate::app::tests::make_item("Indexed Track", "Audio");
+    indexed.id = "track-indexed".into();
+    indexed.index_number = 7;
+    let mut fallback = crate::app::tests::make_item("Fallback Track", "Audio");
+    fallback.id = "track-fallback".into();
+    fallback.index_number = 0;
+
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::new());
+    browser.set_track_items(HashMap::from([(
+        "album".to_string(),
+        vec![
+            MusicTreeTrack {
+                target: indexed.id.clone(),
+                title: track_row_label(&indexed, 0),
+            },
+            MusicTreeTrack {
+                target: fallback.id.clone(),
+                title: track_row_label(&fallback, 1),
+            },
+        ],
+    )]));
+    browser.reconcile(&[MusicTreeEntry {
+        artist: "Artist".into(),
+        artist_key: ArtistKey::Fallback("Artist".into()),
+        title: "Album".into(),
+        year: None,
+        target: "album".into(),
+        semantic_state: MediaSemanticState::Ordinary,
+    }]);
+    browser.expand_root(0);
+    let album_id = browser
+        .projected_nodes()
+        .iter()
+        .find(|node| browser.title_of(node.id()) == "Album")
+        .expect("album leaf")
+        .id();
+    browser.expand_node(album_id);
+    let indexed_id = browser
+        .projected_nodes()
+        .iter()
+        .find(|node| browser.title_of(node.id()) == "7. Indexed Track")
+        .expect("indexed track")
+        .id();
+
+    let mut model = mounted_model_at(make_music_tree_group_app(), width, height);
+    draw_mounted_frame(&mut model, width, height);
+    let list_area = if width >= crate::app::TWO_COLUMN_THRESHOLD {
+        mounted_music_wide_geometry(&model).list_area
+    } else {
+        mounted_music_narrow_geometry(&model).list_area
+    };
+    let term = music_tree_frame(&mut browser, list_area, width, height);
+    let indexed_row = music_tree_projection_row_of(&browser, indexed_id);
+    let row = music_tree_row_text(
+        &term,
+        music_tree_row_y(&browser, list_area, indexed_row),
+        list_area.x,
+        list_area.right(),
+    );
+    assert!(row.contains("7. Indexed Track"), "painted row: {row:?}");
+    assert!(
+        browser
+            .projected_nodes()
+            .iter()
+            .any(|node| music_tree_row_text(
+                &term,
+                music_tree_row_y(
+                    &browser,
+                    list_area,
+                    music_tree_projection_row_of(&browser, node.id()),
+                ),
+                list_area.x,
+                list_area.right(),
+            )
+            .contains("2. Fallback Track")),
+        "fallback label is painted"
+    );
 }
 
 fn render_music_legacy(app: &mut App, width: u16, height: u16, _focused: bool) -> String {
