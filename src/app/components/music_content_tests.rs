@@ -62,6 +62,44 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
 }
 
 #[test]
+fn grouped_music_reanchor_launch_state_falls_back_to_first_album() {
+    let mut album = make_item("Album", "Folder");
+    album.id = "album-stable".into();
+    let mut group = make_item("Artist", "MusicArtist");
+    group.id = "group-stable".into();
+    let mut owner = MusicContent::new();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![album], 0),
+        None,
+        String::new(),
+        vec![group],
+        0,
+        vec![("Artist".into(), "2024".into(), "Album".into())],
+        vec![crate::app::music_grouping::ArtistKey::Fallback(
+            "Artist".into(),
+        )],
+        vec![0],
+        None,
+    ));
+    let state = mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Emby {
+            key: mbv_core::config::EmbySelectorKey::Group("gone".into()),
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Emby { id: "gone".into() }),
+    };
+    assert!(owner.reanchor_launch_state(&state));
+    assert_eq!(
+        owner.launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "album-stable".into()
+        })
+    );
+}
+
+#[test]
 fn grouped_music_launch_snapshot_reports_absence_for_empty_tree_and_groups() {
     let mut owner = MusicContent::new();
     owner.set_content(MusicWideRenderCtx::new(

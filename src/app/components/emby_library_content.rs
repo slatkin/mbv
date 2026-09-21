@@ -726,6 +726,56 @@ impl LibraryContentOwner for EmbyLibraryContent {
     /// and the unfiltered letter view use an explicit unfiltered identity;
     /// a destination with no pills, or an empty list, reports absence. No
     /// pill index, group display name, or row position crosses.
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.loading && self.items.is_empty() {
+            return false;
+        }
+        if self.group_pills {
+            let group = match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Group(id),
+                }) => self
+                    .feed_group_ids
+                    .iter()
+                    .position(|candidate| candidate == id)
+                    .map(|index| index + 1)
+                    .unwrap_or(0),
+                _ => 0,
+            };
+            self.feed_group_cursor = group;
+            self.feed_owner();
+        } else if self.show_letter_pills {
+            self.letter_filter = match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Letter(bucket),
+                }) => crate::app::render::LetterFilter::for_index(match bucket {
+                    EmbyLetterBucket::AToC => 0,
+                    EmbyLetterBucket::DToF => 1,
+                    EmbyLetterBucket::GToI => 2,
+                    EmbyLetterBucket::JToL => 3,
+                    EmbyLetterBucket::MToO => 4,
+                    EmbyLetterBucket::PToR => 5,
+                    EmbyLetterBucket::SToU => 6,
+                    EmbyLetterBucket::VToZ => 7,
+                    EmbyLetterBucket::Hash => 8,
+                }),
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Unfiltered,
+                }) => None,
+                _ => Some(crate::app::render::LetterFilter::default_filter()),
+            };
+            self.feed_owner();
+        }
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
+            _ => false,
+        };
+        if !selected {
+            self.carrier.select_first();
+        }
+        true
+    }
+
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = if self.group_pills {
             if self.feed_group_cursor == 0 {

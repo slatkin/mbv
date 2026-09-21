@@ -191,7 +191,7 @@ pub(crate) fn make_app_stub() -> App {
         mini_view_focus: PanelFocus::Queue,
         library_tab_pending: 0,
         pending_launch_state: None,
-        pending_launch_tab: None,
+        pending_launch_tab_resolved: false,
         emby_catalog_ready: false,
         audiobookshelf_catalog_ready: false,
         pending_navigate_tab_switch: None,

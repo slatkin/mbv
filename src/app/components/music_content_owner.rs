@@ -96,6 +96,37 @@ impl LibraryContentOwner for MusicContent {
             .then_some(crate::app::components::media_list::SelectionSummary { count, origin })
     }
 
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.context.list.loading && self.context.list.items.is_empty() {
+            return false;
+        }
+        if !self.context.groups.is_empty() {
+            self.context.group_cursor = match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Group(id),
+                }) => self
+                    .context
+                    .groups
+                    .iter()
+                    .position(|group| &group.id == id)
+                    .unwrap_or(0),
+                _ => 0,
+            };
+        }
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Emby { id }) => self.browser.select_album_target(id),
+            _ => false,
+        };
+        if !selected {
+            if let Some(target) = self.context.album_targets.first().cloned() {
+                self.browser.select_album_target(&target);
+            } else {
+                self.browser.select_first_visible();
+            }
+        }
+        true
+    }
+
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         // Group pills are Music's main Selector. The artist/album/track tree
         // is Workspace content, so it contributes no selector identity; its

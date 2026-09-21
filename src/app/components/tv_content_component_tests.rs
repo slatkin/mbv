@@ -605,6 +605,38 @@ fn tv_launch_snapshot_uses_unfiltered_letter_scope_and_excludes_season_workspace
 }
 
 #[test]
+fn tv_reanchor_launch_state_falls_back_to_first_series_when_item_is_missing() {
+    let mut first = make_item("First", "Series");
+    first.id = "first-series".into();
+    let mut owner = TvContent::new();
+    owner.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first], 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+    ));
+    let state = mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Letter(EmbyLetterBucket::GToI),
+        }),
+        item: Some(LibraryItemIdentity::Emby { id: "gone".into() }),
+    };
+    assert!(owner.reanchor_launch_state(&state));
+    assert_eq!(owner.launch_snapshot().0, state.selector);
+    assert_eq!(
+        owner.launch_snapshot().1,
+        Some(LibraryItemIdentity::Emby {
+            id: "first-series".into()
+        })
+    );
+}
+
+#[test]
 fn tv_launch_snapshot_uses_nonzero_letter_bucket_identity() {
     let mut series = make_item("Series", "Series");
     series.id = "series-stable".into();

@@ -511,6 +511,18 @@ impl LibraryPanel {
             .map(LibraryContentOwner::launch_snapshot)
     }
 
+    /// Apply the one discrete startup launch re-anchor to exactly one active
+    /// destination owner. The panel does not mirror the resulting local state.
+    pub(in crate::app) fn reanchor_launch_state(
+        &mut self,
+        key: &LibraryKey,
+        state: &mbv_core::config::TuiLaunchState,
+    ) -> bool {
+        self.owners
+            .get_mut(key)
+            .is_some_and(|owner| owner.reanchor_launch_state(state))
+    }
+
     /// Take the hero image paint the last view retained (the shell paints it
     /// right after `view` returns).
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<PanelHeroImagePaint> {

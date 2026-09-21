@@ -14,7 +14,7 @@ impl App {
         // Keep the pre-launch-state numeric fallback alive for the existing
         // migration seam; task 4.2 will replace it with stable legacy
         // identity recovery. New snapshots always take the branch below.
-        if self.pending_launch_tab.is_none()
+        if self.pending_launch_state.is_none()
             && self.library_tab_pending > 0
             && (!self.libs.is_empty() || !self.audiobookshelf_libraries.is_empty())
         {
@@ -27,9 +27,13 @@ impl App {
             self.library_tab_pending = 0;
             return;
         }
-        let Some(identity) = self.pending_launch_tab.clone() else {
+        let Some(state) = self.pending_launch_state.as_ref() else {
             return;
         };
+        if self.pending_launch_tab_resolved {
+            return;
+        }
+        let identity = state.tab.clone();
         let resolved = match identity {
             TabIdentity::Home => Some(TabSelection::Home),
             TabIdentity::Feeds => {
@@ -45,7 +49,7 @@ impl App {
         };
         if let Some(tab) = resolved {
             self.tab = tab;
-            self.pending_launch_tab = None;
+            self.pending_launch_tab_resolved = true;
         }
     }
 
@@ -117,7 +121,7 @@ impl App {
         // A user-selected tab owns the rest of the launch intent. Once the
         // user moves explicitly, a later catalog refresh must not replay the
         // saved tab or its destination identities.
-        self.pending_launch_tab = None;
+        self.pending_launch_tab_resolved = false;
         self.pending_launch_state = None;
         self.tab = TabSelection::from_position_with_counts(
             pos,

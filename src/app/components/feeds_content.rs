@@ -436,6 +436,52 @@ impl Default for FeedsContent {
 }
 
 impl LibraryContentOwner for FeedsContent {
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.loading && self.visible_entries.is_empty() && !self.subscriptions.is_empty() {
+            return false;
+        }
+        if self.subscriptions.is_empty() {
+            self.rebuild_visible_entries();
+        } else {
+            match state.selector.as_ref() {
+                Some(SelectorIdentity::Feeds {
+                    key: FeedsSelectorKey::Filter(filter),
+                }) => {
+                    self.selected_group = 0;
+                    self.watched_filter = match filter {
+                        FeedsFilter::All => WatchedFilter::All,
+                        FeedsFilter::Played => WatchedFilter::Watched,
+                        FeedsFilter::Unplayed => WatchedFilter::Unwatched,
+                    };
+                }
+                Some(SelectorIdentity::Feeds {
+                    key: FeedsSelectorKey::Group(FeedGroupKey::Feed(url)),
+                }) => {
+                    self.selected_group = self
+                        .subscriptions
+                        .iter()
+                        .position(|subscription| &subscription.url == url)
+                        .map(|index| index + 1)
+                        .unwrap_or(0);
+                    self.watched_filter = WatchedFilter::All;
+                }
+                _ => {
+                    self.selected_group = 0;
+                    self.watched_filter = WatchedFilter::All;
+                }
+            }
+            self.rebuild_visible_entries();
+        }
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Feeds { id }) => self.carrier.select_target(id),
+            _ => false,
+        };
+        if !selected {
+            self.carrier.select_first();
+        }
+        true
+    }
+
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = if self.subscriptions.is_empty() {
             None

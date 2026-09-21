@@ -621,6 +621,38 @@ impl LibraryContentOwner for HomeContent {
     /// scope, a latest section as its persisted `pref_key` — plus the
     /// shared carrier's stable item target. No pill index or title crosses;
     /// an empty section reports no item.
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.loading && self.carrier.rows().is_empty() {
+            return false;
+        }
+        let section = match state.selector.as_ref() {
+            Some(SelectorIdentity::Home {
+                key: HomeSelectorKey::Section(source),
+            }) => self
+                .latest
+                .iter()
+                .position(|(_, candidate, _)| candidate.pref_key() == *source)
+                .map(|index| index + 1)
+                .unwrap_or(0),
+            Some(SelectorIdentity::Home {
+                key: HomeSelectorKey::Continue,
+            })
+            | None => 0,
+            _ => 0,
+        };
+        self.section = section;
+        self.clamp_section();
+        self.project_active_section();
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Home { id }) => self.carrier.select_target(id),
+            _ => false,
+        };
+        if !selected {
+            self.carrier.select_first();
+        }
+        true
+    }
+
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = if self.section == 0 {
             Some(SelectorIdentity::Home {
@@ -936,6 +968,36 @@ mod tests {
                     id: "cw-1".to_string(),
                 })
             )
+        );
+    }
+
+    #[test]
+    fn reanchor_launch_state_falls_back_to_first_section_and_item() {
+        let mut owner = HomeContent::new();
+        let mut item = make_item("Latest", "Movie");
+        item.id = "latest-1".into();
+        owner.set_content(
+            vec![QueueItem::Emby(Box::new(item))],
+            Vec::new(),
+            false,
+            HashMap::new(),
+        );
+        let state = mbv_core::config::TuiLaunchState {
+            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_core::config::TabIdentity::Home,
+            panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+            selector: Some(SelectorIdentity::Home {
+                key: HomeSelectorKey::Section("emby:gone".into()),
+            }),
+            item: Some(LibraryItemIdentity::Home { id: "gone".into() }),
+        };
+        assert!(owner.reanchor_launch_state(&state));
+        assert_eq!(owner.section(), 0);
+        assert_eq!(
+            owner.launch_snapshot().1,
+            Some(LibraryItemIdentity::Home {
+                id: "latest-1".into()
+            })
         );
     }
 

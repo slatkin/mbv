@@ -15,7 +15,9 @@ use tuirealm::event::KeyEvent;
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::msg::{LeafKeyResult, Msg};
-use mbv_core::config::{LibraryItemIdentity, SelectorIdentity, ServiceKind, TabIdentity};
+use mbv_core::config::{
+    LibraryItemIdentity, SelectorIdentity, ServiceKind, TabIdentity, TuiLaunchState,
+};
 
 use super::content::{HeroImageState, LibraryPanelContent};
 use super::hero::HeroContentData;
@@ -360,6 +362,15 @@ pub(in crate::app) trait LibraryContentOwner {
     // Consumed by selected-tab teardown assembly in task 2.3.
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         (None, None)
+    }
+
+    /// Apply one discrete startup re-anchor after the destination's current
+    /// content has been projected. Implementations resolve the main Selector
+    /// before the library item and fall back to the first current selectable
+    /// choice at each level. Returning `true` consumes the destination-level
+    /// pending state; ordinary refreshes never call this operation.
+    fn reanchor_launch_state(&mut self, _state: &TuiLaunchState) -> bool {
+        false
     }
 
     /// Downcast support for the shell's per-destination pushes (the shell

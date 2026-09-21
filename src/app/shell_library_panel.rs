@@ -94,6 +94,30 @@ impl Model {
         })
     }
 
+    /// Consume the pending destination-level launch state after the selected
+    /// owner has received its current content. Resolution is deliberately
+    /// pill-before-item and happens once; later refreshes only project content.
+    pub(super) fn reanchor_pending_launch_destination(&mut self) {
+        if !self.app.pending_launch_tab_resolved {
+            return;
+        }
+        let Some(state) = self.app.pending_launch_state.clone() else {
+            return;
+        };
+        let Some(key) = self.active_library_key() else {
+            return;
+        };
+        let applied = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .is_some_and(|panel| panel.reanchor_launch_state(&key, &state));
+        if applied {
+            self.app.pending_launch_state = None;
+            self.app.pending_launch_tab_resolved = false;
+        }
+    }
+
     /// Every [`LibraryKey`] currently in the catalog: the shell tabs that are
     /// always live (Home, Feeds) plus one `Service` key per configured
     /// library, independent of the active tab. `LibraryPanel::retain_owners`

@@ -638,6 +638,41 @@ impl LibraryContentOwner for TvContent {
         self.inline_search.is_active()
     }
 
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.context.list.loading && self.context.list.items.is_empty() {
+            return false;
+        }
+        if self.context.show_letter_pills {
+            self.context.list.letter_filter = match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Letter(bucket),
+                }) => crate::app::render::LetterFilter::for_index(match bucket {
+                    EmbyLetterBucket::AToC => 0,
+                    EmbyLetterBucket::DToF => 1,
+                    EmbyLetterBucket::GToI => 2,
+                    EmbyLetterBucket::JToL => 3,
+                    EmbyLetterBucket::MToO => 4,
+                    EmbyLetterBucket::PToR => 5,
+                    EmbyLetterBucket::SToU => 6,
+                    EmbyLetterBucket::VToZ => 7,
+                    EmbyLetterBucket::Hash => 8,
+                }),
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Unfiltered,
+                }) => None,
+                _ => Some(crate::app::render::LetterFilter::default_filter()),
+            };
+        }
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
+            _ => false,
+        };
+        if !selected {
+            self.carrier.select_first();
+        }
+        true
+    }
+
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         // TV's season pills live in the Hero Workspace and are deliberately
         // excluded from the bounded launch snapshot. Only the main letter

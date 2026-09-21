@@ -303,6 +303,33 @@ fn browser_owner_launch_snapshot_reports_letter_pill_and_item_identities() {
 }
 
 #[test]
+fn browser_owner_reanchors_selector_before_item_and_falls_back_when_item_is_missing() {
+    use mbv_core::config::{
+        EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity, TuiLaunchState,
+    };
+
+    let mut owner = BrowserOwner::new(LibraryKind::Movies);
+    let mut push = owner_push(make_items(3));
+    push.show_letter_pills = true;
+    owner.set_content(push);
+    let state = TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Letter(EmbyLetterBucket::GToI),
+        }),
+        item: Some(LibraryItemIdentity::Emby { id: "gone".into() }),
+    };
+    assert!(owner.reanchor_launch_state(&state));
+    assert_eq!(owner.launch_snapshot().0, state.selector);
+    assert_eq!(
+        owner.launch_snapshot().1,
+        Some(LibraryItemIdentity::Emby { id: "id0".into() })
+    );
+}
+
+#[test]
 fn browser_owner_launch_snapshot_reports_group_content_id_never_the_display_name() {
     use mbv_core::config::{EmbySelectorKey, SelectorIdentity};
 

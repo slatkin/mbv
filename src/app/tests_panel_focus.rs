@@ -155,7 +155,7 @@ fn build_loads_one_pending_launch_intent_without_selecting_a_stale_index() {
     let app = make_built_app();
 
     assert_eq!(app.tab, TabSelection::Home);
-    assert_eq!(app.pending_launch_tab, Some(state.tab.clone()));
+    assert!(!app.pending_launch_tab_resolved);
     assert_eq!(app.pending_launch_state, Some(state));
 }
 

@@ -140,6 +140,29 @@ fn launch_snapshot_uses_feed_filter_and_selected_entry_identity() {
 }
 
 #[test]
+fn feeds_owner_reanchors_missing_group_and_item_to_first_choices() {
+    use mbv_core::config::{LaunchPanelFocus, TabIdentity, TuiLaunchState};
+
+    let mut owner = grouped_component();
+    let state = TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: TabIdentity::Feeds,
+        panel_focus: LaunchPanelFocus::Library,
+        selector: Some(SelectorIdentity::Feeds {
+            key: FeedsSelectorKey::Group(FeedGroupKey::Feed("gone".into())),
+        }),
+        item: Some(LibraryItemIdentity::Feeds { id: "gone".into() }),
+    };
+    assert!(owner.reanchor_launch_state(&state));
+    assert_eq!(owner.selected_group(), 0);
+    assert_eq!(owner.watched_filter(), WatchedFilter::All);
+    assert_eq!(
+        owner.canonical_selected_target(),
+        Some(&"A-unplayed".to_string())
+    );
+}
+
+#[test]
 fn launch_snapshot_uses_feed_url_for_group_identity() {
     let mut owner = grouped_component();
     down(&mut owner, Key::Char(']'));

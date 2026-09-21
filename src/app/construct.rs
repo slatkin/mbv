@@ -68,7 +68,6 @@ impl App {
         let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let pending_launch_state = mbv_core::config::load_tui_launch_state();
-        let pending_launch_tab = pending_launch_state.as_ref().map(|state| state.tab.clone());
         let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
             init.player_tab.queue.clone(),
             crate::config::QueueSource::Unknown,
@@ -172,8 +171,8 @@ impl App {
             // stable pending launch tab. The saved queue is restored
             // independently; destination state remains pending for task 3.2.
             library_tab_pending: 0,
+            pending_launch_tab_resolved: false,
             pending_launch_state,
-            pending_launch_tab,
             emby_catalog_ready: false,
             audiobookshelf_catalog_ready: false,
             pending_navigate_tab_switch: None,

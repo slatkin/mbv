@@ -549,6 +549,31 @@ impl Default for BookContent {
 }
 
 impl LibraryContentOwner for BookContent {
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if !self.state.loading_pages.is_empty() && self.state.books.is_empty() {
+            return false;
+        }
+        let bucket = match state.selector.as_ref() {
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::BookBucket(bucket),
+            }) => self.state.buckets.iter().position(|candidate| {
+                AudiobookshelfBookBucket::from_bucket_index(candidate.index) == Some(*bucket)
+            }),
+            _ => None,
+        }
+        .unwrap_or(0);
+        self.selected_bucket = bucket.min(self.state.buckets.len().saturating_sub(1));
+        self.set_book_rows();
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Audiobookshelf { id }) => self.carrier.select_target(id),
+            _ => false,
+        };
+        if !selected {
+            self.carrier.select_first();
+        }
+        true
+    }
+
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = self
             .state
@@ -781,6 +806,27 @@ mod tests {
                 id: "book-d".into(),
             })
         );
+    }
+
+    #[test]
+    fn reanchor_launch_state_falls_back_to_first_bucket_and_book() {
+        let mut owner = BookContent::new();
+        owner.set_content(
+            &state_with_books(vec![book("book-a", "Adams"), book("book-d", "Dover")]),
+            false,
+        );
+        let state = mbv_core::config::TuiLaunchState {
+            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_core::config::TabIdentity::Home,
+            panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+            selector: Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::BookBucket(AudiobookshelfBookBucket::VToZ),
+            }),
+            item: Some(LibraryItemIdentity::Audiobookshelf { id: "gone".into() }),
+        };
+        assert!(owner.reanchor_launch_state(&state));
+        assert_eq!(owner.selected_bucket, 0);
+        assert_eq!(owner.selected_book_id(), Some("book-a"));
     }
 
     #[test]

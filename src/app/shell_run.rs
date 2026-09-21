@@ -46,6 +46,9 @@ impl Model {
         // drives its owner map (retention + the active pointer) before the
         // focus pass routes to the active surface.
         self.sync_library_panel();
+        // Task 3.2: restore the selected destination's main Selector before
+        // its library item, then consume the pending intent exactly once.
+        self.reanchor_pending_launch_destination();
         // Task 3.1: a landing that completed during this iteration's lib-event
         // drain owes the Series detail hand-off. Consume it here, after the
         // panel's active pointer follows the landed tab and before the hero
