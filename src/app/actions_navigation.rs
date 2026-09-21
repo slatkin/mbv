@@ -195,7 +195,14 @@ impl App {
             match &action {
                 PendingQueueAction::PlayItems {
                     items, start_idx, ..
-                } => self.replace_playback_queue(items.clone(), *start_idx),
+                } => {
+                    // The executor gates the source label on local metadata,
+                    // which never applies to a directly-controlled owner, so
+                    // the label is set here before submission — the same
+                    // order the shipped album/artist track paths use.
+                    self.queue_source = crate::config::QueueSource::Album;
+                    self.replace_playback_queue(items.clone(), *start_idx)
+                }
                 PendingQueueAction::ClearQueue => {}
             }
         }

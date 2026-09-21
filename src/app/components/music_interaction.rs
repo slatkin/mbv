@@ -43,13 +43,15 @@ impl MusicContent {
                             );
                             Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                         }
-                        // Production Grouped Music filtering paints the tree,
-                        // not the legacy flat result carrier. Until filtered
-                        // tree hit geometry owns pointer focus in §5.2, do
-                        // not mutate the carrier when no request can be
-                        // emitted: the framework delivers after mutation and
-                        // discarding the message would otherwise leave a
-                        // losing selection change behind.
+                        // When the destination's own filter owns pointer
+                        // input, the branch below resolves the current-frame
+                        // filtered tree geometry and focuses Library through
+                        // `pointer_album_selection_request`. This flat Inline
+                        // Search carrier path resolves only wheel,
+                        // double-click and context-click, so a plain or
+                        // modified click must not mutate it: the framework
+                        // delivers after mutation, and discarding the message
+                        // would leave a losing selection change behind.
                         MediaListSurfaceInput::Click(_)
                         | MediaListSurfaceInput::ToggleClick(_)
                         | MediaListSurfaceInput::RangeClick(_) => None,

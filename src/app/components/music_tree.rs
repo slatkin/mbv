@@ -337,8 +337,9 @@ impl MusicTreeBrowser {
             .is_some_and(|children| !children.is_empty())
     }
 
-    /// Whether the node is a cached track. Track double-click intentionally
-    /// retains the pre-U4 no-op path until grouped-track playback is specified.
+    /// Whether the node is a cached track. A track double-click claims the
+    /// gesture and emits `MusicTreeTrackActivate` with the node's stable
+    /// identity, which the shell plays through the grouped-track resolver.
     pub(in crate::app) fn model_is_track(&self, id: usize) -> bool {
         self.model.track_identity_of(id).is_some()
     }

@@ -355,6 +355,41 @@ fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() 
     );
 }
 
+/// A directly-controlled owner holds the target queue itself, so the executor's
+/// local-metadata gate never writes the source label; the staging path must
+/// therefore set it, exactly as the shipped album/artist track paths do. The
+/// status chrome and the saved-playlist predicate both read this field.
+#[test]
+fn grouped_track_direct_remote_staging_labels_the_queue_as_album() {
+    let mut app = remote_playback_app();
+    app.config.lock().unwrap().autoload = true;
+    assert!(
+        app.has_direct_remote_queue(),
+        "the fixture must exercise the directly-controlled owner path"
+    );
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    track.album_id = "album-1".into();
+    track.media_type = "Audio".into();
+    track.index_number = 1;
+    app.album_tracks_cache.insert("album-1".into(), vec![track]);
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("playlist-1".into()),
+        name: "Playlist".into(),
+    };
+
+    assert!(app.play_grouped_track("album-1", "track-1"));
+    assert!(
+        matches!(app.queue_source, crate::config::QueueSource::Album),
+        "a directly-controlled owner receives the album label, got {:?}",
+        app.queue_source
+    );
+    assert!(
+        !app.queue_is_saved_playlist(),
+        "the stale playlist label must not survive the album replacement"
+    );
+}
+
 fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
     item.id = id.into();
