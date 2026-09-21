@@ -6,6 +6,10 @@
 
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
+use mbv_core::config::{
+    AudiobookshelfBookBucket, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
+};
+
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
@@ -545,6 +549,25 @@ impl Default for BookContent {
 }
 
 impl LibraryContentOwner for BookContent {
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        let selector = self
+            .state
+            .buckets
+            .get(self.selected_bucket)
+            .and_then(|bucket| self.state.books.get(bucket.start))
+            .map(|book| SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::BookBucket(
+                    AudiobookshelfBookBucket::from_sort_key(&book.author_sort_key),
+                ),
+            });
+        let item = self
+            .carrier
+            .selected_target()
+            .cloned()
+            .map(|id| LibraryItemIdentity::Audiobookshelf { id });
+        (selector, item)
+    }
+
     fn clear_selection(&mut self) {
         self.carrier.clear_owner_selection();
         self.chapter_list.clear_owner_selection();
@@ -726,6 +749,54 @@ mod tests {
         state.append_page_books(0, books.len(), books);
         state.select(0);
         state
+    }
+
+    #[test]
+    fn launch_snapshot_uses_surname_bucket_identity_and_book_id() {
+        let mut owner = BookContent::new();
+        owner.set_content(
+            &state_with_books(vec![book("book-a", "Adams"), book("book-d", "Dover")]),
+            false,
+        );
+        assert_eq!(
+            owner.launch_snapshot(),
+            (
+                Some(SelectorIdentity::Audiobookshelf {
+                    key: AudiobookshelfSelectorKey::BookBucket(AudiobookshelfBookBucket::AToC),
+                }),
+                Some(LibraryItemIdentity::Audiobookshelf {
+                    id: "book-a".into(),
+                }),
+            )
+        );
+
+        owner.select_bucket(1);
+        assert_eq!(
+            owner.launch_snapshot().0,
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::BookBucket(AudiobookshelfBookBucket::DToF),
+            })
+        );
+        assert_eq!(
+            owner.launch_snapshot().1,
+            Some(LibraryItemIdentity::Audiobookshelf {
+                id: "book-d".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn launch_snapshot_is_empty_without_book_buckets_or_selected_book() {
+        let mut owner = BookContent::new();
+        owner.set_content(
+            &AudiobookshelfBookBrowseState::new(AudiobookshelfLibrary {
+                id: "lib".into(),
+                name: "Books".into(),
+                media_type: "book".into(),
+            }),
+            false,
+        );
+        assert_eq!(owner.launch_snapshot(), (None, None));
     }
 
     #[test]

@@ -78,16 +78,97 @@ pub enum LaunchPanelFocus {
 /// stable identity — never a row index. Home and Emby carry narrowed keys
 /// (tasks 2.1): Home sections resolve to the persisted section source, Emby
 /// letter pills to their fixed bucket identity and Emby group pills to the
-/// group folder's content ID. Feeds and Audiobookshelf keep opaque keys
-/// until task 2.2 narrows them the same way. Matching on the destination
+/// group folder's content ID. Feeds and Audiobookshelf use closed filter,
+/// Feed, show, and surname-bucket identities. Matching on the destination
 /// variant is what makes cross-destination resolution impossible.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "destination", rename_all = "snake_case")]
 pub enum SelectorIdentity {
     Home { key: HomeSelectorKey },
-    Feeds { key: String },
+    Feeds { key: FeedsSelectorKey },
     Emby { key: EmbySelectorKey },
-    Audiobookshelf { key: String },
+    Audiobookshelf { key: AudiobookshelfSelectorKey },
+}
+
+/// Stable Feeds main-Selector identity. Watched filters are a closed set;
+/// group pills identify the configured Feed by its URL, never by the displayed
+/// subscription name or its position in the pill row.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedsSelectorKey {
+    Filter(FeedsFilter),
+    Group(FeedGroupKey),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedsFilter {
+    All,
+    Played,
+    Unplayed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeedGroupKey {
+    All,
+    Feed(String),
+}
+
+/// Stable Audiobookshelf main-Selector identity. Podcast show pills use the
+/// Service show ID and book pills use the fixed surname bucket identity;
+/// neither stores a label or a presented pill index.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AudiobookshelfSelectorKey {
+    PodcastFilter(AudiobookshelfPodcastFilter),
+    PodcastShow(String),
+    BookBucket(AudiobookshelfBookBucket),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AudiobookshelfPodcastFilter {
+    All,
+    Unplayed,
+    Played,
+}
+
+/// The closed surname ranges used by the Audiobookshelf book destination.
+/// Empty ranges are omitted from the current presentation, so restoration
+/// matches this identity against the current populated bucket rather than a
+/// bucket position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AudiobookshelfBookBucket {
+    AToC,
+    DToF,
+    GToI,
+    JToL,
+    MToO,
+    PToR,
+    SToU,
+    VToZ,
+}
+
+impl AudiobookshelfBookBucket {
+    pub fn from_sort_key(sort_key: &str) -> Self {
+        match sort_key
+            .chars()
+            .find(|character| character.is_ascii_alphabetic())
+            .map(|character| character.to_ascii_lowercase())
+            .unwrap_or('a')
+        {
+            'a'..='c' => Self::AToC,
+            'd'..='f' => Self::DToF,
+            'g'..='i' => Self::GToI,
+            'j'..='l' => Self::JToL,
+            'm'..='o' => Self::MToO,
+            'p'..='r' => Self::PToR,
+            's'..='u' => Self::SToU,
+            _ => Self::VToZ,
+        }
+    }
 }
 
 /// Stable Home section identity (task 2.1): Continue Watching is a fixed
