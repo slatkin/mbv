@@ -308,6 +308,16 @@ mod tests {
             buf[(selected_rect.x + 1, selected_rect.y)].fg,
             palette::PILL_SELECTED_FG
         );
+        assert_eq!(
+            buf[(selected_rect.left() + 1, selected_rect.y)].bg,
+            palette::PILL_SELECTED_BG,
+            "selected pill's left inner pad keeps the selected fill"
+        );
+        assert_eq!(
+            buf[(selected_rect.right() - 2, selected_rect.y)].bg,
+            palette::PILL_SELECTED_BG,
+            "selected pill's right inner pad keeps the selected fill"
+        );
     }
 
     #[test]

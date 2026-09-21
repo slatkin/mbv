@@ -212,13 +212,13 @@ fn selector_pill_fg(selected: bool, hovered: bool) -> Color {
     }
 }
 
-/// The joined pill shell's display width: `◢ label ◤` = label width plus the
-/// chip's inner pads and the edge glyphs it actually paints.
+/// The joined pill shell's display width: `◢ label[•] ◤` = label width plus
+/// the optional marker, chip's inner pads, and edge glyphs it actually paints.
 fn pill_shell_width(label: &str, marked: bool, inner_pad: usize, leading: bool) -> usize {
     label.width() + usize::from(marked) + inner_pad * 2 + usize::from(leading) + 1
 }
 
-/// Push one joined pill shell (`◢ label ◤`) as spans. The edge glyphs take
+/// Push one joined pill shell (`◢ label[•] ◤`) as spans. The edge glyphs take
 /// the chip's own surface as their foreground and either the row's or the
 /// neighbouring chip's surface behind them. `inner_pad` is the blank columns
 /// between the label and each edge glyph (0 when the slanted border alone is
@@ -246,15 +246,20 @@ fn push_pill_shell(
         Style::default().fg(fg).bg(fill),
     ));
     if marked {
+        // The bullet is a content-state marker, so its semantic colour is
+        // Iris (not the selected chip fill); ACCENT_ACTIVE is the existing
+        // Iris role until the generated palette-role catalogue can accept a
+        // dedicated marker role.
         spans.push(Span::styled(
             "•",
             Style::default().fg(palette::ACCENT_ACTIVE).bg(fill),
         ));
     }
     spans.push(Span::styled(
-        format!("{pad}◤"),
-        Style::default().fg(fill).bg(trailing_bg),
+        " ".repeat(inner_pad),
+        Style::default().bg(fill),
     ));
+    spans.push(Span::styled("◤", Style::default().fg(fill).bg(trailing_bg)));
 }
 
 /// A horizontally-scrolling row of selector pills, shared by every
@@ -558,7 +563,7 @@ pub(in crate::app) fn render_pill_bar(
 }
 
 /// Paints the display-only hint row used by the Library Hero overlay: the
-/// canonical pill bar's row surface and joined chip shell (`◢ label ◤`), with
+/// canonical pill bar's row surface and joined chip shell (`◢ label[•] ◤`), with
 /// every chip filled from `palette::HINT_PILL_FILLS` in rotation (foam,
 /// yellow, orange, repeating) and soft-white text over the fill. Nothing here
 /// is interactive — no hitboxes, no sticky window, no chevrons, no selection —
