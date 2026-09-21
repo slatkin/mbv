@@ -5,8 +5,8 @@
 
 ## 2. Prefs save/load
 
-- [ ] 2.1 Add `list_pane_width` (nullable) to `save_prefs`/`load_prefs` and initialize `App.list_pane_width` from prefs in `construct.rs` instead of hard-coding `None`; verify round-trip (width, null, missing key, non-numeric) with a prefs unit test.
-- [ ] 2.2 Add `save_prefs()` to the library arm of `refresh_current_view` after the existing `list_pane_width = None` clear; verify refresh-then-load yields the default split via a test that persists a width, refreshes, and reloads prefs.
+- [x] 2.1 Add `list_pane_width` (nullable) to `save_prefs`/`load_prefs` and initialize `App.list_pane_width` from prefs in `construct.rs` instead of hard-coding `None`; verify round-trip (width, null, missing key, non-numeric) with a prefs unit test.
+- [x] 2.2 Add `save_prefs()` to the library arm of `refresh_current_view` after the existing `list_pane_width = None` clear; verify refresh-then-load yields the default split via a test that persists a width, refreshes, and reloads prefs.
 
 ## 3. Integration and spec parity
 
