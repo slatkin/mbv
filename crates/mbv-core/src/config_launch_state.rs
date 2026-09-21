@@ -152,6 +152,7 @@ fn save_tui_launch_state_at(
     std::fs::write(&tmp, &json)
         .map_err(|e| TuiLaunchStateError::Write(format!("{}: {e}", tmp.display())))?;
     std::fs::rename(&tmp, path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
         TuiLaunchStateError::Replace(format!("{} to {}: {e}", tmp.display(), path.display()))
     })
 }

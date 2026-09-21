@@ -109,6 +109,33 @@ fn tui_launch_state_partial_document_uses_defaults() {
 }
 
 #[test]
+fn tui_launch_state_failed_replace_leaves_no_tmp_sibling() {
+    let scratch = TestTempDir::new();
+    let path = scratch.join("tui_launch_state.json");
+    // A non-empty directory at the target path makes the atomic rename
+    // deterministically fail, so the failed replace must not orphan its
+    // process-unique temp file.
+    std::fs::create_dir(&path).unwrap();
+    std::fs::write(path.join("sentinel"), "x").unwrap();
+    let err = save_tui_launch_state_at(&path, &launch_state_sample()).unwrap_err();
+    assert!(
+        matches!(err, TuiLaunchStateError::Replace(_)),
+        "expected Replace error, got: {err:?}"
+    );
+    let debris: Vec<_> = std::fs::read_dir(scratch.path())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .contains("tui_launch_state.json.tmp-")
+        })
+        .collect();
+    assert!(debris.is_empty(), "unexpected temp debris: {debris:?}");
+}
+
+#[test]
 fn tui_launch_state_tmp_paths_are_distinct_within_the_state_dir() {
     let scratch = TestTempDir::new();
     let path = scratch.join("tui_launch_state.json");
