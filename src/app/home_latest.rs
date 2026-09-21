@@ -37,7 +37,6 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
 }
 
 /// Normalize the provider timestamp carried by a Home Latest queue item.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     match item {
         QueueItem::Emby(item) => super::feed_parse_date::parse_pub_date_secs(&item.date_added),
@@ -47,7 +46,6 @@ pub(super) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow) -> bool {
     let Some(previous) = window.previous else {
         return false;

@@ -311,7 +311,7 @@ impl App {
                 !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
             })
             .map(|section| {
-                HomeLatestSection::new(
+                HomeLatestSection::new_with_launch_window(
                     section.title,
                     HomeLatestSource::Emby(section.view_id),
                     section
@@ -319,6 +319,7 @@ impl App {
                         .into_iter()
                         .map(|item| QueueItem::Emby(Box::new(item)))
                         .collect(),
+                    self.home_latest_launch_window,
                 )
             })
             .collect();

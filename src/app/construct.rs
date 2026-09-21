@@ -113,6 +113,10 @@ impl App {
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
             hidden_latest: init.hidden_latest,
+            home_latest_launch_window: super::home_latest::HomeLatestLaunchWindow {
+                previous: None,
+                current: 0,
+            },
             music_levels: init.music_levels,
             album_indexes: std::collections::HashMap::new(),
             use_nerd_fonts: init.use_nerd_fonts,

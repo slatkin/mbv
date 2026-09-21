@@ -28,7 +28,7 @@ impl Model {
     /// pending startup skeleton.
     pub(super) fn assign_home_content(&mut self, mut content: HomeContent) {
         content.feed_names = self.resolve_home_feed_names(&content);
-        recompute_home_latest_markers(&mut content, self.home_latest_launch_window);
+        recompute_home_latest_markers(&mut content, self.app.home_latest_launch_window);
         self.home_content = content;
         self.push_home_content();
     }
@@ -79,7 +79,7 @@ impl Model {
                 )
             },
         );
-        recompute_home_latest_markers(&mut self.home_content, self.home_latest_launch_window);
+        recompute_home_latest_markers(&mut self.home_content, self.app.home_latest_launch_window);
         self.push_home_content();
     }
 
@@ -96,7 +96,7 @@ impl Model {
         // Merged feed sections never pass through `assign_home_content`, so
         // re-resolve the lookup over the merged content (design D2).
         self.home_content.feed_names = self.resolve_home_feed_names(&self.home_content);
-        recompute_home_latest_markers(&mut self.home_content, self.home_latest_launch_window);
+        recompute_home_latest_markers(&mut self.home_content, self.app.home_latest_launch_window);
         self.push_home_content();
     }
 

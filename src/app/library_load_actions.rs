@@ -392,13 +392,14 @@ impl App {
                 } else {
                     client.get_latest(&v.id, 30).unwrap_or_default()
                 };
-                emby_sections.push(HomeLatestSection::new(
+                emby_sections.push(HomeLatestSection::new_with_launch_window(
                     v.name.clone(),
                     HomeLatestSource::Emby(v.id.clone()),
                     items
                         .into_iter()
                         .map(|item| QueueItem::Emby(Box::new(item)))
                         .collect(),
+                    self.home_latest_launch_window,
                 ));
             }
         }
@@ -444,13 +445,14 @@ impl App {
                 !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
             })
             .map(|library| {
-                HomeLatestSection::new(
+                HomeLatestSection::new_with_launch_window(
                     library.name.clone(),
                     HomeLatestSource::Audiobookshelf(library.id.clone()),
                     self.audiobookshelf_shelf_cache
                         .get(&library.id)
                         .cloned()
                         .unwrap_or_default(),
+                    self.home_latest_launch_window,
                 )
             })
             .collect()
@@ -475,10 +477,11 @@ impl App {
             return None;
         }
         let items = self.feed_latest_items();
-        Some(HomeLatestSection::new(
+        Some(HomeLatestSection::new_with_launch_window(
             "Feeds".into(),
             HomeLatestSource::Feeds,
             items,
+            self.home_latest_launch_window,
         ))
     }
 

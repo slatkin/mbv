@@ -118,10 +118,6 @@ pub struct Model {
     /// `HomeComponent`; App-internal writers deliver computed snapshots via
     /// lib_tx; `loading` mirrors the deleted `App.home_loading`.
     pub(super) home_content: HomeContent,
-    /// Frozen Home Latest launch interval for this TUI run. This is separate
-    /// from the exit-only TuiLaunchState navigation snapshot.
-    #[allow(dead_code)]
-    pub(super) home_latest_launch_window: HomeLatestLaunchWindow,
     /// Shell-owned semantic Home section preference and one-time restore marker.
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     pub(super) home_section_pending: Option<HomeLatestSource>,
@@ -589,11 +585,12 @@ impl Model {
     }
 
     fn new_with_listener_and_window(
-        app: App,
+        mut app: App,
         listener_cfg: EventListenerCfg<UserEvent>,
         home_latest_launch_window: HomeLatestLaunchWindow,
     ) -> Self {
         let application = Application::init(listener_cfg);
+        app.home_latest_launch_window = home_latest_launch_window;
         let home_section = App::load_prefs()["home_section"]
             .as_str()
             .and_then(HomeLatestSource::from_pref_key);
@@ -612,7 +609,6 @@ impl Model {
             music_workspace_reanchor: false,
             feeds_manage: None,
             home_content: HomeContent::new(),
-            home_latest_launch_window,
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
             home_context_item: None,

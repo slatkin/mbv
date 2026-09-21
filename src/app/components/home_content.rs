@@ -78,16 +78,24 @@ impl HomeContent {
         loading: bool,
         feed_names: HashMap<String, String>,
     ) {
-        if let Some(source) = self.selected_latest_source().cloned() {
-            if latest.iter().any(|section| section.source == source) {
-                self.visited_latest_sources.insert(source);
-            }
-        }
+        let selected_source = self.source_for_section(self.section);
         self.continue_items = continue_items;
         self.latest = latest;
         self.loading = loading;
         self.feed_names = feed_names;
+        if let Some(source) = selected_source {
+            if let Some(index) = self
+                .latest
+                .iter()
+                .position(|section| section.source == source)
+            {
+                self.section = index + 1;
+            }
+        }
         self.clamp_section();
+        if let Some(source) = self.source_for_section(self.section) {
+            self.visited_latest_sources.insert(source);
+        }
         self.project_active_section();
     }
 
@@ -115,13 +123,6 @@ impl HomeContent {
         self.latest
             .get(section - 1)
             .map(|section| section.source.clone())
-    }
-
-    fn selected_latest_source(&self) -> Option<&HomeLatestSource> {
-        (self.section > 0)
-            .then(|| self.latest.get(self.section - 1))
-            .flatten()
-            .map(|section| &section.source)
     }
 
     /// Restore a persisted pill selection once a section matching `source`
@@ -302,13 +303,13 @@ impl HomeContent {
             return false;
         };
         if resolved == self.section {
-            if let Some(source) = self.selected_latest_source().cloned() {
+            if let Some(source) = self.source_for_section(self.section) {
                 self.visited_latest_sources.insert(source);
             }
             return false;
         }
         self.section = resolved;
-        if let Some(source) = self.selected_latest_source().cloned() {
+        if let Some(source) = self.source_for_section(self.section) {
             self.visited_latest_sources.insert(source);
         }
         // A discrete section change re-projects the active section and parks
@@ -764,8 +765,11 @@ mod tests {
             false,
             HashMap::new(),
         );
-        assert!(owner.visited_latest_sources.contains(&first));
-        assert_eq!(owner.latest[1].source, first);
+        let active_source = owner
+            .source_for_section(owner.section())
+            .expect("selected latest source");
+        assert_eq!(active_source, first);
+        assert!(owner.visited_latest_sources.contains(&active_source));
 
         assert!(owner.restore_section(&second));
         assert!(owner.visited_latest_sources.contains(&second));

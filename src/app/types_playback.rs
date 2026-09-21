@@ -169,12 +169,33 @@ pub(super) struct HomeLatestSection {
 }
 
 impl HomeLatestSection {
+    #[cfg(test)]
     pub(super) fn new(title: String, source: HomeLatestSource, items: Vec<QueueItem>) -> Self {
+        Self::new_with_launch_window(
+            title,
+            source,
+            items,
+            HomeLatestLaunchWindow {
+                previous: None,
+                current: 0,
+            },
+        )
+    }
+
+    pub(super) fn new_with_launch_window(
+        title: String,
+        source: HomeLatestSource,
+        items: Vec<QueueItem>,
+        window: HomeLatestLaunchWindow,
+    ) -> Self {
+        let has_new_content = items
+            .iter()
+            .any(|item| is_new_in_launch_window(item, window));
         Self {
             title,
             source,
             items,
-            has_new_content: false,
+            has_new_content,
         }
     }
 
