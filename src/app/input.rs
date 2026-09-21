@@ -118,6 +118,7 @@ impl App {
                 .tab
                 .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
             "queue_column_width": self.queue_column_width,
+            "list_pane_width": self.list_pane_width,
         });
         if let Some(home_section) = existing_home_section {
             v["home_section"] = home_section;
@@ -134,3 +135,21 @@ mod music_track_scope_tests;
 #[cfg(test)]
 #[path = "input_music_track_test_support.rs"]
 mod music_track_test_support;
+
+#[cfg(test)]
+mod prefs_tests {
+    use super::App;
+
+    #[test]
+    fn list_pane_width_prefs_round_trip_width_and_null() {
+        let mut app = crate::app::tests::make_app_stub();
+
+        app.list_pane_width = Some(42);
+        app.save_prefs();
+        assert_eq!(App::load_prefs()["list_pane_width"].as_u64(), Some(42));
+
+        app.list_pane_width = None;
+        app.save_prefs();
+        assert!(App::load_prefs()["list_pane_width"].is_null());
+    }
+}
