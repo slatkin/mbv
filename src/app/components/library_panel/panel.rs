@@ -496,6 +496,21 @@ impl LibraryPanel {
         self.owners.get(key)
     }
 
+    /// Read the bounded launch identities from exactly one destination owner.
+    /// The shell calls this only for the selected key during orderly teardown;
+    /// inactive owners are never queried.
+    pub(in crate::app) fn launch_snapshot(
+        &self,
+        key: &LibraryKey,
+    ) -> Option<(
+        Option<mbv_core::config::SelectorIdentity>,
+        Option<mbv_core::config::LibraryItemIdentity>,
+    )> {
+        self.owners
+            .get(key)
+            .map(LibraryContentOwner::launch_snapshot)
+    }
+
     /// Take the hero image paint the last view retained (the shell paints it
     /// right after `view` returns).
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<PanelHeroImagePaint> {

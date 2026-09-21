@@ -4,7 +4,6 @@
 // scratch directories (uuid-qualified, removed on drop), so no test
 // touches env overrides, the real state dir, or a sibling test's files.
 
-// Consumed by the migration/teardown coverage added in tasks 2.2/2.3.
 #[allow(dead_code)]
 fn launch_state_sample() -> TuiLaunchState {
     TuiLaunchState {
@@ -23,7 +22,6 @@ fn launch_state_sample() -> TuiLaunchState {
     }
 }
 
-// Consumed by the migration/teardown coverage added in tasks 2.2/2.3.
 #[allow(dead_code)]
 fn launch_state_queue_focus_sample() -> TuiLaunchState {
     TuiLaunchState {

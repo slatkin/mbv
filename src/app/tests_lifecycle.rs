@@ -1,4 +1,6 @@
 use super::*;
+use crate::app::components::home_content::HomeContent;
+use crate::app::components::LibraryKey;
 use crate::app::tests::*;
 use rstest::rstest;
 
@@ -15,6 +17,52 @@ fn teardown_fast_when_player_thread_is_not_hung() {
         "teardown against a player with no thread to join should return \
              promptly, not wait anywhere near the quit_timeout budget, took {elapsed:?}"
     );
+}
+
+#[test]
+fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
+    let mut model = Model::new(make_app_stub());
+    model.app.panel_focus = PanelFocus::Queue;
+    model.app.player_tab.queue_cursor = 7;
+
+    let mut selected = make_item("Selected home item", "Movie");
+    selected.id = "selected-home-item".into();
+    model.update_library_owner(
+        LibraryKey::Home,
+        || Box::new(HomeContent::new()),
+        |owner| {
+            owner.set_content(
+                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(selected))],
+                Vec::new(),
+                false,
+                std::collections::HashMap::new(),
+            );
+        },
+    );
+    model.sync_library_panel();
+
+    model.teardown(Duration::from_secs(1));
+
+    let state = mbv_core::config::load_tui_launch_state().expect("launch snapshot after teardown");
+    assert_eq!(state.tab, mbv_core::config::TabIdentity::Home);
+    assert_eq!(state.panel_focus, mbv_core::config::LaunchPanelFocus::Queue);
+    assert_eq!(
+        state.selector,
+        Some(mbv_core::config::SelectorIdentity::Home {
+            key: mbv_core::config::HomeSelectorKey::Continue,
+        })
+    );
+    assert_eq!(
+        state.item,
+        Some(mbv_core::config::LibraryItemIdentity::Home {
+            id: "selected-home-item".into(),
+        })
+    );
+
+    let serialized = std::fs::read_to_string(mbv_core::config::tui_launch_state_path())
+        .expect("serialized launch snapshot");
+    assert!(!serialized.contains("selected-queue-item"));
+    assert!(!serialized.contains("feeds"));
 }
 
 #[test]

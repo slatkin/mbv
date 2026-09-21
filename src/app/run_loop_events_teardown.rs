@@ -58,6 +58,27 @@ impl App {
     }
 
     pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
+        self.teardown_inner(quit_timeout);
+    }
+
+    /// Persist the selected destination's bounded launch snapshot, then run
+    /// the normal orderly teardown. The shell supplies the snapshot only at
+    /// this discrete boundary; App never mirrors component-owned state while
+    /// the TUI is running.
+    pub(in crate::app) fn teardown_with_launch_state(
+        &mut self,
+        quit_timeout: Duration,
+        launch_state: Option<mbv_core::config::TuiLaunchState>,
+    ) {
+        if let Some(state) = launch_state {
+            if let Err(error) = mbv_core::config::save_tui_launch_state(&state) {
+                log::warn!(target: "launch_state", "failed to save TUI launch state: {error}");
+            }
+        }
+        self.teardown(quit_timeout);
+    }
+
+    fn teardown_inner(&mut self, quit_timeout: Duration) {
         // A position saved just before quitting is still only in memory --
         // `save_default_library_position` defers the disk write (see its
         // doc comment) -- so flush it now rather than waiting for the

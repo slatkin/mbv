@@ -149,7 +149,6 @@ impl LibraryKey {
     /// the Service kind plus library ID, so the browse kind selects the
     /// destination-tagged pill/item interpretation, never the tab.
     // Consumed by selected-tab teardown assembly in task 2.3.
-    #[allow(dead_code)]
     pub fn tab_identity(&self) -> TabIdentity {
         match self {
             Self::Home => TabIdentity::Home,
@@ -359,7 +358,6 @@ pub(in crate::app) trait LibraryContentOwner {
     /// exit-snapshot rule). Owners without narrowed identities yet (their
     /// unit keeps the default) report absence.
     // Consumed by selected-tab teardown assembly in task 2.3.
-    #[allow(dead_code)]
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         (None, None)
     }
