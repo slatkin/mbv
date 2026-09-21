@@ -19,6 +19,10 @@ Wide paint order that drives it
    frames must call `invalidate()` before the next `view()`:
    - `reconcile(entries)` — only when the projection was actually rebuilt
      (a no-op settled push keeps the completed geometry);
+   - `set_filter_matches` (via `apply_filter_query`) — only when the filter
+     rebuilds the projection; an unchanged match set/config early-returns in
+     `apply_filter_query` (`src/app/components/music_tree.rs:247`) so every
+     settled push keeps the filtered tree's completed hit rows claimable;
    - `expand_root` / `collapse_root` (and `toggle_root` through them);
    - `select_id` / `select_album_target` — the crate's `select_by_id`
      expands ancestors via `expand_to`, which can insert rows the hit map
@@ -63,6 +67,9 @@ render, so the retained geometry still matches the frame the user saw.
   `selected_row_rect` all early-return `None`/`false` on
   `!self.paint_complete`.
 - **Per-mutator invalidation.** `reconcile` (when `rebuilt`),
+  `set_filter_matches` (only when the filter actually rebuilt the projection;
+  `apply_filter_query` no-ops on an unchanged match set so a settled push
+  re-applies the filter without invalidating the completed hit rows),
   `expand_root`, `collapse_root`, `select_id`, `select_album_target`,
   `clamp_viewport_to`, and the test seams call `invalidate()`; the
   `PanelList` adapter does the same in `set_paint_policy` and
