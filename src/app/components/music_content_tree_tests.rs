@@ -2,6 +2,7 @@
 //! marks, keyboard navigation/expansion, and the shared tree-owner fixtures.
 
 use super::*;
+use rstest::rstest;
 
 /// Artist roots are hero-bearing rows, and unfiltered Enter shares the
 /// double-click/Right Hero entry while filtered Enter stays local.
@@ -544,39 +545,220 @@ fn tree_double_click_cached_album_toggles_expansion_and_focuses_once() {
     assert!(!owner.browser.node_is_expanded(album));
 }
 
-#[test]
-fn tree_track_double_click_keeps_pre_u4_noop_without_mutating_selection() {
-    let mut track = make_item("Track", "Audio");
-    track.id = "track-1".into();
-    let mut owner = tree_owner_with_tracks(&[("Alpha", &["a-0"])], Some(vec![track]));
-    owner.expand_all_tree_roots();
-    let area = Rect::new(0, 0, 48, 8);
+/// The four Grouped Music tree node kinds one double-click can resolve, so
+/// the gesture's dispatch can be asserted both with and without a local tree
+/// filter active (design D5).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DoubleClickNode {
+    ArtistRoot,
+    AlbumWithTracks,
+    ChildlessAlbum,
+    Track,
+}
+
+impl DoubleClickNode {
+    /// The tree fixture each case needs: two settled leaves under one
+    /// expanded artist, with the first album's cached track attached to the
+    /// selected album.
+    fn owner(self) -> MusicContent {
+        let mut track = make_item("Track", "Audio");
+        track.id = "track-1".into();
+        let mut owner = tree_owner_with_tracks(&[("Alpha", &["a-0", "b-0"])], Some(vec![track]));
+        let root = owner
+            .browser
+            .projected_nodes()
+            .first()
+            .expect("artist root")
+            .id();
+        owner.browser.expand_root(root);
+        let album = owner
+            .browser
+            .projected_nodes()
+            .iter()
+            .map(|node| node.id())
+            .find(|id| owner.browser.target_of(*id) == Some("a-0"))
+            .expect("album leaf");
+        match self {
+            // A track row is only projected under an expanded album leaf.
+            DoubleClickNode::Track => owner.browser.expand_node(album),
+            // The cached-children case starts collapsed so the gesture's
+            // toggle direction is the assertion.
+            DoubleClickNode::AlbumWithTracks if owner.browser.node_is_expanded(album) => {
+                owner.browser.toggle_node(album);
+            }
+            _ => {}
+        }
+        owner
+    }
+
+    /// The filter query that keeps this node's own row in the tree's filtered
+    /// projection (every level matches its own text alone).
+    fn filter_query(self) -> &'static str {
+        match self {
+            DoubleClickNode::ArtistRoot => "Alpha",
+            DoubleClickNode::AlbumWithTracks => "a-0",
+            DoubleClickNode::ChildlessAlbum => "b-0",
+            DoubleClickNode::Track => "Track",
+        }
+    }
+
+    fn resolve(self, owner: &MusicContent) -> usize {
+        owner
+            .browser
+            .projected_nodes()
+            .iter()
+            .map(|node| node.id())
+            .find(|id| match self {
+                DoubleClickNode::ArtistRoot => owner.browser.target_of(*id).is_none(),
+                DoubleClickNode::AlbumWithTracks => owner.browser.target_of(*id) == Some("a-0"),
+                DoubleClickNode::ChildlessAlbum => owner.browser.target_of(*id) == Some("b-0"),
+                DoubleClickNode::Track => owner.browser.model_is_track(*id),
+            })
+            .expect("the case's painted tree node")
+    }
+}
+
+/// D5: double-click dispatch is by resolved node kind, in both the unfiltered
+/// tree and the filter-forced projection. An expandable node toggles its
+/// persistent expansion and crosses once for panel focus, a childless album
+/// claims the gesture without changing expansion or opening a Hero, and a
+/// track emits the stable-identity play-now intent for the grouped resolver.
+#[rstest]
+#[case::artist_root_unfiltered(DoubleClickNode::ArtistRoot, false)]
+#[case::artist_root_filtered(DoubleClickNode::ArtistRoot, true)]
+#[case::album_with_tracks_unfiltered(DoubleClickNode::AlbumWithTracks, false)]
+#[case::album_with_tracks_filtered(DoubleClickNode::AlbumWithTracks, true)]
+#[case::childless_album_unfiltered(DoubleClickNode::ChildlessAlbum, false)]
+#[case::childless_album_filtered(DoubleClickNode::ChildlessAlbum, true)]
+#[case::track_unfiltered(DoubleClickNode::Track, false)]
+#[case::track_filtered(DoubleClickNode::Track, true)]
+fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
+    #[case] node: DoubleClickNode,
+    #[case] filtered: bool,
+) {
+    let mut owner = node.owner();
+    if filtered {
+        press(&mut owner, Key::Char('/'));
+        owner.browser.apply_filter_query(node.filter_query());
+        assert!(owner.browser.filter_active());
+        assert!(
+            owner.inline_search.results_len() == 0 && !owner.inline_search.has_pool_entries(),
+            "production filtering leaves the flat result carrier empty"
+        );
+    }
+    // A wide-enough fixture keeps every projected row inside the painted
+    // viewport, so the gesture resolves through real retained geometry.
+    let area = Rect::new(0, 0, 48, 12);
     paint_tree(&mut owner, area);
-    let album = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
-        .expect("album leaf")
-        .id();
-    owner.browser.expand_node(album);
-    paint_tree(&mut owner, area);
-    let track_node = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.model_is_track(node.id()))
-        .expect("track row")
-        .id();
-    let track_at = tree_point(&owner, area, track_node);
-    let selected_before = owner.browser.selected_id();
-    assert_eq!(
+    let id = node.resolve(&owner);
+    let at = tree_point(&owner, area, id);
+    let double_click = |owner: &mut MusicContent| {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
-            track_at
+            at,
+        )))
+    };
+
+    match node {
+        DoubleClickNode::ArtistRoot => {
+            let was_expanded = owner.browser.root_is_expanded(id);
+            assert!(matches!(
+                double_click(&mut owner),
+                Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
+            ));
+            assert_ne!(owner.browser.root_is_expanded(id), was_expanded);
+        }
+        DoubleClickNode::AlbumWithTracks => {
+            assert!(!owner.browser.node_is_expanded(id));
+            assert!(matches!(
+                double_click(&mut owner),
+                Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
+            ));
+            assert!(owner.browser.node_is_expanded(id));
+        }
+        DoubleClickNode::ChildlessAlbum => {
+            assert!(!owner.browser.node_is_expanded(id));
+            assert!(matches!(
+                double_click(&mut owner),
+                Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
+            ));
+            assert!(
+                !owner.browser.node_is_expanded(id),
+                "a childless album claims the gesture without a state change"
+            );
+            assert_eq!(owner.browser.selected_id(), Some(id));
+        }
+        DoubleClickNode::Track => {
+            assert!(matches!(
+                double_click(&mut owner),
+                Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                    album_target,
+                    track_id,
+                })) if album_target == "a-0" && track_id == "track-1"
+            ));
+            assert_eq!(
+                owner.browser.selected_id(),
+                Some(id),
+                "the resolved track is selected before its play intent crosses"
+            );
+        }
+    }
+
+    if filtered {
+        // Filter-forced visibility survives the persistent-expansion update:
+        // the gesture never closes the filter or opens a Hero.
+        assert!(owner.browser.filter_active());
+        assert!(
+            owner
+                .browser
+                .projected_nodes()
+                .iter()
+                .any(|candidate| candidate.id() == id),
+            "the filtered projection still shows the resolved node"
+        );
+    }
+}
+
+/// Production Grouped Music filtering paints the tree and leaves the flat
+/// result carrier empty, so click and wheel gestures resolve the current-frame
+/// filtered tree geometry instead of the legacy seeded-carrier path.
+#[test]
+fn filtered_pointer_gestures_resolve_tree_geometry_not_the_flat_carrier() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    owner.expand_all_tree_roots();
+    press(&mut owner, Key::Char('/'));
+    owner.browser.apply_filter_query("a-");
+    assert!(owner.inline_search.results_len() == 0 && !owner.inline_search.has_pool_entries());
+    let area = Rect::new(0, 0, 48, 12);
+    paint_tree(&mut owner, area);
+    let album_0 = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .map(|node| node.id())
+        .find(|id| owner.browser.target_of(*id) == Some("a-0"))
+        .expect("filtered album leaf");
+    let album_0_at = tree_point(&owner, area, album_0);
+
+    // A click selects the filtered row the tree painted and reports the
+    // resolved album move; the empty carrier resolves nothing.
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+            album_0_at
         ))),
-        None
-    );
-    assert_eq!(owner.browser.selected_id(), selected_before);
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
+    ));
+    assert_eq!(owner.browser.selected_album_target(), Some("a-0"));
+
+    // A wheel inside the painted filtered tree rectangle moves the tree's own
+    // viewport selection rather than falling through unclaimed.
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+            at: album_0_at,
+            delta: 1,
+        })),
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
+    ));
+    assert_eq!(owner.browser.selected_album_target(), Some("a-1"));
 }
 
 #[test]

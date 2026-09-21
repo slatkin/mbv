@@ -251,6 +251,9 @@ impl MusicTreeBrowser {
         self.filter_query.clear();
         self.filter_query.push_str(query);
         if query.is_empty() {
+            if matches!(self.query.filter_config(), TreeFilterConfig::Disabled) {
+                return;
+            }
             self.set_filter_matches(None);
             return;
         }
@@ -268,6 +271,19 @@ impl MusicTreeBrowser {
                 })
             })
             .collect();
+        // Every settled content push re-applies the active filter, and the
+        // crate advances its filter revision on every write. An unchanged
+        // match set therefore keeps the current projection (and the
+        // current-frame hit rows a filtered pointer gesture resolves against)
+        // instead of rebuilding and invalidating it for nothing.
+        let unchanged = !matches!(self.query.filter_config(), TreeFilterConfig::Disabled)
+            && self.query.filter().matching.len() == matching.len()
+            && matching
+                .iter()
+                .all(|id| self.query.filter().matching.contains(id));
+        if unchanged {
+            return;
+        }
         self.set_filter_matches(Some(&matching));
     }
 

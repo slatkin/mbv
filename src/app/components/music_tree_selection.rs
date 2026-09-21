@@ -58,6 +58,12 @@ impl MusicTreeBrowser {
             .and_then(|id| self.model.track_identity_of(id))
     }
 
+    /// A resolved node's stable `(album target, track target)` identity, so a
+    /// pointer gesture can resolve its request before mutating local state.
+    pub(in crate::app) fn track_identity_of(&self, id: usize) -> Option<(&str, &str)> {
+        self.model.track_identity_of(id)
+    }
+
     /// The selected artist root's settled identity (design D7): the stable
     /// `ArtistItems` key or the deterministic fallback grouping key.
     pub(in crate::app) fn selected_artist_key(&self) -> Option<&ArtistKey> {
@@ -107,6 +113,12 @@ impl MusicTreeBrowser {
     /// filter owner. `None` disables filtering; `Some(&[])` is an active
     /// no-match filter. Task 5.1 can feed fuzzy-matched node ids here after
     /// its debounce while this task's action walk already respects them.
+    ///
+    /// Retained hit geometry is invalidated only when the projection actually
+    /// changed, mirroring `reconcile`: every settled content push re-applies
+    /// the active filter, and a no-op re-application must not drop the
+    /// current-frame rows a pointer gesture resolves against (row 5.2's
+    /// filtered pointer path).
     pub(in crate::app) fn set_filter_matches(&mut self, matching: Option<&[usize]>) {
         {
             let filter = self.query.filter_mut();
@@ -119,9 +131,11 @@ impl MusicTreeBrowser {
             Some(_) => TreeFilterConfig::enabled(),
             None => TreeFilterConfig::Disabled,
         });
-        self.state.ensure_projection(&self.model, &self.query);
+        let rebuilt = self.state.ensure_projection(&self.model, &self.query);
         self.sync_manual_marks();
-        self.invalidate();
+        if rebuilt {
+            self.invalidate();
+        }
     }
 
     /// The album-selection persistence request for the shell (design D3 step

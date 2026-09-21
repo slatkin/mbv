@@ -482,10 +482,10 @@ impl MusicContent {
                 None
             }
             Key::Enter if self.browser.selected_is_track() => {
-                let (album_id, track) = self.selected_tree_track()?;
-                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                    album_id,
-                    track,
+                let (album_target, track_id) = self.selected_tree_track()?;
+                Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                    album_target,
+                    track_id,
                 }))
             }
             Key::Enter => {

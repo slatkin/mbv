@@ -1,4 +1,15 @@
 impl MusicContent {
+    /// Whether the destination's own tree filter owns pointer/keyboard input.
+    /// Production Grouped Music filtering paints the tree and leaves the flat
+    /// Inline Search carrier empty, so input must resolve through the
+    /// current-frame tree geometry rather than the compatibility carrier path
+    /// (design D5).
+    fn local_filter_owns_input(&self) -> bool {
+        self.browser.filter_active()
+            && !self.inline_search.has_pool_entries()
+            && self.inline_search.results_len() == 0
+    }
+
     fn pointer_album_selection_request(&mut self, kind: AlbumCursorKind) -> Option<Msg> {
         self.album_selection_request(kind)
             .or(Some(Msg::Shell(ShellRequest::LibraryPanelFocus)))
@@ -11,7 +22,8 @@ impl MusicContent {
                 (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
             }
             LibrarySlotEvent::List(input) => {
-                if self.inline_search.is_active() {
+                let filtered_tree = self.local_filter_owns_input();
+                if self.inline_search.is_active() && !filtered_tree {
                     // Inline Search pointer handling (design.md D4): the
                     // panel-normalized input delegates to the session's
                     // embedded carrier like every other list — a click
@@ -133,12 +145,22 @@ impl MusicContent {
                                 return None;
                             }
                             let (id, index) = self.browser.hit_node(at)?;
-                            // A track double-click keeps the pre-U4 no-op
-                            // behavior. Resolve it before selecting so the
-                            // component never mutates and then returns no
-                            // message; grouped-track playback is §5 work.
                             if self.browser.model_is_track(id) {
-                                return None;
+                                // Resolve the stable identity from the resolved
+                                // node before any local mutation, so a track
+                                // gesture never changes the selection and then
+                                // returns no message.
+                                let (album_target, track_id) =
+                                    self.browser.track_identity_of(id)?;
+                                let album_target = album_target.to_string();
+                                let track_id = track_id.to_string();
+                                self.browser.select_index(index);
+                                return Some(Msg::Shell(
+                                    ShellRequest::MusicTreeTrackActivate {
+                                        album_target,
+                                        track_id,
+                                    },
+                                ));
                             }
                             self.browser.select_index(index);
                             if self.browser.model_is_artist(id) {

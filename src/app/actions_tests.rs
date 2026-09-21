@@ -216,6 +216,145 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
     );
 }
 
+/// Design D6: the one grouped-track resolver used by the tree's Enter chord
+/// and its track double-click. With autoload enabled the queue is the album's
+/// cached playable tracks in disc/track order, starting at the selected track
+/// with the preceding tracks retained, and the complete
+/// `PendingQueueAction::PlayItems` reaches the existing executor.
+#[test]
+fn grouped_track_with_autoload_queues_the_album_in_disc_order_from_the_selected_track() {
+    let mut app = remote_playback_app();
+    app.config.lock().unwrap().autoload = true;
+    let tracks = [("track-3", 3), ("track-1", 1), ("track-2", 2)]
+        .into_iter()
+        .map(|(id, number)| {
+            let mut track = make_item(id, "Audio");
+            track.id = id.into();
+            track.album_id = "album-1".into();
+            track.media_type = "Audio".into();
+            track.index_number = number;
+            track
+        })
+        .collect::<Vec<_>>();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+
+    match app
+        .grouped_track_play_action("album-1", "track-2")
+        .expect("the cached album resolves the selected track")
+    {
+        PendingQueueAction::PlayItems {
+            items,
+            start_idx,
+            source,
+            autostart,
+        } => {
+            assert_eq!(
+                items
+                    .iter()
+                    .map(|item| item.id.as_str())
+                    .collect::<Vec<_>>(),
+                ["track-1", "track-2", "track-3"],
+                "the cached album enters in disc/track order, not cache order"
+            );
+            assert_eq!(start_idx, 1, "the selected track is the start index");
+            assert!(autostart, "a track activation starts playback");
+            assert!(matches!(source, crate::config::QueueSource::Album));
+        }
+        PendingQueueAction::ClearQueue => panic!("a track activation never clears the queue"),
+    }
+
+    assert!(app.play_grouped_track("album-1", "track-2"));
+    assert_eq!(
+        app.playback_queue()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["track-1", "track-2", "track-3"],
+        "the resolved album replaces the target queue"
+    );
+    assert_eq!(
+        app.playback_queue().queue_cursor,
+        1,
+        "playback starts at the selected track with earlier tracks still queued"
+    );
+}
+
+/// The same resolver honours the disabled autoload policy: only the selected
+/// Audio item enters the replacement queue.
+#[test]
+fn grouped_track_without_autoload_queues_only_the_selected_track() {
+    let mut app = remote_playback_app();
+    app.config.lock().unwrap().autoload = false;
+    let tracks = ["track-1", "track-2", "track-3"]
+        .into_iter()
+        .enumerate()
+        .map(|(index, id)| {
+            let mut track = make_item(id, "Audio");
+            track.id = id.into();
+            track.album_id = "album-1".into();
+            track.media_type = "Audio".into();
+            track.index_number = index as i64 + 1;
+            track
+        })
+        .collect::<Vec<_>>();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+
+    assert!(app.play_grouped_track("album-1", "track-2"));
+    assert_eq!(
+        app.playback_queue()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["track-2"],
+        "autoload off resolves only the selected track"
+    );
+    assert_eq!(app.playback_queue().queue_cursor, 0);
+}
+
+/// Resolution failure flashes the existing library error and does not replace
+/// a queue: the group's cached album carries no such track identity.
+#[test]
+fn grouped_track_resolution_failure_keeps_the_queue_and_reports_library_error() {
+    let mut app = remote_playback_app();
+    app.config.lock().unwrap().autoload = true;
+    let mut cached = make_item("Cached", "Audio");
+    cached.id = "cached-track".into();
+    cached.album_id = "album-1".into();
+    cached.media_type = "Audio".into();
+    cached.index_number = 1;
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![cached]);
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.remote_player_tab
+        .as_mut()
+        .expect("the direct remote fixture keeps a target queue")
+        .set_items(vec![existing], 0);
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("playlist-1".into()),
+        name: "Playlist".into(),
+    };
+
+    assert!(!app.play_grouped_track("album-1", "missing-track"));
+    assert_eq!(
+        queued_track_ids(&app),
+        ["existing"],
+        "a failed resolution leaves the target queue untouched"
+    );
+    assert_eq!(app.playback_queue().queue_cursor, 0);
+    assert!(matches!(
+        app.queue_source,
+        crate::config::QueueSource::Playlist { .. }
+    ));
+    assert!(
+        app.status.contains("Library error"),
+        "resolution failure uses the existing library error channel: {}",
+        app.status
+    );
+}
+
 fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
     item.id = id.into();

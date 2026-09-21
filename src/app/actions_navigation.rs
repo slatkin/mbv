@@ -1,6 +1,6 @@
 use super::types_browse::BrowseResting;
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
-use super::{App, BrowseLevel};
+use super::{App, BrowseLevel, PendingQueueAction};
 use mbv_core::api::EmbyItem;
 
 use super::notify_actions::ToastSeverity;
@@ -172,8 +172,74 @@ impl App {
         candidates
     }
 
-    /// Plays a track through the album queue path used by the wide music
-    /// workspace. Returns false when no resolved candidate holds the track.
+    /// The one Grouped Music tree-track activation entry point (design D6),
+    /// shared by the tree's Enter chord and its track double-click. Returns
+    /// false when no cached candidate holds the track: resolution failure
+    /// flashes the existing library error and leaves queue and playback
+    /// unchanged.
+    pub(super) fn play_grouped_track(&mut self, album_target: &str, track_id: &str) -> bool {
+        let Some(action) = self.grouped_track_play_action(album_target, track_id) else {
+            self.flash(
+                "Library error: track is no longer available".into(),
+                ToastSeverity::Error,
+            );
+            return false;
+        };
+        // The pending action is the only executable payload, so the queue gate
+        // added ahead of the executor cannot drift into a second playback
+        // path. A directly-controlled owner holds the target queue itself, so
+        // the resolved replacement is staged in that scope's canonical queue
+        // before submission — the same order the shipped album/artist track
+        // paths use (`replace_playback_queue`, then submission).
+        if self.has_direct_remote_queue() {
+            match &action {
+                PendingQueueAction::PlayItems {
+                    items, start_idx, ..
+                } => self.replace_playback_queue(items.clone(), *start_idx),
+                PendingQueueAction::ClearQueue => {}
+            }
+        }
+        self.execute_pending_queue_action(action);
+        true
+    }
+
+    /// Resolves one Grouped Music tree track from the settled album caches.
+    /// The tree supplies only its stable album occurrence target and track ID;
+    /// this shell-side resolver chooses the cached ordered queue according to
+    /// the current autoload policy and returns the complete pending action.
+    pub(super) fn grouped_track_play_action(
+        &self,
+        album_target: &str,
+        track_id: &str,
+    ) -> Option<PendingQueueAction> {
+        let album_id = album_target.split('\0').next().unwrap_or(album_target);
+        let mut tracks: Vec<EmbyItem> = self
+            .workspace_album_track_candidates(album_id)
+            .into_iter()
+            .find(|tracks| tracks.iter().any(|track| track.id == track_id))?
+            .into_iter()
+            .filter(is_playable)
+            .collect();
+        sort_audio_tracks(&mut tracks);
+        let start_idx = tracks.iter().position(|track| track.id == track_id)?;
+        let autoload = self.config.lock().unwrap().autoload;
+        if autoload {
+            Some(PendingQueueAction::PlayItems {
+                items: tracks,
+                start_idx,
+                source: crate::config::QueueSource::Album,
+                autostart: true,
+            })
+        } else {
+            Some(PendingQueueAction::PlayItems {
+                items: vec![tracks.remove(start_idx)],
+                start_idx: 0,
+                source: crate::config::QueueSource::Album,
+                autostart: true,
+            })
+        }
+    }
+
     pub(super) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
         let mut tracks: Vec<EmbyItem> = self
             .workspace_album_track_candidates(album_id)

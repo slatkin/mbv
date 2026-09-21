@@ -97,19 +97,24 @@ fn hero_activate_activates_an_artist_workspace_track() {
 }
 
 #[test]
-fn enter_activates_a_cached_tree_track_through_the_existing_arm() {
+fn enter_activates_a_cached_tree_track_through_the_grouped_resolver() {
     let mut owner = artist_workspace_owner();
     owner.expand_all_tree_roots();
     press(&mut owner, Key::Home);
     press(&mut owner, Key::Down);
     press(&mut owner, Key::Down);
 
+    // A tree track carries only stable identities: the shell-owned grouped
+    // resolver picks the cached queue according to the autoload policy.
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) => {
-            assert_eq!(album_id, "a-0");
-            assert_eq!(track.id, "alpha-track-1");
+        Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+            album_target,
+            track_id,
+        })) => {
+            assert_eq!(album_target, "a-0");
+            assert_eq!(track_id, "alpha-track-1");
         }
-        other => panic!("expected cached tree track activation, got {other:?}"),
+        other => panic!("expected grouped tree track activation, got {other:?}"),
     }
 }
 

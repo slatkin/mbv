@@ -110,10 +110,7 @@ impl LibraryContentOwner for MusicContent {
             // carrier. Keep the legacy host hook usable for focused harnesses
             // that explicitly seed that carrier while exercising unrelated
             // activation plumbing; the panel still always paints the tree.
-            if self.browser.filter_active()
-                && !self.inline_search.has_pool_entries()
-                && self.inline_search.results_len() == 0
-            {
+            if self.local_filter_owns_input() {
                 return self.on_filter_key(key);
             }
             if key.modifiers.contains(KeyModifiers::CONTROL) {
@@ -210,10 +207,10 @@ impl LibraryContentOwner for MusicContent {
                 }
             }
             Key::Enter if self.browser.selected_is_track() => {
-                let (album_id, track) = self.selected_tree_track()?;
-                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                    album_id,
-                    track,
+                let (album_target, track_id) = self.selected_tree_track()?;
+                Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                    album_target,
+                    track_id,
                 }))
             }
             Key::Enter if self.track_list.rows().is_empty() => self

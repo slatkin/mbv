@@ -85,6 +85,13 @@ pub enum ShellRequest {
     MusicNeighbourPrefetch {
         targets: Vec<String>,
     },
+    /// Activate a track in the Grouped Music tree. The component carries only
+    /// stable tree/track identities; the shell resolves cached playable items
+    /// and feeds the resulting PendingQueueAction through its playback path.
+    MusicTreeTrackActivate {
+        album_target: String,
+        track_id: String,
+    },
     /// Activate the focused inline album track (Enter, or Ctrl+P while a
     /// track is focused): carries the owner-resolved album and track
     /// identities; the shell plays the track through the album queue path

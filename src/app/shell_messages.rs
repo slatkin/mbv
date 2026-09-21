@@ -219,6 +219,14 @@ impl Model {
                         }
                         self.push_music_workspace_content();
                     }
+                    ShellRequest::MusicTreeTrackActivate {
+                        album_target,
+                        track_id,
+                    } => {
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                        self.app.play_grouped_track(&album_target, &track_id);
+                        self.push_music_workspace_content();
+                    }
                     // Inline album-track activation/enqueue/context-menu
                     // target resolution: the component owns the cursor,
                     // the shell resolves it to the cached track and runs

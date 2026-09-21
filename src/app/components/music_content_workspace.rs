@@ -255,27 +255,15 @@ impl MusicContent {
         }
     }
 
-    /// Resolves a selected tree track to the full cached item used by the
-    /// existing `MusicTrackActivate` arm. The tree contributes only stable
-    /// album/track identity; playback resolution remains in the shell.
-    fn selected_tree_track(&self) -> Option<(String, EmbyItem)> {
+    /// Resolves the selected tree track to stable identities only. The shell
+    /// owns the cached Emby items and resolves the playback queue.
+    fn selected_tree_track(&self) -> Option<(String, String)> {
         let (album_target, track_target) = self.browser.selected_track_identity()?;
-        let track = self
-            .tree_tracks
+        self.tree_tracks
             .get(album_target)?
             .iter()
-            .find(|track| track.id == track_target)?
-            .clone();
-        let album_id = if track.album_id.is_empty() {
-            album_target
-                .split('\0')
-                .next()
-                .unwrap_or(album_target)
-                .to_string()
-        } else {
-            track.album_id.clone()
-        };
-        Some((album_id, track))
+            .find(|track| track.id == track_target)?;
+        Some((album_target.to_string(), track_target.to_string()))
     }
 
     /// The settled album projection the tree owner reconciles: one entry per
