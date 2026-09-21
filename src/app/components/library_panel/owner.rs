@@ -162,8 +162,8 @@ pub(in crate::app) trait LibraryContentOwner {
     /// Whether the panel's Enter-in-non-Wide path may open the overlay for the
     /// current browser selection. Defaults to the Hero-availability pair, so
     /// every existing owner keeps its Enter behavior; Grouped Music overrides
-    /// it because its artist roots are hero-bearing (double-click and Right
-    /// open their overlay) while Enter is the root's expansion toggle.
+    /// it so unfiltered artist roots enter the same Hero path as Right while
+    /// filtered roots stay local.
     fn hero_overlay_enter_available(&mut self) -> bool {
         self.hero_overlay_available() || self.hero_overlay_target_available()
     }

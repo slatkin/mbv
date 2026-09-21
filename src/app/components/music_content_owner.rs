@@ -53,10 +53,12 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn hero_overlay_enter_available(&mut self) -> bool {
-        // Enter is the album leaf's overlay entry; an artist root's Enter
-        // toggles its expansion (its overlay entry is Right on the already
-        // expanded root).
-        self.selected_item().is_some()
+        // An unfiltered artist root enters the same Hero/Workspace path as
+        // Right on an expanded root. While filtering, Enter remains local to
+        // the tree so the panel cannot bypass the filter interaction.
+        (!self.browser.filter_active()
+            && self.browser.selected_is_artist())
+            || self.selected_item().is_some()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
@@ -175,17 +177,25 @@ impl LibraryContentOwner for MusicContent {
             };
         }
         match key.code {
-            // An artist root is a grouping row, not an album: Enter toggles its
-            // persistent expansion (task 2.4) while the tree rail owns the
-            // focus. Once the focused pane is this root's own artist Workspace
-            // (task 6.3), Enter belongs to the focused track below; a pane left
-            // over from an album is not that Workspace and must not swallow the
-            // chord through the track arm's track/album resolution.
+            // Unfiltered artist Enter uses the same Hero entry as Right on an
+            // expanded root: Wide takes the inline Workspace cursor, while
+            // non-Wide asks the panel to open the Library Hero overlay. The
+            // filter keeps its local expansion behavior and never enters a
+            // Hero. Once the focused pane is this root's own artist Workspace,
+            // Enter belongs to the focused track below.
             Key::Enter if self.browser.selected_is_artist() && !self.artist_workspace_focused() => {
-                if let Some(root) = self.browser.selected_id() {
-                    self.browser.toggle_root(root);
+                if self.browser.filter_active() {
+                    if let Some(root) = self.browser.selected_id() {
+                        self.browser.toggle_root(root);
+                    }
+                    None
+                } else if self.inline_track_focus_enabled {
+                    self.enter_artist_workspace_focus();
+                    None
+                } else {
+                    self.artist_detail_target()
+                        .map(|target| Msg::Shell(ShellRequest::MusicArtistActivate { target }))
                 }
-                None
             }
             Key::Enter if self.track_focused => {
                 let track = self.selected_track_item()?;

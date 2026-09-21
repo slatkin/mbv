@@ -231,6 +231,143 @@ fn right_on_an_expanded_artist_root_enters_the_wide_workspace() {
     assert!(!music_panel(&harness).test_hero_overlay_open());
 }
 
+/// Enter on an unfiltered artist root uses the same Wide Workspace entry as
+/// Right, without changing the tree expansion or pane placement.
+#[test]
+fn enter_on_an_unfiltered_artist_root_enters_wide_workspace_without_relayout() {
+    let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), 160, 40);
+    tick_key(&mut harness, Key::Left);
+    let root = harness
+        .model()
+        .test_music_owner()
+        .browser
+        .selected_id()
+        .expect("artist root selected");
+    let expanded = harness
+        .model()
+        .test_music_owner()
+        .browser
+        .root_is_expanded(root);
+    let before = music_panel(&harness)
+        .test_wide_geometry()
+        .expect("Wide geometry")
+        .clone();
+
+    tick_key(&mut harness, Key::Enter);
+
+    assert_eq!(
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .root_is_expanded(root),
+        expanded,
+        "Enter does not toggle the artist root"
+    );
+    assert!(
+        harness.model().test_music_owner().track_focused(),
+        "Enter focuses the artist Workspace"
+    );
+    assert!(!music_panel(&harness).test_hero_overlay_open());
+    let after = music_panel(&harness)
+        .test_wide_geometry()
+        .expect("Wide geometry")
+        .clone();
+    assert_eq!(
+        (before.browser, before.hero, before.list_panel, before.list_area),
+        (after.browser, after.hero, after.list_panel, after.list_area),
+        "Workspace entry preserves pane geometry"
+    );
+}
+
+/// Non-Wide Enter opens the Library Hero overlay and focuses the artist
+/// Workspace through the panel's composed overlay path.
+#[test]
+fn enter_on_an_unfiltered_artist_root_opens_the_non_wide_hero_workspace() {
+    let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), 81, 30);
+    tick_key(&mut harness, Key::Left);
+    let root = harness
+        .model()
+        .test_music_owner()
+        .browser
+        .selected_id()
+        .expect("artist root selected");
+    let expanded = harness
+        .model()
+        .test_music_owner()
+        .browser
+        .root_is_expanded(root);
+
+    tick_key(&mut harness, Key::Enter);
+
+    assert!(
+        music_panel(&harness).test_hero_overlay_open(),
+        "non-Wide Enter opens the artist Hero overlay"
+    );
+    assert!(
+        harness.model().test_music_owner().track_focused(),
+        "the artist Workspace receives focus"
+    );
+    assert_eq!(
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .root_is_expanded(root),
+        expanded,
+        "Hero entry does not toggle expansion"
+    );
+}
+
+/// A filtered artist root keeps Enter local in both the Wide and non-Wide
+/// compositions; the panel must not open an overlay before the owner sees it.
+#[test]
+fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
+    for (width, height) in [(160, 40), (81, 30)] {
+        let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), width, height);
+        tick_key(&mut harness, Key::Left);
+        let root = harness
+            .model()
+            .test_music_owner()
+            .browser
+            .selected_id()
+            .expect("artist root selected");
+        assert!(
+            harness
+                .model()
+                .test_music_owner()
+                .browser
+                .root_is_expanded(root)
+        );
+
+        tick_key(&mut harness, Key::Char('/'));
+        harness
+            .model_mut()
+            .test_music_owner_mut()
+            .browser
+            .apply_filter_query("Alpha");
+        draw_music_frame(&mut harness);
+        tick_key(&mut harness, Key::Enter);
+
+        assert!(
+            !harness
+                .model()
+                .test_music_owner()
+                .browser
+                .root_is_expanded(root),
+            "{width}x{height}: filtered Enter toggles the root locally"
+        );
+        assert!(
+            !music_panel(&harness).test_hero_overlay_open(),
+            "{width}x{height}: filtered Enter does not open a Hero"
+        );
+        assert!(
+            !harness.model().test_music_owner().track_focused(),
+            "{width}x{height}: filtered Enter does not focus a Workspace"
+        );
+    }
+}
+
 /// Task 6.4: the Wide Hero and its Workspace switch atomically between the
 /// album and artist arms — the title, facts, and rows never come from
 /// different selections.

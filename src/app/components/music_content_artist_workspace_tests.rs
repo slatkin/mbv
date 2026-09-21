@@ -158,16 +158,19 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
 }
 
 #[test]
-fn artist_workspace_root_still_toggles_while_the_rail_owns_the_focus() {
+fn artist_workspace_root_enter_uses_the_hero_entry_while_the_rail_owns_focus() {
     let mut owner = artist_workspace_owner();
     let root = owner.browser.selected_id().expect("artist root selected");
     assert!(owner.browser.root_is_expanded(root));
     assert!(!owner.track_focused(), "the rail owns the focus");
 
-    assert_eq!(press(&mut owner, Key::Enter), None);
+    assert!(matches!(
+        press(&mut owner, Key::Enter),
+        Some(Msg::Shell(ShellRequest::MusicArtistActivate { .. }))
+    ));
     assert!(
-        !owner.browser.root_is_expanded(root),
-        "Enter on the artist root still toggles expansion"
+        owner.browser.root_is_expanded(root),
+        "unfiltered Enter preserves expansion"
     );
 }
 

@@ -3,11 +3,10 @@
 
 use super::*;
 
-/// Task 6.4: artist roots are hero-bearing rows (double-click/Right own the
-/// overlay), while Enter stays their expansion toggle and only an album leaf
-/// keeps the Enter overlay entry.
+/// Artist roots are hero-bearing rows, and unfiltered Enter shares the
+/// double-click/Right Hero entry while filtered Enter stays local.
 #[test]
-fn artist_roots_own_the_overlay_but_enter_stays_their_expansion_toggle() {
+fn artist_roots_are_hero_eligible_only_when_unfiltered() {
     use crate::app::components::library_panel::owner::LibraryContentOwner;
 
     let mut owner = artist_workspace_owner();
@@ -16,8 +15,18 @@ fn artist_roots_own_the_overlay_but_enter_stays_their_expansion_toggle() {
         "an artist root is a hero-bearing row"
     );
     assert!(
+        owner.hero_overlay_enter_available(),
+        "an unfiltered artist root enters its Hero"
+    );
+
+    owner.on_key(&KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    });
+    owner.browser.apply_filter_query("Alpha");
+    assert!(
         !owner.hero_overlay_enter_available(),
-        "Enter toggles an artist root, never the overlay"
+        "a filtered artist root keeps Enter local"
     );
 
     let mut album_owner = tree_owner(&[("Alpha", &["a-0"])]);
@@ -494,24 +503,37 @@ fn up_and_down_move_across_artist_roots_and_album_leaves() {
 }
 
 #[test]
-fn enter_toggles_an_artist_root_and_activates_an_album_leaf() {
+fn enter_enters_an_unfiltered_artist_hero_and_activates_an_album_leaf() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
     press(&mut owner, Key::Home);
     let root = owner.browser.selected_id().expect("artist root selected");
     // The initial album adoption expanded the first root's path.
     assert!(owner.browser.root_is_expanded(root));
 
-    assert_eq!(
-        press(&mut owner, Key::Enter),
-        None,
-        "root toggle emits no request"
-    );
-    assert!(!owner.browser.root_is_expanded(root), "Enter collapses it");
-    press(&mut owner, Key::Enter);
+    match press(&mut owner, Key::Enter) {
+        Some(Msg::Shell(ShellRequest::MusicArtistActivate { target })) => {
+            assert_eq!(target.artist_name, "Alpha")
+        }
+        other => panic!("expected artist Hero entry, got {other:?}"),
+    }
     assert!(
         owner.browser.root_is_expanded(root),
-        "Enter expands it again"
+        "unfiltered Enter leaves expansion unchanged"
     );
+
+    // Filtered artist Enter remains local and toggles expansion.
+    assert!(owner
+        .on_key(&KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE,
+        })
+        .is_some());
+    owner.browser.apply_filter_query("Alpha");
+    assert_eq!(press(&mut owner, Key::Enter), None);
+    assert!(!owner.browser.root_is_expanded(root));
+    assert_eq!(press(&mut owner, Key::Enter), None);
+    assert!(owner.browser.root_is_expanded(root));
+    press(&mut owner, Key::Esc);
 
     // The existing album activation is preserved on a leaf.
     press(&mut owner, Key::Down);
@@ -524,13 +546,11 @@ fn enter_toggles_an_artist_root_and_activates_an_album_leaf() {
     }
 }
 
-/// Task 2.4 correction: an album-leaf Enter focuses the Wide inline track
-/// pane, but moving the tree selection onto an artist root must not let the
-/// stale pane focus swallow the root's Enter toggle. Before the fix the
-/// `track_focused` Enter arm matched first and short-circuited through
-/// `selected_item()?` (which is `None` for a root), so Enter did nothing.
+/// An album-leaf Enter focuses the Wide inline track pane, but moving the tree
+/// selection onto an artist root must not let stale pane focus swallow the
+/// root's Hero entry. The root keeps its expansion unchanged.
 #[test]
-fn enter_toggles_a_root_reached_while_the_track_pane_holds_focus() {
+fn enter_enters_a_root_reached_while_the_track_pane_holds_focus() {
     let mut owner = tree_owner_with_tracks(
         &[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])],
         Some(vec![make_item("t-0", "Audio"), make_item("t-1", "Audio")]),
@@ -552,14 +572,15 @@ fn enter_toggles_a_root_reached_while_the_track_pane_holds_focus() {
     let root = owner.browser.selected_id().expect("artist root selected");
     assert!(owner.browser.root_is_expanded(root));
 
-    // The stale pane must not swallow Enter: the root toggles instead.
+    // The stale pane must not swallow Enter: the unfiltered root uses Hero
+    // entry and leaves its expansion unchanged.
     assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(
-        !owner.browser.root_is_expanded(root),
-        "Enter collapses the focused root"
+        owner.browser.root_is_expanded(root),
+        "Enter preserves the focused root's expansion"
     );
-    // An artist root resolves no album, so no Hero/Workspace is projected and
-    // the previous album's tracks cannot paint under the root.
+    // The root has no artist-detail rows in this fixture, so it cannot take
+    // the track cursor and must not paint the previous album's Workspace.
     assert!(
         owner.panel_content().hero.is_none(),
         "no stale album Workspace paints under an artist root"
