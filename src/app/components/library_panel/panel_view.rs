@@ -38,6 +38,14 @@ impl Component for LibraryPanel {
         };
         let overview_scroll = owner.hero_scroll_offset();
         let mut content = owner.content();
+        #[cfg(test)]
+        {
+            self.projected_selector_markers = content
+                .selector
+                .as_ref()
+                .map(|selector| selector.markers.clone())
+                .unwrap_or_default();
+        }
         self.painted_link_urls = content
             .hero
             .as_ref()

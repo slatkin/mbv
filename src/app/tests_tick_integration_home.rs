@@ -1,4 +1,5 @@
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
@@ -50,6 +51,37 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
         .owner(&crate::app::components::library_panel::LibraryKey::Home)
         .and_then(|owner| owner.as_any().downcast_ref::<HomeContent>())
         .expect("Home owner installed")
+}
+
+/// The mounted panel's retained region for one selector pill.
+fn pill_region(harness: &TickHarness, id: usize) -> Rect {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type")
+        .test_selector_hits()
+        .regions()
+        .iter()
+        .find(|(_, target)| *target == id)
+        .map(|(rect, _)| *rect)
+        .unwrap_or_else(|| panic!("selector pill {id} painted"))
+}
+
+/// The mounted panel's selector state from its last content projection.
+fn selector_markers(harness: &TickHarness) -> &[bool] {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type")
+        .test_selector_markers()
 }
 
 /// The mounted Queue component, for seeding/reading its local selection.
@@ -136,8 +168,8 @@ fn tick_frame_is_nonempty_in_mini_view() {
 }
 
 /// Section content can arrive after the Home owner is mounted. The marker is
-/// projected by the owner through the Library panel, and visiting it remains a
-/// component-local acknowledgement when the shell pushes the same snapshot
+/// projected through the mounted Library panel, and visiting its pill remains
+/// a component-local acknowledgement when the shell pushes the same snapshot
 /// again (the shell snapshot deliberately stays marked).
 #[test]
 fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
@@ -161,32 +193,9 @@ fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
     let outcome = harness.step();
     handle_tick_messages(&mut harness, outcome.messages);
 
-    let painted = draw(&mut harness, 160, 30);
-    let marked_region = {
-        let panel = harness
-            .model()
-            .application
-            .get_component(&ComponentId::Library)
-            .expect("Library panel mounted")
-            .as_any()
-            .downcast_ref::<LibraryPanel>()
-            .expect("Library panel type");
-        panel
-            .test_selector_hits()
-            .regions()
-            .iter()
-            .find(|(_, id)| *id == 1)
-            .map(|(rect, _)| *rect)
-            .expect("marked Latest pill painted")
-    };
-    let marker_x = (marked_region.left()..marked_region.right())
-        .find(|&x| painted.backend().buffer()[(x, marked_region.y)].symbol() == "•")
-        .expect("Latest pill marker painted");
-    assert_eq!(
-        painted.backend().buffer()[(marker_x, marked_region.y)].fg,
-        palette::ACCENT_ACTIVE,
-        "the marker uses the semantic Iris role"
-    );
+    let _ = draw(&mut harness, 160, 30);
+    let marked_region = pill_region(&harness, 1);
+    assert_eq!(selector_markers(&harness), &[false, true]);
     assert!(
         harness.model().home_content.latest[0].has_new_content,
         "the shell snapshot remains marked; acknowledgement is not mirrored"
@@ -194,7 +203,7 @@ fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
 
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: marked_region.x + 1,
+        column: marked_region.x,
         row: marked_region.y,
         modifiers: KeyModifiers::NONE,
     }));
@@ -203,32 +212,9 @@ fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
         target: 1,
     })));
     handle_tick_messages(&mut harness, outcome.messages);
+    let _ = draw(&mut harness, 160, 30);
+    assert_eq!(selector_markers(&harness), &[false, false]);
 
-    let after_visit = draw(&mut harness, 160, 30);
-    let visited_region = {
-        let panel = harness
-            .model()
-            .application
-            .get_component(&ComponentId::Library)
-            .expect("Library panel mounted")
-            .as_any()
-            .downcast_ref::<LibraryPanel>()
-            .expect("Library panel type");
-        panel
-            .test_selector_hits()
-            .regions()
-            .iter()
-            .find(|(_, id)| *id == 1)
-            .map(|(rect, _)| *rect)
-            .expect("visited Latest pill painted")
-    };
-    assert!((visited_region.left()..visited_region.right()).all(|x| {
-        after_visit.backend().buffer()[(x, visited_region.y)].symbol() != "•"
-    }));
-
-    // Reorder the asynchronously refreshed sections. The selected source is
-    // now unselected, so this proves the visit survived without a shell-side
-    // marker-clearing field or an index-based acknowledgement.
     let other_source = HomeLatestSource::Audiobookshelf("other-library".into());
     harness.model_mut().home_content.latest = vec![
         HomeLatestSection {
@@ -248,32 +234,32 @@ fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
     harness.inject(key(Key::Char('x')));
     let outcome = harness.step();
     handle_tick_messages(&mut harness, outcome.messages);
-    let refreshed = draw(&mut harness, 160, 30);
-    let panel = harness
-        .model()
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("Library panel mounted")
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .expect("Library panel type");
-    let refreshed_regions = panel.test_selector_hits().regions();
-    let other_region = refreshed_regions
-        .iter()
-        .find(|(_, id)| *id == 1)
-        .map(|(rect, _)| *rect)
-        .expect("other Latest pill painted");
-    let visited_region = refreshed_regions
-        .iter()
-        .find(|(_, id)| *id == 2)
-        .map(|(rect, _)| *rect)
-        .expect("reordered visited Latest pill painted");
-    assert!((other_region.left()..other_region.right()).any(|x| {
-        refreshed.backend().buffer()[(x, other_region.y)].symbol() == "•"
+    let _ = draw(&mut harness, 160, 30);
+
+    // Reorder the asynchronously refreshed sections. The selected source is
+    // re-anchored by identity, and its marker remains absent in the mounted
+    // projection; the other source is still marked before it is selected.
+    assert_eq!(selector_markers(&harness), &[false, true, false]);
+
+    // Select Other so the visited source is unselected. Its missing marker
+    // then proves source-based acknowledgement rather than selected-pill
+    // suppression.
+    let other_region = pill_region(&harness, 1);
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: other_region.x,
+        row: other_region.y,
+        modifiers: KeyModifiers::NONE,
     }));
-    assert!((visited_region.left()..visited_region.right()).all(|x| {
-        refreshed.backend().buffer()[(x, visited_region.y)].symbol() != "•"
-    }));
+    let outcome = harness.step();
+    assert!(outcome.messages.contains(&Msg::Shell(ShellRequest::HomePillClick {
+        target: 1,
+    })));
+    handle_tick_messages(&mut harness, outcome.messages);
+    let _ = draw(&mut harness, 160, 30);
+    assert_eq!(selector_markers(&harness), &[false, false, false]);
+    assert_eq!(home_owner(&harness).section(), 1);
+    assert!(harness.model().home_content.latest[1].has_new_content);
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {
