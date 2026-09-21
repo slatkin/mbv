@@ -743,24 +743,29 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 .then_some(LaunchSelector::Emby { index: target });
         }
         if self.show_letter_pills {
-            let target = match state.selector.as_ref() {
+            let current = self.letter_filter.as_ref().map(|filter| filter.index);
+            return match state.selector.as_ref() {
                 Some(SelectorIdentity::Emby {
                     key: EmbySelectorKey::Letter(bucket),
-                }) => match bucket {
-                    EmbyLetterBucket::AToC => 0,
-                    EmbyLetterBucket::DToF => 1,
-                    EmbyLetterBucket::GToI => 2,
-                    EmbyLetterBucket::JToL => 3,
-                    EmbyLetterBucket::MToO => 4,
-                    EmbyLetterBucket::PToR => 5,
-                    EmbyLetterBucket::SToU => 6,
-                    EmbyLetterBucket::VToZ => 7,
-                    EmbyLetterBucket::Hash => 8,
-                },
-                _ => 0,
+                }) => {
+                    let target = match bucket {
+                        EmbyLetterBucket::AToC => 0,
+                        EmbyLetterBucket::DToF => 1,
+                        EmbyLetterBucket::GToI => 2,
+                        EmbyLetterBucket::JToL => 3,
+                        EmbyLetterBucket::MToO => 4,
+                        EmbyLetterBucket::PToR => 5,
+                        EmbyLetterBucket::SToU => 6,
+                        EmbyLetterBucket::VToZ => 7,
+                        EmbyLetterBucket::Hash => 8,
+                    };
+                    (current != Some(target)).then_some(LaunchSelector::Emby { index: target })
+                }
+                // No letter pill is represented by an index. The shell uses
+                // this out-of-band value for the distinct clear intent.
+                _ if current.is_some() => Some(LaunchSelector::Emby { index: usize::MAX }),
+                _ => None,
             };
-            let current = self.letter_filter.as_ref().map(|filter| filter.index);
-            return (current != Some(target)).then_some(LaunchSelector::Emby { index: target });
         }
         None
     }

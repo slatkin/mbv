@@ -99,7 +99,11 @@ impl Model {
         match selector {
             LaunchSelector::Emby { index } => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    self.app.handle_mouse_selector_click_emby(lib_idx, index);
+                    if index == usize::MAX {
+                        self.clear_emby_letter_filter_for_launch(lib_idx);
+                    } else {
+                        self.app.handle_mouse_selector_click_emby(lib_idx, index);
+                    }
                 }
             }
             LaunchSelector::AudiobookshelfShow(library_item_id) => {
@@ -124,6 +128,46 @@ impl Model {
             } => self.push_audiobookshelf_podcast_content(),
             _ => self.push_active_emby_library_owner_content(),
         }
+    }
+
+    /// Return an Emby letter-pilled library to its unfiltered top-level scope
+    /// while restoring launch state. This is the clear counterpart to the
+    /// ordinary pill click: it refreshes the full range instead of treating
+    /// index zero as an A–C pill.
+    fn clear_emby_letter_filter_for_launch(&mut self, lib_idx: usize) {
+        if !self.app.should_show_letter_pills(lib_idx) {
+            return;
+        }
+        let Some(level) = self.app.libs[lib_idx].nav_stack.last() else {
+            return;
+        };
+        if level.letter_filter.is_none() {
+            return;
+        }
+        let parent_id = level.parent_id.clone();
+        let item_types = level.item_types.clone();
+        let unplayed_only = level.unplayed_only;
+        let sort_by = level.sort_by.clone();
+        let sort_order = level.sort_order.clone();
+        if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+            level.letter_filter = None;
+            level.set_resting_cursor(0);
+            level.set_resting_scroll(0);
+            level.loading = true;
+            level.items.clear();
+            level.all_items = None;
+        }
+        self.app.spawn_refresh(
+            lib_idx,
+            parent_id,
+            item_types,
+            unplayed_only,
+            sort_by,
+            sort_order,
+            0,
+            None,
+        );
+        self.app.save_default_library_position(lib_idx);
     }
 
     /// Consume the pending destination-level launch state after the selected

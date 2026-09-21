@@ -96,6 +96,95 @@ fn launch_reanchor_applies_tv_letter_scope_through_app_before_item() {
     );
 }
 
+#[test]
+fn launch_reanchor_unfiltered_scope_keeps_full_tv_library() {
+    let mut harness = tv_harness();
+    harness.model_mut().app.libs[0].library_total = Some(100);
+    let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
+    level.total_count = 100;
+    level.items = vec![
+        crate::app::tests::make_item("Series A", "Series"),
+        crate::app::tests::make_item("Series Z", "Series"),
+    ];
+    level.items[1].id = "series-zulu".into();
+    level.loading = false;
+    harness.model_mut().sync_mounted_surfaces();
+    harness.model_mut().app.pending_launch_tab_resolved = true;
+    harness.model_mut().app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-movies".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Emby {
+            key: mbv_core::config::EmbySelectorKey::Unfiltered,
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "series-zulu".into(),
+        }),
+    });
+
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+    assert!(harness.model().app.pending_launch_state.is_none());
+    assert_eq!(
+        tv(&harness).launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "series-zulu".into()
+        })
+    );
+}
+
+#[test]
+fn launch_reanchor_unfiltered_scope_clears_an_active_tv_pill() {
+    let mut harness = tv_harness();
+    harness.model_mut().app.libs[0].library_total = Some(100);
+    let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
+    level.total_count = 100;
+    level.letter_filter = crate::app::render::LetterFilter::for_index(2);
+    level.items = vec![crate::app::tests::make_item("Series G", "Series")];
+    level.loading = false;
+    harness.model_mut().sync_mounted_surfaces();
+    harness.model_mut().app.pending_launch_tab_resolved = true;
+    harness.model_mut().app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-movies".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Emby {
+            key: mbv_core::config::EmbySelectorKey::Unfiltered,
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "series-zulu".into(),
+        }),
+    });
+
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+    assert!(harness.model().app.pending_launch_state.is_some());
+
+    let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
+    level.items = vec![
+        crate::app::tests::make_item("Series A", "Series"),
+        crate::app::tests::make_item("Series Z", "Series"),
+    ];
+    level.items[1].id = "series-zulu".into();
+    level.loading = false;
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(harness.model().app.pending_launch_state.is_none());
+    assert_eq!(
+        tv(&harness).launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "series-zulu".into()
+        })
+    );
+}
+
 /// The one TV owner (task 8.4, design D2): registered inside the mounted
 /// `LibraryPanel` under `LibraryKey::Service(TvShows)` at every breakpoint.
 fn tv(harness: &TickHarness) -> &TvContent {
