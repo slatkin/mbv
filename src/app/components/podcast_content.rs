@@ -20,7 +20,7 @@ use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::library_panel::hero::hero_content_abs_episode;
-use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
@@ -486,6 +486,32 @@ impl Default for PodcastContent {
 }
 
 impl LibraryContentOwner for PodcastContent {
+    fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
+        let target = match state.selector.as_ref() {
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastShow(id),
+            }) if self
+                .state
+                .shows
+                .iter()
+                .any(|show| &show.library_item_id == id) =>
+            {
+                LaunchSelector::AudiobookshelfShow(id.clone())
+            }
+            _ => LaunchSelector::AudiobookshelfState,
+        };
+        let current = match &self.pill {
+            PillSelection::Show(id) => Some(id.as_str()),
+            PillSelection::State(_) => None,
+        };
+        let desired = match &target {
+            LaunchSelector::AudiobookshelfShow(id) => Some(id.as_str()),
+            LaunchSelector::AudiobookshelfState => None,
+            LaunchSelector::Emby { .. } => None,
+        };
+        (current != desired).then_some(target)
+    }
+
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
         let pill = match state.selector.as_ref() {
             Some(SelectorIdentity::Audiobookshelf {
@@ -507,14 +533,12 @@ impl LibraryContentOwner for PodcastContent {
             }
             _ => PillSelection::State(AudiobookshelfEpisodeFilter::All),
         };
-        if let PillSelection::Show(id) = &pill {
-            if !self.state.detail_cache.contains_key(id)
-                && self.state.detail_loading_ids.contains_key(id)
-            {
+        self.set_pill(pill);
+        if let PillSelection::Show(id) = &self.pill {
+            if !self.state.detail_cache.contains_key(id) {
                 return false;
             }
         }
-        self.set_pill(pill);
         let selected = state
             .item
             .as_ref()

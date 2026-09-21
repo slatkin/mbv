@@ -6,7 +6,7 @@ use tuirealm::event::{
 };
 
 use crate::app::components::msg::TvHit;
-use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
@@ -44,6 +44,56 @@ fn tv_harness() -> TickHarness {
     harness.model_mut().sync_tv_content();
     harness.model_mut().sync_active_destination();
     harness
+}
+
+#[test]
+fn launch_reanchor_applies_tv_letter_scope_through_app_before_item() {
+    let mut harness = tv_harness();
+    harness.model_mut().app.libs[0].library_total = Some(100);
+    harness.model_mut().app.libs[0].nav_stack[0].total_count = 100;
+    harness.model_mut().app.pending_launch_tab_resolved = true;
+    harness.model_mut().app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-movies".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Emby {
+            key: mbv_core::config::EmbySelectorKey::Letter(
+                mbv_core::config::EmbyLetterBucket::GToI,
+            ),
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "series-1".into(),
+        }),
+    });
+
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0]
+            .letter_filter
+            .as_ref()
+            .map(|filter| filter.index),
+        Some(2)
+    );
+    assert!(harness.model().app.pending_launch_state.is_some());
+
+    let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
+    level.items = vec![
+        crate::app::tests::make_item("Series A", "Series"),
+        crate::app::tests::make_item("Series B", "Series"),
+    ];
+    level.items[1].id = "series-1".into();
+    level.loading = false;
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().app.pending_launch_state.is_none());
+    assert_eq!(
+        tv(&harness).launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "series-1".into()
+        })
+    );
 }
 
 /// The one TV owner (task 8.4, design D2): registered inside the mounted

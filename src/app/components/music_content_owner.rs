@@ -96,6 +96,26 @@ impl LibraryContentOwner for MusicContent {
             .then_some(crate::app::components::media_list::SelectionSummary { count, origin })
     }
 
+    fn launch_selector(
+        &self,
+        state: &mbv_core::config::TuiLaunchState,
+    ) -> Option<super::library_panel::owner::LaunchSelector> {
+        let target = match state.selector.as_ref() {
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Group(id),
+            }) => self
+                .context
+                .groups
+                .iter()
+                .position(|group| &group.id == id)
+                .unwrap_or(0),
+            _ => 0,
+        };
+        (self.context.group_cursor != target).then_some(
+            super::library_panel::owner::LaunchSelector::Emby { index: target },
+        )
+    }
+
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;

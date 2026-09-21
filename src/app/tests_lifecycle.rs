@@ -5,7 +5,9 @@ use crate::app::components::LibraryKey;
 use mbv_core::config::{FeedKind, FeedSubscription, ServiceKind};
 use mbv_core::playback_queue::FeedEntry;
 use crate::app::tests::*;
+use crate::app::tests_tick_harness::TickHarness;
 use rstest::rstest;
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 #[test]
 fn teardown_fast_when_player_thread_is_not_hung() {
@@ -93,10 +95,11 @@ fn explicit_tab_movement_consumes_pending_launch_tab_before_refresh() {
 
 #[test]
 fn destination_reanchor_consumes_pending_state_before_a_later_refresh() {
-    let mut model = Model::new(make_app_stub());
-    model.app.tab = TabSelection::Home;
-    model.app.pending_launch_tab_resolved = true;
-    model.app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+    let mut harness = TickHarness::new(make_app_stub());
+    harness.model_mut().sync_mounted_surfaces();
+    harness.model_mut().app.tab = TabSelection::Home;
+    harness.model_mut().app.pending_launch_tab_resolved = true;
+    harness.model_mut().app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
         version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_core::config::TabIdentity::Home,
         panel_focus: mbv_core::config::LaunchPanelFocus::Library,
@@ -105,7 +108,7 @@ fn destination_reanchor_consumes_pending_state_before_a_later_refresh() {
         }),
         item: Some(mbv_core::config::LibraryItemIdentity::Home { id: "first".into() }),
     });
-    model.update_home_owner(|home| {
+    harness.model_mut().update_home_owner(|home| {
         let mut first = make_item("First", "Movie");
         first.id = "first".into();
         home.set_content(
@@ -116,13 +119,20 @@ fn destination_reanchor_consumes_pending_state_before_a_later_refresh() {
         );
     });
 
-    model.reanchor_pending_launch_destination();
-    assert!(model.app.pending_launch_state.is_none());
-    assert!(!model.app.pending_launch_tab_resolved);
+    // The real Application::tick path runs the shell sync pass before the
+    // injected event; the pending intent must be consumed there, not by a
+    // direct helper call that bypasses composition.
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('z'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+    assert!(harness.model().app.pending_launch_state.is_none());
+    assert!(!harness.model().app.pending_launch_tab_resolved);
 
     // A later owner refresh has no pending intent available to replay.
-    model.reanchor_pending_launch_destination();
-    assert!(model.app.pending_launch_state.is_none());
+    harness.model_mut().reanchor_pending_launch_destination();
+    assert!(harness.model().app.pending_launch_state.is_none());
 }
 
 #[test]

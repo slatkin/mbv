@@ -12,6 +12,7 @@ use ratatui::layout::Rect;
 
 use super::components::book_content::BookContent;
 use super::components::library_panel::content::HeroImageState;
+use super::components::library_panel::owner::LaunchSelector;
 use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::components::{ComponentId, LibraryKey, LibraryKind};
@@ -94,6 +95,37 @@ impl Model {
         })
     }
 
+    fn apply_launch_selector(&mut self, key: &LibraryKey, selector: LaunchSelector) {
+        match selector {
+            LaunchSelector::Emby { index } => {
+                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    self.app.handle_mouse_selector_click_emby(lib_idx, index);
+                }
+            }
+            LaunchSelector::AudiobookshelfShow(library_item_id) => {
+                self.app.select_audiobookshelf_show_target(&library_item_id);
+            }
+            LaunchSelector::AudiobookshelfState => {
+                self.app.commit_audiobookshelf_podcast_state_scope();
+            }
+        }
+        match key {
+            LibraryKey::Service {
+                kind: LibraryKind::Music,
+                ..
+            } => self.push_music_workspace_content(),
+            LibraryKey::Service {
+                kind: LibraryKind::TvShows,
+                ..
+            } => self.push_tv_workspace_content(),
+            LibraryKey::Service {
+                kind: LibraryKind::AudiobookshelfPodcast,
+                ..
+            } => self.push_audiobookshelf_podcast_content(),
+            _ => self.push_active_emby_library_owner_content(),
+        }
+    }
+
     /// Consume the pending destination-level launch state after the selected
     /// owner has received its current content. Resolution is deliberately
     /// pill-before-item and happens once; later refreshes only project content.
@@ -107,6 +139,14 @@ impl Model {
         let Some(key) = self.active_library_key() else {
             return;
         };
+        let selector = self
+            .application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.launch_selector(&key, &state));
+        if let Some(selector) = selector {
+            self.apply_launch_selector(&key, selector);
+        }
         let applied = self
             .application
             .get_component_mut(&ComponentId::Library)

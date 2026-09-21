@@ -193,6 +193,16 @@ pub(in crate::app) enum LibrarySlotEvent {
     HeroActivate,
 }
 
+/// The resolved selector effect needed to restore a destination before its
+/// item. The shell applies this against App-owned browse state, then pushes the
+/// resulting content back through the normal projection seam.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::app) enum LaunchSelector {
+    Emby { index: usize },
+    AudiobookshelfShow(String),
+    AudiobookshelfState,
+}
+
 /// The embedded content owner contract: one producer per frame plus the slot
 /// event translation. Object-safe so the panel can host owners for every
 /// library in one map.
@@ -364,11 +374,17 @@ pub(in crate::app) trait LibraryContentOwner {
         (None, None)
     }
 
-    /// Apply one discrete startup re-anchor after the destination's current
-    /// content has been projected. Implementations resolve the main Selector
-    /// before the library item and fall back to the first current selectable
-    /// choice at each level. Returning `true` consumes the destination-level
-    /// pending state; ordinary refreshes never call this operation.
+    /// Resolve the current destination's main Selector into an App-owned
+    /// effect. The shell applies it before the item-level re-anchor, so a
+    /// projection cannot overwrite a component-local downward mirror.
+    fn launch_selector(&self, _state: &TuiLaunchState) -> Option<LaunchSelector> {
+        None
+    }
+
+    /// Apply the item-level part of one discrete startup re-anchor after the
+    /// destination's current content has been projected. Returning `true`
+    /// consumes the destination-level pending state; ordinary refreshes never
+    /// call this operation.
     fn reanchor_launch_state(&mut self, _state: &TuiLaunchState) -> bool {
         false
     }

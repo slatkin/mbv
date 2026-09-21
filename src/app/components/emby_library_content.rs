@@ -27,7 +27,7 @@ use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::library_panel::hero::hero_content_emby;
-use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::library_panel::LibraryKind;
 use super::media_list::{
@@ -726,12 +726,9 @@ impl LibraryContentOwner for EmbyLibraryContent {
     /// and the unfiltered letter view use an explicit unfiltered identity;
     /// a destination with no pills, or an empty list, reports absence. No
     /// pill index, group display name, or row position crosses.
-    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
-        if self.loading && self.items.is_empty() {
-            return false;
-        }
+    fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
         if self.group_pills {
-            let group = match state.selector.as_ref() {
+            let target = match state.selector.as_ref() {
                 Some(SelectorIdentity::Emby {
                     key: EmbySelectorKey::Group(id),
                 }) => self
@@ -742,7 +739,48 @@ impl LibraryContentOwner for EmbyLibraryContent {
                     .unwrap_or(0),
                 _ => 0,
             };
-            self.feed_group_cursor = group;
+            return (self.feed_group_cursor != target)
+                .then_some(LaunchSelector::Emby { index: target });
+        }
+        if self.show_letter_pills {
+            let target = match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Letter(bucket),
+                }) => match bucket {
+                    EmbyLetterBucket::AToC => 0,
+                    EmbyLetterBucket::DToF => 1,
+                    EmbyLetterBucket::GToI => 2,
+                    EmbyLetterBucket::JToL => 3,
+                    EmbyLetterBucket::MToO => 4,
+                    EmbyLetterBucket::PToR => 5,
+                    EmbyLetterBucket::SToU => 6,
+                    EmbyLetterBucket::VToZ => 7,
+                    EmbyLetterBucket::Hash => 8,
+                },
+                _ => 0,
+            };
+            let current = self.letter_filter.as_ref().map(|filter| filter.index);
+            return (current != Some(target)).then_some(LaunchSelector::Emby { index: target });
+        }
+        None
+    }
+
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.loading && self.items.is_empty() {
+            return false;
+        }
+        if self.group_pills {
+            self.feed_group_cursor = match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Group(id),
+                }) => self
+                    .feed_group_ids
+                    .iter()
+                    .position(|candidate| candidate == id)
+                    .map(|index| index + 1)
+                    .unwrap_or(0),
+                _ => 0,
+            };
             self.feed_owner();
         } else if self.show_letter_pills {
             self.letter_filter = match state.selector.as_ref() {

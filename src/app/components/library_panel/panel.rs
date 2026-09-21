@@ -513,6 +513,16 @@ impl LibraryPanel {
 
     /// Apply the one discrete startup launch re-anchor to exactly one active
     /// destination owner. The panel does not mirror the resulting local state.
+    pub(in crate::app) fn launch_selector(
+        &self,
+        key: &LibraryKey,
+        state: &mbv_core::config::TuiLaunchState,
+    ) -> Option<super::owner::LaunchSelector> {
+        self.owners
+            .get(key)
+            .and_then(|owner| owner.launch_selector(state))
+    }
+
     pub(in crate::app) fn reanchor_launch_state(
         &mut self,
         key: &LibraryKey,
