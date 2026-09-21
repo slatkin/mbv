@@ -10,5 +10,5 @@
 
 ## 3. Integration and spec parity
 
-- [ ] 3.1 Extend the wide-split live-tick integration test (`tests_tick_integration_wide_split.rs`) to drive press/drag/release through `Application::tick()` and assert one prefs write with the final width; verify no write occurs for press-release without motion.
-- [ ] 3.2 Run `cargo nextest run -p mbv` for the touched areas plus `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt`; verify the delta-spec scenarios (persisted restore, refresh clears persisted, clamp on narrow terminal) each have covering tests.
+- [x] 3.1 Extend the wide-split live-tick integration test (`tests_tick_integration_wide_split.rs`) to drive press/drag/release through `Application::tick()` and assert one prefs write with the final width; verify no write occurs for press-release without motion.
+- [x] 3.2 Run `cargo nextest run -p mbv` for the touched areas plus `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt`; verify the delta-spec scenarios (persisted restore, refresh clears persisted, clamp on narrow terminal) each have covering tests.
