@@ -96,9 +96,11 @@ pub enum ShellRequest {
     /// Live Wide hero split resize (add-mouse-wide-split-resize). The gap
     /// boundary component owns the gesture and the resolved list-pane width;
     /// the shell clamps it against the active surface's content width and
-    /// stores the session override. Live-only: there is no end/persist
-    /// variant, because nothing is persisted.
+    /// stores the session override without writing preferences.
     ResizeListPaneLive(u16),
+    /// End a changed Wide hero split resize. The shell applies the final
+    /// normalized width and persists it once, after the gesture ends.
+    ResizeListPaneEnd(u16),
     /// Project the focused list's count-only summary to the Status bar.
     SelectionProjection(crate::app::components::media_list::SelectionSummary),
     /// Clear the active list's Visual selection from the status indicator.

@@ -88,6 +88,9 @@ pub struct LibraryPanel {
     /// painted gap arms a drag; pane presses never arm it (the
     /// legacy split-boundary rule this gesture moved in from).
     split_gestures: MouseGestureState,
+    /// Whether the current split gesture changed the resolved width. Used to
+    /// emit one persistence request at drag end, never for intermediate moves.
+    split_changed: bool,
     /// The library surface's own gesture recognizer for slot events.
     gestures: MouseGestureState,
     /// The projected hero image paint the last view retained (task 5.10,
@@ -140,6 +143,7 @@ impl LibraryPanel {
             painted_area: None,
             split: None,
             split_gestures: MouseGestureState::new(),
+            split_changed: false,
             gestures: MouseGestureState::new(),
             image_paint: None,
             deferred_msg: None,
@@ -311,6 +315,7 @@ impl LibraryPanel {
     pub(in crate::app) fn sync_mouse_eligibility(&mut self, eligible: bool) {
         if !eligible {
             self.split_gestures = MouseGestureState::new();
+            self.split_changed = false;
         }
     }
 
@@ -603,9 +608,9 @@ impl LibraryPanel {
         result
     }
 
-    /// The split drag's resolved message: a live-only `ResizeListPaneLive`
-    /// with the pointer-resolved width, identical to the boundary gesture
-    /// this moved in from.
+    /// The split drag's resolved message: live width changes during the
+    /// gesture, followed by one persistence request at drag end when a width
+    /// actually changed.
     fn split_gesture_msg(
         &mut self,
         gesture: MouseGesture,
@@ -614,7 +619,10 @@ impl LibraryPanel {
         let split = self.split.as_ref()?;
         match gesture {
             // Press-and-release without motion changes nothing.
-            MouseGesture::Click { .. } if split.gap.contains(at) => None,
+            MouseGesture::Click { .. } if split.gap.contains(at) => {
+                self.split_changed = false;
+                None
+            }
             // A recognized `Drag` implies an armed press inside the gap, so
             // every drag resolves -- tracking necessarily continues outside
             // the gap once the pointer leaves it.
@@ -628,9 +636,17 @@ impl LibraryPanel {
                     return None;
                 }
                 self.split.as_mut()?.width = width;
+                self.split_changed = true;
                 Some(Msg::Shell(ShellRequest::ResizeListPaneLive(width)))
             }
-            // Live-only: there is nothing to persist, so `DragEnd` is a no-op.
+            MouseGesture::DragEnd if self.split_changed => {
+                self.split_changed = false;
+                Some(Msg::Shell(ShellRequest::ResizeListPaneEnd(split.width)))
+            }
+            MouseGesture::DragEnd => {
+                self.split_changed = false;
+                None
+            }
             _ => None,
         }
     }
@@ -872,10 +888,17 @@ impl LibraryPanel {
                 }
                 self.surface_gesture(mouse)
             }
-            // Release closes whichever gesture armed; a gap-armed release is
-            // a live-only no-op and a surface-armed release claims nothing.
+            // Release closes whichever gesture armed; a changed gap gesture
+            // emits its one persistence request, while a click or pane gesture
+            // remains inert at this boundary.
             MouseEventKind::Up(MouseButton::Left) => {
-                let _ = self.split_gestures.recognize(mouse);
+                if let Some(msg) = self
+                    .split_gestures
+                    .recognize(mouse)
+                    .and_then(|gesture| self.split_gesture_msg(gesture, at))
+                {
+                    return Some(msg);
+                }
                 self.surface_gesture(mouse)
             }
             _ => self.surface_gesture(mouse),

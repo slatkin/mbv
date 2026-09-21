@@ -313,6 +313,26 @@ fn split_drag_resolves_the_live_width_from_the_painted_gap() {
     let gap = panel.test_split_gap().expect("a wide split painted");
     assert!(gap.width > 0 && gap.height > 0);
 
+    // A press and release without motion leaves the split unchanged and
+    // emits no persistence request.
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            gap.x,
+            gap.y
+        )),
+        None
+    );
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Up(MouseButton::Left),
+            gap.x,
+            gap.y
+        )),
+        None,
+        "press-and-release without motion changes nothing"
+    );
+
     // Press inside the gap, drag right, release.
     assert_eq!(
         panel.on(&mouse_event(
@@ -320,8 +340,7 @@ fn split_drag_resolves_the_live_width_from_the_painted_gap() {
             gap.x,
             gap.y
         )),
-        None,
-        "press-and-release without motion changes nothing"
+        None
     );
     let msg = panel.on(&mouse_event(
         MouseEventKind::Drag(MouseButton::Left),
@@ -334,15 +353,48 @@ fn split_drag_resolves_the_live_width_from_the_painted_gap() {
         }
         other => panic!("the drag must resolve the live width: {other:?}"),
     }
-    // DragEnd is a live-only no-op.
-    assert_eq!(
-        panel.on(&mouse_event(
-            MouseEventKind::Up(MouseButton::Left),
-            gap.x + 6,
-            gap.y
-        )),
-        None
-    );
+    // A changed drag emits exactly one persistence request at release.
+    let end = panel.on(&mouse_event(
+        MouseEventKind::Up(MouseButton::Left),
+        gap.x + 6,
+        gap.y,
+    ));
+    assert!(matches!(
+        end,
+        Some(Msg::Shell(ShellRequest::ResizeListPaneEnd(width))) if width > 0
+    ));
+}
+
+#[test]
+fn split_drag_started_outside_the_gap_emits_no_resize_request() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log)));
+    let _ = draw_panel(&mut panel);
+    let list = panel.test_list_rect().expect("a wide list painted");
+    let x = list.x;
+    let y = list.y;
+
+    let _ = panel.on(&mouse_event(MouseEventKind::Down(MouseButton::Left), x, y));
+    let drag = panel.on(&mouse_event(
+        MouseEventKind::Drag(MouseButton::Left),
+        x.saturating_add(6),
+        y,
+    ));
+    let end = panel.on(&mouse_event(
+        MouseEventKind::Up(MouseButton::Left),
+        x.saturating_add(6),
+        y,
+    ));
+    assert!(!matches!(
+        drag,
+        Some(Msg::Shell(ShellRequest::ResizeListPaneLive(_)))
+    ));
+    assert!(!matches!(
+        end,
+        Some(Msg::Shell(ShellRequest::ResizeListPaneEnd(_)))
+    ));
 }
 
 /// Owner retention: dropping a key from the live set removes its owner;
