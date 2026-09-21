@@ -1,7 +1,7 @@
 ## 1. Drag-end message and shell persistence
 
-- [ ] 1.1 Add `ResizeListPaneEnd(u16)` to `ShellRequest` and emit it from `split_gesture_msg` on `DragEnd` only when the gesture changed the width; verify the existing click-without-motion and outside-gap cases still emit nothing via the panel focused-component tests.
-- [ ] 1.2 Handle `ResizeListPaneEnd` in `shell_messages.rs` (set `app.list_pane_width` through `normalize_list_pane_width`, then `save_prefs()`); verify with a unit test that Live sets memory without writing prefs and End writes prefs.
+- [x] 1.1 Add `ResizeListPaneEnd(u16)` to `ShellRequest` and emit it from `split_gesture_msg` on `DragEnd` only when the gesture changed the width; verify the existing click-without-motion and outside-gap cases still emit nothing via the panel focused-component tests.
+- [x] 1.2 Handle `ResizeListPaneEnd` in `shell_messages.rs` (set `app.list_pane_width` through `normalize_list_pane_width`, then `save_prefs()`); verify with a unit test that Live sets memory without writing prefs and End writes prefs.
 
 ## 2. Prefs save/load
 
