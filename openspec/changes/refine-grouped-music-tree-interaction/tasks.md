@@ -2,10 +2,10 @@
 
 ## 1. Artist-root Enter opens its Hero
 
-- [ ] 1.1 Make the Library panel's `hero_overlay_enter_available` report true for a Grouped Music artist root only while the tree filter is inactive, so non-Wide Enter reaches the overlay path without bypassing filtered interaction; verify with panel/owner tests for unfiltered artist eligibility, filtered artist ineligibility, and unchanged album-leaf behavior
-- [ ] 1.2 Replace the unfiltered `MusicContent` Enter-on-artist expansion arm with the Right chord's Hero entry (Wide takes `enter_artist_workspace_focus`; non-Wide emits `MusicArtistActivate`), while retaining the filter-local artist expansion arm; verify key tests that unfiltered Enter emits the artist Hero intent without changing expansion and filtered Enter toggles locally without opening/focusing a Hero in Wide or non-Wide
-- [ ] 1.3 Add real `Application::tick()` coverage for Enter on an unfiltered artist root in Wide (artist Workspace focused, expansion unchanged, layout geometry unchanged) and non-Wide (Library Hero overlay open with the artist Workspace focused), plus filtered Wide and non-Wide cases proving local expansion and no Hero entry; verify the tree tick integration tests pass
-- [ ] 1.4 Confirm Right on a collapsed root still expands and Right on an expanded root still enters the Workspace, and that Left collapse is unchanged; verify the existing tree navigation tests plus one tick test per chord
+- [x] 1.1 Make the Library panel's `hero_overlay_enter_available` report true for a Grouped Music artist root only while the tree filter is inactive, so non-Wide Enter reaches the overlay path without bypassing filtered interaction; verify with panel/owner tests for unfiltered artist eligibility, filtered artist ineligibility, and unchanged album-leaf behavior
+- [x] 1.2 Replace the unfiltered `MusicContent` Enter-on-artist expansion arm with the Right chord's Hero entry (Wide takes `enter_artist_workspace_focus`; non-Wide emits `MusicArtistActivate`), while retaining the filter-local artist expansion arm; verify key tests that unfiltered Enter emits the artist Hero intent without changing expansion and filtered Enter toggles locally without opening/focusing a Hero in Wide or non-Wide
+- [x] 1.3 Add real `Application::tick()` coverage for Enter on an unfiltered artist root in Wide (artist Workspace focused, expansion unchanged, layout geometry unchanged) and non-Wide (Library Hero overlay open with the artist Workspace focused), plus filtered Wide and non-Wide cases proving local expansion and no Hero entry; verify the tree tick integration tests pass
+- [x] 1.4 Confirm Right on a collapsed root still expands and Right on an expanded root still enters the Workspace, and that Left collapse is unchanged; verify the existing tree navigation tests plus one tick test per chord
 
 ## 2. Track rows carry their number
 
