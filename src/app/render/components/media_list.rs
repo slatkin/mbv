@@ -1125,8 +1125,9 @@ mod wide_row_regression_tests {
         year_item.production_year = 2001;
         let year_trailing = (!year_item.is_folder && year_item.production_year > 0)
             .then(|| MediaListTrailing::Gutter(year_item.production_year.to_string()));
-        let published_trailing =
-            Some(MediaListTrailing::Gutter(year_item.production_year.to_string()));
+        let published_trailing = Some(MediaListTrailing::Gutter(
+            year_item.production_year.to_string(),
+        ));
         list.set_content(vec![
             MediaListRow::Item {
                 target: "year".into(),

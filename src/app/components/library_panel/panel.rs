@@ -615,6 +615,14 @@ impl LibraryPanel {
         self.split_changed = false;
     }
 
+    /// Reset the split gesture only if the event is a press/release
+    /// boundary, so an abandoned drag can't outlive its owning gesture.
+    fn reset_boundary_gesture(&mut self, gesture_boundary: bool) {
+        if gesture_boundary {
+            self.reset_split_gesture();
+        }
+    }
+
     fn split_gesture_msg(
         &mut self,
         gesture: MouseGesture,
@@ -653,14 +661,8 @@ impl LibraryPanel {
                 self.split_changed = true;
                 Some(Msg::Shell(ShellRequest::ResizeListPaneLive(width)))
             }
-            MouseGesture::DragEnd if self.split_changed => {
-                self.split_changed = false;
-                Some(Msg::Shell(ShellRequest::ResizeListPaneEnd(split.width)))
-            }
-            MouseGesture::DragEnd => {
-                self.split_changed = false;
-                None
-            }
+            MouseGesture::DragEnd => std::mem::take(&mut self.split_changed)
+                .then_some(Msg::Shell(ShellRequest::ResizeListPaneEnd(split.width))),
             _ => None,
         }
     }
@@ -856,25 +858,19 @@ impl LibraryPanel {
         // The panel resolves only geometry it painted; an unpainted frame
         // (no migrated owner) claims nothing.
         let Some(painted_area) = self.painted_area else {
-            if gesture_boundary {
-                self.reset_split_gesture();
-            }
+            self.reset_boundary_gesture(gesture_boundary);
             return None;
         };
         let at = Position::new(mouse.column, mouse.row);
         if !painted_area.contains(at) {
-            if gesture_boundary {
-                self.reset_split_gesture();
-            }
+            self.reset_boundary_gesture(gesture_boundary);
             return None;
         }
         // The overlay owns the Library pane's current-frame gesture. A
         // backdrop click dismisses and is consumed; covered browser geometry
         // is never replayed into the list.
         if self.hero_overlay_open {
-            if gesture_boundary {
-                self.reset_split_gesture();
-            }
+            self.reset_boundary_gesture(gesture_boundary);
             if !matches!(mouse.kind, MouseEventKind::Moved)
                 && !self
                     .overlay_geometry
@@ -908,22 +904,10 @@ impl LibraryPanel {
             // A recognized `Drag` implies an armed press: whichever
             // recognizer armed it consumes the continuation, so the split
             // drag tracks outside the gap and pane gestures never see a
-            // gap-armed drag.
-            MouseEventKind::Drag(MouseButton::Left) => {
-                let gesture = self.split_gestures.recognize(mouse);
-                let unowned = gesture.is_none();
-                if let Some(msg) = gesture.and_then(|gesture| self.split_gesture_msg(gesture, at)) {
-                    return Some(msg);
-                }
-                if unowned {
-                    self.reset_split_gesture();
-                }
-                self.surface_gesture(mouse)
-            }
-            // Release closes whichever gesture armed; a changed gap gesture
-            // emits its one persistence request, while a click or pane gesture
-            // remains inert at this boundary.
-            MouseEventKind::Up(MouseButton::Left) => {
+            // gap-armed drag. Release closes whichever gesture armed; a
+            // changed gap gesture emits its one persistence request, while a
+            // click or pane gesture remains inert at this boundary.
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
                 let gesture = self.split_gestures.recognize(mouse);
                 let unowned = gesture.is_none();
                 if let Some(msg) = gesture.and_then(|gesture| self.split_gesture_msg(gesture, at)) {
