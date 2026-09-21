@@ -23,6 +23,6 @@
 
 ## 5. Integration and verification
 
-- [ ] 5.1 Add one real `Application::tick()` integration test proving an asynchronously delivered marked Home section paints through the mounted Library panel and selecting its pill removes the marker on the next tick without shell-side acknowledgement mirroring.
-- [ ] 5.2 Run `cargo fmt`, focused `cargo nextest run -p mbv-core` and `cargo nextest run -p mbv` filters for the changed modules, then full `cargo nextest run -p mbv-core` and `cargo nextest run -p mbv`; fix all failures without adding sleeps, live Services, or real user state.
-- [ ] 5.3 Run `cargo clippy --workspace --all-targets -- -D warnings`, `openspec validate mark-home-latest-since-last-launch --strict`, and review the final diff to confirm no primary-tab marker, Continue date, Home-only painter, visited-state shell mirror, exit-only launch-state write, new dependency, or daemon/ctrl protocol change was introduced.
+- [x] 5.1 Add one real `Application::tick()` integration test proving an asynchronously delivered marked Home section paints through the mounted Library panel and selecting its pill removes the marker on the next tick without shell-side acknowledgement mirroring.
+- [x] 5.2 Run `cargo fmt`, focused `cargo nextest run -p mbv-core` and `cargo nextest run -p mbv` filters for the changed modules, then full `cargo nextest run -p mbv-core` and `cargo nextest run -p mbv`; fix all failures without adding sleeps, live Services, or real user state.
+- [x] 5.3 Run `cargo clippy --workspace --all-targets -- -D warnings`, `openspec validate mark-home-latest-since-last-launch --strict`, and review the final diff to confirm no primary-tab marker, Continue date, Home-only painter, visited-state shell mirror, exit-only launch-state write, new dependency, or daemon/ctrl protocol change was introduced.
