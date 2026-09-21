@@ -13,8 +13,8 @@
 
 ## 3. Pill marker presentation
 
-- [ ] 3.1 Extend the shared Selector-pill content with an optional semantic marker and paint `•` in the Iris role through the existing pill painter, including marker width in overflow and hit geometry; update the narrowest existing pill buffer/geometry tests to prove marked and unmarked pills without adding a Home-only painter.
-- [ ] 3.2 Project markers only for unvisited, inactive Home Latest sources with qualifying content; keep Continue and every selected pill unmarked, then verify in a Home/Library-panel buffer test that the Iris `•` appears only on the expected unselected pill in both a fitting and overflowed Selector row.
+- [x] 3.1 Extend the shared Selector-pill content with an optional semantic marker and paint `•` in the Iris role through the existing pill painter, including marker width in overflow and hit geometry; update the narrowest existing pill buffer/geometry tests to prove marked and unmarked pills without adding a Home-only painter.
+- [x] 3.2 Project markers only for unvisited, inactive Home Latest sources with qualifying content; keep Continue and every selected pill unmarked, then verify in a Home/Library-panel buffer test that the Iris `•` appears only on the expected unselected pill in both a fitting and overflowed Selector row.
 
 ## 4. Latest-row date gutters
 
