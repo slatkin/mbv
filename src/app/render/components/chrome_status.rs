@@ -395,7 +395,7 @@ impl App {
         };
         let alive_color = if self.dim_backdrop_active {
             palette::TEXT_FOCUS_ACCENT
-        } else if self.is_local_daemon() {
+        } else if self.player.is_remote() {
             palette::STATUS_ERROR
         } else {
             palette::TEXT_MUTED

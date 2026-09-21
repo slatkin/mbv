@@ -2,7 +2,7 @@ use super::test_helpers::*;
 use super::*;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::PlaybackStripAreas;
-use crate::app::tests::make_app_stub;
+use crate::app::tests::{make_app_stub, make_items, make_local_daemon_app_stub, make_remote_app_stub};
 use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -60,21 +60,32 @@ fn emby_status_glyph_color_tracks_service_state() {
 }
 
 #[test]
-fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
-    fn color(daemon_lost: bool, on_local_daemon: bool) -> ratatui::style::Color {
-        if daemon_lost {
-            palette::TEXT_FOCUS_ACCENT
-        } else if on_local_daemon {
-            palette::STATUS_ERROR
-        } else {
-            palette::TEXT_MUTED
-        }
+fn stay_alive_glyph_is_red_whenever_a_daemon_owns_playback() {
+    // The heart reports playback ownership, not the endpoint kind: bare
+    // mode (in-process player) is grey, any daemon-owned player — managed
+    // local daemon or a TCP/Unix mbvd — is red. Daemon lost (yellow) wins
+    // over a still-remote player.
+    fn heart_color(app: &App) -> ratatui::style::Color {
+        app.status_bar_right_spans()
+            .iter()
+            .find(|span| span.content == "\u{2665}" || span.content == "\u{f004}")
+            .expect("status bar right segment must paint the heart glyph")
+            .style
+            .fg
+            .expect("heart glyph must carry an explicit colour")
     }
-    assert_eq!(color(false, false), palette::TEXT_MUTED); // not in stay-alive mode
-    assert_eq!(color(false, true), palette::STATUS_ERROR); // local daemon active
-                                                           // Daemon lost (yellow) wins over a still-pointed local target.
-    assert_eq!(color(true, true), palette::TEXT_FOCUS_ACCENT);
-    assert_eq!(color(true, false), palette::TEXT_FOCUS_ACCENT);
+    assert_eq!(heart_color(&make_app_stub()), palette::TEXT_MUTED);
+    assert_eq!(
+        heart_color(&make_local_daemon_app_stub(make_items(1))),
+        palette::STATUS_ERROR
+    );
+    assert_eq!(
+        heart_color(&make_remote_app_stub(make_items(1), make_items(1))),
+        palette::STATUS_ERROR
+    );
+    let mut lost = make_local_daemon_app_stub(make_items(1));
+    lost.dim_backdrop_active = true;
+    assert_eq!(heart_color(&lost), palette::TEXT_FOCUS_ACCENT);
 }
 
 #[test]
