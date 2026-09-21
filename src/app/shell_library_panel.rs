@@ -63,27 +63,11 @@ impl Model {
                     .and_then(|panel| panel.launch_snapshot(key))
             })
             .unwrap_or((None, None));
-        // Keep a stale Service selection as a Service-family identity rather
-        // than silently clobbering the completed exit snapshot to Home. There
-        // is no stable library ID once the live catalog entry is gone, so
-        // startup will resolve this bounded marker against that Service's
-        // current catalog and then apply the normal fallback.
-        let tab = key.as_ref().map_or_else(
-            || match self.app.tab {
-                TabSelection::Feeds => mbv_core::config::TabIdentity::Feeds,
-                TabSelection::EmbyLibrary(_) => {
-                    mbv_core::config::TabIdentity::ServiceLibraryUnavailable {
-                        kind: ServiceKind::Emby,
-                    }
-                }
-                TabSelection::AudiobookshelfLibrary(_) => {
-                    mbv_core::config::TabIdentity::ServiceLibraryUnavailable {
-                        kind: ServiceKind::Audiobookshelf,
-                    }
-                }
-                TabSelection::Home => mbv_core::config::TabIdentity::Home,
-            },
-            |key| key.tab_identity(),
+        // A stale Service index has no stable library identity; represent it
+        // as Home so startup follows the ordered first-guaranteed-tab fallback.
+        let tab = key.as_ref().map_or(
+            mbv_core::config::TabIdentity::Home,
+            LibraryKey::tab_identity,
         );
         mbv_core::config::TuiLaunchState {
             version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,

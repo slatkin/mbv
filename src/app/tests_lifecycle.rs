@@ -53,8 +53,9 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
 }
 
 #[test]
-fn pending_launch_tab_missing_from_catalog_falls_back_to_home() {
+fn pending_launch_tab_missing_stable_service_id_falls_back_to_home_even_with_catalog_entry() {
     let mut app = crate::app::render::make_movie_app();
+    assert_eq!(app.libs.len(), 1, "the current catalog must have a service destination");
     app.pending_launch_tab = Some(mbv_core::config::TabIdentity::ServiceLibrary {
         kind: ServiceKind::Emby,
         library_id: "gone".into(),
@@ -174,7 +175,7 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
 }
 
 #[test]
-fn orderly_teardown_preserves_stale_service_tab_family_without_active_destination() {
+fn orderly_teardown_falls_back_to_home_for_stale_service_tab_without_active_destination() {
     let mut model = Model::new(make_app_stub());
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Queue;
@@ -182,12 +183,7 @@ fn orderly_teardown_preserves_stale_service_tab_family_without_active_destinatio
     model.teardown(Duration::from_secs(1));
 
     let state = mbv_core::config::load_tui_launch_state().expect("launch snapshot after teardown");
-    assert_eq!(
-        state.tab,
-        mbv_core::config::TabIdentity::ServiceLibraryUnavailable {
-            kind: ServiceKind::Emby,
-        }
-    );
+    assert_eq!(state.tab, mbv_core::config::TabIdentity::Home);
     assert_eq!(state.panel_focus, mbv_core::config::LaunchPanelFocus::Queue);
     assert_eq!(state.selector, None);
     assert_eq!(state.item, None);

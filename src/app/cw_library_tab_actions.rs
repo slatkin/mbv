@@ -42,7 +42,6 @@ impl App {
             TabIdentity::ServiceLibrary { kind, library_id } => {
                 self.resolve_service_tab(kind, &library_id)
             }
-            TabIdentity::ServiceLibraryUnavailable { kind } => self.resolve_first_service_tab(kind),
         };
         if let Some(tab) = resolved {
             self.tab = tab;
@@ -75,31 +74,6 @@ impl App {
                         .map(TabSelection::AudiobookshelfLibrary)
                         .unwrap_or(TabSelection::Home),
                 )
-            }
-        }
-    }
-
-    fn resolve_first_service_tab(&self, kind: ServiceKind) -> Option<TabSelection> {
-        match kind {
-            ServiceKind::Emby => {
-                if !self.emby_catalog_ready {
-                    None
-                } else {
-                    self.libs
-                        .is_empty()
-                        .then_some(TabSelection::Home)
-                        .or(Some(TabSelection::EmbyLibrary(0)))
-                }
-            }
-            ServiceKind::Audiobookshelf => {
-                if !self.audiobookshelf_catalog_ready {
-                    None
-                } else {
-                    self.audiobookshelf_libraries
-                        .is_empty()
-                        .then_some(TabSelection::Home)
-                        .or(Some(TabSelection::AudiobookshelfLibrary(0)))
-                }
             }
         }
     }
