@@ -7,7 +7,7 @@
 
 ## 2. Selected-destination snapshot extraction
 
-- [ ] 2.1 Add the bounded read-only launch-state query to the Library destination/content-owner boundary and implement stable main-Selector and item identities for Home plus generic Emby/TV/Music destinations; extend the narrowest existing component tests to prove current identities and absence when no pill/item exists, then run the matching `cargo nextest run -p mbv` test filters.
+- [x] 2.1 Add the bounded read-only launch-state query to the Library destination/content-owner boundary and implement stable main-Selector and item identities for Home plus generic Emby/TV/Music destinations; extend the narrowest existing component tests to prove current identities and absence when no pill/item exists, then run the matching `cargo nextest run -p mbv` test filters.
 - [ ] 2.2 Implement the same bounded query for Feeds, Audiobookshelf podcast, and Audiobookshelf book destinations, using Feed/show/book identities rather than labels or row indices; extend the narrowest existing component tests for filter/group/show/bucket and selected-item extraction, then run the matching `cargo nextest run -p mbv` test filters.
 - [ ] 2.3 Assemble exactly the selected tab's destination snapshot during orderly teardown, include Panel focus, exclude Queue selection and every unselected destination, and verify with an App/shell teardown test that reads the saved file without constructing live externals.
 
