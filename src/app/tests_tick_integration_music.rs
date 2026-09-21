@@ -577,7 +577,3 @@ mod landing;
 #[path = "tests_tick_integration_music_artist.rs"]
 mod artist;
 
-#[cfg(test)]
-#[path = "tests_tick_integration_music_page.rs"]
-mod page;
-

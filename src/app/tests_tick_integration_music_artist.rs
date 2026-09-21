@@ -567,7 +567,7 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
         other => panic!("expected the neighbour request, got {other:?}"),
     };
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets, page: None }),
+        Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets }),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -578,9 +578,9 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
     );
     assert!(harness.model().app.card_image_loading.is_empty());
 
-    // An artist-root focus suppresses the artwork window but still ships the
-    // painted-edge page hint: scrolling while a root is focused must keep
-    // advancing source pagination (design D3).
+    // An artist-root focus suppresses the artwork window entirely, so the
+    // tree posts no post-paint payload at all (source pagination for this
+    // album level is unconditional and no longer rides this message).
     harness
         .model_mut()
         .test_music_owner_mut()
@@ -588,11 +588,8 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
         .select_first_visible();
     harness.model_mut().sync_mounted_surfaces();
     draw_music_frame(&mut harness);
-    match music_panel_mut(&mut harness).take_deferred_msg() {
-        Some(Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets, page })) => {
-            assert!(targets.is_empty(), "an artist-root focus ships no artwork window");
-            assert!(page.is_some(), "the painted edge still arms source pagination");
-        }
-        other => panic!("expected the post-paint payload, got {other:?}"),
-    }
+    assert!(
+        music_panel_mut(&mut harness).take_deferred_msg().is_none(),
+        "an artist-root focus ships no post-paint payload"
+    );
 }

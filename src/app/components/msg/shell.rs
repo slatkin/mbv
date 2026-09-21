@@ -72,17 +72,13 @@ pub enum ShellRequest {
     MusicArtistActivate {
         target: super::intents::MusicArtistTarget,
     },
-    /// The Grouped Music tree's post-paint payloads (task 6.5, design D4;
-    /// design D3 pagination): `targets` is the ordered neighbour album-artwork
-    /// window — up to one visible leaf behind and three ahead of the selected
-    /// leaf; the shell applies the existing idle gate and fetches them.
-    /// `page` is the painted viewport's deepest album target plus the viewport
-    /// height in rows — the source-pagination hint the shell arms the next
-    /// artist page from, so scrolling alone advances pagination and one fetch
-    /// always fills the visible list.
+    /// The Grouped Music tree's post-paint neighbour album-artwork window
+    /// (task 6.5, design D4): up to one visible leaf behind and three ahead
+    /// of the selected leaf; the shell applies the existing idle gate and
+    /// fetches them. Source pagination for this album level is unconditional
+    /// (it loads the folder to completion) and no longer rides this payload.
     MusicNeighbourPrefetch {
         targets: Vec<String>,
-        page: Option<(String, usize)>,
     },
     /// Activate the focused inline album track (Enter, or Ctrl+P while a
     /// track is focused): carries the owner-resolved album and track

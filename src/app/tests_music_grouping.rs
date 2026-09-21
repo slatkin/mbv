@@ -208,18 +208,18 @@ fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
 }
 
 #[test]
-fn focused_artist_arms_next_page_from_child_proximity_without_expansion() {
+fn focused_artist_arms_next_page_regardless_of_child_proximity() {
+    // The grouped album level paginates to completion unconditionally
+    // (client-side artist grouping needs the whole folder, and tree scroll
+    // position doesn't correspond to flat-array position once artists
+    // collapse/expand), so even a target near the top of the loaded items
+    // arms the next page.
     let mut app = make_music_app(make_items(30));
     let level = app.libs[0].nav_stack.last_mut().unwrap();
     level.fetched_rows = 30;
     level.total_count = 100;
 
     app.maybe_fetch_next_page_for_music_artist(0, &["id4".into()]);
-    assert!(!app.libs[0].nav_stack.last().unwrap().loading);
-
-    // The artist root remains collapsed: its last loaded album is still the
-    // stable target that arms the ordinary source-page prefetch threshold.
-    app.maybe_fetch_next_page_for_music_artist(0, &["id29".into()]);
     assert!(app.libs[0].nav_stack.last().unwrap().loading);
 }
 

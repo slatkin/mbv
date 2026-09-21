@@ -257,32 +257,6 @@ impl App {
         self.maybe_fetch_next_page_sized(lib_idx, cursor, PREFETCH_AHEAD, PAGE_SIZE);
     }
 
-    /// The Grouped Music tree's painted-edge source pagination (design D3).
-    /// The hint carries the deepest painted album target and the tree's
-    /// viewport height in rows; the near-edge margin and page size floor at
-    /// that height, so the loaded edge arms before it can scroll into view
-    /// and one fetch always fills the visible list however tall the tree is.
-    pub(in crate::app) fn maybe_fetch_next_page_for_music_tree(
-        &mut self,
-        lib_idx: usize,
-        (target, viewport_rows): &(String, usize),
-    ) {
-        let Some(cursor) = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.last())
-            .and_then(|level| level.items.iter().position(|item| item.id == *target))
-        else {
-            return;
-        };
-        self.maybe_fetch_next_page_sized(
-            lib_idx,
-            cursor,
-            PREFETCH_AHEAD + viewport_rows,
-            PAGE_SIZE.max(*viewport_rows),
-        );
-    }
-
     /// `maybe_fetch_next_page` with caller-chosen near-edge margin and page
     /// size. `cursor` is the resolved position to threshold against (the
     /// caller's live/resting cursor) — never re-read from the level, so the
@@ -315,7 +289,15 @@ impl App {
         // cursor on that hidden level. Paginate it to completion unconditionally.
         let is_feed_home_video_root =
             lib.nav_stack.len() == 1 && self.is_feed_home_video_library(lib_idx);
-        if !is_feed_home_video_root && cursor + ahead < lvl.items.len() {
+        // The Grouped Music album level groups its flat items by artist
+        // client-side and the tree's local inline-search filter only ever
+        // searches what's loaded (never re-fetches on its own), so this level
+        // paginates to completion unconditionally too, exactly like the feed
+        // home-video root above -- there's no cursor-proximity heuristic that
+        // stays correct once artists collapse/expand independently of the
+        // underlying flat array position.
+        let paginate_to_completion = is_feed_home_video_root || self.is_music_group_view(lib_idx);
+        if !paginate_to_completion && cursor + ahead < lvl.items.len() {
             return;
         }
         let start_index = lvl.fetched_rows;

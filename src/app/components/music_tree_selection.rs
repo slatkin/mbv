@@ -371,28 +371,6 @@ impl MusicTreeBrowser {
         (!targets.is_empty()).then_some(targets)
     }
 
-    /// The painted viewport's deepest album target with the viewport height
-    /// in rows — the source-pagination hint the shell arms the next artist
-    /// page from (design D3). Derived from the **latest completed paint**, so
-    /// scrolling the viewport alone advances pagination exactly like a
-    /// selection move; the near-edge margin and page size are the shell's
-    /// decision, floored at this height so one fetch always fills the visible
-    /// list. `None` when no paint completed or no album leaf is visible.
-    pub(in crate::app) fn painted_edge_album_page(&self) -> Option<(String, usize)> {
-        if !self.paint_complete {
-            return None;
-        }
-        let nodes = self.state.projection().nodes();
-        let start = self.state.offset();
-        let height = self.last_area?.height as usize;
-        let end = start.saturating_add(height).min(nodes.len());
-        nodes[start..end]
-            .iter()
-            .rev()
-            .find_map(|node| self.model.target_of(node.id()).map(str::to_owned))
-            .map(|target| (target, height.max(1)))
-    }
-
     /// Invalidates the retained paint geometry: until the next view completes
     /// the owner claims no point (the canonical latest-render contract).
     pub(in crate::app) fn invalidate(&mut self) {
