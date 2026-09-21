@@ -195,7 +195,7 @@ fn name_role(
         TreeMarkState::Unmarked => {
             let ordinary = match level {
                 1 => palette::TEXT_FOCUS_ACCENT,
-                _ => palette::ACCENT,
+                _ => palette::MUSIC_TRACK_FG,
             };
             model
                 .semantic_state_of(id)

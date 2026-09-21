@@ -103,6 +103,9 @@ pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title
 /// Grouped Music's artist and section-header text, matching the standard
 /// emphasis colour used by queue and movie list headers.
 pub const MUSIC_HEADER: Color = Palette::Cream.color();
+/// Grouped Music tree's track (third-level) row text. Its own role rather
+/// than the shared `ACCENT`, so a focus-accent edit cannot move the tracks.
+pub const MUSIC_TRACK_FG: Color = Palette::Mauve.color();
 pub const TEXT_ON_ACCENT: Color = Palette::Grey1.color(); // near-black text painted on a colored surface
 pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playing"/confirmed value text;
                                                               // deliberately not the focused surface's
@@ -169,7 +172,7 @@ pub const SPLIT_ROW_TITLE_FG: Color = Palette::Grey2.color(); // light grey (#9e
 
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = Palette::Orange.color();
-pub const INDICATOR_AUDIO_FG: Color = Palette::Purple.color();
+pub const INDICATOR_AUDIO_FG: Color = Palette::Mauve.color();
 
 // Playback panel
 pub const PLAYBACK_VALUE_FG: Color = Palette::Iris.color(); // title/codec value

@@ -812,7 +812,7 @@ fn music_tree_depth_roles_use_ordinary_level_colours() {
     let buf = term.backend().buffer();
     assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER);
     assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
-    assert_eq!(buf[(3, 2)].fg, palette::ACCENT);
+    assert_eq!(buf[(3, 2)].fg, palette::MUSIC_TRACK_FG);
 }
 
 /// The pinned year-gutter contract (design D8), painted through the crate's
