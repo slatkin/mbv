@@ -14,7 +14,7 @@
 ## 3. Hierarchical startup restoration
 
 - [x] 3.1 Load one pending launch intent at startup, resolve stable tab identity after the live catalog arrives, and cancel or consume that level on explicit user tab movement; verify existing-tab restoration and missing-tab fallback to the first guaranteed tab through the existing startup/catalog test seam.
-- [ ] 3.2 Add explicit discrete re-anchor operations for each destination's main Selector and selected library item, resolving pill before item and consuming pending state so later refreshes cannot replay it; verify existing identities, missing-pill first-pill fallback, missing-item first-selectable fallback, no-pill scope, and empty-list selection with focused component tests.
+- [x] 3.2 Add explicit discrete re-anchor operations for each destination's main Selector and selected library item, resolving pill before item and consuming pending state so later refreshes cannot replay it; verify existing identities, missing-pill first-pill fallback, missing-item first-selectable fallback, no-pill scope, and empty-list selection with focused component tests.
 - [ ] 3.3 Restore Library/Queue Panel focus after the selected destination is ready without passing a Queue target; add one real `Application::tick()` integration test proving Queue receives focus while its selected item follows normal Queue initialization, then run that test filter.
 
 ## 4. Exit-only lifecycle and legacy migration
