@@ -9,9 +9,9 @@
 
 ## 2. Track rows carry their number
 
-- [ ] 2.1 Extract the Workspace track-row label (`"{number}. {title}"` with index fallback) into one shared helper and reuse it from `build_track_rows`/`track_row`; verify the track-row tests still pass
-- [ ] 2.2 Build the tree's `MusicTreeTrack` projection from that helper so track items show numbered titles; verify a `music_content`/tree test asserting a numbered track label and an index fallback for a track with no index number
-- [ ] 2.3 Verify the track-number label is what the tree paints (not just what the model holds) at the Wide and smallest non-Wide tree fixtures; verify the tree render characterization tests
+- [x] 2.1 Extract the Workspace track-row label (`"{number}. {title}"` with index fallback) into one shared helper and reuse it from `build_track_rows`/`track_row`; verify the track-row tests still pass
+- [x] 2.2 Build the tree's `MusicTreeTrack` projection from that helper so track items show numbered titles; verify a `music_content`/tree test asserting a numbered track label and an index fallback for a track with no index number
+- [x] 2.3 Verify the track-number label is what the tree paints (not just what the model holds) at the Wide and smallest non-Wide tree fixtures; verify the tree render characterization tests
 
 ## 3. Artist-Workspace playback spans the discography
 
