@@ -8,8 +8,8 @@
 
 ## 2. Typed Home sections and acknowledgement
 
-- [ ] 2.1 Replace Home's Latest tuples with the narrowest typed section snapshot carrying title, stable `HomeLatestSource`, items, and the launch-relative new-content fact; update Emby, Audiobookshelf, and Feed merge paths and verify the existing canonical provider-order and independent-arrival Home tests still pass with source-keyed replacement.
-- [ ] 2.2 Add component-owned visited Latest-source state: selecting a section acknowledges it before paint, an already selected section is acknowledged when async content arrives, and later merge/refresh cannot restore its marker; verify these transitions in focused `HomeContent` component tests using stable source identities rather than section indices.
+- [x] 2.1 Replace Home's Latest tuples with the narrowest typed section snapshot carrying title, stable `HomeLatestSource`, items, and the launch-relative new-content fact; update Emby, Audiobookshelf, and Feed merge paths and verify the existing canonical provider-order and independent-arrival Home tests still pass with source-keyed replacement.
+- [x] 2.2 Add component-owned visited Latest-source state: selecting a section acknowledges it before paint, an already selected section is acknowledged when async content arrives, and later merge/refresh cannot restore its marker; verify these transitions in focused `HomeContent` component tests using stable source identities rather than section indices.
 
 ## 3. Pill marker presentation
 
