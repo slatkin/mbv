@@ -159,6 +159,7 @@ impl MusicContent {
                         .map(|(index, track)| MusicTreeTrack {
                             target: track.id.clone(),
                             title: track_row_label(track, index),
+                            search_title: track.name.clone(),
                         })
                         .collect(),
                 )

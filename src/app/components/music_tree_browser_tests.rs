@@ -302,10 +302,12 @@ fn filter_matches_each_level_on_its_own_text_and_hides_everything_below_it() {
             MusicTreeTrack {
                 target: "track-1".into(),
                 title: "Track One".into(),
+                search_title: "Track One".into(),
             },
             MusicTreeTrack {
                 target: "track-2".into(),
-                title: "Devil Track".into(),
+                title: "2. Devil Track".into(),
+                search_title: "Devil Track".into(),
             },
         ],
     );
@@ -342,8 +344,12 @@ fn filter_matches_each_level_on_its_own_text_and_hides_everything_below_it() {
     browser.apply_filter_query("Devil Track");
     assert_eq!(
         visible(&browser),
-        ["Devil Band", "Devil Soup", "Devil Track"]
+        ["Devil Band", "Devil Soup", "2. Devil Track"]
     );
+
+    // The painted number is not part of the track's searchable title.
+    browser.apply_filter_query("2.");
+    assert!(visible(&browser).is_empty());
 
     browser.apply_filter_query("Track One");
     assert_eq!(visible(&browser), ["Devil Band", "Devil Soup", "Track One"]);
@@ -474,6 +480,7 @@ fn matching_album_hides_cached_track_children_in_the_filtered_projection() {
         vec![MusicTreeTrack {
             target: "track-1".into(),
             title: "Track".into(),
+            search_title: "Track".into(),
         }],
     );
     model.reconcile_with_tracks(&entries, &tracks);
@@ -528,10 +535,12 @@ fn cached_tracks_project_as_ordered_depth_two_children() {
             MusicTreeTrack {
                 target: "track-1".into(),
                 title: "Track One".into(),
+                search_title: "Track One".into(),
             },
             MusicTreeTrack {
                 target: "track-2".into(),
                 title: "Track Two".into(),
+                search_title: "Track Two".into(),
             },
         ],
     )]));

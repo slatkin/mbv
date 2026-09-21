@@ -17,13 +17,15 @@ pub(in crate::app) struct MusicTreeEntry {
     pub(in crate::app) semantic_state: MediaSemanticState,
 }
 
-/// A cached track projected below an album leaf. The browser only needs the
-/// stable Workspace target and label; the owning Music component retains the
-/// full `EmbyItem` to resolve activation through the existing playback arm.
+/// A cached track projected below an album leaf. The browser needs the
+/// stable Workspace target, painted label, and searchable title; the owning
+/// Music component retains the full `EmbyItem` to resolve activation through
+/// the existing playback arm.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::app) struct MusicTreeTrack {
     pub(in crate::app) target: String,
     pub(in crate::app) title: String,
+    pub(in crate::app) search_title: String,
 }
 
 enum MusicNode {
@@ -43,6 +45,7 @@ enum MusicNode {
         album_target: String,
         target: String,
         title: String,
+        search_title: String,
     },
 }
 
@@ -212,9 +215,15 @@ impl MusicTreeModel {
             track: track.target.clone(),
         };
         if let Some(id) = self.intern.get(&node_key).copied() {
-            if let Some(MusicNode::Track { title, .. }) = self.nodes.get_mut(id) {
-                if title != &track.title {
+            if let Some(MusicNode::Track {
+                title,
+                search_title,
+                ..
+            }) = self.nodes.get_mut(id)
+            {
+                if title != &track.title || search_title != &track.search_title {
                     *title = track.title.clone();
+                    *search_title = track.search_title.clone();
                     *display_changed = true;
                 }
             }
@@ -225,6 +234,7 @@ impl MusicTreeModel {
             album_target: album_target.to_string(),
             target: track.target.clone(),
             title: track.title.clone(),
+            search_title: track.search_title.clone(),
         });
         self.intern.insert(node_key, id);
         id
@@ -372,8 +382,9 @@ impl MusicTreeModel {
 
     /// The node's own searchable text for the inline filter. Every level
     /// matches on its own identity alone — an artist root on its name, an
-    /// album leaf on its title and year, a cached track on its title — so a
-    /// match never drags a sibling or a deeper row in: an album no longer
+    /// album leaf on its title and year, a cached track on its searchable
+    /// title — so a match never drags a sibling or a deeper row in: an album
+    /// no longer
     /// matches through its artist's name, and a track no longer matches
     /// through its album's.
     pub(in crate::app) fn search_text_of(&self, id: usize) -> Option<String> {
@@ -382,7 +393,7 @@ impl MusicTreeModel {
             Some(MusicNode::Album { title, year, .. }) => {
                 Some(format!("{} {}", title, year.as_deref().unwrap_or_default()))
             }
-            Some(MusicNode::Track { title, .. }) => Some(title.clone()),
+            Some(MusicNode::Track { search_title, .. }) => Some(search_title.clone()),
             None => None,
         }
     }

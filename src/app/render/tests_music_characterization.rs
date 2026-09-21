@@ -17,7 +17,7 @@ use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
 use crate::app::components::media_list::{
     queue_row_background, queue_row_zebra, MediaSemanticState,
 };
-use crate::app::components::music_content::track_row_label;
+use crate::app::components::music_content::MusicContent;
 use crate::app::components::music_tree::{
     MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack,
 };
@@ -47,7 +47,7 @@ fn mounted_music_narrow_geometry(model: &Model) -> WideSkeletonGeometry {
 
 #[rstest]
 #[case::wide(160, 40)]
-#[case::smallest_non_wide(crate::app::TWO_COLUMN_THRESHOLD - 1, 30)]
+#[case::narrow_grouped_music(60, 30)]
 fn numbered_tree_track_labels_are_painted_at_fixture_widths(
     #[case] width: u16,
     #[case] height: u16,
@@ -59,40 +59,39 @@ fn numbered_tree_track_labels_are_painted_at_fixture_widths(
     fallback.id = "track-fallback".into();
     fallback.index_number = 0;
 
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::new());
-    browser.set_track_items(HashMap::from([(
-        "album".to_string(),
-        vec![
-            MusicTreeTrack {
-                target: indexed.id.clone(),
-                title: track_row_label(&indexed, 0),
-            },
-            MusicTreeTrack {
-                target: fallback.id.clone(),
-                title: track_row_label(&fallback, 1),
-            },
-        ],
-    )]));
-    browser.reconcile(&[MusicTreeEntry {
-        artist: "Artist".into(),
-        artist_key: ArtistKey::Fallback("Artist".into()),
-        title: "Album".into(),
-        year: None,
-        target: "album".into(),
-        semantic_state: MediaSemanticState::Ordinary,
-    }]);
-    browser.expand_root(0);
-    let album_id = browser
+    // Feed raw cached tracks through MusicContent::set_content, which is the
+    // same projection path the shell uses. The assertion therefore fails if
+    // set_content stops applying the shared numbered-row label.
+    let mut album = crate::app::tests::make_item("Album", "MusicAlbum");
+    album.id = "album".into();
+    album.artist = "Artist".into();
+    album.is_folder = true;
+    let mut owner = MusicContent::new();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![album.clone()], 0),
+        Some(album),
+        String::new(),
+        Vec::new(),
+        0,
+        vec![("Artist".into(), String::new(), "Album".into())],
+        vec![ArtistKey::Fallback("Artist".into())],
+        vec![0],
+        Some(vec![indexed, fallback]),
+    ));
+    owner.browser.expand_root(0);
+    let album_id = owner
+        .browser
         .projected_nodes()
         .iter()
-        .find(|node| browser.title_of(node.id()) == "Album")
+        .find(|node| owner.browser.title_of(node.id()) == "Album")
         .expect("album leaf")
         .id();
-    browser.expand_node(album_id);
-    let indexed_id = browser
+    owner.browser.expand_node(album_id);
+    let indexed_id = owner
+        .browser
         .projected_nodes()
         .iter()
-        .find(|node| browser.title_of(node.id()) == "7. Indexed Track")
+        .find(|node| owner.browser.title_of(node.id()) == "7. Indexed Track")
         .expect("indexed track")
         .id();
 
@@ -103,25 +102,26 @@ fn numbered_tree_track_labels_are_painted_at_fixture_widths(
     } else {
         mounted_music_narrow_geometry(&model).list_area
     };
-    let term = music_tree_frame(&mut browser, list_area, width, height);
-    let indexed_row = music_tree_projection_row_of(&browser, indexed_id);
+    let term = music_tree_frame(&mut owner.browser, list_area, width, height);
+    let indexed_row = music_tree_projection_row_of(&owner.browser, indexed_id);
     let row = music_tree_row_text(
         &term,
-        music_tree_row_y(&browser, list_area, indexed_row),
+        music_tree_row_y(&owner.browser, list_area, indexed_row),
         list_area.x,
         list_area.right(),
     );
     assert!(row.contains("7. Indexed Track"), "painted row: {row:?}");
     assert!(
-        browser
+        owner
+            .browser
             .projected_nodes()
             .iter()
             .any(|node| music_tree_row_text(
                 &term,
                 music_tree_row_y(
-                    &browser,
+                    &owner.browser,
                     list_area,
-                    music_tree_projection_row_of(&browser, node.id()),
+                    music_tree_projection_row_of(&owner.browser, node.id()),
                 ),
                 list_area.x,
                 list_area.right(),
@@ -901,6 +901,7 @@ fn music_tree_depth_roles_use_ordinary_level_colours() {
         vec![MusicTreeTrack {
             target: "depth-track".into(),
             title: "Depth Track".into(),
+            search_title: "Depth Track".into(),
         }],
     )]));
     browser.reconcile(&entries);
