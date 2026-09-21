@@ -44,7 +44,7 @@
 
 ## 7. Verification
 
-- [ ] 7.1 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`; verify both are clean
-- [ ] 7.2 Run `cargo nextest run -p mbv -p mbv-core` and compare against the pre-change baseline; verify no regressions
-- [ ] 7.3 Run `openspec validate --all` and sync the applied deltas into `openspec/specs/` when the change completes; verify validation is clean
+- [x] 7.1 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`; verify both are clean
+- [x] 7.2 Run `cargo nextest run -p mbv -p mbv-core` and compare against the pre-change baseline; verify no regressions
+- [x] 7.3 Run `openspec validate --all` and sync the applied deltas into `openspec/specs/` when the change completes; verify validation is clean
 - [ ] 7.4 Manual PoC check at Wide, non-Wide, Mini, and Library Hero overlay states covering Enter's artist Hero and tree-track playback/autoload/confirmation behavior, numbered track rows, discography playback, click focus, double-click expand/play, and Go to Library
