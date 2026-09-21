@@ -18,8 +18,8 @@
 
 ## 4. Latest-row date gutters
 
-- [ ] 4.1 Project `fmt_publish_date_short` through `MediaListTrailing::Gutter` for valid timestamps in the active Home Latest section while leaving Continue and undated Latest rows without trailing metadata; extend the focused Home row-projection test to cover Emby, Audiobookshelf, Feed, Continue, and invalid-date behavior.
-- [ ] 4.2 Verify through the existing canonical media-list painter coverage that Home's projected `17 Sep`/`7 Sep` values right-align in the fixed green gutter in Wide and non-Wide Library-panel presentations; reuse existing gutter assertions rather than adding a second date painter or whole-frame snapshot.
+- [x] 4.1 Project `fmt_publish_date_short` through `MediaListTrailing::Gutter` for valid timestamps in the active Home Latest section while leaving Continue and undated Latest rows without trailing metadata; extend the focused Home row-projection test to cover Emby, Audiobookshelf, Feed, Continue, and invalid-date behavior.
+- [x] 4.2 Verify through the existing canonical media-list painter coverage that Home's projected `17 Sep`/`7 Sep` values right-align in the fixed green gutter in Wide and non-Wide Library-panel presentations; reuse existing gutter assertions rather than adding a second date painter or whole-frame snapshot.
 
 ## 5. Integration and verification
 
