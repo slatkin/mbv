@@ -155,8 +155,9 @@ impl Palette {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{surface_colors, surface_table, Surface};
     use super::*;
-    use std::collections::HashSet;
+    use std::collections::{BTreeMap, HashSet};
 
     /// Embedded so the drift guard has no cwd/filesystem dependence.
     const PALETTE_JSON: &str = include_str!("../../../../docs/palette.json");
@@ -244,8 +245,170 @@ mod tests {
         Some(rgb)
     }
 
+    /// Every role const in `theme/mod.rs` as `(name, variant name)`, in
+    /// declaration order. The retired test-only names (`#[cfg(test)]`-gated:
+    /// `SURFACE_PLAYBACK`, `SURFACE_ACCENT_SOFT`,
+    /// `SURFACE_ARTWORK_PLACEHOLDER`) are skipped: they are reachable only
+    /// because frozen tests pin them, so they are not production roles and do
+    /// not belong in the docs.
+    ///
+    /// Parsed from the source rather than listed here so the guard needs no
+    /// second inventory to keep in sync: a new role const is checked the
+    /// moment it is written.
+    fn code_roles() -> Vec<(String, String)> {
+        let mut roles = Vec::new();
+        let mut cfg_test = false;
+        for line in include_str!("mod.rs").lines() {
+            let line = line.trim();
+            if line.starts_with("#[cfg(test)]") {
+                cfg_test = true;
+            } else if line.starts_with("#[") {
+                continue;
+            } else {
+                if let Some(rest) = line.strip_prefix("pub const ") {
+                    if let Some((name, value)) = rest.split_once(": Color = Palette::") {
+                        if !cfg_test {
+                            let variant = value.split('.').next().unwrap_or_default();
+                            roles.push((name.to_string(), variant.to_string()));
+                        }
+                    }
+                }
+                cfg_test = false;
+            }
+        }
+        roles
+    }
+
+    /// The `#rrggbb` form `docs/palette.json` spells a colour with. The one
+    /// non-`Rgb` value a surface row can carry is the popup dim backdrop's
+    /// `Color::Black` blend base, which the docs record as `#000000` (it is
+    /// not a palette colour, which is why the variant drift guard skips the
+    /// `surfaces` subtree).
+    fn hex(color: Color) -> String {
+        match color {
+            Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
+            Color::Black => "#000000".to_string(),
+            other => panic!("surface/role colour is not an Rgb colour: {other:?}"),
+        }
+    }
+
+    fn json_field(value: &serde_json::Value, field: &str) -> String {
+        value[field]
+            .as_str()
+            .unwrap_or_else(|| panic!("palette.json entry {value} has no string `{field}`"))
+            .to_string()
+    }
+
+    /// Each variant's `(hex, rgb)` in the docs' spelling, keyed by name.
+    fn variant_fields() -> BTreeMap<String, (String, [u8; 3])> {
+        ALL.into_iter()
+            .map(|variant| {
+                let Color::Rgb(r, g, b) = variant.color() else {
+                    panic!("palette variant {:?} is not an Rgb colour", variant.name());
+                };
+                (variant.name().to_string(), (variant.hex(), [r, g, b]))
+            })
+            .collect()
+    }
+
+    /// The `uses` prose of every entry in one docs array, keyed by name.
+    fn prose_by_name(json: &serde_json::Value, array: &str) -> BTreeMap<String, String> {
+        json[array]
+            .as_array()
+            .unwrap_or_else(|| panic!("docs/palette.json {array} must be an array"))
+            .iter()
+            .map(|entry| (json_field(entry, "name"), json_field(entry, "uses")))
+            .collect()
+    }
+
+    /// Drift guard: `docs/palette.json`'s `roles` array must list exactly the
+    /// production role consts, each naming its own variant and that variant's
+    /// hex. The prose (`uses`) stays hand-written; the mechanical fields are
+    /// pinned here.
+    #[test]
+    fn docs_palette_json_lists_every_role_with_its_variant_and_hex() {
+        if updating() {
+            return;
+        }
+        let json: serde_json::Value =
+            serde_json::from_str(PALETTE_JSON).expect("docs/palette.json must be valid JSON");
+        let variant_hexes = variant_fields();
+        let expected: BTreeMap<String, (String, String)> = code_roles()
+            .into_iter()
+            .map(|(name, variant)| {
+                let (hex, _) = variant_hexes
+                    .get(&variant)
+                    .unwrap_or_else(|| panic!("role {name} names unknown variant {variant}"));
+                (name, (variant, hex.clone()))
+            })
+            .collect();
+        let actual: BTreeMap<String, (String, String)> = json["roles"]
+            .as_array()
+            .expect("docs/palette.json roles must be an array")
+            .iter()
+            .map(|role| {
+                let name = json_field(role, "name");
+                let variant = json_field(role, "variant");
+                let hex = json_field(role, "hex");
+                (name, (variant, hex))
+            })
+            .collect();
+        assert_eq!(
+            actual, expected,
+            "docs/palette.json roles drifted from the role consts in theme/mod.rs"
+        );
+    }
+
+    /// Drift guard: `docs/palette.json`'s `surfaces` array must list exactly
+    /// the closed `Surface` set, each with the level and the focused/resting
+    /// fills the resolver actually paints (the `soft` flag too, when set).
+    #[test]
+    fn docs_palette_json_lists_every_surface_row() {
+        if updating() {
+            return;
+        }
+        let json: serde_json::Value =
+            serde_json::from_str(PALETTE_JSON).expect("docs/palette.json must be valid JSON");
+        let expected: BTreeMap<String, (String, String, String, bool)> = Surface::ALL
+            .iter()
+            .map(|&surface| {
+                let row = surface_table::row(surface);
+                (
+                    format!("{surface:?}"),
+                    (
+                        format!("{:?}", row.level),
+                        hex(surface_colors(surface, true).fill),
+                        hex(surface_colors(surface, false).fill),
+                        row.soft,
+                    ),
+                )
+            })
+            .collect();
+        let actual: BTreeMap<String, (String, String, String, bool)> = json["surfaces"]
+            .as_array()
+            .expect("docs/palette.json surfaces must be an array")
+            .iter()
+            .map(|surface| {
+                let name = json_field(surface, "name");
+                (
+                    name,
+                    (
+                        json_field(surface, "level"),
+                        json_field(surface, "focused"),
+                        json_field(surface, "resting"),
+                        surface["soft"].as_bool().unwrap_or(false),
+                    ),
+                )
+            })
+            .collect();
+        assert_eq!(
+            actual, expected,
+            "docs/palette.json surfaces drifted from the surface table"
+        );
+    }
+
     /// Drift guard: the distinct colour values in `docs/palette.json` must
-    /// be exactly the palette's 19 `hex()` values. The `surfaces` and
+    /// be exactly the palette's 20 `hex()` values. The `surfaces` and
     /// `specials` subtrees are deliberately excluded — `surfaces` contains
     /// the `PopupDimBackdrop` `#000000` dim blend base, which is not a
     /// palette colour, and `specials` names raw `Color::` mechanics
@@ -270,5 +433,110 @@ mod tests {
             palette_hexes, json_hexes,
             "docs/palette.json colours drifted from the Palette enum"
         );
+    }
+
+    /// `true` while the update mode below is rewriting the docs. The guards
+    /// step aside then: the embedded copy they read is the one being replaced,
+    /// so a rewrite would otherwise fail its own run.
+    fn updating() -> bool {
+        std::env::var_os("PALETTE_JSON_UPDATE").is_some()
+    }
+
+    /// `PALETTE_JSON_UPDATE=1 cargo nextest run -p mbv palette_json` rewrites
+    /// `docs/palette.json`'s mechanical fields from this tree: every variant
+    /// row, every role's `hex`/`rgb`/`variant`, and every surface's
+    /// `level`/`focused`/`resting`/`soft`. The hand-written `uses` prose is
+    /// carried over by name, and the two arrays keep the file's own order
+    /// (roles in const order, surfaces alphabetically).
+    ///
+    /// Entries this tree has and the file does not are added with empty prose
+    /// and named on stderr; entries the file has and this tree does not are
+    /// dropped and named too. The prose is the human's half — the two guards
+    /// above stay the proof, this test only writes.
+    #[test]
+    fn palette_json_regenerates_the_mechanical_fields_when_asked() {
+        if !updating() {
+            return;
+        }
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/docs/palette.json");
+        let mut json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("read docs/palette.json"))
+                .expect("docs/palette.json must be valid JSON");
+        let fields = variant_fields();
+
+        json["variants"] = serde_json::Value::Array(
+            ALL.into_iter()
+                .map(|variant| {
+                    let (hex, rgb) = &fields[variant.name()];
+                    serde_json::json!({"hex": hex, "name": variant.name(), "rgb": rgb})
+                })
+                .collect(),
+        );
+
+        let mut role_prose = prose_by_name(&json, "roles");
+        json["roles"] = serde_json::Value::Array(
+            code_roles()
+                .into_iter()
+                .map(|(name, variant)| {
+                    let (hex, rgb) = &fields[variant.as_str()];
+                    let uses = role_prose.remove(&name).unwrap_or_else(|| {
+                        eprintln!("palette.json: new role {name} — fill in its `uses` prose");
+                        String::new()
+                    });
+                    serde_json::json!({
+                        "hex": hex, "name": name, "rgb": rgb, "uses": uses, "variant": variant
+                    })
+                })
+                .collect(),
+        );
+        for orphan in role_prose.keys() {
+            eprintln!("palette.json: role {orphan} is no longer a const — dropped");
+        }
+
+        let mut surface_prose = prose_by_name(&json, "surfaces");
+        let mut surfaces: Vec<serde_json::Value> = Surface::ALL
+            .iter()
+            .map(|&surface| {
+                let row = surface_table::row(surface);
+                let name = format!("{surface:?}");
+                let uses = surface_prose.remove(&name).unwrap_or_else(|| {
+                    eprintln!("palette.json: new surface {name} — fill in its `uses` prose");
+                    String::new()
+                });
+                // Built field by field so `soft` lands in the file's
+                // alphabetical key order rather than at the end.
+                let mut entry = serde_json::Map::new();
+                entry.insert(
+                    "focused".into(),
+                    serde_json::json!(hex(surface_colors(surface, true).fill)),
+                );
+                entry.insert(
+                    "level".into(),
+                    serde_json::json!(format!("{:?}", row.level)),
+                );
+                entry.insert("name".into(), serde_json::json!(name));
+                entry.insert(
+                    "resting".into(),
+                    serde_json::json!(hex(surface_colors(surface, false).fill)),
+                );
+                if row.soft {
+                    entry.insert("soft".into(), serde_json::Value::Bool(true));
+                }
+                entry.insert("uses".into(), serde_json::json!(uses));
+                serde_json::Value::Object(entry)
+            })
+            .collect();
+        for orphan in surface_prose.keys() {
+            eprintln!("palette.json: surface {orphan} is no longer a row — dropped");
+        }
+        surfaces.sort_by_key(|surface| json_field(surface, "name"));
+        json["surfaces"] = serde_json::Value::Array(surfaces);
+
+        std::fs::write(
+            path,
+            serde_json::to_string(&json).expect("serialize docs/palette.json"),
+        )
+        .expect("write docs/palette.json");
+        eprintln!("docs/palette.json regenerated from the theme");
     }
 }
