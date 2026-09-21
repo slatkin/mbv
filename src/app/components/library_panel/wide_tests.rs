@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use crate::app::components::inline_search::{InlineSearch, SearchPool};
 use crate::app::components::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, PanelList, SelectorRow, Workspace,
+    WorkspaceHeader,
 };
 use crate::app::render::arrangements::library::wide_library_panes;
 use ratatui::backend::TestBackend;
@@ -588,7 +589,7 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
-                header: Some("Tracks"),
+                header: Some(WorkspaceHeader::Tracklist),
                 selector: None,
                 list: &mut workspace_list,
                 focused: false,
@@ -609,12 +610,12 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
         .map(|x| buf[(x, content_y)].symbol())
         .collect();
     assert!(
-        title_row.starts_with("Tracks"),
+        title_row.starts_with(WorkspaceHeader::Tracklist.label()),
         "header row reads {title_row:?}"
     );
     assert_eq!(
         buf[(content_x, content_y)].style().fg,
-        Some(palette::TEXT_METADATA)
+        Some(palette::MUSIC_HEADER)
     );
     assert_eq!(buf[(content_x, content_y)].bg, fill);
 
@@ -654,7 +655,7 @@ fn music_workspace_header_uses_its_role_without_bold_modifier() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
-                header: Some("TRACKLIST"),
+                header: Some(WorkspaceHeader::Tracklist),
                 selector: None,
                 list: &mut workspace_list,
                 focused: false,

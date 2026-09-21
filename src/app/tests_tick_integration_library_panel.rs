@@ -18,6 +18,7 @@ use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKi
 
 use crate::app::components::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
+    WorkspaceHeader,
 };
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use crate::app::components::library_panel::{
@@ -125,7 +126,7 @@ impl LibraryContentOwner for FixtureOwner {
                 overview: None,
                 credits: None,
                 workspace: self.workspace.then_some(Workspace {
-                    header: Some("Tracks"),
+                    header: Some(WorkspaceHeader::Tracklist),
                     selector: None,
                     list: &mut self.workspace_carrier,
                     focused: self.workspace_focused,

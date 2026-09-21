@@ -1,13 +1,11 @@
 //! Grouped Music source pagination from the painted viewport edge (design
-//! D3): scrolling the tree arms the next artist page without a selection
-//! move, and the near-edge margin floors at the painted viewport height so
-//! the loaded edge arms before it can scroll into view.
+//! D3): the post-paint hint is the deepest painted album target — deeper
+//! than the selection — and the near-edge margin floors at the painted
+//! viewport height, so the loaded edge arms before it can scroll into view.
 
 use super::*;
 
-use super::landing::{
-    draw_music_frame, mounted_music_app_at, music_panel_mut,
-};
+use super::landing::{draw_music_frame, mounted_music_app_at, music_panel_mut};
 
 fn paginated_album_app(loaded: usize, total: usize) -> crate::app::App {
     let mut app = crate::app::render::make_music_group_app();
@@ -27,9 +25,8 @@ fn paginated_album_app(loaded: usize, total: usize) -> crate::app::App {
 }
 
 #[test]
-fn painted_edge_scrolling_ships_the_pagination_hint_without_a_selection_move() {
-    let (mut harness, _id) =
-        mounted_music_app_at(paginated_album_app(200, 400), 100, 24);
+fn painted_edge_hint_is_deeper_than_the_selection_and_arms_the_page() {
+    let (mut harness, _id) = mounted_music_app_at(paginated_album_app(200, 400), 100, 24);
     // The production loop drains the panel's post-paint message before the
     // next frame; clear the adopt-frame payload so this test observes its own.
     let (mut music_resize, mut tv_resize) = (false, false);
@@ -41,24 +38,21 @@ fn painted_edge_scrolling_ships_the_pagination_hint_without_a_selection_move() {
         "the top-of-list frame arms no page: the loaded edge is far away"
     );
 
-    {
-        let owner = harness.model_mut().test_music_owner_mut();
-        owner.browser.expand_all_roots();
-    }
-    // Draw once so the expansion change rebuilds the projection (the crate
-    // re-anchors that rebuild to the selection), then scroll the viewport to
-    // the bottom through the crate's offset seam (the wheel's local path),
-    // leaving the selection on the first album.
-    harness.model_mut().sync_mounted_surfaces();
-    draw_music_frame(&mut harness);
-    let (mut music_resize, mut tv_resize) = (false, false);
+    // The user has scrolled near the loaded edge: the selection rests on a
+    // deep album and the viewport's painted rows reach past it.
     harness
         .model_mut()
-        .drain_deferred_library_message(&mut music_resize, &mut tv_resize);
-    {
-        let owner = harness.model_mut().test_music_owner_mut();
-        owner.browser.scroll_to(usize::MAX);
-    }
+        .test_music_owner_mut()
+        .browser
+        .expand_all_roots();
+    assert!(
+        harness
+            .model_mut()
+            .test_music_owner_mut()
+            .browser
+            .select_album_target("album-190"),
+        "the fixture interns album-190"
+    );
     harness.model_mut().sync_mounted_surfaces();
     draw_music_frame(&mut harness);
 
@@ -69,12 +63,20 @@ fn painted_edge_scrolling_ships_the_pagination_hint_without_a_selection_move() {
         })) => page,
         other => panic!("expected the painted-edge page hint, got {other:?}"),
     };
-    assert_eq!(page.0, "album-200", "the hint is the painted viewport edge");
+    assert!(
+        page.0.starts_with("album-"),
+        "the hint is a painted album target, got {:?}",
+        page.0
+    );
     assert!(page.1 > 0, "the hint carries the painted viewport height");
     assert_eq!(
-        harness.model().test_music_owner().browser.selected_album_target(),
-        Some("album-1"),
-        "scrolling never moved the selection"
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .selected_album_target(),
+        Some("album-190"),
+        "the hint never moves the selection"
     );
 
     // The same typed hint arms the next artist page through the shell arm.

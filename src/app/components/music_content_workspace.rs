@@ -555,7 +555,7 @@ impl MusicContent {
                 overview: data.overview,
                 credits: data.credits,
                 workspace: Some(Workspace {
-                    header: Some("TRACKLIST"),
+                    header: Some(WorkspaceHeader::Tracklist),
                     selector: None,
                     list: &mut self.track_list,
                     focused: focused && track_focused,

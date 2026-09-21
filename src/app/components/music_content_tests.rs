@@ -157,7 +157,10 @@ fn content_exposes_tracks_as_the_workspace() {
         .as_ref()
         .and_then(|hero| hero.workspace.as_ref())
         .and_then(|workspace| workspace.header);
-    assert_eq!(header, Some("TRACKLIST"));
+    assert_eq!(
+        header,
+        Some(crate::app::components::library_panel::content::WorkspaceHeader::Tracklist)
+    );
     assert_eq!(owner.track_list.rows().len(), 1);
 }
 

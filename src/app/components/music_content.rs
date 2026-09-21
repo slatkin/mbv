@@ -13,7 +13,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroImageState, LibraryPanelContent,
-    ListSlot, SelectorRow, Workspace,
+    ListSlot, SelectorRow, Workspace, WorkspaceHeader,
 };
 use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};

@@ -213,10 +213,11 @@ pub(in crate::app) enum ListSlot<'a> {
 /// selector row over one list. A hero with a Workspace is focusable;
 /// `focused` selects the focused surfaces (design D6).
 pub(in crate::app) struct Workspace<'a> {
-    /// One-row box title, painted in the foam metadata role with the Hero
-    /// separator line and one blank row below it, before the list (Grouped
-    /// Music's `Tracks`). Omitted when the box has no room for a list row.
-    pub header: Option<&'static str>,
+    /// One-row box title with the Hero separator line and one blank row
+    /// below it, before the list. Omitted when the box has no room for a
+    /// list row; the painter resolves the style from the semantic arm, never
+    /// from the label text.
+    pub header: Option<WorkspaceHeader>,
     pub selector: Option<SelectorRow>,
     pub list: &'a mut dyn PanelList,
     pub focused: bool,
@@ -346,4 +347,22 @@ pub(in crate::app) struct PanelHeroImagePaint {
     pub cache_key: String,
     /// `true` for a centered artwork box; `false` for right-aligned placement.
     pub centered: bool,
+}
+
+/// The closed set of typed Workspace header rows. The Hero painter resolves
+/// each arm's style here as a semantic role — never by matching the label
+/// text.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(in crate::app) enum WorkspaceHeader {
+    /// Grouped Music's track listing under an album Hero.
+    Tracklist,
+}
+
+impl WorkspaceHeader {
+    /// The row's painted label.
+    pub(in crate::app) fn label(self) -> &'static str {
+        match self {
+            Self::Tracklist => "TRACKLIST",
+        }
+    }
 }
