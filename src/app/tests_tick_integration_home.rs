@@ -10,7 +10,9 @@ use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::palette;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
+use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
 use crate::app::{PanelFocus, PanelMode, TabSelection};
+use mbv_core::playback_queue::QueueItem;
 
 fn home_harness(width: u16, height: u16, count: usize) -> TickHarness {
     let mut app = make_app_stub();
@@ -131,6 +133,147 @@ fn tick_frame_is_nonempty_in_library_only_mode() {
 #[test]
 fn tick_frame_is_nonempty_in_mini_view() {
     assert_tick_frame_nonempty(PanelMode::QueueOnly, 60);
+}
+
+/// Section content can arrive after the Home owner is mounted. The marker is
+/// projected by the owner through the Library panel, and visiting it remains a
+/// component-local acknowledgement when the shell pushes the same snapshot
+/// again (the shell snapshot deliberately stays marked).
+#[test]
+fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut harness = home_harness(160, 30, 0);
+    let _ = draw(&mut harness, 160, 30);
+
+    let marked_source = HomeLatestSource::Emby("marked-library".into());
+    let mut item = make_item("New movie", "Movie");
+    item.id = "new-movie".into();
+    harness.model_mut().home_content.latest = vec![HomeLatestSection {
+        title: "Latest Movies".into(),
+        source: marked_source.clone(),
+        items: vec![QueueItem::Emby(Box::new(item))],
+        has_new_content: true,
+    }];
+    // This is the shell's content-push seam used by asynchronous provider
+    // delivery; the following Application::tick drives the mounted tree.
+    harness.model_mut().push_home_content();
+    harness.inject(key(Key::Char('x')));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+
+    let painted = draw(&mut harness, 160, 30);
+    let marked_region = {
+        let panel = harness
+            .model()
+            .application
+            .get_component(&ComponentId::Library)
+            .expect("Library panel mounted")
+            .as_any()
+            .downcast_ref::<LibraryPanel>()
+            .expect("Library panel type");
+        panel
+            .test_selector_hits()
+            .regions()
+            .iter()
+            .find(|(_, id)| *id == 1)
+            .map(|(rect, _)| *rect)
+            .expect("marked Latest pill painted")
+    };
+    let marker_x = (marked_region.left()..marked_region.right())
+        .find(|&x| painted.backend().buffer()[(x, marked_region.y)].symbol() == "•")
+        .expect("Latest pill marker painted");
+    assert_eq!(
+        painted.backend().buffer()[(marker_x, marked_region.y)].fg,
+        palette::ACCENT_ACTIVE,
+        "the marker uses the semantic Iris role"
+    );
+    assert!(
+        harness.model().home_content.latest[0].has_new_content,
+        "the shell snapshot remains marked; acknowledgement is not mirrored"
+    );
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: marked_region.x + 1,
+        row: marked_region.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.messages.contains(&Msg::Shell(ShellRequest::HomePillClick {
+        target: 1,
+    })));
+    handle_tick_messages(&mut harness, outcome.messages);
+
+    let after_visit = draw(&mut harness, 160, 30);
+    let visited_region = {
+        let panel = harness
+            .model()
+            .application
+            .get_component(&ComponentId::Library)
+            .expect("Library panel mounted")
+            .as_any()
+            .downcast_ref::<LibraryPanel>()
+            .expect("Library panel type");
+        panel
+            .test_selector_hits()
+            .regions()
+            .iter()
+            .find(|(_, id)| *id == 1)
+            .map(|(rect, _)| *rect)
+            .expect("visited Latest pill painted")
+    };
+    assert!((visited_region.left()..visited_region.right()).all(|x| {
+        after_visit.backend().buffer()[(x, visited_region.y)].symbol() != "•"
+    }));
+
+    // Reorder the asynchronously refreshed sections. The selected source is
+    // now unselected, so this proves the visit survived without a shell-side
+    // marker-clearing field or an index-based acknowledgement.
+    let other_source = HomeLatestSource::Audiobookshelf("other-library".into());
+    harness.model_mut().home_content.latest = vec![
+        HomeLatestSection {
+            title: "Other Latest".into(),
+            source: other_source,
+            items: Vec::new(),
+            has_new_content: true,
+        },
+        HomeLatestSection {
+            title: "Latest Movies".into(),
+            source: marked_source,
+            items: Vec::new(),
+            has_new_content: true,
+        },
+    ];
+    harness.model_mut().push_home_content();
+    harness.inject(key(Key::Char('x')));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    let refreshed = draw(&mut harness, 160, 30);
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type");
+    let refreshed_regions = panel.test_selector_hits().regions();
+    let other_region = refreshed_regions
+        .iter()
+        .find(|(_, id)| *id == 1)
+        .map(|(rect, _)| *rect)
+        .expect("other Latest pill painted");
+    let visited_region = refreshed_regions
+        .iter()
+        .find(|(_, id)| *id == 2)
+        .map(|(rect, _)| *rect)
+        .expect("reordered visited Latest pill painted");
+    assert!((other_region.left()..other_region.right()).any(|x| {
+        refreshed.backend().buffer()[(x, other_region.y)].symbol() == "•"
+    }));
+    assert!((visited_region.left()..visited_region.right()).all(|x| {
+        refreshed.backend().buffer()[(x, visited_region.y)].symbol() != "•"
+    }));
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {
