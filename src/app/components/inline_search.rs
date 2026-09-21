@@ -119,7 +119,7 @@ fn search_result_row(item: &mbv_core::api::EmbyItem) -> MediaListRow<String> {
         primary: search_row_label(item),
         secondary: None,
         trailing: (!item.is_folder && item.production_year > 0)
-            .then(|| MediaListTrailing::Year(item.production_year.to_string())),
+            .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
         duration: None,
         kind: if item.is_folder {
             MediaKind::Collection

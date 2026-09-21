@@ -96,9 +96,9 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
 
         // Pad the name slot to its budget, then paint the album year once in
         // the right-aligned fixed six-column gutter at the row's right edge in
-        // the `ROW_DATE_FG` role, followed by its two-column trailing
-        // gap. A yearless row appends nothing, so its title keeps the full
-        // width (the pinned gutter contract).
+        // the green status role, followed by its two-column trailing gap. A
+        // yearless row appends nothing, so its title keeps the full width (the
+        // pinned gutter contract).
         let painted: usize = line.spans[composed..]
             .iter()
             .map(|span| span.content.width())
@@ -113,7 +113,7 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
                     trunc_str(year, YEAR_GUTTER_WIDTH as usize),
                     width = YEAR_GUTTER_WIDTH as usize
                 ),
-                Style::default().fg(palette::ROW_DATE_FG),
+                Style::default().fg(palette::STATUS_AVAILABLE),
             ));
             line.spans
                 .push(Span::raw(" ".repeat(YEAR_GUTTER_TRAILING_SPACE)));

@@ -197,7 +197,7 @@ impl TvContent {
                     primary: item.display_name(),
                     secondary: None,
                     trailing: (item.production_year > 0)
-                        .then(|| MediaListTrailing::Year(item.production_year.to_string())),
+                        .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
                     duration: None,
                     kind: MediaKind::Collection,
                     // The one canonical state derivation; the series rail no

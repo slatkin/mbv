@@ -204,7 +204,7 @@ impl PodcastContent {
                             .published_at
                             .map(fmt_publish_date_short)
                             .filter(|date| !date.is_empty())
-                            .map(MediaListTrailing::Published),
+                            .map(MediaListTrailing::Gutter),
                         // Library lists carry no time column (only the Queue
                         // list and the sessions modal show one).
                         duration: None,
@@ -972,7 +972,7 @@ mod tests {
                 assert_eq!(duration, None, "library episode rows carry no time");
                 assert_eq!(
                     trailing,
-                    Some(MediaListTrailing::Published("30 Jan".into())),
+                    Some(MediaListTrailing::Gutter("30 Jan".into())),
                     "the row carries its publish date for the right-hand gutter"
                 );
                 assert_eq!(semantic_state, MediaSemanticState::Played);

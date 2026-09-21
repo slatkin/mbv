@@ -816,7 +816,7 @@ fn music_tree_depth_roles_use_ordinary_level_colours() {
 }
 
 /// The pinned year-gutter contract (design D8), painted through the crate's
-/// label/column seams: one right-aligned fixed six-column `ROW_DATE_FG`
+/// label/column seams: one right-aligned fixed six-column green status
 /// cell on a year-bearing album row followed by a two-column trailing gap,
 /// reserved nowhere on the artist root or the yearless leaf (their titles
 /// reach the last column), and no inline or second year column. The state
@@ -873,7 +873,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER, "root title role");
 
     // Year-bearing leaf: the title stops before the gutter, and the year
-    // right-aligns in the fixed six-column `ROW_DATE_FG` cell before
+    // right-aligns in the fixed six-column green status cell before
     // its two-column trailing gap.
     let yeared_row = &rows[1];
     assert!(
@@ -907,8 +907,8 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     );
     assert_eq!(
         buf[(gutter as u16 + 4, 1)].fg,
-        palette::ROW_DATE_FG,
-        "the year paints in the ROW_DATE_FG role"
+        palette::STATUS_AVAILABLE,
+        "the year paints in the green status role"
     );
 
     // Yearless leaf: no gutter is reserved, so its long title reaches the
