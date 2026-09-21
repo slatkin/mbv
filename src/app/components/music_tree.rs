@@ -17,9 +17,6 @@
 //! reconciliation, plus the album-selection persistence guard. `MusicContent`
 //! drives that owner as the Grouped Music browser.
 
-// Some tree accessors are still reached only by tests; the allowance lapses
-// once every Grouped Music integration path uses them.
-#![cfg_attr(not(test), allow(dead_code))]
 //!
 //! Layout arithmetic the view relies on (mirroring the crate's
 //! `resolve_layout` for this configuration, asserted by the tree render tests):
@@ -166,6 +163,7 @@ impl MusicTreeModel {
 
     /// A model over one settled entry set, for callers that do not keep an
     /// incremental owner.
+    #[cfg(test)]
     pub(in crate::app) fn from_entries(entries: &[MusicTreeEntry]) -> Self {
         let mut model = Self::new();
         model.reconcile(entries);
@@ -178,6 +176,7 @@ impl MusicTreeModel {
     /// when the settled content actually changed. Settled entries sharing
     /// one `ArtistKey` form one artist root, with roots in first-occurrence
     /// order and leaves in settled order.
+    #[cfg(test)]
     pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) {
         self.reconcile_with_tracks(entries, &HashMap::new());
     }
@@ -251,6 +250,7 @@ impl MusicTreeModel {
     /// Clears the arena for a new destination identity (design D2): the
     /// intern space restarts, so no stale mapping survives a destination
     /// change.
+    #[cfg(test)]
     pub(in crate::app) fn reset(&mut self) {
         self.nodes.clear();
         self.intern.clear();
@@ -1038,27 +1038,25 @@ impl MusicTreeBrowser {
     /// Expands an artist or cached-track album node without changing
     /// selection. Track children are loaded from the existing projection;
     /// this operation never starts a fetch.
-    pub(in crate::app) fn expand_node(&mut self, id: usize) {
-        let parent = self
-            .state
+    /// The projected parent of a node, from the cached projection.
+    fn projected_parent_of(&self, id: usize) -> Option<usize> {
+        self.state
             .projection()
             .nodes()
             .iter()
             .find(|node| node.id() == id)
-            .and_then(|node| node.parent());
+            .and_then(|node| node.parent())
+    }
+
+    pub(in crate::app) fn expand_node(&mut self, id: usize) {
+        let parent = self.projected_parent_of(id);
         self.state.set_expanded(id, parent, true);
         self.state.ensure_projection(&self.model, &self.query);
         self.invalidate();
     }
 
     pub(in crate::app) fn node_is_expanded(&self, id: usize) -> bool {
-        let parent = self
-            .state
-            .projection()
-            .nodes()
-            .iter()
-            .find(|node| node.id() == id)
-            .and_then(|node| node.parent());
+        let parent = self.projected_parent_of(id);
         self.state.node_is_expanded(id, parent)
     }
 
@@ -1148,6 +1146,11 @@ impl MusicTreeBrowser {
         selected
     }
 
+    /// Whether an album target is in the retained mark order.
+    fn is_marked(&self, target: &str) -> bool {
+        self.selection_order.iter().any(|item| item == target)
+    }
+
     pub(in crate::app) fn select_index(&mut self, index: usize) {
         self.state.select_index(Some(index));
     }
@@ -1222,7 +1225,6 @@ impl MusicTreeBrowser {
     /// filter owner. `None` disables filtering; `Some(&[])` is an active
     /// no-match filter. Task 5.1 can feed fuzzy-matched node ids here after
     /// its debounce while this task's action walk already respects them.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn set_filter_matches(&mut self, matching: Option<&[usize]>) {
         {
             let filter = self.query.filter_mut();
@@ -1269,7 +1271,7 @@ impl MusicTreeBrowser {
         let Some(target) = self.model.target_of(id).map(str::to_owned) else {
             return false;
         };
-        let was_marked = self.selection_order.iter().any(|item| item == &target);
+        let was_marked = self.is_marked(&target);
         if was_marked == marked {
             return false;
         }
@@ -1288,7 +1290,7 @@ impl MusicTreeBrowser {
     /// identities.
     pub(in crate::app) fn toggle_mark(&mut self, id: usize) -> bool {
         if let Some(target) = self.model.target_of(id).map(str::to_owned) {
-            let marked = self.selection_order.iter().any(|item| item == &target);
+            let marked = self.is_marked(&target);
             return self.set_marked(id, !marked);
         }
         if !self.model.is_artist(id) {
@@ -1301,7 +1303,7 @@ impl MusicTreeBrowser {
         let all_marked = descendants.iter().all(|child| {
             self.model
                 .target_of(*child)
-                .is_some_and(|target| self.selection_order.iter().any(|item| item == target))
+                .is_some_and(|target| self.is_marked(target))
         });
         let mut changed = false;
         for child in descendants {
@@ -1345,11 +1347,14 @@ impl MusicTreeBrowser {
             .copied()
             .filter(|id| self.album_is_visible(*id))
             .filter_map(|id| self.model.target_of(id))
-            .filter(|target| self.selection_order.iter().any(|item| item == target))
+            .filter(|target| self.is_marked(target))
             .map(str::to_owned)
             .collect()
     }
 
+    /// The node's derived mark state (the tree render tests locate rows by
+    /// aggregate state rather than hard-coded colours).
+    #[cfg(test)]
     pub(in crate::app) fn mark_state(&self, id: usize) -> TreeMarkState {
         computed_mark_state(
             &self.model,
@@ -1434,11 +1439,7 @@ impl MusicTreeBrowser {
         let Some(id) = self.model.node_id(&MusicNodeKey::Album(target.to_string())) else {
             return false;
         };
-        let selected = self.state.select_by_id(&self.model, &self.query, id);
-        if selected {
-            self.invalidate();
-        }
-        selected
+        self.select_id(id)
     }
 
     /// The current visible projection's album targets: `Some(target)` per album
@@ -1651,10 +1652,12 @@ impl MusicTreeBrowser {
             .flatten()
     }
 
+    #[cfg(test)]
     pub(in crate::app) fn projection_len(&self) -> usize {
         self.state.visible_len()
     }
 
+    #[cfg(test)]
     pub(in crate::app) fn projected_nodes(&self) -> &[ProjectedNode<usize>] {
         self.state.projection().nodes()
     }
