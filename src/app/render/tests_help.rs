@@ -86,7 +86,9 @@ fn help_destination_queue_focus_returns_queue() {
 /// default chords and a label.
 #[test]
 fn playback_rows_render_the_registry_defaults() {
-    let rows = playback_help_rows(16, &Keybinds::default());
+    let keybinds = Keybinds::default();
+    let key_w = key_width(&keybinds);
+    let rows = playback_help_rows(&keybinds);
     // One row per declared Playback action, no header, in registry order.
     let declared: Vec<&str> = KEYBIND_ACTIONS
         .iter()
@@ -104,10 +106,10 @@ fn playback_rows_render_the_registry_defaults() {
             .map(|chord| chord.to_string())
             .collect::<Vec<_>>()
             .join(" / ");
-        let key_column = row[..16].trim();
+        let key_column = key_column(row, key_w);
         assert_eq!(key_column, expected_keys, "row for `{}`", action.id);
         assert!(
-            !row[16..].trim().is_empty(),
+            !label_column(row, key_w).trim().is_empty(),
             "row for `{}` must carry a label",
             action.id
         );
@@ -131,34 +133,41 @@ fn playback_rows_follow_an_override() {
             },
         )],
     };
-    let rows = playback_help_rows(16, &keybinds);
+    let key_w = key_width(&keybinds);
+    let rows = playback_help_rows(&keybinds);
     let toggle_row = rows
         .iter()
-        .find(|row| row[..16].trim() == "k")
+        .find(|row| key_column(row, key_w) == "k")
         .expect("rebound toggle_play_pause renders its configured chord");
     assert!(
-        toggle_row[16..].contains("Pause/Resume"),
+        label_column(toggle_row, key_w).contains("Pause/Resume"),
         "the rebound row keeps the action's label: {toggle_row:?}"
     );
     assert!(
-        !rows.iter().any(|row| row[..16].trim() == "Space"),
+        !rows.iter().any(|row| key_column(row, key_w) == "Space"),
         "the declared default Space must disappear from the rendered section"
     );
 }
 
 // ── Task 7.4: the Global section and the prefix list render from the registry ──
 
+/// The chord column's width for these bindings: the painter's own rule, so a
+/// rebind cannot desynchronise the test from the rendered padding.
+fn key_width(keybinds: &Keybinds) -> usize {
+    super::components::help::help_key_width(keybinds)
+}
+
 /// The row's key column. Sub-headers inside a section (e.g. the prefix
 /// block's `Prefix` line) are shorter than the padded key width, so the
 /// slice is guarded.
-fn key_column(row: &str) -> &str {
-    let end = row.len().min(16);
+fn key_column(row: &str, key_w: usize) -> &str {
+    let end = row.len().min(key_w);
     row[..end].trim()
 }
 
-fn label_column(row: &str) -> &str {
-    if row.len() > 16 {
-        &row[16..]
+fn label_column(row: &str, key_w: usize) -> &str {
+    if row.len() > key_w {
+        &row[key_w..]
     } else {
         ""
     }
@@ -168,7 +177,9 @@ fn label_column(row: &str) -> &str {
 /// default chords: the registry is the only chord source.
 #[test]
 fn global_rows_render_the_registry_defaults() {
-    let rows = global_help_rows(16, &Keybinds::default());
+    let keybinds = Keybinds::default();
+    let key_w = key_width(&keybinds);
+    let rows = global_help_rows(&keybinds);
     for (chord, label) in [
         ("F1", "Help"),
         ("F2", "Settings"),
@@ -180,21 +191,21 @@ fn global_rows_render_the_registry_defaults() {
         ("1 – 9", "Jump to tab"),
         ("c", "Clear Queue"),
         ("q", "Quit"),
-        ("Left / Right", "Switch panels"),
+        ("Ctrl+Left / Ctrl+Right", "Switch panels"),
     ] {
         let row = rows
             .iter()
-            .find(|row| key_column(row) == chord)
+            .find(|row| key_column(row, key_w) == chord)
             .unwrap_or_else(|| panic!("no Global row for chord {chord:?} in {rows:?}"));
         assert!(
-            label_column(row).contains(label),
+            label_column(row, key_w).contains(label),
             "row for {chord:?} must carry the {label:?} label: {row:?}"
         );
     }
     // No prefix block without a configured prefix.
     assert!(!rows
         .iter()
-        .any(|row| label_column(row).contains("Arm prefix mode")));
+        .any(|row| label_column(row, key_w).contains("Arm prefix mode")));
 }
 
 /// After a rebind, the Global section shows the configured chord and the
@@ -211,17 +222,18 @@ fn global_rows_follow_an_override() {
             },
         )],
     };
-    let rows = global_help_rows(16, &keybinds);
+    let key_w = key_width(&keybinds);
+    let rows = global_help_rows(&keybinds);
     let rebound = rows
         .iter()
-        .find(|row| key_column(row) == "k")
+        .find(|row| key_column(row, key_w) == "k")
         .expect("the rebound next_library_tab renders its configured chord");
     assert!(
-        label_column(rebound).contains("Cycle menu"),
+        label_column(rebound, key_w).contains("Cycle menu"),
         "the rebound row keeps the action's label: {rebound:?}"
     );
     assert!(
-        !rows.iter().any(|row| key_column(row) == "Tab"),
+        !rows.iter().any(|row| key_column(row, key_w) == "Tab"),
         "the declared default Tab must disappear from the rendered section"
     );
 }
@@ -240,18 +252,24 @@ fn help_lists_the_prefix_and_its_assignments() {
             },
         )],
     };
-    let rows = global_help_rows(16, &keybinds);
+    let key_w = key_width(&keybinds);
+    let rows = global_help_rows(&keybinds);
     let arm = rows
         .iter()
-        .find(|row| key_column(row) == "Ctrl+k")
+        .find(|row| key_column(row, key_w) == "Ctrl+k")
         .expect("the configured prefix chord is listed");
-    assert!(label_column(arm).contains("Arm prefix mode"), "{arm:?}");
+    assert!(
+        label_column(arm, key_w).contains("Arm prefix mode"),
+        "{arm:?}"
+    );
     let assigned = rows
         .iter()
-        .find(|row| key_column(row) == "n" && label_column(row).contains("Next track"))
+        .find(|row| {
+            key_column(row, key_w) == "n" && label_column(row, key_w).contains("Next track")
+        })
         .expect("the prefix-namespace assignment is listed");
     assert!(
-        label_column(assigned).contains("Next track"),
+        label_column(assigned, key_w).contains("Next track"),
         "{assigned:?}"
     );
 }

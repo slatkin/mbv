@@ -411,7 +411,7 @@ mod wide_row_regression_tests {
     fn zebra_stripes_are_contained_and_selected_row_still_wins() {
         let rect = Rect::new(0, 0, 32, 4);
         let selected_bg = palette::SURFACE_RESTING;
-        let zebra_bg = Color::Rgb(60, 72, 65);
+        let zebra_bg = palette::SURFACE_FOCUSED;
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
             item("one", "One", None),
@@ -476,7 +476,7 @@ mod wide_row_regression_tests {
                 semantic_state: MediaSemanticState::Ordinary,
             },
         ]);
-        let zebra_bg = Color::Rgb(60, 72, 65);
+        let zebra_bg = palette::SURFACE_FOCUSED;
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
@@ -532,7 +532,10 @@ mod wide_row_regression_tests {
             heading("C"),
             item("c1", "C1", None),
         ]);
-        let pair = stripe(palette::Surface::MainContentBox);
+        // The production browser stripe: the library column's fill for the
+        // paint's focus bit (the Grouped Music tree's alternation tone),
+        // against the `LibraryPanel` box fill the panel paints underneath.
+        let pair = stripe(palette::Surface::LibraryColumn);
         let other = stripe(palette::Surface::LibraryPanel);
         assert_ne!(pair.focused, other.focused);
         assert_ne!(pair.unfocused, other.unfocused);
@@ -697,7 +700,7 @@ mod wide_row_regression_tests {
             .unwrap();
         let buffer = terminal.backend().buffer();
         let cell = &buffer[(2, 1)];
-        assert_eq!(cell.fg, palette::TEXT_EMPHASIS);
+        assert_eq!(cell.fg, palette::SELECTED_ROW_FG);
         assert!(!cell.modifier.contains(Modifier::BOLD));
         for x in 0..rect.width {
             assert_eq!(buffer[(x, 1)].bg, palette::SELECTED_ROW_BG, "bar at x={x}");
@@ -752,9 +755,9 @@ mod wide_row_regression_tests {
         let buf = terminal.backend().buffer();
         // The list is unfocused, so only the selected rows paint: the cursor's
         // own first row plus the two toggled rows each fill the whole row with
-        // the bar and keep their ordinary foreground.
+        // the canonical bar and selected-row foreground.
         for y in [0, 1, 3] {
-            assert_eq!(buf[(2, y)].fg, palette::TEXT_EMPHASIS);
+            assert_eq!(buf[(2, y)].fg, palette::SELECTED_ROW_FG);
             assert!(!buf[(2, y)].modifier.contains(Modifier::BOLD));
             for x in 0..rect.width {
                 assert_eq!(buf[(x, y)].bg, palette::SELECTED_ROW_BG, "row {y} x={x}");
@@ -1112,6 +1115,42 @@ mod wide_row_regression_tests {
             .map(|x| buf[(x, 0)].symbol().to_string())
             .collect();
         assert_eq!(&text[32..38], " 3 Sep", "{text:?}");
+    }
+
+    #[test]
+    fn selected_now_playing_marker_uses_ink_but_progress_keeps_metadata_role() {
+        use crate::app::components::media_list::ActiveProgress;
+
+        let rect = Rect::new(0, 0, 40, 1);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "playing".into(),
+            primary: "Playing title".into(),
+            secondary: None,
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::NowPlaying {
+                progress: Some(ActiveProgress::new(47)),
+            },
+        }]);
+
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SELECTED_ROW_BG);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let marker_x = (0..rect.width)
+            .find(|&x| buf[(x, 0)].symbol() == "▶")
+            .expect("selected now-playing marker");
+        assert_eq!(buf[(marker_x, 0)].fg, palette::SELECTED_ROW_FG);
+        let progress_x = (0..rect.width)
+            .find(|&x| buf[(x, 0)].symbol() == "4")
+            .expect("selected progress percentage");
+        assert_eq!(buf[(progress_x, 0)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(progress_x + 1, 0)].fg, palette::TEXT_METADATA);
     }
 
     #[test]

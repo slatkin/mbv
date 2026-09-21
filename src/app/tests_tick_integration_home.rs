@@ -7,6 +7,7 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 use crate::app::components::msg::HomeRowTarget;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
+use crate::app::palette;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
@@ -592,7 +593,11 @@ fn home_list_row_cells(
     );
 }
 
-fn assert_home_palette_painted(terminal: &Terminal<TestBackend>, label: &str) {
+fn assert_home_palette_painted(
+    terminal: &Terminal<TestBackend>,
+    label: &str,
+    single_fg: ratatui::style::Color,
+) {
     use crate::app::palette;
 
     let buf = terminal.backend().buffer();
@@ -611,11 +616,26 @@ fn assert_home_palette_painted(terminal: &Terminal<TestBackend>, label: &str) {
         palette::SPLIT_ROW_TITLE_FG,
         "{label}: split-row item title must paint the split-row title role"
     );
-    // A single-part row (movie, no container) keeps the ordinary title role.
+    // A single-part row (movie, no container) uses its ordinary role when
+    // unselected and the Ink role when it owns the selected bar.
     assert_eq!(
         buf[(single_x, single_y)].fg,
-        palette::TEXT_EMPHASIS,
-        "{label}: single-part row must keep the ordinary title role"
+        single_fg,
+        "{label}: single-part row foreground must match its selection state"
+    );
+}
+
+fn assert_home_single_part_role(
+    terminal: &Terminal<TestBackend>,
+    label: &str,
+    expected: ratatui::style::Color,
+) {
+    let (_, (single_x, single_y)) =
+        home_list_row_cells(terminal, "Severance", "Broken Bird", "The Long Goodbye");
+    assert_eq!(
+        terminal.backend().buffer()[(single_x, single_y)].fg,
+        expected,
+        "{label}: unselected single-part row must keep its ordinary title role"
     );
 }
 
@@ -643,11 +663,19 @@ fn home_tick_render_paints_split_row_palette_and_ordinary_single_part_role() {
     handle_tick_messages(&mut harness, outcome.messages);
 
     let wide = draw(&mut harness, 160, 30);
-    assert_home_palette_painted(&wide, "Wide");
+    assert_home_palette_painted(&wide, "Wide", palette::SELECTED_ROW_FG);
 
     // The Narrow presentation reuses the same owner through the panel; the
-    // palette must survive the geometry transition.
+    // selected row keeps the Ink foreground across the geometry transition.
     let narrow = draw(&mut harness, 60, 20);
-    assert_home_palette_painted(&narrow, "Narrow");
+    assert_home_palette_painted(&narrow, "Narrow", palette::SELECTED_ROW_FG);
+
+    // Move the bar back to the split row and pin the adjacent ordinary row's
+    // unselected role: it must never inherit the selected-row foreground.
+    harness.inject(key(Key::Up));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    let unselected = draw(&mut harness, 160, 30);
+    assert_home_single_part_role(&unselected, "Wide", palette::TEXT_EMPHASIS);
 }
 

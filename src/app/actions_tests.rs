@@ -72,6 +72,128 @@ fn album_playback_routes_with_album_queue_source() {
     ));
 }
 
+/// A started remote-backed App (mirrors `album_playback_routes_with_album_queue_source`):
+/// `play_album_track`'s Emby-availability gate passes and the resulting queue
+/// is observable.
+fn remote_playback_app() -> App {
+    let config = crate::config::Config::default();
+    let (remote, player_rx, _cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    App::new_remote_with_config(
+        mbv_core::api::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
+    )
+}
+
+/// The shell-owned artist-detail cache key one artist push writes: the
+/// destination/generation/artist-ID/revision identity the projection reads.
+fn artist_cache_key(
+    app: &App,
+    artist_id: &str,
+) -> crate::app::music_artist_detail::ArtistDetailKey {
+    crate::app::music_artist_detail::ArtistDetailKey {
+        destination: crate::app::components::library_panel::LibraryKey::Service {
+            service: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-music".into(),
+            kind: crate::app::components::LibraryKind::Music,
+        },
+        generation: app.emby_runtime.generation().value(),
+        artist_id: artist_id.into(),
+        revision: 7,
+    }
+}
+
+fn queued_track_ids(app: &App) -> Vec<String> {
+    let mut ids: Vec<String> = app
+        .playback_queue()
+        .emby_items()
+        .iter()
+        .map(|item| item.id.clone())
+        .collect();
+    ids.sort();
+    ids
+}
+
+/// Task 6.3 correction: an artist root's Workspace rows are projected from the
+/// shell-owned artist-detail cache, which the `ArtistIds` path fills without
+/// ever touching `album_tracks_cache`. Activation resolves that cache as its
+/// fallback source, so Enter/double-click on an artist row plays the album's
+/// tracks from where the row came from.
+#[test]
+fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
+    let mut app = remote_playback_app();
+    let mut first = make_item("First", "Audio");
+    first.id = "artist-track-1".into();
+    first.album_id = "album-1".into();
+    let mut second = make_item("Second", "Audio");
+    second.id = "artist-track-2".into();
+    second.album_id = "album-1".into();
+    let mut other_album = make_item("Other", "Audio");
+    other_album.id = "other-track".into();
+    other_album.album_id = "album-2".into();
+    app.artist_detail_cache.insert(
+        artist_cache_key(&app, "artist-alpha"),
+        crate::app::music_artist_detail::ArtistDetailCacheEntry {
+            tracks: vec![first, second.clone(), other_album],
+            failed: false,
+        },
+    );
+    assert!(
+        app.album_tracks_cache.is_empty(),
+        "the artist-ID path populates only the artist cache"
+    );
+
+    assert!(app.play_album_track("album-1", &second));
+    assert_eq!(
+        queued_track_ids(&app),
+        ["artist-track-1", "artist-track-2"],
+        "the row's album group becomes the queue from the artist cache"
+    );
+}
+
+/// Ordinary album browsing must not change: an `album_tracks_cache` entry
+/// still wins over the artist-cache fallback, even when the artist entry
+/// carries more tracks for the same album.
+#[test]
+fn album_track_cache_still_precedes_the_artist_cache_fallback() {
+    let mut app = remote_playback_app();
+    let mut only = make_item("Only", "Audio");
+    only.id = "album-track".into();
+    only.album_id = "album-1".into();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![only.clone()]);
+    let mut extra = make_item("Extra", "Audio");
+    extra.id = "artist-extra".into();
+    extra.album_id = "album-1".into();
+    app.artist_detail_cache.insert(
+        artist_cache_key(&app, "artist-alpha"),
+        crate::app::music_artist_detail::ArtistDetailCacheEntry {
+            tracks: vec![only.clone(), extra],
+            failed: false,
+        },
+    );
+
+    assert!(app.play_album_track("album-1", &only));
+    assert_eq!(
+        queued_track_ids(&app),
+        ["album-track"],
+        "the album cache's list is the browsing source and takes precedence"
+    );
+
+    // A failed or truncated per-album page (an entry that does not hold the
+    // activated row) must not hide the artist group the row came from.
+    app.album_tracks_cache.insert("album-1".into(), Vec::new());
+    assert!(app.play_album_track("album-1", &only));
+    assert_eq!(
+        queued_track_ids(&app),
+        ["album-track", "artist-extra"],
+        "the candidate that holds the row wins when the album cache does not"
+    );
+}
+
 fn album(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "MusicAlbum");
     item.id = id.into();

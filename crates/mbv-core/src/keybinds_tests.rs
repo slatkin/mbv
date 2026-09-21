@@ -267,8 +267,8 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("cycle_subtitle", &["z"]),
     ("open_idle_feed_link", &["o"]),
     ("panel_mode_cycle_x", &["x"]),
-    ("panel_right", &["Right"]),
-    ("panel_left", &["Left"]),
+    ("panel_right", &["Ctrl+Right"]),
+    ("panel_left", &["Ctrl+Left"]),
     ("ctrl_l_force_clear", &["Ctrl+l"]),
 ];
 

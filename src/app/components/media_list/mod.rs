@@ -4,6 +4,7 @@
 //! owner. Painting lives in `crate::app::render::components::media_list`.
 
 use crate::app::components::library_panel::LibraryKey;
+use crate::app::palette;
 use crate::app::ui_util::move_cursor;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
@@ -55,12 +56,6 @@ impl<Target> RowGeometry<Target> {
     /// Display-row index of the selected row in flow space.
     pub fn selected_row(&self) -> Option<usize> {
         self.selected_row
-    }
-
-    /// Stable targets parallel to the flow rows.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn targets(&self) -> impl Iterator<Item = Option<&Target>> {
-        self.rows.iter().map(|row| row.target.as_ref())
     }
 
     /// The selected row's absolute one-line rectangle when it is visible.
@@ -218,17 +213,15 @@ impl MediaSemanticState {
 /// Which semantic surface should receive the selected-row treatment.
 ///
 /// The policy is deliberately closed: callers choose a named surface identity,
-/// never a raw Ratatui style or colour. An owning-surface selected row
-/// resolves its containing column's focus pair, so the caller names which
-/// column it sits in; the painter maps each variant to the table's declared
-/// selected-row identity.
+/// never a raw Ratatui style or colour. The painter retains the identity for
+/// composition policy while every selected row resolves to the canonical
+/// selected-row bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectedRowSurface {
     ListBackdrop,
     OwningQueueColumn,
     /// The library Workspace (Wide Hero pane and Library Hero overlay — one
-    /// unified look): the bar takes the sheet's own fixed Ink chrome so it
-    /// reads against the box's resting Slate fill.
+    /// unified look), retained as a closed owning-surface identity.
     OwningLibraryPane,
 }
 
@@ -237,6 +230,24 @@ pub enum SelectedRowSurface {
 pub struct ZebraStripe {
     pub focused: Color,
     pub unfocused: Color,
+}
+
+/// The Queue's row palette, shared by the Queue and Grouped Music tree so
+/// their base and zebra fills cannot drift apart. The base fill is the
+/// recessed QueuePanel surface; the stripe is the QueueColumn surface.
+pub(crate) fn queue_row_background(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueuePanel, focused).fill
+}
+
+pub(crate) fn queue_row_zebra(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueueColumn, focused).fill
+}
+
+pub(crate) fn queue_row_zebra_stripe() -> ZebraStripe {
+    ZebraStripe {
+        focused: queue_row_zebra(true),
+        unfocused: queue_row_zebra(false),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

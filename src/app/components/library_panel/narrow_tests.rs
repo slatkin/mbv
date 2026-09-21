@@ -154,11 +154,11 @@ fn narrow_search_paints_one_search_bar_and_one_result_list() {
 }
 
 /// The non-Wide list box is the Wide browser pane's list box (design D3): the
-/// `LibraryPanel` fill pair on the box, with no stripe pair of its own —
-/// the browser list paints no zebra, so every unselected row rests on the
-/// box fill in both focus states.
+/// `LibraryPanel` fill pair on the box, striped with the library column's fill
+/// like every other library browser list (restored 2026-09-20), so the rows
+/// below the first alternate against the box fill in both focus states.
 #[test]
-fn narrow_list_box_uses_the_wide_browser_pane_fill_without_stripes() {
+fn narrow_list_box_uses_the_wide_browser_pane_fill_with_stripes() {
     for focused in [false, true] {
         let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
@@ -192,13 +192,17 @@ fn narrow_list_box_uses_the_wide_browser_pane_fill_without_stripes() {
             buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
             palette::surface_colors(palette::Surface::LibraryPanel, focused).fill
         );
-        // No zebra on the browser list: the unselected rows rest on the
-        // `LibraryPanel` box fill, never the `MainContentBox` stripe pair.
-        for dy in 1..=2 {
-            assert_eq!(
-                buf[(geometry.list_area.x, geometry.list_area.y + dy)].bg,
-                palette::surface_colors(palette::Surface::LibraryPanel, focused).fill
-            );
-        }
+        // The browser list stripes with the library column's pair: the
+        // ungrouped alternation opens on the box fill, so the rows below it
+        // carry the stripe.
+        let stripe = palette::surface_colors(palette::Surface::LibraryColumn, focused).fill;
+        assert_eq!(
+            buf[(geometry.list_area.x, geometry.list_area.y + 1)].bg,
+            stripe
+        );
+        assert_eq!(
+            buf[(geometry.list_area.x, geometry.list_area.y + 2)].bg,
+            palette::surface_colors(palette::Surface::LibraryPanel, focused).fill
+        );
     }
 }

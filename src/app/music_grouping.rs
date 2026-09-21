@@ -30,9 +30,30 @@ pub(super) struct GroupedAlbumEntry {
     pub(super) album_index: usize,
     pub(super) album_id: String,
     pub(super) artist: String,
+    /// Stable artist identity for this entry's group: the `ArtistItems` ID
+    /// resolved against the settled display artist, or a deterministic
+    /// fallback key when no payload identity applies. Never derived from
+    /// display position.
+    // Carried by task 1.3; first read by the Grouped Music tree owner
+    // (task 2.1 of add-grouped-music-tree-browser).
+    #[allow(dead_code)]
+    pub(super) artist_key: ArtistKey,
     pub(super) sort_key: String,
     pub(super) year: String,
     pub(super) name: String,
+}
+
+/// Stable identity of one settled artist group. `Service` carries the
+/// resolved `ArtistItems` item ID — the only artist ID space mbv uses;
+/// `/Artists` listing IDs never enter here. `Fallback` is the deterministic
+/// grouping key for every absent, unmatched, or ambiguous `ArtistItems`
+/// case: the settled display artist itself, so albums without valid
+/// payload identity stay grouped exactly as they are today while equal
+/// display names with distinct valid IDs stay separate.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) enum ArtistKey {
+    Service(String),
+    Fallback(String),
 }
 
 /// A settled, source-derived grouping for one music album browse level:
@@ -111,6 +132,16 @@ pub(super) fn derive_album_display_name(item: &EmbyItem) -> (String, String) {
     }
 }
 
+/// Resolves an album's stable artist grouping key from its payload
+/// `ArtistItems` pairs against the settled display artist. Pure: no app
+/// state, no network.
+fn resolve_artist_key(item: &EmbyItem, display_artist: &str) -> ArtistKey {
+    match item.matched_artist_item_id(display_artist) {
+        Some(id) => ArtistKey::Service(id.to_string()),
+        None => ArtistKey::Fallback(display_artist.to_string()),
+    }
+}
+
 /// Builds the settled grouped catalog for a source snapshot from the raw
 /// items and a resolved artist lookup. Pure: no app state, no network.
 pub(super) fn build_grouped_album_catalog(
@@ -126,6 +157,7 @@ pub(super) fn build_grouped_album_catalog(
             album_index,
             album_id: item.id.clone(),
             artist: artist.clone(),
+            artist_key: resolve_artist_key(item, &artist),
             sort_key,
             year,
             name,

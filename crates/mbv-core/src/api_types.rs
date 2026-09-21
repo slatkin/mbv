@@ -242,6 +242,16 @@ pub struct EmbyLink {
     pub url: String,
 }
 
+/// One `ArtistItems` name/ID pair from a music album/item payload: an
+/// album-artist display name and the stable artist item ID it maps to.
+/// This pair is mbv's only source of stable artist identity; IDs from an
+/// `/Artists` listing never enter this field.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EmbyArtistRef {
+    pub name: String,
+    pub id: String,
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EmbyItem {
     pub id: String,
@@ -264,6 +274,12 @@ pub struct EmbyItem {
     pub unplayed_item_count: u32,
     pub path: String,
     pub artist: String,
+    /// `ArtistItems` name/ID pairs as returned on the payload, retained
+    /// verbatim. `Default` so legacy serialized queue items (which predate
+    /// the field) deserialize unchanged; serialized queue compatibility is
+    /// unchanged.
+    #[serde(default)]
+    pub artist_items: Vec<EmbyArtistRef>,
     pub sort_name: String,
     pub production_year: u32,
     pub end_year: u32,
@@ -334,6 +350,32 @@ impl EmbyItem {
         self.item_type == "MusicAlbum" || self.item_type == "MusicArtist" || self.is_audio()
     }
 
+    /// Resolves this item's stable artist item ID from its `ArtistItems`
+    /// payload pairs. A pair is applicable only when its trimmed name
+    /// case-insensitively equals the settled display artist, and only a
+    /// single applicable pair resolves: zero matches, or several equal-name
+    /// pairs, resolve nothing rather than picking an arbitrary first pair.
+    /// Returns `None` for every absent, unmatched, or ambiguous case.
+    pub fn matched_artist_item_id(&self, display_artist: &str) -> Option<&str> {
+        let target = display_artist.trim().to_lowercase();
+        if target.is_empty() {
+            return None;
+        }
+        let mut matched: Option<&str> = None;
+        for pair in &self.artist_items {
+            if pair.id.is_empty() || pair.name.trim().to_lowercase() != target {
+                continue;
+            }
+            if matched.is_some() {
+                // Ambiguous: several pairs carry the display name with
+                // distinct (or repeated) IDs. No arbitrary first pick.
+                return None;
+            }
+            matched = Some(&pair.id);
+        }
+        matched
+    }
+
     pub fn is_video(&self) -> bool {
         self.media_type == "Video"
     }
@@ -397,6 +439,7 @@ impl EmbyItem {
             unplayed_item_count: 0,
             path: String::new(),
             artist: String::new(),
+            artist_items: Vec::new(),
             sort_name: String::new(),
             production_year: 0,
             end_year: 0,

@@ -97,9 +97,9 @@ mod tests {
         let overlay = Rect::new(4, 2, 40, 8);
         let hints = ["Enter:Play", "Esc:Dismiss"];
         let (buf, inner) = draw(area, overlay, &hints);
-        let row_bg = Color::Rgb(30, 35, 38); // PillRow
-        let foam = Color::Rgb(58, 148, 197); // HINT_PILL_FILLS[0]
-        let yellow = Color::Rgb(219, 188, 127); // HINT_PILL_FILLS[1]
+        let row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
+        let foam = palette::HINT_PILL_FILLS[0];
+        let yellow = palette::HINT_PILL_FILLS[1];
         let bar_y = overlay.bottom() - 1;
         let line = row_text(&buf, bar_y, (overlay.x, overlay.right()));
         assert!(line.contains("Enter:Play"));
@@ -131,9 +131,10 @@ mod tests {
         let hints = ["A:1", "B:2", "C:3", "D:4"];
         let (buf, _) = draw(area, overlay, &hints);
         let bar_y = overlay.bottom() - 1;
-        let foam = Color::Rgb(58, 148, 197);
-        let yellow = Color::Rgb(219, 188, 127);
-        let orange = Color::Rgb(229, 152, 117);
+        let fills = palette::HINT_PILL_FILLS;
+        let foam = fills[0];
+        let yellow = fills[1];
+        let orange = fills[2];
         // Chip 0 is "◢A:1◤" = 5 columns and every later chip is "B:2◤" = 4,
         // so a 17-column group in a 60-column row leaves 21 columns to its
         // left; the chips start at 21, 26, 30, and 34, and each chip's first
@@ -155,7 +156,7 @@ mod tests {
         // bar and its spacer band).
         let inset = Rect::new(0, 2, 48, 10);
         let overlay = Rect::new(4, 3, 40, 8);
-        let chrome = Color::Rgb(30, 35, 38); // PillRow
+        let chrome = palette::surface_colors(palette::Surface::PillRow, false).fill;
         let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
         terminal
             .draw(|f| {

@@ -23,12 +23,12 @@
 
 use ratatui::style::Color;
 
-/// The 19 approved palette variants, in name-table order (hue families,
+/// The 20 approved palette variants, in name-table order (hue families,
 /// dark-to-light within each family; see
 /// `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 ///
 /// `Copy` is required: const-context indexing out of `ALL` moves the value
-/// (design.md spike outcomes, task 1.1).
+/// (see the palette table drift tests below).
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub(in crate::app) enum Palette {
     Grey1,
@@ -47,6 +47,8 @@ pub(in crate::app) enum Palette {
     Purple,
     Red,
     Orange,
+    #[allow(dead_code)]
+    Clay,
     Yellow,
     Cream,
     White,
@@ -56,7 +58,7 @@ pub(in crate::app) enum Palette {
 /// the uniqueness tests and the later `docs/palette.json` viewer. Test-only:
 /// production code names variants directly, never through `ALL`.
 #[cfg(test)]
-pub(in crate::app) const ALL: [Palette; 19] = [
+pub(in crate::app) const ALL: [Palette; 20] = [
     Palette::Grey1,
     Palette::Grey2,
     Palette::Grey3,
@@ -73,6 +75,7 @@ pub(in crate::app) const ALL: [Palette; 19] = [
     Palette::Purple,
     Palette::Red,
     Palette::Orange,
+    Palette::Clay,
     Palette::Yellow,
     Palette::Cream,
     Palette::White,
@@ -86,8 +89,8 @@ impl Palette {
             Palette::Grey1 => Color::Rgb(0x1a, 0x1a, 0x1a),
             Palette::Grey2 => Color::Rgb(0x9e, 0x9e, 0x9e),
             Palette::Grey3 => Color::Rgb(0xe6, 0xe6, 0xe6),
-            Palette::Green1 => Color::Rgb(0x3c, 0x48, 0x41),
-            Palette::Green2 => Color::Rgb(0x48, 0x58, 0x4e),
+            Palette::Green1 => Color::Rgb(0x2e, 0x38, 0x3c),
+            Palette::Green2 => Color::Rgb(0x37, 0x41, 0x45),
             Palette::Green3 => Color::Rgb(0x6c, 0x76, 0x6c),
             Palette::Green => Color::Rgb(0x93, 0xb2, 0x59),
             Palette::Iris => Color::Rgb(0xa7, 0xc0, 0x80),
@@ -99,6 +102,7 @@ impl Palette {
             Palette::Purple => Color::Rgb(0xd6, 0x99, 0xb6),
             Palette::Red => Color::Rgb(0xe5, 0x7e, 0x80),
             Palette::Orange => Color::Rgb(0xe5, 0x98, 0x75),
+            Palette::Clay => Color::Rgb(0xdd, 0x9a, 0x78),
             Palette::Yellow => Color::Rgb(0xdb, 0xbc, 0x7f),
             Palette::Cream => Color::Rgb(0xfa, 0xed, 0xcd),
             Palette::White => Color::Rgb(0xfd, 0xf6, 0xe3),
@@ -126,6 +130,7 @@ impl Palette {
             Palette::Purple => "Purple",
             Palette::Red => "Red",
             Palette::Orange => "Orange",
+            Palette::Clay => "Clay",
             Palette::Yellow => "Yellow",
             Palette::Cream => "Cream",
             Palette::White => "White",
@@ -161,7 +166,7 @@ mod tests {
     /// colour check covers both presentations.
     #[test]
     fn all_lists_every_variant_once_with_distinct_values() {
-        assert_eq!(ALL.len(), 19, "ALL must list exactly the 19 variants");
+        assert_eq!(ALL.len(), 20, "ALL must list exactly the 20 variants");
         let distinct: HashSet<Palette> = ALL.into_iter().collect();
         assert_eq!(
             distinct.len(),
@@ -179,6 +184,20 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The green-family entries in the palette RGB table intentionally shift
+    /// one step darker together: Green1 takes the new dark value and Green2
+    /// takes Green1's former value.
+    #[test]
+    fn palette_rgb_table_tracks_the_green_shift() {
+        assert_eq!(Palette::Green1.color(), Color::Rgb(0x2e, 0x38, 0x3c));
+        assert_eq!(Palette::Green2.color(), Color::Rgb(0x37, 0x41, 0x45));
+    }
+
+    #[test]
+    fn palette_rgb_table_tracks_the_yellow_decision() {
+        assert_eq!(Palette::Yellow.color(), Color::Rgb(0xdb, 0xbc, 0x7f));
     }
 
     /// Collects every `#rrggbb` string and every `[r, g, b]` triple from a

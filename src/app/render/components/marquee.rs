@@ -8,7 +8,11 @@ use unicode_width::UnicodeWidthStr;
 /// never advances. `force_scroll` scrolls a title that already fits its
 /// window instead of returning it static, for a list that reveals its row
 /// titles only on the selected row.
-pub(super) fn marquee_spans(
+///
+/// Reused beyond the media-list painters by the Grouped Music tree adapter's
+/// label renderer (the crate label-renderer seam permits it; design D8 of
+/// `add-grouped-music-tree-browser`).
+pub(in crate::app) fn marquee_spans(
     key: &str,
     parts: &[(String, Color)],
     max_width: usize,

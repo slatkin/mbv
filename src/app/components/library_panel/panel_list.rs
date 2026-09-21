@@ -11,6 +11,7 @@ use tuirealm::component::Component;
 
 use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
+use crate::app::components::music_tree::MusicTreeBrowser;
 use crate::app::palette::{self, Surface};
 
 use super::content::{PanelList, PanelListPaintPolicy};
@@ -37,11 +38,15 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
             PanelListPaintPolicy::Wide { focused } => {
-                // The browser list paints no zebra: queue and Workspace
-                // lists keep their stripes; the library browser rests on
-                // its surface fill.
-                self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::new(focused));
+                // Every library browser list stripes again (7038e430 dropped
+                // it; restored 2026-09-20), in the Grouped Music tree's style:
+                // the stripe is the library column's own fill for this focus
+                // bit — focused `SURFACE_FOCUSED`, the same tone the music
+                // tree's rows alternate with, resting the app backdrop.
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::new(focused)
+                        .with_zebra(zebra_stripe(Surface::LibraryColumn)),
+                );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
                 // Fixed Storm stripes in both focus states; the focused
@@ -106,6 +111,58 @@ impl PanelList for InlineSearch {
     }
 }
 
+/// The Grouped Music tree browser's `PanelList` surface (task 2.3, design
+/// D5): the panel drives the tree owner through the exact same object-safe
+/// surface every canonical media-list presentation uses — the viewport clamp,
+/// the paint policy's focus bit, the slot-rect view with retained hit
+/// geometry, and the selected-row read — while typed artist/album target
+/// resolution stays on the tree owner's own surface, never on the erased
+/// trait. No new `ListSlot` arm is added.
+impl PanelList for MusicTreeBrowser {
+    fn clamp_viewport(&mut self, viewport_height: usize) {
+        self.clamp_viewport_to(viewport_height);
+    }
+
+    fn clear_selection(&mut self) {
+        self.clear_marks();
+    }
+
+    fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
+        // Only the focus bit reaches the tree: it drives the selected-row bar
+        // and the focused marquee. The tree owns its own row surface (task
+        // 3.2); the panel supplies no rectangle or colour.
+        let focused = match policy {
+            PanelListPaintPolicy::Wide { focused }
+            | PanelListPaintPolicy::WideWorkspace { focused } => focused,
+        };
+        self.set_focused(focused);
+        self.invalidate();
+    }
+
+    fn view(&mut self, frame: &mut Frame, rect: Rect) {
+        MusicTreeBrowser::view(self, frame, rect);
+    }
+
+    fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        // Match the canonical list's claim/content split: the tree uses the
+        // claim width for its rows and shared scrollbar, while the content
+        // height remains its viewport metric.
+        MusicTreeBrowser::set_geometry(self, claim_rect, content_rect);
+    }
+
+    fn selected_row_rect(&self) -> Option<Rect> {
+        MusicTreeBrowser::selected_row_rect(self)
+    }
+
+    fn claims_point(&self, point: Position) -> bool {
+        MusicTreeBrowser::claims_point(self, point)
+    }
+
+    fn search_bar(&self) -> Option<(String, bool)> {
+        MusicTreeBrowser::search_bar(self)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod panel_list_tests {
@@ -130,10 +187,7 @@ mod panel_list_tests {
     /// The selected-row bar is intentionally identical across the browser
     /// arms; arm-specific stripe colours are owned by the Render Component
     /// regressions in `src/app/render/components/media_list.rs` and its
-    /// Wide-arm tests. The Workspace arm is the exception: while focused its
-    /// bar takes the Iris accent instead of the shared Slate bar, unified
-    /// across the Wide Hero pane and the Library Hero overlay (unfocused it
-    /// keeps the sheet's Ink chrome).
+    /// Wide-arm tests. Every arm uses the canonical Iris selected-row role.
     #[test]
     fn wide_selected_rows_paint_the_bar_in_both_slots() {
         let mut carrier = MediaListCarrier::new();
@@ -166,8 +220,8 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::ACCENT_ACTIVE,
-            "the focused Workspace's selected-row bar takes the Iris accent"
+            palette::SELECTED_ROW_BG,
+            "the focused Workspace uses the canonical Iris selected-row bar"
         );
     }
 
@@ -200,6 +254,44 @@ mod panel_list_tests {
                 buf[(area.x + 2, area.y + 1)].bg,
                 palette::SURFACE_RESTING,
                 "striped row, focused={focused}"
+            );
+        }
+    }
+
+    /// The browser-list stripe pair, pinned to the Grouped Music tree's own
+    /// alternation: the second row carries the library column's fill for the
+    /// paint's focus bit, so a focused browser list alternates `SURFACE_FOCUSED`
+    /// against the `LibraryPanel` box fill exactly as the music rows do.
+    #[test]
+    fn browser_stripes_zebra_rows_like_the_music_tree() {
+        let mut carrier = MediaListCarrier::new();
+        carrier.set_content(vec![item("a"), item("b")]);
+        let area = Rect::new(0, 0, 20, 2);
+        let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+
+        for focused in [true, false] {
+            terminal
+                .draw(|f| {
+                    PanelList::set_paint_policy(
+                        &mut carrier,
+                        PanelListPaintPolicy::Wide { focused },
+                    );
+                    PanelList::view(&mut carrier, f, area);
+                })
+                .unwrap();
+            let buf = terminal.backend().buffer();
+            // The ungrouped alternation opens on the box fill, so row 1
+            // carries the stripe; the 2-column quiet indent keeps the parent
+            // background, so the stripe is read from the title column.
+            assert_eq!(
+                buf[(area.x + 2, area.y + 1)].bg,
+                palette::surface_colors(palette::Surface::LibraryColumn, focused).fill,
+                "striped row, focused={focused}"
+            );
+            assert_ne!(
+                buf[(area.x + 2, area.y + 1)].bg,
+                palette::surface_colors(palette::Surface::LibraryPanel, focused).fill,
+                "the stripe must be visible against the box fill, focused={focused}"
             );
         }
     }

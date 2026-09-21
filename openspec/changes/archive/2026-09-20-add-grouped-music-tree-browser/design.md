@@ -14,7 +14,7 @@ The existing contracts conflict with the new surface in deliberate, narrow ways:
 - Use the dependency's supported model/query/state/rendering seams rather than reimplementing its projection.
 - Preserve mbv's Panel, Keyboard Router, mouse, semantic-theme, selected-row, and typed-effect boundaries.
 - Keep new tree code outside `music_content.rs` so the existing orchestration module does not grow further.
-- Make dependency rejection cheap and complete if final customization review fails.
+- Keep dependency rejection cheap and complete if the tree's core behavior or ownership proves impossible, without treating visual differences or rough visual edges as failure.
 
 **Non-Goals:**
 
@@ -72,7 +72,7 @@ Alternative rejected: rebuilding IDs from row position, which makes selection an
 
 ### D4. Map mbv input explicitly; do not enable the crate keymap
 
-The existing Keyboard Router keeps precedence. Once it returns local fall-through, `MusicContent` maps the confirmed chords to tree view actions. `/`, printable filter text, Visual mode, context actions, and track Workspace focus remain destination-local semantic operations. No crate keymap or second routing table receives terminal events.
+The existing Keyboard Router keeps precedence. Once it returns local fall-through, `MusicContent` maps the confirmed chords to tree view actions. `/`, printable filter text, context actions, and track Workspace focus remain destination-local semantic operations. No crate keymap or second routing table receives terminal events.
 
 The crate's latest-render `hit_test` resolves artist/album targets inside the browser rectangle. `MusicContent` keeps gesture recognition and sends already-resolved targets to local operations or typed requests, matching ADR 0024. Geometry is invalidated on content or area changes before the next view.
 
@@ -86,7 +86,7 @@ Reuse `SkimMatcherV2` and the existing 300 ms duration without creating a second
 
 Each album leaf has precomputed searchable text containing artist, album title, and year. On debounce expiry, the filter records the matching album node IDs; the tree query retains ancestors and force-expands matching paths while leaving persistent expansion untouched. Scores are discarded after match/no-match classification, preserving settled order.
 
-Opening the filter snapshots the selected node. Empty text disables filtering and shows the full tree. Dismissal restores the snapshot if present and persistent expansion. Filtering masks stored marks outside the visible album projection rather than deleting them: status, aggregate root state, painting, ranges, and bulk actions use only visible marks while the filter is active; dismissal reveals surviving pre-filter marks without adding newly hidden albums. Query changes perform no shell request.
+Opening the filter snapshots the selected node. Empty text disables filtering and shows the full tree. Dismissal restores the snapshot if present and persistent expansion. Filtering masks stored marks outside the visible album projection rather than deleting them: status, aggregate root state, painting, and bulk actions use only visible marks while the filter is active; dismissal reveals surviving pre-filter marks without adding newly hidden albums. Query changes perform no shell request.
 
 Alternative rejected: adapting the current `InlineSearch` carrier. Its flat result owner, full-corpus fetch lifecycle, relevance order, and empty-result behavior are the semantics this exception replaces. Alternative rejected: extracting a generic search framework for one new caller.
 
@@ -94,9 +94,11 @@ Alternative rejected: adapting the current `InlineSearch` carrier. Its flat resu
 
 Artist roots never cross the shell as playable targets. For play, enqueue, shuffle, and context requests, the tree owner walks the root's settled child leaves and returns ordered album targets. Expansion does not affect action scope. An active filter restricts the walk to matching visible leaves.
 
-Root multi-selection applies mark operations to the same visible child leaves. Aggregate root state is derived from child marks. Range selection walks visible album leaves and skips roots. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
+Root multi-selection is modified-click only: Ctrl+Click toggles album leaves, and artist-root toggles apply mark operations to the same visible child leaves. Aggregate root state is derived from child marks. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
 
 Alternative rejected: storing selected artist IDs. Their meaning changes with filtering and would force the shell to re-resolve component-local scope.
+
+Visual mode and range selection are descoped from this PoC (user decision 2026-09-20); revisit after PoC acceptance if wanted.
 
 ### D7. Add artist detail without giving the component Service authority
 
@@ -112,17 +114,17 @@ Every new artist-artwork and artist-track request and completion is a typed boun
 
 Alternative rejected: name-based Service lookup, which conflates equal artist names. Alternative rejected: preloading all artist tracks during grouping warm-up, which couples browsing readiness to an unbounded fetch.
 
-### D8. Use the stock tree rendering pipeline as the dependency gate
+### D8. Use the stock tree rendering pipeline
 
-Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` from the exact locked 0.2.2 API to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. The crate's published metadata declares Ratatui 0.30.2 compatibility, and its API documentation exposes these seams plus latest-render hit testing ([docs.rs](https://docs.rs/tui-treelistview/0.2.2/tui_treelistview/), [lib.rs](https://lib.rs/crates/tui-treelistview)). Task 1.1 is a hard go/no-go gate: before the tree owner or artist features are built, a one-frame adapter spike SHALL paint the existing Wide and smallest supported non-Wide fixtures and prove the full-row bar, group-relative zebra, scrollbar, focused marquee, and clipping through supported seams. If it does not compile, any required seam is absent, or that buffer evidence fails, stop and reject the dependency.
+Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` from the exact locked 0.2.2 API to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. The crate's published metadata declares Ratatui 0.30.2 compatibility, and its API documentation exposes these seams plus latest-render hit testing ([docs.rs](https://docs.rs/tui-treelistview/0.2.2/tui_treelistview/), [lib.rs](https://lib.rs/crates/tui-treelistview)). Task 1.1 is a hard stop: before the tree owner or artist features are built, one adapter frame SHALL paint the existing Wide and smallest supported non-Wide fixtures and prove the tree's own row treatment, hierarchy glyphs, zebra rhythm, scrollbar, focused marquee, clipping, latest-render hit testing, and aggregate marks through the crate's supported model/state/renderer/style seams. If it does not compile, or the tree's core model, state, or hit testing cannot be driven through those interfaces, stop and reject the dependency.
 
-Style values are resolved from existing semantic theme policies inside the owning render layer; the destination does not pass raw colours. Album leaves use `MediaSemanticState::from_emby`, whose music collapse keeps them `Ordinary`; the label renderer SHALL NOT re-derive played or resume decoration from raw `EmbyItem` fields. Artist roots are likewise ordinary grouping rows.
+Style values are resolved from existing semantic theme policies inside the owning render layer; the destination does not pass raw colours. Album leaves use `MediaSemanticState::from_emby`, whose music collapse keeps them `Ordinary`; the label renderer SHALL NOT re-derive played or resume decoration from raw `EmbyItem` fields. Artist roots are likewise undecorated rows: they carry no played or resume treatment, though unlike album leaves they remain selectable and focusable.
 
 Tree album years follow the canonical single metadata-gutter contract introduced by `unify-row-metadata-gutter`: one right-aligned fixed six-column gutter in `STATUS_AVAILABLE`, no inline or second year column, and no reserved gutter on artist roots or leaves without a year. Because the tree has its own label/column renderer, task 3.1 implements this change's pinned gutter contract directly rather than depending on `MediaListTrailing` or its painter; if the concurrent gutter change's final contract differs when it lands, the smaller reconciliation happens at that change's or this change's spec sync, and the tree follows the settled main-spec contract afterward.
 
 The tree remains in the Library panel's existing browser slot. The panel owns placement and fill; the tree painter owns paint-local row geometry. No screen module calls Ratatui or splits layout, and no base frame paints underneath. Marquee timing reuses the existing title-marquee primitive if the label-renderer seam permits it.
 
-The implementation is not allowed to bypass a missing extension point with a second projection or bespoke tree widget. After focused buffer/component/integration checks and full gates pass, live review covers Wide, Narrow, Mini, and Library Hero overlay states, including the smallest supported non-Wide Library-panel width. Failure of hierarchy readability, selected-row treatment, zebra behavior, metadata, marquee, scrollbar, or narrow-width behavior rejects and removes the dependency.
+The implementation is not allowed to bypass a missing extension point with a second projection or bespoke tree widget. After focused buffer/component/integration checks and full gates pass, live review covers Wide, Narrow, Mini, and Library Hero overlay states, including the smallest supported non-Wide Library-panel width. Live review judges the tree against its own tree-specific contract — readable hierarchy and expansion state, a clear focused-node treatment within the supplied browser rectangle, usable metadata, marquee, scrollbar, and narrow-width handling — and not against canonical-list parity. Two differences are intentional and documented: the crate paints its scrollbar whenever content overflows, with no focus gate reachable through a supported interface, and the tree's selected-row treatment is bounded by the browser rectangle it paints into rather than extending to the panel edge. Rough visual edges are expected and are worked out during the end-of-implementation manual PoC evaluation. The dependency is removed only if the tree's core behavior or ownership cannot be delivered through the crate's supported interfaces, never because its visuals differ from canonical lists or are initially unpolished, and never by hand-writing a parallel renderer.
 
 ### D9. Preserve test ownership and use the smallest durable evidence
 
@@ -135,11 +137,17 @@ Tests are added only where they protect realistic failures:
 
 Existing tests are adapted or replaced rather than duplicated. No snapshot suite, live Service fixture, real filesystem/config, sleep-based debounce, or smoke test is added. Debounce is tested by injecting the clock instant directly.
 
+### D10. Project album tracks as selectable tree nodes
+
+The tree projection deepens from the two-level artist→album shape to three levels: artist root → album leaf → track items, with each album's tracks ordered by disc/track order as the canonical album-track order. Track rows are provider-neutral selectable `Item`s carrying the same stable track targets the album-track Workspace already uses; no parallel track list or second identity space is introduced. Track nodes are projected from the shell-owned artist-detail cache established in D7 (the per-album track fetches feeding the same cache on the fallback path) — the tree never refetches: it re-projects whatever settled track data the shell has already cached for the focused artist, and an album with no cached tracks simply shows no track children. Activating a track node routes through the existing playback arms shared with the Workspace track rows — no new playback path, admission path, or effect variant is added. The Hero header and album-track Workspaces deliberately REMAIN the full-album listening surface, unchanged; the user explicitly accepts the resulting double functionality (a track can be started from the tree in one motion, and the whole album can still be listened to via Hero/Workspace) as the price of same-motion track access.
+
+Alternative rejected: removing the Hero/Workspace track projection once tracks live in the tree. Rejected because the Hero/Workspace remains the full-album listening surface the user wants for whole-album playback, and because it would discard the already-accepted Hero/Workspace behaviors this change otherwise leaves intact.
+
 ## Risks / Trade-offs
 
-- **[Crate rendering seams cannot reproduce mbv's surface]** → Keep customization inside supported crate interfaces, run focused visual evidence before final acceptance, and remove the dependency/change if live review fails; do not add a parallel renderer.
+- **[Crate visuals differ from the canonical flat lists]** → Accept the tree as its own presentation (selection extent, zebra rhythm, scrollbar focus behavior), keep customization inside the crate's supported interfaces, and treat rough visual edges as PoC-evaluation work rather than gate failures; remove the dependency only if core behavior or ownership is impossible, never by adding a parallel renderer.
 - **[The locked crate API differs from the evaluated surface]** → Pin 0.2.2 exactly, make the minimal adapter a hard stop, and reject the dependency rather than guessing equivalent APIs.
-- **[The dependency has limited adoption and a short release history]** → Current registry metadata shows one owner, low download volume, and two yanked earlier versions ([lib.rs](https://lib.rs/crates/tui-treelistview), [crates.io API](https://crates.io/api/v1/crates/tui-treelistview)); keep the integration destination-local, pin exactly, and retain dependency rejection as the acceptance outcome.
+- **[The dependency has limited adoption and a short release history]** → Current registry metadata shows one owner, low download volume, and two yanked earlier versions ([lib.rs](https://lib.rs/crates/tui-treelistview), [crates.io API](https://crates.io/api/v1/crates/tui-treelistview)); keep the integration destination-local, pin exactly, and retain dependency rejection for the case where the tree's core behavior proves impossible.
 - **[Artist identity is absent, ambiguous, or omitted by a Service]** → Request `ArtistItems` explicitly, accept only a name-matching pair, retain equal-name groups separately, and use a deterministic fallback key when no match exists; never perform effect lookup by name. Unsupported artist-ID queries propagate to the shell's per-album aggregation fallback.
 - **[Artist completions paint beneath a new selection]** → Key requests and visible application by destination, Service generation, settled revision, and artist ID; cache valid data separately from presentation.
 - **[Filtering and marks expose hidden actions]** → Intersect tree multi-selection with the visible album projection whenever a debounced filter revision applies, and materialize every root action from that same projection.
@@ -154,9 +162,9 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 2. Request and retain `ArtistItems` identity in parsed music data and add the fallback-safe Audio-by-artist client operation; defer the advisory live Emby mapping check to terminal acceptance.
 3. Settle the verified identity into stable tree keys.
 4. Replace only the Grouped Music album carrier with the tree owner; keep both track Workspaces canonical.
-5. Add local filtering, root action materialization, multi-selection, and current-frame mouse handling.
+5. Add local filtering, root action materialization, and current-frame mouse handling.
 6. Add shell-owned lazy artist detail/artwork/track projection with stale guards.
 7. Complete focused automated evidence, repository checks, and live user review in Wide, Narrow, Mini, and Library Hero overlay Panel states.
-8. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.
+8. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection of the dependency's core capability, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.
 
 Rollback is a normal revert: no persisted tree state, protocol, queue schema, or config migration is introduced.

@@ -82,16 +82,6 @@ impl<Target> MediaListCarrier<Target> {
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_flow_len(&self) -> Option<usize> {
-        self.wide.current_flow_len()
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_flow_target_at(&self, row: usize) -> Option<Option<&Target>> {
-        self.wide.current_flow_target_at(row)
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_offset(&self) -> Option<usize> {
         self.wide.current_flow_offset()
     }

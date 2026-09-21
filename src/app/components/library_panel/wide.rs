@@ -107,11 +107,18 @@ pub(in crate::app) struct BrowserPaneGeometry {
 /// Paints the Browser pane (Selector row and list box) and returns the role
 /// rects it placed. Pure painting over the supplied
 /// pane geometry; the hero pane and workspace content are painted elsewhere.
+///
+/// `panel_focused` is the whole panel's own bit (what the shell paints the
+/// column body with): the Selector row's spacer is the panel showing
+/// through, so the full-width spacer band follows that bit, not the list
+/// pane's narrower one.
+#[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn paint_browser_pane(
     f: &mut Frame,
     pane: WideHeroBrowserPane,
     content: &mut LibraryPanelContent<'_>,
     list_focused: bool,
+    panel_focused: bool,
     hovered_selector: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
@@ -120,7 +127,11 @@ pub(in crate::app) fn paint_browser_pane(
     // a SelectorRow — while a search is active the box takes the bar's rect
     // (spec: the Selector row's place is reserved for the search box) and
     // the spacer keeps the reserved gap.
-    let searching = matches!(content.list, ListSlot::Search(_));
+    let searching = match &content.list {
+        ListSlot::Search(_) => true,
+        ListSlot::Media(list) => list.search_bar().is_some(),
+        ListSlot::Empty { .. } => false,
+    };
     match (&content.selector, searching) {
         (Some(selector), false) => {
             paint_selector_row(
@@ -131,9 +142,10 @@ pub(in crate::app) fn paint_browser_pane(
                 hovered_selector,
                 &mut hits.selector,
                 &mut windows.selector,
-                // Wide's spacer stays the chrome gap band it has always been.
+                // The spacer is the panel showing through: it keeps the
+                // column body's fill for the panel's focus bit.
                 palette::Surface::PillRowGap,
-                false,
+                panel_focused,
             );
         }
         (None, false) => {
@@ -152,9 +164,19 @@ pub(in crate::app) fn paint_browser_pane(
                 &mut hits.selector,
                 &mut windows.selector,
             );
-            paint_pill_row_gap(f, pane.spacer_area, palette::Surface::PillRowGap, false);
+            paint_pill_row_gap(
+                f,
+                pane.spacer_area,
+                palette::Surface::PillRowGap,
+                panel_focused,
+            );
         }
-        (_, true) => paint_pill_row_gap(f, pane.spacer_area, palette::Surface::PillRowGap, false),
+        (_, true) => paint_pill_row_gap(
+            f,
+            pane.spacer_area,
+            palette::Surface::PillRowGap,
+            panel_focused,
+        ),
     }
 
     // List box: fill, then the slot's content in the inset row-flow rect.
@@ -212,6 +234,9 @@ pub(in crate::app) fn paint_browser_pane(
             }
         }
         ListSlot::Media(list) => {
+            if let Some((query, loading)) = list.search_bar() {
+                render_search_box(f, pane.pills_area, &query, loading);
+            }
             // The panel drives the viewport clamp and the paint policy
             // (design D3): the slot fixes focus and the list-backdrop
             // selected row (design D6).
@@ -304,6 +329,7 @@ pub(in crate::app) fn render_wide_skeleton(
         pane,
         content,
         list_focused,
+        browser_focused,
         hovered_selector,
         hits,
         windows,

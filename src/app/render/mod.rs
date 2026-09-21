@@ -89,11 +89,11 @@ pub(crate) use screens::sort_filter::{
 pub(crate) use theme::{
     ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, DURATION, HERO_CREDITS_NAME, HERO_CREDITS_STRIPE,
     HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR, HINT_PILL_FILLS, INDICATOR_AUDIO_FG,
-    INDICATOR_RESOLUTION_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG, PLAYBACK_CONTEXT_FG,
+    INDICATOR_RESOLUTION_FG, MUSIC_HEADER, PILL_OVERFLOW_FG, PILL_SELECTED_FG, PLAYBACK_CONTEXT_FG,
     PLAYBACK_META_FG, PLAYBACK_TITLE_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK, ROW_DATE_FG, SCROLLBAR,
-    SELECTED_ROW_BG, SPLIT_ROW_CONTEXT_FG, SPLIT_ROW_TITLE_FG, STATUS_AVAILABLE, STATUS_ERROR,
-    TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE, TEXT_METADATA,
-    TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
+    SELECTED_ROW_BG, SELECTED_ROW_FG, SPLIT_ROW_CONTEXT_FG, SPLIT_ROW_TITLE_FG, STATUS_AVAILABLE,
+    STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE,
+    TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
 };
 // Task 4.2: the retired role names and the value-aliased resolver survive only
 // as test-fed re-exports — each is pinned by a frozen pre-existing test file
@@ -158,9 +158,6 @@ mod music_characterization_tests;
 #[cfg(test)]
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
-#[cfg(test)]
-#[path = "tests_music_wide_reanchor_characterization.rs"]
-mod music_wide_reanchor_characterization_tests;
 #[cfg(test)]
 #[path = "tests_non_music.rs"]
 mod non_music_tests;

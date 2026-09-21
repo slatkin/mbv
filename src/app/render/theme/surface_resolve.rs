@@ -101,14 +101,14 @@ mod tests {
     fn pinned_fills(surface: Surface) -> (Color, Color) {
         match surface {
             Surface::QueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::LibraryColumn => (SURFACE_BACKDROP, SURFACE_BACKDROP),
+            Surface::LibraryColumn => (SURFACE_FOCUSED, SURFACE_BACKDROP),
             Surface::WideSplitGutter => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::HeroPane => (SURFACE_FOCUSED, SURFACE_RESTING),
+            Surface::HeroPane => (Palette::Ink.color(), Palette::Ink.color()),
             Surface::SelectedRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
-            Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
+            Surface::LibraryPanel => (Palette::Green2.color(), SURFACE_RESTING),
             Surface::QueuePanel => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::MainContentBox => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
@@ -127,7 +127,7 @@ mod tests {
             Surface::PillChip => (PILL_BG, PILL_BG),
             Surface::PillChipSelected => (PILL_SELECTED_BG, PILL_SELECTED_BG),
             Surface::QueueScopePillSelected => (ACCENT, ACCENT),
-            Surface::PillRowGap => (SURFACE_BACKDROP, SURFACE_BACKDROP),
+            Surface::PillRowGap => (SURFACE_FOCUSED, SURFACE_BACKDROP),
             Surface::SidebarBand => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::TabBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::PopupFrame => (SURFACE_FOCUSED, SURFACE_FOCUSED),
@@ -194,25 +194,23 @@ mod tests {
                     focused, SURFACE_FOCUSED,
                     "{surface:?} shares the recess focused fill"
                 ),
-                Level::ChromeBand | Level::Popup => {
-                    panic!(
-                        "{surface:?}: only column/pane, content body and recess are focus-driven"
-                    )
-                }
+                Level::ChromeBand => assert_eq!(
+                    focused, SURFACE_FOCUSED,
+                    "{surface:?} shares the chrome band focused fill"
+                ),
+                Level::Popup => panic!(
+                    "{surface:?}: only column/pane, content body, recess and chrome \
+                     band are focus-driven"
+                ),
             }
         }
 
-        // A declared column deviation (the library column's backdrop) differs
-        // from a content body's resting value. The two levels' declared
-        // *defaults* coincide, so this pins the visible difference.
+        // The library column rests at Slate while the panel rests at Storm,
+        // and their focused arms remain distinct surface roles.
         let column = surface_colors(Surface::LibraryColumn, false).fill;
         let content = surface_colors(Surface::LibraryPanel, false).fill;
-        assert_ne!(
-            column, content,
-            "the column and content-body resting values"
-        );
-        assert_eq!(column, SURFACE_BACKDROP);
-        assert_eq!(content, SURFACE_RESTING);
+        assert_eq!(column, Palette::Slate.color());
+        assert_eq!(content, Palette::Storm.color());
     }
 
     /// The soft content body is the table's one declared variant: it takes the

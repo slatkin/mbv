@@ -31,6 +31,14 @@ fn key(code: Key) -> Event<UserEvent> {
     })
 }
 
+/// The Ctrl chord of a key: the panel-focus switch (user decision 2026-09-20).
+fn ctrl_key(code: Key) -> Event<UserEvent> {
+    Event::Keyboard(KeyEvent {
+        code,
+        modifiers: KeyModifiers::CONTROL,
+    })
+}
+
 /// Task 1.1: the saved-tab restore runs in the sync pass, before any draw.
 /// After one tick() + sync pass and without drawing, the pending tab is
 /// resolved; `render_main` no longer writes `self.tab`.
@@ -305,14 +313,16 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     );
 }
 
-/// Plain Left/Right now own panel switching (formerly Alt+Left/Right): the
-/// router fold must claim the bare chords and move panel focus, proven here
-/// through the real tick + sync pass rather than a direct `Component::on`.
+/// Panel switching is the Ctrl+Left/Ctrl+Right chord (user decision
+/// 2026-09-20, replacing the bare arrows, which now reach the tree's own
+/// parent/child chords): the router fold must claim the Ctrl chords and move
+/// panel focus, proven here through the real tick + sync pass rather than a
+/// direct `Component::on`.
 #[test]
-fn tick_plain_arrows_switch_main_panels() {
-    // Queue focused: plain Right moves panel focus to Library.
+fn tick_ctrl_arrows_switch_main_panels() {
+    // Queue focused: Ctrl+Right moves panel focus to Library.
     let mut harness = queue_focused_harness();
-    harness.inject(key(Key::Right));
+    harness.inject(ctrl_key(Key::Right));
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
@@ -323,12 +333,12 @@ fn tick_plain_arrows_switch_main_panels() {
     }
     assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
 
-    // Library focused in Both mode: plain Left moves panel focus to Queue.
+    // Library focused in Both mode: Ctrl+Left moves panel focus to Queue.
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::Both;
     let mut both = TickHarness::new(app);
-    both.inject(key(Key::Left));
+    both.inject(ctrl_key(Key::Left));
     let outcome = both.step();
     assert_eq!(
         outcome.router,
@@ -338,6 +348,25 @@ fn tick_plain_arrows_switch_main_panels() {
         both.model_mut().dispatch_router_command(command);
     }
     assert_eq!(both.model().app.panel_focus, PanelFocus::Queue);
+
+    // The bare arrows no longer move panel focus: Library focus in Both mode
+    // keeps the panel and falls through to the tree's own chord.
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::Both;
+    let mut plain = TickHarness::new(app);
+    plain.inject(key(Key::Left));
+    let outcome = plain.step();
+    assert_ne!(
+        outcome.router,
+        RouterOutcome::Command(Command::FocusPanel(PanelFocus::Queue)),
+        "plain Left is the tree's chord, not a panel switch"
+    );
+    assert_eq!(
+        plain.model().app.panel_focus,
+        PanelFocus::Library,
+        "plain Left leaves panel focus where it was"
+    );
 }
 
 #[test]

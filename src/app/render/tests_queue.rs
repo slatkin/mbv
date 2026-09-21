@@ -3,7 +3,6 @@ use crate::app::palette;
 use crate::app::tests::make_session;
 use crate::App;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use ratatui::style::Modifier;
 
 /// Task 4.1 (D10): the right column reserves the playback strip's
@@ -150,7 +149,7 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
         let cell = &buf[(queue.x + 4, layout.content_area.y + 1)];
         assert_eq!(
             cell.style().bg,
-            Some(Color::from_u32(0x003c4841)),
+            Some(palette::surface_colors(palette::Surface::QueueColumn, true).fill),
             "queue-only with queue focus at width {width} must use the focused zebra stripe, got {:?}",
             cell.style().bg
         );
@@ -191,7 +190,7 @@ fn both_mode_focused_queue_keeps_focused_styling() {
     let cell = &buf[(layout.content_area.x + 2, layout.content_area.y + 1)];
     assert_eq!(
         cell.style().bg,
-        Some(Color::from_u32(0x003c4841)),
+        Some(palette::surface_colors(palette::Surface::QueueColumn, true).fill),
         "focused queue in both mode must paint the focused zebra stripe, got {:?}",
         cell.style().bg
     );
@@ -601,12 +600,17 @@ fn queue_playback_panel_unmounts_in_library_only() {
 #[test]
 fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     /// Screen positions of `title` painted on a live (now-playing) row,
-    /// located by the row's aqua play glyph.
+    /// located by its play glyph. Unselected rows use Aqua; a selected row's
+    /// marker uses the selected-row Ink foreground.
     fn now_playing_cells(buf: &ratatui::buffer::Buffer, title: &str) -> Vec<(u16, u16)> {
         let mut hits = Vec::new();
         for y in 0..buf.area().height {
             let has_icon = (0..buf.area().width).any(|x| {
-                buf[(x, y)].symbol() == "▶" && buf[(x, y)].style().fg == Some(palette::ACCENT)
+                buf[(x, y)].symbol() == "▶"
+                    && matches!(
+                        buf[(x, y)].style().fg,
+                        Some(palette::ACCENT) | Some(palette::SELECTED_ROW_FG)
+                    )
             });
             if !has_icon {
                 continue;
@@ -722,11 +726,11 @@ fn queue_selection_paints_the_bar_without_an_outside_marker() {
         " ",
         "no marker may paint outside the box edge"
     );
-    // The selected row paints the bar and keeps the ordinary emphasis title,
+    // The selected row paints the Iris bar with the selected-row Ink title,
     // not bold.
     let title_x = box_area.x + 2;
     assert_eq!(buf[(title_x, marker_y)].bg, palette::SELECTED_ROW_BG);
-    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS);
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::SELECTED_ROW_FG);
     assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 
     // Without panel focus the row keeps the ordinary emphasis title and is

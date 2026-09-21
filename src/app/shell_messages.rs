@@ -62,6 +62,62 @@ impl Model {
                         }
                         self.push_music_workspace_content();
                     }
+                    ShellRequest::MusicArtistActivate { target } => {
+                        // Right on an already expanded artist root (task 6.4):
+                        // non-Wide geometry opens the artist's Library Hero
+                        // overlay and focuses its Workspace. The shell re-reads
+                        // no tree cursor; it only confirms the owner still
+                        // resolves that artist before opening.
+                        if self.app.tab.emby_library_index().is_some()
+                            && !self.app.is_right_panel_wide()
+                            && self.music_owner().is_some_and(|owner| {
+                                owner
+                                    .artist_detail_target()
+                                    .is_some_and(|current| current.same_source(&target))
+                            })
+                        {
+                            self.open_library_hero_overlay();
+                        }
+                        self.push_music_workspace_content();
+                    }
+                    ShellRequest::MusicNeighbourPrefetch { targets } => {
+                        // Task 6.5 (design D4): the artwork payload is the
+                        // tree's own ordered neighbour window from its
+                        // completed paint. The fetch applies the existing
+                        // idle gate. Source pagination for this album level
+                        // is unconditional (`maybe_fetch_next_page_sized`
+                        // loads it to completion), so it no longer rides
+                        // this payload.
+                        self.app.prefetch_neighbour_album_art(&targets);
+                    }
+                    ShellRequest::MusicArtistTracks { target } => {
+                        // Artist-root movement is the Grouped Music browser's
+                        // source-pagination signal. Resolve the stable album
+                        // targets against App-owned browse rows and arm only
+                        // when one is near the loaded edge; expansion is not a
+                        // prerequisite for loading the next artist page.
+                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                            self.app.maybe_fetch_next_page_for_music_artist(
+                                lib_idx,
+                                &target.album_targets,
+                            );
+                        }
+                        // Design D7 (tasks 6.1/6.2): one focus transition
+                        // requests both concerns. The track request arms the
+                        // artist query/fallback here; the artwork half
+                        // re-dispatches as its own typed variant so each
+                        // concern keeps a separate exhaustive dispatch arm.
+                        self.request_music_artist_tracks(target.clone());
+                        self.handle_terminal_message(
+                            Msg::Shell(ShellRequest::MusicArtistArtwork { target }),
+                            music_resize,
+                            tv_resize,
+                        );
+                    }
+                    ShellRequest::MusicArtistArtwork { target } => {
+                        self.request_music_artist_artwork(target);
+                        self.push_music_workspace_content();
+                    }
                     ShellRequest::MusicAlbumCursor { target, kind } => {
                         // Click-to-focus: a pointer-driven album-cursor move pulls
                         // panel focus to the Library. Keyboard moves only reach
@@ -92,6 +148,70 @@ impl Model {
                                     self.app.page_grouped_album_cursor(lib_idx, target);
                                 }
                             }
+                        }
+                        self.push_music_workspace_content();
+                    }
+                    ShellRequest::MusicArtistAction {
+                        action,
+                        items,
+                        origin,
+                        unresolved_targets,
+                    } => {
+                        // Artist actions use the same stable origin as the
+                        // status/bulk-selection path. Clearing through that
+                        // identity keeps Queue or another Library owner from
+                        // losing its independent selection.
+                        // Album rows are folders, so Play and Shuffle must first
+                        // compose their playable descendants in tree order and
+                        // submit one replacement. Enqueue intentionally keeps
+                        // the existing per-album append path.
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                        let had_items = !items.is_empty();
+                        match action {
+                            crate::app::components::msg::MusicTreeAction::Play
+                            | crate::app::components::msg::MusicTreeAction::Shuffle => {
+                                if had_items {
+                                    self.app.play_music_albums(
+                                        items,
+                                        matches!(
+                                            action,
+                                            crate::app::components::msg::MusicTreeAction::Shuffle
+                                        ),
+                                    );
+                                }
+                            }
+                            crate::app::components::msg::MusicTreeAction::Enqueue => {
+                                for item in items {
+                                    self.handle_emby_library_request(
+                                        ShellRequest::EmbyLibraryEnqueue { item },
+                                    );
+                                }
+                            }
+                        }
+                        // A tree-originated multi-selection action consumes
+                        // only the selection that produced it. The clear is
+                        // harmless for an ordinary unmarked artist action.
+                        self.clear_multi_selection_from_origin(origin);
+                        if unresolved_targets.is_empty() {
+                            if !had_items {
+                                self.app.flash(
+                                    "No artist albums available".into(),
+                                    ToastSeverity::Neutral,
+                                );
+                            }
+                        } else {
+                            self.app.flash(
+                                format!(
+                                    "{} artist album{} unavailable",
+                                    unresolved_targets.len(),
+                                    if unresolved_targets.len() != 1 {
+                                        "s"
+                                    } else {
+                                        ""
+                                    }
+                                ),
+                                ToastSeverity::Warning,
+                            );
                         }
                         self.push_music_workspace_content();
                     }

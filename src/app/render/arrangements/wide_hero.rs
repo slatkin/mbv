@@ -330,37 +330,38 @@ mod wide_hero_hero_pane_tests {
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
-        assert_eq!(cell.bg, palette::SURFACE_RESTING);
+        assert_eq!(
+            cell.bg,
+            palette::surface_colors(palette::Surface::HeroPane, false).fill
+        );
         assert_ne!(cell.bg, palette::resolve_surface_focus(true));
     }
 
     #[test]
-    fn workspace_resolves_focus_and_returns_the_shared_inset() {
+    fn hero_pane_paints_one_sheet_in_both_focus_states_and_returns_the_shared_inset() {
         let area = wide_area();
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         let WideHeroPanes {
             hero: left_panel, ..
         } = wide_hero_presentation(area, None);
         let expected = padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y);
-        terminal
-            .draw(|f| {
-                let returned = wide_hero_hero_pane(f, area, true, None);
-                assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
-                assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
-                assert_eq!(returned, expected);
-            })
-            .unwrap();
-        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
-        assert_eq!(cell.bg, palette::resolve_surface_focus(true));
-
-        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
-        terminal
-            .draw(|f| {
-                wide_hero_hero_pane(f, area, false, None);
-            })
-            .unwrap();
-        let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
-        assert_eq!(cell.bg, palette::resolve_surface_focus(false));
+        let sheet = palette::surface_colors(palette::Surface::HeroPane, false).fill;
+        for focused in [true, false] {
+            terminal
+                .draw(|f| {
+                    let returned = wide_hero_hero_pane(f, area, focused, None);
+                    assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
+                    assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
+                    assert_eq!(returned, expected);
+                })
+                .unwrap();
+            let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
+            assert_eq!(
+                cell.bg, sheet,
+                "the hero pane is one fixed sheet, focused={focused}"
+            );
+            assert_ne!(cell.bg, palette::SURFACE_FOCUSED);
+        }
     }
 
     /// The hero painter is split-only (design D1): it must paint whatever
@@ -400,7 +401,7 @@ mod wide_hero_hero_pane_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(hero_panel.x, hero_panel.y)].bg,
-            palette::SURFACE_RESTING
+            palette::surface_colors(palette::Surface::HeroPane, false).fill
         );
     }
 }

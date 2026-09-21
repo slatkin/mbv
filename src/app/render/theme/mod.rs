@@ -100,6 +100,9 @@ pub const TEXT_STRONG: Color = Palette::White.color(); // bold titles/headings
 pub const TEXT_EMPHASIS: Color = Palette::Cream.color(); // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = Palette::Yellow.color(); // focused-row title accent
 pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title (the first metadata line)
+/// Grouped Music's artist and section-header text, matching the standard
+/// emphasis colour used by queue and movie list headers.
+pub const MUSIC_HEADER: Color = Palette::Cream.color();
 pub const TEXT_ON_ACCENT: Color = Palette::Grey1.color(); // near-black text painted on a colored surface
 pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playing"/confirmed value text;
                                                               // deliberately not the focused surface's
@@ -111,13 +114,11 @@ pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playi
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, pct, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the
-/// punch-through and the gutter-accent-only title treatment; the row keeps
-/// its ordinary foreground roles on the bar).
-pub const SELECTED_ROW_BG: Color = Palette::Slate.color(); // its own role, deliberately not
-                                                           // `SURFACE_BACKDROP`, whose `Palette::Slate`
-                                                           // value it shares today: the two are equal
-                                                           // today and independently editable, so an
-                                                           // edit to either moves it alone
+/// punch-through and the gutter-accent-only title treatment).
+pub const SELECTED_ROW_BG: Color = Palette::Iris.color();
+/// Selected-row text on the Iris bar. Its own role keeps the bar's foreground
+/// independent from the ordinary title and metadata hierarchy.
+pub const SELECTED_ROW_FG: Color = Palette::Ink.color();
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours
@@ -150,7 +151,7 @@ pub const DURATION: Color = Palette::Iris.color(); // the sage
 /// podcast browser's `17 Sep 26` gutter. Its own role rather than the
 /// `DURATION` time column's, so a duration edit cannot move the dates; a date
 /// is metadata about the item, not a playback time.
-pub const ROW_DATE_FG: Color = Palette::Yellow.color(); // muted gold (#dbbc7f)
+pub const ROW_DATE_FG: Color = Palette::Iris.color(); // sage (#a7c080)
 
 /// The primary (context/container) part of a split media-list row — the
 /// podcast an episode row came from. Its own role rather than

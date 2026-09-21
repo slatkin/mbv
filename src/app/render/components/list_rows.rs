@@ -43,10 +43,6 @@ impl LibraryListRenderCtx {
         }
     }
 
-    pub(in crate::app) fn item_count(&self) -> usize {
-        self.items.len()
-    }
-
     pub(in crate::app) fn cursor(&self) -> usize {
         self.cursor
     }

@@ -161,6 +161,20 @@ impl Component for LibraryPanel {
                 .as_ref()
                 .and_then(|geometry| geometry.hero_image.clone())
         };
+        // A typed request the owner resolved from the frame it just painted
+        // (task 6.5: the Grouped Music tree's neighbour artwork window) rides
+        // the panel's deferred-message seam and is dispatched after this
+        // paint. A pending deferred message is never clobbered; the owner
+        // re-resolves the same window on the next painted frame.
+        if self.deferred_msg.is_none() {
+            if let Some(message) = self
+                .owners
+                .active_mut()
+                .and_then(|owner| owner.post_paint_message())
+            {
+                self.deferred_msg = Some(message);
+            }
+        }
         self.hits = hits;
         self.pill_windows = windows;
         self.painted_area = Some(area);
@@ -206,6 +220,10 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                     && key.code == tuirealm::event::Key::Enter
                     && !self.hero_overlay_open
                     && self.narrow_geometry.is_some()
+                    && self
+                        .owners
+                        .active_mut()
+                        .is_some_and(|owner| owner.hero_overlay_enter_available())
                 {
                     if let Some(message) = self.open_hero_from_browser(None) {
                         return Some(message);

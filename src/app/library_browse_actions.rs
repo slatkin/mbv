@@ -692,7 +692,7 @@ impl App {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn spawn_browse_page(
+    pub(super) fn spawn_browse_page_sized(
         &self,
         lib_idx: usize,
         parent_id: String,
@@ -702,6 +702,7 @@ impl App {
         sort_by: String,
         sort_order: String,
         letter_filter: Option<super::render::LetterFilter>,
+        limit: usize,
     ) {
         let Some(client) = self.emby_snapshot() else {
             return;
@@ -717,7 +718,7 @@ impl App {
                 item_types.as_deref(),
                 unplayed_only,
                 start_index,
-                PAGE_SIZE,
+                limit,
                 &sort_by,
                 &sort_order,
                 name_ge,

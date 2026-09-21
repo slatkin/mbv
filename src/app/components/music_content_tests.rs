@@ -1,3 +1,5 @@
+use self::artist_workspace_tests::artist_workspace_owner;
+use self::tree_tests::{press, tree_owner, tree_owner_with_tracks};
 use super::*;
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::make_item;
@@ -16,9 +18,83 @@ fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
         vec![make_item("Artist", "MusicArtist")],
         0,
         vec![("Artist".into(), "2024".into(), "Album".into())],
+        vec![crate::app::music_grouping::ArtistKey::Fallback(
+            "Artist".into(),
+        )],
         vec![0],
         None,
     )
+}
+
+#[test]
+fn grouped_music_filter_keeps_the_tree_panel_owner_and_uses_the_shared_query_editor() {
+    let mut first = make_item("First Album", "Folder");
+    first.id = "album-1".into();
+    let mut second = make_item("Second Album", "Folder");
+    second.id = "album-2".into();
+    let mut owner = MusicContent::new();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first, second], 0),
+        None,
+        String::new(),
+        Vec::new(),
+        0,
+        vec![
+            ("Artist".into(), "2001".into(), "First Album".into()),
+            ("Artist".into(), "2002".into(), "Second Album".into()),
+        ],
+        vec![
+            crate::app::music_grouping::ArtistKey::Fallback("Artist".into()),
+            crate::app::music_grouping::ArtistKey::Fallback("Artist".into()),
+        ],
+        vec![0, 1],
+        None,
+    ));
+
+    let slash = KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    };
+    assert!(owner.on_key(&slash).is_some());
+    assert!(owner.inline_search.is_active());
+    assert!(owner.browser.filter_active());
+    owner.inline_search.restore_query("Second".into());
+    owner
+        .browser
+        .apply_filter_query(owner.inline_search.query());
+    let content = owner.content();
+    assert!(matches!(content.list, ListSlot::Media(_)));
+    drop(content);
+    let titles: Vec<&str> = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .map(|node| owner.browser.title_of(node.id()))
+        .collect();
+    assert_eq!(titles, ["Artist", "Second Album"]);
+}
+
+#[test]
+fn tree_entries_ignore_played_album_state_but_keep_live_progress() {
+    let mut played = make_item("Album", "Folder");
+    played.played = true;
+    let mut owner = MusicContent::new();
+    owner.set_content(context(played, ""));
+    assert_eq!(
+        owner.tree_entries()[0].semantic_state,
+        MediaSemanticState::Ordinary,
+        "music tree album rows never inherit stored played state"
+    );
+
+    let mut active = make_item("Album", "Folder");
+    active.playback_position_ticks = 500;
+    active.runtime_ticks = 1000;
+    owner.set_content(context(active, ""));
+    assert_eq!(
+        owner.tree_entries()[0].semantic_state,
+        MediaSemanticState::active(Some(50)),
+        "music tree retains live playback progress"
+    );
 }
 
 #[test]
@@ -81,123 +157,414 @@ fn content_exposes_tracks_as_the_workspace() {
         .as_ref()
         .and_then(|hero| hero.workspace.as_ref())
         .and_then(|workspace| workspace.header);
-    assert_eq!(header, Some("TRACKLIST"));
+    assert_eq!(
+        header,
+        Some(crate::app::components::library_panel::content::WorkspaceHeader::Tracklist)
+    );
     assert_eq!(owner.track_list.rows().len(), 1);
 }
 
 #[test]
-fn hero_double_click_activates_the_selected_track() {
-    let album = make_item("Album", "MusicAlbum");
-    let track = make_item("Track", "Audio");
+fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut album = make_item("Album", "MusicAlbum");
+    album.id = "album-1".into();
+    let mut first = make_item("Same Title", "Audio");
+    first.id = "track-1".into();
+    first.album_id = album.id.clone();
+    let mut second = make_item("Same Title", "Audio");
+    second.id = "track-2".into();
+    second.album_id = album.id.clone();
     let mut owner = MusicContent::new();
-    let mut ctx = context(album.clone(), "overview");
-    ctx.album_tracks = Some(vec![track.clone()]);
+    owner.set_content(context(album, "overview"));
+    // Artist rows belong to the focused artist root (task 6.4): the detail
+    // projection must carry the tree-resolved target, so the fixture focuses
+    // the root first and binds the projection to it.
+    owner.browser.select_first_visible();
+    let target = owner.artist_detail_target().expect("artist root selected");
+    let detail = ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Artist".into(),
+            album_count: 1,
+            year_start: Some(2001),
+            year_end: Some(2001),
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "album-1".into(),
+            album_title: "Album".into(),
+            tracks: vec![first.clone(), second.clone()],
+        }],
+    };
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(detail);
     owner.set_content(ctx);
 
-    let area = Rect::new(0, 0, 30, 1);
-    owner.track_list.wide_mut().set_geometry(area, area);
-    let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
-    terminal
-        .draw(|frame| owner.track_list.wide_mut().view(frame, area))
-        .unwrap();
-
-    let message = owner.on_slot_event(LibrarySlotEvent::HeroPane(
-        MediaListSurfaceInput::DoubleClick(Position { x: 0, y: 0 }),
-    ));
-    match message {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-            album_id,
-            track: activated,
-        })) => {
-            assert_eq!(album_id, album.id);
-            assert_eq!(activated.id, track.id);
-        }
-        other => panic!("expected track activation, got {other:?}"),
-    }
-}
-
-#[test]
-fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
-    let mut owner = MusicContent::new();
-    owner.set_content(context(make_item("Album", "MusicAlbum"), "overview"));
-
-    let area = Rect::new(0, 0, 30, 1);
-    owner.carrier.wide_mut().set_geometry(area, area);
-    let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
-    terminal
-        .draw(|frame| owner.carrier.wide_mut().view(frame, area))
-        .unwrap();
-
-    let event = LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
-        at: Position { x: 0, y: 0 },
-        delta: 1,
-    });
     assert!(matches!(
-        owner.on_slot_event(event),
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: 0,
-            kind: AlbumCursorKind::Move,
-        }))
+        owner.track_list.rows().first(),
+        Some(MediaListRow::Heading { text }) if text == "Album"
     ));
-
-    owner.context.album_targets.clear();
-    assert_eq!(owner.on_slot_event(event), None);
+    let items: Vec<&str> = owner
+        .track_list
+        .rows()
+        .iter()
+        .filter_map(MediaListRow::selectable_target)
+        .map(String::as_str)
+        .collect();
+    assert_eq!(items, ["track-1", "track-2"]);
 }
 
+/// Task 6.4 (design D7): an artist root's Hero content is the shell-projected
+/// summary and album artwork — name, in-scope album count, year span, and the
+/// first settled album's existing artwork source — with the projected groups
+/// as its Workspace.
 #[test]
-fn wide_album_metadata_removes_artist_and_year_prefix() {
-    // The old `wide_album_metadata` characterization (rehomed here by task
-    // 9.2): a tagged album whose display name still carries the
-    // `Artist (Year) Title` folder prefix must present the bare title and
-    // the parsed release year, even though `derive_album_display_name`
-    // leaves a tagged album's name untouched.
-    let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");
-    album.artist = "Bob Dylan".into();
-    album.production_year = 1970;
+fn album_tracks_survive_an_artist_detail_push_for_another_album() {
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut album_track = make_item("Fetched Album Track", "Audio");
+    album_track.id = "album-track".into();
+    album_track.album_id = "a-0".into();
+    let mut owner = tree_owner_with_tracks(
+        &[("Alpha", &["a-0", "a-1"])],
+        Some(vec![album_track.clone()]),
+    );
+    owner.browser.select_first_visible();
+    let artist_target = owner.artist_detail_target().expect("artist root selected");
+    let mut artist_track = make_item("Artist Detail Track", "Audio");
+    artist_track.id = "artist-track".into();
+    artist_track.album_id = "a-1".into();
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target: artist_target,
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 2,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "a-1".into(),
+            album_title: "a-1".into(),
+            tracks: vec![artist_track],
+        }],
+    });
+
+    owner.set_content(ctx);
 
     assert_eq!(
-        wide_album_metadata(&album, "Bob Dylan"),
-        ("New Morning".to_string(), 1970)
+        owner.tree_tracks.get("a-0").map(Vec::as_slice),
+        Some([album_track].as_slice()),
+        "the prior per-album fetch remains projected"
+    );
+    assert_eq!(
+        owner
+            .tree_tracks
+            .get("a-1")
+            .map(Vec::as_slice)
+            .map(|tracks| tracks[0].id.as_str()),
+        Some("artist-track"),
+        "artist detail tracks are merged into the existing projection"
     );
 }
 
 #[test]
-fn resolved_hero_data_uses_parsed_title_year_and_cached_artist() {
-    // The `album_artist_cache` fallback names the artist; the folder-name
-    // parse supplies the title/year the Wide hero presents.
+fn artist_root_hero_uses_the_projected_summary_and_artwork() {
+    use crate::app::components::library_panel::content::ArtworkSource;
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    press(&mut owner, Key::Home);
+    let target = owner.artist_detail_target().expect("artist root selected");
+    let mut track = make_item("Track One", "Audio");
+    track.id = "alpha-track-1".into();
+    track.album_id = "a-0".into();
+    let cache_key = "a-0:P".to_string();
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 2,
+            year_start: Some(2001),
+            year_end: Some(2003),
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "a-0".into(),
+            album_title: "a-0".into(),
+            tracks: vec![track],
+        }],
+    });
+    owner.set_content(ctx);
+    owner.set_hero_image(HeroImageState::Loading);
+
+    {
+        let content = owner.content();
+        let hero = content.hero.expect("artist hero");
+        assert_eq!(hero.facts.title, "Alpha");
+        assert_eq!(
+            hero.facts.meta_rows,
+            vec!["2 albums".to_string(), "2001\u{2013}2003".to_string()]
+        );
+        assert_eq!(
+            hero.facts.artwork.shape,
+            super::super::library_panel::ArtworkShape::Square
+        );
+        assert_eq!(hero.facts.artwork.image, HeroImageState::Loading);
+        match hero.facts.artwork.source.as_ref() {
+            Some(ArtworkSource::Emby {
+                item_id,
+                image_types,
+                cache_key: key,
+                ..
+            }) => {
+                assert_eq!(item_id, "a-0");
+                assert_eq!(image_types, &vec!["AudioChild".to_string()]);
+                assert_eq!(key, &cache_key);
+            }
+            other => panic!("expected the artist artwork source, got {other:?}"),
+        }
+        assert!(
+            hero.workspace.is_some(),
+            "the artist Hero carries its Workspace"
+        );
+    }
+    assert!(matches!(
+        owner.track_list.rows().first(),
+        Some(MediaListRow::Heading { text }) if text == "a-0"
+    ));
+}
+
+#[test]
+fn artist_hero_switches_to_the_selected_track_album_artwork() {
+    use crate::app::components::library_panel::content::ArtworkSource;
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    press(&mut owner, Key::Home);
+    let target = owner.artist_detail_target().expect("artist root selected");
+    let mut first = make_item("First Track", "Audio");
+    first.id = "track-a-0".into();
+    first.album_id = "a-0".into();
+    let mut second = make_item("Second Track", "Audio");
+    second.id = "track-a-1".into();
+    second.album_id = "a-1".into();
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 2,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: vec![
+            ArtistTrackGroup {
+                album_id: "a-0".into(),
+                album_title: "a-0".into(),
+                tracks: vec![first],
+            },
+            ArtistTrackGroup {
+                album_id: "a-1".into(),
+                album_title: "a-1".into(),
+                tracks: vec![second],
+            },
+        ],
+    });
+    owner.set_content(ctx);
+    owner.expand_all_tree_roots();
+    owner.set_hero_image(HeroImageState::Loading);
+
+    let album_a0 = owner.browser.projected_nodes()[1].id();
+    owner.browser.expand_node(album_a0);
+    owner.browser.select_index(2);
+    assert_eq!(
+        owner.browser.selected_track_identity(),
+        Some(("a-0", "track-a-0"))
+    );
+    let first_source = owner.hero_data().expect("artist hero").facts.artwork.source;
+    assert!(matches!(
+        first_source,
+        Some(ArtworkSource::Emby { item_id, cache_key, .. })
+            if item_id == "a-0" && cache_key == "a-0:P"
+    ));
+
+    let album_a1 = owner.browser.projected_nodes()[3].id();
+    owner.browser.expand_node(album_a1);
+    owner.browser.select_index(4);
+    assert_eq!(
+        owner.browser.selected_track_identity(),
+        Some(("a-1", "track-a-1"))
+    );
+    let second_source = owner.hero_data().expect("artist hero").facts.artwork.source;
+    assert!(matches!(
+        second_source,
+        Some(ArtworkSource::Emby { item_id, cache_key, .. })
+            if item_id == "a-1" && cache_key == "a-1:P"
+    ));
+}
+
+/// An artist root without a Service ID still uses the settled album's
+/// artwork. The image source is album-scoped, so no artist-ID artwork request
+/// is needed for either identity form.
+#[test]
+fn fallback_artist_hero_uses_the_first_album_artwork() {
+    use crate::app::components::library_panel::content::ArtworkSource;
+    use crate::app::music_artist_detail::{ArtistDetailProjection, ArtistSummary};
+
     let mut owner = MusicContent::new();
-    let mut album = make_item("Folder Artist (2024) First Album", "MusicAlbum");
-    album.artist.clear();
-    album.production_year = 0;
-    let mut ctx = context(album, "overview");
-    ctx.album_info = vec![("Folder Artist".into(), "2024".into(), "First Album".into())];
+    owner.set_content(context(make_item("Album", "MusicAlbum"), ""));
+    owner.browser.select_first_visible();
+    let target = owner.artist_detail_target().expect("fallback artist root");
+    assert_eq!(target.artist_id, None, "the fixture root has no Service ID");
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Artist".into(),
+            album_count: 1,
+            year_start: Some(2024),
+            year_end: Some(2024),
+        },
+        track_groups: Vec::new(),
+    });
     owner.set_content(ctx);
 
-    let data = owner.hero_data().expect("hero data");
-    assert_eq!(data.facts.title, "First Album");
-    assert_eq!(data.facts.meta_rows, vec!["Folder Artist", "2024"]);
+    let content = owner.content();
+    let hero = content.hero.expect("fallback artist hero");
+    assert_eq!(hero.facts.title, "Artist");
+    assert_eq!(
+        hero.facts.meta_rows,
+        vec!["1 album".to_string(), "2024".to_string()]
+    );
+    match hero.facts.artwork.source.as_ref() {
+        Some(ArtworkSource::Emby {
+            item_id,
+            image_types,
+            cache_key,
+            ..
+        }) => {
+            assert_eq!(item_id, "id");
+            assert_eq!(image_types, &vec!["AudioChild".to_string()]);
+            assert_eq!(cache_key, "id:P");
+        }
+        other => panic!("expected the first album artwork source, got {other:?}"),
+    }
+    assert_eq!(hero.facts.artwork.image, HeroImageState::None);
 }
 
-/// Music never tracks played/progress in its rows: a played track and a
-/// half-played track both project the ordinary row (mbv never resumes a music
-/// track, so its stored position means nothing either).
+/// Task 6.4: a projected artist detail that no longer belongs to the tree's
+/// current root never paints its summary, artwork, or groups — the Hero is
+/// absent rather than stale.
 #[test]
-fn played_tracks_project_the_ordinary_state() {
-    let mut played = make_item("Finished Track", "Audio");
-    played.played = true;
-    let mut half_played = make_item("Half-Played Track", "Audio");
-    half_played.runtime_ticks = 1000;
-    half_played.playback_position_ticks = 500;
-    let fresh = make_item("Fresh Track", "Audio");
-    let rows = build_track_rows(&[played, half_played, fresh]);
-    let states: Vec<&MediaSemanticState> = rows
-        .iter()
-        .map(|row| match row {
-            MediaListRow::Item { semantic_state, .. } => semantic_state,
-            _ => panic!("track rows are items"),
-        })
-        .collect();
-    assert_eq!(states[0], &MediaSemanticState::Ordinary);
-    assert_eq!(states[1], &MediaSemanticState::Ordinary);
-    assert_eq!(states[2], &MediaSemanticState::Ordinary);
+fn a_stale_artist_detail_never_paints_under_the_new_root() {
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut owner = tree_owner(&[("Alpha", &["a-0"]), ("Beta", &["b-0"])]);
+    press(&mut owner, Key::Home);
+    // The projection belongs to Beta while the tree focuses Alpha.
+    let beta_target = MusicArtistTarget {
+        artist_id: Some("artist-Beta".into()),
+        artist_name: "Beta".into(),
+        album_targets: vec!["b-0".into()],
+        revision: owner.context.catalog_revision,
+    };
+    let mut track = make_item("Beta Track", "Audio");
+    track.id = "beta-track".into();
+    track.album_id = "b-0".into();
+    let mut ctx = owner.context.clone();
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target: beta_target,
+        summary: ArtistSummary {
+            name: "Beta".into(),
+            album_count: 1,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "b-0".into(),
+            album_title: "b-0".into(),
+            tracks: vec![track.clone()],
+        }],
+    });
+    owner.set_content(ctx);
+
+    {
+        let content = owner.content();
+        assert!(
+            content.hero.is_none(),
+            "no stale Beta Hero paints under Alpha"
+        );
+    }
+    assert!(
+        owner.track_list.rows().is_empty(),
+        "no stale Beta group rows paint under Alpha"
+    );
+    assert!(
+        owner.workspace_track_item("beta-track").is_none(),
+        "the stale track is not resolvable for activation"
+    );
 }
+
+/// Task 6.4: a local album move between pushes resolves no rows until the new
+/// album's snapshot arrives — the prior album's tracks never paint under the
+/// new title.
+#[test]
+fn a_local_album_move_never_paints_the_prior_albums_tracks() {
+    let mut owner = tree_owner_with_tracks(
+        &[("Alpha", &["a-0", "a-1"])],
+        Some(vec![make_item("Old Track", "Audio")]),
+    );
+    assert_eq!(owner.track_list.rows().len(), 1, "fixture rows for a-0");
+
+    press(&mut owner, Key::Down);
+    assert_eq!(owner.browser.selected_album_target(), Some("a-1"));
+    {
+        let content = owner.content();
+        assert!(content.hero.is_some(), "the new leaf's title still paints");
+    }
+    assert!(
+        owner.track_list.rows().is_empty(),
+        "the prior album's rows must not paint under a-1"
+    );
+
+    // The a-1 push supplies its own snapshot and rows.
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = owner.selected_item();
+    ctx.album_tracks = Some(vec![make_item("New Track", "Audio")]);
+    owner.set_content(ctx);
+    assert_eq!(owner.track_list.rows().len(), 1);
+}
+
+#[cfg(test)]
+#[path = "music_content_tree_tests.rs"]
+mod tree_tests;
+
+#[cfg(test)]
+#[path = "music_content_artist_workspace_tests.rs"]
+mod artist_workspace_tests;
+
+#[cfg(test)]
+#[path = "music_content_artist_actions_tests.rs"]
+mod artist_actions_tests;

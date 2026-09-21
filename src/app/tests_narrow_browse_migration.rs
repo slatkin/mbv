@@ -6,7 +6,7 @@
 //! - Saved-position restore seam (`LibEvent::RestoreLibraryPosition`): restore
 //!   still writes the resting `BrowseLevel` cursor a later content projection
 //!   hands the owning component.
-//! - Painted-selection movement under `j`/`k` for TV and grouped music.
+//! - Painted-selection movement under `j`/`k` for TV.
 //! - `*_paints_each_browse_row_once`: the double-paint guard — assert on the
 //!   `TestBackend` buffer through the full `Model::draw_frame` path, red only
 //!   if both the legacy painter and the component `view` run for one surface.
@@ -101,61 +101,6 @@ fn narrow_tv_library_restores_saved_series_position() {
         app.libs[0].nav_stack[0].resting().cursor(),
         3,
         "entering the narrow TV library must restore the saved series (Series-3 at index 3)"
-    );
-}
-
-/// Entering a narrow Emby grouped-Music library restores its saved album
-/// position: the restored album (child) browse level lands its cursor on the
-/// saved album `focused_item_id`.
-#[test]
-fn narrow_grouped_music_library_restores_saved_album_position() {
-    let mut app = make_app_stub();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
-    app.panel_focus = PanelFocus::Queue;
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.music_levels = vec!["group".into(), "album".into()];
-
-    let mut library = make_item("Music", "CollectionFolder");
-    library.id = "lib-music".into();
-    library.collection_type = "music".into();
-    app.libs.push(LibraryTab::new(library));
-
-    let group_level = saved_level("lib-music", "Music", "group-1", None);
-    let album_level = saved_level("group-1", "Beta", "album-2", None);
-    let position = crate::config::LibraryPosition {
-        levels: vec![group_level.clone(), album_level.clone()],
-        ..Default::default()
-    };
-    app.replace_saved_library_position(0, position.clone());
-
-    let groups = folder_items("group", "MusicArtist", 3);
-    let albums: Vec<mbv_core::api::EmbyItem> = (0..4)
-        .map(|i| {
-            let mut album = make_item(&format!("Album {i}"), "MusicAlbum");
-            album.id = format!("album-{i}");
-            album
-        })
-        .collect();
-    let nav_stack = vec![
-        BrowseLevel::from_position_level(&group_level, groups, 3, 10),
-        BrowseLevel::from_position_level(&album_level, albums, 4, 10),
-    ];
-    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
-        lib_idx: 0,
-        requested_position: position.clone(),
-        position,
-        nav_stack,
-    });
-
-    assert_eq!(
-        app.libs[0].nav_stack.len(),
-        2,
-        "grouped path must survive restore"
-    );
-    assert_eq!(
-        app.libs[0].nav_stack[1].resting().cursor(), 2,
-        "entering the narrow grouped Music library must restore the saved album (album-2 at index 2)"
     );
 }
 
@@ -287,43 +232,6 @@ fn narrow_tv_browse_j_moves_painted_selection() {
     assert_ne!(
         before, after,
         "j must move the painted selection down the narrow TV series list"
-    );
-}
-
-/// Regression 4: narrow grouped Music `j` moves the painted selection.
-#[test]
-fn narrow_grouped_music_j_moves_painted_selection() {
-    let mut app = crate::app::render::make_music_group_app();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
-    app.mini_view_focus = PanelFocus::Library;
-    let album_level = app.libs[0].nav_stack.last_mut().unwrap();
-    for i in 0..3 {
-        let mut album = make_item(&format!("Extra Album {i}"), "MusicAlbum");
-        album.id = format!("album-extra-{i}");
-        album.artist = "Alpha".into();
-        album_level.items.push(album);
-    }
-    album_level.total_count = album_level.items.len();
-
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    let mut term = narrow_backend();
-
-    draw(&mut model, &mut term);
-    let before = model.test_painted_library_layout().selected_item_rect;
-    assert!(
-        before.is_some(),
-        "narrow grouped Music must paint a selected album row"
-    );
-
-    press(&mut model, Key::Char('j'));
-    draw(&mut model, &mut term);
-    let after = model.test_painted_library_layout().selected_item_rect;
-
-    assert_ne!(
-        before, after,
-        "j must move the painted selection down the narrow grouped-album list"
     );
 }
 

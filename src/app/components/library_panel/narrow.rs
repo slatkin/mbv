@@ -33,6 +33,7 @@ pub(in crate::app) fn render_narrow_skeleton(
         pane,
         content,
         browser_focused,
+        browser_focused,
         hovered_selector,
         hits,
         windows,

@@ -225,12 +225,50 @@ impl App {
         });
     }
 
+    /// Arm the next source page when a focused Grouped Music artist has a
+    /// child album near the loaded edge. The tree owns artist/album selection;
+    /// the shell resolves these stable album targets back to its browse level
+    /// here, so no component cursor or source-row index crosses the boundary.
+    pub(in crate::app) fn maybe_fetch_next_page_for_music_artist(
+        &mut self,
+        lib_idx: usize,
+        album_targets: &[String],
+    ) {
+        let cursor = {
+            let Some(level) = self.libs.get(lib_idx).and_then(|lib| lib.nav_stack.last()) else {
+                return;
+            };
+            album_targets
+                .iter()
+                .filter_map(|target| level.items.iter().position(|item| item.id == *target))
+                .max()
+        };
+        if let Some(cursor) = cursor {
+            self.maybe_fetch_next_page(lib_idx, cursor);
+        }
+    }
+
     /// Check whether another page should be fetched for the level at the top
     /// of `lib_idx`'s nav stack, and spawn it. `cursor` is the resolved
     /// position to threshold against (the caller's live/resting cursor) —
     /// never re-read from the level, so the prefetch decision no longer
     /// depends on `BrowseLevel.cursor` (task 4.3, R7).
     pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize, cursor: usize) {
+        self.maybe_fetch_next_page_sized(lib_idx, cursor, PREFETCH_AHEAD, PAGE_SIZE);
+    }
+
+    /// `maybe_fetch_next_page` with caller-chosen near-edge margin and page
+    /// size. `cursor` is the resolved position to threshold against (the
+    /// caller's live/resting cursor) — never re-read from the level, so the
+    /// prefetch decision no longer depends on `BrowseLevel.cursor` (task 4.3,
+    /// R7).
+    pub(in crate::app) fn maybe_fetch_next_page_sized(
+        &mut self,
+        lib_idx: usize,
+        cursor: usize,
+        ahead: usize,
+        limit: usize,
+    ) {
         let lib = &self.libs[lib_idx];
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,
@@ -251,7 +289,15 @@ impl App {
         // cursor on that hidden level. Paginate it to completion unconditionally.
         let is_feed_home_video_root =
             lib.nav_stack.len() == 1 && self.is_feed_home_video_library(lib_idx);
-        if !is_feed_home_video_root && cursor + PREFETCH_AHEAD < lvl.items.len() {
+        // The Grouped Music album level groups its flat items by artist
+        // client-side and the tree's local inline-search filter only ever
+        // searches what's loaded (never re-fetches on its own), so this level
+        // paginates to completion unconditionally too, exactly like the feed
+        // home-video root above -- there's no cursor-proximity heuristic that
+        // stays correct once artists collapse/expand independently of the
+        // underlying flat array position.
+        let paginate_to_completion = is_feed_home_video_root || self.is_music_group_view(lib_idx);
+        if !paginate_to_completion && cursor + ahead < lvl.items.len() {
             return;
         }
         let start_index = lvl.fetched_rows;
@@ -264,7 +310,7 @@ impl App {
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
         }
-        self.spawn_browse_page(
+        self.spawn_browse_page_sized(
             lib_idx,
             parent_id,
             start_index,
@@ -273,6 +319,7 @@ impl App {
             sort_by,
             sort_order,
             letter_filter,
+            limit,
         );
     }
 }

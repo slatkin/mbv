@@ -74,15 +74,15 @@ In the wide grouped Music composition, the music-group pills SHALL render at the
 
 ### Requirement: Wide hero uses one focus treatment
 
-The Wide hero arrangement SHALL apply one focused and unfocused surface treatment to every screen that uses it, including grouped Music and Home. During tree browsing the browser pane SHALL carry the focused treatment and the hero pane SHALL carry the resting treatment. During track selection those treatments SHALL reverse. When the Library panel itself is unfocused, both panes SHALL use the unfocused treatment. Grouped Music SHALL NOT define these colours itself.
+The Wide hero arrangement SHALL apply one focused and unfocused surface treatment to every screen that uses it, including grouped Music and Home. The hero pane SHALL paint one fixed dark sheet — the same chrome the Library Hero overlay paints — in every focus state. During tree browsing the browser pane SHALL carry the focused treatment; during track selection the Workspace box SHALL carry it. When the Library panel itself is unfocused, both SHALL use the unfocused treatment. Grouped Music SHALL NOT define these colours itself.
 
 #### Scenario: Album browser has focus
 - **WHEN** track selection is inactive and the Library panel is focused
-- **THEN** the tree pane has the arrangement's focused treatment and the hero pane remains a readable preview
+- **THEN** the tree pane has the arrangement's focused treatment and the hero pane keeps its fixed dark sheet
 
 #### Scenario: Track selection has focus
 - **WHEN** track selection is active and the Library panel is focused
-- **THEN** the hero pane has the arrangement's focused treatment and the tree pane is visibly dimmed while retaining its selected-node treatment
+- **THEN** the Workspace box has the arrangement's focused treatment and the tree pane is visibly dimmed while retaining its selected-node treatment
 
 #### Scenario: Queue has focus
 - **WHEN** the Queue panel has focus

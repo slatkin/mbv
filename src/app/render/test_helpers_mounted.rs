@@ -3,10 +3,12 @@
 use super::super::*;
 use super::buffer_to_string;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::music_content::MusicContent;
+use crate::app::components::media_list::MediaSemanticState;
+use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::ComponentId;
 use crate::app::layout::PaintedRowGeometry;
+use crate::app::music_grouping::ArtistKey;
 use crate::app::shell::Model;
 use crate::app::{App, PanelFocus};
 use ratatui::backend::TestBackend;
@@ -73,30 +75,33 @@ pub fn mounted_music_wide_geometry(
         .expect("wide Music skeleton painted")
 }
 
-pub fn mounted_music_layout(model: &Model) -> PaintedRowGeometry {
-    model
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("library panel mounted")
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .expect("LibraryPanel")
-        .test_painted_layout()
-}
-
-/// The album-scroll offset the mounted `MusicWorkspaceComponent` settled on.
-pub fn mounted_music_scroll(model: &Model) -> usize {
-    model.test_music_owner().album_scroll()
-}
-
-/// The mounted Music album control's complete current-frame flow targets.
-pub fn mounted_music_flow_targets(model: &Model) -> Vec<Option<String>> {
-    model.test_music_owner().album_flow_targets()
-}
-
-/// Flow rows occupied by a source album index in the mounted Music control.
-pub fn mounted_music_album_target_rows(model: &Model, target: usize) -> Vec<usize> {
-    model.test_music_owner().album_target_rows(target)
+/// The Grouped Music tree over the mounted fixture's settled projection: the
+/// same `MusicWideRenderCtx` facts (`album_info`/`album_order`/targets) the
+/// production browser flattens, grouped into artist roots and album leaves.
+pub fn mounted_music_tree_browser(model: &Model) -> MusicTreeBrowser {
+    let ctx = model.app.wide_music_render_ctx(0, None);
+    let entries: Vec<MusicTreeEntry> = ctx
+        .album_order
+        .iter()
+        .map(|&index| {
+            let (artist, year, name) = &ctx.album_info[index];
+            MusicTreeEntry {
+                artist: artist.clone(),
+                // The fixture's settled order groups each artist's albums
+                // consecutively, so the deterministic fallback key reproduces
+                // the same roots as the settled `ArtistKey` identity does.
+                artist_key: ArtistKey::Fallback(artist.clone()),
+                title: name.clone(),
+                year: (!year.is_empty()).then(|| year.clone()),
+                target: ctx.album_targets[index].clone(),
+                // The tree projects the fixture's settled album facts; the
+                // real pane derives this through `MediaSemanticState::from_emby`
+                // (music collapse keeps it ordinary).
+                semantic_state: MediaSemanticState::Ordinary,
+            }
+        })
+        .collect();
+    MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries))
 }
 
 /// The panel-hosted TV owner (task 8.4: reached through the mounted

@@ -360,6 +360,17 @@ _Avoid_: wide media row, wide_media_row
 The non-selectable Heading row labelling a group of media-list Item rows (artist, feed age bucket, letter or surname bucket, season). Painted bold in the FOAM metadata role; unlike a media-list Item row it keeps the surface fill and never paints the selected-row bar. It is a visual label, never a selection or action target, and it takes its own place in the zebra alternation.
 _Avoid_: artist header, group title, section label
 
+**Artist root**:
+The SELECTABLE tree root row representing one artist in the Grouped Music
+browser (`grouped-music-tree-browser`). It is focusable, expandable/collapsible,
+carries stable Service artist identity (or a deterministic fallback), and is the
+source for artist detail (Hero/Workspace, artwork, artist tracks). It is never
+played as a target itself — actions on it walk its settled album leaves. Distinct
+from `Group heading`, which is a non-selectable visual label elsewhere in the
+canonical lists; do not conflate the two, and do not call the artist root a
+"group", "heading", or "section".
+_Avoid_: artist heading, artist group, artist header, group heading (for the root)
+
 **Inline Search**:
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. EmbyLibraryContent, MusicContent, or TvContent is the sole owner and painter for the current presentation; TV transfers one snapshot between Narrow and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
 _Avoid_: global search, Search sidebar, search overlay
@@ -551,17 +562,20 @@ _Avoid_: separate detail block, split, side-by-side, hero-on-side, hero-on-left,
 hero-on-right
 
 **Hero pane**:
-The `#333c43` `SURFACE_RESTING` fill of Wide hero's right pane — the
-container surface itself, independent of what is painted inside it.
+The fixed `#1e2326` `Palette::Ink` dark sheet of Wide hero's right pane — the
+container surface itself, independent of what is painted inside it. The sheet
+is fixed in both focus states (it does not lighten with the panel's focus bit)
+and is the same dark chrome the Library Hero overlay paints when the same hero
+is shown over a non-Wide browser.
 _Avoid_: recessed box, hero panel, detail panel
 
 **Main content box**:
 The `#2d353b` `SURFACE_BACKDROP` inset within a Hero pane or Library Hero
 overlay, holding kind-dependent body content at one shared padding
 value. It holds overview text and, for a Movie in the Wide Hero pane, the
-Cast and crew table in the same box. Distinct from the Hero pane it sits
-inside: the pane is the outer container fill, the box is the inner content
-inset.
+Cast and crew table in the same box. Distinct from the fixed dark Hero pane
+sheet it sits inside: the pane is the outer container fill, the box is the
+inner content inset.
 _Avoid_: overview box, recessed box
 
 **Provider-link row**:

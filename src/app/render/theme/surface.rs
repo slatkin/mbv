@@ -44,6 +44,11 @@ pub(super) enum Level {
     /// Non-focusable structural chrome that never follows panel focus (the
     /// tab bar, the status bar, a column's header/status rows, the pill row
     /// and the spacer band below it, a sidebar's header/footer).
+    ///
+    /// The Selector row's spacer band (`PillRowGap`) is the level's one
+    /// focus-driven row: it is a reserved row *inside* the panel it paints
+    /// through, not chrome around it, so it follows the panel's bit while the
+    /// structural bands beside it stay fixed.
     ChromeBand,
     /// An overlay frame and its dim backdrop, which never follow a panel.
     Popup,
@@ -56,8 +61,9 @@ impl Level {
     /// `ColumnPane` and `ContentBody` deliberately share the value today, and
     /// `Recess` shares it too because its focus-driven row (the now-playing
     /// recess, and the TV/Music pane content boxes) reads as content.
-    /// `ChromeBand` and `Popup` have no focus-driven row in main; their value
-    /// records the level's intent for one.
+    /// `ChromeBand`'s one focus-driven row is the pill-row spacer band;
+    /// `Popup` has no focus-driven row in main, so its value records the
+    /// level's intent for one.
     pub(super) const fn focused_fill(self) -> Color {
         match self {
             Level::ColumnPane

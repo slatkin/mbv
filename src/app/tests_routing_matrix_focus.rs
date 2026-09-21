@@ -72,3 +72,94 @@ fn lib_key_ctrl_catchall_swallows_unmapped_chord() {
         "an unmapped Ctrl chord under Library focus must be swallowed (no queue undo)"
     );
 }
+
+/// Grouped Music's tree navigation chords are leaf-local: the router claims
+/// none of them. Up/Down/Home/End/PageUp/PageDown and both plain horizontal
+/// arrows always reach the focused leaf, in every panel mode — the panel
+/// focus switch is `Ctrl+Left`/`Ctrl+Right` (user decision 2026-09-20: plain
+/// Left conflicted with the tree's parent/collapse chord in the Both layout).
+#[test]
+fn library_focus_tree_navigation_chords_stay_leaf_local() {
+    let leaf = Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }));
+    for code in [
+        KeyCode::Up,
+        KeyCode::Down,
+        KeyCode::Home,
+        KeyCode::End,
+        KeyCode::PageUp,
+        KeyCode::PageDown,
+    ] {
+        let out = fold_tick(
+            leaf.clone(),
+            key(code),
+            Some(ComponentId::Library),
+            idle_snapshot(),
+        );
+        assert_eq!(out.len(), 1, "{code:?} must reach the focused Music leaf");
+    }
+
+    let right = fold_tick(
+        leaf.clone(),
+        key(KeyCode::Right),
+        Some(ComponentId::Library),
+        idle_snapshot(),
+    );
+    assert_eq!(
+        right.len(),
+        1,
+        "plain Right under Library focus reaches the tree (no panel_right)"
+    );
+
+    // Both layout, Library focused: plain Left is the tree's chord too, and
+    // the panel command moved to Ctrl+Left.
+    let left_both = fold_tick(
+        leaf,
+        key(KeyCode::Left),
+        Some(ComponentId::Library),
+        idle_snapshot(),
+    );
+    assert_eq!(
+        left_both.len(),
+        1,
+        "plain Left under Library focus reaches the tree, not the panel command"
+    );
+}
+
+/// The panel-focus switch is the Ctrl chord in both directions, and each
+/// direction is gated on the opposite panel holding focus.
+#[test]
+fn panel_focus_switches_on_the_ctrl_arrows_only() {
+    let leaf = Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }));
+    let ctrl_left = KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL);
+    let ctrl_right = KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL);
+
+    assert_eq!(
+        fold_tick(leaf.clone(), ctrl_left, Some(ComponentId::Library), idle_snapshot()),
+        Vec::new(),
+        "Ctrl+Left is the Both-layout panel command, not the tree's"
+    );
+
+    let mut queue = idle_snapshot();
+    queue.panel_focus = crate::app::PanelFocus::Queue;
+    assert_eq!(
+        fold_tick(leaf.clone(), ctrl_right, Some(ComponentId::Queue), queue),
+        Vec::new(),
+        "Ctrl+Right is the panel command while the Queue holds focus"
+    );
+
+    // The same Ctrl chords are inert on the panel that already holds focus,
+    // so the focused leaf's own message stands.
+    let mut library = idle_snapshot();
+    library.panel_focus = crate::app::PanelFocus::Library;
+    library.panel_mode = crate::app::types_settings::PanelMode::Both;
+    assert_eq!(
+        fold_tick(leaf.clone(), ctrl_right, Some(ComponentId::Library), library).len(),
+        1,
+        "Ctrl+Right with Library focus already held changes nothing"
+    );
+    assert_eq!(
+        fold_tick(leaf, ctrl_left, Some(ComponentId::Queue), queue).len(),
+        1,
+        "Ctrl+Left with Queue focus already held changes nothing"
+    );
+}

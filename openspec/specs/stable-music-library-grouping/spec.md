@@ -37,24 +37,27 @@ Once a grouped album snapshot is visible, individual metadata results SHALL NOT 
 - **THEN** those results do not alter the current grouped display
 
 ### Requirement: Grouped-view continuity
-When a settled grouped snapshot is replaced, the system SHALL preserve the current album selection by stable album identity when that album remains present. It SHALL retain the closest practical viewport position around that selection. Artist headers SHALL remain stable visual labels and SHALL NOT become selection or action targets.
+When a settled grouped snapshot is replaced, the system SHALL preserve the current artist-root or album-leaf selection by stable identity when that node remains present. It SHALL preserve surviving artist expansion and multi-selection state. When the selected node survives, the viewport SHALL retain its prior screen row when projection bounds permit; otherwise it SHALL scroll only enough to keep the node visible and clamp at projection bounds. Artist roots SHALL remain stable grouping and action targets across the replacement.
 
 #### Scenario: Selected album survives a replacement
-- **WHEN** a replacement snapshot contains the album selected in the prior snapshot
+- **WHEN** a replacement snapshot contains the album leaf selected in the prior snapshot
 - **THEN** that album remains selected and remains visible after the replacement is committed
 
+#### Scenario: Selected artist survives a replacement
+- **WHEN** a replacement snapshot contains the artist root selected in the prior snapshot
+- **THEN** that artist remains selected with its persistent expansion state preserved
+
 #### Scenario: Selected album is absent from a replacement
-- **WHEN** the selected album is not present in a replacement
-- **THEN** the system selects a valid album using its normal fallback selection behavior
+- **WHEN** the selected artist or album node is not present in a replacement
+- **THEN** the system selects a valid visible node using its normal fallback selection behavior
 
 #### Scenario: Artist grouping survives a replacement
 - **WHEN** a replacement snapshot is committed
-- **THEN** its settled artist headers continue to group the visible album rows without receiving selection or action focus
+- **THEN** its settled artist roots continue to group the visible album leaves with stable identity and expansion
 
 #### Scenario: Artist header action follows the visible grouping
-
-- **WHEN** the user invokes an artist-header action on a settled grouped view
-- **THEN** the action operates on exactly the albums shown under that header in the settled snapshot
+- **WHEN** the user invokes an artist-root action on a settled grouped view
+- **THEN** the action operates on exactly that root's in-scope albums in the settled snapshot
 
 ### Requirement: Stable redraw behavior
 For an unchanged settled grouped snapshot, repeated terminal redraws SHALL reuse its grouping and ordering without starting artist metadata resolution work.
@@ -63,39 +66,47 @@ For an unchanged settled grouped snapshot, repeated terminal redraws SHALL reuse
 - **WHEN** the terminal redraws a settled grouped view and its albums, grouping metadata, and selection have not changed
 - **THEN** the displayed grouping remains identical and no additional artist lookup is initiated by the redraw
 
-### Requirement: Artist headers are non-selectable grouping labels
-The grouped music album view SHALL render artist headers as visual grouping labels and SHALL exclude them from keyboard and mouse selection, current-item scope, and playback or queue actions. Album rows SHALL remain the selectable targets within each artist group.
-
-#### Scenario: Keyboard navigation crosses an artist boundary
-- **WHEN** the user moves the album cursor across an artist-group boundary
-- **THEN** selection moves between album rows without landing on the artist header
-
-#### Scenario: Artist header is clicked
-- **WHEN** the user clicks an artist header
-- **THEN** the current album selection and action scope remain unchanged
-
-#### Scenario: Grouped music action is invoked
-- **WHEN** the user invokes an item, playback, queue, or context-menu action in the grouped music album view without track selection active
-- **THEN** the action targets the selected album rather than an artist header
-
 ### Requirement: Album navigation remains visible across artist groups
-Keyboard album navigation in the grouped music view SHALL keep the selected album visible while crossing artist-group boundaries. Visual artist-header rows SHALL contribute to scroll geometry without becoming cursor targets.
+Tree navigation in the grouped Music view SHALL keep the selected artist root or album leaf visible while crossing artist-group boundaries. Artist roots SHALL contribute to scroll geometry and SHALL be cursor targets; collapsed album leaves SHALL not contribute to the visible projection or hit geometry.
 
 #### Scenario: Cursor crosses an artist boundary
-- **WHEN** album navigation moves selection from one artist group to an adjacent group
-- **THEN** the destination album is selected and the viewport adjusts as needed to keep it visible
+- **WHEN** tree navigation moves selection from one artist group to an adjacent group
+- **THEN** the destination visible node is selected
+- **AND** the viewport adjusts as needed to keep it visible
+
+#### Scenario: Artist is collapsed
+- **WHEN** an expanded artist root is collapsed
+- **THEN** its album leaves leave the visible projection
+- **AND** viewport clamping keeps the focused root visible
 
 ### Requirement: Responsive grouped-view continuity
 
-The narrow hero-above-list composition and wide side-hero composition SHALL consume the same settled grouped snapshot and album selection. Changing composition SHALL NOT restart artist metadata resolution, publish a different grouping for the same snapshot, or replace the selected album when it remains available.
+The non-Wide and Wide compositions SHALL consume the same settled grouped snapshot and tree owner. Changing composition SHALL NOT restart artist metadata resolution, publish a different grouping for the same snapshot, or replace the selected artist root or album leaf when it remains available.
 
 #### Scenario: Grouped Music crosses the responsive breakpoint
-- **WHEN** terminal resizing switches grouped Music between its narrow and wide compositions
-- **THEN** the same settled grouping and selected album remain in use and the active album viewport is clamped around that selection
+- **WHEN** terminal resizing switches grouped Music between its non-Wide and Wide compositions
+- **THEN** the same settled grouping, selected tree node, expansion state, and multi-selection remain in use
+- **AND** the active tree viewport is clamped around that selection
 
 #### Scenario: Responsive composition redraws
 - **WHEN** either responsive composition redraws without a changed album snapshot
 - **THEN** it reuses the existing settled grouping without starting artist metadata resolution work
+
+### Requirement: Artist roots are focusable grouping targets
+The grouped Music album view SHALL present focusable artist roots in the shallow tree. Artist roots SHALL receive keyboard and mouse selection, expansion, current-item scope, playback and queue actions, and context actions as specified by `grouped-music-tree-browser`. Album leaves SHALL remain independently selectable targets within each artist root. This SHALL NOT change canonical Group headings in any other list or in the artist track Workspace; those remain non-selectable visual labels.
+
+#### Scenario: Keyboard navigation crosses an artist boundary
+- **WHEN** the user moves through the grouped Music tree across an artist boundary
+- **THEN** focus can land on the artist root and its visible album leaves
+
+#### Scenario: Artist root is clicked
+- **WHEN** the user clicks a painted artist root
+- **THEN** that root receives focus and becomes the current tree action scope
+
+#### Scenario: Grouped music action is invoked
+- **WHEN** the user invokes a playback, queue, or context action with an artist root focused
+- **THEN** the action resolves the root to its in-scope album leaves
+- **AND** no artist identity crosses the effect boundary as a playable target
 
 ### Requirement: Music grouping metadata is warmed at startup
 

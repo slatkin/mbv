@@ -1,8 +1,6 @@
 //! Grouped Music's wide Wide hero component.
 
-use crate::app::components::media_list::{
-    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
-};
+use crate::app::music_grouping::ArtistKey;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::App;
 use mbv_core::api::EmbyItem;
@@ -16,9 +14,22 @@ pub(in crate::app) struct MusicWideRenderCtx {
     pub(in crate::app) groups: Vec<EmbyItem>,
     pub(in crate::app) group_cursor: usize,
     pub(in crate::app) album_info: Vec<(String, String, String)>,
+    /// Stable artist identity per album (parallel to `album_info`, design
+    /// D2): the settled catalog's resolved `ArtistItems` identity or its
+    /// deterministic fallback key. The Grouped Music tree owner groups the
+    /// settled albums into artist roots by this key.
+    pub(in crate::app) album_artist_keys: Vec<ArtistKey>,
     pub(in crate::app) album_order: Vec<usize>,
     pub(in crate::app) focused: bool,
     pub(in crate::app) album_tracks: Option<Vec<EmbyItem>>,
+    /// Settled source revision carried with the tree snapshot (design D7):
+    /// artist detail requests bind to it so a completion from a replaced
+    /// catalog can never become the new snapshot's Workspace.
+    pub(in crate::app) catalog_revision: u64,
+    /// The focused artist's projected summary and grouped track Workspace
+    /// (tasks 6.2/6.3), when the tree owner is on an artist root.
+    pub(in crate::app) artist_detail:
+        Option<crate::app::music_artist_detail::ArtistDetailProjection>,
 }
 
 impl MusicWideRenderCtx {
@@ -30,6 +41,7 @@ impl MusicWideRenderCtx {
         groups: Vec<EmbyItem>,
         group_cursor: usize,
         album_info: Vec<(String, String, String)>,
+        album_artist_keys: Vec<ArtistKey>,
         album_order: Vec<usize>,
         album_tracks: Option<Vec<EmbyItem>>,
     ) -> Self {
@@ -56,58 +68,21 @@ impl MusicWideRenderCtx {
             groups,
             group_cursor,
             album_info,
+            album_artist_keys,
             album_order,
             // Framework focus is owned by `MusicWorkspaceComponent` and applied
             // from `Attribute::Focus`; content projection never sets it.
             focused: false,
             album_tracks,
+            catalog_revision: 0,
+            artist_detail: None,
         }
     }
-}
 
-impl MusicWideRenderCtx {
-    /// Canonical row projection shared by the wide `WideMediaList` and the
-    /// one-column fixed-row browser: one `Heading` per artist group, a `Spacer`
-    /// between groups, and one selectable `Item` per album keyed by its stable
-    /// id. Grouped Music album rows carry no played/active state (parity with
-    /// the wide rail and the legacy painter).
-    pub(in crate::app) fn grouped_rows(&self) -> Vec<MediaListRow<String>> {
-        grouped_album_rows_with_targets(&self.album_info, &self.album_order, &self.album_targets)
+    pub(in crate::app) fn with_catalog_revision(mut self, revision: u64) -> Self {
+        self.catalog_revision = revision;
+        self
     }
-}
-
-fn grouped_album_rows_with_targets(
-    album_info: &[(String, String, String)],
-    order: &[usize],
-    targets: &[String],
-) -> Vec<MediaListRow<String>> {
-    let mut rows = Vec::new();
-    let mut start = 0;
-    while start < order.len() {
-        let artist = album_info[order[start]].0.clone();
-        let mut end = start + 1;
-        while end < order.len() && album_info[order[end]].0 == artist {
-            end += 1;
-        }
-        if start > 0 {
-            rows.push(MediaListRow::Spacer);
-        }
-        rows.push(MediaListRow::Heading { text: artist });
-        for &idx in &order[start..end] {
-            let (_, year, name) = &album_info[idx];
-            rows.push(MediaListRow::Item {
-                target: targets[idx].clone(),
-                primary: name.clone(),
-                secondary: None,
-                trailing: (!year.is_empty()).then(|| MediaListTrailing::Year(year.clone())),
-                duration: None,
-                kind: MediaKind::Collection,
-                semantic_state: MediaSemanticState::Ordinary,
-            });
-        }
-        start = end;
-    }
-    rows
 }
 
 impl App {
@@ -133,11 +108,12 @@ impl App {
         let catalog = level
             .and_then(|level| level.music_grouping.as_ref())
             .and_then(|state| state.settled.clone());
-        let album_info = crate::app::render::screens::album_plan::group_album_info(
-            &self.album_artist_cache,
-            &albums,
-            catalog.as_ref(),
-        );
+        let (album_info, album_artist_keys) =
+            crate::app::render::screens::album_plan::group_album_plan(
+                &self.album_artist_cache,
+                &albums,
+                catalog.as_ref(),
+            );
         let album_order = catalog
             .as_ref()
             .map(|catalog| {
@@ -152,6 +128,10 @@ impl App {
         let album_tracks = selected_album
             .as_ref()
             .and_then(|album| self.album_tracks_cache.get(&album.id).cloned());
+        let catalog_revision = catalog
+            .as_ref()
+            .map(|catalog| catalog.revision)
+            .unwrap_or(0);
 
         MusicWideRenderCtx::new(
             list,
@@ -160,8 +140,10 @@ impl App {
             groups,
             group_cursor,
             album_info,
+            album_artist_keys,
             album_order,
             album_tracks,
         )
+        .with_catalog_revision(catalog_revision)
     }
 }

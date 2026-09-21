@@ -175,6 +175,57 @@ pub fn make_music_group_app_with_second_album() -> App {
     app
 }
 
+/// The long album title the Grouped Music tree row tests share: it cannot fit
+/// any supported Library browser width, so it exercises truncation, clipping,
+/// and the marquee window.
+pub const MUSIC_TREE_LONG_TITLE: &str =
+    "A Suspiciously Long Album Title That Cannot Fit Any Library Browser Row";
+pub const MUSIC_TREE_LONG_TITLE_YEAR: u32 = 1999;
+
+/// Node ids of the tree projection over `make_music_tree_group_app`'s settled
+/// entry order: the Alpha root, its 41 leaves, the Beta root, its 2 leaves.
+pub const MUSIC_TREE_ALPHA_ROOT: usize = 0;
+pub const MUSIC_TREE_BETA_ROOT: usize = 42;
+pub const MUSIC_TREE_BETA_LEAF_0: usize = 43;
+pub const MUSIC_TREE_BETA_LEAF_1: usize = 44;
+
+/// The expanded projection length for `make_music_tree_group_app`: one Alpha
+/// root over 41 leaves, one Beta root over 2 leaves.
+pub const MUSIC_TREE_EXPANDED_PROJECTION_LEN: usize = 45;
+
+/// The repository's existing Wide Grouped Music fixture corpus
+/// (`music_app_many_albums`'s 40 Alpha albums) plus a long-titled album and a
+/// second artist group, so the group-relative zebra reset has two groups to
+/// cross.
+pub fn make_music_tree_group_app() -> App {
+    let mut app = make_music_group_app();
+    app.panel_focus = PanelFocus::Library;
+    let level = app.libs[0].nav_stack.last_mut().unwrap();
+    for i in 1..40 {
+        let mut album = make_item(&format!("Album {i:02}"), "MusicAlbum");
+        album.id = format!("album-extra-{i}");
+        album.artist = "Alpha".into();
+        level.items.push(album);
+    }
+    let mut long_album = make_item(MUSIC_TREE_LONG_TITLE, "MusicAlbum");
+    long_album.id = "album-long".into();
+    long_album.artist = "Alpha".into();
+    long_album.production_year = MUSIC_TREE_LONG_TITLE_YEAR;
+    level.items.push(long_album);
+
+    let mut beta_one = make_item("Beta Session", "MusicAlbum");
+    beta_one.id = "album-beta-1".into();
+    beta_one.artist = "Beta".into();
+    level.items.push(beta_one);
+    let mut beta_two = make_item("Beta Nights", "MusicAlbum");
+    beta_two.id = "album-beta-2".into();
+    beta_two.artist = "Beta".into();
+    level.items.push(beta_two);
+
+    level.total_count = level.items.len();
+    app
+}
+
 pub fn make_home_video_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);

@@ -172,6 +172,13 @@ impl App {
         self.start_or_supersede_music_grouping(lib_idx);
         self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         self.spawn_all_items_prefetch(lib_idx);
+        // A group switch refreshes the album level in place (no `Loaded`
+        // event, which is where an ordinary first navigation kicks off
+        // completion pagination); re-arm it here so the new group's level
+        // still loads to completion unconditionally.
+        if self.is_music_group_view(lib_idx) {
+            self.maybe_fetch_next_page(lib_idx, 0);
+        }
     }
 
     fn handle_restored_library_position(
@@ -701,13 +708,50 @@ impl App {
                 album_id,
                 mut tracks,
             } => {
+                // A fallback artist fetch frees its bounded slot here, and the
+                // drain arms the next in-scope album so rows keep appearing
+                // progressively; selection-driven fetches share the cache but
+                // hold no slot.
+                let fallback_completed =
+                    self.artist_album_track_fetches_in_flight.remove(&album_id);
                 self.album_tracks_loading.remove(&album_id);
                 // The cache is also the cursor's source of truth while the
                 // album is open, so normalize it once before rendering or
                 // resolving the focused track for playback.
                 sort_audio_tracks(&mut tracks);
                 self.album_tracks_cache.insert(album_id, tracks);
+                if fallback_completed {
+                    self.drain_artist_album_track_fetches();
+                }
             }
+            LibEvent::ArtistTracksFetched {
+                destination,
+                generation,
+                artist_id,
+                revision,
+                result,
+            } => self.handle_artist_tracks_fetched(
+                destination,
+                generation,
+                artist_id,
+                revision,
+                result,
+            ),
+            LibEvent::ArtistArtworkFetched {
+                destination,
+                generation,
+                artist_id,
+                revision,
+                cache_key,
+                available,
+            } => self.handle_artist_artwork_fetched(
+                destination,
+                generation,
+                artist_id,
+                revision,
+                cache_key,
+                available,
+            ),
             LibEvent::SeriesDetailFetched {
                 series_id,
                 seasons,

@@ -18,6 +18,7 @@ use ratatui::Frame;
 
 use super::content::{
     HeroContent, HeroImageState, PanelHeroImagePaint, PanelListPaintPolicy, Workspace,
+    WorkspaceHeader,
 };
 use super::hero_header::paint_hero_pane_content;
 use super::slots::paint_pill_bar_row;
@@ -111,13 +112,12 @@ pub(in crate::app) fn paint_library_hero_content(
     geometry
 }
 
-fn paint_workspace_header(f: &mut Frame, content: Rect, header: &str) {
+fn paint_workspace_header(f: &mut Frame, content: Rect, header: WorkspaceHeader) {
+    let (label, style) = match header {
+        WorkspaceHeader::Tracklist => (header.label(), Style::default().fg(palette::MUSIC_HEADER)),
+    };
     f.render_widget(
-        Paragraph::new(header).style(
-            Style::default()
-                .fg(palette::TEXT_METADATA)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ),
+        Paragraph::new(label).style(style),
         Rect {
             height: 1,
             ..content

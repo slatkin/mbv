@@ -34,7 +34,7 @@
 //! | `Surface` | pinned here | otherwise pinned by |
 //! | --- | --- | --- |
 //! | `QueueColumn` | yes (wide Both, both bits) | — |
-//! | `LibraryColumn` | yes (Both, LibraryOnly, mini library) | — (fixed row; probed in both frames) |
+//! | `LibraryColumn` | yes (Both, LibraryOnly, mini library) | — (focus-driven row; probed in both bits) |
 //! | `WideSplitGutter` | yes (boundary component view) | — (pinned only here at buffer level) |
 //! | `HeroPane` | yes (LibraryOnly Movies, bit `false`) | `tests_wide_hero_pane_characterization.rs` (resting fill) |
 //! | `SelectedRow` | — | `render/components/media_list.rs::selected_row_spans_full_width_with_two_col_indent` (selected-row fill) |
@@ -364,9 +364,9 @@ fn coverage_table_accounts_for_every_surface_row() {
 /// library column (the QueueColumn footer's shape): one gap row sits above
 /// the bar, the status row is inset two columns each side, one padding row
 /// sits below it, and the gap row plus the band's gutters and padding row
-/// keep the library column's backdrop rather than the status fill. The bar
-/// no longer touches the content above or the column's bottom, left or
-/// right edge.
+/// keep the library column's focused body fill rather than the status fill.
+/// The bar no longer touches the content above or the column's bottom, left
+/// or right edge.
 #[test]
 fn status_bar_floats_inside_its_band_clear_of_the_edges() {
     let mut app = make_movie_app();
@@ -402,36 +402,38 @@ fn status_bar_floats_inside_its_band_clear_of_the_edges() {
         area.bottom() - 2,
         "one padding row sits below the status row"
     );
-    // The gap row above the bar keeps the backdrop in every column.
+    // The gap row above the bar keeps the focused column body in every
+    // column (this frame holds library focus).
     for x in [band.x, row.x, row.right() - 1, band.right() - 1] {
         painted.expect(
             "band gap row",
             palette::Surface::LibraryColumn,
-            false,
+            true,
             Rect::new(x, band.y, 1, 1),
         );
     }
 
     painted.expect("status row", palette::Surface::StatusBar, false, row);
-    // The two columns each side of the row are the column's backdrop.
+    // The two columns each side of the row are the column's focused body.
     painted.expect(
         "band left gutter",
         palette::Surface::LibraryColumn,
-        false,
+        true,
         Rect::new(band.x, row.y, 1, 1),
     );
     painted.expect(
         "band right gutter",
         palette::Surface::LibraryColumn,
-        false,
+        true,
         Rect::new(band.right() - 1, row.y, 1, 1),
     );
-    // The padding row below the bar keeps the backdrop in every column.
+    // The padding row below the bar keeps the focused column body in every
+    // column.
     for x in [band.x, row.x, row.right() - 1, band.right() - 1] {
         painted.expect(
             "band padding row",
             palette::Surface::LibraryColumn,
-            false,
+            true,
             Rect::new(x, band.bottom() - 1, 1, 1),
         );
     }
@@ -450,6 +452,9 @@ fn drawn_non_wide_library(
     let mut app = make_movie_app();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = focus;
+    // Below `MINI_VIEW_THRESHOLD` the effective focus is the mini-view bit,
+    // so mirror the requested focus there for the mini frame too.
+    app.mini_view_focus = focus;
     if filler_items > 0 {
         let level = app.libs[0].nav_stack.last_mut().unwrap();
         for i in 0..filler_items {
@@ -465,23 +470,23 @@ fn drawn_non_wide_library(
 }
 
 /// `unify-narrow-library-with-wide-browser-pane` 4.4 (design D2/D5): the
-/// non-Wide library column's body is the Wide column's fixed backdrop. A
-/// focused and an unfocused Narrow frame paint the same fill for the
-/// always-painted regions — the panel placement, the Selector row's spacer
-/// row, and the status band's padding rows — and the status row keeps the
-/// status bar's own surface. Mini is the non-Wide presentation (there is no
-/// Mini-specific paint bit) and paints the same backdrop.
+/// non-Wide library column's body is the Wide column's surface, resolved with
+/// the panel focus bit. A focused Narrow frame paints the column's focused
+/// fill for the always-painted regions — the panel placement, the Selector
+/// row's spacer row, and the status band's padding rows — while an unfocused
+/// one paints the column's resting backdrop; the status row keeps the status
+/// bar's own surface either way. Mini is the non-Wide presentation (there is
+/// no Mini-specific paint bit) and follows the same bit.
 #[test]
-fn non_wide_column_body_paints_the_fixed_backdrop_in_every_focus_state() {
-    let backdrop = palette::surface_colors(palette::Surface::LibraryColumn, false).fill;
+fn non_wide_column_body_follows_the_panel_focus_bit() {
     let status_fill = palette::surface_colors(palette::Surface::StatusBar, false).fill;
     // The status row keeps the status bar's own surface; every other probed
-    // region is the column's fixed backdrop.
-    let expected_fill = |label: &str| {
+    // region is the column's fill for that frame's focus bit.
+    let expected_fill = |label: &str, focused: bool| {
         if label == "status row" {
             status_fill
         } else {
-            backdrop
+            palette::surface_colors(palette::Surface::LibraryColumn, focused).fill
         }
     };
 
@@ -519,22 +524,28 @@ fn non_wide_column_body_paints_the_fixed_backdrop_in_every_focus_state() {
     for ((label, focused_bg), (_, resting_bg)) in focused.iter().zip(&resting) {
         assert_eq!(
             *focused_bg,
-            expected_fill(label),
-            "{label}: the non-Wide column paints its fixed surface"
+            expected_fill(label, true),
+            "{label}: the focused non-Wide column paints its focused fill"
         );
         assert_eq!(
-            focused_bg, resting_bg,
-            "{label}: the column body must not follow the panel focus bit"
+            *resting_bg,
+            expected_fill(label, false),
+            "{label}: the resting non-Wide column paints its resting fill"
         );
     }
+    assert_ne!(
+        focused[0].1, resting[0].1,
+        "the non-Wide column body must follow the panel focus bit"
+    );
 
-    // Mini (< MINI_VIEW_THRESHOLD): the same regions, the same fixed
-    // backdrop — the mini view derives from the non-Wide presentation with
-    // no paint bit of its own.
+    // Mini (< MINI_VIEW_THRESHOLD): the same regions off the mini-view focus
+    // bit — the mini view derives from the non-Wide presentation with no
+    // paint bit of its own. (A queue-focused mini frame is the Queue-only
+    // view, which places no library panel to probe.)
     for (label, bg) in region_colors(70, PanelFocus::Library) {
         assert_eq!(
             bg,
-            expected_fill(label),
+            expected_fill(label, true),
             "{label}: mini must match the non-Wide body"
         );
     }
@@ -542,12 +553,11 @@ fn non_wide_column_body_paints_the_fixed_backdrop_in_every_focus_state() {
 
 /// `unify-narrow-library-with-wide-browser-pane` 4.4: the list's scrollbar
 /// column paints only while the list is focused and overflowing, so it is
-/// absent from an unfocused frame. In a focused overflowing Narrow frame it
-/// must resolve the selected-row surface (`#2d353b`) — the same fill the Wide
-/// Browser-pane list's column carries — never the list box's own fill beside
-/// it.
+/// absent from an unfocused frame. In a focused overflowing Narrow frame the
+/// column outside the list's claim shows the library column body's own fill
+/// for that bit — never the list box's fill beside it.
 #[test]
-fn focused_overflowing_narrow_scrollbar_column_paints_the_selected_row_surface() {
+fn focused_overflowing_narrow_scrollbar_column_shows_the_column_body_surface() {
     let width = 81;
     let (model, term) = drawn_non_wide_library(width, PanelFocus::Library, 40);
     let buffer = term.backend().buffer();
@@ -578,11 +588,11 @@ fn focused_overflowing_narrow_scrollbar_column_paints_the_selected_row_surface()
     let first_row = pane.list_panel.y + super::arrangements::wide_hero::PANE_PAD_Y;
     let unselected_row = first_row + 3;
 
-    let selected_fill = palette::surface_colors(palette::Surface::SelectedRow, true).fill;
+    let selected_fill = palette::surface_colors(palette::Surface::LibraryColumn, true).fill;
     assert_eq!(
         buffer[(scrollbar_x, unselected_row)].bg,
         selected_fill,
-        "the scrollbar column must resolve the selected-row surface"
+        "the scrollbar column must resolve the column body's focused fill"
     );
     assert_ne!(
         buffer[(scrollbar_x - 1, unselected_row)].bg,

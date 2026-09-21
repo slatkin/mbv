@@ -140,13 +140,45 @@ impl App {
         }
     }
 
+    /// Candidate track sources for one album Workspace row, in resolution
+    /// order (design D7, tasks 6.1–6.3). Ordinary album browsing fills
+    /// `album_tracks_cache`; an artist root's Workspace rows come from the
+    /// shell-owned `artist_detail_cache`, which the `ArtistIds` query populates
+    /// without ever touching the album cache. `play_album_track` takes the
+    /// first candidate holding the activated row's stable track ID, so a
+    /// failed or truncated per-album page never hides the artist group the row
+    /// actually came from. No cursor, no re-fetch, no component involvement.
+    fn workspace_album_track_candidates(&self, album_id: &str) -> Vec<Vec<EmbyItem>> {
+        let mut candidates = Vec::new();
+        if let Some(tracks) = self.album_tracks_cache.get(album_id) {
+            candidates.push(tracks.clone());
+        }
+        candidates.extend(
+            self.artist_detail_cache
+                .values()
+                .filter(|entry| !entry.failed)
+                .filter_map(|entry| {
+                    let tracks: Vec<EmbyItem> = entry
+                        .tracks
+                        .iter()
+                        .filter(|track| {
+                            super::music_artist_detail::track_matches_album(track, album_id)
+                        })
+                        .cloned()
+                        .collect();
+                    (!tracks.is_empty()).then_some(tracks)
+                }),
+        );
+        candidates
+    }
+
     /// Plays a track through the album queue path used by the wide music
-    /// workspace. Returns false when the track is not in the cached album.
+    /// workspace. Returns false when no resolved candidate holds the track.
     pub(super) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
         let mut tracks: Vec<EmbyItem> = self
-            .album_tracks_cache
-            .get(album_id)
-            .cloned()
+            .workspace_album_track_candidates(album_id)
+            .into_iter()
+            .find(|tracks| tracks.iter().any(|candidate| candidate.id == track.id))
             .unwrap_or_default()
             .into_iter()
             .filter(is_playable)

@@ -372,8 +372,8 @@ fn wide_tv_focus_to_queue_drops_right_rail_treatment_via_shell_sync() {
     let (focused_buf, rail) = render_wide_tv(&mut model);
     assert_eq!(
         focused_buf[(rail.x.saturating_sub(1), rail.y.saturating_sub(1))].bg,
-        crate::app::palette::resolve_surface_focus(true),
-        "focused right rail paints the focused surface"
+        crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryPanel, true).fill,
+        "focused right rail paints the focused Library panel surface"
     );
     assert!(
         !rail_has_marker_glyph(&focused_buf, rail),

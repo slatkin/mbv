@@ -160,6 +160,23 @@ impl Model {
             self.app.card_image_loading.remove(&cache_key);
             self.app.image_fetches_active = self.app.image_fetches_active.saturating_sub(1);
             let entry = self.app.build_cached_image(&cache_key, img_opt);
+            // Artist artwork (task 6.2, design D7): a fetch reserved through
+            // the typed artist request identity completes as its own typed
+            // event; the generic image cache stays provider/generic.
+            let artist_completion =
+                self.app
+                    .artist_artwork_requests
+                    .remove(&cache_key)
+                    .map(|identity| crate::app::LibEvent::ArtistArtworkFetched {
+                        destination: identity.destination,
+                        generation: mbv_core::service_runtime::SetupGeneration::new(
+                            identity.generation,
+                        ),
+                        artist_id: identity.artist_id,
+                        revision: identity.revision,
+                        cache_key: cache_key.clone(),
+                        available: entry.img.is_some(),
+                    });
             if entry.img.is_some() {
                 self.app.image_lru.retain(|k| k != &cache_key);
                 self.app.image_lru.push_back(cache_key.clone());
@@ -170,6 +187,9 @@ impl Model {
                 }
             }
             self.app.card_image_states.insert(cache_key, entry);
+            if let Some(event) = artist_completion {
+                let _ = self.app.lib_tx.send(event);
+            }
         }
         if series_image_changed {
             self.push_tv_workspace_content();
@@ -361,6 +381,14 @@ impl Model {
                     super::super::LibEvent::SeriesDetailFetched { .. } => {
                         self.app.handle_lib_event(ev);
                         self.push_tv_workspace_content();
+                    }
+                    // Artist detail completions (tasks 6.1/6.2): the App arms
+                    // own the stale-guard and cache writes; the drain tail's
+                    // Music re-push projects whatever is now current. Kept as
+                    // explicit arms so the variants are never wildcard-hidden.
+                    super::super::LibEvent::ArtistTracksFetched { .. }
+                    | super::super::LibEvent::ArtistArtworkFetched { .. } => {
+                        self.app.handle_lib_event(ev);
                     }
                     super::super::LibEvent::HomeContentCleared => self.clear_home_content(),
                     super::super::LibEvent::AudiobookshelfLatestRebuilt(sections) => {

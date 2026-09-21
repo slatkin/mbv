@@ -102,47 +102,88 @@ impl MusicContent {
                 } else {
                     match input {
                         MediaListSurfaceInput::Wheel { at, delta } => {
-                            if self.carrier.claims_current_point(at) {
-                                self.carrier.delegate_operation(MediaListSurfaceInput::Wheel { at, delta }.into_operation(None).expect("resolved media-list pointer target"));
-                                let target = self.carrier.selected_target()?;
-                                let index = self
-                                    .context
-                                    .album_targets
-                                    .iter()
-                                    .position(|candidate| candidate == target)?;
-                                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                                    target: index,
-                                    kind: AlbumCursorKind::Move,
-                                }))
+                            if !self.browser.claims_point(at) {
+                                return None;
+                            }
+                            self.browser.move_selection(delta);
+                            self.album_selection_request(AlbumCursorKind::Move)
+                        }
+                        MediaListSurfaceInput::Click(at)
+                        | MediaListSurfaceInput::RangeClick(at) => {
+                            if !self.browser.claims_point(at) {
+                                return None;
+                            }
+                            let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.clear_marks();
+                            self.browser.select_index(index);
+                            self.album_selection_request(AlbumCursorKind::Move)
+                        }
+                        MediaListSurfaceInput::ToggleClick(at) => {
+                            // Resolve the latest painted row before changing
+                            // either focus or membership. Artist roots toggle
+                            // their visible album descendants; they never
+                            // become effect or Queue targets.
+                            self.browser.toggle_mark_at(at)?;
+                            self.album_selection_request(AlbumCursorKind::Move)
+                        }
+                        MediaListSurfaceInput::DoubleClick(at) => {
+                            if !self.browser.claims_point(at) {
+                                return None;
+                            }
+                            let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.select_index(index);
+                            self.selected_item()
+                                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                        }
+                        MediaListSurfaceInput::ContextClick(at) => {
+                            if !self.browser.claims_point(at) {
+                                return None;
+                            }
+                            let (id, index) = self.browser.hit_node(at)?;
+                            let marked = self.browser.selected_album_targets_in_display_order();
+                            let clicked_marked = if let Some(target) = self.browser.target_of(id) {
+                                marked.iter().any(|selected| selected == target)
+                            } else if self.browser.model_is_artist(id) {
+                                self.browser
+                                    .artist_album_targets(id)
+                                    .into_iter()
+                                    .any(|target| marked.iter().any(|selected| selected == &target))
                             } else {
-                                None
+                                false
+                            };
+                            self.browser.select_index(index);
+                            if !marked.is_empty() && clicked_marked {
+                                let (items, unresolved_targets) = self.selected_tree_items()?;
+                                if items.is_empty() && unresolved_targets.is_empty() {
+                                    return None;
+                                }
+                                return Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                                    Some((at.x, at.y)),
+                                )));
+                            }
+
+                            // A context click outside the marked set has the
+                            // canonical list semantics: clear only this tree
+                            // selection and open the ordinary single/root menu.
+                            self.browser.clear_marks();
+                            if self.browser.selected_is_artist() {
+                                let (items, _unresolved_targets) = self.selected_artist_items()?;
+                                if items.is_empty() {
+                                    return None;
+                                }
+                                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                                    Some((at.x, at.y)),
+                                )))
+                            } else {
+                                let item = self.selected_item()?;
+                                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                                    Some((at.x, at.y)),
+                                )))
                             }
                         }
-                        MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::ToggleClick(at) | MediaListSurfaceInput::RangeClick(at) => {
-                            let target = self.carrier.resolve_current_point(at)?.clone();
-                            self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
-                            let _ = ();
-                            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                                target: self.selected_album_index(),
-                                kind: AlbumCursorKind::Move,
-                            }))
-                        }
-                        MediaListSurfaceInput::DoubleClick(_) => self
-                            .selected_item()
-                            .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
-                        MediaListSurfaceInput::ContextClick(at) => {
-                            let target = self.carrier.resolve_current_point(at)?.clone();
-                            let outcome = self.carrier.delegate_operation(input.into_operation(Some(target.clone())).expect("resolved media-list pointer target"));
-                            let _ = ();
-                            let items = match outcome.external_intent {
-                                Some(RowIntent::ContextSelection(targets)) => targets
-                                    .into_iter()
-                                    .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
-                                    .collect(),
-                                _ => vec![self.selected_item()?],
-                            };
-                            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), Some((at.x, at.y)))))
-                        },
                         _ => None,
                     }
                 }
@@ -151,9 +192,9 @@ impl MusicContent {
             LibrarySlotEvent::HeroActivate => {
                 if self.track_focused {
                     let track = self.selected_track_item()?;
-                    let album = self.selected_item()?;
+                    let album_id = self.focused_track_album_id()?;
                     Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                        album_id: album.id,
+                        album_id,
                         track,
                     }))
                 } else {
@@ -181,36 +222,23 @@ impl MusicContent {
                     self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
                     (matches!(input, MediaListSurfaceInput::DoubleClick(_))).then(|| {
                         let track_target = self.track_list.selected_target()?;
-                        let track = self
-                            .context
-                            .album_tracks
-                            .as_deref()
-                            .unwrap_or_default()
-                            .iter()
-                            .find(|track| &track.id == track_target)
-                            .cloned()?;
-                        let album_target = self.carrier.selected_target()?;
-                        let album_index = self
-                            .context
-                            .album_targets
-                            .iter()
-                            .position(|candidate| candidate == album_target)?;
-                        let album = self.context.list.items.get(album_index)?;
+                        let track = self.workspace_track_item(track_target)?;
+                        let album_id = self.focused_track_album_id()?;
                         Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-                            album_id: album.id.clone(),
+                            album_id,
                             track,
                         }))
                     })?
                 }
                 MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();
-                    let item = self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target)?.clone();
+                    let item = self.workspace_track_item(&target)?;
                     let outcome = self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
                     let _ = ();
                     let items = match outcome.external_intent {
                         Some(RowIntent::ContextSelection(targets)) => targets
                             .into_iter()
-                            .filter_map(|target| self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target).cloned())
+                            .filter_map(|target| self.workspace_track_item(&target))
                             .collect(),
                         _ => vec![item],
                     };

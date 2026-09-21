@@ -395,8 +395,8 @@ impl Model {
     }
 
     /// Paint the mounted `StatusBarPanel` into its `RootFrame.status_bar`
-    /// band. The band's padding rows take the library column's fixed backdrop
-    /// (`library_body_fill`: one fill in every geometry and focus state), and
+    /// band. The band's padding rows take the library column's body fill
+    /// (`library_body_fill`: the column's focus pair), and
     /// the status row is inset two columns each side, so the bar floats clear
     /// of the content above and the column's edges.
     pub(super) fn render_status_bar_panel_at(&mut self, frame: &mut Frame, area: Rect) {
@@ -406,7 +406,7 @@ impl Model {
         }
         // The band's padding rows belong to the library column, not the bar:
         // they take the same body fill the placement above them took — the
-        // column's fixed backdrop in every geometry and focus state. The bar
+        // column's focus pair in every geometry. The bar
         // row itself is painted by `StatusBarPanel` afterwards.
         frame.render_widget(ratatui::widgets::Clear, area);
         frame.render_widget(

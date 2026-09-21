@@ -5,6 +5,7 @@ use ratatui::layout::Rect;
 use crate::app::components::inline_search::{InlineSearch, SearchPool};
 use crate::app::components::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, PanelList, SelectorRow, Workspace,
+    WorkspaceHeader,
 };
 use crate::app::render::arrangements::library::wide_library_panes;
 use ratatui::backend::TestBackend;
@@ -475,6 +476,14 @@ fn browser_focused_list_carries_the_focus_green() {
         buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
         palette::surface_colors(palette::Surface::LibraryPanel, true).fill
     );
+    // The Selector row's spacer is the panel showing through, so the focused
+    // panel paints it with the column body's focused fill (the reserved row
+    // and its spacer paint even with no `SelectorRow`).
+    assert_eq!(
+        buf[(geometry.selector_bar.x, geometry.selector_bar.y + 1)].bg,
+        palette::surface_colors(palette::Surface::PillRowGap, true).fill,
+        "the focused panel's spacer band carries the focused column body"
+    );
     assert_eq!(
         buf[(geometry.hero.x, geometry.hero.y)].bg,
         palette::surface_colors(palette::Surface::HeroPane, false).fill
@@ -580,7 +589,7 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
-                header: Some("Tracks"),
+                header: Some(WorkspaceHeader::Tracklist),
                 selector: None,
                 list: &mut workspace_list,
                 focused: false,
@@ -601,12 +610,12 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
         .map(|x| buf[(x, content_y)].symbol())
         .collect();
     assert!(
-        title_row.starts_with("Tracks"),
+        title_row.starts_with(WorkspaceHeader::Tracklist.label()),
         "header row reads {title_row:?}"
     );
     assert_eq!(
         buf[(content_x, content_y)].style().fg,
-        Some(palette::TEXT_METADATA)
+        Some(palette::MUSIC_HEADER)
     );
     assert_eq!(buf[(content_x, content_y)].bg, fill);
 
@@ -632,6 +641,39 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
     assert_eq!(list_rect.bottom(), box_panel.bottom() - PANE_PAD_Y);
     assert_eq!(list_rect.x, content_x);
     assert_eq!(list_rect.width, content_width);
+}
+
+#[test]
+fn music_workspace_header_uses_its_role_without_bold_modifier() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut workspace_list = StubList::with_rows(vec!["Track 1"]);
+    let mut content = LibraryPanelContent {
+        selector: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Album"),
+            overview: None,
+            credits: None,
+            workspace: Some(Workspace {
+                header: Some(WorkspaceHeader::Tracklist),
+                selector: None,
+                list: &mut workspace_list,
+                focused: false,
+            }),
+        }),
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let (box_panel, _) = geo.workspace.expect("workspace box painted");
+    let content_y = box_panel.y + PANE_PAD_Y;
+    let content_x = box_panel.x + PANE_PAD_X;
+    let header = &buf[(content_x, content_y)];
+
+    assert_eq!(
+        palette::MUSIC_HEADER,
+        ratatui::style::Color::Rgb(0xfa, 0xed, 0xcd)
+    );
+    assert_eq!(header.fg, palette::MUSIC_HEADER);
+    assert!(!header.modifier.contains(ratatui::style::Modifier::BOLD));
 }
 
 #[test]
@@ -791,11 +833,11 @@ fn search_results_paint_the_canonical_selected_row_bar() {
     }
 }
 
-/// Result rows paint no zebra: the browser list rests on its box fill, so
-/// the second row carries the `LibraryPanel` resting fill, not the
-/// `MainContentBox` stripe the panel's Wide policy used to set.
+/// Result rows carry the browser stripe like every other library list: the
+/// panel's Wide policy sets the library column's fill as the stripe, so the
+/// second row carries it over the box fill.
 #[test]
-fn search_result_rows_paint_no_zebra() {
+fn search_result_rows_carry_the_browser_stripe() {
     let mut search = InlineSearch::new();
     search.open();
     search.set_pool(SearchPool::Items(vec![
@@ -809,10 +851,15 @@ fn search_result_rows_paint_no_zebra() {
         hero: None,
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
-    // The unselected rows rest on the box fill with no stripe.
+    // The ungrouped alternation opens on the box fill; the row below it
+    // carries the stripe (the unfocused library column's backdrop).
+    assert_eq!(
+        buf[(geo.list_area.x, geo.list_area.y)].bg,
+        palette::surface_colors(palette::Surface::LibraryPanel, false).fill
+    );
     assert_eq!(
         buf[(geo.list_area.x, geo.list_area.y + 1)].bg,
-        palette::surface_colors(palette::Surface::LibraryPanel, false).fill
+        palette::surface_colors(palette::Surface::LibraryColumn, false).fill
     );
 }
 

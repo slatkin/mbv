@@ -23,6 +23,7 @@ fn make_item(name: &str, item_type: &str) -> EmbyItem {
         unplayed_item_count: 0,
         path: String::new(),
         artist: String::new(),
+        artist_items: Vec::new(),
         sort_name: String::new(),
         production_year: 0,
         end_year: 0,
@@ -296,6 +297,76 @@ fn parse_item_audio_not_folder() {
 #[case::parse_item_album_artist_takes_priority_over_artists_array(json!({ "Type": "Audio", "AlbumArtist": "Album Artist", "Artists": ["Track Artist"], "UserData": {} }), "Album Artist")]
 fn parse_item_artist_cases(#[case] raw: serde_json::Value, #[case] expected: &str) {
     assert_eq!(parse_item(&raw).artist, expected);
+}
+
+// ── parse_item: ArtistItems identity pairs (task 1.2) ──────────────────────────────
+
+#[test]
+fn parse_item_artist_items_retained_when_present() {
+    let item = parse_item(&json!({
+        "Type": "MusicAlbum",
+        "ArtistItems": [
+            {"Name": "Alpha", "Id": "artist-1"},
+            {"Name": "Beta", "Id": "artist-2"}
+        ]
+    }));
+    assert_eq!(
+        item.artist_items,
+        vec![
+            EmbyArtistRef { name: "Alpha".into(), id: "artist-1".into() },
+            EmbyArtistRef { name: "Beta".into(), id: "artist-2".into() },
+        ]
+    );
+}
+
+#[test]
+fn parse_item_artist_items_absent_default_empty() {
+    assert!(parse_item(&json!({"Type": "MusicAlbum"})).artist_items.is_empty());
+}
+
+#[rstest]
+#[case::single_matching_pair_resolves(
+    "Alpha",
+    json!([{"Name": "Alpha", "Id": "artist-1"}]),
+    Some("artist-1")
+)]
+#[case::trimmed_and_case_insensitive_match_resolves(
+    "  alpha  ",
+    json!([{"Name": "Alpha", "Id": "artist-1"}]),
+    Some("artist-1")
+)]
+#[case::missing_field_stays_unresolved(
+    "Alpha",
+    json!(null),
+    None
+)]#[case::multiple_unmatched_pairs_stay_unresolved(
+    "Alpha",
+    json!([{"Name": "Beta", "Id": "artist-2"}, {"Name": "Gamma", "Id": "artist-3"}]),
+    None
+)]
+#[case::equal_name_distinct_ids_stay_unresolved_no_arbitrary_pick(
+    "Alpha",
+    json!([{"Name": "Alpha", "Id": "artist-1"}, {"Name": "Alpha", "Id": "artist-2"}]),
+    None
+)]
+#[case::empty_id_pair_is_ignored(
+    "Alpha",
+    json!([{"Name": "Alpha", "Id": ""}]),
+    None
+)]
+#[case::empty_display_artist_never_resolves(
+    "",
+    json!([{"Name": "", "Id": "artist-1"}]),
+    None
+)]
+fn artist_item_id_resolution_cases(
+    #[case] display_artist: &str,
+    #[case] pairs: serde_json::Value,
+    #[case] expected: Option<&str>,
+) {
+    let raw = json!({"Type": "MusicAlbum", "ArtistItems": pairs});
+    let item = parse_item(&raw);
+    assert_eq!(item.matched_artist_item_id(display_artist), expected);
 }
 
 // ── decode_entities ─────────────────────────────────────────────────────

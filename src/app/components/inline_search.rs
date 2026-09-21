@@ -44,32 +44,33 @@ impl SearchPool {
         }
     }
 
-    /// `(original_index, score)` for every corpus entry that fuzzy-matches
-    /// `query` against its match text (display name, or indexed
-    /// `search_text` for albums).
+    /// `(original_index, score)` for every corpus entry that matches `query`
+    /// against its match text (display name, or indexed `search_text` for
+    /// albums). Every match goes through the shared word-local rule, so a
+    /// query word can never be spelled out of letters taken from different
+    /// words of the label.
     fn match_scores(
         &self,
         matcher: &fuzzy_matcher::skim::SkimMatcherV2,
         query: &str,
     ) -> Vec<(usize, i64)> {
-        use fuzzy_matcher::FuzzyMatcher;
+        use crate::app::fuzzy_match::word_match_score;
         match self {
             Self::Items(items) => items
                 .iter()
                 .enumerate()
                 .filter_map(|(i, item)| {
-                    matcher
-                        .fuzzy_match(&item.display_name(), query)
-                        .map(|score| (i, score))
+                    word_match_score(matcher, &item.display_name(), query).map(|score| (i, score))
                 })
                 .collect(),
             Self::Albums(entries) => entries
                 .iter()
                 .enumerate()
                 .filter_map(|(i, entry)| {
-                    matcher
-                        .fuzzy_match(&entry.search_text, query)
-                        .map(|score| (i, score))
+                    // The label is the ancestor chain ("Artist / Album"); the
+                    // shared rule already keeps each query word inside one of
+                    // its words, so the whole label is the candidate.
+                    word_match_score(matcher, &entry.search_text, query).map(|score| (i, score))
                 })
                 .collect(),
         }
@@ -229,6 +230,16 @@ impl InlineSearch {
 
     pub(in crate::app) fn results_len(&self) -> usize {
         self.results.rows().len()
+    }
+
+    /// Whether a host explicitly supplied a flat corpus. Grouped Music keeps
+    /// this false in production; the compatibility distinction lets focused
+    /// harnesses exercise the old activation path without changing painting.
+    pub(in crate::app) fn has_pool_entries(&self) -> bool {
+        match &self.pool {
+            SearchPool::Items(items) => !items.is_empty(),
+            SearchPool::Albums(entries) => !entries.is_empty(),
+        }
     }
 
     /// Replaces the candidate pool and re-scores the current query. The
@@ -414,6 +425,17 @@ impl Default for InlineSearch {
 pub(in crate::app) trait InlineSearchHost {
     fn inline_search(&self) -> &InlineSearch;
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
+
+    /// Grouped Music keeps its tree as the browser owner. Such a host uses
+    /// this shared control only for query editing, debounce, and the bar; it
+    /// must not receive a flat corpus or start a library fetch.
+    fn uses_local_filter(&self) -> bool {
+        false
+    }
+
+    /// Apply a query after the shared debounce fires. The host owns only its
+    /// destination-specific projection; the query editor remains this type.
+    fn inline_search_debounced(&mut self) {}
     fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.inline_search().selected_item()
     }
@@ -466,6 +488,56 @@ mod tests {
             search.handle_clock(Instant::now() + Duration::from_millis(301)),
             "the deadline fires the armed re-score"
         );
+    }
+
+    /// The reported case: an album whose own name is the whole phrase. No
+    /// separator is involved, so the match can only be a scatter through the
+    /// name's words ("devil" out of "The Velvet Underground Live With Lou
+    /// Reed") and the anchored rule has to reject it.
+    #[test]
+    fn album_search_rejects_a_scatter_through_one_name() {
+        let entry = crate::app::AlbumSearchEntry {
+            album: make_item("The Velvet Underground Live With Lou Reed", "MusicAlbum"),
+            ancestors: Vec::new(),
+            display_label: "The Velvet Underground Live With Lou Reed".into(),
+            search_text: "The Velvet Underground Live With Lou Reed".into(),
+        };
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(SearchPool::Albums(vec![entry]));
+
+        for (query, expected) in [("devil", 0), ("velvet", 1), ("lou reed", 1)] {
+            search.restore_query(query.into());
+            assert_eq!(search.results_len(), expected, "query {query:?}");
+        }
+    }
+
+    /// An album's search text is its ancestor chain (`Artist / Album`). The
+    /// shared word-local rule keeps each query word inside one word of that
+    /// label, so a query word can no longer be spelled out of single letters
+    /// taken from different names or different words.
+    #[test]
+    fn album_search_matches_a_word_within_one_word_of_the_chain() {
+        let entry = crate::app::AlbumSearchEntry {
+            album: make_item("Live With Lou Reed", "MusicAlbum"),
+            ancestors: vec![crate::app::AlbumPathPart {
+                id: "artist-1".into(),
+                name: "The Velvet Underground".into(),
+            }],
+            display_label: "The Velvet Underground / Live With Lou Reed".into(),
+            search_text: "The Velvet Underground / Live With Lou Reed".into(),
+        };
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(SearchPool::Albums(vec![entry]));
+
+        // "devil" would have to come from single letters spread over four of
+        // the label's words (d in "Underground", e after it, v in "Live",
+        // i in "With", l in "Lou") and must not hit; the real words still do.
+        for (query, expected) in [("devil", 0), ("velvet", 1), ("lou reed", 1)] {
+            search.restore_query(query.into());
+            assert_eq!(search.results_len(), expected, "query {query:?}");
+        }
     }
 
     #[test]

@@ -266,13 +266,15 @@ impl Model {
         Some(crate::app::render::components::widgets::right_panel_content_area(area, collapsed))
     }
 
-    /// The Library column's body fill: the column's fixed backdrop in every
-    /// geometry and every focus state. The non-Wide panel is the Wide browser
-    /// pane without a Hero, so its body no longer follows the panel focus bit
-    /// and no non-Wide surface identity exists — the single named authority
-    /// both the placement fill and the status band's padding rows read.
+    /// The Library column's body fill: the placement's own back, painted with
+    /// the panel's focus bit. Focused it takes the column level's
+    /// `SURFACE_FOCUSED` fill, resting the column's app backdrop; one named
+    /// authority both the placement fill and the status band's padding rows
+    /// read, so both follow the same bit in every geometry.
     pub(super) fn library_body_fill(&self) -> ratatui::style::Color {
-        crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryColumn, false).fill
+        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryColumn, focused)
+            .fill
     }
 
     /// The transitional draw step: give the library rect to the mounted
@@ -290,9 +292,10 @@ impl Model {
         // show the column's own background rather than whatever was painted
         // underneath before this panel owned the placement.
         frame.render_widget(ratatui::widgets::Clear, area);
-        // The panel body is the library column's fixed backdrop in every
-        // geometry and focus state: the non-Wide panel is the Wide browser
-        // pane without a Hero, so one backdrop serves both skeletons.
+        // The panel body follows the library column's focus pair: the panel's
+        // own back lightens while the right panel holds focus. The non-Wide
+        // panel is the Wide browser pane without a Hero, so one column
+        // identity serves both skeletons.
         let content_area = self.library_panel_content_area().unwrap_or(area);
         frame.render_widget(
             ratatui::widgets::Block::default()

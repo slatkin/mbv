@@ -134,7 +134,7 @@ impl EmbyClient {
             .query("SortOrder", sort_order)
             .query("StartIndex", start_index.to_string())
             .query("Limit", limit.to_string())
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres,ExternalUrls,ProviderIds")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ArtistItems,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres,ExternalUrls,ProviderIds")
             .query("EnableUserData", "true");
         if let Some(types) = item_types {
             req = req
@@ -261,6 +261,25 @@ impl EmbyClient {
             ("SortOrder",        "Ascending"),
             ("Limit",            "2000"),
             ("Fields",           "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
+        ])
+    }
+
+    /// Fetches one artist's Audio tracks via Emby's
+    /// `ArtistIds=<id>&IncludeItemTypes=Audio&Recursive=true` query.
+    ///
+    /// `artist_id` must be a stable artist item ID resolved from an
+    /// `ArtistItems` pair carried on an album/item payload (see
+    /// [`EmbyItem::matched_artist_item_id`]). That payload ID space is the
+    /// sole accepted input: mbv performs no `/Artists` listing fetch, and
+    /// IDs from such a listing have no proven equivalence to these keys, so
+    /// they are never valid here. Unsupported or rejected queries propagate
+    /// as `Err` and the caller falls back to per-album aggregation.
+    pub fn get_artist_audio_tracks(&self, artist_id: &str) -> Result<Vec<EmbyItem>, String> {
+        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
+            ("ArtistIds",        artist_id),
+            ("IncludeItemTypes", "Audio"),
+            ("Recursive",        "true"),
+            ("Fields",           "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ArtistItems,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres,ExternalUrls,ProviderIds"),
         ])
     }
 

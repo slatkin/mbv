@@ -233,6 +233,22 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
             .or_else(|| raw["Artists"].get(0).and_then(|v| v.as_str()))
             .unwrap_or("")
             .to_string(),
+        artist_items: raw["ArtistItems"]
+            .as_array()
+            .map(|pairs| {
+                pairs
+                    .iter()
+                    .filter_map(|pair| {
+                        let name = pair["Name"].as_str()?;
+                        let id = pair["Id"].as_str()?;
+                        Some(EmbyArtistRef {
+                            name: name.to_string(),
+                            id: id.to_string(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         sort_name: raw["SortName"].as_str().unwrap_or("").to_string(),
         production_year: raw["ProductionYear"]
             .as_u64()
