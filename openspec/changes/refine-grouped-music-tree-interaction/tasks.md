@@ -15,10 +15,10 @@
 
 ## 3. Artist-Workspace playback spans the discography
 
-- [ ] 3.1 Add a shell path that resolves an artist's ordered in-scope tracks and chosen `EmbyItem` from the artist-detail cache, then sends the full flattened disc/track-ordered list with the chosen track's start index to the existing routed playback executor, reusing the queue-source behavior already used by Music track playback (no new `QueueSource` variant, persistence shape, or ctrl payload); verify with an `actions` unit test that preceding tracks remain queued while playback starts at the selected index
-- [ ] 3.2 Add the typed `MusicArtistTrackActivate` intent carrying only the artist target and stable track ID; verify `cargo check` and a handler test proving the shell resolves the item from its cache
-- [ ] 3.3 Emit that intent from every artist-Workspace activation path (keyboard Enter, `HeroActivate`, and Workspace row double-click), leaving all album-Workspace routes on the existing album path; verify with a `music_content` owner test per path, a Library Hero overlay activation test, and a tick integration test asserting the whole flattened discography reaches the routed executor from the selected index
-- [ ] 3.4 Verify the artist Workspace's single-click select and track movement behaviour is unchanged; verify the existing artist-workspace tests pass
+- [x] 3.1 Add a shell path that resolves an artist's ordered in-scope tracks and chosen `EmbyItem` from the artist-detail cache, then sends the full flattened disc/track-ordered list with the chosen track's start index to the existing routed playback executor, reusing the queue-source behavior already used by Music track playback (no new `QueueSource` variant, persistence shape, or ctrl payload); verify with an `actions` unit test that preceding tracks remain queued while playback starts at the selected index
+- [x] 3.2 Add the typed `MusicArtistTrackActivate` intent carrying only the artist target and stable track ID; verify `cargo check` and a handler test proving the shell resolves the item from its cache
+- [x] 3.3 Emit that intent from every artist-Workspace activation path (keyboard Enter, `HeroActivate`, and Workspace row double-click), leaving all album-Workspace routes on the existing album path; verify with a `music_content` owner test per path, a Library Hero overlay activation test, and a tick integration test asserting the whole flattened discography reaches the routed executor from the selected index
+- [x] 3.4 Verify the artist Workspace's single-click select and track movement behaviour is unchanged; verify the existing artist-workspace tests pass
 
 ## 4. Tree pointer gestures focus the panel
 
