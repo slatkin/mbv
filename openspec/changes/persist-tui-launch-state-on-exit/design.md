@@ -48,6 +48,8 @@ Alternatives considered:
 
 Known limitation: canonical Music album targets derive from the `music_wide.rs` `album_targets` dedupe, so when duplicate album ids exist the target becomes `albumId\0<rowIndex>` — an order-derived suffix. A saved `LibraryItemIdentity` for such a duplicate album may therefore degrade gracefully to fallback selection at restore rather than exact restoration. This is pre-existing canonical-target behavior, not introduced by this change.
 
+Related encoding contract: the ABS podcast launch-state item identity uses the composed encoding `show\0episode` (see `podcast_content.rs` ~505-510); restoration-side parsing of that identity must account for this encoding rather than assume it implicitly.
+
 ### 2. Components expose a read-only exit snapshot, not live persistence messages
 
 Extend the existing selected destination/content-owner boundary with a small query that returns its current main Selector and selected library-item identities. The shell invokes it only while assembling orderly teardown state. It does not query unselected destinations.
