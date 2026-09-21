@@ -1,11 +1,11 @@
 use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel};
 
-/// The shared eligibility gate for the grouped Music owner. Keep this in sync
+/// The shared eligibility gate for the grouped Music owner, consumed by
+/// `is_music_group_view` and grouped landing validation. Keep this in sync
 /// with the shape that `is_music_group_view` exposes to the shell: the
 /// configured path must begin at the grouping level, have a group and album
-/// level on the stack. This is the shared `is_grouped_music_path` gate consumed
-/// by `is_music_group_view` and grouped landing validation.
+/// level on the stack.
 fn is_grouped_music_path(music_levels: &[String], nav_stack: &[BrowseLevel]) -> bool {
     music_levels.first().is_some_and(|level| level == "group")
         && nav_stack.len() >= 2

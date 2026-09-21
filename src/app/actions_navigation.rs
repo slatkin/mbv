@@ -203,15 +203,7 @@ impl App {
         track_id: &str,
     ) -> Option<PendingQueueAction> {
         let album_id = album_target.split('\0').next().unwrap_or(album_target);
-        let mut tracks: Vec<EmbyItem> = self
-            .workspace_album_track_candidates(album_id)
-            .into_iter()
-            .find(|tracks| tracks.iter().any(|track| track.id == track_id))?
-            .into_iter()
-            .filter(is_playable)
-            .collect();
-        sort_audio_tracks(&mut tracks);
-        let start_idx = tracks.iter().position(|track| track.id == track_id)?;
+        let (mut tracks, start_idx) = self.resolve_playable_album_tracks(album_id, track_id)?;
         let autoload = self.config.lock().unwrap().autoload;
         if autoload {
             Some(PendingQueueAction::PlayItems {
@@ -245,19 +237,32 @@ impl App {
     }
 
     pub(super) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
+        let Some((tracks, start_idx)) = self.resolve_playable_album_tracks(album_id, &track.id)
+        else {
+            return false;
+        };
+        self.replace_and_route_album_queue(tracks, start_idx)
+    }
+
+    /// The shared track-resolution sequence behind both `grouped_track_play_action`
+    /// and `play_album_track`: find the cached candidate list containing
+    /// `track_id`, keep only playable tracks, sort them, and locate `track_id`'s
+    /// resulting position.
+    fn resolve_playable_album_tracks(
+        &self,
+        album_id: &str,
+        track_id: &str,
+    ) -> Option<(Vec<EmbyItem>, usize)> {
         let mut tracks: Vec<EmbyItem> = self
             .workspace_album_track_candidates(album_id)
             .into_iter()
-            .find(|tracks| tracks.iter().any(|candidate| candidate.id == track.id))
-            .unwrap_or_default()
+            .find(|tracks| tracks.iter().any(|track| track.id == track_id))?
             .into_iter()
             .filter(is_playable)
             .collect();
         sort_audio_tracks(&mut tracks);
-        let Some(start_idx) = tracks.iter().position(|item| item.id == track.id) else {
-            return false;
-        };
-        self.replace_and_route_album_queue(tracks, start_idx)
+        let start_idx = tracks.iter().position(|track| track.id == track_id)?;
+        Some((tracks, start_idx))
     }
 
     /// Play the complete artist Workspace sequence from its selected track.

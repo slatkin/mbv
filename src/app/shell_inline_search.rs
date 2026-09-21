@@ -183,9 +183,8 @@ impl Model {
             let library_id = self.app.libs[lib_idx].library.id.clone();
             let entry = match self.app.album_indexes.get(&library_id) {
                 Some(AlbumIndexState::Ready(index)) => index
-                    .entries
-                    .iter()
-                    .find(|entry| entry.album.id == id && entry.album.item_type == item_type)
+                    .get(&id)
+                    .filter(|entry| entry.album.item_type == item_type)
                     .cloned(),
                 _ => None,
             };
