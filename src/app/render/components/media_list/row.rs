@@ -306,7 +306,7 @@ const RIGHT_INSET: usize = 2;
 
 /// The fixed width of the right-aligned date-metadata gutter (the podcast
 /// browser's `17 Sep` column): the column is the same width for every row
-/// that carries a year or date, whatever the string's own length is.
+/// that carries a year, date, or runtime, whatever the string's own length is.
 const DATE_GUTTER_W: usize = 6;
 
 /// The row's text-flow content width: every row type (items, headings, the
