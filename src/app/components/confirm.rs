@@ -161,6 +161,11 @@ fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmInt
             Key::Char('c') | Key::Char('C') | Key::Esc => Some(ConfirmIntent::Cancel),
             _ => None,
         },
+        ConfirmAction::ReplacePopulatedQueue => match key {
+            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
+            Key::Esc => Some(ConfirmIntent::Cancel),
+            _ => Some(ConfirmIntent::Dismiss),
+        },
     }
 }
 

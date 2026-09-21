@@ -1,9 +1,10 @@
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use rstest::rstest;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::{ComponentId, Msg, ShellRequest, UserEvent};
-use crate::app::render::make_music_group_app;
+use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest, UserEvent};
+use crate::app::render::{make_music_group_app, make_music_group_app_with_second_album};
 use crate::app::tests::make_item;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
@@ -485,102 +486,228 @@ fn album_node_id(harness: &TickHarness, target: &str) -> usize {
         .expect("projected album node")
 }
 
-/// The painted point of a `make_music_group_app` album leaf, resolved from the
-/// tree's completed frame.
-fn album_point(harness: &TickHarness, target: &str) -> (usize, (u16, u16)) {
-    let node = album_node_id(harness, target);
+// ── Row 5.5: double-click and track-activation tick coverage ──
+
+/// The two expandable tree rows a double-click case can claim.
+#[derive(Clone, Copy, Debug)]
+enum TreeDoubleClickNode {
+    ArtistRoot,
+    AlbumLeaf,
+}
+
+impl TreeDoubleClickNode {
+    /// The case's settled node, resolved from the projection by identity.
+    fn resolve(self, harness: &TickHarness) -> usize {
+        let music = harness.model().test_music_owner();
+        music
+            .browser
+            .projected_nodes()
+            .iter()
+            .map(|node| node.id())
+            .find(|id| match self {
+                TreeDoubleClickNode::ArtistRoot => music.browser.model_is_artist(*id),
+                TreeDoubleClickNode::AlbumLeaf => music.browser.target_of(*id) == Some("album-1"),
+            })
+            .expect("the case's projected tree node")
+    }
+
+    /// The filter query that keeps this node's own row visible.
+    fn filter_query(self) -> &'static str {
+        match self {
+            TreeDoubleClickNode::ArtistRoot => "Alpha",
+            TreeDoubleClickNode::AlbumLeaf => "First Album",
+        }
+    }
+}
+
+/// One cached `album-1` track for the tree-track activation cases.
+fn cached_track(id: &str, number: i64) -> mbv_core::api::EmbyItem {
+    let mut track = make_item(&format!("Track {number}"), "Audio");
+    track.id = id.into();
+    track.album_id = "album-1".into();
+    track.media_type = "Audio".into();
+    track.index_number = number;
+    track
+}
+
+/// The painted point of any tree row, resolved from the tree's completed frame.
+fn tree_node_point(harness: &TickHarness, id: usize) -> (u16, u16) {
     let row = harness
         .model()
         .test_music_owner()
         .browser
-        .row_rect_for(node)
-        .expect("painted album row");
-    (node, (row.x, row.y))
+        .row_rect_for(id)
+        .expect("painted tree row");
+    (row.x, row.y)
 }
 
-/// D5: with the local tree filter active the production Grouped Music surface
-/// paints the tree and leaves the flat Inline Search result carrier empty, so a
-/// double-click must resolve current-frame filtered tree geometry and keep tree
-/// semantics — the leaf toggles its persistent expansion and no Hero opens —
-/// in both the Wide and non-Wide compositions.
-#[test]
-fn filtered_double_click_keeps_tree_semantics_in_wide_and_non_wide() {
-    for (width, height) in [(160, 40), (81, 30)] {
-        let mut app = make_music_group_app();
-        let mut track = make_item("Track 1", "Audio");
-        track.id = "track-1".into();
-        track.album_id = "album-1".into();
-        app.album_tracks_cache
-            .insert("album-1".into(), vec![track]);
-        app.terminal_width = width;
-        app.terminal_height = height;
-        app.panel_focus = PanelFocus::Library;
-        app.panel_mode = PanelMode::LibraryOnly;
-        let mut harness = TickHarness::new(app);
-        harness.model_mut().sync_mounted_surfaces();
-        draw_frame(&mut harness);
+/// Whether the shared confirm modal is mounted in the current composition.
+fn confirm_mounted(harness: &TickHarness) -> bool {
+    harness
+        .model()
+        .application
+        .mounted(&ComponentId::Modal(ModalId::Confirm))
+}
 
-        let (album_id, title) = {
-            let (id, _) = album_point(&harness, "album-1");
-            let music = harness.model().test_music_owner();
-            (id, music.browser.title_of(id).to_string())
-        };
-        let was_expanded = harness
-            .model()
-            .test_music_owner()
-            .browser
-            .node_is_expanded(album_id);
+/// A Wide `make_music_group_app` whose `album-1` leaf owns two cached tracks,
+/// ready for a tree-track activation case.
+fn music_tree_track_app(autoload: bool) -> crate::app::App {
+    let mut app = make_music_group_app();
+    app.config.lock().unwrap().autoload = autoload;
+    app.terminal_width = 160;
+    app.terminal_height = 40;
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.album_tracks_cache.insert(
+        "album-1".into(),
+        vec![cached_track("track-1", 1), cached_track("track-2", 2)],
+    );
+    app
+}
 
-        // Open the production filter through the router, then feed the
-        // destination's own query (the panel paints the tree, never a flat
-        // result list).
+/// The same app with the album leaf expanded and its track rows painted.
+fn expanded_track_harness(app: crate::app::App) -> TickHarness {
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let album_id = album_node_id(&harness, "album-1");
+    harness
+        .model_mut()
+        .test_music_owner_mut()
+        .browser
+        .expand_node(album_id);
+    draw_frame(&mut harness);
+    harness
+}
+
+fn expanded_music_tree_track_harness(autoload: bool) -> TickHarness {
+    expanded_track_harness(music_tree_track_app(autoload))
+}
+
+/// The playback-target queue's item ids in queue order.
+fn playback_queue_ids(harness: &TickHarness) -> Vec<String> {
+    harness
+        .model()
+        .app
+        .playback_queue()
+        .emby_items()
+        .iter()
+        .map(|item| item.id.clone())
+        .collect()
+}
+
+/// The two tree-track activation routes that share the grouped resolver.
+#[derive(Clone, Copy, Debug)]
+enum TrackActivation {
+    Enter,
+    DoubleClick,
+}
+
+/// Select the painted track row, then activate it by the case's route.
+fn activate_track(harness: &mut TickHarness, at: (u16, u16), kind: TrackActivation) {
+    harness.inject(left_click(at.0, at.1));
+    dispatch_step(harness);
+    draw_frame(harness);
+    match kind {
+        TrackActivation::Enter => inject_key(harness, Key::Enter),
+        TrackActivation::DoubleClick => {
+            harness.inject(left_click(at.0, at.1));
+            dispatch_step(harness);
+        }
+    }
+}
+
+/// D5/rows 5.2 and 5.5: a double-click on an expandable tree node — an artist
+/// root or an album leaf with cached track children — toggles its persistent
+/// expansion and opens no Hero, in Wide and non-Wide and both with and without
+/// the local tree filter active. With the filter active the production Grouped
+/// Music surface paints the tree and leaves the flat Inline Search result
+/// carrier empty, so the gesture must resolve current-frame filtered tree
+/// geometry and keep tree semantics.
+#[rstest]
+#[case::wide_unfiltered_artist(160, 40, false, TreeDoubleClickNode::ArtistRoot)]
+#[case::wide_filtered_artist(160, 40, true, TreeDoubleClickNode::ArtistRoot)]
+#[case::wide_unfiltered_album(160, 40, false, TreeDoubleClickNode::AlbumLeaf)]
+#[case::wide_filtered_album(160, 40, true, TreeDoubleClickNode::AlbumLeaf)]
+#[case::narrow_unfiltered_artist(81, 30, false, TreeDoubleClickNode::ArtistRoot)]
+#[case::narrow_filtered_artist(81, 30, true, TreeDoubleClickNode::ArtistRoot)]
+#[case::narrow_unfiltered_album(81, 30, false, TreeDoubleClickNode::AlbumLeaf)]
+#[case::narrow_filtered_album(81, 30, true, TreeDoubleClickNode::AlbumLeaf)]
+fn double_click_expands_artist_and_album_nodes_without_a_hero(
+    #[case] width: u16,
+    #[case] height: u16,
+    #[case] filtered: bool,
+    #[case] node: TreeDoubleClickNode,
+) {
+    let mut app = make_music_group_app();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![cached_track("track-1", 1)]);
+    app.terminal_width = width;
+    app.terminal_height = height;
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    draw_frame(&mut harness);
+
+    let node_id = node.resolve(&harness);
+    let was_expanded = harness
+        .model()
+        .test_music_owner()
+        .browser
+        .node_is_expanded(node_id);
+
+    // Open the production filter through the router, then feed the
+    // destination's own query (the panel paints the tree, never a flat result
+    // list). Filter-forced visibility never overwrites persistent expansion.
+    if filtered {
         inject_key(&mut harness, Key::Char('/'));
         harness
             .model_mut()
             .test_music_owner_mut()
             .browser
-            .apply_filter_query(&title);
+            .apply_filter_query(node.filter_query());
         draw_frame(&mut harness);
         assert!(
             harness.model().test_music_owner().inline_search.results_len() == 0,
             "{width}x{height}: production filtering leaves the flat carrier empty"
         );
-        let (_, album_at) = album_point(&harness, "album-1");
+    }
 
-        // The first click resolves the filtered row; the run loop paints the
-        // next frame before the second click, so the gesture's second press
-        // folds into a double-click against fresh tree geometry.
-        harness.inject(left_click(album_at.0, album_at.1));
-        dispatch_step(&mut harness);
-        draw_frame(&mut harness);
-        harness.inject(left_click(album_at.0, album_at.1));
-        let outcome = harness.step();
-        assert!(
-            outcome.raw_messages.iter().all(|message| !matches!(
-                message,
-                Msg::Shell(ShellRequest::MusicAlbumActivate { .. })
-                    | Msg::Shell(ShellRequest::InlineSearchActivate { .. })
-            )),
-            "{width}x{height}: filtered double-click keeps tree semantics: {:?}",
-            outcome.raw_messages
-        );
-        let (mut music_resize, mut tv_resize) = (false, false);
-        for message in outcome.messages {
-            harness
-                .model_mut()
-                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
-        }
-        harness.model_mut().sync_mounted_surfaces();
+    // The first click resolves the row; the run loop paints the next frame
+    // before the second press, as the real event loop does.
+    let at = tree_node_point(&harness, node_id);
+    harness.inject(left_click(at.0, at.1));
+    dispatch_step(&mut harness);
+    draw_frame(&mut harness);
+    harness.inject(left_click(at.0, at.1));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().all(|message| !matches!(
+            message,
+            Msg::Shell(ShellRequest::MusicAlbumActivate { .. })
+                | Msg::Shell(ShellRequest::InlineSearchActivate { .. })
+        )),
+        "{width}x{height} {node:?} filtered={filtered}: double-click keeps tree semantics: {:?}",
+        outcome.raw_messages
+    );
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
 
-        assert_ne!(
-            harness
-                .model()
-                .test_music_owner()
-                .browser
-                .node_is_expanded(album_id),
-            was_expanded,
-            "{width}x{height}: a filtered double-click toggles persistent expansion"
-        );
+    assert_ne!(
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .node_is_expanded(node_id),
+        was_expanded,
+        "{width}x{height} {node:?} filtered={filtered}: double-click toggles persistent expansion"
+    );
+    if filtered {
         assert!(
             harness
                 .model()
@@ -589,11 +716,35 @@ fn filtered_double_click_keeps_tree_semantics_in_wide_and_non_wide() {
                 .filter_active(),
             "{width}x{height}: the forced filtered projection stays until the filter closes"
         );
-        assert!(
-            !music_panel(&harness).test_hero_overlay_open(),
-            "{width}x{height}: no Hero opens over the filtered tree"
-        );
     }
+    assert!(
+        !music_panel(&harness).test_hero_overlay_open(),
+        "{width}x{height} {node:?} filtered={filtered}: no Hero opens over the tree"
+    );
+}
+
+/// The painted point of the `make_music_group_app` album leaf's cached track
+/// row, resolved from the tree's completed frame.
+fn track_point(harness: &TickHarness, track: &str) -> (u16, u16) {
+    let music = harness.model().test_music_owner();
+    let node = music
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| {
+            music
+                .browser
+                .track_identity_of(node.id())
+                .is_some_and(|(album_target, track_target)| {
+                    album_target == "album-1" && track_target == track
+                })
+        })
+        .expect("painted track node");
+    let row = music
+        .browser
+        .row_rect_for(node.id())
+        .expect("painted track row");
+    (row.x, row.y)
 }
 
 /// Rows 5.2/5.3 end to end through the mounted composition: the tree's track
@@ -602,55 +753,7 @@ fn filtered_double_click_keeps_tree_semantics_in_wide_and_non_wide() {
 /// queue through the existing executor with the selected start index.
 #[test]
 fn music_tree_track_activation_plays_through_the_grouped_resolver() {
-    let mut app = make_music_group_app();
-    app.config.lock().unwrap().autoload = true;
-    app.terminal_width = 160;
-    app.terminal_height = 40;
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
-    let tracks = (1..=2)
-        .map(|number| {
-            let mut track = make_item(&format!("Track {number}"), "Audio");
-            track.id = format!("track-{number}");
-            track.album_id = "album-1".into();
-            track.media_type = "Audio".into();
-            track.index_number = number;
-            track
-        })
-        .collect::<Vec<_>>();
-    app.album_tracks_cache.insert("album-1".into(), tracks);
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-
-    // Expand the album leaf so its cached tracks project as visible rows.
-    let album_id = album_node_id(&harness, "album-1");
-    harness
-        .model_mut()
-        .test_music_owner_mut()
-        .browser
-        .expand_node(album_id);
-    draw_frame(&mut harness);
-
-    let track_point = |harness: &TickHarness, track: &str| {
-        let music = harness.model().test_music_owner();
-        let node = music
-            .browser
-            .projected_nodes()
-            .iter()
-            .find(|node| {
-                music.browser.track_identity_of(node.id()).is_some_and(
-                    |(album_target, track_target)| {
-                        album_target == "album-1" && track_target == track
-                    },
-                )
-            })
-            .expect("painted track node");
-        let row = music
-            .browser
-            .row_rect_for(node.id())
-            .expect("painted track row");
-        (row.x, row.y)
-    };
+    let mut harness = expanded_music_tree_track_harness(true);
 
     // Enter on the selected tree track: the router reaches the owner's
     // track arm, whose request the shell resolves.
@@ -675,13 +778,25 @@ fn music_tree_track_activation_plays_through_the_grouped_resolver() {
 
     // Double-click on the second track: the same resolver starts at that
     // track's own index. The run loop repaints between the two presses, as
-    // the real event loop does.
+    // the real event loop does. The previous activation left a populated
+    // target queue, so row 5.4's gate raises the replacement confirmation and
+    // only the confirmed action executes.
     let second_track = track_point(&harness, "track-2");
     harness.inject(left_click(second_track.0, second_track.1));
     dispatch_step(&mut harness);
     draw_frame(&mut harness);
     harness.inject(left_click(second_track.0, second_track.1));
     dispatch_step(&mut harness);
+    assert!(
+        confirm_mounted(&harness),
+        "a populated target queue asks before the replacement"
+    );
+    assert_eq!(
+        harness.model().app.playback_queue().queue_cursor,
+        0,
+        "the queue is unchanged before the confirmation"
+    );
+    inject_key(&mut harness, Key::Char('y'));
     assert_eq!(
         harness
             .model()
@@ -696,6 +811,185 @@ fn music_tree_track_activation_plays_through_the_grouped_resolver() {
     assert_eq!(
         harness.model().app.playback_queue().queue_cursor,
         1,
-        "the double-clicked track is the start index"
+        "the double-clicked track is the start index after confirmation"
     );
+}
+
+/// Row 5.5: a double-click on an album leaf with no cached track children
+/// claims the gesture without changing its expansion, opening a Hero, or
+/// starting playback.
+#[test]
+fn double_click_a_childless_album_claims_the_gesture_unchanged() {
+    let mut app = make_music_group_app_with_second_album();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![cached_track("track-1", 1)]);
+    app.terminal_width = 160;
+    app.terminal_height = 40;
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    draw_frame(&mut harness);
+
+    let childless = album_node_id(&harness, "album-2");
+    assert!(
+        !harness
+            .model()
+            .test_music_owner()
+            .browser
+            .node_is_expanded(childless),
+        "the childless leaf starts collapsed"
+    );
+    let at = tree_node_point(&harness, childless);
+
+    harness.inject(left_click(at.0, at.1));
+    dispatch_step(&mut harness);
+    draw_frame(&mut harness);
+    harness.inject(left_click(at.0, at.1));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().all(|message| !matches!(
+            message,
+            Msg::Shell(ShellRequest::MusicTreeTrackActivate { .. })
+        )),
+        "a childless album claims the gesture without a track activation: {:?}",
+        outcome.raw_messages
+    );
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(
+        !harness
+            .model()
+            .test_music_owner()
+            .browser
+            .node_is_expanded(childless),
+        "the claimed childless leaf keeps its expansion state"
+    );
+    assert!(
+        !music_panel(&harness).test_hero_overlay_open(),
+        "a childless album double-click opens no Hero"
+    );
+    assert_eq!(playback_queue_ids(&harness), Vec::<String>::new());
+    assert!(harness.model().app.pending_queue_action.is_none());
+}
+
+/// Row 5.5: tree-track Enter feeds the one grouped resolver, whose autoload
+/// policy decides whether the replacement queue is the whole cached album
+/// (starting at the selected track) or only the selected Audio item.
+#[rstest]
+#[case::autoload_on(true, &["track-1", "track-2"], 1)]
+#[case::autoload_off(false, &["track-2"], 0)]
+fn tree_track_enter_follows_the_autoload_policy(
+    #[case] autoload: bool,
+    #[case] expected: &[&str],
+    #[case] start: usize,
+) {
+    let mut harness = expanded_music_tree_track_harness(autoload);
+    assert_eq!(
+        harness.model().app.playback_queue().total_queue_len(),
+        0,
+        "the target queue starts empty, so the replacement needs no prompt"
+    );
+
+    let at = track_point(&harness, "track-2");
+    activate_track(&mut harness, at, TrackActivation::Enter);
+
+    assert!(!confirm_mounted(&harness));
+    assert_eq!(playback_queue_ids(&harness), expected);
+    assert_eq!(harness.model().app.playback_queue().queue_cursor, start);
+}
+
+/// Row 5.5: with an empty target queue both tree-track activation routes play
+/// immediately, with no confirmation prompt.
+#[rstest]
+#[case::enter(TrackActivation::Enter)]
+#[case::double_click(TrackActivation::DoubleClick)]
+fn tree_track_activation_with_an_empty_queue_plays_immediately(
+    #[case] kind: TrackActivation,
+) {
+    let mut harness = expanded_music_tree_track_harness(true);
+    let at = track_point(&harness, "track-2");
+
+    activate_track(&mut harness, at, kind);
+
+    assert!(
+        !confirm_mounted(&harness),
+        "{kind:?}: an empty queue starts playback without a prompt"
+    );
+    assert_eq!(playback_queue_ids(&harness), ["track-1", "track-2"]);
+    assert_eq!(harness.model().app.playback_queue().queue_cursor, 1);
+}
+
+/// Row 5.5: with a populated target queue both tree-track activation routes
+/// raise the replacement confirmation, change nothing before it, and only
+/// play after the complete confirmation sequence.
+#[rstest]
+#[case::enter(TrackActivation::Enter)]
+#[case::double_click(TrackActivation::DoubleClick)]
+fn tree_track_activation_with_a_populated_queue_confirms_before_replacing(
+    #[case] kind: TrackActivation,
+) {
+    let mut app = music_tree_track_app(true);
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.player_tab.set_items(vec![existing], 0);
+    let mut harness = expanded_track_harness(app);
+
+    let at = track_point(&harness, "track-2");
+    activate_track(&mut harness, at, kind);
+
+    assert!(
+        confirm_mounted(&harness),
+        "{kind:?}: a populated target queue asks before the replacement"
+    );
+    assert_eq!(
+        playback_queue_ids(&harness),
+        ["existing"],
+        "{kind:?}: the prompt changes no queue"
+    );
+    assert_eq!(harness.model().app.playback_queue().queue_cursor, 0);
+    assert!(harness.model().app.pending_queue_action.is_some());
+
+    inject_key(&mut harness, Key::Char('y'));
+
+    assert!(!confirm_mounted(&harness));
+    assert!(harness.model().app.pending_queue_action.is_none());
+    assert_eq!(playback_queue_ids(&harness), ["track-1", "track-2"]);
+    assert_eq!(harness.model().app.playback_queue().queue_cursor, 1);
+}
+
+/// Rows 5.4/5.5: cancelling the populated-queue confirmation leaves the queue
+/// and playback unchanged, clears the pending payload, and a later sync pass
+/// does not resurrect it.
+#[test]
+fn cancelling_the_replace_queue_confirmation_leaves_the_queue_unchanged() {
+    let mut app = music_tree_track_app(true);
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.player_tab.set_items(vec![existing], 0);
+    let mut harness = expanded_track_harness(app);
+
+    let at = track_point(&harness, "track-2");
+    activate_track(&mut harness, at, TrackActivation::Enter);
+    assert!(confirm_mounted(&harness));
+
+    inject_key(&mut harness, Key::Esc);
+
+    assert!(!confirm_mounted(&harness));
+    assert!(
+        harness.model().app.pending_queue_action.is_none(),
+        "cancellation leaves no executable payload behind"
+    );
+    assert_eq!(playback_queue_ids(&harness), ["existing"]);
+    assert_eq!(harness.model().app.playback_queue().queue_cursor, 0);
+
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(playback_queue_ids(&harness), ["existing"]);
+    assert_eq!(harness.model().app.playback_queue().queue_cursor, 0);
 }

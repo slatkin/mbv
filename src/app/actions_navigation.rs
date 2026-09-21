@@ -185,28 +185,11 @@ impl App {
             );
             return false;
         };
-        // The pending action is the only executable payload, so the queue gate
-        // added ahead of the executor cannot drift into a second playback
-        // path. A directly-controlled owner holds the target queue itself, so
-        // the resolved replacement is staged in that scope's canonical queue
-        // before submission — the same order the shipped album/artist track
-        // paths use (`replace_playback_queue`, then submission).
-        if self.has_direct_remote_queue() {
-            match &action {
-                PendingQueueAction::PlayItems {
-                    items, start_idx, ..
-                } => {
-                    // The executor gates the source label on local metadata,
-                    // which never applies to a directly-controlled owner, so
-                    // the label is set here before submission — the same
-                    // order the shipped album/artist track paths use.
-                    self.queue_source = crate::config::QueueSource::Album;
-                    self.replace_playback_queue(items.clone(), *start_idx)
-                }
-                PendingQueueAction::ClearQueue => {}
-            }
-        }
-        self.execute_pending_queue_action(action);
+        // The pending action is the only executable payload, so the queue
+        // gate ahead of the executor cannot drift into a second playback
+        // path: an empty target queue executes immediately, a populated one
+        // asks before replacement and runs the stored action on confirmation.
+        self.request_queue_replacement(action);
         true
     }
 
