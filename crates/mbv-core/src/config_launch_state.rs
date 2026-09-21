@@ -77,7 +77,7 @@ pub enum LaunchPanelFocus {
 /// Selected main Selector pill, tagged per destination. Each payload is a
 /// stable identity — never a row index. Home and Emby carry narrowed keys
 /// (tasks 2.1): Home sections resolve to the persisted section source, Emby
-/// letter pills to their closed bucket label and Emby group pills to the
+/// letter pills to their fixed bucket identity and Emby group pills to the
 /// group folder's content ID. Feeds and Audiobookshelf keep opaque keys
 /// until task 2.2 narrows them the same way. Matching on the destination
 /// variant is what makes cross-destination resolution impossible.
@@ -100,14 +100,53 @@ pub enum HomeSelectorKey {
     Section(String),
 }
 
+/// Stable generic-Emby letter-pillar identity (task 2.1). The variants are
+/// the closed bucket set in `app::render::LetterFilter`; they intentionally do
+/// not carry the bucket's presentation label, which may be reworded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmbyLetterBucket {
+    AToC,
+    DToF,
+    GToI,
+    JToL,
+    MToO,
+    PToR,
+    SToU,
+    VToZ,
+    Hash,
+}
+
+impl EmbyLetterBucket {
+    /// Resolve the bucket's stable identity from its position in the shared
+    /// `LETTER_FILTER_BUCKETS` table.
+    pub fn from_index(index: usize) -> Option<Self> {
+        Some(match index {
+            0 => Self::AToC,
+            1 => Self::DToF,
+            2 => Self::GToI,
+            3 => Self::JToL,
+            4 => Self::MToO,
+            5 => Self::PToR,
+            6 => Self::SToU,
+            7 => Self::VToZ,
+            8 => Self::Hash,
+            _ => return None,
+        })
+    }
+}
+
 /// Stable generic-Emby pill identity (task 2.1): letter pills are a closed
-/// bucket set, so the bucket label is enum-like and stable; feed/home-video
-/// group pills are dynamic, so they resolve to the group folder's Service
-/// content ID — never a pill index or group display name.
+/// bucket set, so the bucket identity is independent of its display label;
+/// feed/home-video group pills are dynamic, so they resolve to the group
+/// folder's Service content ID — never a pill index or group display name.
+/// `Unfiltered` distinguishes a shown, unfiltered pill row from a destination
+/// that has no pills at all (`TuiLaunchState::selector == None`).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EmbySelectorKey {
-    Letter(String),
+    Letter(EmbyLetterBucket),
+    Unfiltered,
     Group(String),
 }
 

@@ -267,14 +267,16 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
 }
 
 // Task 2.1: the bounded read-only launch-state query on the generic-Emby
-// owner. Pill identities are stable keys — the closed letter bucket's label
-// or the selected feed/home-video group's folder content ID — and the item
-// identity is the shared carrier's stable target. No pill index, group
-// display name, or row position crosses; unfiltered scopes and empty lists
-// report absence.
+// owner. Pill identities are stable keys — the closed letter bucket's fixed
+// value or the selected feed/home-video group's folder content ID — and the
+// item identity is the shared carrier's stable target. No pill index, group
+// display name, or row position crosses; a shown unfiltered scope has an
+// explicit identity, while pill-less and empty views report absence.
 #[test]
 fn browser_owner_launch_snapshot_reports_letter_pill_and_item_identities() {
-    use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+    use mbv_core::config::{
+        EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity,
+    };
 
     let bucket = LetterFilter::for_index(2).expect("letter buckets exist");
     let mut push = owner_push(make_items(3));
@@ -287,9 +289,9 @@ fn browser_owner_launch_snapshot_reports_letter_pill_and_item_identities() {
     assert_eq!(
         selector,
         Some(SelectorIdentity::Emby {
-            key: EmbySelectorKey::Letter(LetterFilter::labels()[2].clone()),
+            key: EmbySelectorKey::Letter(EmbyLetterBucket::GToI),
         }),
-        "the letter pill resolves to its closed bucket label, never its index"
+        "the letter pill resolves to its fixed bucket identity, never its label"
     );
     assert_eq!(
         item,
@@ -324,7 +326,7 @@ fn browser_owner_launch_snapshot_reports_group_content_id_never_the_display_name
 
 #[test]
 fn browser_owner_launch_snapshot_reports_absence_for_unfiltered_and_empty_views() {
-    use mbv_core::config::LibraryItemIdentity;
+    use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 
     // No pills at all (a small library): no selector, but the item remains.
     let mut owner = BrowserOwner::new(LibraryKind::Movies);
@@ -339,7 +341,8 @@ fn browser_owner_launch_snapshot_reports_absence_for_unfiltered_and_empty_views(
         )
     );
 
-    // The "All" group pill is the unfiltered scope: no selector either.
+    // The "All" group pill is the unfiltered scope: it has an explicit
+    // selector identity so it is distinct from a destination with no pills.
     let mut push = owner_push(make_items(2));
     push.group_pills = true;
     push.feed_groups = vec!["Displayed Name".to_string()];
@@ -349,12 +352,14 @@ fn browser_owner_launch_snapshot_reports_absence_for_unfiltered_and_empty_views(
     assert_eq!(
         owner.launch_snapshot(),
         (
-            None,
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Unfiltered,
+            }),
             Some(LibraryItemIdentity::Emby {
                 id: "id0".to_string(),
             })
         ),
-        "the All pill reports no selector; restoration falls back to the first pill"
+        "the All pill reports an explicit unfiltered selector"
     );
 
     // Letter pills shown but no bucket filtered: the unfiltered scope again.
@@ -365,7 +370,9 @@ fn browser_owner_launch_snapshot_reports_absence_for_unfiltered_and_empty_views(
     assert_eq!(
         owner.launch_snapshot(),
         (
-            None,
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Unfiltered,
+            }),
             Some(LibraryItemIdentity::Emby {
                 id: "id0".to_string(),
             })

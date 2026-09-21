@@ -15,7 +15,7 @@ fn launch_state_sample() -> TuiLaunchState {
         },
         panel_focus: LaunchPanelFocus::Library,
         selector: Some(SelectorIdentity::Emby {
-            key: EmbySelectorKey::Letter("A\u{2013}C".to_string()),
+            key: EmbySelectorKey::Letter(EmbyLetterBucket::AToC),
         }),
         item: Some(LibraryItemIdentity::Emby {
             id: "movie-2".to_string(),

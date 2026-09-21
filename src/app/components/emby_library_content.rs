@@ -36,7 +36,7 @@ use super::media_list::{
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
-use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 
 /// Browse identity used to decide when a projected position should be applied.
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -720,30 +720,40 @@ impl LibraryContentOwner for EmbyLibraryContent {
     }
 
     /// Bounded read-only launch-state identities (task 2.1): the current
-    /// main-Selector pill as a stable key — the closed letter bucket's
-    /// label, or the selected feed/home-video group's folder content ID —
+    /// main-Selector pill as a stable key — the closed letter bucket's fixed
+    /// value, or the selected feed/home-video group's folder content ID —
     /// plus the shared carrier's stable item target. The "All" group pill
-    /// and the unfiltered letter view are the unfiltered scope, so they
-    /// report no selector (restoration falls back to the first pill); a
-    /// destination with no pills, or an empty list, reports absence the
-    /// same way. No pill index, group display name, or row position
-    /// crosses.
+    /// and the unfiltered letter view use an explicit unfiltered identity;
+    /// a destination with no pills, or an empty list, reports absence. No
+    /// pill index, group display name, or row position crosses.
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = if self.group_pills {
-            self.feed_group_cursor.checked_sub(1).and_then(|group| {
-                self.feed_group_ids
-                    .get(group)
-                    .cloned()
-                    .map(|id| SelectorIdentity::Emby {
-                        key: EmbySelectorKey::Group(id),
-                    })
-            })
-        } else if self.show_letter_pills {
-            self.letter_filter
-                .as_ref()
-                .map(|filter| SelectorIdentity::Emby {
-                    key: EmbySelectorKey::Letter(filter.label.to_owned()),
+            if self.feed_group_cursor == 0 {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Unfiltered,
                 })
+            } else {
+                self.feed_group_cursor.checked_sub(1).and_then(|group| {
+                    self.feed_group_ids
+                        .get(group)
+                        .cloned()
+                        .map(|id| SelectorIdentity::Emby {
+                            key: EmbySelectorKey::Group(id),
+                        })
+                })
+            }
+        } else if self.show_letter_pills {
+            Some(SelectorIdentity::Emby {
+                key: self
+                    .letter_filter
+                    .as_ref()
+                    .map(|filter| {
+                        EmbyLetterBucket::from_index(filter.index)
+                            .expect("LetterFilter index comes from LETTER_FILTER_BUCKETS")
+                    })
+                    .map(EmbySelectorKey::Letter)
+                    .unwrap_or(EmbySelectorKey::Unfiltered),
+            })
         } else {
             None
         };
