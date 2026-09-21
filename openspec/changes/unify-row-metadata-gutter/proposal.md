@@ -10,6 +10,10 @@ A media-list row's release year and its publish date are the same kind of thing 
 - Delete the `ROW_DATE_FG` palette role (`src/app/render/theme/mod.rs`); nothing else references it.
 - Group headings (`MediaListRow::Heading`) and spacer rows continue to carry no gutter — no behaviour change there, since a heading has no `trailing` field today.
 
+- Hero workspace lists merge their per-item durations into the green gutter: music tracklists, TV episode lists, and ABS book chapter lists project each item's duration right-aligned in the unified green gutter (`MediaListTrailing::Gutter`) instead of leaving it off — NOT the gold `DURATION` slot, which stays Queue-only.
+- Audiobooks additionally show their total runtime in the gutter of the book's browser list row (where movies/TV show the production year).
+- Gutter durations use a minutes-precision format — `M:SS` under an hour, `H:MM` at or over an hour — always ≤6 columns so `DATE_GUTTER_W=6` never truncates.
+
 ## Capabilities
 
 ### Modified Capabilities
@@ -23,4 +27,7 @@ A media-list row's release year and its publish date are the same kind of thing 
 - Call sites constructing `MediaListTrailing::Year`: `src/app/components/emby_library_content.rs`, `src/app/components/tv_content/mod.rs`, `src/app/render/components/music_wide.rs`, `src/app/components/inline_search.rs`.
 - Call site constructing `MediaListTrailing::Published`: `src/app/components/podcast_content.rs`.
 - Buffer/paint tests in `src/app/render/components/media_list.rs` that assert the old inline placement/colour for years and the old `ROW_DATE_FG` colour for dates.
+- Duration projection sites: `src/app/components/music_content_workspace.rs` (track rows), `src/app/components/tv_content/mod.rs` (episode rows), `src/app/components/book_content.rs` (chapter rows + the book browser row's total runtime), switching their duration handling to the gutter.
+- A new small gutter-duration formatter (minutes-precision, e.g. in `src/app/ui_util.rs`) with unit tests.
+- Buffer tests for duration-in-gutter painting, plus updates to any tests asserting workspace rows carry no trailing metadata.
 - Visual effect: every Movies/TV/Music/Generic list row's year moves from immediately after the title to the row's right edge, and its colour is unchanged (already green). Every podcast episode row's publish date keeps its position but changes colour from yellow to green.

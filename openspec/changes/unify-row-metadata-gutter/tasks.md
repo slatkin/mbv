@@ -24,3 +24,11 @@
 
 - [x] 5.1 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv` (and any other package touched). Verify: all three succeed with no warnings/failures.
 - [ ] 5.2 Manually run the app (`run` skill) and check a Movies/TV/Music/Generic list (year in gutter, green) and the Podcast episode list (date in gutter, green) side by side. Verify: both show a right-aligned green date/year column at the same row position, and group headings show no gutter.
+
+## 6. Duration in the unified gutter
+
+- [ ] 6.1 The three Workspace producers emit per-item `MediaListTrailing::Gutter` durations (minutes-precision format from 6.3, right-aligned in the green gutter): `src/app/components/music_content_workspace.rs` `track_row` (music tracklists), `src/app/components/tv_content/mod.rs` `build_episode_rows` (TV episode lists), `src/app/components/book_content.rs` `chapter_rows` (ABS book chapter lists). The Queue's gold `DURATION` slot is unchanged. Verify: `cargo check -p mbv` compiles clean.
+- [ ] 6.2 Audiobook browser row (`src/app/components/book_content.rs` ~line 48, currently `trailing: None`) emits `MediaListTrailing::Gutter` carrying the book's total runtime (minutes-precision), where movies/TV show production year. Verify: `cargo check -p mbv` compiles clean.
+- [ ] 6.3 Add a minutes-precision gutter-duration formatter (new small helper, e.g. `src/app/ui_util.rs`): `M:SS` under an hour, `H:MM` at or over an hour — always ≤6 columns. With unit tests covering both formats and the 6-column bound. Verify: `cargo nextest run -p mbv <new tests>` passes.
+- [ ] 6.4 Buffer tests: a chapter/track/episode row paints its duration right-aligned in the gutter column in `STATUS_AVAILABLE`; an audiobook browser row paints its total runtime there; assert no truncation at 6 columns for ≥1h values. Verify: `cargo nextest run -p mbv <new tests>` passes.
+- [ ] 6.5 Update any buffer tests/char tests that assert workspace rows have no trailing (e.g. `music_content_workspace` or `row.rs` tests asserting `duration: None` rows paint nothing in the gutter). Verify: `cargo nextest run -p mbv` for the touched families passes.
