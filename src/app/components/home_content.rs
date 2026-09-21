@@ -24,13 +24,14 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, MediaSemanticState, RowIntent,
+    MediaListTrailing, MediaListTransition, MediaSemanticState, RowIntent,
 };
+use crate::app::home_latest::provider_timestamp_secs;
 use crate::app::types_context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
-use crate::app::ui_util::trunc_str;
+use crate::app::ui_util::{fmt_publish_date_short, trunc_str};
 use mbv_core::playback_queue::QueueItem;
 
 /// The embedded content owner for the Home destination (design D2). Plain
@@ -245,7 +246,13 @@ impl HomeContent {
                     target: item.id().to_owned(),
                     // The canonical state renders an active row's resume
                     // percentage inline, so Home projects no separate badge.
-                    trailing: None,
+                    trailing: if self.section != 0 {
+                        provider_timestamp_secs(item).map(|timestamp| {
+                            MediaListTrailing::Gutter(fmt_publish_date_short(timestamp))
+                        })
+                    } else {
+                        None
+                    },
                     // Library lists carry no time column (only the Queue list
                     // and the sessions modal show one).
                     duration: None,
@@ -745,6 +752,13 @@ mod tests {
         }
     }
 
+    fn row_trailing(owner: &HomeContent, index: usize) -> Option<MediaListTrailing> {
+        match &owner.test_active_rows()[index] {
+            MediaListRow::Item { trailing, .. } => trailing.clone(),
+            other => panic!("expected an item row, got {other:?}"),
+        }
+    }
+
     #[test]
     fn selector_markers_skip_continue_selected_and_visited_latest_sources() {
         let first = HomeLatestSource::Emby("first".into());
@@ -816,6 +830,62 @@ mod tests {
             HashMap::new(),
         );
         assert!(owner.visited_latest_sources.contains(&second));
+    }
+
+    #[test]
+    fn latest_rows_project_provider_dates_but_continue_and_invalid_rows_do_not() {
+        let mut emby = make_item("Emby movie", "Movie");
+        emby.date_added = "2026-09-17T00:00:00Z".into();
+        let abs = QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+            library_item_id: "show".into(),
+            episode_id: "abs-episode".into(),
+            title: "ABS episode".into(),
+            pub_date_secs: Some(1_789_603_200 - 14 * 86_400),
+            ..abs_episode_defaults()
+        });
+        let feed = QueueItem::Feed(FeedEntry {
+            pub_date_secs: Some(1_789_603_200),
+            ..match feed_entry("Feed entry", None) {
+                QueueItem::Feed(entry) => entry,
+                _ => unreachable!(),
+            }
+        });
+        let mut invalid = make_item("Invalid date", "Movie");
+        invalid.date_added = "not-a-date".into();
+        let owner = owner_with_section(
+            HomeLatestSource::Emby("emby".into()),
+            vec![
+                QueueItem::Emby(Box::new(emby)),
+                abs,
+                feed,
+                QueueItem::Emby(Box::new(invalid)),
+            ],
+            &[],
+        );
+        assert_eq!(
+            row_trailing(&owner, 0),
+            Some(MediaListTrailing::Gutter("17 Sep".into()))
+        );
+        assert_eq!(
+            row_trailing(&owner, 1),
+            Some(MediaListTrailing::Gutter("3 Sep".into()))
+        );
+        assert_eq!(
+            row_trailing(&owner, 2),
+            Some(MediaListTrailing::Gutter("17 Sep".into()))
+        );
+        assert_eq!(row_trailing(&owner, 3), None);
+
+        let mut continue_item = make_item("Continue movie", "Movie");
+        continue_item.date_added = "2026-09-17T00:00:00Z".into();
+        let mut continue_owner = HomeContent::new();
+        continue_owner.set_content(
+            vec![QueueItem::Emby(Box::new(continue_item))],
+            Vec::new(),
+            false,
+            HashMap::new(),
+        );
+        assert_eq!(row_trailing(&continue_owner, 0), None);
     }
 
     #[test]
