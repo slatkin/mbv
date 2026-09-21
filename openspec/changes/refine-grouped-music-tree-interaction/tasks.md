@@ -22,14 +22,14 @@
 
 ## 4. Tree pointer gestures focus the panel
 
-- [ ] 4.1 Add the typed `LibraryPanelFocus` request for resolved tree gestures that have no other external effect and handle it by focusing Library; verify repeat selection, local expansion, childless-album claim, and boundary-clamped tree wheel with shell-message/owner tests
-- [ ] 4.2 Focus Library at the start of the existing `MusicAlbumCursor` handler and the new Music artist-track/play-now handlers; verify each handler without adding a second message from the owner
-- [ ] 4.3 Add a Music-specific context-menu request carrying the already-resolved targets/anchor whose shell handler focuses Library before opening the menu; keep generic `RowContextMenu` behavior unchanged for other destinations, and verify first click, toggle/range click, artist-root click, track double-click, and context-click owner cases
-- [ ] 4.4 Add a real tick test that clicking a tree row while Queue holds focus moves panel focus to Library; verify it passes and that a click on another panel still leaves Library unfocused
+- [x] 4.1 Add the typed `LibraryPanelFocus` request for resolved tree gestures that have no other external effect and handle it by focusing Library; verify repeat selection, local expansion, childless-album claim, and boundary-clamped tree wheel with shell-message/owner tests
+- [x] 4.2 Focus Library at the start of the existing `MusicAlbumCursor` handler and the new Music artist-track/play-now handlers; verify each handler without adding a second message from the owner
+- [x] 4.3 Add a Music-specific context-menu request carrying the already-resolved targets/anchor whose shell handler focuses Library before opening the menu; keep generic `RowContextMenu` behavior unchanged for other destinations, and verify first click, toggle/range click, artist-root click, track double-click, and context-click owner cases
+- [x] 4.4 Add a real tick test that clicking a tree row while Queue holds focus moves panel focus to Library; verify it passes and that a click on another panel still leaves Library unfocused
 
 ## 5. Tree double-click expands or plays
 
-- [ ] 5.1 Add the owner policy that a double-click reaches the owner instead of opening the Hero overlay, defaulting to the current hero-bearing behaviour and overridden false by Grouped Music; verify with a panel/owner policy unit test
+- [x] 5.1 Add the owner policy that a double-click reaches the owner instead of opening the Hero overlay, defaulting to the current hero-bearing behaviour and overridden false by Grouped Music; verify with a panel/owner policy unit test
 - [ ] 5.2 Rewrite the owner's tree double-click arm with explicit node-kind dispatch: toggle persistent expansion for an artist root or album leaf with cached children, claim a childless album leaf without state change, and emit the stable-ID track play-now intent for a track; route production local-filter pointer input through current-frame filtered tree geometry rather than the empty flat-result carrier, and verify all four node cases both filtered and unfiltered
 - [ ] 5.3 Add one grouped-track resolver used by tree Enter and play-now: autoload enabled resolves cached playable album tracks in disc/track order and the selected start index; disabled resolves only the selected track. Feed its complete `PendingQueueAction::PlayItems` into the existing playback/admission executor; verify both policies and resolution failure without queue mutation
 - [ ] 5.4 Add `ConfirmAction::ReplacePopulatedQueue` and its dispatcher/predicate. Empty local or direct-remote target queues execute immediately; populated queues store the action and prompt; confirmed dirty saved-playlist replacement proceeds through the existing save/discard prompt before execution; cancellation at either prompt changes neither queue nor playback. Verify empty/populated local and direct-remote queues plus populated+dirty save, discard, and cancel in `input_confirm_keys` tests
