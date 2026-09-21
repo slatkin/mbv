@@ -4,7 +4,7 @@
 
 ### Requirement: Grouped Music navigation lands and never silently no-ops
 
-A queue or Search sidebar navigation to a Music item in a Grouped Music library SHALL land the tree on the resolved album with that album's Workspace content available, and SHALL select the navigated track in that Workspace once its tracks are available. The landing SHALL apply its own grouped-catalog state and re-anchor a previously retained Music destination rather than depending on an unrelated later event. A navigation that cannot resolve, activate, or apply a landing SHALL surface the existing library-error feedback and leave the current view unchanged; it SHALL NOT silently do nothing.
+A queue or Search sidebar navigation to a Music item in a Grouped Music library SHALL land the tree on the resolved album with that album's Workspace content available, and SHALL select the navigated track in that Workspace once its tracks are available. The landing SHALL apply its own grouped-catalog state and re-anchor a previously retained Music destination rather than depending on an unrelated later event. A navigation SHALL prepare its resolved grouped-catalog landing before committing any tab, nav-stack, saved-position, or retained-component change. A navigation that cannot resolve, activate, or apply that prepared landing SHALL surface the existing library-error feedback and leave the current view unchanged; it SHALL NOT silently do nothing.
 
 #### Scenario: Navigated music track lands in the grouped tree
 
@@ -21,4 +21,10 @@ A queue or Search sidebar navigation to a Music item in a Grouped Music library 
 
 - **WHEN** a music navigation cannot resolve its album or cannot apply a landing
 - **THEN** the existing library-error feedback is shown
-- **AND** the current view is unchanged rather than silently no-opped
+- **AND** the active tab, nav stack, saved Library position, and retained destination selection remain unchanged
+
+#### Scenario: Apply-stage failure is atomic
+
+- **WHEN** album resolution succeeds but grouped-state construction or application fails
+- **THEN** no partial landing becomes visible or saved
+- **AND** the existing library-error feedback is shown

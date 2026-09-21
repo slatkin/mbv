@@ -26,6 +26,10 @@ queue's "Go to Library" on a music item silently does nothing.
 - A pointer gesture on the Grouped Music tree that resolves a row now requests
   Library panel focus, so clicking the tree focuses the panel like every other
   library list.
+- Enter on a Grouped Music track runs the library playback policy through a new
+  grouped-track resolver: autoload on resolves the selected album's cached
+  ordered tracks, autoload off resolves only the selected track, and either
+  path asks before replacing a populated target queue.
 - Double-click on a Grouped Music tree node toggles expansion when the node is
   expandable, and otherwise plays the resolved item now — asking for
   confirmation when the queue is populated. This replaces double-click opening
@@ -61,12 +65,10 @@ None.
   artist-Workspace activation intent.
 - `src/app/components/library_panel/panel.rs` — Grouped Music double-click no
   longer taking the overlay-first path.
-- `src/app/actions_navigation.rs`, `src/app/shell_messages.rs` — discography
-  playback request and handler.
-- `crates/mbv-core/src/config_types_queue_state.rs` and queue-source presentation
-  matches — persisted `QueueSource::Artist` support; older variants remain
-  wire- and persistence-compatible, while older binaries are not expected to
-  read the new variant.
+- `src/app/actions_navigation.rs`, `src/app/shell_messages.rs`,
+  `src/app/types_confirm.rs`, `src/app/input_confirm_keys.rs` — grouped-track
+  and discography playback resolution, populated-queue confirmation, and
+  confirmed execution.
 - `src/app/library_search_actions.rs`, `library_browse_actions.rs`,
   `lib_event_actions.rs`, `shell_inline_search.rs` — music navigation landing
   and the Go-to-Library diagnosis fix.
