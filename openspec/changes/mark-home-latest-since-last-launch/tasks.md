@@ -2,9 +2,9 @@
 
 ## 1. Launch cutoff and provider time
 
-- [ ] 1.1 Add the versioned per-user Home-new-content launch timestamp record, tolerant loader, and process-unique atomic replacement writer in `mbv-core`; verify with the existing hermetic test-state-directory seam that missing/malformed state returns no baseline and replacement round-trips without constructing live externals.
-- [ ] 1.2 Capture an injected/current launch instant once during TUI construction, read the previous timestamp, replace it immediately, and retain the immutable launch window separately from exit-only `TuiLaunchState`; verify with a deterministic startup test (no sleep or real state directory) that first launch establishes a baseline and a second launch reads the first instant before advancing it.
-- [ ] 1.3 Add one provider-neutral Home Latest timestamp projection for Emby `date_added` and Audiobookshelf/Feed `pub_date_secs`, including ISO-8601 parsing and the closed `previous < item <= current` comparison; verify with one table-driven test covering all three Services plus missing, invalid, cutoff-equal, and future timestamps.
+- [x] 1.1 Add the versioned per-user Home-new-content launch timestamp record, tolerant loader, and process-unique atomic replacement writer in `mbv-core`; verify with the existing hermetic test-state-directory seam that missing/malformed state returns no baseline and replacement round-trips without constructing live externals.
+- [x] 1.2 Capture an injected/current launch instant once during TUI construction, read the previous timestamp, replace it immediately, and retain the immutable launch window separately from exit-only `TuiLaunchState`; verify with a deterministic startup test (no sleep or real state directory) that first launch establishes a baseline and a second launch reads the first instant before advancing it.
+- [x] 1.3 Add one provider-neutral Home Latest timestamp projection for Emby `date_added` and Audiobookshelf/Feed `pub_date_secs`, including ISO-8601 parsing and the closed `previous < item <= current` comparison; verify with one table-driven test covering all three Services plus missing, invalid, cutoff-equal, and future timestamps.
 
 ## 2. Typed Home sections and acknowledgement
 
