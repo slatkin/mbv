@@ -1,6 +1,18 @@
 use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel};
 
+/// The shared eligibility gate for the grouped Music owner. Keep this in sync
+/// with the shape that `is_music_group_view` exposes to the shell: the
+/// configured path must begin at the grouping level, have a group and album
+/// level on the stack, and identify album folders at the current depth.
+fn is_grouped_music_path(music_levels: &[String], nav_stack: &[BrowseLevel]) -> bool {
+    music_levels.first().is_some_and(|level| level == "group")
+        && nav_stack.len() >= 2
+        && music_levels
+            .get(nav_stack.len() - 1)
+            .is_some_and(|level| level == "album")
+}
+
 impl App {
     /// True when mbv should show the combined music group view:
     /// a group-selector bar at top with the album list below.
@@ -19,12 +31,7 @@ impl App {
             return false;
         }
         let lib = &self.libs[lib_idx];
-        // Need at least a group level and an album level on the stack.
-        if lib.nav_stack.len() < 2 {
-            return false;
-        }
-        // The top nav level must be the album-folder level.
-        self.is_viewing_album_folders(lib_idx)
+        is_grouped_music_path(&self.music_levels, &lib.nav_stack)
     }
 
     /// D7: validate a prepared recursive-album landing before its drain
@@ -51,7 +58,10 @@ impl App {
         {
             return Err("Could not resolve the configured music album level".into());
         }
-        if nav_stack.len() != self.music_levels.len() {
+        if nav_stack.len() != self.music_levels.len()
+            || lib.library.collection_type != "music"
+            || !is_grouped_music_path(&self.music_levels, nav_stack)
+        {
             return Err(could_not_build());
         }
         // Each level must hang off the selected item of the level above,

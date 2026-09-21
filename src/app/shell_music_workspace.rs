@@ -17,14 +17,13 @@ impl Model {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        (library.library.collection_type == "music"
-            && self.app.is_music_group_view(index)
-            && self.app.is_viewing_album_folders(index))
-        .then(|| LibraryKey::Service {
-            service: ServiceKind::Emby,
-            library_id: library.library.id.clone(),
-            kind: LibraryKind::Music,
-        })
+        (library.library.collection_type == "music" && self.app.is_music_group_view(index)).then(
+            || LibraryKey::Service {
+                service: ServiceKind::Emby,
+                library_id: library.library.id.clone(),
+                kind: LibraryKind::Music,
+            },
+        )
     }
 
     pub fn music_owner(&self) -> Option<&MusicContent> {

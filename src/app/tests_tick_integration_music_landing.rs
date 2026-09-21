@@ -62,8 +62,10 @@ fn navigated_album_reanchors_the_grouped_owner_workspace() {
         let level = app.libs[0].nav_stack.last_mut().expect("album level");
         level.items.push(second);
         level.total_count = 2;
-        app.album_tracks_cache
-            .insert("album-2".into(), vec![crate::app::tests::make_item("Other Track", "Audio")]);
+        app.album_tracks_cache.insert(
+            "album-2".into(),
+            vec![crate::app::tests::make_item("Other Track", "Audio")],
+        );
     }
     harness.model_mut().sync_mounted_surfaces();
     harness.inject(key(Key::Down));
@@ -205,7 +207,9 @@ fn navigated_track_selection_waits_for_the_album_tracks() {
 
 // ── Task 2.3: the tree is the one Grouped Music browser owner and painter ──
 
-pub(super) fn music_panel(harness: &TickHarness) -> &crate::app::components::library_panel::LibraryPanel {
+pub(super) fn music_panel(
+    harness: &TickHarness,
+) -> &crate::app::components::library_panel::LibraryPanel {
     harness
         .model()
         .application
@@ -252,7 +256,9 @@ pub(super) fn mounted_music_app_at(
     (harness, ComponentId::Library)
 }
 
-pub(super) fn music_panel_mut(harness: &mut TickHarness) -> &mut crate::app::components::library_panel::LibraryPanel {
+pub(super) fn music_panel_mut(
+    harness: &mut TickHarness,
+) -> &mut crate::app::components::library_panel::LibraryPanel {
     harness
         .model_mut()
         .application
@@ -294,22 +300,23 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
                 .iter()
                 .find(|node| music.browser.target_of(node.id()) == Some(target))
                 .expect("painted album node");
-            let row = music.browser.row_rect_for(node.id()).expect("painted album row");
+            let row = music
+                .browser
+                .row_rect_for(node.id())
+                .expect("painted album row");
             (row.x, row.y)
         })
     };
-    let click = |column, row, modifiers| Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column,
-        row,
-        modifiers,
-    });
-    for (column, row) in album_points {
-        harness.inject(click(
+    let click = |column, row, modifiers| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
             column,
             row,
-            KeyModifiers::CONTROL,
-        ));
+            modifiers,
+        })
+    };
+    for (column, row) in album_points {
+        harness.inject(click(column, row, KeyModifiers::CONTROL));
         let outcome = harness.step();
         let (mut music_resize, mut tv_resize) = (false, false);
         for message in outcome.messages {
@@ -321,7 +328,11 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
     }
 
     assert_eq!(
-        harness.model().test_music_owner().browser.selected_album_targets_in_display_order(),
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .selected_album_targets_in_display_order(),
         vec!["album-1".to_string(), "album-2".to_string()]
     );
     assert_eq!(
@@ -361,15 +372,17 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
     }
     assert_eq!(
         harness.model().context_menu_origin,
-        Some(crate::app::components::media_list::SelectionOrigin::Library(
-            crate::app::components::media_list::LibrarySelectionOrigin::Service(
-                crate::app::components::library_panel::owner::LibraryKey::Service {
-                    service: mbv_core::config::ServiceKind::Emby,
-                    library_id: "lib-music".into(),
-                    kind: crate::app::components::library_panel::owner::LibraryKind::Music,
-                },
-            ),
-        )),
+        Some(
+            crate::app::components::media_list::SelectionOrigin::Library(
+                crate::app::components::media_list::LibrarySelectionOrigin::Service(
+                    crate::app::components::library_panel::owner::LibraryKey::Service {
+                        service: mbv_core::config::ServiceKind::Emby,
+                        library_id: "lib-music".into(),
+                        kind: crate::app::components::library_panel::owner::LibraryKind::Music,
+                    },
+                ),
+            )
+        ),
         "bulk context captures the originating library identity"
     );
     assert_eq!(
@@ -414,7 +427,12 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
         &mut tv_resize,
     );
     assert_eq!(
-        harness.model().test_music_owner().browser.selected_album_targets().len(),
+        harness
+            .model()
+            .test_music_owner()
+            .browser
+            .selected_album_targets()
+            .len(),
         2,
         "a clear for another Library origin cannot clear the tree"
     );
@@ -460,10 +478,7 @@ fn grouped_music_browser_has_one_tree_owner_and_painter_in_every_panel_mode() {
         // The panel drove exactly one skeleton this frame (Wide xor Narrow),
         // and its browser slot's selected row is the tree's own retained row.
         let panel = music_panel(&harness);
-        let (wide, narrow) = (
-            panel.test_wide_geometry(),
-            panel.test_narrow_geometry(),
-        );
+        let (wide, narrow) = (panel.test_wide_geometry(), panel.test_narrow_geometry());
         assert!(
             wide.is_some() ^ narrow.is_some(),
             "{width}x{height}: exactly one Library skeleton painted a browser slot"
@@ -482,10 +497,7 @@ fn grouped_music_browser_has_one_tree_owner_and_painter_in_every_panel_mode() {
         // The tree's own hit map — not a second carrier — claims the row it
         // painted, and the panel's browser list rect contains that row.
         let row = tree_selected.expect("tree selected row");
-        let position = ratatui::layout::Position {
-            x: row.x,
-            y: row.y,
-        };
+        let position = ratatui::layout::Position { x: row.x, y: row.y };
         assert!(
             owner.browser.claims_point(position),
             "{width}x{height}: the tree claims the row it painted"
@@ -601,11 +613,26 @@ fn grouped_music_app_with_mock_emby(http: &mbv_core::mock_http::MockHttp) -> cra
 /// which is exactly the depth mismatch D7 diagnoses.
 fn script_grouped_album_landing(http: &mbv_core::mock_http::MockHttp) {
     http.respond(200, r#"{"Items":[{"Id":"trk1","Name":"Song","Type":"Audio","AlbumId":"alb1"}],"TotalRecordCount":1}"#);
-    http.respond(200, r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}],"TotalRecordCount":1}"#);
-    http.respond(200, r#"{"Items":[{"Id":"group-0","Name":"Alpha","Type":"MusicArtist"}],"TotalRecordCount":1}"#);
-    http.respond(200, r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}],"TotalRecordCount":1}"#);
-    http.respond(200, r#"{"Items":[{"Id":"group-0","Name":"Alpha","Type":"MusicArtist"}],"TotalRecordCount":1}"#);
-    http.respond(200, r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}],"TotalRecordCount":1}"#);
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}],"TotalRecordCount":1}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"group-0","Name":"Alpha","Type":"MusicArtist"}],"TotalRecordCount":1}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}],"TotalRecordCount":1}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"group-0","Name":"Alpha","Type":"MusicArtist"}],"TotalRecordCount":1}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}],"TotalRecordCount":1}"#,
+    );
 }
 
 /// Feed the queued-track navigation through the production shell drains: the
@@ -741,11 +768,14 @@ fn go_to_library_into_a_retained_tree_reanchors_and_selects_the_navigated_track(
     app.replace_playback_queue(vec![queued.clone()], 0);
     let mut other = crate::app::tests::make_item("Other Song", "Audio");
     other.id = "trk0".into();
-    app.album_tracks_cache.insert("alb1".into(), vec![other, queued]);
+    app.album_tracks_cache
+        .insert("alb1".into(), vec![other, queued]);
     let mut fixture = crate::app::tests::make_item("Fixture", "Audio");
     fixture.id = "fixture-track".into();
-    app.album_tracks_cache.insert("album-1".into(), vec![fixture.clone()]);
-    app.album_tracks_cache.insert("album-2".into(), vec![fixture]);
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![fixture.clone()]);
+    app.album_tracks_cache
+        .insert("album-2".into(), vec![fixture]);
     script_grouped_album_landing(&http);
 
     let mut harness = TickHarness::new(app);
@@ -841,3 +871,63 @@ fn rejected_grouped_album_apply_flashes_and_leaves_every_committed_value_unchang
     );
 }
 
+/// A configured album-terminating shape whose first level is not the grouped
+/// Music level cannot provide a Music owner. Landing validation must reject it
+/// before the active tab, browse state, saved position, or retained owner can
+/// be changed.
+#[test]
+fn rejected_non_grouped_music_shape_flashes_and_leaves_every_committed_value_unchanged() {
+    let (mut harness, id) = wide_music_harness();
+    let before_tab = harness.model().app.tab;
+    let before_stack = nav_stack_snapshot(&harness);
+    let before_saved = harness.model().app.saved_library_position(0);
+    let before_album = music_selected_album_id(&harness, &id);
+    harness.model_mut().app.music_levels = vec!["genre".into(), "album".into()];
+
+    harness
+        .model_mut()
+        .on_recursive_album_activated("lib-music".into(), landed_grouped_album_stack("alb1"));
+    harness.step();
+
+    assert!(
+        harness.model().app.status.contains("Library error"),
+        "the existing library-error feedback fires: {}",
+        harness.model().app.status
+    );
+    assert_eq!(
+        harness.model().app.status_severity,
+        crate::app::notify_actions::ToastSeverity::Error
+    );
+    assert_eq!(
+        harness.model().app.tab,
+        before_tab,
+        "the active tab is unchanged"
+    );
+    assert_eq!(
+        nav_stack_snapshot(&harness),
+        before_stack,
+        "the nav stack is unchanged"
+    );
+    assert_eq!(
+        harness.model().app.saved_library_position(0),
+        before_saved,
+        "the saved Library position is unchanged"
+    );
+    let key = crate::app::components::library_panel::LibraryKey::Service {
+        service: mbv_core::config::ServiceKind::Emby,
+        library_id: "lib-music".into(),
+        kind: crate::app::components::library_panel::LibraryKind::Music,
+    };
+    let retained_album = music_panel(&harness)
+        .owner(&key)
+        .and_then(|owner| {
+            owner
+                .as_any()
+                .downcast_ref::<crate::app::components::music_content::MusicContent>()
+        })
+        .and_then(|owner| owner.selected_item().map(|item| item.id.clone()));
+    assert_eq!(
+        retained_album, before_album,
+        "the retained component selection is unchanged"
+    );
+}
