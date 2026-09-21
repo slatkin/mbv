@@ -339,7 +339,7 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
     harness.inject(right);
     let outcome = harness.step();
     let context_items = outcome.messages.iter().find_map(|message| match message {
-        Msg::Shell(ShellRequest::RowContextMenu(
+        Msg::Shell(ShellRequest::MusicRowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
             _,
         )) => Some(items),

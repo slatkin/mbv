@@ -39,6 +39,9 @@ impl Model {
             }
             Msg::Shell(request) => {
                 match request {
+                    ShellRequest::LibraryPanelFocus => {
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                    }
                     ShellRequest::SelectionProjection(summary) => {
                         self.visual_selection = (summary.count > 0)
                             .then_some((self.app.effective_panel_focus(), summary.count));
@@ -91,6 +94,7 @@ impl Model {
                         self.app.prefetch_neighbour_album_art(&targets);
                     }
                     ShellRequest::MusicArtistTracks { target } => {
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
                         // Artist-root movement is the Grouped Music browser's
                         // source-pagination signal. Resolve the stable album
                         // targets against App-owned browse rows and arm only
@@ -220,10 +224,12 @@ impl Model {
                     // the shell resolves it to the cached track and runs
                     // the App effect (task 5.3d, Album track focus).
                     ShellRequest::MusicTrackActivate { album_id, track } => {
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
                         self.app.play_album_track(&album_id, &track);
                         self.push_music_workspace_content();
                     }
                     ShellRequest::MusicArtistTrackActivate { target, track_id } => {
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
                         let resolved = self.music_owner().and_then(|owner| {
                             let detail = owner.artist_detail_for_target(&target)?;
                             let tracks: Vec<mbv_core::api::EmbyItem> = detail
@@ -650,6 +656,18 @@ impl Model {
                             }
                         }
                         self.queue_click_reproject();
+                    }
+                    ShellRequest::MusicRowContextMenu(targets, anchor) => {
+                        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                        // Reuse the generic resolver after applying Music's
+                        // focus policy; the component still emitted only one
+                        // semantic request and the shell never re-resolves a
+                        // pointer coordinate.
+                        quit |= self.handle_terminal_message(
+                            Msg::Shell(ShellRequest::RowContextMenu(targets, anchor)),
+                            music_resize,
+                            tv_resize,
+                        );
                     }
                     // Other destination payloads are converted in later slices.
                     ShellRequest::RowContextMenu(targets, anchor) => {

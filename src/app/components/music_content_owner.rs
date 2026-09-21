@@ -46,6 +46,13 @@ impl LibraryContentOwner for MusicContent {
         self.browser.clear_marks();
     }
 
+    fn double_click_opens_hero_overlay(&mut self) -> bool {
+        // Grouped Music resolves double-clicks in the tree owner: expandable
+        // rows toggle locally and track rows play, so the panel must not
+        // pre-empt them with its generic Hero-overlay path.
+        false
+    }
+
     fn hero_overlay_target_available(&mut self) -> bool {
         // Both hero-bearing tree rows can own the overlay before their Hero
         // snapshot materializes: an album leaf and an artist root.
@@ -295,14 +302,14 @@ impl LibraryContentOwner for MusicContent {
                             .into_iter()
                             .filter_map(|target| self.workspace_track_item(&target))
                             .collect();
-                        (!items.is_empty()).then_some(Msg::Shell(ShellRequest::RowContextMenu(
+                        (!items.is_empty()).then_some(Msg::Shell(ShellRequest::MusicRowContextMenu(
                             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                             None,
                         )))
                     }
                     Some(RowIntent::Context(target)) => {
                         self.workspace_track_item(&target).map(|track| {
-                            Msg::Shell(ShellRequest::RowContextMenu(
+                            Msg::Shell(ShellRequest::MusicRowContextMenu(
                                 crate::app::types_context_menu::ContextMenuTargets::Emby(vec![
                                     track,
                                 ]),
@@ -319,13 +326,13 @@ impl LibraryContentOwner for MusicContent {
                     if items.is_empty() {
                         return None;
                     }
-                    Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
                         crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                         None,
                     )))
                 } else {
                     self.selected_item().map(|item| {
-                        Msg::Shell(ShellRequest::RowContextMenu(
+                        Msg::Shell(ShellRequest::MusicRowContextMenu(
                             crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
                             None,
                         ))

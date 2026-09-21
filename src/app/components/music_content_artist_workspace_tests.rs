@@ -139,7 +139,7 @@ fn artist_workspace_track_context_menu_resolves_projected_groups() {
     owner.enter_track_focus();
 
     match press(&mut owner, Key::Char('.')) {
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
             None,
         ))) => {
@@ -160,7 +160,7 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
         MediaListSurfaceInput::ContextClick(Position { x: 0, y: 1 }),
     ));
     match message {
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
             Some((0, 1)),
         ))) => {

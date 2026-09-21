@@ -91,7 +91,7 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
     let outcome = harness.step();
     assert!(outcome.messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::RowContextMenu(_, Some((x, y)))) if *x == second_track_point.0 && *y == second_track_point.1
+        Msg::Shell(ShellRequest::MusicRowContextMenu(_, Some((x, y)))) if *x == second_track_point.0 && *y == second_track_point.1
     )));
 
     // Wheel over the painted table advances exactly one local track row and
@@ -187,6 +187,88 @@ fn music_wide_track_modifier_clicks_toggle_range_and_plain_clear() {
 /// tree's completed hit map, then rejects that map as soon as a new frame is
 /// configured. The mounted path is the real LibraryPanel/Application tick;
 /// there is no shell-side album row geometry to fall back to.
+#[test]
+fn music_tree_click_moves_focus_to_library_and_other_panel_click_does_not() {
+    let mut app = make_music_group_app();
+    app.panel_mode = PanelMode::Both;
+    app.panel_focus = PanelFocus::Queue;
+    app.player_tab.set_items(vec![make_item("Queue Item", "Audio")], 0);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+
+    let tree_point = {
+        let music = harness.model().test_music_owner();
+        let node = music.browser.projected_nodes().first().expect("tree root");
+        let row = music
+            .browser
+            .row_rect_for(node.id())
+            .expect("painted tree row");
+        (row.x, row.y)
+    };
+    let click = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        })
+    };
+
+    let list_area = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.test_list_rect())
+        .expect("painted Music list area");
+    assert!(list_area.contains(ratatui::layout::Position::new(tree_point.0, tree_point.1)));
+    assert!(harness.model().mouse_subscribed.contains(&ComponentId::Library));
+    harness.inject(click(tree_point.0, tree_point.1));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| {
+        matches!(message, Msg::Shell(ShellRequest::LibraryPanelFocus))
+            || matches!(message, Msg::Shell(ShellRequest::MusicArtistTracks { .. }))
+    }), "tree click messages: {:?}", outcome.raw_messages);
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Library);
+
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    let queue_point = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::QueueComponent>()
+        })
+        .and_then(|queue| queue.selected_row_rect())
+        .expect("painted queue row");
+    harness.inject(click(queue_point.x, queue_point.y));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Queue);
+}
+
 #[test]
 fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     let mut app = make_music_group_app();
