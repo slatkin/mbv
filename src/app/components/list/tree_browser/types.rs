@@ -116,6 +116,14 @@ pub enum TreeOperation<Target> {
     /// Toggle one node's persistent expansion without changing selection.
     /// A childless target is an explicit `Unhandled` result.
     ToggleExpansionTarget(Target),
+    /// Restore a persisted position: select `target`, reveal its ancestor
+    /// path, and anchor the viewport at the persisted settled-flow
+    /// `flow_offset`. A target the owner does not hold is an explicit
+    /// `Unhandled` result.
+    AnchorSelection {
+        target: Target,
+        flow_offset: usize,
+    },
     Select(Target),
     ToggleMark,
     ToggleMarkTarget(Target),

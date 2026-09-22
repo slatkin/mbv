@@ -11,6 +11,7 @@ use std::hash::Hash;
 use tuirealm::component::Component;
 
 use crate::app::components::inline_search::InlineSearch;
+use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
 use crate::app::components::music_tree::MusicTreeBrowser;
 use crate::app::palette::{self, Surface};
@@ -89,7 +90,7 @@ impl<Target: Clone + Eq + Hash> PanelList
     }
 
     fn clear_selection(&mut self) {
-        self.clear_marks_for_panel();
+        self.apply(TreeOperation::ClearMarks);
     }
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {

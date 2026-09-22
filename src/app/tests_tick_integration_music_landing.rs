@@ -300,21 +300,11 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
                 .into_iter()
                 .find(|candidate| candidate.album_leaf_target() == Some(target))
                 .expect("painted album node");
-            let point = (0..256u16)
-                .find_map(|y| {
-                    (0..256u16).find_map(|x| {
-                        (music
-                            .browser
-                            .resolve_current_point(ratatui::layout::Position::new(x, y))
-                            == Some(&node))
-                        .then_some((x, y))
-                    })
-                })
+            let row = music
+                .browser
+                .row_rect_for(&node)
                 .expect("painted album row");
-            // Click inside the row's text area: a selected row's retained
-            // rect starts at the panel's claim edge, two columns left of the
-            // content rect the panel delivers within.
-            (point.0 + 2, point.1)
+            (row.x, row.y)
         })
     };
     let click = |column, row, modifiers| {

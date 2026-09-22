@@ -48,7 +48,7 @@ impl LibraryContentOwner for MusicContent {
     fn clear_selection(&mut self) {
         // The destination switch clears the shared owner's ordered marks so
         // no stale selection mark survives into a new destination.
-        self.browser.clear_marks_for_panel();
+        self.browser.apply(TreeOperation::ClearMarks);
     }
 
     fn double_click_opens_hero_overlay(&mut self) -> bool {
@@ -119,15 +119,23 @@ impl LibraryContentOwner for MusicContent {
             self.context.group_cursor = self.group_cursor_for_launch_state(state);
         }
         let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Emby { id }) => self
-                .browser
-                .anchor_selection_to(&MusicTreeTarget::Album(id.clone()), 0),
+            Some(LibraryItemIdentity::Emby { id }) => {
+                self.browser
+                    .apply(TreeOperation::AnchorSelection {
+                        target: MusicTreeTarget::Album(id.clone()),
+                        flow_offset: 0,
+                    })
+                    .disposition
+                    == TreeConsumed::Consumed
+            }
             _ => false,
         };
         if !selected {
             if let Some(target) = self.context.album_targets.first().cloned() {
-                self.browser
-                    .anchor_selection_to(&MusicTreeTarget::Album(target), 0);
+                self.browser.apply(TreeOperation::AnchorSelection {
+                    target: MusicTreeTarget::Album(target),
+                    flow_offset: 0,
+                });
             } else {
                 self.browser.apply(TreeOperation::First);
             }

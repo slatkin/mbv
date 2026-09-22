@@ -313,17 +313,14 @@ pub(super) fn paint_tree(owner: &mut MusicContent, area: Rect) {
 }
 
 /// The retained painted point of a target's row in the latest tree frame,
-/// resolved through the shared latest-frame point surface (never a projection
-/// index).
+/// resolved through the shared read-only stable-target row geometry (never a
+/// projection index or a paint-local point scan).
 pub(super) fn tree_point(owner: &MusicContent, target: &MusicTreeTarget) -> Position {
-    (0..256u16)
-        .find_map(|y| {
-            (0..256u16).find_map(|x| {
-                (owner.browser.resolve_current_point(Position::new(x, y)) == Some(target))
-                    .then_some(Position::new(x, y))
-            })
-        })
-        .expect("node is inside the painted viewport")
+    let rect = owner
+        .browser
+        .row_rect_for(target)
+        .expect("node is inside the painted viewport");
+    Position::new(rect.x, rect.y)
 }
 
 #[test]
@@ -946,6 +943,42 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
         }
         other => panic!("expected album activation, got {other:?}"),
     }
+
+    // A filtered dismissal must not revert to the pre-filter anchor: `/`,
+    // move onto another match, Enter activates and keeps the activated album
+    // in the tree, the Workspace/Hero resolution, and the launch snapshot.
+    assert!(owner
+        .on_key(&KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE,
+        })
+        .is_some());
+    owner
+        .browser
+        .apply(TreeOperation::EditFilter("2001".to_string()));
+    assert_eq!(
+        owner.selected_album_target().as_deref(),
+        Some("a-0"),
+        "the filter anchors on the current album"
+    );
+    press(&mut owner, Key::Down);
+    assert_eq!(owner.selected_album_target().as_deref(), Some("a-1"));
+    match press(&mut owner, Key::Enter) {
+        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item })) => {
+            assert_eq!(item.id, "a-1")
+        }
+        other => panic!("expected album activation, got {other:?}"),
+    }
+    assert_eq!(
+        owner.selected_album_target().as_deref(),
+        Some("a-1"),
+        "the dismissed filter keeps the activated album, not its anchor"
+    );
+    assert_eq!(
+        owner.launch_snapshot().1,
+        Some(LibraryItemIdentity::Emby { id: "a-1".into() }),
+        "the launch snapshot keeps the activated album"
+    );
 }
 
 /// An album-leaf Enter focuses the Wide inline track pane, but moving the tree

@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::LibEvent;
 
 fn wide_music_harness() -> (TickHarness, ComponentId) {

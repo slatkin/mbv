@@ -212,16 +212,11 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
             .first()
             .expect("tree root")
             .clone();
-        let point = (0..256u16)
-            .find_map(|y| {
-                (0..256u16).find_map(|x| {
-                    (music.browser.resolve_current_point(ratatui::layout::Position::new(x, y))
-                        == Some(&root))
-                    .then_some((x, y))
-                })
-            })
+        let row = music
+            .browser
+            .row_rect_for(&root)
             .expect("painted tree row");
-        point
+        (row.x, row.y)
     };
     let click = |column, row| {
         Event::Mouse(MouseEvent {
@@ -357,21 +352,11 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
                 .into_iter()
                 .find(|candidate| candidate.album_leaf_target() == target)
                 .expect("painted tree node");
-            let point = (0..256u16)
-                .find_map(|y| {
-                    (0..256u16).find_map(|x| {
-                        (music
-                            .browser
-                            .resolve_current_point(ratatui::layout::Position::new(x, y))
-                            == Some(&node))
-                        .then_some((x, y))
-                    })
-                })
+            let row = music
+                .browser
+                .row_rect_for(&node)
                 .expect("painted tree row");
-            // Click inside the row's text area: a selected row's retained
-            // rect starts at the panel's claim edge, two columns left of the
-            // content rect the panel delivers within.
-            (point.0 + 2, point.1)
+            (row.x, row.y)
         };
         (point_for(None), point_for(Some("album-1")))
     };
@@ -559,22 +544,15 @@ fn cached_track(id: &str, number: i64) -> mbv_core::api::EmbyItem {
     track
 }
 
-/// The painted point of any tree row, resolved from the tree's completed frame.
+/// The painted point of any tree row, resolved from the tree's completed
+/// frame through the shared read-only stable-target row geometry.
 fn tree_node_point(harness: &TickHarness, target: &MusicTreeTarget) -> (u16, u16) {
     let music = harness.model().test_music_owner();
-    let point = (0..256u16)
-        .find_map(|y| {
-            (0..256u16).find_map(|x| {
-                (music.browser.resolve_current_point(ratatui::layout::Position::new(x, y))
-                    == Some(target))
-                .then_some((x, y))
-            })
-        })
+    let row = music
+        .browser
+        .row_rect_for(target)
         .expect("painted tree row");
-    // Click inside the row's text area: a selected row's retained rect starts
-    // at the panel's claim edge, two columns left of the content rect the
-    // panel delivers within.
-    (point.0 + 2, point.1)
+    (row.x, row.y)
 }
 
 /// Whether the shared confirm modal is mounted in the current composition.
@@ -760,7 +738,8 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
 }
 
 /// The painted point of the `make_music_group_app` album leaf's cached track
-/// row, resolved from the tree's completed frame.
+/// row, resolved from the tree's completed frame through the shared read-only
+/// stable-target row geometry.
 fn track_point(harness: &TickHarness, track: &str) -> (u16, u16) {
     let music = harness.model().test_music_owner();
     let node = music
@@ -773,15 +752,11 @@ fn track_point(harness: &TickHarness, track: &str) -> (u16, u16) {
                     if album == "album-1" && track_target == track)
         })
         .expect("painted track node");
-    (0..256u16)
-        .find_map(|y| {
-            (0..256u16).find_map(|x| {
-                (music.browser.resolve_current_point(ratatui::layout::Position::new(x, y))
-                    == Some(&node))
-                .then_some((x, y))
-            })
-        })
-        .expect("painted track row")
+    let row = music
+        .browser
+        .row_rect_for(&node)
+        .expect("painted track row");
+    (row.x, row.y)
 }
 
 /// Rows 5.2/5.3 end to end through the mounted composition: the tree's track
@@ -1029,27 +1004,4 @@ fn cancelling_the_replace_queue_confirmation_leaves_the_queue_unchanged() {
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(playback_queue_ids(&harness), ["existing"]);
     assert_eq!(harness.model().app.playback_queue().queue_cursor, 0);
-}
-
-#[test]
-fn debug_tree_point_moused() {
-    let mut app = make_music_group_app_with_second_album();
-    app.terminal_width = 160;
-    app.terminal_height = 40;
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-    draw_frame(&mut harness);
-    let music = harness.model().test_music_owner();
-    eprintln!("DBG paint={}", music.browser.has_completed_paint());
-    eprintln!("DBG visible={:?}", music.browser.visible_targets());
-    'outer: for y in 0..40u16 {
-        for x in 0..160u16 {
-            if let Some(t) = music.browser.resolve_current_point(ratatui::layout::Position::new(x, y)) {
-                eprintln!("DBG ({x},{y})={t:?}");
-                break 'outer;
-            }
-        }
-    }
 }

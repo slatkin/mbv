@@ -46,9 +46,16 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
         vec![0],
         None,
     ));
-    assert!(owner
-        .browser
-        .anchor_selection_to(&MusicTreeTarget::Album("album-stable".into()), 0));
+    assert_eq!(
+        owner
+            .browser
+            .apply(TreeOperation::AnchorSelection {
+                target: MusicTreeTarget::Album("album-stable".into()),
+                flow_offset: 0,
+            })
+            .disposition,
+        TreeConsumed::Consumed
+    );
 
     assert_eq!(
         owner.launch_snapshot(),

@@ -27,7 +27,7 @@ use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, Shell
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
 use super::music_tree::MusicTreeTarget;
 use crate::app::components::list::tree_browser::{
-    TreeBrowser, TreeMarkPolicy, TreeNode, TreeOperation,
+    TreeBrowser, TreeConsumed, TreeMarkPolicy, TreeNode, TreeOperation,
 };
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::{fmt_duration_gutter, trunc_str};
@@ -170,13 +170,24 @@ impl MusicContent {
 
         self.project_tree_tracks();
         let projection = self.tree_projection();
-        let _ = self.browser.reconcile(projection);
+        let reconciled = self.browser.reconcile(projection);
+        // A rejected projection is the typed D2 result that leaves the
+        // previous tree unchanged; the projection is generated from settled
+        // snapshots, so a rejection is a destination bug. Surface it loudly
+        // in debug builds instead of freezing the tree behind a swallowed
+        // error.
+        debug_assert!(
+            reconciled.is_ok(),
+            "music tree projection rejected: {:?}",
+            reconciled.as_ref().err()
+        );
         // A fresh owner adopts the shell's projected album position once
-        // (design D3 step 4). Later pushes never re-point the tree — the tree
-        // owns selection, and an explicit shell re-anchor request
-        // (`re_anchor`) adopts a navigated position.
-        if !self.tree_adopted {
-            self.tree_adopted = true;
+        // (design D3 step 4). The first push can be a loading/empty snapshot
+        // with no target to adopt, so the latch is set only when adoption
+        // actually resolved one; later pushes retry until it lands, then
+        // never re-point the tree — the tree owns selection, and an explicit
+        // shell re-anchor request (`re_anchor`) adopts a navigated position.
+        if !self.tree_adopted && reconciled.is_ok() {
             let adopted = self
                 .context
                 .selected_album
@@ -190,8 +201,11 @@ impl MusicContent {
                 })
                 .and_then(|position| self.context.album_targets.get(position).cloned());
             if let Some(target) = adopted {
-                self.browser
-                    .anchor_selection_to(&MusicTreeTarget::Album(target), 0);
+                let transition = self.browser.apply(TreeOperation::AnchorSelection {
+                    target: MusicTreeTarget::Album(target),
+                    flow_offset: 0,
+                });
+                self.tree_adopted = transition.disposition == TreeConsumed::Consumed;
             }
         }
         // The Workspace rows and the Hero facts resolve from the same tree
@@ -296,8 +310,10 @@ impl MusicContent {
             // leaves), not a tree projection row: the tree owner translates
             // it so an interleaved artist root can never anchor the viewport
             // to the wrong album.
-            self.browser
-                .anchor_selection_to(&MusicTreeTarget::Album(target), scroll);
+            self.browser.apply(TreeOperation::AnchorSelection {
+                target: MusicTreeTarget::Album(target),
+                flow_offset: scroll,
+            });
         }
         // A re-anchor is a discrete navigation transition: a cursor that no
         // longer rests on the armed root voids its Wide Workspace entry.
@@ -528,9 +544,18 @@ impl MusicContent {
                 }))
             }
             Key::Enter => {
+                // Capture the activated target before the dismissal restores
+                // the pre-filter anchor, then re-select it: the shared
+                // `ClearFilter` restores `filter_anchor`, so without this the
+                // tree (and with it Hero/Workspace/persistence) would revert
+                // to the row the filter started on. Legacy parity.
+                let target = self.browser.selected_target().cloned();
                 let item = self.selected_item()?;
                 self.inline_search.close();
                 self.browser.apply(TreeOperation::ClearFilter);
+                if let Some(target) = target {
+                    self.browser.apply(TreeOperation::Select(target));
+                }
                 if self.track_list.rows().is_empty() {
                     Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
                 } else if self.inline_track_focus_enabled {

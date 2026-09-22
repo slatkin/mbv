@@ -377,6 +377,14 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     disposition = TreeConsumed::Unhandled;
                 }
             }
+            super::TreeOperation::AnchorSelection {
+                target,
+                flow_offset,
+            } => {
+                if !self.anchor_selection_to(&target, flow_offset) {
+                    disposition = TreeConsumed::Unhandled;
+                }
+            }
             super::TreeOperation::Select(target) => {
                 if !self.with_state(|state| Cursored::select_target(state, &flow, &target)) {
                     disposition = TreeConsumed::Unhandled;

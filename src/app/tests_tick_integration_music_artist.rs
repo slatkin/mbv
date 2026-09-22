@@ -1,5 +1,6 @@
 use super::*;
 use super::landing::{draw_music_frame, mounted_music_app_at, music_panel, music_panel_mut, tick_key};
+use crate::app::components::list::tree_browser::{TreeConsumed, TreeOperation};
 
 /// Tasks 6.1–6.3 correction: a Service `ArtistItems` root's Workspace rows come
 /// from the shell-owned artist-detail cache, never `album_tracks_cache`. Enter
@@ -666,17 +667,19 @@ fn neighbour_prefetch_payload_is_the_painted_trees_order_in_both_presentations()
         harness
             .model_mut()
             .drain_deferred_library_message(&mut music_resize, &mut tv_resize);
-        assert!(
+        assert_eq!(
             harness
                 .model_mut()
                 .test_music_owner_mut()
                 .browser
-                .anchor_selection_to(
-                    &crate::app::components::music_tree::MusicTreeTarget::Album(
+                .apply(TreeOperation::AnchorSelection {
+                    target: crate::app::components::music_tree::MusicTreeTarget::Album(
                         "album-3".into(),
                     ),
-                    0,
-                ),
+                    flow_offset: 0,
+                })
+                .disposition,
+            TreeConsumed::Consumed,
             "{width}x{height}: the fixture interns album-3"
         );
         harness.model_mut().sync_mounted_surfaces();
@@ -721,15 +724,19 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
     harness
         .model_mut()
         .drain_deferred_library_message(&mut music_resize, &mut tv_resize);
-    assert!(
+    assert_eq!(
         harness
             .model_mut()
             .test_music_owner_mut()
             .browser
-            .anchor_selection_to(
-                &crate::app::components::music_tree::MusicTreeTarget::Album("album-3".into()),
-                0,
-            )
+            .apply(TreeOperation::AnchorSelection {
+                target: crate::app::components::music_tree::MusicTreeTarget::Album(
+                    "album-3".into(),
+                ),
+                flow_offset: 0,
+            })
+            .disposition,
+        TreeConsumed::Consumed
     );
     harness.model_mut().sync_mounted_surfaces();
     // Drop the selected hero's own non-idle fetch so the assertions isolate

@@ -410,13 +410,14 @@ impl<Target> TreeBrowser<Target> {
         self.paint.is_valid()
     }
 
-    /// Restore a persisted position: select `target`, revealing its ancestor
-    /// path, and anchor the viewport at the persisted fully-expanded flow
-    /// `offset`. The persisted value names a row in the complete settled
-    /// order, not the current projection, so the anchor rounds forward to the
-    /// next visible row instead of parking the viewport on a hidden one. A
-    /// target the owner does not hold is an explicit absent result.
-    pub fn anchor_selection_to(&mut self, target: &Target, flow_offset: usize) -> bool
+    /// The `AnchorSelection` operation's implementation: select `target`,
+    /// revealing its ancestor path, and anchor the viewport at the persisted
+    /// fully-expanded flow `offset`. The persisted value names a row in the
+    /// complete settled order, not the current projection, so the anchor
+    /// rounds forward to the next visible row instead of parking the viewport
+    /// on a hidden one. A target the owner does not hold is an explicit
+    /// absent result.
+    fn anchor_selection_to(&mut self, target: &Target, flow_offset: usize) -> bool
     where
         Target: Clone + Eq + Hash,
     {
@@ -503,17 +504,21 @@ impl<Target> TreeBrowser<Target> {
         self.invalidate_paint();
     }
 
-    /// Clear ordered marks when the Library panel replaces its active owner.
-    pub fn clear_marks_for_panel(&mut self)
+    pub fn selected_row_rect(&self) -> Option<Rect> {
+        self.paint.selected_row_rect()
+    }
+
+    /// A target's one-line row rectangle from the latest completed frame,
+    /// clipped to the frame's content area. A target absent from the current
+    /// projection or the latest frame is an explicit absent result.
+    /// Read-only stable-target geometry: callers address rows by target,
+    /// never by projection index.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn row_rect_for(&self, target: &Target) -> Option<Rect>
     where
         Target: PartialEq,
     {
-        self.marks.clear();
-        self.invalidate_paint();
-    }
-
-    pub fn selected_row_rect(&self) -> Option<Rect> {
-        self.paint.selected_row_rect()
+        self.paint.row_rect_for(target)
     }
 
     pub fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect)
