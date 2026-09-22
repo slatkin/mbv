@@ -72,6 +72,7 @@ pub(in crate::app) enum MusicTreeHit {
 }
 
 impl MusicTreeBrowser {
+    /// Latest-completed-render hit resolution: the stable target of the row
     /// under `at`, if any. A hit row is always interned, so a row the arena no
     /// longer holds is an explicit absent result.
     pub(in crate::app) fn hit_node(&self, at: Position) -> Option<MusicTreeTarget> {
@@ -462,18 +463,8 @@ impl MusicTreeBrowser {
             .take(visible_end.saturating_sub(visible_start))
             .filter_map(|(projection_row, node)| {
                 let target = model.target_ref_of_node(node.id())?.clone();
-                let y = content_rect
-                    .y
-                    .saturating_add((projection_row - visible_start) as u16);
-                Some((
-                    Rect {
-                        x: content_rect.x,
-                        y,
-                        width: content_rect.width,
-                        height: 1,
-                    },
-                    target,
-                ))
+                let rect = raw_row_rect(content_rect, state.offset(), projection_row)?;
+                Some((rect, target))
             })
             .collect();
         let flow_offset = state.offset();

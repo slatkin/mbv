@@ -374,7 +374,6 @@ impl<Target: Clone + Eq> MediaList<Target> {
     pub fn enter_visual_mode(&mut self) {
         if let Some(target) = self.selected_target().cloned() {
             if self.multi_selection.is_empty() {
-                self.multi_selection.clear();
                 self.multi_selection.add(target.clone());
                 self.frozen_selection.clear();
             } else {
