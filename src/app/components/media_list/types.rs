@@ -5,6 +5,7 @@ use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::Position;
 use ratatui::style::Color;
 
+/// A bounded percentage used by active canonical media-list rows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ActiveProgress(u8);
 
