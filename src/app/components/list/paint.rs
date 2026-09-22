@@ -14,12 +14,22 @@ struct CompletedPaint<Target> {
 }
 
 /// State carrier used by a list shape's retained-paint adapter.
-#[derive(Default)]
 pub struct PaintRetainedState<Target> {
     completed: Option<CompletedPaint<Target>>,
 }
 
+impl<Target> Default for PaintRetainedState<Target> {
+    fn default() -> Self {
+        Self { completed: None }
+    }
+}
+
 impl<Target> PaintRetainedState<Target> {
+    /// Create an empty retained-paint carrier.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Start a paint.  Until [`Self::finish`] completes, the previous frame is
     /// not eligible for hit testing.
     pub fn begin(&mut self) {

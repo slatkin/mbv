@@ -56,7 +56,20 @@ impl Viewported<u8> for TestListState {
 mod tests {
     // Keep a module at the seam root so the focused nextest filter also
     // exercises the public composition boundary, not only private submodules.
-    use super::{Cursored, Row, RowFlow, TestListState, Viewported};
+    use super::{
+        Cursored, MarkSelectionState, PaintRetainedState, Row, RowFlow, TestListState, Viewported,
+    };
+
+    #[derive(PartialEq, Eq)]
+    struct NonDefaultTarget;
+
+    #[test]
+    fn carriers_default_without_a_target_default_bound() {
+        let _: MarkSelectionState<NonDefaultTarget> = Default::default();
+        let _: PaintRetainedState<NonDefaultTarget> = Default::default();
+        let _ = MarkSelectionState::<NonDefaultTarget>::new();
+        let _ = PaintRetainedState::<NonDefaultTarget>::new();
+    }
 
     #[test]
     fn composed_cursor_and_viewport_share_the_same_flow_positions() {

@@ -5,13 +5,23 @@ use super::RowFlow;
 /// State carrier for multi-selection membership.
 ///
 /// The vector is intentionally ordered by addition.  Actions should use
-/// [`MarkSelection::selected_targets_in_flow`] when they need display order.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// [`MarkSelection::marked_targets_in_flow_order`] when they need display order.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MarkSelectionState<Target> {
     marked: Vec<Target>,
 }
 
+impl<Target: Eq> Default for MarkSelectionState<Target> {
+    fn default() -> Self {
+        Self { marked: Vec::new() }
+    }
+}
+
 impl<Target: Eq> MarkSelectionState<Target> {
+    /// Create an empty ordered-mark carrier.
+    pub fn new() -> Self {
+        Self::default()
+    }
     /// Add `target` at the end of the addition order.  Returns `false` when it
     /// was already marked.
     pub fn add(&mut self, target: Target) -> bool {
@@ -103,12 +113,12 @@ pub trait MarkSelection<Target: Eq> {
         self.mark_selection().targets()
     }
 
-    /// Selected targets in the current row-flow (display) order.
+    /// Marked targets in the current row-flow (display) order.
     ///
     /// The returned references point at the flow's stable targets.  This keeps
     /// the operation read-only and makes it impossible for action ordering to
     /// rewrite the carrier's addition order.
-    fn selected_targets_in_flow<'a>(&'a self, flow: &'a RowFlow<Target>) -> Vec<&'a Target> {
+    fn marked_targets_in_flow_order<'a>(&'a self, flow: &'a RowFlow<Target>) -> Vec<&'a Target> {
         (0..flow.len())
             .filter_map(|position| flow.row_at(position).and_then(|row| row.target()))
             .filter(|target| self.is_marked(target))
@@ -121,7 +131,7 @@ pub trait MarkSelection<Target: Eq> {
     where
         Target: Clone,
     {
-        self.selected_targets_in_flow(flow)
+        self.marked_targets_in_flow_order(flow)
             .into_iter()
             .cloned()
             .collect()

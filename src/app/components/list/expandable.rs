@@ -5,7 +5,7 @@
 //! stable-target contract and the shared post-projection validation; it does
 //! not introduce structural nodes or any tree crate type.
 
-use super::{Cursored, MarkSelection, RowFlow, Viewported};
+use super::{Cursored, RowFlow, Viewported};
 
 /// Aggregate mark state for a parent with visible children.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,11 +18,20 @@ pub enum AggregateMarkState {
     Marked,
 }
 
+fn set_selected_position<Target: Eq, State: Cursored<Target> + ?Sized>(
+    state: &mut State,
+    flow: &RowFlow<Target>,
+    position: Option<usize>,
+) -> Option<usize> {
+    if let Some(position) = position {
+        state.set_selected_target(flow.target_at(position));
+    }
+    position
+}
+
 /// Tree-only adapter contract for expansion, hierarchy movement, and parent
 /// mark aggregation.
-pub trait Expandable<Target: Eq>:
-    Cursored<Target> + Viewported<Target> + MarkSelection<Target>
-{
+pub trait Expandable<Target: Eq>: Cursored<Target> + Viewported<Target> {
     /// Whether the stable target is currently expanded.
     fn is_expanded(&self, target: &Target) -> bool;
 
@@ -35,9 +44,9 @@ pub trait Expandable<Target: Eq>:
     /// Stable child targets in the shape's established child order.
     fn child_targets(&self, target: &Target) -> Vec<&Target>;
 
-    /// Shape-owned aggregate state for a parent.  This is deliberately not a
-    /// default derived from `MarkSelection`: tree shapes may have hidden
-    /// children and therefore different aggregation policy.
+    /// Shape-owned aggregate state for a parent.  This is deliberately not
+    /// derived from mark membership: tree shapes may have hidden children and
+    /// therefore different aggregation policy.
     fn aggregate_mark_state(&self, target: &Target) -> AggregateMarkState;
 
     /// Toggle expansion without taking ownership of a shape-specific handle.
@@ -52,10 +61,7 @@ pub trait Expandable<Target: Eq>:
             .selected_target()
             .and_then(|target| self.parent_target(target))
             .and_then(|parent| flow.position_of(parent));
-        if let Some(position) = position {
-            self.set_selected_target(flow.target_at(position));
-        }
-        position
+        set_selected_position(self, flow, position)
     }
 
     /// Move the cursor to the first visible child of the selected target.
@@ -66,10 +72,7 @@ pub trait Expandable<Target: Eq>:
             .into_iter()
             .flatten()
             .find_map(|child| flow.position_of(child));
-        if let Some(position) = position {
-            self.set_selected_target(flow.target_at(position));
-        }
-        position
+        set_selected_position(self, flow, position)
     }
 
     /// Move the cursor to the last visible child of the selected target.
@@ -81,10 +84,7 @@ pub trait Expandable<Target: Eq>:
             .flatten()
             .rev()
             .find_map(|child| flow.position_of(child));
-        if let Some(position) = position {
-            self.set_selected_target(flow.target_at(position));
-        }
-        position
+        set_selected_position(self, flow, position)
     }
 
     /// Validate selection after a projection change, then reuse the shared
@@ -103,14 +103,11 @@ mod tests {
     use std::collections::HashSet;
 
     use super::{AggregateMarkState, Expandable};
-    use crate::app::components::list::{
-        Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, TestListState, Viewported,
-    };
+    use crate::app::components::list::{Cursored, Row, RowFlow, TestListState, Viewported};
 
     struct TestTree {
         state: TestListState,
         expanded: HashSet<u8>,
-        marks: MarkSelectionState<u8>,
     }
 
     impl Default for TestTree {
@@ -121,7 +118,6 @@ mod tests {
                     offset: 2,
                 },
                 expanded: HashSet::from([1]),
-                marks: MarkSelectionState::default(),
             }
         }
     }
@@ -145,17 +141,6 @@ mod tests {
             self.state.set_viewport_offset(offset);
         }
     }
-
-    impl MarkSelection<u8> for TestTree {
-        fn mark_selection(&self) -> &MarkSelectionState<u8> {
-            &self.marks
-        }
-
-        fn mark_selection_mut(&mut self) -> &mut MarkSelectionState<u8> {
-            &mut self.marks
-        }
-    }
-
     impl Expandable<u8> for TestTree {
         fn is_expanded(&self, target: &u8) -> bool {
             self.expanded.contains(target)
