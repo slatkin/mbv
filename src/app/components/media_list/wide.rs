@@ -56,11 +56,18 @@ pub(crate) fn row_marquee_key<Target>(row: &MediaListRow<Target>) -> Option<Stri
 /// and accepts no column-count or inline-detail options (design.md D1).
 /// Painting is performed by its `Component::view` through the render adapter;
 /// current-frame point resolution is retained alongside the painted flow.
+struct WidePaintGeometry<Target> {
+    content_rect: Rect,
+    flow_offset: usize,
+    selected_target: Option<Target>,
+}
+
 pub struct WideMediaList<Target> {
     core: MediaList<Target>,
     policy: WideMediaListPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
     paint: PaintRetainedState<Target>,
+    paint_geometry: Option<WidePaintGeometry<Target>>,
 }
 
 impl<Target> Default for WideMediaList<Target> {
@@ -82,11 +89,13 @@ impl<Target> WideMediaList<Target> {
             policy: WideMediaListPaintPolicy::new(false),
             configured_geometry: None,
             paint: PaintRetainedState::new(),
+            paint_geometry: None,
         }
     }
 
     pub fn invalidate_paint(&mut self) {
         self.paint.invalidate();
+        self.paint_geometry = None;
     }
 
     /// Configure the semantic policy used by the next `view`.
@@ -120,15 +129,13 @@ impl<Target> WideMediaList<Target> {
     ) where
         Target: Clone,
     {
-        let rows = row_geometry.target_rects(self.core.rows(), claim_rect, content_rect);
-        self.paint.finish_with_geometry(
-            claim_rect,
-            Some(content_rect),
-            Some(row_geometry.offset()),
-            self.core.selected_target().cloned(),
-            rows,
-            selected_row_rect,
-        );
+        let rows = row_geometry.target_rects(claim_rect, content_rect);
+        self.paint.finish(claim_rect, rows, selected_row_rect);
+        self.paint_geometry = Some(WidePaintGeometry {
+            content_rect,
+            flow_offset: row_geometry.offset(),
+            selected_target: self.core.selected_target().cloned(),
+        });
     }
 
     /// The current frame's claimed list rectangle, if `view` completed.
@@ -139,13 +146,17 @@ impl<Target> WideMediaList<Target> {
 
     /// The current frame's content rectangle, if `view` completed.
     pub fn current_content_rect(&self) -> Option<Rect> {
-        self.paint.content_rect()
+        self.paint_geometry
+            .as_ref()
+            .map(|geometry| geometry.content_rect)
     }
 
     /// The current frame's selected target, if `view` completed.
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_selected_target(&self) -> Option<&Target> {
-        self.paint.selected_target()
+        self.paint_geometry
+            .as_ref()
+            .and_then(|geometry| geometry.selected_target.as_ref())
     }
 
     /// The current frame's selected-row rectangle, if it is visible.
@@ -155,7 +166,9 @@ impl<Target> WideMediaList<Target> {
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_offset(&self) -> Option<usize> {
-        self.paint.flow_offset()
+        self.paint_geometry
+            .as_ref()
+            .map(|geometry| geometry.flow_offset)
     }
 
     /// Whether the current frame's painted list claims `point`.
@@ -170,14 +183,6 @@ impl<Target> WideMediaList<Target> {
 
     pub fn rows(&self) -> &[MediaListRow<Target>] {
         self.core.rows()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn row_flow(&self) -> crate::app::components::list::RowFlow<Target>
-    where
-        Target: Clone,
-    {
-        self.core.row_flow()
     }
 
     /// No selectable rows at all.
@@ -369,17 +374,21 @@ impl<Target: Clone + Eq> Viewported<Target> for WideMediaList<Target> {
     }
 
     fn set_viewport_offset(&mut self, offset: usize) {
-        self.core.set_scroll(offset);
+        self.set_scroll(offset);
     }
 }
 
-impl<Target: Clone + Eq> MarkSelection<Target> for WideMediaList<Target> {
+impl<Target: PartialEq> MarkSelection<Target> for WideMediaList<Target> {
     fn mark_selection(&self) -> &MarkSelectionState<Target> {
         self.core.mark_selection()
     }
 
     fn mark_selection_mut(&mut self) -> &mut MarkSelectionState<Target> {
         self.core.mark_selection_mut()
+    }
+
+    fn after_mark_mutation(&mut self) {
+        self.core.after_mark_mutation();
     }
 }
 
@@ -390,6 +399,22 @@ impl<Target> PaintRetained<Target> for WideMediaList<Target> {
 
     fn paint_retained_mut(&mut self) -> &mut PaintRetainedState<Target> {
         &mut self.paint
+    }
+
+    fn begin(&mut self) {
+        self.invalidate_paint();
+    }
+
+    fn finish<I>(&mut self, claim_rect: Rect, rows: I, selected_row_rect: Option<Rect>)
+    where
+        I: IntoIterator<Item = (Rect, Target)>,
+    {
+        self.paint.finish(claim_rect, rows, selected_row_rect);
+        self.paint_geometry = None;
+    }
+
+    fn invalidate(&mut self) {
+        self.invalidate_paint();
     }
 }
 

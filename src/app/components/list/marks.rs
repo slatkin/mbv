@@ -77,6 +77,15 @@ impl<Target: PartialEq> MarkSelectionState<Target> {
         self.marked.clear();
     }
 
+    /// Replace all marks in the caller-provided order.
+    pub fn set_targets<I>(&mut self, targets: I)
+    where
+        I: IntoIterator<Item = Target>,
+    {
+        self.marked.clear();
+        self.marked.extend(targets);
+    }
+
     /// Retain marks matching the supplied predicate without changing the
     /// relative addition order of survivors.
     pub fn retain<F>(&mut self, mut keep: F)
@@ -97,23 +106,33 @@ pub trait MarkSelection<Target: PartialEq> {
 
     /// Add a stable target, retaining its addition order.
     fn add_mark(&mut self, target: Target) -> bool {
-        self.mark_selection_mut().add(target)
+        let added = self.mark_selection_mut().add(target);
+        self.after_mark_mutation();
+        added
     }
 
     /// Remove a stable target without reordering the remaining membership.
     fn remove_mark(&mut self, target: &Target) -> bool {
-        self.mark_selection_mut().remove(target)
+        let removed = self.mark_selection_mut().remove(target);
+        self.after_mark_mutation();
+        removed
     }
 
     /// Toggle a stable target's membership.
     fn toggle_mark(&mut self, target: Target) -> bool {
-        self.mark_selection_mut().toggle(target)
+        let added = self.mark_selection_mut().toggle(target);
+        self.after_mark_mutation();
+        added
     }
 
     /// Clear the selection.
     fn clear_marks(&mut self) {
         self.mark_selection_mut().clear();
+        self.after_mark_mutation();
     }
+
+    /// Let an owner keep any coupled selection state in sync with a mutation.
+    fn after_mark_mutation(&mut self) {}
 
     /// Whether a stable target is marked.
     fn is_marked(&self, target: &Target) -> bool {

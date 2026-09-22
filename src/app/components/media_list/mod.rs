@@ -160,7 +160,6 @@ impl<Target> MediaList<Target> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn row_flow(&self) -> RowFlow<Target>
     where
         Target: Clone,
@@ -344,18 +343,8 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
                 .iter()
                 .any(|selected| selected == &target)
             {
-                let targets = self
-                    .selectable
-                    .iter()
-                    .filter_map(|&row| self.rows[row].selectable_target())
-                    .filter(|candidate| {
-                        self.multi_selection
-                            .targets()
-                            .iter()
-                            .any(|selected| selected == *candidate)
-                    })
-                    .cloned()
-                    .collect();
+                let flow = self.row_flow();
+                let targets = MarkSelection::action_targets(self, &flow);
                 RowIntent::ContextSelection(targets)
             } else {
                 self.clear_selection();
@@ -452,9 +441,9 @@ impl<Target: Eq> Cursored<Target> for MediaList<Target> {
     }
 
     fn set_selected_target(&mut self, target: Option<&Target>) {
-        self.cursor = target
-            .and_then(|target| self.position_of(target))
-            .unwrap_or(0);
+        if let Some(target) = target {
+            self.select_target(target);
+        }
     }
 }
 
@@ -468,12 +457,18 @@ impl<Target: Eq> Viewported<Target> for MediaList<Target> {
     }
 }
 
-impl<Target: Eq> MarkSelection<Target> for MediaList<Target> {
+impl<Target: PartialEq> MarkSelection<Target> for MediaList<Target> {
     fn mark_selection(&self) -> &MarkSelectionState<Target> {
         &self.multi_selection
     }
 
     fn mark_selection_mut(&mut self) -> &mut MarkSelectionState<Target> {
         &mut self.multi_selection
+    }
+
+    fn after_mark_mutation(&mut self) {
+        self.frozen_selection.clear();
+        self.selection_anchor = None;
+        self.live_range = false;
     }
 }

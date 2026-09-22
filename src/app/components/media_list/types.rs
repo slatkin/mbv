@@ -367,7 +367,6 @@ pub struct RowGeometry<Target> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct FlowRow<Target> {
-    source_row: Option<usize>,
     target: Option<Target>,
 }
 
@@ -387,27 +386,26 @@ impl<Target> RowGeometry<Target> {
         self.selected_row
     }
 
+    fn row_rect(&self, area: Rect, flow_row: usize) -> Rect {
+        Rect {
+            y: area.y + (flow_row - self.offset) as u16,
+            height: 1,
+            ..area
+        }
+    }
+
     /// The selected row's absolute one-line rectangle when it is visible.
     pub fn selected_row_rect(&self, area: Rect) -> Option<Rect> {
         let row = self.selected_row?;
         (self.offset..self.offset.saturating_add(area.height as usize))
             .contains(&row)
-            .then(|| Rect {
-                y: area.y + (row - self.offset) as u16,
-                height: 1,
-                ..area
-            })
+            .then(|| self.row_rect(area, row))
     }
 
     /// Produce target-bearing rectangles for the visible portion of the
     /// completed fixed-row paint. Structural rows remain in the flow but do
     /// not enter retained hit geometry.
-    pub(crate) fn target_rects(
-        &self,
-        rows: &[MediaListRow<Target>],
-        claim_rect: Rect,
-        content_rect: Rect,
-    ) -> Vec<(Rect, Target)>
+    pub(crate) fn target_rects(&self, claim_rect: Rect, content_rect: Rect) -> Vec<(Rect, Target)>
     where
         Target: Clone,
     {
@@ -417,18 +415,13 @@ impl<Target> RowGeometry<Target> {
             .min(self.rows.len());
         (self.offset..end)
             .filter_map(|flow_row| {
-                let source_row = self.rows.get(flow_row)?.source_row?;
-                let target = rows.get(source_row)?.selectable_target()?.clone();
-                let y = content_rect.y + (flow_row - self.offset) as u16;
-                Some((
-                    Rect {
-                        x: claim_rect.x,
-                        y,
-                        width: claim_rect.width,
-                        height: 1,
-                    },
-                    target,
-                ))
+                let target = self.rows.get(flow_row)?.target.as_ref()?.clone();
+                let row_area = Rect {
+                    y: content_rect.y,
+                    height: content_rect.height,
+                    ..claim_rect
+                };
+                Some((self.row_rect(row_area, flow_row), target))
             })
             .collect()
     }
@@ -444,9 +437,7 @@ impl<Target: Clone> RowGeometry<Target> {
             offset,
             rows: rows
                 .iter()
-                .enumerate()
-                .map(|(source_row, row)| FlowRow {
-                    source_row: Some(source_row),
+                .map(|row| FlowRow {
                     target: row.selectable_target().cloned(),
                 })
                 .collect(),

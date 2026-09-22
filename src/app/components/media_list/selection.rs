@@ -62,8 +62,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .unwrap_or_else(|| target.clone());
         let Some(start) = self.position_of(&anchor) else {
             self.selection_anchor = Some(target.clone());
-            self.multi_selection.clear();
-            self.multi_selection.add(target.clone());
+            self.multi_selection.set_targets([target.clone()]);
             return;
         };
         let (lo, hi) = if start <= end {
@@ -82,10 +81,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
                 .then(|| candidate.clone())
             })
             .collect();
-        self.multi_selection.clear();
-        for target in selected {
-            self.multi_selection.add(target);
-        }
+        self.multi_selection.set_targets(selected);
         self.selection_anchor = Some(anchor);
     }
 
