@@ -340,24 +340,6 @@ impl MusicTreeModel {
         }
     }
 
-    /// The model's current revision value.
-    #[cfg(test)]
-    fn revision_value(&self) -> u64 {
-        self.revision.get()
-    }
-
-    /// The settled child album ids of an artist root.
-    #[cfg(test)]
-    fn children_of(&self, id: usize) -> Vec<usize> {
-        self.children[id].clone()
-    }
-
-    /// The projected artist root ids in settled order.
-    #[cfg(test)]
-    fn root_ids(&self) -> Vec<usize> {
-        self.roots.clone()
-    }
-
     fn title_of(&self, id: usize) -> &str {
         match &self.nodes[id] {
             MusicNode::Artist { name, .. } => name,

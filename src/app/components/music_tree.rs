@@ -489,10 +489,6 @@ include!("music_tree_selection.rs");
 include!("music_tree_view.rs");
 
 #[cfg(test)]
-#[path = "music_tree_test_support.rs"]
-mod test_support;
-
-#[cfg(test)]
 #[path = "music_tree_tests.rs"]
 mod tests;
 

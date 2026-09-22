@@ -149,7 +149,7 @@ impl MusicTreeBrowser {
     /// the active filter, and a no-op re-application must not drop the
     /// current-frame rows a pointer gesture resolves against (row 5.2's
     /// filtered pointer path).
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn set_filter_matches(&mut self, matching: Option<&[MusicTreeTarget]>) {
         let matching: Option<Vec<usize>> = matching.map(|targets| {
             targets

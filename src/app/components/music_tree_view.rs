@@ -179,14 +179,6 @@ impl MusicTreeBrowser {
     }
 
     #[cfg(test)]
-    fn projection_len(&self) -> usize {
-        self.state.visible_len()
-    }
-
-    /// The stable targets of the current visible projection, in row order
-    /// (test-facing; the crate's `ProjectedNode<usize>` never leaves this
-    /// module).
-    #[cfg(test)]
     pub(in crate::app) fn projected_node_targets(&self) -> Vec<MusicTreeTarget> {
         self.state
             .projection()
