@@ -13,12 +13,33 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::list::tree_browser::{
-    tree_row_is_full_width, TreeAggregateMark, TreePaintRow,
-};
+use crate::app::components::list::tree_browser::{TreeAggregateMark, TreePaintRow};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
+
+/// The pinned trailing-metadata slot (design D8): a fixed six-column
+/// right-aligned date cell, plus the two-column gap between it and the row's
+/// trailing edge. Reserved only on rows that carry trailing metadata, so a
+/// metadata-free row's title keeps the full width.
+pub(in crate::app) const TREE_METADATA_SLOT_WIDTH: usize = 6;
+pub(in crate::app) const TREE_METADATA_TRAILING_SPACE: usize = 2;
+
+/// The rows that paint the canonical full-width bar: the focused selected row
+/// and directly marked leaves. Aggregate states resolve title roles, not bars
+/// (design D5's aggregate-mark roles). The retained hit geometry mirrors this
+/// predicate, so it stays one paint-policy decision owned here.
+pub(in crate::app) fn tree_row_is_full_width(selected: bool, marked: bool) -> bool {
+    selected || marked
+}
+
+/// The columns a row's trailing metadata reserves inside the content area.
+pub(in crate::app) fn tree_metadata_gutter_width(trailing: &str) -> usize {
+    trailing
+        .width()
+        .max(TREE_METADATA_SLOT_WIDTH)
+        .saturating_add(TREE_METADATA_TRAILING_SPACE)
+}
 
 #[allow(dead_code)]
 pub(in crate::app) fn render_tree_browser(
@@ -64,7 +85,10 @@ pub(in crate::app) fn render_tree_browser(
             base
         };
         let prefix = " ".repeat(row.depth.saturating_mul(2));
-        let gutter = row.trailing.as_deref().map_or(0, |text| text.width() + 2);
+        let gutter = row
+            .trailing
+            .as_deref()
+            .map_or(0, tree_metadata_gutter_width);
         let budget = content_width.saturating_sub(prefix.width() + gutter);
         let title_color = if full_width {
             palette::SELECTED_ROW_FG
@@ -101,7 +125,12 @@ pub(in crate::app) fn render_tree_browser(
         }
         if let Some(trailing) = &row.trailing {
             spans.push(Span::styled(
-                format!("{:>width$}  ", trailing, width = trailing.width()),
+                format!(
+                    "{:>width$}{}",
+                    trailing,
+                    " ".repeat(TREE_METADATA_TRAILING_SPACE),
+                    width = trailing.width().max(TREE_METADATA_SLOT_WIDTH)
+                ),
                 Style::default().fg(if full_width {
                     palette::SELECTED_ROW_FG
                 } else {

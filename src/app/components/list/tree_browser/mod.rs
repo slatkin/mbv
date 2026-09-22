@@ -85,13 +85,6 @@ pub(crate) struct TreePaintRow {
     pub(crate) semantic_state: MediaSemanticState,
 }
 
-/// The rows that paint the canonical full-width bar: the focused selected row
-/// and directly marked leaves. Aggregate states resolve title roles, not bars
-/// (design D5's aggregate-mark roles).
-pub(crate) fn tree_row_is_full_width(selected: bool, marked: bool) -> bool {
-    selected || marked
-}
-
 #[allow(dead_code)]
 #[derive(Clone)]
 pub(super) struct ArenaNode<Target> {
@@ -534,6 +527,16 @@ impl<Target> TreeBrowser<Target> {
 
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    /// Test seam mirroring the canonical list's clock injection: seed the
+    /// marquee key and start instant so a buffer test can observe a scrolled
+    /// title window without sleeping on the clock.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(in crate::app) fn set_marquee_started_at(&mut self, text: &str, at: Instant) {
+        self.marquee_text.clear();
+        self.marquee_text.push_str(text);
+        self.marquee_started_at = at;
     }
 
     pub fn invalidate_paint(&mut self) {

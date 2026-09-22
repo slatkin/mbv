@@ -201,11 +201,13 @@ pub trait PaintRetained<Target> {
 
     /// Explicitly invalidate retained geometry after content or geometry
     /// changes.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn invalidate(&mut self) {
         self.paint_retained_mut().invalidate();
     }
 
     /// Whether the latest completed frame claims `point`.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn claims_point(&self, point: Position) -> bool {
         self.paint_retained().claims_point(point)
     }
@@ -217,6 +219,7 @@ pub trait PaintRetained<Target> {
     }
 
     /// The selected row's rectangle from the latest completed frame.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn selected_row_rect(&self) -> Option<Rect> {
         self.paint_retained().selected_row_rect()
     }

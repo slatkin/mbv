@@ -4,7 +4,7 @@ use rstest::rstest;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::list::tree_browser::TreeOperation;
-use crate::app::components::music_tree::MusicTreeTarget;
+use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest, UserEvent};
 use crate::app::render::{make_music_group_app, make_music_group_app_with_second_album};
 use crate::app::tests::make_item;

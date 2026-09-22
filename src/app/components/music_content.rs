@@ -25,7 +25,7 @@ use super::media_list::{
 };
 use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
-use super::music_tree::MusicTreeTarget;
+use super::music_tree_target::MusicTreeTarget;
 use crate::app::components::list::tree_browser::{
     TreeBrowser, TreeConsumed, TreeMarkPolicy, TreeNode, TreeOperation,
 };
@@ -370,10 +370,6 @@ impl MusicContent {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_cursor(&self) -> usize {
         self.selected_album_index()
-    }
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(in crate::app) fn album_scroll(&self) -> usize {
-        self.browser.viewport_offset()
     }
     pub(in crate::app) fn track_focused(&self) -> bool {
         self.track_focused

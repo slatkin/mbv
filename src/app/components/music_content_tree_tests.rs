@@ -2,7 +2,7 @@
 //! marks, keyboard navigation/expansion, and the shared tree-owner fixtures.
 
 use super::*;
-use crate::app::components::music_tree::MusicTreeTarget;
+use crate::app::components::music_tree_target::MusicTreeTarget;
 use rstest::rstest;
 
 /// The first projected target matching a predicate.

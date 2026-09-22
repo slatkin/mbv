@@ -1,8 +1,8 @@
 //! Shared mechanics for embedded ordered media-list row flows.
 //!
 //! This module is intentionally independent of both concrete list shapes and
-//! of `tui-treelistview`. Adapters retain their own state and implement only
-//! the primitive hooks required by the composed traits.
+//! of the tree-list widget crate. Adapters retain their own state and implement
+//! only the primitive hooks required by the composed traits.
 //!
 //! The seam ships its whole contract ahead of its second adopter, so an item
 //! without a production caller carries its own attribute rather than the module

@@ -1,14 +1,17 @@
 use super::test_helpers::*;
 use super::*;
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
+use crate::app::components::list::tree_browser::{TreeBrowser, TreeOperation};
 use crate::app::components::media_list::queue_row_zebra;
-use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeTarget};
+use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::ComponentId;
+use crate::app::render::components::tree_browser::{
+    tree_metadata_gutter_width, TREE_METADATA_SLOT_WIDTH,
+};
 use crate::app::shell::Model;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
-use tui_treelistview::TreeMarkState;
 
 /// A fixture album's stable tree target.
 fn album(name: &str) -> MusicTreeTarget {
@@ -18,12 +21,58 @@ fn album(name: &str) -> MusicTreeTarget {
 /// The projected artist root whose settled display name is `title` (the
 /// fixture corpus groups by display identity, so its stable key is not
 /// load-bearing).
-fn artist_root(browser: &MusicTreeBrowser, title: &str) -> MusicTreeTarget {
+fn artist_root(browser: &TreeBrowser<MusicTreeTarget>, title: &str) -> MusicTreeTarget {
     browser
-        .projected_node_targets()
+        .roots()
         .into_iter()
-        .find(|target| target.is_artist() && browser.title_of(target) == Some(title))
+        .find(|target| {
+            target.is_artist()
+                && browser.node(target).map(|node| node.title.as_str()) == Some(title)
+        })
+        .cloned()
         .expect("the settled artist root is projected")
+}
+
+/// Expand a root through the shared transition surface, idempotently.
+fn expand_root(browser: &mut TreeBrowser<MusicTreeTarget>, root: &MusicTreeTarget) {
+    if !browser.is_expanded(root) {
+        browser.apply(TreeOperation::ToggleExpansionTarget(root.clone()));
+    }
+}
+
+/// Select a stable target through the shared transition surface.
+fn select_target(browser: &mut TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) {
+    browser.apply(TreeOperation::Select(target.clone()));
+}
+
+/// Mark one leaf through the shared transition surface, idempotently.
+fn mark_leaf(browser: &mut TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) {
+    if !browser.marked_targets().contains(target) {
+        browser.apply(TreeOperation::ToggleMarkTarget(target.clone()));
+    }
+}
+
+/// The owner's aggregate mark state over a root's direct children.
+#[derive(Debug, PartialEq, Eq)]
+enum MarkState {
+    None,
+    Partial,
+    Marked,
+}
+
+fn mark_state(browser: &TreeBrowser<MusicTreeTarget>, root: &MusicTreeTarget) -> MarkState {
+    let children = browser.children_of(root).unwrap_or_default();
+    let marked = children
+        .iter()
+        .filter(|child| browser.marked_targets().contains(child))
+        .count();
+    if marked == 0 {
+        MarkState::None
+    } else if marked == children.len() {
+        MarkState::Marked
+    } else {
+        MarkState::Partial
+    }
 }
 
 #[test]
@@ -55,23 +104,24 @@ fn mounted_music_narrow_geometry(model: &Model) -> WideSkeletonGeometry {
         .expect("non-Wide Music skeleton painted")
 }
 
-/// One tree frame: the tree adapter painting into the mounted Library panel's
+/// One tree frame: the shared owner painting into the mounted Library panel's
 /// reserved browser rect on a fresh buffer.
 fn music_tree_frame(
-    browser: &mut MusicTreeBrowser,
+    browser: &mut TreeBrowser<MusicTreeTarget>,
     area: Rect,
     width: u16,
     height: u16,
 ) -> Terminal<TestBackend> {
     let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
-    term.draw(|f| browser.view(f, area)).unwrap();
+    term.draw(|f| tuirealm::component::Component::view(browser, f, area))
+        .unwrap();
     term
 }
 
 /// The painted buffer y of a target's row in the latest tree frame. The owner
 /// resolves its own painted geometry, so the test never re-derives a row from
 /// the projection index.
-fn row_y(browser: &MusicTreeBrowser, target: &MusicTreeTarget) -> u16 {
+fn row_y(browser: &TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) -> u16 {
     browser
         .row_rect_for(target)
         .expect("the target's row is painted in the latest frame")
@@ -85,7 +135,7 @@ fn music_tree_row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -
 
 fn assert_music_tree_scrollbar_matches_shared(
     term: &Terminal<TestBackend>,
-    browser: &MusicTreeBrowser,
+    browser: &TreeBrowser<MusicTreeTarget>,
     area: Rect,
     width: u16,
     height: u16,
@@ -96,9 +146,9 @@ fn assert_music_tree_scrollbar_matches_shared(
             crate::app::render::components::widgets::render_right_scrollbar_with_viewport(
                 frame,
                 area,
-                browser.projected_node_targets().len(),
+                browser.visible_targets().len(),
                 area.height as usize,
-                browser.offset(),
+                browser.viewport_offset(),
                 palette::SCROLLBAR,
             );
         })
@@ -186,15 +236,6 @@ fn music_tree_long_leaf() -> MusicTreeTarget {
     album("album-long")
 }
 
-/// A node's projection row, if visible in the settled projection.
-fn music_tree_projection_row_of(browser: &MusicTreeBrowser, target: &MusicTreeTarget) -> usize {
-    browser
-        .projected_node_targets()
-        .iter()
-        .position(|candidate| candidate == target)
-        .expect("node projected")
-}
-
 /// The tree's row contracts at the smallest supported non-Wide Library-panel
 /// width: the hierarchy glyph and title fit inside the browser rect with no
 /// overrun, the narrow scrollbar keeps the `SCROLLBAR` role, the zebra reset,
@@ -226,17 +267,16 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let mut browser = mounted_music_tree_browser(&model);
     let alpha_root = artist_root(&browser, "Alpha");
     let beta_root = artist_root(&browser, "Beta");
-    browser.expand_root(&alpha_root);
-    browser.expand_root(&beta_root);
+    expand_root(&mut browser, &alpha_root);
+    expand_root(&mut browser, &beta_root);
     assert_eq!(
-        browser.projected_node_targets().len(),
+        browser.visible_targets().len(),
         MUSIC_TREE_EXPANDED_PROJECTION_LEN
     );
-    let long_row = music_tree_projection_row_of(&browser, &music_tree_long_leaf());
 
     // Frame A rests at the top with the root selected, so the Alpha zebra
     // rows below paint unselected.
-    browser.select_target(&alpha_root);
+    select_target(&mut browser, &alpha_root);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -283,18 +323,19 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let second_row_rect = browser
         .row_rect_for(&second_row)
         .expect("the painted second row");
-    match browser.hit_node(Position {
-        x: second_row_rect.x + 5,
-        y: second_row_rect.y,
-    }) {
-        Some(target) if target == second_row => {}
-        other => panic!("expected the painted row's target, got {other:?}"),
-    }
+    assert_eq!(
+        browser.resolve_current_point(Position {
+            x: second_row_rect.x + 5,
+            y: second_row_rect.y,
+        }),
+        Some(&second_row)
+    );
 
-    // Clipping: scrolled so the unselected long album leaf paints, it
-    // truncates with an ellipsis, its year keeps its gutter inside the rect,
-    // and no glyph lands outside the browser rect.
-    browser.scroll_to((long_row + 1).saturating_sub(list_area.height as usize));
+    // Clipping: selected and unfocused so the long album leaf paints without
+    // marqueeing, it truncates with an ellipsis, its year keeps its gutter
+    // inside the rect, and no glyph lands outside the browser rect.
+    select_target(&mut browser, &music_tree_long_leaf());
+    browser.set_focused(false);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -308,13 +349,13 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
         long_row_text.contains('\u{2026}'),
         "long title truncates at {MUSIC_TREE_NON_WIDE_WIDTH}: {long_row_text}"
     );
-    let gutter_start =
-        list_area.right() - crate::app::components::music_tree::YEAR_GUTTER_WIDTH - 2;
+    let gutter_start = list_area.right()
+        - tree_metadata_gutter_width(MUSIC_TREE_LONG_TITLE_YEAR.to_string().as_str()) as u16;
     let gutter_text: String = music_tree_row_text(
         &term,
         long_y,
         gutter_start,
-        gutter_start + crate::app::components::music_tree::YEAR_GUTTER_WIDTH,
+        gutter_start + TREE_METADATA_SLOT_WIDTH as u16,
     )
     .trim()
     .to_string();
@@ -325,7 +366,15 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     );
     assert_music_tree_row_within(&term, long_y, list_area, MUSIC_TREE_NON_WIDE_WIDTH);
 
-    // Scrollbar on the overflowing projection remains the shared painter.
+    // Scrollbar on the overflowing projection remains the shared painter
+    // (refocused: the shared scrollbar is focus-gated).
+    browser.set_focused(true);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
+    );
     assert_music_tree_scrollbar_matches_shared(
         &term,
         &browser,
@@ -336,7 +385,7 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
 
     // Frame B: the second Beta leaf's bar spans the narrower full row, and
     // Beta's first leaf keeps the neighbouring group's unstriped band.
-    browser.select_target(&album("album-beta-2"));
+    select_target(&mut browser, &album("album-beta-2"));
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -380,9 +429,11 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
         MUSIC_TREE_NON_WIDE_HEIGHT,
     ))
     .unwrap();
-    stale.draw(|f| browser.view(f, Rect::ZERO)).unwrap();
+    stale
+        .draw(|f| tuirealm::component::Component::view(&mut browser, f, Rect::ZERO))
+        .unwrap();
     assert_eq!(
-        browser.hit_node(Position {
+        browser.resolve_current_point(Position {
             x: list_area.x + 5,
             y: list_area.y + 1
         }),
@@ -390,15 +441,15 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     );
 
     // Aggregate marks: both Beta leaves marked lift the Beta root to Marked.
-    browser.set_marked(&album("album-beta-1"), true);
-    browser.set_marked(&album("album-beta-2"), true);
+    mark_leaf(&mut browser, &album("album-beta-1"));
+    mark_leaf(&mut browser, &album("album-beta-2"));
     music_tree_frame(
         &mut browser,
         list_area,
         MUSIC_TREE_NON_WIDE_WIDTH,
         MUSIC_TREE_NON_WIDE_HEIGHT,
     );
-    assert_eq!(browser.mark_state(&beta_root), TreeMarkState::Marked);
+    assert_eq!(mark_state(&browser, &beta_root), MarkState::Marked);
 }
 
 #[test]
@@ -423,9 +474,10 @@ fn music_tree_panel_inset_keeps_rows_inside_claim_and_scrollbar_at_claim_edge() 
 
     let mut browser = mounted_music_tree_browser(&model);
     let alpha_root = artist_root(&browser, "Alpha");
-    browser.expand_root(&alpha_root);
-    browser.expand_root(&artist_root(&browser, "Beta"));
-    browser.select_target(&alpha_root);
+    let beta_root = artist_root(&browser, "Beta");
+    expand_root(&mut browser, &alpha_root);
+    expand_root(&mut browser, &beta_root);
+    select_target(&mut browser, &alpha_root);
     browser.set_geometry(claim, content);
     let term = music_tree_frame(
         &mut browser,

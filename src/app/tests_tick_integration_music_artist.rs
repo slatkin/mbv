@@ -375,10 +375,10 @@ fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
         let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), width, height);
         tick_key(&mut harness, Key::Left);
         let root = harness
-        .model()
-        .test_music_owner()
-        .browser
-        .selected_target()
+            .model()
+            .test_music_owner()
+            .browser
+            .selected_target()
             .cloned()
             .expect("artist root selected");
         assert!(
@@ -673,7 +673,7 @@ fn neighbour_prefetch_payload_is_the_painted_trees_order_in_both_presentations()
                 .test_music_owner_mut()
                 .browser
                 .apply(TreeOperation::AnchorSelection {
-                    target: crate::app::components::music_tree::MusicTreeTarget::Album(
+                    target: crate::app::components::music_tree_target::MusicTreeTarget::Album(
                         "album-3".into(),
                     ),
                     flow_offset: 0,
@@ -730,7 +730,7 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
             .test_music_owner_mut()
             .browser
             .apply(TreeOperation::AnchorSelection {
-                target: crate::app::components::music_tree::MusicTreeTarget::Album(
+                target: crate::app::components::music_tree_target::MusicTreeTarget::Album(
                     "album-3".into(),
                 ),
                 flow_offset: 0,

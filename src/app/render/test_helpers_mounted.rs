@@ -3,8 +3,9 @@
 use super::super::*;
 use super::buffer_to_string;
 use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::list::tree_browser::{TreeBrowser, TreeMarkPolicy, TreeNode};
 use crate::app::components::media_list::MediaSemanticState;
-use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
+use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::ComponentId;
 use crate::app::layout::PaintedRowGeometry;
@@ -13,6 +14,7 @@ use crate::app::shell::Model;
 use crate::app::{App, PanelFocus};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use std::collections::HashMap;
 
 /// Build a `Model` at an explicit terminal size with the library pane focused.
 /// Characterization tests whose surface is now painted by an embedded owner
@@ -77,31 +79,67 @@ pub fn mounted_music_wide_geometry(
 
 /// The Grouped Music tree over the mounted fixture's settled projection: the
 /// same `MusicWideRenderCtx` facts (`album_info`/`album_order`/targets) the
-/// production browser flattens, grouped into artist roots and album leaves.
-pub fn mounted_music_tree_browser(model: &Model) -> MusicTreeBrowser {
+/// production projection flattens, grouped into artist roots and album leaves
+/// and reconciled into one shared `TreeBrowser`.
+pub fn mounted_music_tree_browser(model: &Model) -> TreeBrowser<MusicTreeTarget> {
     let ctx = model.app.wide_music_render_ctx(0, None);
-    let entries: Vec<MusicTreeEntry> = ctx
-        .album_order
-        .iter()
-        .map(|&index| {
-            let (artist, year, name) = &ctx.album_info[index];
-            MusicTreeEntry {
-                artist: artist.clone(),
-                // The fixture's settled order groups each artist's albums
-                // consecutively, so the deterministic fallback key reproduces
-                // the same roots as the settled `ArtistKey` identity does.
-                artist_key: ArtistKey::Fallback(artist.clone()),
-                title: name.clone(),
-                year: (!year.is_empty()).then(|| year.clone()),
-                target: ctx.album_targets[index].clone(),
-                // The tree projects the fixture's settled album facts; the
-                // real pane derives this through `MediaSemanticState::from_emby`
-                // (music collapse keeps it ordinary).
-                semantic_state: MediaSemanticState::Ordinary,
-            }
-        })
-        .collect();
-    MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries))
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile(music_tree_fixture_projection(&ctx))
+        .expect("the fixture's settled albums form a forest");
+    browser
+}
+
+/// The fixture's plain node projection (test data, not a second production
+/// destination): first-occurrence artist roots over their settled album
+/// leaves, in settled order.
+fn music_tree_fixture_projection(
+    ctx: &crate::app::render::MusicWideRenderCtx,
+) -> Vec<TreeNode<MusicTreeTarget>> {
+    let mut nodes: Vec<TreeNode<MusicTreeTarget>> = Vec::new();
+    let mut root_of_key: HashMap<ArtistKey, MusicTreeTarget> = HashMap::new();
+    for &index in &ctx.album_order {
+        let Some((artist, year, name)) = ctx.album_info.get(index) else {
+            continue;
+        };
+        let Some(key) = ctx.album_artist_keys.get(index) else {
+            continue;
+        };
+        let Some(album_target) = ctx.album_targets.get(index) else {
+            continue;
+        };
+        let artist_target = if let Some(existing) = root_of_key.get(key) {
+            existing.clone()
+        } else {
+            let target = MusicTreeTarget::Artist(key.clone());
+            root_of_key.insert(key.clone(), target.clone());
+            nodes.push(TreeNode::new(
+                target.clone(),
+                None,
+                artist.clone(),
+                artist.clone(),
+                MediaSemanticState::Ordinary,
+                TreeMarkPolicy::Aggregate,
+            ));
+            target
+        };
+        let album_node = TreeNode::new(
+            MusicTreeTarget::Album(album_target.clone()),
+            Some(artist_target),
+            name.clone(),
+            format!("{name} {year}"),
+            // The fixture's settled album facts are ordinary; the real pane
+            // derives playback emphasis through `MediaSemanticState`.
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Direct,
+        );
+        nodes.push(if year.is_empty() {
+            album_node
+        } else {
+            album_node.with_trailing(year.clone())
+        });
+    }
+    nodes
 }
 
 /// The panel-hosted TV owner (task 8.4: reached through the mounted

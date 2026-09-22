@@ -9,10 +9,13 @@ use crate::app::components::list::{
     AggregateMarkState, Cursored, Expandable, MarkSelection, MarkSelectionState, PagingPolicy, Row,
     RowFlow, Viewported,
 };
+// The full-width bar is paint policy, so its predicate lives with the shared
+// tree painter and is imported through the app-level render seam.
+use crate::app::render::tree_row_is_full_width;
 
 use super::{
-    tree_row_is_full_width, TreeAggregateMark, TreeBrowser, TreeConsumed, TreeExternalIntent,
-    TreeMarkPolicy, TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition,
+    TreeAggregateMark, TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy,
+    TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition,
 };
 
 /// The shared list traits are implemented only for this private adapter.
@@ -401,15 +404,10 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 }
                 self.reconcile_selection();
             }
-            super::TreeOperation::ToggleMark
-            | super::TreeOperation::ToggleMarkTarget(_)
-            | super::TreeOperation::PointerToggleMark(_) => {
+            super::TreeOperation::ToggleMark | super::TreeOperation::ToggleMarkTarget(_) => {
                 let target = match operation {
                     super::TreeOperation::ToggleMark => self.selected.clone(),
                     super::TreeOperation::ToggleMarkTarget(target) => Some(target),
-                    super::TreeOperation::PointerToggleMark(point) => {
-                        self.resolve_current_point(point).cloned()
-                    }
                     _ => None,
                 };
                 if let Some(target) = target {
@@ -424,6 +422,20 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 } else {
                     disposition = TreeConsumed::Unhandled;
                 }
+            }
+            super::TreeOperation::PointerToggleMark(point) => {
+                // Legacy parity (the retired `toggle_mark_at`): a modified
+                // click resolves the painted row and moves the cursor to it
+                // before toggling. An `Excluded` row (a cached track) is not
+                // markable, so it still takes the cursor and reports no mark
+                // change rather than leaving the selection behind.
+                let Some(target) = self.resolve_current_point(point).cloned() else {
+                    disposition = TreeConsumed::Unhandled;
+                    return self.transition(previous, previous_marks, disposition, external_intent);
+                };
+                self.selected = Some(target.clone());
+                let _ = self.toggle_mark_target(&target);
+                self.reconcile_selection();
             }
             super::TreeOperation::Activate => {
                 if let Some(target) = self.selected.clone() {

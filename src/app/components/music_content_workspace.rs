@@ -414,7 +414,7 @@ impl MusicContent {
     /// projection), when an artist root is focused (the shipped suppression),
     /// or when the window has no album leaf.
     fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
-        if !self.browser.has_completed_paint() || self.selected_is_artist() || self.browser.filter_active() {
+        if !self.neighbour_prefetch_eligible() {
             return None;
         }
         let selected = self.browser.selected_target()?.clone();
@@ -434,6 +434,15 @@ impl MusicContent {
                 .take(NEIGHBOUR_PREFETCH_AHEAD),
         );
         (!targets.is_empty()).then_some(targets)
+    }
+
+    /// The shipped neighbour-prefetch suppression: no window without a
+    /// completed paint (retained geometry is not the painted projection),
+    /// with an artist root focused, or while a filter session is active.
+    fn neighbour_prefetch_eligible(&self) -> bool {
+        self.browser.has_completed_paint()
+            && !self.selected_is_artist()
+            && !self.browser.filter_active()
     }
 
     /// Resolves a focused Workspace track as an artist-track activation when

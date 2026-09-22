@@ -128,6 +128,7 @@ pub trait MarkSelection<Target: PartialEq> {
     }
 
     /// Clear the selection.
+    #[allow(dead_code)]
     fn clear_marks(&mut self) {
         self.mark_selection_mut().clear();
         self.after_mark_mutation();

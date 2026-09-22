@@ -13,7 +13,6 @@ use tuirealm::component::Component;
 use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
-use crate::app::components::music_tree::MusicTreeBrowser;
 use crate::app::palette::{self, Surface};
 
 use super::content::{PanelList, PanelListPaintPolicy};
@@ -155,58 +154,6 @@ impl PanelList for InlineSearch {
 
     fn claims_point(&self, point: Position) -> bool {
         PanelList::claims_point(self.results(), point)
-    }
-}
-
-/// The Grouped Music tree browser's `PanelList` surface (task 2.3, design
-/// D5): the panel drives the tree owner through the exact same object-safe
-/// surface every canonical media-list presentation uses — the viewport clamp,
-/// the paint policy's focus bit, the slot-rect view with retained hit
-/// geometry, and the selected-row read — while typed artist/album target
-/// resolution stays on the tree owner's own surface, never on the erased
-/// trait. No new `ListSlot` arm is added.
-impl PanelList for MusicTreeBrowser {
-    fn clamp_viewport(&mut self, viewport_height: usize) {
-        self.clamp_viewport_to(viewport_height);
-    }
-
-    fn clear_selection(&mut self) {
-        self.clear_marks();
-    }
-
-    fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
-        // Only the focus bit reaches the tree: it drives the selected-row bar
-        // and the focused marquee. The tree owns its own row surface (task
-        // 3.2); the panel supplies no rectangle or colour.
-        let focused = match policy {
-            PanelListPaintPolicy::Wide { focused }
-            | PanelListPaintPolicy::WideWorkspace { focused } => focused,
-        };
-        self.set_focused(focused);
-        self.invalidate();
-    }
-
-    fn view(&mut self, frame: &mut Frame, rect: Rect) {
-        MusicTreeBrowser::view(self, frame, rect);
-    }
-
-    fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
-        // Match the canonical list's claim/content split: the tree uses the
-        // claim width for its rows and shared scrollbar, while the content
-        // height remains its viewport metric.
-        MusicTreeBrowser::set_geometry(self, claim_rect, content_rect);
-    }
-
-    fn selected_row_rect(&self) -> Option<Rect> {
-        MusicTreeBrowser::selected_row_rect(self)
-    }
-
-    fn claims_point(&self, point: Position) -> bool {
-        MusicTreeBrowser::claims_point(self, point)
-    }
-
-    fn search_bar(&self) -> Option<(String, bool)> {
-        MusicTreeBrowser::search_bar(self)
     }
 }
 

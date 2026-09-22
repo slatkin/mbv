@@ -58,7 +58,7 @@ pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
-pub(in crate::app) use components::tree_browser::render_tree_browser;
+pub(in crate::app) use components::tree_browser::{render_tree_browser, tree_row_is_full_width};
 pub(in crate::app) use components::tv_wide::TvWideRenderCtx;
 pub(in crate::app) use components::widgets::{
     render_pill_bar, render_placeholder, PillBar, PillBarWindow,

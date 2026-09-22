@@ -9,20 +9,22 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;
 use ratatui::Terminal;
 use rstest::rstest;
-use std::collections::HashMap;
-use tui_treelistview::TreeMarkState;
+use std::time::{Duration, Instant};
 
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
-use crate::app::components::list::tree_browser::TreeOperation;
+use crate::app::components::list::tree_browser::{
+    TreeBrowser, TreeMarkPolicy, TreeNode, TreeOperation,
+};
 use crate::app::components::media_list::{
     queue_row_background, queue_row_zebra, MediaSemanticState,
 };
 use crate::app::components::music_content::MusicContent;
-use crate::app::components::music_tree::{
-    MusicTreeBrowser, MusicTreeEntry, MusicTreeHit, MusicTreeModel, MusicTreeTarget, MusicTreeTrack,
-};
+use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::ComponentId;
 use crate::app::music_grouping::ArtistKey;
+use crate::app::render::components::tree_browser::{
+    tree_metadata_gutter_width, TREE_METADATA_SLOT_WIDTH,
+};
 use crate::app::shell::Model;
 
 /// A fixture album's stable tree target.
@@ -38,18 +40,78 @@ fn artist(key: &str) -> MusicTreeTarget {
 /// The projected artist root whose settled display name is `title` (the
 /// fixture corpus groups by display identity, so its stable key is not
 /// load-bearing).
-fn artist_root(browser: &MusicTreeBrowser, title: &str) -> MusicTreeTarget {
+fn artist_root(browser: &TreeBrowser<MusicTreeTarget>, title: &str) -> MusicTreeTarget {
     browser
-        .projected_node_targets()
+        .roots()
         .into_iter()
-        .find(|target| target.is_artist() && browser.title_of(target) == Some(title))
+        .find(|target| {
+            target.is_artist()
+                && browser.node(target).map(|node| node.title.as_str()) == Some(title)
+        })
+        .cloned()
         .expect("the settled artist root is projected")
+}
+
+/// The owner's aggregate mark state over a root's direct children, mirroring
+/// the retired `TreeMarkState` read (the shared owner exposes membership, not
+/// an aggregate cache).
+#[derive(Debug, PartialEq, Eq)]
+enum MarkState {
+    None,
+    Partial,
+    Marked,
+}
+
+fn mark_state(browser: &TreeBrowser<MusicTreeTarget>, root: &MusicTreeTarget) -> MarkState {
+    let children = browser.children_of(root).unwrap_or_default();
+    let marked = children
+        .iter()
+        .filter(|child| browser.marked_targets().contains(child))
+        .count();
+    if marked == 0 {
+        MarkState::None
+    } else if marked == children.len() {
+        MarkState::Marked
+    } else {
+        MarkState::Partial
+    }
+}
+
+/// Mark one leaf through the shared transition surface, idempotently.
+fn mark_leaf(browser: &mut TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) {
+    if !browser.marked_targets().contains(target) {
+        browser.apply(TreeOperation::ToggleMarkTarget(target.clone()));
+    }
+}
+
+/// Expand a root through the shared transition surface, idempotently.
+fn expand_root(browser: &mut TreeBrowser<MusicTreeTarget>, root: &MusicTreeTarget) {
+    if !browser.is_expanded(root) {
+        browser.apply(TreeOperation::ToggleExpansionTarget(root.clone()));
+    }
+}
+
+/// Select a stable target through the shared transition surface.
+fn select_target(browser: &mut TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) {
+    browser.apply(TreeOperation::Select(target.clone()));
+}
+
+/// Inject the shared marquee clock (no sleeps): the marquee primitive resets
+/// its start instant when the keyed title changes, so seeding the key and
+/// instant is the state a real frame reaches after `elapsed_ms`.
+fn set_marquee_clock(browser: &mut TreeBrowser<MusicTreeTarget>, title: &str, elapsed_ms: u64) {
+    browser.set_marquee_started_at(
+        title,
+        Instant::now()
+            .checked_sub(Duration::from_millis(elapsed_ms))
+            .expect("the injected clock precedes the process start"),
+    );
 }
 
 /// The painted buffer y of a target's row in the latest tree frame. The owner
 /// resolves its own painted geometry, so the test never re-derives a row from
 /// the projection index.
-fn row_y(browser: &MusicTreeBrowser, target: &MusicTreeTarget) -> u16 {
+fn row_y(browser: &TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) -> u16 {
     browser
         .row_rect_for(target)
         .expect("the target's row is painted in the latest frame")
@@ -244,16 +306,17 @@ fn narrow_grouped_music_shows_group_pill_bar() {
 const MUSIC_TREE_WIDE_WIDTH: u16 = 160;
 const MUSIC_TREE_WIDE_HEIGHT: u16 = 40;
 
-/// One tree frame: the tree adapter painting into the mounted Library panel's
+/// One tree frame: the shared owner painting into the mounted Library panel's
 /// reserved browser rect on a fresh buffer.
 fn music_tree_frame(
-    browser: &mut MusicTreeBrowser,
+    browser: &mut TreeBrowser<MusicTreeTarget>,
     area: Rect,
     width: u16,
     height: u16,
 ) -> Terminal<TestBackend> {
     let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
-    term.draw(|f| browser.view(f, area)).unwrap();
+    term.draw(|f| tuirealm::component::Component::view(browser, f, area))
+        .unwrap();
     term
 }
 
@@ -316,7 +379,7 @@ fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::s
 /// contract rather than a glyph-only assertion.
 fn assert_music_tree_scrollbar_matches_shared(
     term: &Terminal<TestBackend>,
-    browser: &MusicTreeBrowser,
+    browser: &TreeBrowser<MusicTreeTarget>,
     area: Rect,
     width: u16,
     height: u16,
@@ -327,9 +390,9 @@ fn assert_music_tree_scrollbar_matches_shared(
             crate::app::render::components::widgets::render_right_scrollbar_with_viewport(
                 frame,
                 area,
-                browser.projected_node_targets().len(),
+                browser.visible_targets().len(),
                 area.height as usize,
-                browser.offset(),
+                browser.viewport_offset(),
                 palette::SCROLLBAR,
             );
         })
@@ -362,15 +425,6 @@ fn music_tree_long_leaf() -> MusicTreeTarget {
     album("album-long")
 }
 
-/// A node's projection row, if visible in the settled projection.
-fn music_tree_projection_row_of(browser: &MusicTreeBrowser, target: &MusicTreeTarget) -> usize {
-    browser
-        .projected_node_targets()
-        .iter()
-        .position(|candidate| candidate == target)
-        .expect("node projected")
-}
-
 /// The tree's row contracts at the Wide Library-panel fixture, painted through
 /// the crate's supported model/state/renderer/style seams: the full-row
 /// selected bar, header-group zebra bands, scrollbar, clipping with the fixed
@@ -397,20 +451,19 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let mut browser = mounted_music_tree_browser(&model);
     let alpha_root = artist_root(&browser, "Alpha");
     let beta_root = artist_root(&browser, "Beta");
-    browser.expand_root(&alpha_root);
-    browser.expand_root(&beta_root);
+    expand_root(&mut browser, &alpha_root);
+    expand_root(&mut browser, &beta_root);
     assert_eq!(
-        browser.projected_node_targets().len(),
+        browser.visible_targets().len(),
         MUSIC_TREE_EXPANDED_PROJECTION_LEN
     );
     let long_leaf = music_tree_long_leaf();
-    let long_row = music_tree_projection_row_of(&browser, &long_leaf);
     // The stable album target the shell keys survives into the tree leaf.
     assert_eq!(long_leaf.album_leaf_target(), Some("album-long"));
 
     // Frame A rests at the top with the root selected, so the zebra rows
     // below it paint unselected.
-    browser.select_target(&alpha_root);
+    select_target(&mut browser, &alpha_root);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -418,7 +471,11 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         MUSIC_TREE_WIDE_HEIGHT,
     );
     let buf = term.backend().buffer();
-    assert_eq!(browser.offset(), 0, "a top selection needs no scroll");
+    assert_eq!(
+        browser.viewport_offset(),
+        0,
+        "a top selection needs no scroll"
+    );
 
     // The selected artist root keeps its title, and the scrollbar follows the
     // canonical list's outside-column placement.
@@ -469,27 +526,30 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let second_row_rect = browser
         .row_rect_for(&second_row)
         .expect("the painted second row");
-    match browser.hit_region(Position {
-        x: second_row_rect.x + 5,
-        y: second_row_rect.y,
-    }) {
-        Some(MusicTreeHit::Row(target)) if target == second_row => {}
-        other => panic!("expected the painted row's target, got {other:?}"),
-    }
-    assert!(matches!(
-        browser.hit_region(Position {
+    assert_eq!(
+        browser.resolve_current_point(Position {
+            x: second_row_rect.x + 5,
+            y: second_row_rect.y,
+        }),
+        Some(&second_row)
+    );
+    // The scrollbar column is painted just outside the claimed rect, so the
+    // shared owner's row-only retained geometry resolves no target there.
+    assert_eq!(
+        browser.resolve_current_point(Position {
             x: scrollbar_x,
             y: list_area.y + 1
         }),
-        Some(MusicTreeHit::VerticalScrollbar)
-    ));
+        None
+    );
 
-    // Clipping: scrolled so the unselected long album leaf paints at the
-    // viewport's last row, it truncates with an ellipsis, its year sits
-    // right-aligned inside the fixed six-column gutter with a two-column
-    // trailing gap, and no glyph lands
-    // outside the browser rectangle.
-    browser.scroll_to((long_row + 1).saturating_sub(list_area.height as usize));
+    // Clipping: selected and unfocused so the long album leaf paints at the
+    // viewport's last row without marqueeing; it truncates with an ellipsis,
+    // its year sits right-aligned inside the fixed six-column gutter with a
+    // two-column trailing gap, and no glyph lands outside the browser
+    // rectangle.
+    select_target(&mut browser, &long_leaf);
+    browser.set_focused(false);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -503,13 +563,13 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         long_row_text.contains('\u{2026}'),
         "long title truncates: {long_row_text}"
     );
-    let gutter_start =
-        list_area.right() - crate::app::components::music_tree::YEAR_GUTTER_WIDTH - 2;
+    let gutter_start = list_area.right()
+        - tree_metadata_gutter_width(MUSIC_TREE_LONG_TITLE_YEAR.to_string().as_str()) as u16;
     let gutter_text: String = music_tree_row_text(
         &term,
         long_y,
         gutter_start,
-        gutter_start + crate::app::components::music_tree::YEAR_GUTTER_WIDTH,
+        gutter_start + TREE_METADATA_SLOT_WIDTH as u16,
     )
     .trim()
     .to_string();
@@ -523,7 +583,8 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     // Frame B: selecting the second Beta leaf scrolls it into view; its bar
     // spans the full row and overrides the group band, while Beta's first leaf
     // keeps the neighbouring unstriped phase.
-    browser.select_target(&album("album-beta-2"));
+    browser.set_focused(true);
+    select_target(&mut browser, &album("album-beta-2"));
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -531,7 +592,10 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         MUSIC_TREE_WIDE_HEIGHT,
     );
     let buf = term.backend().buffer();
-    assert!(browser.offset() > 0, "the bottom Beta leaf forces a scroll");
+    assert!(
+        browser.viewport_offset() > 0,
+        "the bottom Beta leaf forces a scroll"
+    );
     let beta_bar_y = row_y(&browser, &album("album-beta-2"));
     for x in list_area.x..table_right {
         assert_eq!(
@@ -550,27 +614,27 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     // Aggregate marks: one of Beta's two leaves marked leaves the Beta root
     // Partial; marking the second lifts it to Marked, and each aggregate state
     // paints its own semantic role on the root's title.
-    browser.set_marked(&album("album-beta-1"), true);
+    mark_leaf(&mut browser, &album("album-beta-1"));
     let term = music_tree_frame(
         &mut browser,
         list_area,
         MUSIC_TREE_WIDE_WIDTH,
         MUSIC_TREE_WIDE_HEIGHT,
     );
-    assert_eq!(browser.mark_state(&beta_root), TreeMarkState::Partial);
+    assert_eq!(mark_state(&browser, &beta_root), MarkState::Partial);
     assert_eq!(
         term.backend().buffer()[(list_area.x + 2, row_y(&browser, &beta_root))].fg,
         palette::TEXT_ACCENT_MUTED,
         "a Partial artist root paints the muted aggregate role"
     );
-    browser.set_marked(&album("album-beta-2"), true);
+    mark_leaf(&mut browser, &album("album-beta-2"));
     let term = music_tree_frame(
         &mut browser,
         list_area,
         MUSIC_TREE_WIDE_WIDTH,
         MUSIC_TREE_WIDE_HEIGHT,
     );
-    assert_eq!(browser.mark_state(&beta_root), TreeMarkState::Marked);
+    assert_eq!(mark_state(&browser, &beta_root), MarkState::Marked);
     assert_eq!(
         term.backend().buffer()[(list_area.x + 2, row_y(&browser, &beta_root))].fg,
         palette::STATUS_AVAILABLE,
@@ -591,9 +655,10 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
     let list_area = mounted_music_wide_geometry(&model).list_area;
 
     let mut browser = mounted_music_tree_browser(&model);
-    browser.expand_root(&artist_root(&browser, "Alpha"));
+    let alpha_root = artist_root(&browser, "Alpha");
+    expand_root(&mut browser, &alpha_root);
     let long_leaf = music_tree_long_leaf();
-    browser.select_target(&long_leaf);
+    select_target(&mut browser, &long_leaf);
 
     // The marquee window strips to the row's name slot (after the hierarchy
     // plain-space indentation the crate composes).
@@ -602,7 +667,7 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
     }
 
     // Hold phase: the window rests on the title's beginning — no ellipsis.
-    browser.set_marquee_clock_for_test(MUSIC_TREE_LONG_TITLE, 0);
+    set_marquee_clock(&mut browser, MUSIC_TREE_LONG_TITLE, 0);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -626,7 +691,7 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
     );
 
     // Seven steps past the hold: the window has travelled seven columns.
-    browser.set_marquee_clock_for_test(MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
+    set_marquee_clock(&mut browser, MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -647,7 +712,7 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
 
     // Unfocused, the same row truncates with an ellipsis instead of marqueeing.
     browser.set_focused(false);
-    browser.set_marquee_clock_for_test(MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
+    set_marquee_clock(&mut browser, MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -686,8 +751,8 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     let mut browser = mounted_music_tree_browser(&model);
     let alpha_root = artist_root(&browser, "Alpha");
     let beta_root = artist_root(&browser, "Beta");
-    browser.expand_root(&alpha_root);
-    browser.expand_root(&beta_root);
+    expand_root(&mut browser, &alpha_root);
+    expand_root(&mut browser, &beta_root);
     let table_right = list_area.x + list_area.width - 1;
     let zebra = music_tree_zebra_fill(true);
     assert_ne!(palette::SELECTED_ROW_BG, zebra, "the bar is not the stripe");
@@ -696,7 +761,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     // the whole content row (the scrollbar column keeps the parent
     // background) and overrides the zebra stripe, and the title keeps the
     // ordinary primary foreground with no bold modifier.
-    browser.select_target(&album("album-beta-1"));
+    select_target(&mut browser, &album("album-beta-1"));
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -722,8 +787,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     // Artist roots are Heading-equivalent grouping rows and carry their own
     // group's band. Paint the Alpha header at the top so this assertion does
     // not depend on the selected Beta leaf's scrolled viewport.
-    browser.select_target(&alpha_root);
-    browser.scroll_to(0);
+    select_target(&mut browser, &alpha_root);
     browser.set_focused(false);
     let term = music_tree_frame(
         &mut browser,
@@ -740,8 +804,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     // Unfocused: the cursor row paints no bar; the focused Alpha band settles
     // from the focused Green2 fill to the tree's `#272e33` fill.
     browser.set_focused(false);
-    browser.select_target(&album("album-1"));
-    browser.scroll_to(0);
+    select_target(&mut browser, &album("album-1"));
     let unfocused_zebra = music_tree_zebra_fill(false);
     let term = music_tree_frame(
         &mut browser,
@@ -775,8 +838,8 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     // Unfocused multi-selection: with the cursor moved off the marked album
     // leaf, the mark alone paints the bar across its whole row, again
     // overriding the zebra stripe.
-    browser.select_target(&album("album-beta-2"));
-    browser.set_marked(&album("album-beta-1"), true);
+    select_target(&mut browser, &album("album-beta-2"));
+    mark_leaf(&mut browser, &album("album-beta-1"));
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -812,51 +875,91 @@ const GUTTER_YEARED: &str = "A Yeared Album Title Long Enough To Want A Gutter";
 const GUTTER_YEARLESS: &str = "A Yearless Album Title Long Enough To Fill The Row";
 const GUTTER_YEAR: &str = "2007";
 
-fn gutter_entries() -> Vec<MusicTreeEntry> {
-    let key = ArtistKey::Service("gutter-artist".into());
+/// Build a shared owner over a plain fixture projection.
+fn tree_browser(projection: Vec<TreeNode<MusicTreeTarget>>) -> TreeBrowser<MusicTreeTarget> {
+    let mut browser = TreeBrowser::new();
+    browser.reconcile(projection).expect("fixture forest");
+    browser
+}
+
+/// A plain node projection: one artist root over its album leaves.
+fn album_leaf(
+    parent: &MusicTreeTarget,
+    target: &str,
+    title: &str,
+    trailing: Option<&str>,
+    semantic_state: MediaSemanticState,
+) -> TreeNode<MusicTreeTarget> {
+    let node = TreeNode::new(
+        album(target),
+        Some(parent.clone()),
+        title,
+        title,
+        semantic_state,
+        TreeMarkPolicy::Direct,
+    );
+    match trailing {
+        Some(trailing) => node.with_trailing(trailing),
+        None => node,
+    }
+}
+
+fn gutter_projection() -> Vec<TreeNode<MusicTreeTarget>> {
+    let root = artist("gutter-artist");
     vec![
-        MusicTreeEntry {
-            artist: GUTTER_ARTIST.into(),
-            artist_key: key.clone(),
-            title: GUTTER_YEARED.into(),
-            year: Some(GUTTER_YEAR.into()),
-            target: "gutter-yeared".into(),
-            semantic_state: MediaSemanticState::Ordinary,
-        },
-        MusicTreeEntry {
-            artist: GUTTER_ARTIST.into(),
-            artist_key: key,
-            title: GUTTER_YEARLESS.into(),
-            year: None,
-            target: "gutter-yearless".into(),
-            semantic_state: MediaSemanticState::Ordinary,
-        },
+        TreeNode::new(
+            root.clone(),
+            None,
+            GUTTER_ARTIST,
+            GUTTER_ARTIST,
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Aggregate,
+        ),
+        album_leaf(
+            &root,
+            "gutter-yeared",
+            GUTTER_YEARED,
+            Some(GUTTER_YEAR),
+            MediaSemanticState::Ordinary,
+        ),
+        album_leaf(
+            &root,
+            "gutter-yearless",
+            GUTTER_YEARLESS,
+            None,
+            MediaSemanticState::Ordinary,
+        ),
     ]
 }
 
 #[test]
 fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
-    let key = ArtistKey::Service("semantic-artist".into());
-    let entries = vec![
-        MusicTreeEntry {
-            artist: "Semantic Artist".into(),
-            artist_key: key.clone(),
-            title: "Played Album".into(),
-            year: None,
-            target: "played-album".into(),
-            semantic_state: MediaSemanticState::Played,
-        },
-        MusicTreeEntry {
-            artist: "Semantic Artist".into(),
-            artist_key: key,
-            title: "Active Album".into(),
-            year: None,
-            target: "active-album".into(),
-            semantic_state: MediaSemanticState::active(Some(50)),
-        },
-    ];
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
-    browser.expand_root(&artist("semantic-artist"));
+    let root = artist("semantic-artist");
+    let mut browser = tree_browser(vec![
+        TreeNode::new(
+            root.clone(),
+            None,
+            "Semantic Artist",
+            "Semantic Artist",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Aggregate,
+        ),
+        album_leaf(
+            &root,
+            "played-album",
+            "Played Album",
+            None,
+            MediaSemanticState::Played,
+        ),
+        album_leaf(
+            &root,
+            "active-album",
+            "Active Album",
+            None,
+            MediaSemanticState::active(Some(50)),
+        ),
+    ]);
+    expand_root(&mut browser, &root);
     browser.set_focused(false);
     let area = Rect::new(0, 0, 40, 3);
     let term = music_tree_frame(&mut browser, area, 40, 3);
@@ -876,20 +979,28 @@ fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
 
 #[test]
 fn music_tree_selected_live_row_uses_selected_foreground() {
-    let key = ArtistKey::Service("selected-live-artist".into());
-    let entries = vec![MusicTreeEntry {
-        artist: "Selected Live Artist".into(),
-        artist_key: key,
-        title: "Now Playing Album".into(),
-        year: None,
-        target: "selected-live-album".into(),
-        semantic_state: MediaSemanticState::NowPlaying {
-            progress: Some(crate::app::components::media_list::ActiveProgress::new(47)),
-        },
-    }];
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
-    browser.expand_root(&artist("selected-live-artist"));
-    browser.select_target(&album("selected-live-album"));
+    let root = artist("selected-live-artist");
+    let mut browser = tree_browser(vec![
+        TreeNode::new(
+            root.clone(),
+            None,
+            "Selected Live Artist",
+            "Selected Live Artist",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Aggregate,
+        ),
+        album_leaf(
+            &root,
+            "selected-live-album",
+            "Now Playing Album",
+            None,
+            MediaSemanticState::NowPlaying {
+                progress: Some(crate::app::components::media_list::ActiveProgress::new(47)),
+            },
+        ),
+    ]);
+    expand_root(&mut browser, &root);
+    select_target(&mut browser, &album("selected-live-album"));
     let area = Rect::new(0, 0, 40, 2);
     let term = music_tree_frame(&mut browser, area, area.width, area.height);
 
@@ -902,37 +1013,48 @@ fn music_tree_selected_live_row_uses_selected_foreground() {
 
 #[test]
 fn music_tree_depth_roles_use_ordinary_level_colours() {
-    let key = ArtistKey::Service("depth-role-artist".into());
-    let entries = vec![MusicTreeEntry {
-        artist: "Depth Artist".into(),
-        artist_key: key,
-        title: "Depth Album".into(),
-        year: None,
-        target: "depth-album".into(),
-        semantic_state: MediaSemanticState::Ordinary,
-    }];
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
-    browser.set_track_items(HashMap::from([(
-        "depth-album".to_string(),
-        vec![MusicTreeTrack {
-            target: "depth-track".into(),
-            title: "Depth Track".into(),
-            search_title: "Depth Track".into(),
-        }],
-    )]));
-    browser.reconcile(&entries);
     let root = artist("depth-role-artist");
-    browser.expand_root(&root);
-    let album = album("depth-album");
-    browser.expand_node(&album);
+    let album_target = album("depth-album");
+    let mut browser = tree_browser(vec![
+        TreeNode::new(
+            root.clone(),
+            None,
+            "Depth Artist",
+            "Depth Artist",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Aggregate,
+        ),
+        album_leaf(
+            &root,
+            "depth-album",
+            "Depth Album",
+            None,
+            MediaSemanticState::Ordinary,
+        ),
+        TreeNode::new(
+            MusicTreeTarget::Track {
+                album: "depth-album".into(),
+                track: "depth-track".into(),
+            },
+            Some(album_target.clone()),
+            "Depth Track",
+            "Depth Track",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Excluded,
+        ),
+    ]);
+    expand_root(&mut browser, &root);
+    expand_root(&mut browser, &album_target);
     browser.set_focused(false);
 
     let area = Rect::new(0, 0, 40, 3);
     let term = music_tree_frame(&mut browser, area, area.width, area.height);
     let buf = term.backend().buffer();
+    // The shared painter indents two plain columns per depth, so the album
+    // leaf starts at column 2 and the cached track at column 4.
     assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER);
     assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
-    assert_eq!(buf[(3, 2)].fg, palette::ACCENT);
+    assert_eq!(buf[(4, 2)].fg, palette::ACCENT);
 }
 
 /// The pinned year-gutter contract (design D8), painted through the crate's
@@ -945,11 +1067,11 @@ fn music_tree_depth_roles_use_ordinary_level_colours() {
 fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     const WIDTH: u16 = 40;
     const FRAME_WIDTH: u16 = WIDTH + 4;
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
+    let mut browser = tree_browser(gutter_projection());
     let root = artist("gutter-artist");
     assert!(root.is_artist(), "level 0 is the artist root");
-    browser.expand_root(&root);
-    assert_eq!(browser.projected_node_targets().len(), 3);
+    expand_root(&mut browser, &root);
+    assert_eq!(browser.visible_targets().len(), 3);
     // Unfocused so no row marquees: every row paints its ordinary truncation,
     // which is what makes the per-row budget observable.
     browser.set_focused(false);
@@ -970,7 +1092,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     // Three rows in three lines never overflow, so no scrollbar takes a
     // column: the tree column is the full browser width and the gutter is its
     // six-column date plus its two-column trailing gap.
-    let gutter = (WIDTH - crate::app::components::music_tree::YEAR_GUTTER_WIDTH - 2) as usize;
+    let gutter = (WIDTH - TREE_METADATA_SLOT_WIDTH as u16 - 2) as usize;
     let rows: Vec<String> = (0..3)
         .map(|y| music_tree_row_text(&term, y, 0, WIDTH))
         .collect();
@@ -1055,11 +1177,11 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
 fn music_tree_overflow_with_room_keeps_cell_budget_aligned() {
     const WIDTH: u16 = 40;
     const FRAME_WIDTH: u16 = WIDTH + 4;
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
+    let mut browser = tree_browser(gutter_projection());
     let root = artist("gutter-artist");
-    browser.expand_root(&root);
-    browser.select_target(&album("gutter-yeared"));
-    browser.set_marquee_clock_for_test(GUTTER_YEARED, 0);
+    expand_root(&mut browser, &root);
+    select_target(&mut browser, &album("gutter-yeared"));
+    set_marquee_clock(&mut browser, GUTTER_YEARED, 0);
 
     let area = Rect::new(0, 0, WIDTH, 2);
     let term = music_tree_frame(&mut browser, area, FRAME_WIDTH, area.height);
@@ -1094,7 +1216,7 @@ fn music_tree_uses_plain_indentation_in_every_state() {
     const PLAIN_LEAF_PREFIX: &str = "  ";
 
     let area = Rect::new(0, 0, WIDTH, 3);
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
+    let mut browser = tree_browser(gutter_projection());
     browser.set_focused(false);
     let root = artist("gutter-artist");
     assert!(root.is_artist(), "level 0 is the artist root");
@@ -1103,8 +1225,8 @@ fn music_tree_uses_plain_indentation_in_every_state() {
     let collapsed_root_row = music_tree_row_text(&term, 0, 0, WIDTH);
     assert_eq!(collapsed_root_row.chars().next(), Some('T'));
 
-    browser.expand_root(&root);
-    assert_eq!(browser.projected_node_targets().len(), 3);
+    expand_root(&mut browser, &root);
+    assert_eq!(browser.visible_targets().len(), 3);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let root_row = music_tree_row_text(&term, 0, 0, WIDTH);
     assert_eq!(root_row.chars().next(), Some('T'));
@@ -1123,25 +1245,31 @@ const RESET_TITLE_FIRST: &str = "A First Album Title Long Enough To Marquee Acro
 const RESET_TITLE_SECOND: &str =
     "A Second Album Title Long Enough To Marquee Across The Browser Row";
 
-fn reset_entries() -> Vec<MusicTreeEntry> {
-    let key = ArtistKey::Service("reset-artist".into());
+fn reset_projection() -> Vec<TreeNode<MusicTreeTarget>> {
+    let root = artist("reset-artist");
     vec![
-        MusicTreeEntry {
-            artist: "Reset Artist".into(),
-            artist_key: key.clone(),
-            title: RESET_TITLE_FIRST.into(),
-            year: None,
-            target: "reset-first".into(),
-            semantic_state: MediaSemanticState::Ordinary,
-        },
-        MusicTreeEntry {
-            artist: "Reset Artist".into(),
-            artist_key: key,
-            title: RESET_TITLE_SECOND.into(),
-            year: None,
-            target: "reset-second".into(),
-            semantic_state: MediaSemanticState::Ordinary,
-        },
+        TreeNode::new(
+            root.clone(),
+            None,
+            "Reset Artist",
+            "Reset Artist",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Aggregate,
+        ),
+        album_leaf(
+            &root,
+            "reset-first",
+            RESET_TITLE_FIRST,
+            None,
+            MediaSemanticState::Ordinary,
+        ),
+        album_leaf(
+            &root,
+            "reset-second",
+            RESET_TITLE_SECOND,
+            None,
+            MediaSemanticState::Ordinary,
+        ),
     ]
 }
 
@@ -1154,10 +1282,10 @@ fn reset_entries() -> Vec<MusicTreeEntry> {
 fn music_tree_title_clock_resets_when_the_selection_changes() {
     const WIDTH: u16 = 40;
     let area = Rect::new(0, 0, WIDTH, 3);
-    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&reset_entries()));
+    let mut browser = tree_browser(reset_projection());
     let root = artist("reset-artist");
-    browser.expand_root(&root);
-    assert_eq!(browser.projected_node_targets().len(), 3);
+    expand_root(&mut browser, &root);
+    assert_eq!(browser.visible_targets().len(), 3);
     let first = album("reset-first");
     let second = album("reset-second");
 
@@ -1167,8 +1295,8 @@ fn music_tree_title_clock_resets_when_the_selection_changes() {
 
     // Select the first title and inject a mid-scroll clock: its window has
     // travelled eight columns, not its hold start.
-    browser.select_music_target(&first);
-    browser.set_marquee_clock_for_test(RESET_TITLE_FIRST, 600 + 150 * 8);
+    select_target(&mut browser, &first);
+    set_marquee_clock(&mut browser, RESET_TITLE_FIRST, 600 + 150 * 8);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let first_row = music_tree_row_text(&term, 1, 0, WIDTH);
     let first_name = name_slot(&first_row);
@@ -1180,7 +1308,7 @@ fn music_tree_title_clock_resets_when_the_selection_changes() {
     // Select the second title without touching the clock. Its title text
     // differs, so the primitive resets the clock and it paints its hold
     // window from the start.
-    browser.select_music_target(&second);
+    select_target(&mut browser, &second);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let second_row = music_tree_row_text(&term, 2, 0, WIDTH);
     let second_name = name_slot(&second_row);
