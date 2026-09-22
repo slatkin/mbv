@@ -534,3 +534,25 @@ fn ordered_marks_emit_action_targets_in_display_order() {
         vec!["album-1", "album-2"]
     );
 }
+
+#[test]
+fn collapsed_root_keeps_its_marked_albums_in_the_action_scope() {
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&base_entries()));
+    let alpha_root = artist("artist-alpha");
+    browser.expand_root(&alpha_root);
+
+    // Click order is the reverse of display order.
+    assert!(browser.set_marked(&album("album-2"), true));
+    assert!(browser.set_marked(&album("album-1"), true));
+
+    // Collapsing the root removes its leaves from the painted projection but
+    // never from the action scope: a collapsed root has the same action scope
+    // as an expanded one, so display order must still include the marks.
+    browser.collapse_root(&alpha_root);
+    assert!(!browser.root_is_expanded(&alpha_root));
+    assert_eq!(browser.selected_album_targets(), vec!["album-2", "album-1"]);
+    assert_eq!(
+        browser.selected_album_targets_in_display_order(),
+        vec!["album-1", "album-2"]
+    );
+}

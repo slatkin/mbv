@@ -304,16 +304,21 @@ impl MusicTreeBrowser {
 
     /// Album targets selected in the current settled tree display order. This
     /// is the order boundary-crossing actions should use, independent of click
-    /// order. The shared ordered-mark projection supplies display order; this
-    /// owner only translates the stable targets to album identities.
+    /// order. The walk reads the model's root/child lists rather than the
+    /// expanded projection, because expansion never participates in the action
+    /// scope: a collapsed root contributes the same marked albums as an
+    /// expanded one. The shared ordered-mark carrier supplies membership only;
+    /// it is never the ordering source.
     pub(in crate::app) fn selected_album_targets_in_display_order(&self) -> Vec<String> {
-        let flow = self.row_flow();
-        self.action_targets(&flow)
-            .into_iter()
-            .filter_map(|target| match target {
-                MusicTreeTarget::Album(album) => Some(album),
-                MusicTreeTarget::Artist(_) | MusicTreeTarget::Track { .. } => None,
-            })
+        self.model
+            .roots
+            .iter()
+            .flat_map(|root| self.model.children[*root].iter())
+            .copied()
+            .filter(|id| self.album_is_visible(*id))
+            .filter_map(|id| self.model.target_of(id))
+            .filter(|target| self.is_marked(target))
+            .map(str::to_owned)
             .collect()
     }
 
@@ -530,7 +535,9 @@ impl MusicTreeBrowser {
 
     /// The visible projection as the seam's ordered row flow. Every projected
     /// node carries a stable target; the current tree has no structural rows,
-    /// so every row is selectable.
+    /// so every row is selectable. Test-only: the action scope deliberately
+    /// does not read the expanded projection.
+    #[cfg(test)]
     fn row_flow(&self) -> RowFlow<MusicTreeTarget> {
         RowFlow::new(
             self.state
