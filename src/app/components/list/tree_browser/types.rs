@@ -1,10 +1,12 @@
 use crate::app::components::media_list::MediaSemanticState;
 /// Provider-neutral trailing metadata in a tree row's right gutter.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeTrailing {
     pub text: String,
 }
 
+#[allow(dead_code)]
 impl TreeTrailing {
     pub fn new(text: impl Into<String>) -> Self {
         Self { text: text.into() }
@@ -12,6 +14,7 @@ impl TreeTrailing {
 }
 
 /// Closed per-node marking policy.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TreeMarkPolicy {
     /// The node itself can be included in the ordered mark set.
@@ -24,6 +27,7 @@ pub enum TreeMarkPolicy {
 }
 
 /// Plain destination data for one tree row.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeNode<Target> {
     pub target: Target,
@@ -35,6 +39,7 @@ pub struct TreeNode<Target> {
     pub mark_policy: TreeMarkPolicy,
 }
 
+#[allow(dead_code)]
 impl<Target> TreeNode<Target> {
     pub fn new(
         target: Target,
@@ -62,6 +67,7 @@ impl<Target> TreeNode<Target> {
 }
 
 /// The result disposition shared by semantic tree operations.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TreeConsumed {
     Unhandled,
@@ -69,6 +75,7 @@ pub enum TreeConsumed {
 }
 
 /// Stable-target external intent emitted by a tree operation.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TreeExternalIntent<Target> {
     Activate(Target),
@@ -77,6 +84,7 @@ pub enum TreeExternalIntent<Target> {
 }
 
 /// Stable selection change reported by a tree operation.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeSelectionChange<Target> {
     pub previous: Option<Target>,
@@ -84,6 +92,7 @@ pub struct TreeSelectionChange<Target> {
 }
 
 /// Provider-neutral summary of ordered marks and aggregate presentation.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeMarkSummary {
     pub marked_count: usize,
@@ -93,6 +102,7 @@ pub struct TreeMarkSummary {
 /// Closed semantic operation vocabulary.  Behaviour is implemented by the
 /// owner in the operations unit; keeping the vocabulary here prevents a
 /// destination from inventing a second mutation surface.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TreeOperation<Target> {
     Move(i64),
@@ -115,6 +125,7 @@ pub enum TreeOperation<Target> {
 
 /// One complete operation result.  The independent fields let a caller
 /// observe selection, marks, and external intent without replaying owner logic.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeTransition<Target> {
     pub disposition: TreeConsumed,
@@ -125,6 +136,7 @@ pub struct TreeTransition<Target> {
     pub external_intent: Option<TreeExternalIntent<Target>>,
 }
 
+#[allow(dead_code)]
 impl<Target> TreeTransition<Target> {
     pub fn unhandled() -> Self {
         Self {

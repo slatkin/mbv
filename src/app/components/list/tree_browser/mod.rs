@@ -3,7 +3,6 @@
 //! `TreeBrowser` owns stable-target tree state.  Destinations project their
 //! domain data into [`TreeNode`] values and never see the private arena used by
 //! the implementation.
-#![allow(dead_code)]
 
 mod types;
 
@@ -31,6 +30,7 @@ pub use types::{
 ///
 /// The error deliberately contains only stable targets.  Arena identifiers
 /// are an implementation detail and never cross this boundary.
+#[allow(dead_code)]
 #[derive(Clone, PartialEq, Eq)]
 pub enum TreeReconciliationError<Target> {
     DuplicateTarget { target: Target },
@@ -50,6 +50,7 @@ impl<Target> std::fmt::Debug for TreeReconciliationError<Target> {
     }
 }
 
+#[allow(dead_code)]
 impl<Target> TreeReconciliationError<Target> {
     pub fn target(&self) -> &Target {
         match self {
@@ -62,6 +63,7 @@ impl<Target> TreeReconciliationError<Target> {
 }
 
 /// A row prepared for the destination-neutral render component.
+#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TreePaintRow {
     pub(crate) title: String,
@@ -74,6 +76,7 @@ pub(crate) struct TreePaintRow {
     pub(crate) semantic_state: MediaSemanticState,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 struct ArenaNode<Target> {
     node: TreeNode<Target>,
@@ -86,6 +89,7 @@ struct ArenaNode<Target> {
 ///
 /// The arena and its identifiers are private.  In particular, callers can
 /// only select, expand, mark, and resolve rows through destination targets.
+#[allow(dead_code)]
 pub struct TreeBrowser<Target> {
     arena: HashMap<usize, ArenaNode<Target>>,
     target_to_node: HashMap<Target, usize>,
@@ -104,12 +108,14 @@ pub struct TreeBrowser<Target> {
     marquee_started_at: Instant,
 }
 
+#[allow(dead_code)]
 impl<Target> Default for TreeBrowser<Target> {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[allow(dead_code)]
 impl<Target> TreeBrowser<Target> {
     pub fn new() -> Self {
         Self {
@@ -179,6 +185,16 @@ impl<Target> TreeBrowser<Target> {
                     .get(&target)
                     .and_then(|&index| nodes[index].parent.clone());
             }
+        }
+
+        let content_changed = self.ordered_nodes.len() != nodes.len()
+            || self
+                .ordered_nodes
+                .iter()
+                .zip(nodes.iter())
+                .any(|(id, node)| self.arena.get(id).is_none_or(|entry| entry.node != *node));
+        if !content_changed {
+            return Ok(());
         }
 
         let mut arena = HashMap::with_capacity(nodes.len());
@@ -358,6 +374,7 @@ impl<Target> TreeBrowser<Target> {
     }
 }
 
+#[allow(dead_code)]
 impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     fn visible_node_ids(&self) -> Vec<usize> {
         let mut visible = Vec::new();

@@ -28,6 +28,13 @@ fn node(target: Target, parent: Option<Target>) -> TreeNode<Target> {
 
 fn component_bound<T: Component>() {}
 
+fn paint(browser: &mut TreeBrowser<Target>) {
+    let mut terminal = Terminal::new(TestBackend::new(20, 2)).unwrap();
+    terminal
+        .draw(|frame| Component::view(browser, frame, Rect::new(1, 0, 18, 2)))
+        .unwrap();
+}
+
 #[test]
 fn generic_tree_browser_implements_tuirealm_component() {
     component_bound::<TreeBrowser<Target>>();
@@ -65,6 +72,62 @@ fn three_level_forest_preserves_stable_selection_through_reorder_and_removal() {
 
     browser.reconcile([node(Target::Leaf, None)]).unwrap();
     assert_eq!(browser.selected_target(), Some(&Target::Leaf));
+}
+
+#[test]
+fn identical_projection_preserves_revision_and_retained_geometry() {
+    let projection = [node(Target::Root, None)];
+    let mut browser = TreeBrowser::new();
+    browser.reconcile(projection.clone()).unwrap();
+    paint(&mut browser);
+
+    let revision = browser.model_revision();
+    assert_eq!(
+        browser.resolve_current_point(Position::new(2, 0)),
+        Some(&Target::Root)
+    );
+
+    browser.reconcile(projection).unwrap();
+
+    assert_eq!(browser.model_revision(), revision);
+    assert_eq!(
+        browser.resolve_current_point(Position::new(2, 0)),
+        Some(&Target::Root)
+    );
+}
+
+#[test]
+fn changed_projection_bumps_revision_and_invalidates_retained_geometry() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([node(Target::Root, None), node(Target::Other, None)])
+        .unwrap();
+    paint(&mut browser);
+    let revision = browser.model_revision();
+
+    browser
+        .reconcile([node(Target::Other, None), node(Target::Root, None)])
+        .unwrap();
+
+    assert_eq!(browser.model_revision(), revision + 1);
+    assert_eq!(browser.resolve_current_point(Position::new(2, 0)), None);
+
+    paint(&mut browser);
+    let revision = browser.model_revision();
+    let changed = TreeNode::new(
+        Target::Other,
+        None,
+        "changed",
+        "row",
+        MediaSemanticState::Ordinary,
+        TreeMarkPolicy::Direct,
+    );
+    browser
+        .reconcile([changed, node(Target::Root, None)])
+        .unwrap();
+
+    assert_eq!(browser.model_revision(), revision + 1);
+    assert_eq!(browser.resolve_current_point(Position::new(2, 0)), None);
 }
 
 #[rstest]

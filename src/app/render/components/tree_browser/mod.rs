@@ -18,6 +18,7 @@ use crate::app::components::media_list::MediaSemanticState;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
 
+#[allow(dead_code)]
 pub(in crate::app) fn render_tree_browser(
     frame: &mut Frame,
     area: Rect,
@@ -96,6 +97,7 @@ pub(in crate::app) fn render_tree_browser(
     }
 }
 
+#[allow(dead_code)]
 fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
     if row.marked {
         return palette::STATUS_AVAILABLE;
@@ -116,6 +118,7 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
     }
 }
 
+#[allow(dead_code)]
 fn truncate(text: &str, width: usize) -> String {
     if text.width() <= width {
         return text.to_owned();
