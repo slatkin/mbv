@@ -1,5 +1,5 @@
 use self::artist_workspace_tests::artist_workspace_owner;
-use self::tree_tests::{press, tree_owner, tree_owner_with_tracks};
+use self::tree_fixtures::{press, tree_owner, tree_owner_with_tracks};
 use super::*;
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::make_item;
@@ -663,6 +663,10 @@ fn a_local_album_move_never_paints_the_prior_albums_tracks() {
 }
 
 #[cfg(test)]
+#[path = "music_content_tree_fixtures.rs"]
+mod tree_fixtures;
+
+#[cfg(test)]
 #[path = "music_content_tree_tests.rs"]
 mod tree_tests;
 
@@ -673,3 +677,11 @@ mod artist_workspace_tests;
 #[cfg(test)]
 #[path = "music_content_artist_actions_tests.rs"]
 mod artist_actions_tests;
+
+#[cfg(test)]
+#[path = "music_content_tree_pointer_tests.rs"]
+mod tree_pointer_tests;
+
+#[cfg(test)]
+#[path = "music_content_tree_key_tests.rs"]
+mod tree_key_tests;

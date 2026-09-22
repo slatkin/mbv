@@ -161,6 +161,18 @@ mod music_characterization_tests;
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
 #[cfg(test)]
+#[path = "tests_music_tree_gutter.rs"]
+mod music_tree_gutter_tests;
+#[cfg(test)]
+#[path = "tests_music_tree_marquee.rs"]
+mod music_tree_marquee_tests;
+#[cfg(test)]
+#[path = "tests_music_tree_rows.rs"]
+mod music_tree_rows_tests;
+#[cfg(test)]
+#[path = "tests_music_tree_states.rs"]
+mod music_tree_states_tests;
+#[cfg(test)]
 #[path = "tests_non_music.rs"]
 mod non_music_tests;
 #[cfg(test)]
