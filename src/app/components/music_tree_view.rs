@@ -59,16 +59,49 @@ fn computed_mark_state(
     }
 }
 
+/// The classified region of a latest-render hit for test assertions: a row
+/// carries its stable target, and the non-row regions stay distinguishable
+/// without leaking the crate's arena ids.
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) enum MusicTreeHit {
+    Row(MusicTreeTarget),
+    Header,
+    VerticalScrollbar,
+    HorizontalScrollbar,
+}
+
 impl MusicTreeBrowser {
-    /// Latest-completed-render hit resolution: the node id and its projection
-    /// row for the row under `at`, if any.
-    pub(in crate::app) fn hit_node(&self, at: Position) -> Option<(usize, usize)> {
-        match self.hit_test(at)? {
-            TreeHit::Row { id, index, .. } => Some((id, index)),
+    /// under `at`, if any. A hit row is always interned, so a row the arena no
+    /// longer holds is an explicit absent result.
+    pub(in crate::app) fn hit_node(&self, at: Position) -> Option<MusicTreeTarget> {
+        match self.hit_test_row(at)? {
+            TreeHit::Row { id, .. } => self.model.target_of_node(id),
             TreeHit::Header { .. } | TreeHit::VerticalScrollbar | TreeHit::HorizontalScrollbar => {
                 None
             }
         }
+    }
+
+    /// The classified hit region for render-test assertions: a row carries its
+    /// stable target, and the non-row regions stay distinguishable without
+    /// leaking the crate's arena ids.
+    #[cfg(test)]
+    pub(in crate::app) fn hit_region(&self, at: Position) -> Option<MusicTreeHit> {
+        match self.hit_test_row(at)? {
+            TreeHit::Row { id, .. } => self.model.target_of_node(id).map(MusicTreeHit::Row),
+            TreeHit::Header { .. } => Some(MusicTreeHit::Header),
+            TreeHit::VerticalScrollbar => Some(MusicTreeHit::VerticalScrollbar),
+            TreeHit::HorizontalScrollbar => Some(MusicTreeHit::HorizontalScrollbar),
+        }
+    }
+
+    /// Latest-completed-render hit resolution into the crate's arena ids, kept
+    /// private because the arena index never crosses the seam.
+    fn hit_test_row(&self, at: Position) -> Option<TreeHit<usize>> {
+        self.paint_complete
+            .then(|| self.state.hit_test(at))
+            .flatten()
     }
 
     /// Moves the selection `delta` visible rows (the tree's own visible-node
@@ -122,21 +155,18 @@ impl MusicTreeBrowser {
             .and_then(|index| self.row_rect_for_index(index))
     }
 
-    /// A visible node's one-line rect from the latest completed view.
+    /// A visible node's one-line rect from the latest completed view. A target
+    /// absent from the current projection is an explicit absent result.
     #[cfg(test)]
-    pub(in crate::app) fn row_rect_for(&self, id: usize) -> Option<Rect> {
-        let index = self
-            .state
-            .projection()
-            .nodes()
-            .iter()
-            .position(|node| node.id() == id)?;
+    pub(in crate::app) fn row_rect_for(&self, target: &MusicTreeTarget) -> Option<Rect> {
+        let id = self.model.id_of(target)?;
+        let index = self.state.visible_index_of(id)?;
         self.row_rect_for_index(index)
     }
 
     /// Whether the latest completed view's retained geometry claims `at`.
     pub(in crate::app) fn claims_point(&self, at: Position) -> bool {
-        self.hit_test(at).is_some()
+        self.hit_test_row(at).is_some()
     }
 
     /// Arms the crate's `KeepInView` rule for the current selection without
@@ -148,20 +178,22 @@ impl MusicTreeBrowser {
         rearm_selection_visibility_for(&mut self.state);
     }
 
-    pub(in crate::app) fn hit_test(&self, position: Position) -> Option<TreeHit<usize>> {
-        self.paint_complete
-            .then(|| self.state.hit_test(position))
-            .flatten()
-    }
-
     #[cfg(test)]
-    pub(in crate::app) fn projection_len(&self) -> usize {
+    fn projection_len(&self) -> usize {
         self.state.visible_len()
     }
 
+    /// The stable targets of the current visible projection, in row order
+    /// (test-facing; the crate's `ProjectedNode<usize>` never leaves this
+    /// module).
     #[cfg(test)]
-    pub(in crate::app) fn projected_nodes(&self) -> &[ProjectedNode<usize>] {
-        self.state.projection().nodes()
+    pub(in crate::app) fn projected_node_targets(&self) -> Vec<MusicTreeTarget> {
+        self.state
+            .projection()
+            .nodes()
+            .iter()
+            .filter_map(|node| self.model.target_of_node(node.id()))
+            .collect()
     }
 
     /// Injects the marquee clock directly (no sleeps): `key` must be the
@@ -282,11 +314,12 @@ impl MusicTreeBrowser {
             .projection()
             .nodes()
             .iter()
-            .map(|node| {
-                (
-                    node.id(),
+            .filter_map(|node| {
+                let target = model.target_of_node(node.id())?;
+                Some((
+                    target,
                     computed_mark_state(model, query, state, selection_order, node.id()),
-                )
+                ))
             })
             .collect();
         let label = MusicTreeLabelRenderer {

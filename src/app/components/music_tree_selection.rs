@@ -18,9 +18,13 @@ impl MusicTreeBrowser {
         true
     }
 
-    /// Selects a node by stable identity, loading its ancestor path, and arms
-    /// the viewport to keep it visible (design D3 step 4).
-    pub(in crate::app) fn select_id(&mut self, id: usize) -> bool {
+    /// Selects a node by stable target, loading its ancestor path, and arms
+    /// the viewport to keep it visible (design D3 step 4). A target the arena
+    /// has not interned is an explicit absent result.
+    pub(in crate::app) fn select_id(&mut self, target: &MusicTreeTarget) -> bool {
+        let Some(id) = self.model.id_of(target) else {
+            return false;
+        };
         let selected = self.state.select_by_id(&self.model, &self.query, id);
         if selected {
             self.invalidate();
@@ -33,13 +37,32 @@ impl MusicTreeBrowser {
         self.selection_order.iter().any(|item| item == target)
     }
 
-    pub(in crate::app) fn select_index(&mut self, index: usize) {
+    /// Selects one visible projection row without touching expansion. Hit
+    /// resolution already proved the row visible, so no ancestor path is
+    /// loaded and filter-forced expansion is never promoted (design D5).
+    fn select_row(&mut self, index: usize) {
         self.state.select_index(Some(index));
     }
 
-    /// The selected node's stable arena id.
-    pub(in crate::app) fn selected_id(&self) -> Option<usize> {
-        self.state.selected_id()
+    /// Selects the visible projection row for a stable target without touching
+    /// expansion. A target absent from the arena or the current projection is
+    /// an explicit absent result.
+    pub(in crate::app) fn select_target(&mut self, target: &MusicTreeTarget) -> bool {
+        let Some(id) = self.model.id_of(target) else {
+            return false;
+        };
+        let Some(index) = self.state.visible_index_of(id) else {
+            return false;
+        };
+        self.select_row(index);
+        true
+    }
+
+    /// The selected node's stable target.
+    pub(in crate::app) fn selected_target(&self) -> Option<MusicTreeTarget> {
+        self.state
+            .selected_id()
+            .and_then(|id| self.model.target_of_node(id))
     }
 
     /// The selected node's album target; `None` when an artist root (or
@@ -60,20 +83,27 @@ impl MusicTreeBrowser {
 
     /// A resolved node's stable `(album target, track target)` identity, so a
     /// pointer gesture can resolve its request before mutating local state.
-    pub(in crate::app) fn track_identity_of(&self, id: usize) -> Option<(&str, &str)> {
-        self.model.track_identity_of(id)
+    pub(in crate::app) fn track_identity_of(
+        &self,
+        target: &MusicTreeTarget,
+    ) -> Option<(&str, &str)> {
+        self.model
+            .id_of(target)
+            .and_then(|id| self.model.track_identity_of(id))
     }
 
     /// The selected artist root's settled identity (design D7): the stable
     /// `ArtistItems` key or the deterministic fallback grouping key.
     pub(in crate::app) fn selected_artist_key(&self) -> Option<&ArtistKey> {
-        self.selected_id()
+        self.state
+            .selected_id()
             .and_then(|id| self.model.artist_key_of(id))
     }
 
     /// The selected artist root's settled display name.
     pub(in crate::app) fn selected_artist_name(&self) -> Option<&str> {
-        self.selected_id()
+        self.state
+            .selected_id()
             .and_then(|id| self.model.artist_name_of(id))
     }
 
@@ -85,7 +115,7 @@ impl MusicTreeBrowser {
     /// boundary. A non-artist selection is not an artist action; an empty
     /// artist returns an empty list so callers can handle that case explicitly.
     pub(in crate::app) fn selected_artist_album_targets(&self) -> Option<Vec<String>> {
-        let root = self.selected_id()?;
+        let root = self.state.selected_id()?;
         if !self.model.is_artist(root) {
             return None;
         }
@@ -119,7 +149,21 @@ impl MusicTreeBrowser {
     /// the active filter, and a no-op re-application must not drop the
     /// current-frame rows a pointer gesture resolves against (row 5.2's
     /// filtered pointer path).
-    pub(in crate::app) fn set_filter_matches(&mut self, matching: Option<&[usize]>) {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(in crate::app) fn set_filter_matches(&mut self, matching: Option<&[MusicTreeTarget]>) {
+        let matching: Option<Vec<usize>> = matching.map(|targets| {
+            targets
+                .iter()
+                .filter_map(|target| self.model.id_of(target))
+                .collect()
+        });
+        self.apply_filter_match_ids(matching.as_deref());
+    }
+
+    /// The internal filter-matching bridge: the crate's filter is keyed by its
+    /// arena `usize`, so the target surface above translates once here and the
+    /// private owner keeps speaking node ids.
+    fn apply_filter_match_ids(&mut self, matching: Option<&[usize]>) {
         {
             let filter = self.query.filter_mut();
             filter.matching.clear();
@@ -163,18 +207,27 @@ impl MusicTreeBrowser {
     /// state from child leaves and are never stored as mark targets (design
     /// D6), so marking one is a no-op. The owner retains membership separately
     /// because the tree dependency's mark set has no insertion order.
-    pub(in crate::app) fn set_marked(&mut self, id: usize, marked: bool) -> bool {
-        let Some(target) = self.model.target_of(id).map(str::to_owned) else {
+    pub(in crate::app) fn set_marked(&mut self, target: &MusicTreeTarget, marked: bool) -> bool {
+        let MusicTreeTarget::Album(album) = target else {
             return false;
         };
-        let was_marked = self.is_marked(&target);
+        if self.model.id_of(target).is_none() {
+            return false;
+        }
+        self.set_album_marked(album, marked)
+    }
+
+    /// The internal album-leaf mark write, keyed by the stable album target
+    /// the retained order already stores.
+    fn set_album_marked(&mut self, target: &str, marked: bool) -> bool {
+        let was_marked = self.is_marked(target);
         if was_marked == marked {
             return false;
         }
         if marked {
-            self.selection_order.push(target);
+            self.selection_order.push(target.to_string());
         } else {
-            self.selection_order.retain(|item| item != &target);
+            self.selection_order.retain(|item| item != target);
         }
         self.sync_manual_marks();
         true
@@ -184,14 +237,20 @@ impl MusicTreeBrowser {
     /// artist root. The caller must resolve the target from the latest paint
     /// before invoking this operation; this method only mutates stable node
     /// identities.
-    pub(in crate::app) fn toggle_mark(&mut self, id: usize) -> bool {
-        if let Some(target) = self.model.target_of(id).map(str::to_owned) {
-            let marked = self.is_marked(&target);
-            return self.set_marked(id, !marked);
+    pub(in crate::app) fn toggle_mark(&mut self, target: &MusicTreeTarget) -> bool {
+        if let MusicTreeTarget::Album(album) = target {
+            if self.model.id_of(target).is_none() {
+                return false;
+            }
+            let marked = self.is_marked(album);
+            return self.set_marked(target, !marked);
         }
-        if !self.model.is_artist(id) {
+        if !target.is_artist() {
             return false;
         }
+        let Some(id) = self.model.id_of(target) else {
+            return false;
+        };
         let descendants = self.visible_album_ids(id);
         if descendants.is_empty() {
             return false;
@@ -203,7 +262,10 @@ impl MusicTreeBrowser {
         });
         let mut changed = false;
         for child in descendants {
-            changed |= self.set_marked(child, !all_marked);
+            let Some(album) = self.model.target_of(child).map(str::to_owned) else {
+                continue;
+            };
+            changed |= self.set_album_marked(&album, !all_marked);
         }
         changed
     }
@@ -211,11 +273,11 @@ impl MusicTreeBrowser {
     /// Resolves a modified click against the latest completed tree frame,
     /// selects the clicked node, and only then toggles its album/root mark.
     /// Resolution is deliberately complete before any local mutation.
-    pub(in crate::app) fn toggle_mark_at(&mut self, at: Position) -> Option<usize> {
-        let (id, index) = self.hit_node(at)?;
-        self.state.select_index(Some(index));
-        self.toggle_mark(id);
-        Some(id)
+    pub(in crate::app) fn toggle_mark_at(&mut self, at: Position) -> Option<MusicTreeTarget> {
+        let target = self.hit_node(at)?;
+        self.select_target(&target);
+        self.toggle_mark(&target);
+        Some(target)
     }
 
     /// Album targets selected in insertion order. Hidden marks are masked while
@@ -225,7 +287,7 @@ impl MusicTreeBrowser {
             .iter()
             .filter(|target| {
                 self.model
-                    .node_id(&MusicNodeKey::Album((*target).clone()))
+                    .id_of(&MusicTreeTarget::Album((*target).clone()))
                     .is_some_and(|id| self.album_is_visible(id))
             })
             .cloned()
@@ -251,7 +313,10 @@ impl MusicTreeBrowser {
     /// The node's derived mark state (the tree render tests locate rows by
     /// aggregate state rather than hard-coded colours).
     #[cfg(test)]
-    pub(in crate::app) fn mark_state(&self, id: usize) -> TreeMarkState {
+    pub(in crate::app) fn mark_state(&self, target: &MusicTreeTarget) -> TreeMarkState {
+        let Some(id) = self.model.id_of(target) else {
+            return TreeMarkState::Unmarked;
+        };
         computed_mark_state(
             &self.model,
             &self.query,
@@ -262,29 +327,28 @@ impl MusicTreeBrowser {
     }
 
     /// The node's painted title (the tree render tests locate rows by title
-    /// rather than by hard-coded settled sort positions).
+    /// rather than by hard-coded settled sort positions). A target absent from
+    /// the arena is an explicit absent result.
     #[cfg(test)]
-    pub(in crate::app) fn title_of(&self, id: usize) -> &str {
-        self.model.title_of(id)
+    pub(in crate::app) fn title_of(&self, target: &MusicTreeTarget) -> Option<&str> {
+        self.model.id_of(target).map(|id| self.model.title_of(id))
     }
 
-    /// The album leaf's stable target (the identity that crosses to the
-    /// shell); artist roots have none.
-    pub(in crate::app) fn target_of(&self, id: usize) -> Option<&str> {
-        self.model.target_of(id)
-    }
-
-    /// Whether a hit-tested node is an artist root. This keeps context
+    /// Whether a hit-tested target is an artist root. This keeps context
     /// resolution on the tree owner rather than exposing its model to the
     /// mounted destination.
-    pub(in crate::app) fn model_is_artist(&self, id: usize) -> bool {
-        self.model.is_artist(id)
+    pub(in crate::app) fn model_is_artist(&self, target: &MusicTreeTarget) -> bool {
+        self.model.id_of(target).is_some_and(|id| self.model.is_artist(id))
     }
 
     /// Resolves an artist root's currently visible album descendants in tree
-    /// order for context-hit membership checks.
-    pub(in crate::app) fn artist_album_targets(&self, root: usize) -> Vec<String> {
-        self.visible_album_ids(root)
+    /// order for context-hit membership checks. A target absent from the arena
+    /// is an explicit empty result.
+    pub(in crate::app) fn artist_album_targets(&self, root: &MusicTreeTarget) -> Vec<String> {
+        let Some(id) = self.model.id_of(root) else {
+            return Vec::new();
+        };
+        self.visible_album_ids(id)
             .into_iter()
             .filter_map(|id| self.model.target_of(id).map(str::to_owned))
             .collect()
@@ -332,10 +396,7 @@ impl MusicTreeBrowser {
     /// tree replaces the album carrier for the shell's selected-album
     /// projection).
     pub(in crate::app) fn select_album_target(&mut self, target: &str) -> bool {
-        let Some(id) = self.model.node_id(&MusicNodeKey::Album(target.to_string())) else {
-            return false;
-        };
-        self.select_id(id)
+        self.select_id(&MusicTreeTarget::Album(target.to_string()))
     }
 
     /// The current visible projection's album targets: `Some(target)` per album
@@ -448,7 +509,7 @@ impl MusicTreeBrowser {
     fn sync_manual_marks(&mut self) {
         self.state.clear_marks();
         for target in &self.selection_order {
-            let Some(id) = self.model.node_id(&MusicNodeKey::Album(target.clone())) else {
+            let Some(id) = self.model.id_of(&MusicTreeTarget::Album(target.clone())) else {
                 continue;
             };
             if self.album_is_visible(id) {

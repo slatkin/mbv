@@ -2,7 +2,18 @@
 //! marks, keyboard navigation/expansion, and the shared tree-owner fixtures.
 
 use super::*;
+use crate::app::components::music_tree::MusicTreeTarget;
 use rstest::rstest;
+
+/// The first projected target matching a predicate.
+fn find(owner: &MusicContent, predicate: impl Fn(&MusicTreeTarget) -> bool) -> MusicTreeTarget {
+    owner
+        .browser
+        .projected_node_targets()
+        .into_iter()
+        .find(|target| predicate(target))
+        .expect("the case's painted tree node")
+}
 
 /// Artist roots are hero-bearing rows, and unfiltered Enter shares the
 /// double-click/Right Hero entry while filtered Enter stays local.
@@ -190,20 +201,14 @@ fn tree_tracks_use_numbered_workspace_labels_with_index_fallback() {
 
     let mut owner = tree_owner_with_tracks(&[("Alpha", &["a-0"])], Some(vec![indexed, fallback]));
     owner.expand_all_tree_roots();
-    let album_id = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
-        .expect("album leaf")
-        .id();
-    owner.browser.expand_node(album_id);
+    let album_target = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
+    owner.browser.expand_node(&album_target);
     let labels: Vec<&str> = owner
         .browser
-        .projected_nodes()
+        .projected_node_targets()
         .iter()
-        .filter(|node| owner.browser.title_of(node.id()).contains("Track"))
-        .map(|node| owner.browser.title_of(node.id()))
+        .filter_map(|target| owner.browser.title_of(target))
+        .filter(|title| title.contains("Track"))
         .collect();
     assert_eq!(labels, ["7. Indexed Track", "2. Fallback Track"]);
 }
@@ -279,12 +284,12 @@ pub(super) fn press(owner: &mut MusicContent, code: Key) -> Option<Msg> {
 }
 
 pub(super) fn selected_row(owner: &MusicContent) -> usize {
-    let id = owner.browser.selected_id().expect("a node is selected");
+    let selected = owner.browser.selected_target().expect("a node is selected");
     owner
         .browser
-        .projected_nodes()
+        .projected_node_targets()
         .iter()
-        .position(|node| node.id() == id)
+        .position(|target| *target == selected)
         .expect("the selected node is projected")
 }
 
@@ -296,12 +301,12 @@ pub(super) fn paint_tree(owner: &mut MusicContent, area: Rect) {
         .expect("tree frame");
 }
 
-pub(super) fn tree_point(owner: &MusicContent, area: Rect, id: usize) -> Position {
+pub(super) fn tree_point(owner: &MusicContent, area: Rect, target: &MusicTreeTarget) -> Position {
     let row = owner
         .browser
-        .projected_nodes()
+        .projected_node_targets()
         .iter()
-        .position(|node| node.id() == id)
+        .position(|candidate| candidate == target)
         .expect("node is projected");
     let visible_row = row
         .checked_sub(owner.browser.offset())
@@ -316,29 +321,11 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
     let area = Rect::new(0, 0, 48, 8);
     paint_tree(&mut owner, area);
 
-    let root = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()).is_none())
-        .expect("artist root")
-        .id();
-    let album_0 = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
-        .expect("first album leaf")
-        .id();
-    let album_1 = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-1"))
-        .expect("second album leaf")
-        .id();
-    let root_at = tree_point(&owner, area, root);
-    let album_0_at = tree_point(&owner, area, album_0);
+    let root = find(&owner, |target| target.is_artist());
+    let album_0 = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
+    let album_1 = find(&owner, |target| target.album_leaf_target() == Some("a-1"));
+    let root_at = tree_point(&owner, area, &root);
+    let album_0_at = tree_point(&owner, area, &album_0);
 
     // A click resolves the painted artist row and changes local selection;
     // the grouping root manufactures no album request, but its resolved
@@ -382,7 +369,7 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         })),
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target: 1, .. }))
     ));
-    assert_eq!(owner.browser.selected_id(), Some(album_1));
+    assert_eq!(owner.browser.selected_target(), Some(album_1));
 
     // Double-click resolves the row under the latest retained geometry. The
     // childless leaf is claimed locally and focuses Library once.
@@ -434,14 +421,8 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     let mut owner = tree_owner(&[("Alpha", &["a-0"])]);
     let area = Rect::new(0, 0, 48, 8);
     paint_tree(&mut owner, area);
-    let root = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()).is_none())
-        .expect("artist root")
-        .id();
-    let root_at = tree_point(&owner, area, root);
+    let root = find(&owner, |target| target.is_artist());
+    let root_at = tree_point(&owner, area, &root);
 
     // The first click resolves the root's artist request; repeating the same
     // painted selection has no other effect and emits the single focus request.
@@ -456,33 +437,24 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     ));
 
     // Double-click expansion is local and still crosses once for focus.
-    let was_expanded = owner.browser.root_is_expanded(root);
+    let was_expanded = owner.browser.root_is_expanded(&root);
     paint_tree(&mut owner, area);
-    let root_at = tree_point(&owner, area, root);
-    assert_eq!(
-        owner.browser.hit_node(root_at).map(|(id, _)| id),
-        Some(root)
-    );
+    let root_at = tree_point(&owner, area, &root);
+    assert_eq!(owner.browser.hit_node(root_at), Some(root.clone()));
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             root_at
         ))),
         Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
     ));
-    assert_ne!(owner.browser.root_is_expanded(root), was_expanded);
-    if !owner.browser.root_is_expanded(root) {
-        owner.browser.toggle_root(root);
+    assert_ne!(owner.browser.root_is_expanded(&root), was_expanded);
+    if !owner.browser.root_is_expanded(&root) {
+        owner.browser.toggle_root(&root);
     }
 
     paint_tree(&mut owner, area);
-    let album = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
-        .expect("album leaf")
-        .id();
-    let album_at = tree_point(&owner, area, album);
+    let album = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
+    let album_at = tree_point(&owner, area, &album);
     // A childless album claims double-click without opening a Hero or changing
     // expansion, and a wheel at the final row focuses even when movement clamps.
     assert!(matches!(
@@ -493,7 +465,7 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     ));
     let _ = owner.browser.take_album_selection_change();
     paint_tree(&mut owner, area);
-    let album_at = tree_point(&owner, area, album);
+    let album_at = tree_point(&owner, area, &album);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
             at: album_at,
@@ -510,39 +482,33 @@ fn tree_double_click_cached_album_toggles_expansion_and_focuses_once() {
     let mut owner = tree_owner_with_tracks(&[("Alpha", &["a-0"])], Some(vec![track]));
     let root = owner
         .browser
-        .projected_nodes()
+        .projected_node_targets()
         .first()
         .expect("artist root")
-        .id();
-    owner.browser.expand_root(root);
+        .clone();
+    owner.browser.expand_root(&root);
     let area = Rect::new(0, 0, 48, 8);
     paint_tree(&mut owner, area);
-    let album = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
-        .expect("album leaf")
-        .id();
-    let album_at = tree_point(&owner, area, album);
-    assert!(!owner.browser.node_is_expanded(album));
+    let album = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
+    let album_at = tree_point(&owner, area, &album);
+    assert!(!owner.browser.node_is_expanded(&album));
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             album_at
         ))),
         Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
     ));
-    assert!(owner.browser.node_is_expanded(album));
+    assert!(owner.browser.node_is_expanded(&album));
 
     paint_tree(&mut owner, area);
-    let album_at = tree_point(&owner, area, album);
+    let album_at = tree_point(&owner, area, &album);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             album_at
         ))),
         Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
     ));
-    assert!(!owner.browser.node_is_expanded(album));
+    assert!(!owner.browser.node_is_expanded(&album));
 }
 
 /// The four Grouped Music tree node kinds one double-click can resolve, so
@@ -566,25 +532,21 @@ impl DoubleClickNode {
         let mut owner = tree_owner_with_tracks(&[("Alpha", &["a-0", "b-0"])], Some(vec![track]));
         let root = owner
             .browser
-            .projected_nodes()
+            .projected_node_targets()
             .first()
             .expect("artist root")
-            .id();
-        owner.browser.expand_root(root);
-        let album = owner
-            .browser
-            .projected_nodes()
-            .iter()
-            .map(|node| node.id())
-            .find(|id| owner.browser.target_of(*id) == Some("a-0"))
-            .expect("album leaf");
+            .clone();
+        owner.browser.expand_root(&root);
+        let album = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
         match self {
             // A track row is only projected under an expanded album leaf.
-            DoubleClickNode::Track => owner.browser.expand_node(album),
+            DoubleClickNode::Track => {
+                owner.browser.expand_node(&album);
+            }
             // The cached-children case starts collapsed so the gesture's
             // toggle direction is the assertion.
-            DoubleClickNode::AlbumWithTracks if owner.browser.node_is_expanded(album) => {
-                owner.browser.toggle_node(album);
+            DoubleClickNode::AlbumWithTracks if owner.browser.node_is_expanded(&album) => {
+                owner.browser.toggle_node(&album);
             }
             _ => {}
         }
@@ -602,19 +564,13 @@ impl DoubleClickNode {
         }
     }
 
-    fn resolve(self, owner: &MusicContent) -> usize {
-        owner
-            .browser
-            .projected_nodes()
-            .iter()
-            .map(|node| node.id())
-            .find(|id| match self {
-                DoubleClickNode::ArtistRoot => owner.browser.target_of(*id).is_none(),
-                DoubleClickNode::AlbumWithTracks => owner.browser.target_of(*id) == Some("a-0"),
-                DoubleClickNode::ChildlessAlbum => owner.browser.target_of(*id) == Some("b-0"),
-                DoubleClickNode::Track => owner.browser.model_is_track(*id),
-            })
-            .expect("the case's painted tree node")
+    fn resolve(self, owner: &MusicContent) -> MusicTreeTarget {
+        find(owner, |target| match self {
+            DoubleClickNode::ArtistRoot => target.is_artist(),
+            DoubleClickNode::AlbumWithTracks => target.album_leaf_target() == Some("a-0"),
+            DoubleClickNode::ChildlessAlbum => target.album_leaf_target() == Some("b-0"),
+            DoubleClickNode::Track => matches!(target, MusicTreeTarget::Track { .. }),
+        })
     }
 }
 
@@ -651,7 +607,7 @@ fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
     let area = Rect::new(0, 0, 48, 12);
     paint_tree(&mut owner, area);
     let id = node.resolve(&owner);
-    let at = tree_point(&owner, area, id);
+    let at = tree_point(&owner, area, &id);
     let double_click = |owner: &mut MusicContent| {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             at,
@@ -660,32 +616,32 @@ fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
 
     match node {
         DoubleClickNode::ArtistRoot => {
-            let was_expanded = owner.browser.root_is_expanded(id);
+            let was_expanded = owner.browser.root_is_expanded(&id);
             assert!(matches!(
                 double_click(&mut owner),
                 Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
             ));
-            assert_ne!(owner.browser.root_is_expanded(id), was_expanded);
+            assert_ne!(owner.browser.root_is_expanded(&id), was_expanded);
         }
         DoubleClickNode::AlbumWithTracks => {
-            assert!(!owner.browser.node_is_expanded(id));
+            assert!(!owner.browser.node_is_expanded(&id));
             assert!(matches!(
                 double_click(&mut owner),
                 Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
             ));
-            assert!(owner.browser.node_is_expanded(id));
+            assert!(owner.browser.node_is_expanded(&id));
         }
         DoubleClickNode::ChildlessAlbum => {
-            assert!(!owner.browser.node_is_expanded(id));
+            assert!(!owner.browser.node_is_expanded(&id));
             assert!(matches!(
                 double_click(&mut owner),
                 Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
             ));
             assert!(
-                !owner.browser.node_is_expanded(id),
+                !owner.browser.node_is_expanded(&id),
                 "a childless album claims the gesture without a state change"
             );
-            assert_eq!(owner.browser.selected_id(), Some(id));
+            assert_eq!(owner.browser.selected_target(), Some(id.clone()));
         }
         DoubleClickNode::Track => {
             assert!(matches!(
@@ -696,8 +652,8 @@ fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
                 })) if album_target == "a-0" && track_id == "track-1"
             ));
             assert_eq!(
-                owner.browser.selected_id(),
-                Some(id),
+                owner.browser.selected_target(),
+                Some(id.clone()),
                 "the resolved track is selected before its play intent crosses"
             );
         }
@@ -708,11 +664,7 @@ fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
         // the gesture never closes the filter or opens a Hero.
         assert!(owner.browser.filter_active());
         assert!(
-            owner
-                .browser
-                .projected_nodes()
-                .iter()
-                .any(|candidate| candidate.id() == id),
+            owner.browser.projected_node_targets().contains(&id),
             "the filtered projection still shows the resolved node"
         );
     }
@@ -730,14 +682,8 @@ fn filtered_pointer_gestures_resolve_tree_geometry_not_the_flat_carrier() {
     assert!(owner.inline_search.results_len() == 0 && !owner.inline_search.has_pool_entries());
     let area = Rect::new(0, 0, 48, 12);
     paint_tree(&mut owner, area);
-    let album_0 = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .map(|node| node.id())
-        .find(|id| owner.browser.target_of(*id) == Some("a-0"))
-        .expect("filtered album leaf");
-    let album_0_at = tree_point(&owner, area, album_0);
+    let album_0 = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
+    let album_0_at = tree_point(&owner, area, &album_0);
 
     // A click selects the filtered row the tree painted and reports the
     // resolved album move; the empty carrier resolves nothing.
@@ -767,22 +713,10 @@ fn tree_context_click_outside_selection_clears_only_tree_marks() {
     owner.expand_all_tree_roots();
     let area = Rect::new(0, 0, 48, 8);
     paint_tree(&mut owner, area);
-    let a0 = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
-        .expect("first album")
-        .id();
-    let b0 = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("b-0"))
-        .expect("second album")
-        .id();
-    owner.browser.set_marked(a0, true);
-    let b0_at = tree_point(&owner, area, b0);
+    let a0 = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
+    let b0 = find(&owner, |target| target.album_leaf_target() == Some("b-0"));
+    owner.browser.set_marked(&a0, true);
+    let b0_at = tree_point(&owner, area, &b0);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(b0_at))),
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
@@ -801,15 +735,9 @@ fn clearing_grouped_music_marks_removes_the_selection_summary() {
     let mut owner = tree_owner(&[("Alpha", &["a-0"])]);
     owner.set_selection_origin(crate::app::components::media_list::SelectionOrigin::Queue);
     owner.expand_all_tree_roots();
-    let album = owner
-        .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
-        .expect("album leaf")
-        .id();
+    let album = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
 
-    owner.browser.set_marked(album, true);
+    owner.browser.set_marked(&album, true);
     assert_eq!(
         owner.selection_summary().map(|summary| summary.count),
         Some(1)
@@ -828,7 +756,7 @@ fn home_end_and_page_move_over_the_tree_visible_nodes() {
     owner.expand_all_tree_roots();
 
     press(&mut owner, Key::Home);
-    let first_visible = owner.browser.selected_id();
+    let first_visible = owner.browser.selected_target();
     assert!(
         owner.browser.selected_is_artist(),
         "Home lands on the first visible node (the Alpha root), not a Heading group"
@@ -840,7 +768,7 @@ fn home_end_and_page_move_over_the_tree_visible_nodes() {
         "End lands on the last visible album"
     );
     press(&mut owner, Key::Home);
-    assert_eq!(owner.browser.selected_id(), first_visible);
+    assert_eq!(owner.browser.selected_target(), first_visible);
 
     // The page stride is the shared visible-node stride (5): it must never
     // inherit a Heading-based group jump.
@@ -855,8 +783,11 @@ fn up_and_down_move_across_artist_roots_and_album_leaves() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
     owner.expand_all_tree_roots();
     press(&mut owner, Key::Home);
-    let root = owner.browser.selected_id().expect("artist root selected");
-    assert!(owner.browser.root_is_expanded(root));
+    let root = owner
+        .browser
+        .selected_target()
+        .expect("artist root selected");
+    assert!(owner.browser.root_is_expanded(&root));
 
     // Down crosses from the root to its first leaf, then on to the next root;
     // both are visible tree nodes.
@@ -882,15 +813,18 @@ fn up_and_down_move_across_artist_roots_and_album_leaves() {
 fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
     press(&mut owner, Key::Home);
-    let root = owner.browser.selected_id().expect("artist root selected");
+    let root = owner
+        .browser
+        .selected_target()
+        .expect("artist root selected");
     // The initial album adoption expanded the first root's path.
-    assert!(owner.browser.root_is_expanded(root));
+    assert!(owner.browser.root_is_expanded(&root));
 
     // The mounted non-Wide panel owns the unfiltered Hero entry before the
     // owner sees Enter; the direct owner has no request to emit.
     assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(
-        owner.browser.root_is_expanded(root),
+        owner.browser.root_is_expanded(&root),
         "unfiltered Enter leaves expansion unchanged"
     );
 
@@ -903,9 +837,9 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
         .is_some());
     owner.browser.apply_filter_query("Alpha");
     assert_eq!(press(&mut owner, Key::Enter), None);
-    assert!(!owner.browser.root_is_expanded(root));
+    assert!(!owner.browser.root_is_expanded(&root));
     assert_eq!(press(&mut owner, Key::Enter), None);
-    assert!(owner.browser.root_is_expanded(root));
+    assert!(owner.browser.root_is_expanded(&root));
     press(&mut owner, Key::Esc);
 
     // The existing album activation is preserved on a leaf.
@@ -942,8 +876,11 @@ fn enter_enters_a_root_reached_while_the_track_pane_holds_focus() {
     // the Alpha artist root while the pane still holds focus.
     press(&mut owner, Key::Home);
     assert!(owner.browser.selected_is_artist());
-    let root = owner.browser.selected_id().expect("artist root selected");
-    assert!(owner.browser.root_is_expanded(root));
+    let root = owner
+        .browser
+        .selected_target()
+        .expect("artist root selected");
+    assert!(owner.browser.root_is_expanded(&root));
 
     // The stale pane must not swallow Enter: the unfiltered root reconciles
     // away the album carrier and arms the artist Workspace entry instead.
@@ -957,7 +894,7 @@ fn enter_enters_a_root_reached_while_the_track_pane_holds_focus() {
         "stale album rows never retain track focus under an artist root"
     );
     assert!(
-        owner.browser.root_is_expanded(root),
+        owner.browser.root_is_expanded(&root),
         "Enter preserves the focused root's expansion"
     );
     // The root has no artist-detail rows in this fixture, so it cannot take

@@ -69,17 +69,60 @@ const YEAR_GUTTER_TRAILING_SPACE: usize = 2;
 const NEIGHBOUR_PREFETCH_BEHIND: usize = 1;
 const NEIGHBOUR_PREFETCH_AHEAD: usize = 3;
 
+/// The stable, destination-facing identity of one tree row (design D2). This
+/// is the only row identity the seam accepts: arena indexes and `MusicNodeKey`
+/// stay private to this module. Every arm mirrors the arena's interning key
+/// one-for-one, so a target is stable across ordinary settled-catalog
+/// replacement and never a projection row position.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(in crate::app) enum MusicTreeTarget {
+    Artist(ArtistKey),
+    Album(String),
+    Track { album: String, track: String },
+}
+
+impl MusicTreeTarget {
+    /// The stable album target when this target is an album leaf; artist roots
+    /// and cached tracks have none.
+    pub(in crate::app) fn album_leaf_target(&self) -> Option<&str> {
+        match self {
+            Self::Album(target) => Some(target),
+            Self::Artist(_) | Self::Track { .. } => None,
+        }
+    }
+
+    /// Whether this target is an artist root.
+    pub(in crate::app) fn is_artist(&self) -> bool {
+        matches!(self, Self::Artist(_))
+    }
+}
+
 /// The stable semantic identity one arena node is interned by (design D2).
 /// Artist roots intern by the settled catalog's `ArtistKey` — the resolved
 /// `ArtistItems` identity or the deterministic fallback grouping key — so
 /// equal display names with distinct Service identities stay separate roots.
 /// Album leaves intern by the stable album target the shell already keys
-/// albums by. Neither key is ever a projection row position.
+/// albums by. Neither key is ever a projection row position. The key stays
+/// private: `MusicTreeTarget` is the only identity that crosses a module
+/// boundary.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(in crate::app) enum MusicNodeKey {
+enum MusicNodeKey {
     Artist(ArtistKey),
     Album(String),
     Track { album: String, track: String },
+}
+
+impl From<&MusicTreeTarget> for MusicNodeKey {
+    fn from(target: &MusicTreeTarget) -> Self {
+        match target {
+            MusicTreeTarget::Artist(key) => MusicNodeKey::Artist(key.clone()),
+            MusicTreeTarget::Album(target) => MusicNodeKey::Album(target.clone()),
+            MusicTreeTarget::Track { album, track } => MusicNodeKey::Track {
+                album: album.clone(),
+                track: track.clone(),
+            },
+        }
+    }
 }
 
 /// One settled album leaf's domain projection: the stable target the shell
@@ -221,18 +264,18 @@ impl MusicTreeBrowser {
 
     pub(in crate::app) fn open_filter(&mut self) {
         if !self.filter_active {
-            self.filter_anchor = self.selected_id();
+            self.filter_anchor = self.state.selected_id();
             self.filter_active = true;
         }
         self.filter_query.clear();
-        self.set_filter_matches(None);
+        self.apply_filter_match_ids(None);
     }
 
     pub(in crate::app) fn close_filter(&mut self) {
         let anchor = self.filter_anchor.take();
         self.filter_active = false;
         self.filter_query.clear();
-        self.set_filter_matches(None);
+        self.apply_filter_match_ids(None);
         if let Some(anchor) = anchor {
             let _ = self.state.select_by_id(&self.model, &self.query, anchor);
             self.rearm_selection_visibility();
@@ -254,7 +297,7 @@ impl MusicTreeBrowser {
             if matches!(self.query.filter_config(), TreeFilterConfig::Disabled) {
                 return;
             }
-            self.set_filter_matches(None);
+            self.apply_filter_match_ids(None);
             return;
         }
         let matcher = SkimMatcherV2::default().ignore_case();
@@ -284,7 +327,7 @@ impl MusicTreeBrowser {
         if unchanged {
             return;
         }
-        self.set_filter_matches(Some(&matching));
+        self.apply_filter_match_ids(Some(&matching));
     }
 
     pub(in crate::app) fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
@@ -299,13 +342,14 @@ impl MusicTreeBrowser {
         self.invalidate();
     }
 
-    pub(in crate::app) fn expand_root(&mut self, root: usize) {
-        self.expand_node(root);
+    /// Expands one artist root or cached-track album node by stable target,
+    /// without changing selection. Track children are loaded from the existing
+    /// projection; this operation never starts a fetch. A target the arena has
+    /// not interned is an explicit absent result.
+    pub(in crate::app) fn expand_root(&mut self, root: &MusicTreeTarget) -> bool {
+        self.expand_node(root)
     }
 
-    /// Expands an artist or cached-track album node without changing
-    /// selection. Track children are loaded from the existing projection;
-    /// this operation never starts a fetch.
     /// The projected parent of a node, from the cached projection.
     fn projected_parent_of(&self, id: usize) -> Option<usize> {
         self.state
@@ -316,59 +360,82 @@ impl MusicTreeBrowser {
             .and_then(|node| node.parent())
     }
 
-    pub(in crate::app) fn expand_node(&mut self, id: usize) {
+    /// Expands an artist or cached-track album node without changing
+    /// selection. Track children are loaded from the existing projection;
+    /// this operation never starts a fetch. A target the arena has not
+    /// interned is an explicit absent result.
+    pub(in crate::app) fn expand_node(&mut self, target: &MusicTreeTarget) -> bool {
+        let Some(id) = self.model.id_of(target) else {
+            return false;
+        };
         let parent = self.projected_parent_of(id);
         self.state.set_expanded(id, parent, true);
         self.state.ensure_projection(&self.model, &self.query);
         self.invalidate();
+        true
     }
 
-    pub(in crate::app) fn node_is_expanded(&self, id: usize) -> bool {
+    pub(in crate::app) fn node_is_expanded(&self, target: &MusicTreeTarget) -> bool {
+        let Some(id) = self.model.id_of(target) else {
+            return false;
+        };
         let parent = self.projected_parent_of(id);
         self.state.node_is_expanded(id, parent)
     }
 
     /// Whether the settled projection has children for this node. This is a
     /// local cache fact used by pointer expansion; it never starts a fetch.
-    pub(in crate::app) fn node_has_children(&self, id: usize) -> bool {
+    pub(in crate::app) fn node_has_children(&self, target: &MusicTreeTarget) -> bool {
         self.model
-            .children
-            .get(id)
+            .id_of(target)
+            .and_then(|id| self.model.children.get(id))
             .is_some_and(|children| !children.is_empty())
     }
 
     /// Whether the node is a cached track. A track double-click claims the
     /// gesture and emits `MusicTreeTrackActivate` with the node's stable
     /// identity, which the shell plays through the grouped-track resolver.
-    pub(in crate::app) fn model_is_track(&self, id: usize) -> bool {
-        self.model.track_identity_of(id).is_some()
+    pub(in crate::app) fn model_is_track(&self, target: &MusicTreeTarget) -> bool {
+        self.model
+            .id_of(target)
+            .is_some_and(|id| self.model.track_identity_of(id).is_some())
     }
 
     /// Toggle an artist or cached-track album node without changing selection.
-    pub(in crate::app) fn toggle_node(&mut self, id: usize) {
+    /// A target the arena has not interned is an explicit absent result.
+    pub(in crate::app) fn toggle_node(&mut self, target: &MusicTreeTarget) -> bool {
+        let Some(id) = self.model.id_of(target) else {
+            return false;
+        };
         let parent = self.projected_parent_of(id);
         let expanded = self.state.node_is_expanded(id, parent);
         self.state.set_expanded(id, parent, !expanded);
         self.state.ensure_projection(&self.model, &self.query);
         self.invalidate();
+        true
     }
 
     /// Collapses an artist root (task 2.4 Left): its leaves leave the visible
     /// projection while the selection stays on the root, and the crate's
-    /// projection rebuild re-arms the viewport visibility rule.
-    pub(in crate::app) fn collapse_root(&mut self, root: usize) {
-        self.state.set_expanded(root, None, false);
+    /// projection rebuild re-arms the viewport visibility rule. A target the
+    /// arena has not interned is an explicit absent result.
+    pub(in crate::app) fn collapse_root(&mut self, root: &MusicTreeTarget) -> bool {
+        let Some(id) = self.model.id_of(root) else {
+            return false;
+        };
+        self.state.set_expanded(id, None, false);
         self.state.ensure_projection(&self.model, &self.query);
         self.invalidate();
+        true
     }
 
     /// Toggles an artist root's persistent expansion (task 2.4 Enter). This is
     /// the tree's own expansion, never the filter-forced projection state.
-    pub(in crate::app) fn toggle_root(&mut self, root: usize) {
-        if self.state.node_is_expanded(root, None) {
-            self.collapse_root(root);
+    pub(in crate::app) fn toggle_root(&mut self, root: &MusicTreeTarget) -> bool {
+        if self.root_is_expanded(root) {
+            self.collapse_root(root)
         } else {
-            self.expand_root(root);
+            self.expand_root(root)
         }
     }
 
@@ -381,8 +448,10 @@ impl MusicTreeBrowser {
     }
 
     /// Whether an artist root is persistently expanded.
-    pub(in crate::app) fn root_is_expanded(&self, root: usize) -> bool {
-        self.state.node_is_expanded(root, None)
+    pub(in crate::app) fn root_is_expanded(&self, root: &MusicTreeTarget) -> bool {
+        self.model
+            .id_of(root)
+            .is_some_and(|id| self.state.node_is_expanded(id, None))
     }
 
     /// The projection row for a persisted expanded-flow offset. The persisted
@@ -418,6 +487,10 @@ include!("music_tree_model.rs");
 include!("music_tree_label.rs");
 include!("music_tree_selection.rs");
 include!("music_tree_view.rs");
+
+#[cfg(test)]
+#[path = "music_tree_test_support.rs"]
+mod test_support;
 
 #[cfg(test)]
 #[path = "music_tree_tests.rs"]

@@ -19,7 +19,7 @@ fn a_geometry_change_keeps_the_selection_visible_within_bounds() {
     let beta_11 = album_id(&model, "beta-11").expect("beta-11 interned");
     let mut browser = MusicTreeBrowser::new(model);
     expand_all_roots(&mut browser);
-    browser.select_id(beta_11);
+    browser.select_id_by_arena(beta_11);
 
     frame(&mut browser, 30);
     assert_eq!(browser.offset(), 0, "the tall viewport needs no scroll");
@@ -49,10 +49,10 @@ fn a_geometry_change_does_not_persist_filter_forced_expansion() {
     // leaving persistent expansion untouched (design D5). Matching every
     // current node projects the whole tree under forced expansion.
     let matching: Vec<usize> = (0..browser.model.size_hint()).collect();
-    browser.set_filter_matches(Some(&matching));
+    browser.set_filter_matches_id(Some(&matching));
     frame(&mut browser, 10);
     assert!(
-        !browser.root_is_expanded(alpha_root),
+        !browser.root_is_expanded_id(alpha_root),
         "filter-forced expansion is not persistent"
     );
     assert_eq!(browser.target_of(album_2), Some("album-2"));
@@ -67,7 +67,7 @@ fn a_geometry_change_does_not_persist_filter_forced_expansion() {
     // promoting the filter-forced branch into persistent expansion.
     frame(&mut browser, 4);
     assert!(
-        !browser.root_is_expanded(alpha_root),
+        !browser.root_is_expanded_id(alpha_root),
         "a resize must not persist filter-forced expansion"
     );
     assert_eq!(browser.selected_id(), Some(album_2));
@@ -83,7 +83,7 @@ fn a_removed_selected_album_falls_back_to_a_visible_node() {
     let album_1 = album_id(&model, "album-1").expect("album-1 interned");
     let mut browser = MusicTreeBrowser::new(model);
     expand_all_roots(&mut browser);
-    browser.select_id(album_1);
+    browser.select_id_by_arena(album_1);
     frame(&mut browser, 5);
 
     let replacement: Vec<MusicTreeEntry> = entries
@@ -114,7 +114,7 @@ fn album_selection_persistence_changes_only_with_the_resolved_album() {
     assert_eq!(browser.selected_id(), Some(alpha_root));
     assert_eq!(browser.take_album_selection_change(), None);
 
-    browser.select_id(album_1);
+    browser.select_id_by_arena(album_1);
     assert_eq!(
         browser.take_album_selection_change().as_deref(),
         Some("album-1")
@@ -126,16 +126,16 @@ fn album_selection_persistence_changes_only_with_the_resolved_album() {
     );
 
     // Focusing an artist root neither emits nor overwrites the retained album.
-    browser.select_id(alpha_root);
+    browser.select_id_by_arena(alpha_root);
     assert_eq!(browser.take_album_selection_change(), None);
-    browser.select_id(album_1);
+    browser.select_id_by_arena(album_1);
     assert_eq!(
         browser.take_album_selection_change(),
         None,
         "returning to the retained album is still not a change"
     );
 
-    browser.select_id(album_3);
+    browser.select_id_by_arena(album_3);
     assert_eq!(
         browser.take_album_selection_change().as_deref(),
         Some("album-3")
@@ -212,7 +212,7 @@ fn neighbour_prefetch_is_suppressed_for_an_artist_root_or_an_unpainted_frame() {
     browser.expand_all_roots();
     frame(&mut browser, 8);
 
-    browser.select_id(alpha_root);
+    browser.select_id_by_arena(alpha_root);
     frame(&mut browser, 8);
     assert_eq!(
         browser.neighbour_prefetch_targets(),
@@ -241,14 +241,14 @@ fn modified_selection_keeps_added_order_and_derives_artist_tri_state() {
 
     // Membership is album-only and retains the order in which leaves were
     // added, even though the crate's internal mark set is unordered.
-    assert!(browser.set_marked(album_2, true));
-    assert!(browser.set_marked(album_1, true));
+    assert!(browser.set_marked_id(album_2, true));
+    assert!(browser.set_marked_id(album_1, true));
     assert_eq!(
         browser.selected_album_targets(),
         vec!["album-2".to_string(), "album-1".to_string()]
     );
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
-    browser.expand_root(alpha_root);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Marked);
+    browser.expand_root_id(alpha_root);
     assert_eq!(
         browser.selected_album_targets_in_display_order(),
         vec!["album-1".to_string(), "album-2".to_string()]
@@ -256,11 +256,11 @@ fn modified_selection_keeps_added_order_and_derives_artist_tri_state() {
 
     // Toggling the artist root removes all visible descendants; a second
     // toggle adds them back in settled child order.
-    assert!(browser.toggle_mark(alpha_root));
+    assert!(browser.toggle_mark_id(alpha_root));
     assert!(browser.selected_album_targets().is_empty());
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Unmarked);
-    assert!(browser.toggle_mark(alpha_root));
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Unmarked);
+    assert!(browser.toggle_mark_id(alpha_root));
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Marked);
     assert_eq!(
         browser.selected_album_targets(),
         vec!["album-1".to_string(), "album-2".to_string()]
@@ -320,7 +320,7 @@ fn filter_matches_each_level_on_its_own_text_and_hides_everything_below_it() {
         browser
             .projected_nodes()
             .iter()
-            .map(|node| browser.title_of(node.id()).to_string())
+            .map(|node| browser.title_of_id(node.id()).to_string())
             .collect()
     };
 
@@ -380,7 +380,7 @@ fn filter_rejects_a_scatter_through_one_albums_name() {
     let visible: Vec<String> = browser
         .projected_nodes()
         .iter()
-        .map(|node| browser.title_of(node.id()).to_string())
+        .map(|node| browser.title_of_id(node.id()).to_string())
         .collect();
     assert_eq!(
         visible,
@@ -418,14 +418,14 @@ fn fuzzy_filter_uses_composite_text_and_preserves_settled_order() {
     ];
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
     let alpha = browser.projected_nodes().first().expect("root").id();
-    browser.collapse_root(alpha);
+    browser.collapse_root_id(alpha);
     browser.open_filter();
     browser.apply_filter_query("2002");
 
     let visible: Vec<&str> = browser
         .projected_nodes()
         .iter()
-        .map(|node| browser.title_of(node.id()))
+        .map(|node| browser.title_of_id(node.id()))
         .collect();
     assert_eq!(visible, ["Alpha Artist", "Loud Record"]);
 
@@ -444,12 +444,12 @@ fn filter_session_restores_anchor_expansion_and_hidden_marks() {
     let entries = vec![alpha("album-1", "First"), alpha("album-2", "Second")];
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
     let root = browser.projected_nodes()[0].id();
-    browser.expand_root(root);
+    browser.expand_root_id(root);
     let album_2 = browser.projected_nodes()[2].id();
-    browser.select_id(album_2);
-    browser.set_marked(album_2, true);
-    browser.collapse_root(root);
-    browser.select_id(root);
+    browser.select_id_by_arena(album_2);
+    browser.set_marked_id(album_2, true);
+    browser.collapse_root_id(root);
+    browser.select_id_by_arena(root);
 
     browser.open_filter();
     browser.apply_filter_query("First");
@@ -463,7 +463,7 @@ fn filter_session_restores_anchor_expansion_and_hidden_marks() {
     browser.close_filter();
     assert_eq!(browser.selected_id(), Some(root));
     assert!(
-        !browser.root_is_expanded(root),
+        !browser.root_is_expanded_id(root),
         "forced expansion is not persistent"
     );
     assert_eq!(browser.selected_album_targets(), vec!["album-2"]);
@@ -491,7 +491,7 @@ fn matching_album_hides_cached_track_children_in_the_filtered_projection() {
     let titles: Vec<&str> = browser
         .projected_nodes()
         .iter()
-        .map(|node| browser.title_of(node.id()))
+        .map(|node| browser.title_of_id(node.id()))
         .collect();
     assert_eq!(titles, ["Alpha", "First"]);
 }
@@ -506,24 +506,24 @@ fn filtered_artist_toggle_masks_hidden_marks_without_losing_them() {
 
     // Keep a mark on the album hidden by the active filter, then toggle the
     // visible root. The root sees only its matching descendant.
-    assert!(browser.set_marked(album_2, true));
-    browser.set_filter_matches(Some(&[album_1]));
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Unmarked);
-    assert!(browser.toggle_mark(alpha_root));
+    assert!(browser.set_marked_id(album_2, true));
+    browser.set_filter_matches_id(Some(&[album_1]));
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Unmarked);
+    assert!(browser.toggle_mark_id(alpha_root));
     assert_eq!(
         browser.selected_album_targets(),
         vec!["album-1".to_string()]
     );
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Marked);
 
     // Dismissing the filter reveals the surviving hidden mark without adding
     // any new album membership.
-    browser.set_filter_matches(None);
+    browser.set_filter_matches_id(None);
     assert_eq!(
         browser.selected_album_targets(),
         vec!["album-2".to_string(), "album-1".to_string()]
     );
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Marked);
 }
 
 #[test]
@@ -547,9 +547,9 @@ fn cached_tracks_project_as_ordered_depth_two_children() {
     )]));
     browser.reconcile(&entries);
     let root = browser.selected_id().expect("root selected");
-    browser.expand_root(root);
+    browser.expand_root_id(root);
     let album = browser.projected_nodes()[1].id();
-    browser.expand_node(album);
+    browser.expand_node_id(album);
     assert_eq!(browser.projection_len(), 4);
     assert_eq!(browser.projected_nodes()[1].level(), 1);
     assert_eq!(browser.projected_nodes()[2].level(), 2);
@@ -581,11 +581,11 @@ fn an_unchanged_filter_reapplication_keeps_completed_frame_hit_geometry() {
     browser.apply_filter_query("First");
     frame(&mut browser, 6);
     let row = browser
-        .row_rect_for(album_1)
+        .row_rect_for_id(album_1)
         .expect("filtered match painted a row");
     let at = Position { x: row.x, y: row.y };
     assert_eq!(
-        browser.hit_node(at).map(|(id, _)| id),
+        browser.hit_node_id(at).map(|(id, _)| id),
         Some(album_1),
         "the filtered row resolves through the completed frame"
     );
@@ -594,7 +594,7 @@ fn an_unchanged_filter_reapplication_keeps_completed_frame_hit_geometry() {
     // projection alone, so the painted row still resolves.
     browser.apply_filter_query("First");
     assert_eq!(
-        browser.hit_node(at).map(|(id, _)| id),
+        browser.hit_node_id(at).map(|(id, _)| id),
         Some(album_1),
         "a no-op filter re-application keeps the current-frame hit rows"
     );
@@ -603,17 +603,17 @@ fn an_unchanged_filter_reapplication_keeps_completed_frame_hit_geometry() {
     // longer claims input until the replacement frame paints.
     browser.apply_filter_query("Second");
     assert_eq!(
-        browser.hit_node(at),
+        browser.hit_node_id(at),
         None,
         "a changed filtered projection invalidates the stale hit map"
     );
     frame(&mut browser, 6);
     let row = browser
-        .row_rect_for(album_2)
+        .row_rect_for_id(album_2)
         .expect("the new match painted a row");
     assert_eq!(
         browser
-            .hit_node(Position { x: row.x, y: row.y })
+            .hit_node_id(Position { x: row.x, y: row.y })
             .map(|(id, _)| id),
         Some(album_2)
     );

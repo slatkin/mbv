@@ -12,7 +12,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use tui_treelistview::{TreeMarkState, TreeRevision};
 
-use super::{MusicNodeKey, MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
+use super::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTarget};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::music_grouping::ArtistKey;
 
@@ -63,11 +63,11 @@ pub(super) fn base_entries() -> Vec<MusicTreeEntry> {
 }
 
 pub(super) fn artist_id(model: &MusicTreeModel, key: ArtistKey) -> Option<usize> {
-    model.node_id(&MusicNodeKey::Artist(key))
+    model.id_of(&MusicTreeTarget::Artist(key))
 }
 
 pub(super) fn album_id(model: &MusicTreeModel, target: &str) -> Option<usize> {
-    model.node_id(&MusicNodeKey::Album(target.to_string()))
+    model.id_of(&MusicTreeTarget::Album(target.to_string()))
 }
 
 #[test]
@@ -327,7 +327,7 @@ pub(super) fn expand_all_roots(browser: &mut MusicTreeBrowser) {
     for root in 0..browser.projection_len() {
         let id = browser.projected_nodes()[root].id();
         if browser.target_of(id).is_none() {
-            browser.expand_root(id);
+            browser.expand_root_id(id);
         }
     }
 }
@@ -366,7 +366,7 @@ fn tree_hit_geometry_is_claimable_only_after_the_latest_view() {
     let alpha_root =
         artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("alpha root");
     let mut browser = MusicTreeBrowser::new(model);
-    browser.expand_root(alpha_root);
+    browser.expand_root_id(alpha_root);
 
     let point = Position::new(1, 0);
     frame(&mut browser, 5);
@@ -411,19 +411,19 @@ fn settled_replacement_retains_the_selected_node_expansion_and_marks() {
     let album_1 = album_id(&model, "album-1").expect("album-1 interned");
     let album_2 = album_id(&model, "album-2").expect("album-2 interned");
     let mut browser = MusicTreeBrowser::new(model);
-    browser.expand_root(alpha_root);
-    browser.expand_root(beta_root);
-    browser.select_id(album_1);
+    browser.expand_root_id(alpha_root);
+    browser.expand_root_id(beta_root);
+    browser.select_id_by_arena(album_1);
 
     // Aggregate root state is derived: an artist root is never a stored
     // mark target (design D6).
     assert!(
-        !browser.set_marked(alpha_root, true),
+        !browser.set_marked_id(alpha_root, true),
         "artist roots are not stored mark targets"
     );
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Unmarked);
-    browser.set_marked(album_1, true);
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Partial);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Unmarked);
+    browser.set_marked_id(album_1, true);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Partial);
 
     // A settled replacement that still contains the selected leaf and both
     // expanded roots rebuilds the projection but keeps the owner's state.
@@ -434,16 +434,16 @@ fn settled_replacement_retains_the_selected_node_expansion_and_marks() {
         "a settled change rebuilds the projection"
     );
     assert_eq!(browser.selected_id(), Some(album_1));
-    assert!(browser.root_is_expanded(alpha_root));
-    assert!(browser.root_is_expanded(beta_root));
+    assert!(browser.root_is_expanded_id(alpha_root));
+    assert!(browser.root_is_expanded_id(beta_root));
     assert_eq!(browser.projection_len(), 6);
-    assert_eq!(browser.mark_state(album_1), TreeMarkState::Marked);
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Partial);
-    assert_eq!(browser.mark_state(beta_root), TreeMarkState::Unmarked);
+    assert_eq!(browser.mark_state_id(album_1), TreeMarkState::Marked);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Partial);
+    assert_eq!(browser.mark_state_id(beta_root), TreeMarkState::Unmarked);
 
     // The surviving mark lifts to Marked once the second leaf is marked.
-    browser.set_marked(album_2, true);
-    assert_eq!(browser.mark_state(alpha_root), TreeMarkState::Marked);
+    browser.set_marked_id(album_2, true);
+    assert_eq!(browser.mark_state_id(alpha_root), TreeMarkState::Marked);
 }
 
 #[test]
@@ -457,15 +457,15 @@ fn marking_an_out_of_range_node_id_is_a_no_op() {
     let foreign = album_id(&foreign_model, "alpha-11").expect("foreign id");
 
     assert!(
-        !browser.set_marked(foreign, true),
+        !browser.set_marked_id(foreign, true),
         "a foreign node id is never a mark target"
     );
-    assert_eq!(browser.mark_state(foreign), TreeMarkState::Unmarked);
+    assert_eq!(browser.mark_state_id(foreign), TreeMarkState::Unmarked);
     assert!(
-        !browser.set_marked(usize::MAX, true),
+        !browser.set_marked_id(usize::MAX, true),
         "an out-of-range node id is never a mark target"
     );
-    assert_eq!(browser.mark_state(usize::MAX), TreeMarkState::Unmarked);
+    assert_eq!(browser.mark_state_id(usize::MAX), TreeMarkState::Unmarked);
 }
 
 #[test]
@@ -483,7 +483,7 @@ fn a_settled_change_invalidates_the_projection_but_a_no_op_reconcile_does_not() 
         !browser.reconcile(&entries),
         "a no-op reconcile holds the cached projection"
     );
-    assert_eq!(browser.title_of(album_1), "First Album");
+    assert_eq!(browser.title_of_id(album_1), "First Album");
 
     // A real settled change advances the model revision, the stamp no longer
     // matches, and the projection rebuilds from the new settled content.
@@ -492,7 +492,7 @@ fn a_settled_change_invalidates_the_projection_but_a_no_op_reconcile_does_not() 
         browser.reconcile(&renamed),
         "a changed revision invalidates the cached projection"
     );
-    assert_eq!(browser.title_of(album_1), "Renamed Album");
+    assert_eq!(browser.title_of_id(album_1), "Renamed Album");
     assert_eq!(
         browser.projection_len(),
         1,
@@ -510,7 +510,7 @@ fn viewport_keeps_its_offset_and_scrolls_only_the_minimum() {
     expand_all_roots(&mut browser);
 
     // Scroll the selected leaf to the viewport's last row.
-    browser.select_id(alpha_5);
+    browser.select_id_by_arena(alpha_5);
     frame(&mut browser, 5);
     assert_eq!(browser.offset(), 2, "the leaf sits at the viewport bottom");
     assert_selection_visible(&browser, 5);
@@ -546,7 +546,7 @@ fn viewport_keeps_its_offset_and_scrolls_only_the_minimum() {
     assert_selection_visible(&browser, 5);
 
     // A jump to the last projection row clamps at the projection bounds.
-    browser.select_id(beta_11);
+    browser.select_id_by_arena(beta_11);
     frame(&mut browser, 5);
     assert_eq!(browser.offset(), browser.projection_len() - 5);
     assert_selection_visible(&browser, 5);
