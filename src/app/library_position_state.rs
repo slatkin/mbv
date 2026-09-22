@@ -157,7 +157,7 @@ impl App {
             .remove(&lib.library.id);
     }
 
-    fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {
+    pub(super) fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {
         let library = self.audiobookshelf_libraries.get(index)?;
         let server = self
             .config

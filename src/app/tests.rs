@@ -192,6 +192,8 @@ pub(crate) fn make_app_stub() -> App {
         library_tab_pending: 0,
         pending_launch_state: None,
         pending_launch_tab_resolved: false,
+        legacy_launch_tab: None,
+        legacy_launch_migration_attempted: false,
         emby_catalog_ready: false,
         audiobookshelf_catalog_ready: false,
         pending_navigate_tab_switch: None,

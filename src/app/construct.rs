@@ -68,6 +68,17 @@ impl App {
         let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let pending_launch_state = mbv_core::config::load_tui_launch_state();
+        // The legacy selected-tab preference is only a migration input. Never
+        // let it compete with a versioned launch snapshot that already exists.
+        let legacy_launch_tab = pending_launch_state
+            .is_none()
+            .then(|| {
+                prefs["library_tab"]
+                    .as_u64()
+                    .or_else(|| prefs["power_left_tab"].as_u64())
+                    .and_then(|position| usize::try_from(position).ok())
+            })
+            .flatten();
         let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
             init.player_tab.queue.clone(),
             crate::config::QueueSource::Unknown,
@@ -173,6 +184,8 @@ impl App {
             library_tab_pending: 0,
             pending_launch_tab_resolved: false,
             pending_launch_state,
+            legacy_launch_tab,
+            legacy_launch_migration_attempted: false,
             emby_catalog_ready: false,
             audiobookshelf_catalog_ready: false,
             pending_navigate_tab_switch: None,
