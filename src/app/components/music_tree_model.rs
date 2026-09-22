@@ -59,6 +59,10 @@ enum MusicNode {
 /// (`reset`).
 pub(in crate::app) struct MusicTreeModel {
     nodes: Vec<MusicNode>,
+    /// Stable target per arena id, aligned with `nodes`. Node ids are
+    /// append-only, so a target can be borrowed by the seam
+    /// (`Cursored::selected_target`) without rebuilding one per call.
+    targets: Vec<MusicTreeTarget>,
     intern: HashMap<MusicNodeKey, usize>,
     roots: Vec<usize>,
     /// Per node id: its artist root's settled child leaves. Album nodes and
@@ -75,6 +79,7 @@ impl MusicTreeModel {
     pub(in crate::app) fn new() -> Self {
         Self {
             nodes: Vec::new(),
+            targets: Vec::new(),
             intern: HashMap::new(),
             roots: Vec::new(),
             children: Vec::new(),
@@ -175,6 +180,7 @@ impl MusicTreeModel {
     #[cfg(test)]
     pub(in crate::app) fn reset(&mut self) {
         self.nodes.clear();
+        self.targets.clear();
         self.intern.clear();
         self.roots.clear();
         self.children.clear();
@@ -199,6 +205,7 @@ impl MusicTreeModel {
             key: key.clone(),
             name: name.to_string(),
         });
+        self.targets.push(MusicTreeTarget::Artist(key.clone()));
         self.intern.insert(node_key, id);
         id
     }
@@ -235,6 +242,10 @@ impl MusicTreeModel {
             target: track.target.clone(),
             title: track.title.clone(),
             search_title: track.search_title.clone(),
+        });
+        self.targets.push(MusicTreeTarget::Track {
+            album: album_target.to_string(),
+            track: track.target.clone(),
         });
         self.intern.insert(node_key, id);
         id
@@ -288,6 +299,8 @@ impl MusicTreeModel {
             target: target.to_string(),
             semantic_state: semantic_state.clone(),
         });
+        self.targets
+            .push(MusicTreeTarget::Album(target.to_string()));
         self.intern.insert(node_key, id);
         id
     }
@@ -303,19 +316,12 @@ impl MusicTreeModel {
     /// of the boundary map; an unknown (tombstoned or out-of-range) id has no
     /// target.
     fn target_of_node(&self, id: usize) -> Option<MusicTreeTarget> {
-        match self.nodes.get(id) {
-            Some(MusicNode::Artist { key, .. }) => Some(MusicTreeTarget::Artist(key.clone())),
-            Some(MusicNode::Album { target, .. }) => Some(MusicTreeTarget::Album(target.clone())),
-            Some(MusicNode::Track {
-                album_target,
-                target,
-                ..
-            }) => Some(MusicTreeTarget::Track {
-                album: album_target.clone(),
-                track: target.clone(),
-            }),
-            None => None,
-        }
+        self.target_ref_of_node(id).cloned()
+    }
+
+    /// Borrow the stable target of an interned node id for the shared seam.
+    fn target_ref_of_node(&self, id: usize) -> Option<&MusicTreeTarget> {
+        self.targets.get(id)
     }
 
     /// Whether the node is an artist root.

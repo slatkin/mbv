@@ -318,12 +318,20 @@ fn tree_hit_geometry_is_claimable_only_after_the_latest_view() {
         browser.hit_region(point),
         Some(MusicTreeHit::Row(root.clone()))
     );
+    assert_eq!(
+        crate::app::components::list::PaintRetained::resolve_point(&browser, point),
+        Some(&root)
+    );
 
     // An explicit invalidation models a content/area configuration that has
     // happened after the last completed frame. Every pointer-resolution seam
     // must reject the old row until a new view completes.
     browser.invalidate();
     assert!(!browser.claims_point(point));
+    assert_eq!(
+        crate::app::components::list::PaintRetained::resolve_point(&browser, point),
+        None
+    );
     assert!(browser.hit_node(point).is_none());
     assert!(browser.hit_region(point).is_none());
 
@@ -481,4 +489,48 @@ fn viewport_keeps_its_offset_and_scrolls_only_the_minimum() {
     frame(&mut browser, 5);
     assert_eq!(browser.offset(), browser.projected_node_targets().len() - 5);
     assert_selection_visible(&browser, 5);
+}
+
+#[test]
+fn seam_adapters_move_by_stable_parent_and_child_targets() {
+    use crate::app::components::list::{Cursored, Expandable, Viewported};
+
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&base_entries()));
+    let alpha_root = artist("artist-alpha");
+    let album_1 = album("album-1");
+    browser.expand_root(&alpha_root);
+    browser.select_id(&album_1);
+
+    assert_eq!(browser.selected_target(), Some(album_1.clone()));
+    assert_eq!(Cursored::selected_target(&browser), Some(&album_1));
+    assert_eq!(Viewported::viewport_offset(&browser), browser.offset());
+
+    let flow = browser.row_flow();
+    assert_eq!(Expandable::select_parent(&mut browser, &flow), Some(0));
+    assert_eq!(browser.selected_target(), Some(alpha_root.clone()));
+
+    let flow = browser.row_flow();
+    assert_eq!(Expandable::select_first_child(&mut browser, &flow), Some(1));
+    assert_eq!(browser.selected_target(), Some(album_1.clone()));
+
+    assert!(Expandable::is_expanded(&browser, &alpha_root));
+    Expandable::set_expanded(&mut browser, &alpha_root, false);
+    assert!(!browser.root_is_expanded(&alpha_root));
+    assert!(!Expandable::is_expanded(&browser, &alpha_root));
+}
+
+#[test]
+fn ordered_marks_emit_action_targets_in_display_order() {
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&base_entries()));
+    browser.expand_root(&artist("artist-alpha"));
+
+    // Click order is the reverse of display order; membership keeps click
+    // order while the shared action projection keeps display order.
+    assert!(browser.set_marked(&album("album-2"), true));
+    assert!(browser.set_marked(&album("album-1"), true));
+    assert_eq!(browser.selected_album_targets(), vec!["album-2", "album-1"]);
+    assert_eq!(
+        browser.selected_album_targets_in_display_order(),
+        vec!["album-1", "album-2"]
+    );
 }

@@ -34,7 +34,10 @@ impl MusicTreeBrowser {
 
     /// Whether an album target is in the retained mark order.
     fn is_marked(&self, target: &str) -> bool {
-        self.selection_order.iter().any(|item| item == target)
+        self.marks
+            .targets()
+            .iter()
+            .any(|item| matches!(item, MusicTreeTarget::Album(album) if album == target))
     }
 
     /// Selects one visible projection row without touching expansion. Hit
@@ -224,12 +227,12 @@ impl MusicTreeBrowser {
         if was_marked == marked {
             return false;
         }
+        let target = MusicTreeTarget::Album(target.to_string());
         if marked {
-            self.selection_order.push(target.to_string());
+            self.add_mark(target);
         } else {
-            self.selection_order.retain(|item| item != target);
+            self.remove_mark(&target);
         }
-        self.sync_manual_marks();
         true
     }
 
@@ -281,32 +284,36 @@ impl MusicTreeBrowser {
     }
 
     /// Album targets selected in insertion order. Hidden marks are masked while
-    /// a filter is active but remain in `selection_order` for dismissal.
+    /// a filter is active but remain in the mark carrier for dismissal.
     pub(in crate::app) fn selected_album_targets(&self) -> Vec<String> {
-        self.selection_order
+        self.marks
+            .targets()
             .iter()
+            .filter_map(|target| match target {
+                MusicTreeTarget::Album(album) => Some(album.as_str()),
+                MusicTreeTarget::Artist(_) | MusicTreeTarget::Track { .. } => None,
+            })
             .filter(|target| {
                 self.model
-                    .id_of(&MusicTreeTarget::Album((*target).clone()))
+                    .id_of(&MusicTreeTarget::Album((*target).to_string()))
                     .is_some_and(|id| self.album_is_visible(id))
             })
-            .cloned()
+            .map(str::to_owned)
             .collect()
     }
 
     /// Album targets selected in the current settled tree display order. This
     /// is the order boundary-crossing actions should use, independent of click
-    /// order.
+    /// order. The shared ordered-mark projection supplies display order; this
+    /// owner only translates the stable targets to album identities.
     pub(in crate::app) fn selected_album_targets_in_display_order(&self) -> Vec<String> {
-        self.model
-            .roots
-            .iter()
-            .flat_map(|root| self.model.children[*root].iter())
-            .copied()
-            .filter(|id| self.album_is_visible(*id))
-            .filter_map(|id| self.model.target_of(id))
-            .filter(|target| self.is_marked(target))
-            .map(str::to_owned)
+        let flow = self.row_flow();
+        self.action_targets(&flow)
+            .into_iter()
+            .filter_map(|target| match target {
+                MusicTreeTarget::Album(album) => Some(album),
+                MusicTreeTarget::Artist(_) | MusicTreeTarget::Track { .. } => None,
+            })
             .collect()
     }
 
@@ -321,7 +328,7 @@ impl MusicTreeBrowser {
             &self.model,
             &self.query,
             &self.state,
-            &self.selection_order,
+            self.marks.targets(),
             id,
         )
     }
@@ -422,7 +429,7 @@ impl MusicTreeBrowser {
     /// projection), when an artist root is focused (the shipped suppression),
     /// or when the window has no album leaf.
     pub(in crate::app) fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
-        if !self.paint_complete || self.selected_is_artist() || self.filter_active {
+        if !self.paint.is_valid() || self.selected_is_artist() || self.filter_active {
             return None;
         }
         let nodes = self.state.projection().nodes();
@@ -449,7 +456,7 @@ impl MusicTreeBrowser {
     /// Invalidates the retained paint geometry: until the next view completes
     /// the owner claims no point (the canonical latest-render contract).
     pub(in crate::app) fn invalidate(&mut self) {
-        self.paint_complete = false;
+        PaintRetained::invalidate(self);
     }
 
     /// Clamps the viewport to a painted height without transferring owner state,
@@ -473,11 +480,10 @@ impl MusicTreeBrowser {
     /// Clears every stored album mark and refreshes the derived aggregate
     /// state (destination-switch selection clear).
     pub(in crate::app) fn clear_marks(&mut self) {
-        if self.selection_order.is_empty() {
+        if self.marks.is_empty() {
             return;
         }
-        self.selection_order.clear();
-        self.sync_manual_marks();
+        MarkSelection::clear_marks(self);
     }
 
     /// Returns the album leaves currently visible beneath an artist root. An
@@ -504,12 +510,15 @@ impl MusicTreeBrowser {
 
     /// Rebuilds the crate's mark cache from the owner selection. During a
     /// filter session only visible album marks are handed to the dependency;
-    /// hidden membership remains in `selection_order` and is restored when the
+    /// hidden membership remains in the mark carrier and is restored when the
     /// filter is dismissed.
     fn sync_manual_marks(&mut self) {
         self.state.clear_marks();
-        for target in &self.selection_order {
-            let Some(id) = self.model.id_of(&MusicTreeTarget::Album(target.clone())) else {
+        for target in self.marks.targets() {
+            let MusicTreeTarget::Album(_) = target else {
+                continue;
+            };
+            let Some(id) = self.model.id_of(target) else {
                 continue;
             };
             if self.album_is_visible(id) {
@@ -517,5 +526,125 @@ impl MusicTreeBrowser {
             }
         }
         self.state.ensure_mark_states(&self.model);
+    }
+
+    /// The visible projection as the seam's ordered row flow. Every projected
+    /// node carries a stable target; the current tree has no structural rows,
+    /// so every row is selectable.
+    fn row_flow(&self) -> RowFlow<MusicTreeTarget> {
+        RowFlow::new(
+            self.state
+                .projection()
+                .nodes()
+                .iter()
+                .map(|node| {
+                    self.model
+                        .target_ref_of_node(node.id())
+                        .cloned()
+                        .map_or_else(Row::structural, Row::selectable)
+                })
+                .collect(),
+        )
+    }
+}
+
+impl Cursored<MusicTreeTarget> for MusicTreeBrowser {
+    fn selected_target(&self) -> Option<&MusicTreeTarget> {
+        self.state
+            .selected_id()
+            .and_then(|id| self.model.target_ref_of_node(id))
+    }
+
+    fn set_selected_target(&mut self, target: Option<&MusicTreeTarget>) {
+        let id = target.and_then(|target| self.model.id_of(target));
+        self.state.select_id(id);
+    }
+}
+
+impl Viewported<MusicTreeTarget> for MusicTreeBrowser {
+    fn viewport_offset(&self) -> usize {
+        self.state.offset()
+    }
+
+    fn set_viewport_offset(&mut self, offset: usize) {
+        self.state.set_offset(offset);
+    }
+}
+
+impl MarkSelection<MusicTreeTarget> for MusicTreeBrowser {
+    fn mark_selection(&self) -> &MarkSelectionState<MusicTreeTarget> {
+        &self.marks
+    }
+
+    fn mark_selection_mut(&mut self) -> &mut MarkSelectionState<MusicTreeTarget> {
+        &mut self.marks
+    }
+
+    fn after_mark_mutation(&mut self) {
+        self.sync_manual_marks();
+    }
+}
+
+impl PaintRetained<MusicTreeTarget> for MusicTreeBrowser {
+    fn paint_retained(&self) -> &PaintRetainedState<MusicTreeTarget> {
+        &self.paint
+    }
+
+    fn paint_retained_mut(&mut self) -> &mut PaintRetainedState<MusicTreeTarget> {
+        &mut self.paint
+    }
+
+    /// The crate-classified hit map is the tree's claim: rows, header, and
+    /// scrollbar each claim only when the latest frame completed. This keeps
+    /// the shape's existing pointer gating rather than re-deriving row claims
+    /// from the carrier's private geometry.
+    fn claims_point(&self, point: Position) -> bool {
+        self.hit_test_row(point).is_some()
+    }
+}
+
+impl Expandable<MusicTreeTarget> for MusicTreeBrowser {
+    fn is_expanded(&self, target: &MusicTreeTarget) -> bool {
+        self.node_is_expanded(target)
+    }
+
+    fn set_expanded(&mut self, target: &MusicTreeTarget, expanded: bool) {
+        let Some(id) = self.model.id_of(target) else {
+            return;
+        };
+        let parent = self.projected_parent_of(id);
+        self.state.set_expanded(id, parent, expanded);
+        self.state.ensure_projection(&self.model, &self.query);
+        self.invalidate();
+    }
+
+    fn parent_target(&self, target: &MusicTreeTarget) -> Option<&MusicTreeTarget> {
+        let id = self.model.id_of(target)?;
+        let parent = self.projected_parent_of(id)?;
+        self.model.target_ref_of_node(parent)
+    }
+
+    fn child_targets(&self, target: &MusicTreeTarget) -> Vec<&MusicTreeTarget> {
+        let Some(id) = self.model.id_of(target) else {
+            return Vec::new();
+        };
+        self.model.children[id]
+            .iter()
+            .filter_map(|child| self.model.target_ref_of_node(*child))
+            .collect()
+    }
+
+    /// Shape-owned aggregate state: the same visible-children policy the
+    /// painter uses, so hidden filtered children stay out of a root's
+    /// Partial/Marked state while remaining in the mark carrier.
+    fn aggregate_mark_state(&self, target: &MusicTreeTarget) -> AggregateMarkState {
+        let Some(id) = self.model.id_of(target) else {
+            return AggregateMarkState::Unmarked;
+        };
+        match computed_mark_state(&self.model, &self.query, &self.state, self.marks.targets(), id) {
+            TreeMarkState::Marked => AggregateMarkState::Marked,
+            TreeMarkState::Partial => AggregateMarkState::Partial,
+            TreeMarkState::Unmarked => AggregateMarkState::Unmarked,
+        }
     }
 }

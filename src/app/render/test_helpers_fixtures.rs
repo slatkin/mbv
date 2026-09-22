@@ -182,13 +182,6 @@ pub const MUSIC_TREE_LONG_TITLE: &str =
     "A Suspiciously Long Album Title That Cannot Fit Any Library Browser Row";
 pub const MUSIC_TREE_LONG_TITLE_YEAR: u32 = 1999;
 
-/// Node ids of the tree projection over `make_music_tree_group_app`'s settled
-/// entry order: the Alpha root, its 41 leaves, the Beta root, its 2 leaves.
-pub const MUSIC_TREE_ALPHA_ROOT: usize = 0;
-pub const MUSIC_TREE_BETA_ROOT: usize = 42;
-pub const MUSIC_TREE_BETA_LEAF_0: usize = 43;
-pub const MUSIC_TREE_BETA_LEAF_1: usize = 44;
-
 /// The expanded projection length for `make_music_tree_group_app`: one Alpha
 /// root over 41 leaves, one Beta root over 2 leaves.
 pub const MUSIC_TREE_EXPANDED_PROJECTION_LEN: usize = 45;

@@ -47,6 +47,10 @@ use tui_treelistview::{
 
 use unicode_width::UnicodeWidthStr;
 
+use crate::app::components::list::{
+    AggregateMarkState, Cursored, Expandable, MarkSelection, MarkSelectionState, PaintRetained,
+    PaintRetainedState, Row, RowFlow, Viewported,
+};
 use crate::app::components::media_list::{
     queue_row_background, queue_row_zebra, MediaSemanticState,
 };
@@ -164,14 +168,15 @@ pub(in crate::app) struct MusicTreeBrowser {
     /// persistence (design D3 step 5). An artist-root focus resolves to no
     /// album and never clears or overwrites it.
     last_reported_album: Option<String>,
-    /// Album targets in the order they were added to the tree selection. The
-    /// dependency stores marks as a set, so this owner-local order is the
-    /// source of truth for ordered multi-selection membership.
-    selection_order: Vec<String>,
-    /// Whether the latest `view` completed and retained hit geometry (the
-    /// panel's `set_paint_policy`/`set_geometry`/`clamp_viewport` invalidate
-    /// it before the next view, so a skipped frame claims no point).
-    paint_complete: bool,
+    /// Ordered album-leaf marks in the order they were added. A stable-target
+    /// carrier owned here; the crate stores marks as a set, so this order is
+    /// the source of truth for ordered multi-selection membership and hidden
+    /// marks stay here until a filter is dismissed.
+    marks: MarkSelectionState<MusicTreeTarget>,
+    /// Retained target-bearing geometry from the latest completed `view`. The
+    /// panel's `set_geometry`/`clamp_viewport` and settled-content pushes
+    /// invalidate it before the next view, so a skipped frame claims no point.
+    paint: PaintRetainedState<MusicTreeTarget>,
 }
 
 impl MusicTreeBrowser {
@@ -200,8 +205,8 @@ impl MusicTreeBrowser {
             configured_geometry: None,
             last_area: None,
             last_reported_album: None,
-            selection_order: Vec::new(),
-            paint_complete: false,
+            marks: MarkSelectionState::new(),
+            paint: PaintRetainedState::new(),
         }
     }
 
@@ -216,12 +221,15 @@ impl MusicTreeBrowser {
     /// leaves the cached projection, offset, and arming untouched.
     pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) -> bool {
         self.model.reconcile_with_tracks(entries, &self.track_items);
-        self.selection_order.retain(|target| {
+        self.marks.retain(|target| {
+            let MusicTreeTarget::Album(album) = target else {
+                return false;
+            };
             self.model
                 .roots
                 .iter()
                 .flat_map(|root| self.model.children[*root].iter())
-                .any(|id| self.model.target_of(*id) == Some(target.as_str()))
+                .any(|id| self.model.target_of(*id) == Some(album.as_str()))
         });
         let rebuilt = self.state.ensure_projection(&self.model, &self.query);
         self.sync_manual_marks();

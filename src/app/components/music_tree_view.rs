@@ -12,12 +12,12 @@ fn multi_select_bar(model: &MusicTreeModel, id: usize, mark: TreeMarkState) -> b
 
 /// Derives marks from the owner selection rather than the crate's full-model
 /// aggregation. This keeps hidden album marks out of a filtered root's
-/// Partial/Marked state while preserving them in `selection_order`.
+/// Partial/Marked state while preserving them in the mark carrier.
 fn computed_mark_state(
     model: &MusicTreeModel,
     query: &TreeQuery<MusicTreeFilter>,
     state: &TreeListViewState<usize>,
-    selection_order: &[String],
+    marks: &[MusicTreeTarget],
     id: usize,
 ) -> TreeMarkState {
     let visible = |candidate| {
@@ -30,8 +30,8 @@ fn computed_mark_state(
     };
     let marked = |candidate| {
         model
-            .target_of(candidate)
-            .is_some_and(|target| selection_order.iter().any(|item| item == target))
+            .target_ref_of_node(candidate)
+            .is_some_and(|target| marks.iter().any(|item| item == target))
     };
     if model.target_of(id).is_some() {
         return if visible(id) && marked(id) {
@@ -99,9 +99,7 @@ impl MusicTreeBrowser {
     /// Latest-completed-render hit resolution into the crate's arena ids, kept
     /// private because the arena index never crosses the seam.
     fn hit_test_row(&self, at: Position) -> Option<TreeHit<usize>> {
-        self.paint_complete
-            .then(|| self.state.hit_test(at))
-            .flatten()
+        self.paint.is_valid().then(|| self.state.hit_test(at)).flatten()
     }
 
     /// Moves the selection `delta` visible rows (the tree's own visible-node
@@ -130,29 +128,18 @@ impl MusicTreeBrowser {
         let _ = self.state.select_last();
     }
 
+    #[cfg(test)]
     fn row_rect_for_index(&self, index: usize) -> Option<Rect> {
-        if !self.paint_complete {
+        if !self.paint.is_valid() {
             return None;
         }
-        let area = self.last_area?;
-        let row = index.checked_sub(self.state.offset())?;
-        if row as u16 >= area.height {
-            return None;
-        }
-        Some(Rect {
-            x: area.x,
-            y: area.y.saturating_add(row as u16),
-            width: area.width,
-            height: 1,
-        })
+        raw_row_rect(self.last_area?, self.state.offset(), index)
     }
 
     /// The selected row's one-line rect from the latest completed view, when
     /// the node is visible (the panel's retained selected-row geometry).
     pub(in crate::app) fn selected_row_rect(&self) -> Option<Rect> {
-        self.state
-            .selected_index()
-            .and_then(|index| self.row_rect_for_index(index))
+        PaintRetained::selected_row_rect(self)
     }
 
     /// A visible node's one-line rect from the latest completed view. A target
@@ -166,7 +153,7 @@ impl MusicTreeBrowser {
 
     /// Whether the latest completed view's retained geometry claims `at`.
     pub(in crate::app) fn claims_point(&self, at: Position) -> bool {
-        self.hit_test_row(at).is_some()
+        PaintRetained::claims_point(self, at)
     }
 
     /// Arms the crate's `KeepInView` rule for the current selection without
@@ -215,7 +202,7 @@ impl MusicTreeBrowser {
             marquee_started,
             configured_geometry,
             last_area,
-            selection_order,
+            marks,
             ..
         } = self;
         let (claim_rect, content_rect) = configured_geometry.unwrap_or((area, area));
@@ -287,7 +274,7 @@ impl MusicTreeBrowser {
                 model,
                 node.id(),
                 node.level(),
-                computed_mark_state(model, query, state, selection_order, node.id()),
+                computed_mark_state(model, query, state, marks.targets(), node.id()),
             );
             let parts = vec![(title.to_string(), role)];
             marquee_spans(
@@ -310,7 +297,7 @@ impl MusicTreeBrowser {
                 let target = model.target_of_node(node.id())?;
                 Some((
                     target,
-                    computed_mark_state(model, query, state, selection_order, node.id()),
+                    computed_mark_state(model, query, state, marks.targets(), node.id()),
                 ))
             })
             .collect();
@@ -385,7 +372,7 @@ impl MusicTreeBrowser {
                     || multi_select_bar(
                         model,
                         node.id(),
-                        computed_mark_state(model, query, state, selection_order, node.id()),
+                        computed_mark_state(model, query, state, marks.targets(), node.id()),
                     );
                 if full_bleed {
                     continue;
@@ -440,7 +427,33 @@ impl MusicTreeBrowser {
                 palette::SCROLLBAR,
             );
         }
-        self.paint_complete = true;
+        let retained_selected = state
+            .selected_index()
+            .and_then(|index| raw_row_rect(content_rect, state.offset(), index));
+        let retained_rows: Vec<(Rect, MusicTreeTarget)> = state
+            .projection()
+            .nodes()
+            .iter()
+            .enumerate()
+            .skip(visible_start)
+            .take(visible_end.saturating_sub(visible_start))
+            .filter_map(|(projection_row, node)| {
+                let target = model.target_ref_of_node(node.id())?.clone();
+                let y = content_rect
+                    .y
+                    .saturating_add((projection_row - visible_start) as u16);
+                Some((
+                    Rect {
+                        x: content_rect.x,
+                        y,
+                        width: content_rect.width,
+                        height: 1,
+                    },
+                    target,
+                ))
+            })
+            .collect();
+        self.paint.finish(content_rect, retained_rows, retained_selected);
     }
 }
 
@@ -452,6 +465,22 @@ fn rearm_selection_visibility_for(state: &mut TreeListViewState<usize>) {
         state.select_index(None);
         state.select_index(Some(index));
     }
+}
+
+/// The one-line rect a visible projection row occupies in the painted content
+/// area, or `None` when the row is outside the viewport. One formula for the
+/// shape's retained selected-row geometry and its `row_rect_for` read.
+fn raw_row_rect(area: Rect, offset: usize, index: usize) -> Option<Rect> {
+    let row = index.checked_sub(offset)?;
+    if row as u16 >= area.height {
+        return None;
+    }
+    Some(Rect {
+        x: area.x,
+        y: area.y.saturating_add(row as u16),
+        width: area.width,
+        height: 1,
+    })
 }
 
 /// The tree's glyph set. Grouped Music deliberately has no symbols: levels
