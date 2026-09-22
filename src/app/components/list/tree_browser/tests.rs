@@ -404,12 +404,59 @@ fn one_operation_reports_selection_and_mark_changes_together() {
 fn pointer_operations_use_the_latest_completed_frame() {
     let mut browser = TreeBrowser::new();
     browser
-        .reconcile([node(Target::Root, None), node(Target::Other, None)])
+        .reconcile([
+            named_node(
+                Target::Branch,
+                None,
+                "Branch",
+                "branch",
+                TreeMarkPolicy::Excluded,
+            ),
+            named_node(
+                Target::Other,
+                None,
+                "Other",
+                "other",
+                TreeMarkPolicy::Direct,
+            ),
+        ])
         .unwrap();
+    // The row flow has two painted rows and the cursor starts on row 0.
+    assert_eq!(browser.selected_target(), Some(&Target::Branch));
     paint(&mut browser);
+
+    // A pointer toggle resolves the painted row and moves the cursor to it
+    // before marking, so the cursor is left on the row that was clicked.
     let transition = browser.apply(super::TreeOperation::PointerToggleMark(Position::new(2, 1)));
     assert_eq!(transition.disposition, super::TreeConsumed::Consumed);
+    assert_eq!(
+        transition.selected_target_change,
+        Some(super::TreeSelectionChange {
+            previous: Some(Target::Branch),
+            current: Some(Target::Other),
+        })
+    );
+    assert_eq!(browser.selected_target(), Some(&Target::Other));
     assert_eq!(browser.marked_targets(), &[Target::Other]);
+    assert_eq!(transition.external_intent, None);
+
+    // An `Excluded` row (a cached track) is not markable: the click still takes
+    // the cursor and reports no mark change and no request.
+    paint(&mut browser);
+    let excluded = browser.apply(super::TreeOperation::PointerToggleMark(Position::new(2, 0)));
+    assert_eq!(excluded.disposition, super::TreeConsumed::Consumed);
+    assert_eq!(
+        excluded.selected_target_change,
+        Some(super::TreeSelectionChange {
+            previous: Some(Target::Other),
+            current: Some(Target::Branch),
+        })
+    );
+    assert_eq!(browser.selected_target(), Some(&Target::Branch));
+    assert_eq!(browser.marked_targets(), &[Target::Other]);
+    assert!(excluded.mark_summary_change.is_none());
+    assert_eq!(excluded.external_intent, None);
+
     assert!(browser.resolve_current_point(Position::new(2, 1)).is_none());
 }
 
