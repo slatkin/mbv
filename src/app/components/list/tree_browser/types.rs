@@ -1,4 +1,5 @@
 use crate::app::components::media_list::MediaSemanticState;
+use ratatui::layout::Position;
 /// Provider-neutral trailing metadata in a tree row's right gutter.
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -115,6 +116,8 @@ pub enum TreeOperation<Target> {
     Select(Target),
     ToggleMark,
     ToggleMarkTarget(Target),
+    PointerSelect(Position),
+    PointerToggleMark(Position),
     Activate,
     ActivateTarget(Target),
     Context,
