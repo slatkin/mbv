@@ -169,7 +169,8 @@ impl MusicContent {
                     artist.clone(),
                     MediaSemanticState::Ordinary,
                     TreeMarkPolicy::Aggregate,
-                ));
+                )
+                .with_title_role(crate::app::components::list::tree_browser::TreeTitleRole::Heading));
                 target
             };
             // The tree's album projection is music by owner context even
@@ -196,7 +197,8 @@ impl MusicContent {
                 format!("{name} {}", year.as_str()),
                 semantic_state,
                 TreeMarkPolicy::Direct,
-            );
+            )
+            .with_title_role(crate::app::components::list::tree_browser::TreeTitleRole::Secondary);
             let album_node = if year.is_empty() {
                 album_node
             } else {

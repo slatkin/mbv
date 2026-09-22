@@ -3,7 +3,9 @@
 use super::super::*;
 use super::buffer_to_string;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::list::tree_browser::{TreeBrowser, TreeMarkPolicy, TreeNode};
+use crate::app::components::list::tree_browser::{
+    TreeBrowser, TreeMarkPolicy, TreeNode, TreeTitleRole,
+};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::tv_content::TvContent;
@@ -113,14 +115,17 @@ fn music_tree_fixture_projection(
         } else {
             let target = MusicTreeTarget::Artist(key.clone());
             root_of_key.insert(key.clone(), target.clone());
-            nodes.push(TreeNode::new(
-                target.clone(),
-                None,
-                artist.clone(),
-                artist.clone(),
-                MediaSemanticState::Ordinary,
-                TreeMarkPolicy::Aggregate,
-            ));
+            nodes.push(
+                TreeNode::new(
+                    target.clone(),
+                    None,
+                    artist.clone(),
+                    artist.clone(),
+                    MediaSemanticState::Ordinary,
+                    TreeMarkPolicy::Aggregate,
+                )
+                .with_title_role(TreeTitleRole::Heading),
+            );
             target
         };
         let album_node = TreeNode::new(
@@ -132,7 +137,8 @@ fn music_tree_fixture_projection(
             // derives playback emphasis through `MediaSemanticState`.
             MediaSemanticState::Ordinary,
             TreeMarkPolicy::Direct,
-        );
+        )
+        .with_title_role(TreeTitleRole::Secondary);
         nodes.push(if year.is_empty() {
             album_node
         } else {

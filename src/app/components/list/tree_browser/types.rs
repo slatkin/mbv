@@ -12,6 +12,18 @@ impl TreeTrailing {
     }
 }
 
+/// Semantic title emphasis supplied by the destination for one tree row.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TreeTitleRole {
+    /// A group or section title.
+    Heading,
+    /// A nested title with secondary emphasis.
+    Secondary,
+    /// A regular row title.
+    #[default]
+    Standard,
+}
+
 /// Closed per-node marking policy.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TreeMarkPolicy {
@@ -31,6 +43,7 @@ pub struct TreeNode<Target> {
     pub parent: Option<Target>,
     pub title: String,
     pub search_text: String,
+    pub title_role: TreeTitleRole,
     pub trailing: Option<TreeTrailing>,
     pub semantic_state: MediaSemanticState,
     pub mark_policy: TreeMarkPolicy,
@@ -50,6 +63,7 @@ impl<Target> TreeNode<Target> {
             parent,
             title: title.into(),
             search_text: search_text.into(),
+            title_role: TreeTitleRole::Standard,
             trailing: None,
             semantic_state,
             mark_policy,
@@ -58,6 +72,11 @@ impl<Target> TreeNode<Target> {
 
     pub fn with_trailing(mut self, trailing: impl Into<String>) -> Self {
         self.trailing = Some(TreeTrailing::new(trailing));
+        self
+    }
+
+    pub fn with_title_role(mut self, title_role: TreeTitleRole) -> Self {
+        self.title_role = title_role;
         self
     }
 }

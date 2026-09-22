@@ -13,7 +13,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::list::tree_browser::{TreeAggregateMark, TreePaintRow};
+use crate::app::components::list::tree_browser::{TreeAggregateMark, TreePaintRow, TreeTitleRole};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
@@ -175,10 +175,10 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
             ) {
                 palette::TEXT_EMPHASIS
             } else {
-                match row.depth {
-                    0 => palette::MUSIC_HEADER,
-                    1 => palette::TEXT_FOCUS_ACCENT,
-                    _ => palette::ACCENT,
+                match row.title_role {
+                    TreeTitleRole::Heading => palette::TEXT_EMPHASIS,
+                    TreeTitleRole::Secondary => palette::TEXT_FOCUS_ACCENT,
+                    TreeTitleRole::Standard => palette::ACCENT,
                 }
             }
         }

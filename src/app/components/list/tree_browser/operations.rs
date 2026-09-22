@@ -569,6 +569,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             };
             rows.push(TreePaintRow {
                 title: entry.node.title.clone(),
+                title_role: entry.node.title_role,
                 trailing: entry
                     .node
                     .trailing

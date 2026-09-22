@@ -63,7 +63,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
         Some('…'),
         "the root title reaches the last column (no gutter): {root_row:?}"
     );
-    assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER, "root title role");
+    assert_eq!(buf[(0, 0)].fg, palette::TEXT_EMPHASIS, "heading title role");
 
     // Year-bearing leaf: the title stops before the gutter, and the year
     // right-aligns in the fixed six-column green status cell before
@@ -96,7 +96,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     assert_eq!(
         buf[(gutter as u16 - 1, 1)].fg,
         palette::TEXT_FOCUS_ACCENT,
-        "an ordinary album leaf keeps the level-one album role"
+        "an ordinary album leaf keeps its secondary title role"
     );
     assert_eq!(
         buf[(gutter as u16 + 4, 1)].fg,

@@ -20,7 +20,7 @@ use crate::app::components::media_list::MediaSemanticState;
 #[allow(unused_imports)]
 pub use types::{
     TreeConsumed, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary, TreeNode, TreeOperation,
-    TreeSelectionChange, TreeTrailing, TreeTransition,
+    TreeSelectionChange, TreeTitleRole, TreeTrailing, TreeTransition,
 };
 
 /// A typed failure from an attempted tree projection replacement.
@@ -61,6 +61,7 @@ pub(crate) enum TreeAggregateMark {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TreePaintRow {
     pub(crate) title: String,
+    pub(crate) title_role: TreeTitleRole,
     pub(crate) trailing: Option<String>,
     pub(crate) depth: usize,
     pub(crate) root_index: usize,
@@ -414,28 +415,24 @@ impl<Target> TreeBrowser<Target> {
     }
 
     /// The visible row of the first node at or after a persisted
-    /// fully-expanded flow offset. The walk counts roots and their direct
-    /// children, mirroring the persisted settled order.
+    /// fully-expanded flow offset. The walk follows the complete settled tree,
+    /// independent of expansion state.
     fn visible_row_for_flow_offset(&self, offset: usize) -> Option<usize>
     where
         Target: Clone + Eq + Hash,
     {
         let visible = self.visible_node_ids();
         let mut position = 0;
-        for &root in &self.roots {
+        let mut stack = self.roots.iter().rev().copied().collect::<Vec<_>>();
+        while let Some(id) = stack.pop() {
             if position >= offset {
-                if let Some(row) = visible.iter().position(|&id| id == root) {
+                if let Some(row) = visible.iter().position(|&visible_id| visible_id == id) {
                     return Some(row);
                 }
             }
             position += 1;
-            for &leaf in &self.arena[&root].children {
-                if position >= offset {
-                    if let Some(row) = visible.iter().position(|&id| id == leaf) {
-                        return Some(row);
-                    }
-                }
-                position += 1;
+            if let Some(entry) = self.arena.get(&id) {
+                stack.extend(entry.children.iter().rev().copied());
             }
         }
         None

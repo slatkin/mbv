@@ -11,7 +11,7 @@ use super::draw_mounted_frame;
 use super::mounted_model_at;
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
 use crate::app::components::list::tree_browser::{
-    TreeBrowser, TreeMarkPolicy, TreeNode, TreeOperation,
+    TreeBrowser, TreeMarkPolicy, TreeNode, TreeOperation, TreeTitleRole,
 };
 use crate::app::components::media_list::{
     queue_row_background, queue_row_zebra, MediaSemanticState,
@@ -294,6 +294,7 @@ pub fn album_leaf(
         semantic_state,
         TreeMarkPolicy::Direct,
     );
+    let node = node.with_title_role(TreeTitleRole::Secondary);
     match trailing {
         Some(trailing) => node.with_trailing(trailing),
         None => node,
@@ -318,7 +319,8 @@ pub fn gutter_projection() -> Vec<TreeNode<MusicTreeTarget>> {
             GUTTER_ARTIST,
             MediaSemanticState::Ordinary,
             TreeMarkPolicy::Aggregate,
-        ),
+        )
+        .with_title_role(TreeTitleRole::Heading),
         album_leaf(
             &root,
             "gutter-yeared",

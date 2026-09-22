@@ -6,7 +6,7 @@ use super::test_helpers::{
 };
 use super::*;
 
-use crate::app::components::list::tree_browser::{TreeMarkPolicy, TreeNode};
+use crate::app::components::list::tree_browser::{TreeMarkPolicy, TreeNode, TreeTitleRole};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::components::music_tree_target::MusicTreeTarget;
 
@@ -101,7 +101,8 @@ fn music_tree_depth_roles_use_ordinary_level_colours() {
             "Depth Artist",
             MediaSemanticState::Ordinary,
             TreeMarkPolicy::Aggregate,
-        ),
+        )
+        .with_title_role(TreeTitleRole::Heading),
         album_leaf(
             &root,
             "depth-album",
@@ -130,7 +131,7 @@ fn music_tree_depth_roles_use_ordinary_level_colours() {
     let buf = term.backend().buffer();
     // The shared painter indents two plain columns per depth, so the album
     // leaf starts at column 2 and the cached track at column 4.
-    assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER);
+    assert_eq!(buf[(0, 0)].fg, palette::TEXT_EMPHASIS);
     assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
     assert_eq!(buf[(4, 2)].fg, palette::ACCENT);
 }

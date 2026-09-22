@@ -244,6 +244,31 @@ fn apply_owns_clamped_tree_navigation_and_parent_child_traversal() {
 }
 
 #[test]
+fn anchor_selection_counts_all_levels_in_the_settled_flow() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            node(Target::Root, None),
+            node(Target::Branch, Some(Target::Root)),
+            node(Target::Leaf, Some(Target::Branch)),
+            node(Target::Other, None),
+        ])
+        .unwrap();
+
+    browser.apply(super::TreeOperation::AnchorSelection {
+        target: Target::Leaf,
+        flow_offset: 2,
+    });
+
+    assert_eq!(browser.selected_target(), Some(&Target::Leaf));
+    assert_eq!(browser.viewport_offset(), 2);
+    assert_eq!(
+        browser.visible_targets(),
+        vec![Target::Root, Target::Branch, Target::Leaf, Target::Other]
+    );
+}
+
+#[test]
 fn filter_matching_forces_visibility_without_persisting_expansion_and_restores_anchor() {
     let mut browser = TreeBrowser::new();
     browser
