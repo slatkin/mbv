@@ -287,6 +287,36 @@ fn filter_matching_forces_visibility_without_persisting_expansion_and_restores_a
 }
 
 #[test]
+fn marking_filter_hidden_target_reconciles_selection_to_visible_row() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            named_node(
+                Target::Root,
+                None,
+                "Visible",
+                "visible",
+                TreeMarkPolicy::Direct,
+            ),
+            named_node(
+                Target::Other,
+                None,
+                "Hidden",
+                "hidden",
+                TreeMarkPolicy::Direct,
+            ),
+        ])
+        .unwrap();
+
+    browser.apply(super::TreeOperation::EditFilter("visible".into()));
+    let transition = browser.apply(super::TreeOperation::ToggleMarkTarget(Target::Other));
+
+    assert_eq!(browser.marked_targets(), &[Target::Other]);
+    assert_eq!(transition.selected_target, Some(Target::Root));
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+}
+
+#[test]
 fn marks_aggregate_and_context_use_visible_display_order() {
     let mut browser = TreeBrowser::new();
     browser
