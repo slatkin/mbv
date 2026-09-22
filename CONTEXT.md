@@ -354,6 +354,20 @@ the skeleton and slot; the destination retains Service content and typed
 translation.
 _Avoid_: generic list, generic media list, two-column list
 
+**Row flow**:
+The one ordered sequence of rows a list presents, in paint order. Row position, viewport
+offset, and point resolution all address this same sequence; a list's ordering is the order
+its rows paint. Owned by the shared `src/app/components/list/` seam; cursor movement,
+viewport resolution, retained paint geometry, and multi-selection each have one shared
+implementation over it.
+_Avoid_: item list, row list, flat list
+
+**Structural row**:
+A row that occupies a position in a Row flow but carries no stable target and can never
+be the selection — e.g. a Group heading or a Spacer. The cursor moves between selectable
+rows and never rests on a structural row.
+_Avoid_: non-selectable row (bare), filler row, separator row
+
 **Multi-selection**:
 The set of rows a user has picked in one MediaList for a bulk action, built by
 Ctrl+Click, Shift+Click, or keyboard Visual mode (`V`), keyed by stable
