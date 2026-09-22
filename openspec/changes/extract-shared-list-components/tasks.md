@@ -2,9 +2,9 @@
 
 ## 1. Baselines and required file split
 
-- [ ] 1.1 Create `openspec/changes/extract-shared-list-components/baseline.md` and record the pre-change production line total from `wc -l src/app/components/media_list/{mod,wide,carrier,anchor,selection,grouping}.rs src/app/components/music_tree{,_model,_view,_selection,_label}.rs`. Run `cargo llvm-cov -p mbv --json --summary-only --output-path target/extract-shared-list-components-before.json`; record the summed covered-line and count-line values for that exact production file list, with the command and per-file values. Verify: the markdown contains the command, file list, line total, and coverage numerator/denominator needed for the after comparison.
-- [ ] 1.2 Split `src/app/components/media_list/mod.rs` into cohesive files under the 800-line cap, moving code only with no signature or behavior changes. Do not split an already-under-cap tree file unless work in this change would otherwise push it over 800 lines. Verify: `cargo check -p mbv`, `cargo nextest run -p mbv`, and `cargo fmt --all -- --check` are clean; review the diff as move-only.
-- [ ] 1.3 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`. Verify: both are clean before behavior work begins.
+- [x] 1.1 Create `openspec/changes/extract-shared-list-components/baseline.md` and record the pre-change production line total from `wc -l src/app/components/media_list/{mod,wide,carrier,anchor,selection,grouping}.rs src/app/components/music_tree{,_model,_view,_selection,_label}.rs`. Run `cargo llvm-cov -p mbv --json --summary-only --output-path target/extract-shared-list-components-before.json`; record the summed covered-line and count-line values for that exact production file list, with the command and per-file values. Verify: the markdown contains the command, file list, line total, and coverage numerator/denominator needed for the after comparison.
+- [x] 1.2 Split `src/app/components/media_list/mod.rs` into cohesive files under the 800-line cap, moving code only with no signature or behavior changes. Do not split an already-under-cap tree file unless work in this change would otherwise push it over 800 lines. Verify: `cargo check -p mbv`, `cargo nextest run -p mbv`, and `cargo fmt --all -- --check` are clean; review the diff as move-only.
+- [x] 1.3 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`. Verify: both are clean before behavior work begins.
 
 ## 2. The shared seam
 
