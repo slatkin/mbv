@@ -13,23 +13,25 @@ See `proposal.md` — Why. The constraints that shape the approach:
   must sit *above* that boundary — if seam types leak crate types, the flat list
   ends up depending on a tree crate.
 - **The crate has no non-selectable node.** `TreeModel` is `roots()` +
-  `children()` + `revision()`; every projected node is selectable, expandable
-  and hit-testable. The flat list's `Heading`/`Spacer` have no crate counterpart.
-  This matters for TV later, but the seam must define structural rows now or the
-  tree shape cannot express them at all.
+  `children()` + `revision()`; every projected node is selectable and
+  hit-testable. The seam supports structural rows because the flat list already
+  requires them, but this change does not synthesize unsupported structural
+  nodes in the current tree. A future tree that needs them must first establish
+  a viable dependency boundary.
 - **mbv already owns tree movement.** The crate keymap is disabled and
   `MusicTreeBrowser` maps its own chords. So cursor policy is already ours on
   both sides — the seam is unifying code we control, not overriding a dependency.
-- **File sizes.** `media_list/mod.rs` (~30K), `music_tree.rs`, `music_tree_model.rs`,
-  `music_tree_selection.rs` and several test files sit at or over the 800-line
-  cap. Splitting is forced by this change, not optional.
+- **File sizes.** `media_list/mod.rs` is currently the only governed production
+  file over the 800-line cap. It is split mechanically before behavior changes;
+  tree files are split only if this implementation would push one over the cap.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- One implementation of cursor, viewport, retained geometry, point resolution
-  and ordered marks, with both shapes as thin consumers.
+- One implementation of cursor and viewport arithmetic, retained geometry,
+  point resolution, and ordered-mark storage, with each shape supplying only
+  the primitive access needed to adapt its existing state owner.
 - Flat and tree substitutable at the destination boundary — a destination should
   differ only where its flow genuinely nests.
 - A net deletion. The change is only worth shipping if the duplicated
@@ -55,12 +57,20 @@ See `proposal.md` — Why. The constraints that shape the approach:
 one carrying a stable target. Over it sit `Cursored`, `Viewported`,
 `PaintRetained`, `MarkSelection`, and (tree only) `Expandable`.
 
-Rationale: the three middle traits are pure arithmetic over
-`(len, selected_row, offset, area)`. Expressed as default methods on top of
-`RowFlow`, they require *zero* per-shape code — which is where the deletion
-comes from. A single fat `ListComponent` trait would instead force each shape to
-implement or stub every method, producing the parallel-abstraction outcome this
-change exists to avoid.
+The traits separate shared algorithms from shape storage. `Cursored` requires
+primitive selected-target read/write operations; `Viewported` requires offset
+read/write operations; their default methods own movement, clamping, and
+keep-visible arithmetic over `RowFlow`. The flat adapter mutates its existing
+fields, while the tree adapter delegates those primitives to
+`TreeListViewState`. `PaintRetained` and `MarkSelection` use shared state carriers
+held by each owner, replacing `WidePaintResult`/`paint_complete` and each shape's
+ordered-membership vector. These small adapters are required per shape; the
+arithmetic and retained-state implementations are not duplicated.
+
+Rationale: traits preserve the tree crate's state ownership without pretending
+Rust traits can own fields. A single fat `ListComponent` trait would instead
+force each shape to implement or stub every method, producing the
+parallel-abstraction outcome this change exists to avoid.
 
 *Alternative considered — generic struct with a row-source parameter
 (`List<S: RowSource>`) instead of traits.* Rejected: the tree's state lives
@@ -72,9 +82,11 @@ would demand ownership the tree cannot give.
 ### D2: The seam is generic over `Target`; internal handles never appear in it
 
 `RowFlow` is generic over the destination's stable target type — already varied
-in practice (`String`, `QueueSlotId`, `PodcastEpisodeTarget`). The tree's arena
-`usize` and `MusicNodeKey` become private; `MusicTreeBrowser` gains an internal
-target↔node map and converts at its boundary.
+in practice (`String`, `QueueSlotId`, `PodcastEpisodeTarget`). The tree exposes
+one stable `MusicTreeTarget` with `Artist(ArtistKey)`, `Album(String)`, and
+`Track { album: String, track: String }` arms. Its arena `usize` and
+`MusicNodeKey` become private; `MusicTreeBrowser` gains an internal
+`MusicTreeTarget`↔node map and converts at its boundary.
 
 Rationale: this is what makes the two shapes substitutable, and it aligns the
 tree with the rule the repo already applies to messages — stable opaque
@@ -89,28 +101,23 @@ explicit absent case). Per the repo's standing rule on migrations, those
 assertions are **deleted and rewritten against the target surface**, not
 translated case by case.
 
-### D3: Structural rows are a seam concept, expressed per shape
+### D3: Structural rows are a row-flow concept, used only where supported
 
-The seam defines rows as selectable-with-target or structural-without. The flat
-shape already has this (`Heading`/`Spacer`). The tree shape must synthesize it,
-because the crate cannot: a structural row is a node the tree marks
-non-selectable in its own projection, and cursor movement — already ours —
-skips it.
+The seam defines rows as selectable-with-target or structural-without because
+the flat shape already has `Heading`/`Spacer`. The current tree projects only
+selectable stable targets: `tui-treelistview` 0.2.2 has no non-selectable-node
+API, and this change neither emulates one nor changes tree behavior for a future
+destination.
 
-Rationale: defining it in the seam now costs nothing (the flat shape needs it
-regardless) and is the only thing that makes TV's alphabet headings expressible
-later without reopening the seam. Defining it *only* in the flat shape would
-guarantee reopening it.
-
-This is the one place the seam is shaped by a known near-term need rather than
-purely by existing code. It is included because the flat shape independently
-requires it, not on TV's behalf alone.
+Rationale: every shape can describe its existing flow without speculative
+machinery. Supporting structural rows in a future tree is a separate dependency
+and behavior decision, not hidden scope in this extraction.
 
 ### D4: Paging is an explicit policy hook, not a shared default
 
-Flat lists do `Heading`-based group jumps; `grouped-music-tree-browser`
-explicitly forbids the tree inheriting them and pages the visible-node viewport
-instead. Both are correct for their shape.
+Flat lists keep their existing fixed selectable-row page distance; the tree
+keeps its existing visible-viewport paging. Both are correct for their current
+shape and must remain behavior-neutral in this extraction.
 
 Rationale: a shared default would silently regress one of them. Naming it as a
 policy keeps the divergence deliberate and visible. This is the only behavioral
@@ -125,23 +132,24 @@ Rationale: keeps `MarkSelection` implementable by a flat list with no stub, and
 keeps music's deliberate divergence from the crate's aggregation (for hidden
 filtered children) local to the shape that has the concept.
 
-### D6: Paint invalidation unifies on the explicit call, not the flag
+### D6: Paint invalidation uses one shared retained-state implementation
 
-The two implementations spell this differently: `WideMediaList::invalidate_paint()`
-versus the tree's `paint_complete` bool cleared at three separate sites.
-`PaintRetained` takes the explicit form.
+The two implementations currently retain completion differently:
+`WideMediaList` stores an optional `WidePaintResult`, while the tree combines the
+crate's hit facts with a `paint_complete` flag. `PaintRetained` provides one
+shared state carrier and explicit begin/finish/invalidate operations; shape
+adapters populate it from the geometry each painter actually produced.
 
-Rationale: three clear sites is how the tree's version drifts. One call is
-auditable. This is a small change that happens to be the most concrete evidence
-in the change that the duplication was already going wrong.
+Rationale: one state transition model makes stale-frame behavior auditable while
+leaving each painter responsible for producing its own geometry.
 
 ## Risks / Trade-offs
 
 - **The change has no user-visible payoff until TV adopts it, so "done" is easy
-  to fake.** → The acceptance gate is the net deletion in task group 4, not the
-  existence of the new traits. If removing the duplicated arithmetic from both
-  implementations does not come out substantially net-negative, the seam is a
-  parallel abstraction and should be reverted rather than shipped.
+  to fake.** → Acceptance requires direct evidence that each duplicated mechanic
+  was removed from both shapes. Production line count is recorded as a
+  diagnostic; a non-negative result triggers review and explanation for possible
+  parallel abstraction, but no numeric reduction threshold decides correctness.
 - **The arena→target conversion is where real bugs are.** → Convert the tree
   *after* the flat shape is already green against the seam, so a failure is
   unambiguously attributable to the conversion. Keep the music tick-integration
@@ -164,15 +172,17 @@ in the change that the duplication was already going wrong.
 
 Sequenced so each step is independently verifiable and a failure is attributable:
 
-1. **Mechanical file splits.** No behavior change; existing suites green.
+1. **Mechanical file split.** Split the over-cap `media_list/mod.rs`; split a
+   tree file only if this implementation would otherwise push it over the cap.
+   No behavior change; existing suites green.
 2. **Seam introduced; flat shape implements it.** `media_list/` satisfies the
    traits. Externally observable behavior unchanged — the canonical suites and
    every destination's tests are the proof.
 3. **Tree shape implements it; arena id goes private.** `MusicTreeBrowser`
    converts to targets; its index-based tests are deleted and rewritten. Music
    buffer/characterization and tick-integration suites are the proof.
-4. **Delete the duplicated arithmetic from both.** The gate. Net-negative diff
-   required.
+4. **Delete the duplicated mechanics from both.** Confirm each shared mechanic
+   has one production implementation; record line-count movement as a diagnostic.
 
 Rollback: steps are independently revertable, and the seam is additive until
 step 4. Reverting step 4 alone leaves a working but redundant system; reverting
@@ -180,8 +190,6 @@ steps 2–4 restores the current architecture without touching destinations.
 
 ## Open Questions
 
-- Whether `MarkSelection` needs a visual-mode representation in the seam or
-  stays flat-only. The flat list has visual mode; the tree has no equivalent
-  today. Deferrable because it changes no spec requirement and no task boundary
-  — if the tree never grows visual mode, it stays a flat-shape concern, and if
-  it does, it widens the trait then.
+None. Visual-mode range/anchor state stays flat-only because the tree has no
+such behavior today; `MarkSelection` shares only ordered stable-target
+membership.

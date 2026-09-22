@@ -33,9 +33,10 @@ destination — an adoption rather than another copy.
   implementation details. No user-visible behavior changes; the Grouped Music
   tree test suites that assert against arena indices are rewritten against the
   target surface.
-- Delete the now-duplicated cursor, viewport, and retained-geometry code from
-  both implementations. This deletion is the change's acceptance gate, not a
-  cleanup afterthought.
+- Delete the now-duplicated cursor, viewport, and retained-geometry mechanics
+  from both implementations. Production line-count change is recorded as a
+  diagnostic: a non-negative result triggers review for a parallel abstraction,
+  but no numeric reduction threshold gates an otherwise-correct implementation.
 - Filtering is explicitly out of scope. Flat destinations keep their embedded
   `InlineSearch` control and the tree keeps its internal filter session,
   unchanged and un-accommodated.
@@ -77,11 +78,13 @@ capability neither existing implementation has today.
 Affected code:
 
 - `src/app/components/media_list/` — `mod.rs`, `wide.rs`, `carrier.rs`,
-  `anchor.rs`, `selection.rs`. Several files already exceed the 800-line cap,
-  so splitting is forced by this change rather than optional.
+  `anchor.rs`, `selection.rs`. `mod.rs` currently exceeds the 800-line cap and
+  must be split mechanically before behavior changes.
 - `src/app/components/music_tree.rs`, `music_tree_model.rs`, `music_tree_view.rs`,
   `music_tree_selection.rs`, `music_tree_label.rs` — the arena id goes private
-  and the shared arithmetic is deleted in favour of the seam.
+  and the shared arithmetic is deleted in favour of the seam. These files are
+  already below the cap and are split only if implementation growth would push
+  one over it.
 - `src/app/components/music_content*.rs` — call sites that currently pass arena
   ids move to stable targets.
 - New module for the seam itself.
@@ -96,5 +99,7 @@ Dependencies: none added. `tui-treelistview` stays pinned at 0.2.2 and stays
 behind the tree implementation's boundary — the seam does not leak crate types.
 
 Risk: this is a foundation change with no user-visible payoff until TV adopts
-it, which makes "done" easy to fake. The net-deletion gate exists to prevent
-shipping a parallel abstraction that adds a layer instead of removing one.
+it, which makes "done" easy to fake. Removing the duplicated mechanics is the
+acceptance criterion. Production line count is recorded only as a diagnostic:
+an unexpected non-negative result must be investigated and explained, but is
+not by itself a failure.

@@ -8,9 +8,9 @@ Defines the one reusable seam every mbv list shape satisfies — flat and tree a
 
 ### Requirement: Every list is one ordered row flow addressed by stable target
 
-A list SHALL present its content as one ordered sequence of rows in paint order. Each row SHALL be either selectable and carrying a stable opaque target, or structural and carrying none. A list's ordering SHALL be the order its rows paint, so that row position, viewport offset, and point resolution all address the same sequence.
+A list SHALL present its content as one ordered sequence of rows in paint order. Each row SHALL be either selectable and carrying a stable opaque target, or structural and carrying none. A list's ordering SHALL be the order its rows paint, so that row position, viewport offset, and point resolution all address the same sequence. Supporting structural rows in the abstraction SHALL NOT require a shape to synthesize structural rows its current implementation cannot produce.
 
-A stable target's identity SHALL survive reorder and ordinary refresh. A target that is unique only within a parent SHALL include that parent identity. The flow SHALL impose no fixed nesting depth and SHALL NOT require any row to carry optional decoration such as a metadata gutter.
+A stable target's identity SHALL survive reorder and ordinary refresh. A target that is unique only within a parent SHALL include that parent identity. A nesting shape with heterogeneous row kinds SHALL use one closed stable-target type that distinguishes those kinds; its internal node handles SHALL remain private. The flow SHALL impose no fixed nesting depth and SHALL NOT require any row to carry optional decoration such as a metadata gutter.
 
 #### Scenario: Structural rows occupy the flow without being selectable
 - **WHEN** a list's content includes structural rows among its selectable rows
@@ -24,9 +24,9 @@ A stable target's identity SHALL survive reorder and ordinary refresh. A target 
 
 ### Requirement: Shared list mechanics have exactly one implementation site
 
-Cursor movement, viewport resolution and clamping, retained paint geometry, point resolution, and ordered multi-selection membership SHALL be implemented once over the row flow and SHALL NOT be reimplemented per list shape. A list shape SHALL supply only what its shape genuinely determines: how its rows are produced, and any behavior its shape defines differently where the seam names an explicit policy.
+Cursor movement, viewport resolution and clamping, retained paint geometry, point resolution, and ordered multi-selection membership SHALL each have one shared algorithm or state-carrier implementation over the row flow and SHALL NOT be reimplemented per list shape. A list shape SHALL supply only primitive access to its existing state owner, how its rows and completed-paint geometry are produced, and any behavior its shape defines differently where the seam names an explicit policy. A shape adapter SHALL NOT reproduce the shared arithmetic.
 
-Adding or correcting one of these shared mechanics SHALL be possible by changing the shared implementation alone, without editing either list shape's own code.
+Adding or correcting one of these shared mechanics without changing its primitive adapter contract SHALL be possible by changing the shared implementation alone, without editing either list shape's own code.
 
 #### Scenario: A shared mechanic has one change site
 - **WHEN** a developer changes cursor movement, viewport clamping, or retained point resolution behavior
@@ -36,8 +36,8 @@ Adding or correcting one of these shared mechanics SHALL be possible by changing
 
 #### Scenario: A shape supplies only shape-determined behavior
 - **WHEN** a list shape is implemented against the seam
-- **THEN** it supplies its row production and its explicitly named policy choices
-- **AND** it supplies no cursor, viewport, retained-geometry, or point-resolution arithmetic of its own
+- **THEN** it supplies row and paint production, primitive state access, and its explicitly named policy choices
+- **AND** it supplies no cursor, viewport, retained-geometry, point-resolution, or ordered-membership arithmetic of its own
 
 ### Requirement: Public list surfaces address rows by stable target
 
@@ -114,16 +114,22 @@ A point-resolution call SHALL accept only the point and SHALL return the stable 
 - **THEN** resolution returns that row's stable target
 - **AND** no row map or rectangle set is exposed to the caller
 
-### Requirement: Multi-selection preserves the order rows were added
+### Requirement: Multi-selection stores addition order and emits action order explicitly
 
-A list that supports multi-selection SHALL retain its selected targets in the order they were added, and SHALL report that order to callers. Removing a target SHALL preserve the relative order of the rest. Multi-selection membership SHALL be expressed in stable targets.
+A list that supports multi-selection SHALL retain its selected targets in the order they were added. Removing a target SHALL preserve the relative order of the rest. Multi-selection membership SHALL be expressed in stable targets. Read-only presentation state that depends on mark history MAY use this addition order.
 
-Aggregating a multi-selection across nested rows SHALL belong to the list shape that has nesting, and SHALL NOT be required of a shape without it.
+An action or context intent SHALL emit selected targets in the current visible row-flow order, preserving the canonical list-order contract independently of addition order. Aggregating a multi-selection across nested rows SHALL belong to the list shape that has nesting, and SHALL NOT be required of a shape without it.
 
-#### Scenario: Selection order survives addition and removal
+#### Scenario: Stored addition order survives addition and removal
 - **WHEN** rows are added to and removed from a multi-selection
-- **THEN** the reported order matches the order the remaining rows were added
-- **AND** membership is reported as stable targets
+- **THEN** the stored membership order matches the order the remaining rows were added
+- **AND** membership is stored as stable targets
+
+#### Scenario: An action emits display order rather than click order
+- **WHEN** rows are marked in an order different from their current visible row-flow order
+- **AND** the list emits an action or context intent for them
+- **THEN** the intent carries those stable targets in current visible row-flow order
+- **AND** changing action order does not rewrite the stored addition order
 
 #### Scenario: A flat shape needs no aggregation
 - **WHEN** a list shape without nesting supports multi-selection
