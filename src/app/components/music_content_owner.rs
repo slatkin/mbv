@@ -16,20 +16,26 @@ impl InlineSearchHost for MusicContent {
     fn open_inline_search(&mut self) {
         if !self.inline_search.is_active() {
             self.inline_search.open();
-            self.browser.open_filter();
+            // Arming the shared filter session anchors it on the current
+            // selection and shows the complete tree for the empty query.
+            self.browser
+                .apply(TreeOperation::EditFilter(String::new()));
         }
     }
 
     fn close_inline_search(&mut self) {
         if self.inline_search.is_active() {
             self.inline_search.close();
-            self.browser.close_filter();
+            self.browser.apply(TreeOperation::ClearFilter);
         }
     }
 
     fn inline_search_debounced(&mut self) {
+        if !self.browser.filter_active() {
+            return;
+        }
         let query = self.inline_search.query().to_string();
-        self.browser.apply_filter_query(&query);
+        self.browser.apply(TreeOperation::EditFilter(query));
     }
 }
 
@@ -40,10 +46,9 @@ impl InlineSearchHost for MusicContent {
 /// snapshot and never mirror those interaction values.
 impl LibraryContentOwner for MusicContent {
     fn clear_selection(&mut self) {
-        // The tree's multi-selection is task 4.2 scope; the destination switch
-        // clears the browser's stored marks so no stale selection mark
-        // survives into a new destination.
-        self.browser.clear_marks();
+        // The destination switch clears the shared owner's ordered marks so
+        // no stale selection mark survives into a new destination.
+        self.browser.apply(TreeOperation::ClearMarks);
     }
 
     fn double_click_opens_hero_overlay(&mut self) -> bool {
@@ -56,7 +61,7 @@ impl LibraryContentOwner for MusicContent {
     fn hero_overlay_target_available(&mut self) -> bool {
         // Both hero-bearing tree rows can own the overlay before their Hero
         // snapshot materializes: an album leaf and an artist root.
-        self.selected_item().is_some() || self.browser.selected_is_artist()
+        self.selected_item().is_some() || self.selected_is_artist()
     }
 
     fn hero_overlay_enter_available(&mut self) -> bool {
@@ -64,7 +69,7 @@ impl LibraryContentOwner for MusicContent {
         // Right on an expanded root. While filtering, Enter remains local to
         // the tree so the panel cannot bypass the filter interaction.
         (!self.browser.filter_active()
-            && self.browser.selected_is_artist())
+            && self.selected_is_artist())
             || self.selected_item().is_some()
     }
 
@@ -90,7 +95,7 @@ impl LibraryContentOwner for MusicContent {
         // The tree keeps membership locally; expose only the same read-only
         // count/origin projection used by every canonical list. Music rows
         // never inspect played/unplayed state here.
-        let count = self.browser.selected_album_targets().len();
+        let count = self.selected_album_targets().len();
         let origin = self.selection_origin.clone()?;
         (count > 0)
             .then_some(crate::app::components::media_list::SelectionSummary { count, origin })
@@ -114,14 +119,25 @@ impl LibraryContentOwner for MusicContent {
             self.context.group_cursor = self.group_cursor_for_launch_state(state);
         }
         let selected = match state.item.as_ref() {
-            Some(LibraryItemIdentity::Emby { id }) => self.browser.select_album_target(id),
+            Some(LibraryItemIdentity::Emby { id }) => {
+                self.browser
+                    .apply(TreeOperation::AnchorSelection {
+                        target: MusicTreeTarget::Album(id.clone()),
+                        flow_offset: 0,
+                    })
+                    .disposition
+                    == TreeConsumed::Consumed
+            }
             _ => false,
         };
         if !selected {
             if let Some(target) = self.context.album_targets.first().cloned() {
-                self.browser.select_album_target(&target);
+                self.browser.apply(TreeOperation::AnchorSelection {
+                    target: MusicTreeTarget::Album(target),
+                    flow_offset: 0,
+                });
             } else {
-                self.browser.select_first_visible();
+                self.browser.apply(TreeOperation::First);
             }
         }
         true
@@ -140,9 +156,7 @@ impl LibraryContentOwner for MusicContent {
                 key: EmbySelectorKey::Group(group.id),
             });
         let item = self
-            .browser
             .selected_album_target()
-            .map(str::to_owned)
             .map(|id| LibraryItemIdentity::Emby { id });
         (selector, item)
     }
@@ -174,7 +188,7 @@ impl LibraryContentOwner for MusicContent {
                     };
                     if let Some(request) = request {
                         self.inline_search.close();
-                        self.browser.close_filter();
+                        self.browser.apply(TreeOperation::ClearFilter);
                         return Some(Msg::Shell(request));
                     }
                 }
@@ -188,7 +202,7 @@ impl LibraryContentOwner for MusicContent {
                 }
                 Some(super::inline_search::InlineSearchAction::Dismiss) => {
                     self.inline_search.close();
-                    self.browser.close_filter();
+                    self.browser.apply(TreeOperation::ClearFilter);
                     None
                 }
                 Some(super::inline_search::InlineSearchAction::QueryStarted) => {
@@ -239,14 +253,14 @@ impl LibraryContentOwner for MusicContent {
             // behavior in `on_filter_key`. Once the focused pane is this
             // root's own artist Workspace, Enter belongs to the focused track
             // below.
-            Key::Enter if self.browser.selected_is_artist() && !self.artist_workspace_focused() => {
+            Key::Enter if self.selected_is_artist() && !self.artist_workspace_focused() => {
                 if self.inline_track_focus_enabled {
                     self.enter_artist_workspace_focus();
                 }
                 None
             }
             Key::Enter if self.track_focused => self.workspace_track_activation(),
-            Key::Enter if self.browser.selected_is_track() => {
+            Key::Enter if self.selected_is_track() => {
                 let (album_target, track_id) = self.selected_tree_track()?;
                 Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
                     album_target,
@@ -316,7 +330,8 @@ impl LibraryContentOwner for MusicContent {
             Key::Char('/') => {
                 if !self.inline_search.is_active() {
                     self.inline_search.open();
-                    self.browser.open_filter();
+                    self.browser
+                        .apply(TreeOperation::EditFilter(String::new()));
                 }
                 Some(Msg::Shell(ShellRequest::OpenInlineSearch))
             }
@@ -397,11 +412,11 @@ impl LibraryContentOwner for MusicContent {
             Key::Up | Key::Char('k') => self.move_album(-1, AlbumCursorKind::Move),
             Key::Down | Key::Char('j') => self.move_album(1, AlbumCursorKind::Move),
             Key::Home => {
-                self.browser.select_first_visible();
+                self.browser.apply(TreeOperation::First);
                 self.album_selection_request(AlbumCursorKind::Jump)
             }
             Key::End => {
-                self.browser.select_last_visible();
+                self.browser.apply(TreeOperation::Last);
                 self.album_selection_request(AlbumCursorKind::Jump)
             }
             Key::PageUp => self.page_album(-1, AlbumCursorKind::Page),
@@ -415,16 +430,23 @@ impl LibraryContentOwner for MusicContent {
             // reach the tree. Right on an already expanded root (the artist
             // Workspace entry) is task 6.4 and stays unhandled here.
             Key::Left if !self.track_focused => {
-                if self.browser.selected_is_artist() {
-                    if let Some(root) = self.browser.selected_target() {
-                        if self.browser.root_is_expanded(&root) {
-                            self.browser.collapse_root(&root);
+                if self.selected_is_artist() {
+                    if let Some(root) = self.browser.selected_target().cloned() {
+                        if self.browser.is_expanded(&root) {
+                            self.browser.apply(TreeOperation::ToggleExpansionTarget(root));
                         }
                     }
                     None
-                } else if self.browser.move_to_parent() {
+                } else if self
+                    .browser
+                    .selected_target()
+                    .and_then(|selected| self.browser.node(selected))
+                    .and_then(|node| node.parent.clone())
+                    .is_some()
+                {
                     // The parent is an artist root, so no album selection
                     // crosses: artist focus never overwrites album persistence.
+                    self.browser.apply(TreeOperation::Parent);
                     self.album_selection_request(AlbumCursorKind::Move)
                 } else {
                     None
@@ -433,10 +455,10 @@ impl LibraryContentOwner for MusicContent {
             // Right first expands cached track children on an album node;
             // the shell already owns any missing album-track fetch and this
             // local operation only projects settled cache data.
-            Key::Right if !self.track_focused && !self.browser.selected_is_artist() => {
-                if let Some(target) = self.browser.selected_target() {
-                    if !self.browser.node_is_expanded(&target) {
-                        self.browser.expand_node(&target);
+            Key::Right if !self.track_focused && !self.selected_is_artist() => {
+                if let Some(target) = self.browser.selected_target().cloned() {
+                    if !self.browser.is_expanded(&target) {
+                        self.browser.apply(TreeOperation::ToggleExpansionTarget(target));
                     }
                 }
                 None
@@ -446,10 +468,10 @@ impl LibraryContentOwner for MusicContent {
             // enters its artist Workspace — Wide takes the inline pane's
             // cursor locally, non-Wide asks the shell to open the Library
             // Hero overlay and focus the same Workspace.
-            Key::Right if !self.track_focused && self.browser.selected_is_artist() => {
-                let root = self.browser.selected_target()?;
-                if !self.browser.root_is_expanded(&root) {
-                    self.browser.expand_root(&root);
+            Key::Right if !self.track_focused && self.selected_is_artist() => {
+                let root = self.browser.selected_target().cloned()?;
+                if !self.browser.is_expanded(&root) {
+                    self.browser.apply(TreeOperation::ToggleExpansionTarget(root));
                     return None;
                 }
                 if self.inline_track_focus_enabled {
@@ -521,13 +543,12 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn post_paint_message(&mut self) -> Option<Msg> {
-        // Task 6.5 (design D4): the tree owner resolved the neighbour album
-        // artwork window from the frame it just painted; the shell applies
-        // the existing idle gate and fetches the typed targets. Source
-        // pagination for this album level is unconditional and no longer
-        // depends on the painted viewport.
-        self.browser
-            .neighbour_prefetch_targets()
+        // Task 6.5 (design D4): the owner translates the neighbour album
+        // artwork window from the frame the shared browser just painted; the
+        // shell applies the existing idle gate and fetches the typed targets.
+        // Source pagination for this album level is unconditional and no
+        // longer depends on the painted viewport.
+        self.neighbour_prefetch_targets()
             .map(|targets| Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets }))
     }
 

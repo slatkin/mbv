@@ -58,6 +58,7 @@ pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
+pub(in crate::app) use components::tree_browser::{render_tree_browser, tree_row_is_full_width};
 pub(in crate::app) use components::tv_wide::TvWideRenderCtx;
 pub(in crate::app) use components::widgets::{
     render_pill_bar, render_placeholder, PillBar, PillBarWindow,
@@ -89,7 +90,7 @@ pub(crate) use screens::sort_filter::{
 pub(crate) use theme::{
     bar_role_fg, ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, DURATION, HERO_CREDITS_NAME,
     HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR, HINT_PILL_FILLS,
-    INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, MUSIC_HEADER, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
+    INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
     PLAYBACK_CONTEXT_FG, PLAYBACK_META_FG, PLAYBACK_TITLE_FG, PLAYBACK_VALUE_FG, PROGRESS_PERCENT,
     PROGRESS_TRACK, SCROLLBAR, SELECTED_ROW_BG, SELECTED_ROW_FG, SELECTED_ROW_PROGRESS_FG,
     SPLIT_ROW_CONTEXT_FG, SPLIT_ROW_TITLE_FG, STATUS_AVAILABLE, STATUS_ERROR, TEXT_ACCENT_MUTED,
@@ -159,6 +160,18 @@ mod music_characterization_tests;
 #[cfg(test)]
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
+#[cfg(test)]
+#[path = "tests_music_tree_gutter.rs"]
+mod music_tree_gutter_tests;
+#[cfg(test)]
+#[path = "tests_music_tree_marquee.rs"]
+mod music_tree_marquee_tests;
+#[cfg(test)]
+#[path = "tests_music_tree_rows.rs"]
+mod music_tree_rows_tests;
+#[cfg(test)]
+#[path = "tests_music_tree_states.rs"]
+mod music_tree_states_tests;
 #[cfg(test)]
 #[path = "tests_non_music.rs"]
 mod non_music_tests;

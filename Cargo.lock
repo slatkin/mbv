@@ -1723,7 +1723,6 @@ dependencies = [
  "tokio",
  "toml",
  "tui-scrollbar",
- "tui-treelistview",
  "tuirealm",
  "unicode-width",
  "ureq",
@@ -3549,17 +3548,6 @@ checksum = "a495ec7eb64f1505a94d56bbb337792b15448394879552b09be2a1460846d99b"
 dependencies = [
  "document-features",
  "ratatui-core",
-]
-
-[[package]]
-name = "tui-treelistview"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7f6167a3904ef5ed42fe4ab2fe4db87e89e38f58cb703625d88b42634a8392f"
-dependencies = [
- "ratatui",
- "rustc-hash",
- "smallvec",
 ]
 
 [[package]]

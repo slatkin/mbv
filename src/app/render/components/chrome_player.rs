@@ -698,9 +698,13 @@ fn marquee_spans(
     max_width: usize,
 ) -> Vec<Span<'static>> {
     let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+    let borrowed: Vec<(&str, Color)> = parts
+        .iter()
+        .map(|(text, color)| (text.as_str(), *color))
+        .collect();
     marquee::marquee_spans(
         &key,
-        parts,
+        &borrowed,
         max_width,
         ctx.marquee_text,
         ctx.marquee_started_at,

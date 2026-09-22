@@ -100,8 +100,9 @@ pub const TEXT_STRONG: Color = Palette::White.color(); // bold titles/headings
 pub const TEXT_EMPHASIS: Color = Palette::Cream.color(); // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = Palette::Yellow.color(); // focused-row title accent
 pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title (the first metadata line)
-/// Grouped Music's artist and section-header text, matching the standard
-/// emphasis colour used by queue and movie list headers.
+/// Legacy Grouped Music header role, retained in the palette contract. The
+/// shared tree painter now uses destination-supplied `TreeTitleRole`s.
+#[allow(dead_code)]
 pub const MUSIC_HEADER: Color = Palette::Cream.color();
 /// The Workspace box's header label (`TRACKLIST`) in a music album Hero. Its
 /// own role rather than `MUSIC_HEADER`, the music tree's artist/section role

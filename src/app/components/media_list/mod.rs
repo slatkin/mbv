@@ -31,9 +31,11 @@ pub use types::{
     SelectionOrigin, SelectionSummary, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
 };
 pub use wide::WideMediaList;
-pub(crate) use wide::{
-    queue_row_background, queue_row_zebra, queue_row_zebra_stripe, row_marquee_key,
-};
+pub(crate) use wide::{queue_row_background, queue_row_zebra_stripe, row_marquee_key};
+// The tree-row zebra role is asserted by the Music buffer tests only; the
+// production zebra pair is composed in `wide` itself.
+#[cfg(test)]
+pub(crate) use wide::queue_row_zebra;
 
 /// The single canonical owner for one logical provider-neutral media-row flow.
 ///

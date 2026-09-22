@@ -1,5 +1,5 @@
 use self::artist_workspace_tests::artist_workspace_owner;
-use self::tree_tests::{press, tree_owner, tree_owner_with_tracks};
+use self::tree_fixtures::{press, tree_owner, tree_owner_with_tracks};
 use super::*;
 use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::make_item;
@@ -46,7 +46,16 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
         vec![0],
         None,
     ));
-    assert!(owner.browser.select_album_target("album-stable"));
+    assert_eq!(
+        owner
+            .browser
+            .apply(TreeOperation::AnchorSelection {
+                target: MusicTreeTarget::Album("album-stable".into()),
+                flow_offset: 0,
+            })
+            .disposition,
+        TreeConsumed::Consumed
+    );
 
     assert_eq!(
         owner.launch_snapshot(),
@@ -150,17 +159,17 @@ fn grouped_music_filter_keeps_the_tree_panel_owner_and_uses_the_shared_query_edi
     assert!(owner.inline_search.is_active());
     assert!(owner.browser.filter_active());
     owner.inline_search.restore_query("Second".into());
-    owner
-        .browser
-        .apply_filter_query(owner.inline_search.query());
+    owner.browser.apply(TreeOperation::EditFilter(
+        owner.inline_search.query().to_string(),
+    ));
     let content = owner.content();
     assert!(matches!(content.list, ListSlot::Media(_)));
     drop(content);
     let titles: Vec<&str> = owner
         .browser
-        .projected_node_targets()
+        .visible_targets()
         .iter()
-        .filter_map(|target| owner.browser.title_of(target))
+        .filter_map(|target| owner.browser.node(target).map(|node| node.title.as_str()))
         .collect();
     assert_eq!(titles, ["Artist", "Second Album"]);
 }
@@ -172,7 +181,7 @@ fn tree_entries_ignore_played_album_state_but_keep_live_progress() {
     let mut owner = MusicContent::new();
     owner.set_content(context(played, ""));
     assert_eq!(
-        owner.tree_entries()[0].semantic_state,
+        owner.tree_projection()[1].semantic_state,
         MediaSemanticState::Ordinary,
         "music tree album rows never inherit stored played state"
     );
@@ -182,7 +191,7 @@ fn tree_entries_ignore_played_album_state_but_keep_live_progress() {
     active.runtime_ticks = 1000;
     owner.set_content(context(active, ""));
     assert_eq!(
-        owner.tree_entries()[0].semantic_state,
+        owner.tree_projection()[1].semantic_state,
         MediaSemanticState::active(Some(50)),
         "music tree retains live playback progress"
     );
@@ -274,7 +283,7 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
     // Artist rows belong to the focused artist root (task 6.4): the detail
     // projection must carry the tree-resolved target, so the fixture focuses
     // the root first and binds the projection to it.
-    owner.browser.select_first_visible();
+    owner.browser.apply(TreeOperation::First);
     let target = owner.artist_detail_target().expect("artist root selected");
     let detail = ArtistDetailProjection {
         target,
@@ -327,7 +336,7 @@ fn album_tracks_survive_an_artist_detail_push_for_another_album() {
         &[("Alpha", &["a-0", "a-1"])],
         Some(vec![album_track.clone()]),
     );
-    owner.browser.select_first_visible();
+    owner.browser.apply(TreeOperation::First);
     let artist_target = owner.artist_detail_target().expect("artist root selected");
     let mut artist_track = make_item("Artist Detail Track", "Audio");
     artist_track.id = "artist-track".into();
@@ -483,12 +492,14 @@ fn artist_hero_switches_to_the_selected_track_album_artwork() {
     owner.expand_all_tree_roots();
     owner.set_hero_image(HeroImageState::Loading);
 
-    let album_a0 = owner.browser.projected_node_targets()[1].clone();
-    owner.browser.expand_node(&album_a0);
-    let track_a0 = owner.browser.projected_node_targets()[2].clone();
-    owner.browser.select_target(&track_a0);
+    // expand_all_tree_roots already revealed the cached track rows.
+    let track_a0 = owner.browser.visible_targets()[2].clone();
+    owner.browser.apply(TreeOperation::Select(track_a0.clone()));
     assert_eq!(
-        owner.browser.selected_track_identity(),
+        owner
+            .selected_track_identity()
+            .as_ref()
+            .map(|(album, track)| (album.as_str(), track.as_str())),
         Some(("a-0", "track-a-0"))
     );
     let first_source = owner.hero_data().expect("artist hero").facts.artwork.source;
@@ -498,12 +509,13 @@ fn artist_hero_switches_to_the_selected_track_album_artwork() {
             if item_id == "a-0" && cache_key == "a-0:P"
     ));
 
-    let album_a1 = owner.browser.projected_node_targets()[3].clone();
-    owner.browser.expand_node(&album_a1);
-    let track_a1 = owner.browser.projected_node_targets()[4].clone();
-    owner.browser.select_target(&track_a1);
+    let track_a1 = owner.browser.visible_targets()[4].clone();
+    owner.browser.apply(TreeOperation::Select(track_a1.clone()));
     assert_eq!(
-        owner.browser.selected_track_identity(),
+        owner
+            .selected_track_identity()
+            .as_ref()
+            .map(|(album, track)| (album.as_str(), track.as_str())),
         Some(("a-1", "track-a-1"))
     );
     let second_source = owner.hero_data().expect("artist hero").facts.artwork.source;
@@ -524,7 +536,7 @@ fn fallback_artist_hero_uses_the_first_album_artwork() {
 
     let mut owner = MusicContent::new();
     owner.set_content(context(make_item("Album", "MusicAlbum"), ""));
-    owner.browser.select_first_visible();
+    owner.browser.apply(TreeOperation::First);
     let target = owner.artist_detail_target().expect("fallback artist root");
     assert_eq!(target.artist_id, None, "the fixture root has no Service ID");
     let mut ctx = owner.context.clone();
@@ -632,7 +644,7 @@ fn a_local_album_move_never_paints_the_prior_albums_tracks() {
     assert_eq!(owner.track_list.rows().len(), 1, "fixture rows for a-0");
 
     press(&mut owner, Key::Down);
-    assert_eq!(owner.browser.selected_album_target(), Some("a-1"));
+    assert_eq!(owner.selected_album_target().as_deref(), Some("a-1"));
     {
         let content = owner.content();
         assert!(content.hero.is_some(), "the new leaf's title still paints");
@@ -651,6 +663,10 @@ fn a_local_album_move_never_paints_the_prior_albums_tracks() {
 }
 
 #[cfg(test)]
+#[path = "music_content_tree_fixtures.rs"]
+mod tree_fixtures;
+
+#[cfg(test)]
 #[path = "music_content_tree_tests.rs"]
 mod tree_tests;
 
@@ -661,3 +677,11 @@ mod artist_workspace_tests;
 #[cfg(test)]
 #[path = "music_content_artist_actions_tests.rs"]
 mod artist_actions_tests;
+
+#[cfg(test)]
+#[path = "music_content_tree_pointer_tests.rs"]
+mod tree_pointer_tests;
+
+#[cfg(test)]
+#[path = "music_content_tree_key_tests.rs"]
+mod tree_key_tests;

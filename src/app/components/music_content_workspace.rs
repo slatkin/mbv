@@ -110,7 +110,7 @@ impl MusicContent {
     /// to empty rows, so the prior title's tracks never paint under the new
     /// one.
     fn resolved_workspace(&self) -> (Option<WorkspaceOwner>, Vec<MediaListRow<String>>) {
-        if self.browser.selected_is_artist() {
+        if self.selected_is_artist() {
             let owner = self.artist_detail_target().map(WorkspaceOwner::Artist);
             let rows = self
                 .current_artist_detail()
@@ -256,66 +256,13 @@ impl MusicContent {
         }
     }
 
-    /// Resolves the selected tree track to stable identities only. The shell
-    /// owns the cached Emby items and resolves the playback queue.
-    fn selected_tree_track(&self) -> Option<(String, String)> {
-        let (album_target, track_target) = self.browser.selected_track_identity()?;
-        self.tree_tracks
-            .get(album_target)?
-            .iter()
-            .find(|track| track.id == track_target)?;
-        Some((album_target.to_string(), track_target.to_string()))
-    }
-
-    /// The settled album projection the tree owner reconciles: one entry per
-    /// album in settled order, carrying the stable album target, the settled
-    /// display text, the album's stable artist identity (design D2/D3), and
-    /// playback-live state. Stored played/unplayed facts are deliberately
-    /// ignored for music rows; a positive position still retains `Active`.
-    fn tree_entries(&self) -> Vec<MusicTreeEntry> {
-        self.context
-            .album_order
-            .iter()
-            .filter_map(|&index| {
-                let (artist, year, name) = self.context.album_info.get(index)?;
-                let artist_key = self.context.album_artist_keys.get(index)?.clone();
-                let target = self.context.album_targets.get(index)?;
-                // The tree's album projection is music by owner context even
-                // when Emby represents its rows as `Folder`. Ignore stored
-                // played state while retaining a positive playback position
-                // as the live `Active` distinction.
-                let semantic_state = self
-                    .context
-                    .list
-                    .items
-                    .get(index)
-                    .map(|item| {
-                        MediaSemanticState::from_progress(
-                            false,
-                            item.playback_position_ticks,
-                            item.runtime_ticks,
-                        )
-                    })
-                    .unwrap_or(MediaSemanticState::Ordinary);
-                Some(MusicTreeEntry {
-                    artist: artist.clone(),
-                    artist_key,
-                    title: name.clone(),
-                    year: (!year.is_empty()).then(|| year.clone()),
-                    target: target.clone(),
-                    semantic_state,
-                })
-            })
-            .collect()
-    }
-
     pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
-        let target = self.browser.selected_album_target()?;
+        let target = self.selected_album_target()?;
         let index = self
             .context
             .album_targets
             .iter()
-            .position(|candidate| candidate == target)?;
+            .position(|candidate| candidate == &target)?;
         self.context.list.items.get(index).cloned()
     }
 
@@ -348,7 +295,7 @@ impl MusicContent {
     /// Resolves the focused artist's settled album targets against the latest
     /// content snapshot.
     fn selected_artist_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
-        let targets = self.browser.selected_artist_album_targets()?;
+        let targets = self.selected_artist_album_targets()?;
         Some(self.resolve_album_targets(targets))
     }
 
@@ -356,7 +303,7 @@ impl MusicContent {
     /// multi-selection boundary: the tree owns membership and the content
     /// owner only translates stable album targets to the current snapshot.
     fn selected_tree_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
-        let targets = self.browser.selected_album_targets_in_display_order();
+        let targets = self.selected_album_targets_in_display_order();
         if targets.is_empty() {
             return None;
         }
@@ -379,24 +326,22 @@ impl MusicContent {
         }))
     }
 
-    /// Whether the tree's focused node is an artist root (task 2.2: an artist
-    /// focus resolves to no album and never writes album persistence).
-    pub(in crate::app) fn selected_is_artist(&self) -> bool {
-        self.browser.selected_is_artist()
-    }
-
     /// The focused artist root's component-resolved detail identity (design
     /// D7): settled identity, display name, leaf album targets, and the
     /// snapshot's settled revision. `None` while an album leaf is focused.
     pub(in crate::app) fn artist_detail_target(&self) -> Option<MusicArtistTarget> {
-        let key = self.browser.selected_artist_key()?.clone();
+        let selected = self.browser.selected_target()?;
+        let MusicTreeTarget::Artist(key) = selected else {
+            return None;
+        };
+        let artist_name = self.browser.node(selected)?.title.clone();
         Some(MusicArtistTarget {
             artist_id: match key {
-                crate::app::music_grouping::ArtistKey::Service(id) => Some(id),
+                crate::app::music_grouping::ArtistKey::Service(id) => Some(id.clone()),
                 crate::app::music_grouping::ArtistKey::Fallback(_) => None,
             },
-            artist_name: self.browser.selected_artist_name()?.to_string(),
-            album_targets: self.browser.selected_artist_album_targets()?,
+            artist_name,
+            album_targets: self.selected_artist_album_targets()?,
             revision: self.context.catalog_revision,
         })
     }
@@ -449,13 +394,55 @@ impl MusicContent {
     /// addresses the focused node.
     fn artist_workspace_focused(&self) -> bool {
         self.track_focused
-            && self.browser.selected_is_artist()
+            && self.selected_is_artist()
             && self.current_artist_detail().is_some()
     }
 
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
         let target = self.track_list.selected_target()?;
         self.workspace_track_item(target)
+    }
+
+    /// The neighbour album-artwork targets the shell prefetches (design D4):
+    /// from the latest completed paint's visible flow, up to one album leaf
+    /// behind the selected leaf and up to three ahead, in visible order,
+    /// skipping artist roots and the selected leaf itself. The owner resolves
+    /// the window here so the shell receives stable targets and never a
+    /// cursor or enough tree state to re-resolve one.
+    ///
+    /// `None` when no paint completed (retained geometry is not the painted
+    /// projection), when an artist root is focused (the shipped suppression),
+    /// or when the window has no album leaf.
+    fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
+        if !self.neighbour_prefetch_eligible() {
+            return None;
+        }
+        let selected = self.browser.selected_target()?.clone();
+        let visible = self.browser.visible_targets();
+        let position = visible.iter().position(|target| *target == selected)?;
+        let album_of = |target: &MusicTreeTarget| target.album_leaf_target().map(str::to_string);
+        let mut targets: Vec<String> = visible[..position]
+            .iter()
+            .rev()
+            .filter_map(album_of)
+            .take(NEIGHBOUR_PREFETCH_BEHIND)
+            .collect();
+        targets.extend(
+            visible[position + 1..]
+                .iter()
+                .filter_map(album_of)
+                .take(NEIGHBOUR_PREFETCH_AHEAD),
+        );
+        (!targets.is_empty()).then_some(targets)
+    }
+
+    /// The shipped neighbour-prefetch suppression: no window without a
+    /// completed paint (retained geometry is not the painted projection),
+    /// with an artist root focused, or while a filter session is active.
+    fn neighbour_prefetch_eligible(&self) -> bool {
+        self.browser.has_completed_paint()
+            && !self.selected_is_artist()
+            && !self.browser.filter_active()
     }
 
     /// Resolves a focused Workspace track as an artist-track activation when
@@ -540,7 +527,7 @@ impl MusicContent {
             let artwork = self.artist_hero_artwork(detail);
             return Some(artist_hero_data(detail, artwork, self.hero_image.clone()));
         }
-        if self.browser.selected_is_artist() {
+        if self.selected_is_artist() {
             return None;
         }
         let album = self.selected_item()?;
@@ -588,7 +575,6 @@ impl MusicContent {
                 }),
             }
         });
-        self.browser.set_search_bar(self.inline_search.query());
         let selector = (!self.context.groups.is_empty()).then(|| SelectorRow {
             pills: self
                 .context

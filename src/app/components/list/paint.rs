@@ -123,6 +123,21 @@ impl<Target> PaintRetainedState<Target> {
             .as_ref()
             .and_then(|paint| paint.selected_row_rect)
     }
+
+    /// A target's one-line row rectangle from the latest completed paint,
+    /// clipped to the frame's content area (so a full-width selected row's
+    /// claim band is not part of the row rect), if it painted one. This is a
+    /// read-only stable-target look-up: the retained row map itself stays
+    /// private.
+    pub fn row_rect_for(&self, target: &Target) -> Option<Rect>
+    where
+        Target: PartialEq,
+    {
+        let paint = self.completed.as_ref()?;
+        paint.rows.iter().find_map(|(rect, row_target)| {
+            (row_target == target).then(|| rect.intersection(paint.content_rect))
+        })
+    }
 }
 
 /// Shared retained-paint operations supplied by a list shape's state owner.
@@ -186,11 +201,13 @@ pub trait PaintRetained<Target> {
 
     /// Explicitly invalidate retained geometry after content or geometry
     /// changes.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn invalidate(&mut self) {
         self.paint_retained_mut().invalidate();
     }
 
     /// Whether the latest completed frame claims `point`.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn claims_point(&self, point: Position) -> bool {
         self.paint_retained().claims_point(point)
     }
@@ -202,6 +219,7 @@ pub trait PaintRetained<Target> {
     }
 
     /// The selected row's rectangle from the latest completed frame.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn selected_row_rect(&self) -> Option<Rect> {
         self.paint_retained().selected_row_rect()
     }

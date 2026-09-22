@@ -187,9 +187,11 @@ pub(in crate::app) fn media_list_row<Target>(
                             || title_reveal == MediaListTitleReveal::OnSelection)
                 })
                 .map(|(key, text, started_at)| {
+                    let borrowed: Vec<(&str, Color)> =
+                        parts.iter().map(|(t, c)| (t.as_str(), *c)).collect();
                     marquee_spans(
                         key,
-                        &parts,
+                        &borrowed,
                         title_width,
                         text,
                         started_at,

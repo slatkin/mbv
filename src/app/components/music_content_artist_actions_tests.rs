@@ -1,9 +1,8 @@
 //! Grouped Music artist-action tests: Play/Enqueue materialization over the
 //! settled leaves, filter interaction, and unresolved-target feedback.
 
-use super::tree_tests::{press, tree_owner};
+use super::tree_fixtures::{press, tree_owner};
 use super::*;
-use crate::app::components::music_tree::MusicTreeTarget;
 
 fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicContent {
     let mut items = Vec::new();
@@ -100,8 +99,13 @@ fn artist_actions_materialize_all_albums_for_collapsed_and_expanded_roots() {
     let root = collapsed
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
-    collapsed.browser.collapse_root(&root);
+    if collapsed.browser.is_expanded(&root) {
+        collapsed
+            .browser
+            .apply(TreeOperation::ToggleExpansionTarget(root));
+    }
     for code in [
         Key::Char('p'),
         Key::Char('a'),
@@ -116,8 +120,13 @@ fn artist_actions_materialize_all_albums_for_collapsed_and_expanded_roots() {
     let root = expanded
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
-    expanded.browser.expand_root(&root);
+    if !expanded.browser.is_expanded(&root) {
+        expanded
+            .browser
+            .apply(TreeOperation::ToggleExpansionTarget(root));
+    }
     for code in [
         Key::Char('p'),
         Key::Char('a'),
@@ -130,23 +139,26 @@ fn artist_actions_materialize_all_albums_for_collapsed_and_expanded_roots() {
 
 #[test]
 fn filtered_artist_actions_materialize_only_matching_leaves_in_settled_order() {
-    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1", "a-2", "a-3", "a-4"])]);
+    let mut owner = tree_owner(&[(
+        "Alpha",
+        &["match-1", "skip-2", "match-3", "skip-4", "skip-5"],
+    )]);
     press(&mut owner, Key::Home);
-    let matching: Vec<MusicTreeTarget> = owner
+    // Album leaves carry their target as the settled title, so a fuzzy query
+    // over "match" keeps exactly the two match-* leaves visible in the shared
+    // filter session (armed directly, as the old injection did, so the
+    // editor-free context chord still routes to the tree).
+    owner
         .browser
-        .projected_node_targets()
-        .into_iter()
-        .filter(|target| matches!(target.album_leaf_target(), Some("a-1" | "a-3")))
-        .collect();
-    owner.browser.set_filter_matches(Some(&matching));
+        .apply(TreeOperation::EditFilter("match".to_string()));
 
     assert_eq!(
         artist_action_ids(&mut owner, Key::Char('p')),
-        vec!["a-1".to_string(), "a-3".to_string()]
+        vec!["match-1".to_string(), "match-3".to_string()]
     );
     assert_eq!(
         artist_action_ids(&mut owner, Key::Char('.')),
-        vec!["a-1".to_string(), "a-3".to_string()]
+        vec!["match-1".to_string(), "match-3".to_string()]
     );
 }
 
@@ -209,7 +221,9 @@ fn fully_unresolved_artist_action_requests_shell_feedback() {
 fn empty_visible_artist_emits_no_action_target() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
     press(&mut owner, Key::Home);
-    owner.browser.set_filter_matches(Some(&[]));
+    owner
+        .browser
+        .apply(TreeOperation::EditFilter("zzzznomatch".to_string()));
 
     for (code, modifiers) in [
         (Key::Char('p'), KeyModifiers::CONTROL),
@@ -233,7 +247,7 @@ fn equal_name_artists_resolve_actions_by_stable_root_identity() {
     press(&mut owner, Key::Home);
     press(&mut owner, Key::Down);
     press(&mut owner, Key::Down);
-    assert!(owner.browser.selected_is_artist());
+    assert!(owner.selected_is_artist());
 
     for code in [
         Key::Char('p'),

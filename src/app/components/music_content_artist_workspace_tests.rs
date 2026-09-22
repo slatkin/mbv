@@ -1,7 +1,7 @@
 //! Grouped Music artist-Workspace tests: the mounted artist root's inline
 //! Wide pane, its track activation/context arms, and expansion/focus entry.
 
-use super::tree_tests::{press, selected_row, tree_owner};
+use super::tree_fixtures::{press, selected_row, tree_owner};
 use super::*;
 
 /// Task 6.3 correction: an artist root's Workspace rows come from the
@@ -15,7 +15,7 @@ pub(super) fn artist_workspace_owner() -> MusicContent {
 
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
     press(&mut owner, Key::Home);
-    assert!(owner.browser.selected_is_artist(), "fixture focuses a root");
+    assert!(owner.selected_is_artist(), "fixture focuses a root");
     let target = owner.artist_detail_target().expect("artist target");
     let mut first = make_item("Track One", "Audio");
     first.id = "alpha-track-1".into();
@@ -182,8 +182,9 @@ fn artist_workspace_root_enter_is_handled_by_the_non_wide_panel_gate() {
     let root = owner
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
-    assert!(owner.browser.root_is_expanded(&root));
+    assert!(owner.browser.is_expanded(&root));
     assert!(!owner.track_focused(), "the rail owns the focus");
 
     // The mounted non-Wide panel intercepts this chord before the owner and
@@ -191,7 +192,7 @@ fn artist_workspace_root_enter_is_handled_by_the_non_wide_panel_gate() {
     // request to emit on this geometry.
     assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(
-        owner.browser.root_is_expanded(&root),
+        owner.browser.is_expanded(&root),
         "unfiltered Enter preserves expansion"
     );
 }
@@ -203,11 +204,12 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
     let root = owner
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
     // The initial album adoption expanded the first root's path.
-    assert!(owner.browser.root_is_expanded(&root));
+    assert!(owner.browser.is_expanded(&root));
     press(&mut owner, Key::Down);
-    assert_eq!(owner.browser.selected_album_target(), Some("a-0"));
+    assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));
 
     // Left on a leaf returns to its artist parent without collapsing it and
     // without emitting an album-cursor request (an artist never overwrites
@@ -219,16 +221,16 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
         }
         other => panic!("expected the typed artist-track request, got {other:?}"),
     }
-    assert_eq!(owner.browser.selected_target(), Some(root.clone()));
+    assert_eq!(owner.browser.selected_target(), Some(&root));
     assert!(
-        owner.browser.root_is_expanded(&root),
+        owner.browser.is_expanded(&root),
         "moving to the parent must not collapse it"
     );
 
     // Left on the expanded root collapses it in place.
     assert_eq!(press(&mut owner, Key::Left), None);
-    assert!(!owner.browser.root_is_expanded(&root));
-    assert_eq!(owner.browser.selected_target(), Some(root.clone()));
+    assert!(!owner.browser.is_expanded(&root));
+    assert_eq!(owner.browser.selected_target(), Some(&root));
 }
 
 #[test]
@@ -242,9 +244,10 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
     let root = owner
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
-    assert!(owner.browser.selected_is_artist());
-    assert!(!owner.browser.root_is_expanded(&root));
+    assert!(owner.selected_is_artist());
+    assert!(!owner.browser.is_expanded(&root));
 
     // The first Right on the collapsed root expands it and nothing else
     // (task 6.4): the artist Workspace is entered only by a later Right.
@@ -253,10 +256,7 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
         None,
         "expand emits no request"
     );
-    assert!(
-        owner.browser.root_is_expanded(&root),
-        "Right expands the root"
-    );
+    assert!(owner.browser.is_expanded(&root), "Right expands the root");
     assert!(
         !owner.track_focused(),
         "the first Right must not enter the Workspace"
@@ -272,8 +272,8 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
         }
         other => panic!("expected the artist Workspace entry, got {other:?}"),
     }
-    assert!(owner.browser.root_is_expanded(&root));
-    assert_eq!(owner.browser.selected_target(), Some(root.clone()));
+    assert!(owner.browser.is_expanded(&root));
+    assert_eq!(owner.browser.selected_target(), Some(&root));
 }
 
 /// Task 6.4: in Wide geometry the later Right on an expanded artist root takes
@@ -285,8 +285,9 @@ fn wide_right_on_an_expanded_artist_root_takes_the_inline_workspace_focus() {
     let root = owner
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
-    assert!(owner.browser.root_is_expanded(&root));
+    assert!(owner.browser.is_expanded(&root));
     assert!(!owner.track_focused());
 
     assert_eq!(press(&mut owner, Key::Right), None);
@@ -405,9 +406,9 @@ fn restored_album_selection_lands_visible_behind_many_artist_roots() {
         .draw(|frame| owner.browser.view(frame, area))
         .unwrap();
 
-    assert_eq!(owner.browser.selected_album_target(), Some("a5-0"));
+    assert_eq!(owner.selected_album_target().as_deref(), Some("a5-0"));
     let row = selected_row(&owner);
-    let offset = owner.browser.offset();
+    let offset = owner.browser.viewport_offset();
     assert!(
         row >= offset && row < offset + 5,
         "restored album row {row} outside the viewport {offset}..{}",
@@ -450,11 +451,11 @@ fn tree_entries_ignore_played_but_keep_live_progress() {
     let mut owner = MusicContent::new();
     owner.set_content(ctx);
 
-    let entries = owner.tree_entries();
-    assert_eq!(entries.len(), 1);
-    assert_eq!(entries[0].title, "Played Album");
+    let entries = owner.tree_projection();
+    assert_eq!(entries.len(), 2, "an artist root plus its album leaf");
+    assert_eq!(entries[1].title, "Played Album");
     assert_eq!(
-        entries[0].semantic_state,
+        entries[1].semantic_state,
         MediaSemanticState::active(Some(50)),
         "stored played state never suppresses live playback emphasis"
     );

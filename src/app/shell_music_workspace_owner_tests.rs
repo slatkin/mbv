@@ -425,7 +425,7 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
     // The carrier clamps the requested scroll to its own valid range for the
     // fixture's short flow; read back the clamped value as the ground truth
     // the round trip below must preserve exactly.
-    let scroll = model.test_music_owner().album_scroll();
+    let scroll = model.test_music_owner().browser.viewport_offset();
 
     // Tab away to Home: Music is no longer the active owner, but stays
     // retained (its library is still in the catalog).
@@ -446,7 +446,7 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
         "the owner's album cursor survives the tab round trip"
     );
     assert_eq!(
-        model.test_music_owner().album_scroll(),
+        model.test_music_owner().browser.viewport_offset(),
         scroll,
         "the owner's scroll survives the tab round trip"
     );

@@ -392,6 +392,17 @@ flow rectangle, while the destination retains Service content and typed
 translation.
 _Avoid_: generic list, two-column list, Inline Search
 
+**TreeBrowser**:
+The one complete shared nesting browser Interactive Component
+(`src/app/components/list/tree_browser/`), the nesting counterpart to the flat
+MediaList. Destinations supply only plain `TreeNode<Target>` values plus the
+closed per-node `TreeMarkPolicy`, and translate emitted stable-target intents;
+they supply no tree behavior of their own. Like MediaList it is embedded — never
+independently mounted, focused, subscribed, or given a ComponentId. Its
+`Component::view` is the only interactive view entry point and delegates
+painting to one shared destination-neutral Render Component under
+`src/app/render/components/tree_browser/`.
+
 **Media-list row**:
 The one painted fixed-height row of a `MediaList` flow in every Panel mode. Its
 left-aligned metadata slot carries a progress badge in the FOAM role; its

@@ -3,7 +3,8 @@ use ratatui::Terminal;
 use rstest::rstest;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::music_tree::MusicTreeTarget;
+use crate::app::components::list::tree_browser::TreeOperation;
+use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest, UserEvent};
 use crate::app::render::{make_music_group_app, make_music_group_app_with_second_album};
 use crate::app::tests::make_item;
@@ -207,7 +208,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
         let music = harness.model().test_music_owner();
         let root = music
             .browser
-            .projected_node_targets()
+            .visible_targets()
             .first()
             .expect("tree root")
             .clone();
@@ -286,6 +287,9 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     }
     assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Library);
 
+    // The click's mutation invalidated the completed frame; re-paint so the
+    // right-click resolves the latest geometry.
+    draw_frame(&mut harness);
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
     harness.inject(right_click(tree_point.0, tree_point.1));
     let outcome = harness.step();
@@ -344,7 +348,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
         let point_for = |target: Option<&str>| {
             let node = music
                 .browser
-                .projected_node_targets()
+                .visible_targets()
                 .into_iter()
                 .find(|candidate| candidate.album_leaf_target() == target)
                 .expect("painted tree node");
@@ -383,7 +387,9 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     }));
     assert!(harness.model().test_music_owner().selected_is_artist());
 
-    // The same completed frame resolves the leaf's stable album identity.
+    // The root click's mutation invalidated the completed frame; re-paint so
+    // the leaf click resolves the latest geometry.
+    draw_frame(&mut harness);
     harness.inject(click(album_point.0, album_point.1));
     let outcome = harness.step();
     assert!(outcome.messages.iter().any(|message| matches!(
@@ -395,7 +401,8 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
             .model()
             .test_music_owner()
             .browser
-            .selected_album_target(),
+            .selected_target()
+            .and_then(|target| target.album_leaf_target()),
         Some("album-1")
     );
 
@@ -407,7 +414,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
         .model_mut()
         .test_music_owner_mut()
         .browser
-        .invalidate();
+        .invalidate_paint();
     harness.inject(click(album_point.0, album_point.1));
     let outcome = harness.step();
     assert!(outcome.messages.iter().all(|message| {
@@ -418,7 +425,8 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
             .model()
             .test_music_owner()
             .browser
-            .selected_album_target(),
+            .selected_target()
+            .and_then(|target| target.album_leaf_target()),
         Some("album-1"),
         "the stale click did not mutate the tree selection"
     );
@@ -485,7 +493,7 @@ fn album_target(harness: &TickHarness, target: &str) -> MusicTreeTarget {
     let music = harness.model().test_music_owner();
     music
         .browser
-        .projected_node_targets()
+        .visible_targets()
         .into_iter()
         .find(|candidate| candidate.album_leaf_target() == Some(target))
         .expect("projected album node")
@@ -506,7 +514,7 @@ impl TreeDoubleClickNode {
         let music = harness.model().test_music_owner();
         music
             .browser
-            .projected_node_targets()
+            .visible_targets()
             .into_iter()
             .find(|candidate| match self {
                 TreeDoubleClickNode::ArtistRoot => candidate.is_artist(),
@@ -536,11 +544,11 @@ fn cached_track(id: &str, number: i64) -> mbv_core::api::EmbyItem {
     track
 }
 
-/// The painted point of any tree row, resolved from the tree's completed frame.
+/// The painted point of any tree row, resolved from the tree's completed
+/// frame through the shared read-only stable-target row geometry.
 fn tree_node_point(harness: &TickHarness, target: &MusicTreeTarget) -> (u16, u16) {
-    let row = harness
-        .model()
-        .test_music_owner()
+    let music = harness.model().test_music_owner();
+    let row = music
         .browser
         .row_rect_for(target)
         .expect("painted tree row");
@@ -580,7 +588,7 @@ fn expanded_track_harness(app: crate::app::App) -> TickHarness {
         .model_mut()
         .test_music_owner_mut()
         .browser
-        .expand_node(&album_id);
+        .apply(TreeOperation::ToggleExpansionTarget(album_id.clone()));
     draw_frame(&mut harness);
     harness
 }
@@ -660,7 +668,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
         .model()
         .test_music_owner()
         .browser
-        .node_is_expanded(&node_id);
+        .is_expanded(&node_id);
 
     // Open the production filter through the router, then feed the
     // destination's own query (the panel paints the tree, never a flat result
@@ -671,7 +679,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
             .model_mut()
             .test_music_owner_mut()
             .browser
-            .apply_filter_query(node.filter_query());
+            .apply(TreeOperation::EditFilter(node.filter_query().to_string()));
         draw_frame(&mut harness);
         assert!(
             harness.model().test_music_owner().inline_search.results_len() == 0,
@@ -709,7 +717,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
             .model()
             .test_music_owner()
             .browser
-            .node_is_expanded(&node_id),
+            .is_expanded(&node_id),
         was_expanded,
         "{width}x{height} {node:?} filtered={filtered}: double-click toggles persistent expansion"
     );
@@ -730,20 +738,18 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
 }
 
 /// The painted point of the `make_music_group_app` album leaf's cached track
-/// row, resolved from the tree's completed frame.
+/// row, resolved from the tree's completed frame through the shared read-only
+/// stable-target row geometry.
 fn track_point(harness: &TickHarness, track: &str) -> (u16, u16) {
     let music = harness.model().test_music_owner();
     let node = music
         .browser
-        .projected_node_targets()
+        .visible_targets()
         .into_iter()
         .find(|candidate| {
-            music
-                .browser
-                .track_identity_of(candidate)
-                .is_some_and(|(album_target, track_target)| {
-                    album_target == "album-1" && track_target == track
-                })
+            matches!(candidate,
+                MusicTreeTarget::Track { album, track: track_target }
+                    if album == "album-1" && track_target == track)
         })
         .expect("painted track node");
     let row = music
@@ -843,7 +849,7 @@ fn double_click_a_childless_album_claims_the_gesture_unchanged() {
             .model()
             .test_music_owner()
             .browser
-            .node_is_expanded(&childless),
+            .is_expanded(&childless),
         "the childless leaf starts collapsed"
     );
     let at = tree_node_point(&harness, &childless);
@@ -874,7 +880,7 @@ fn double_click_a_childless_album_claims_the_gesture_unchanged() {
             .model()
             .test_music_owner()
             .browser
-            .node_is_expanded(&childless),
+            .is_expanded(&childless),
         "the claimed childless leaf keeps its expansion state"
     );
     assert!(
