@@ -35,8 +35,8 @@
 
 ## 5. Verification and close-out
 
-- [ ] 5.1 Confirm no seam type exposes a `tui-treelistview` type and `media_list` has no path to that crate. Verify: `grep -RIn 'tui_treelistview' src/app/components/list src/app/components/media_list` finds nothing, while dependency usage remains confined to the tree boundary.
-- [ ] 5.2 Run the full gate: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run -p mbv`, and `cargo nextest run --workspace`. Verify: all commands are clean.
-- [ ] 5.3 Confirm every file in the exact after production file list recorded by 4.4 is at or under 800 lines with `wc -l <recorded production files>`. Verify: no production file exceeds 800 lines; test files are governed by focused readability review rather than this production-file cap.
-- [ ] 5.4 Run `openspec validate extract-shared-list-components --strict`. Verify: it passes.
-- [ ] 5.5 Commit the implementation, revised planning artifacts, and `baseline.md`. Verify: `git status --short` is empty after the commit.
+- [x] 5.1 Confirm no seam type exposes a `tui-treelistview` type and `media_list` has no path to that crate. Verify: `grep -RIn 'tui_treelistview' src/app/components/list src/app/components/media_list` finds nothing, while dependency usage remains confined to the tree boundary.
+- [x] 5.2 Run the full gate: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run -p mbv`, and `cargo nextest run --workspace`. Verify: all commands are clean.
+- [x] 5.3 Confirm every file in the exact after production file list recorded by 4.4 is at or under 800 lines with `wc -l <recorded production files>`. Verify: no production file exceeds 800 lines; test files are governed by focused readability review rather than this production-file cap.
+- [x] 5.4 Run `openspec validate extract-shared-list-components --strict`. Verify: it passes.
+- [x] 5.5 Commit the implementation, revised planning artifacts, and `baseline.md`. Verify: `git status --short` is empty after the commit.
