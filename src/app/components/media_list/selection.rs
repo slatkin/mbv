@@ -1,4 +1,26 @@
-use super::MediaList;
+use super::{MediaList, MediaListOperation, MediaListSurfaceInput};
+
+impl MediaListSurfaceInput {
+    pub fn into_operation<Target>(
+        self,
+        target: Option<Target>,
+    ) -> Option<MediaListOperation<Target>> {
+        Some(match self {
+            Self::Move(delta) => MediaListOperation::Move(delta),
+            Self::Page(delta) => MediaListOperation::Page(delta),
+            Self::First => MediaListOperation::First,
+            Self::Last => MediaListOperation::Last,
+            Self::Activate => MediaListOperation::ActivateCurrent,
+            Self::Context => MediaListOperation::ContextCurrent,
+            Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
+            Self::Click(_) => MediaListOperation::Select(target?),
+            Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
+            Self::RangeClick(_) => MediaListOperation::Range(target?),
+            Self::DoubleClick(_) => MediaListOperation::Activate(target?),
+            Self::ContextClick(_) => MediaListOperation::Context(target?),
+        })
+    }
+}
 
 impl<Target: Clone + PartialEq> MediaList<Target> {
     /// Toggle a target and freeze the resulting explicit set. The first toggle

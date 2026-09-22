@@ -1,8 +1,7 @@
 use crate::app::components::library_panel::LibraryKey;
-use crate::app::palette;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 
 /// A bounded percentage used by active canonical media-list rows.
@@ -144,24 +143,6 @@ pub struct ZebraStripe {
     pub unfocused: Color,
 }
 
-/// The Queue's row palette, shared by the Queue and Grouped Music tree so
-/// their base and zebra fills cannot drift apart. The base fill is the
-/// recessed QueuePanel surface; the stripe is the QueueColumn surface.
-pub(crate) fn queue_row_background(focused: bool) -> Color {
-    palette::surface_colors(palette::Surface::QueuePanel, focused).fill
-}
-
-pub(crate) fn queue_row_zebra(focused: bool) -> Color {
-    palette::surface_colors(palette::Surface::QueueColumn, focused).fill
-}
-
-pub(crate) fn queue_row_zebra_stripe() -> ZebraStripe {
-    ZebraStripe {
-        focused: queue_row_zebra(true),
-        unfocused: queue_row_zebra(false),
-    }
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WideMediaListPaintPolicy {
     focused: bool,
@@ -250,28 +231,6 @@ pub enum MediaListOperation<Target> {
     Range(Target),
     Activate(Target),
     Context(Target),
-}
-
-impl MediaListSurfaceInput {
-    pub fn into_operation<Target>(
-        self,
-        target: Option<Target>,
-    ) -> Option<MediaListOperation<Target>> {
-        Some(match self {
-            Self::Move(delta) => MediaListOperation::Move(delta),
-            Self::Page(delta) => MediaListOperation::Page(delta),
-            Self::First => MediaListOperation::First,
-            Self::Last => MediaListOperation::Last,
-            Self::Activate => MediaListOperation::ActivateCurrent,
-            Self::Context => MediaListOperation::ContextCurrent,
-            Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
-            Self::Click(_) => MediaListOperation::Select(target?),
-            Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
-            Self::RangeClick(_) => MediaListOperation::Range(target?),
-            Self::DoubleClick(_) => MediaListOperation::Activate(target?),
-            Self::ContextClick(_) => MediaListOperation::Context(target?),
-        })
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -384,24 +343,6 @@ impl<Target> MediaListRow<Target> {
     }
 }
 
-/// The text a list's marquee clock keys on for one row: the full title text the
-/// painter marquees — a split row's context text and item title, one space
-/// apart — or `None` for a row with no title. One formula for both sides: the
-/// presenter keys its clock with this text and hands the painter the same
-/// string, so the two cannot drift. A drift makes the clock restart every frame
-/// and the marquee hold at the start forever.
-pub(crate) fn row_marquee_key<Target>(row: &MediaListRow<Target>) -> Option<String> {
-    match row {
-        MediaListRow::Item {
-            primary, secondary, ..
-        } => Some(match secondary.as_deref().filter(|sec| !sec.is_empty()) {
-            Some(sec) => format!("{primary} {sec}"),
-            None => primary.clone(),
-        }),
-        MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
-    }
-}
-
 /// The clamped one-column viewport of a [`MediaList`] for a given painted
 /// height: `offset` is the display-row index at the viewport top, so display
 /// row `i` paints at screen row `i - offset`. `total_rows` counts every
@@ -413,4 +354,74 @@ pub struct WideViewport {
     pub total_rows: usize,
 }
 
-impl WideViewport {}
+/// Flow-space geometry for a painted media-list control.
+///
+/// Rows contain the source-row lookup used by painters and an optional stable
+/// target for hit maps.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RowGeometry<Target> {
+    offset: usize,
+    rows: Vec<FlowRow<Target>>,
+    selected_row: Option<usize>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct FlowRow<Target> {
+    source_row: Option<usize>,
+    target: Option<Target>,
+}
+
+impl<Target> RowGeometry<Target> {
+    /// Display-row index at the viewport top.
+    pub fn offset(&self) -> usize {
+        self.offset
+    }
+
+    /// Number of rows in the complete painted flow.
+    pub fn len(&self) -> usize {
+        self.rows.len()
+    }
+
+    /// Display-row index of the selected row in flow space.
+    pub fn selected_row(&self) -> Option<usize> {
+        self.selected_row
+    }
+
+    /// The selected row's absolute one-line rectangle when it is visible.
+    pub fn selected_row_rect(&self, area: Rect) -> Option<Rect> {
+        let row = self.selected_row?;
+        (self.offset..self.offset.saturating_add(area.height as usize))
+            .contains(&row)
+            .then(|| Rect {
+                y: area.y + (row - self.offset) as u16,
+                height: 1,
+                ..area
+            })
+    }
+
+    /// Resolve a flow row to its source row for canonical painting.
+    pub(crate) fn source_row(&self, row: usize) -> Option<usize> {
+        self.rows.get(row).and_then(|row| row.source_row)
+    }
+}
+
+impl<Target: Clone> RowGeometry<Target> {
+    pub(crate) fn source(
+        rows: &[MediaListRow<Target>],
+        offset: usize,
+        selected_row: Option<usize>,
+    ) -> Self {
+        Self {
+            offset,
+            rows: rows
+                .iter()
+                .enumerate()
+                .map(|(source_row, row)| FlowRow {
+                    source_row: Some(source_row),
+                    target: row.selectable_target().cloned(),
+                })
+                .collect(),
+            selected_row,
+        }
+    }
+}

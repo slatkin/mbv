@@ -1,13 +1,51 @@
 use super::{
     MediaList, MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition,
-    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
+    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
 };
+use crate::app::palette;
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Color;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
+
+/// The Queue's row palette, shared by the Queue and Grouped Music tree so
+/// their base and zebra fills cannot drift apart. The base fill is the
+/// recessed QueuePanel surface; the stripe is the QueueColumn surface.
+pub(crate) fn queue_row_background(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueuePanel, focused).fill
+}
+
+pub(crate) fn queue_row_zebra(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueueColumn, focused).fill
+}
+
+pub(crate) fn queue_row_zebra_stripe() -> ZebraStripe {
+    ZebraStripe {
+        focused: queue_row_zebra(true),
+        unfocused: queue_row_zebra(false),
+    }
+}
+
+/// The text a list's marquee clock keys on for one row: the full title text the
+/// painter marquees — a split row's context text and item title, one space
+/// apart — or `None` for a row with no title. One formula for both sides: the
+/// presenter keys its clock with this text and hands the painter the same
+/// string, so the two cannot drift. A drift makes the clock restart every frame
+/// and the marquee hold at the start forever.
+pub(crate) fn row_marquee_key<Target>(row: &MediaListRow<Target>) -> Option<String> {
+    match row {
+        MediaListRow::Item {
+            primary, secondary, ..
+        } => Some(match secondary.as_deref().filter(|sec| !sec.is_empty()) {
+            Some(sec) => format!("{primary} {sec}"),
+            None => primary.clone(),
+        }),
+        MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
+    }
+}
 
 /// The read-only facts retained by one completed `WideMediaList::view`.
 struct WidePaintResult<Target> {

@@ -4,7 +4,6 @@
 //! owner. Painting lives in `crate::app::render::components::media_list`.
 
 use crate::app::ui_util::move_cursor;
-use ratatui::layout::Rect;
 use std::time::Instant;
 
 mod anchor;
@@ -19,83 +18,16 @@ mod wide;
 pub use anchor::ViewportAnchor;
 pub use carrier::MediaListCarrier;
 pub use grouping::letter_grouped_rows;
-pub(crate) use types::row_marquee_key;
-pub(crate) use types::{queue_row_background, queue_row_zebra, queue_row_zebra_stripe};
 pub use types::{
     ActiveProgress, LibrarySelectionOrigin, MediaKind, MediaListDisposition, MediaListOperation,
     MediaListRow, MediaListSurfaceInput, MediaListTitleReveal, MediaListTrailing,
-    MediaListTransition, MediaSemanticState, RowIntent, SelectedRowSurface, SelectionOrigin,
-    SelectionSummary, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
+    MediaListTransition, MediaSemanticState, RowGeometry, RowIntent, SelectedRowSurface,
+    SelectionOrigin, SelectionSummary, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
 };
 pub use wide::WideMediaList;
-
-/// Flow-space geometry for a painted media-list control.
-///
-/// Rows contain the source-row lookup used by painters and an optional stable
-/// target for hit maps.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RowGeometry<Target> {
-    offset: usize,
-    rows: Vec<FlowRow<Target>>,
-    selected_row: Option<usize>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct FlowRow<Target> {
-    source_row: Option<usize>,
-    target: Option<Target>,
-}
-
-impl<Target> RowGeometry<Target> {
-    /// Display-row index at the viewport top.
-    pub fn offset(&self) -> usize {
-        self.offset
-    }
-
-    /// Number of rows in the complete painted flow.
-    pub fn len(&self) -> usize {
-        self.rows.len()
-    }
-
-    /// Display-row index of the selected row in flow space.
-    pub fn selected_row(&self) -> Option<usize> {
-        self.selected_row
-    }
-
-    /// The selected row's absolute one-line rectangle when it is visible.
-    pub fn selected_row_rect(&self, area: Rect) -> Option<Rect> {
-        let row = self.selected_row?;
-        (self.offset..self.offset.saturating_add(area.height as usize))
-            .contains(&row)
-            .then(|| Rect {
-                y: area.y + (row - self.offset) as u16,
-                height: 1,
-                ..area
-            })
-    }
-
-    /// Resolve a flow row to its source row for canonical painting.
-    pub(crate) fn source_row(&self, row: usize) -> Option<usize> {
-        self.rows.get(row).and_then(|row| row.source_row)
-    }
-}
-
-impl<Target: Clone> RowGeometry<Target> {
-    fn source(rows: &[MediaListRow<Target>], offset: usize, selected_row: Option<usize>) -> Self {
-        Self {
-            offset,
-            rows: rows
-                .iter()
-                .enumerate()
-                .map(|(source_row, row)| FlowRow {
-                    source_row: Some(source_row),
-                    target: row.selectable_target().cloned(),
-                })
-                .collect(),
-            selected_row,
-        }
-    }
-}
+pub(crate) use wide::{
+    queue_row_background, queue_row_zebra, queue_row_zebra_stripe, row_marquee_key,
+};
 
 /// The single canonical owner for one logical provider-neutral media-row flow.
 ///
