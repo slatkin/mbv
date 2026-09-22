@@ -233,11 +233,20 @@ fn pending_launch_tab_resolves_after_catalog_arrival_and_restores_existing_tab()
 /// A local-daemon/remote launch attaches a live Emby client at construction
 /// and never spawns the Emby startup worker, so `apply_emby_bootstrap` never
 /// runs. Its live catalog arrives through `fetch_home`'s view rebuild, which
-/// must mark the catalog ready or the saved launch tab never resolves.
+/// must mark the catalog ready or the saved launch tab never resolves. The
+/// resolved tab must also load its library's content, not just select the
+/// tab, or the panel's owner is empty and the tab paints blank.
 #[test]
-fn home_view_rebuild_marks_the_catalog_ready_and_resolves_the_launch_tab() {
+fn restored_launch_tab_loads_its_library_content_not_just_the_tab() {
     let mut app = crate::app::render::make_movie_app();
     app.emby_catalog_ready = false;
+
+    let mut second_library = make_item("Shows", "CollectionFolder");
+    second_library.id = "lib-shows".into();
+    second_library.is_folder = true;
+    second_library.collection_type = "tvshows".into();
+    app.libs.push(crate::app::LibraryTab::new(second_library));
+
     let views: Vec<mbv_core::api::EmbyItem> =
         app.libs.iter().map(|lib| lib.library.clone()).collect();
     app.rebuild_library_tabs_from_views(&views);
@@ -251,7 +260,7 @@ fn home_view_rebuild_marks_the_catalog_ready_and_resolves_the_launch_tab() {
         version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
         tab: mbv_core::config::TabIdentity::ServiceLibrary {
             kind: ServiceKind::Emby,
-            library_id: "lib-movies".into(),
+            library_id: "lib-shows".into(),
         },
         panel_focus: mbv_core::config::LaunchPanelFocus::Library,
         selector: None,
@@ -260,8 +269,18 @@ fn home_view_rebuild_marks_the_catalog_ready_and_resolves_the_launch_tab() {
 
     app.resolve_library_tab_pending();
 
-    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(1));
     assert!(app.pending_launch_tab_resolved);
+    assert_eq!(
+        app.libs[1].nav_stack.len(),
+        1,
+        "the restored tab must load its root level"
+    );
+    assert!(app.libs[1].nav_stack[0].loading);
+    assert!(
+        app.pending_launch_state.is_some(),
+        "destination state remains for the pill/item re-anchor"
+    );
 }
 
 #[test]

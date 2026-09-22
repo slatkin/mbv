@@ -54,6 +54,12 @@ impl App {
         if let Some(tab) = resolved {
             self.tab = tab;
             self.pending_launch_tab_resolved = true;
+            // The snapshot names a tab, not a browse position, so the
+            // resolved tab must be activated exactly like a user tab switch:
+            // otherwise the panel is handed an empty owner and the restored
+            // tab paints blank. The destination re-anchor then applies the
+            // snapshot's pill and item over this loaded root.
+            self.settle_tab_selection();
         }
     }
 
@@ -271,6 +277,15 @@ impl App {
             self.audiobookshelf_libraries.len(),
             self.has_feeds_subscriptions(),
         );
+        self.settle_tab_selection();
+    }
+
+    /// Settle all state that follows from `self.tab` being set: stale
+    /// destination fallback, image dims, panel focus, the selected
+    /// destination's content load, tab-bar visibility, and prefs. Shared by
+    /// user tab movement and launch-state tab restoration — the restore path
+    /// must load the restored library's content, not just select its tab.
+    fn settle_tab_selection(&mut self) {
         // A stale Service library index (libraries removed or replaced since
         // `pos` was computed) becomes Home; the pending selection stops
         // without focus, activation, or preference changes.
