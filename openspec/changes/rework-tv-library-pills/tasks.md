@@ -17,8 +17,8 @@
 
 ## 4. Upcoming mode
 
-- [ ] 4.1 Add `get_upcoming(parent_id, limit)` to `crates/mbv-core/src/api_client_library.rs` over `GET /Shows/Upcoming` with `ParentId`, and cover it with a mock/parse unit test. Verify: `cargo nextest run -p mbv-core` is green.
-- [ ] 4.2 Wire the `Upcoming` mode to that fetch through the library's fetch path with flat episode rows. Verify: `cargo nextest run -p mbv` covers `Upcoming` requesting the route with the library as parent and presenting the returned episodes.
+- [x] 4.1 Add `get_upcoming(parent_id, limit)` to `crates/mbv-core/src/api_client_library.rs` over `GET /Shows/Upcoming` with `ParentId`, and cover it with a mock/parse unit test. Verify: `cargo nextest run -p mbv-core` is green.
+- [x] 4.2 Wire the `Upcoming` mode to that fetch through the library's fetch path with flat episode rows. Verify: `cargo nextest run -p mbv` covers `Upcoming` requesting the route with the library as parent and presenting the returned episodes.
 
 ## 5. Episode activation and hero
 
