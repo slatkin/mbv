@@ -322,6 +322,7 @@ type BrowseRefresh = (
     String,
     usize,
     Option<super::render::LetterFilter>,
+    Option<mbv_core::config::TvContentMode>,
 );
 type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<EmbyItem>, usize), String> + 'a;
@@ -734,6 +735,13 @@ impl App {
                         lvl.sort_order.clone(),
                         lvl.items.len(),
                         lvl.letter_filter.clone(),
+                        (lib.library.collection_type == "tvshows" && lib.nav_stack.len() == 1)
+                            .then(|| {
+                                lvl.tv_content_mode
+                                    .clone()
+                                    .or_else(|| lib.tv_content_mode.clone())
+                            })
+                            .flatten(),
                     )
                 })
             })
@@ -747,61 +755,78 @@ impl App {
             sort_order,
             loaded_count,
             letter_filter,
+            tv_content_mode,
         ) in fetches
         {
-            self.spawn_refresh(
-                lib_idx,
-                parent_id,
-                item_types,
-                unplayed_only,
-                sort_by,
-                sort_order,
-                loaded_count,
-                letter_filter,
-            );
+            match tv_content_mode {
+                Some(mbv_core::config::TvContentMode::Latest) => {
+                    self.spawn_tv_latest(
+                        lib_idx,
+                        parent_id,
+                        self.libs[lib_idx].library.name.clone(),
+                    );
+                }
+                Some(mbv_core::config::TvContentMode::Upcoming) => {
+                    self.spawn_tv_upcoming(
+                        lib_idx,
+                        parent_id,
+                        self.libs[lib_idx].library.name.clone(),
+                    );
+                }
+                Some(mbv_core::config::TvContentMode::All)
+                | Some(mbv_core::config::TvContentMode::Range(_))
+                | None => self.spawn_refresh(
+                    lib_idx,
+                    parent_id,
+                    item_types,
+                    unplayed_only,
+                    sort_by,
+                    sort_order,
+                    loaded_count,
+                    letter_filter,
+                ),
+            }
         }
     }
 
-    pub(super) fn spawn_tv_latest(&self, lib_idx: usize, parent_id: String, title: String) {
+    fn spawn_tv_content<F>(&self, lib_idx: usize, parent_id: String, title: String, build: F)
+    where
+        F: FnOnce(&EmbyClient, String, String) -> Result<BrowseLevel, String> + Send + 'static,
+    {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
         let tx = self.lib_tx.clone();
-        std::thread::spawn(move || {
-            match build_tv_latest_level(&client, parent_id.clone(), title) {
-                Ok(level) => {
-                    let _ = tx.send(LibEvent::Loaded {
-                        lib_idx,
-                        parent_id,
-                        level: Box::new(level),
-                    });
-                }
-                Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
-                }
+        std::thread::spawn(move || match build(&client, parent_id.clone(), title) {
+            Ok(level) => {
+                let _ = tx.send(LibEvent::Loaded {
+                    lib_idx,
+                    parent_id,
+                    level: Box::new(level),
+                });
+            }
+            Err(e) => {
+                let _ = tx.send(LibEvent::Error(e));
             }
         });
     }
 
+    pub(super) fn spawn_tv_latest(&self, lib_idx: usize, parent_id: String, title: String) {
+        self.spawn_tv_content(
+            lib_idx,
+            parent_id,
+            title,
+            build_tv_latest_level::<EmbyClient>,
+        );
+    }
+
     pub(super) fn spawn_tv_upcoming(&self, lib_idx: usize, parent_id: String, title: String) {
-        let Some(client) = self.emby_snapshot() else {
-            return;
-        };
-        let tx = self.lib_tx.clone();
-        std::thread::spawn(move || {
-            match build_tv_upcoming_level(&client, parent_id.clone(), title) {
-                Ok(level) => {
-                    let _ = tx.send(LibEvent::Loaded {
-                        lib_idx,
-                        parent_id,
-                        level: Box::new(level),
-                    });
-                }
-                Err(e) => {
-                    let _ = tx.send(LibEvent::Error(e));
-                }
-            }
-        });
+        self.spawn_tv_content(
+            lib_idx,
+            parent_id,
+            title,
+            build_tv_upcoming_level::<EmbyClient>,
+        );
     }
 
     pub(super) fn spawn_browse(
@@ -1067,6 +1092,7 @@ impl App {
 #[cfg(test)]
 mod tv_latest_tests {
     use super::*;
+    use rstest::rstest;
     use std::cell::RefCell;
 
     struct FakeLatestSource {
@@ -1135,5 +1161,85 @@ mod tv_latest_tests {
         );
         assert_eq!(level.items, vec![episode]);
         assert_eq!(level.item_types.as_deref(), Some("Episode"));
+    }
+
+    #[rstest]
+    #[case::latest(mbv_core::config::TvContentMode::Latest)]
+    #[case::upcoming(mbv_core::config::TvContentMode::Upcoming)]
+    fn refresh_after_stop_reloads_selected_tv_mode(#[case] mode: mbv_core::config::TvContentMode) {
+        let mut app = crate::app::tests::make_app_stub();
+        let mut config = crate::config::Config::default();
+        config.server_url = "http://127.0.0.1:1".into();
+        let http = mbv_core::mock_http::MockHttp::new();
+        let client = mbv_core::api::EmbyClient::new(config).with_test_agent(http.agent());
+        app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+            std::sync::Mutex::new(client),
+        ));
+
+        let mut library = crate::app::tests::make_item("Shows", "CollectionFolder");
+        library.id = "tv-library".into();
+        library.collection_type = "tvshows".into();
+        let mut level_item = crate::app::tests::make_item("Old episode", "Episode");
+        level_item.id = "old-episode".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "tv-library".into(),
+                title: "Shows".into(),
+                items: vec![level_item],
+                fetched_rows: 1,
+                total_count: 1,
+                resting: BrowseResting::new(0, 0),
+                item_types: Some("Episode".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                tv_content_mode: Some(mode.clone()),
+                music_grouping: None,
+            }],
+            tv_content_mode: Some(mode),
+            ..LibraryTab::new(crate::app::tests::make_item("unused", "CollectionFolder"))
+        });
+
+        // fetch_home: virtual folders, user views, continue watching, and
+        // user views; the fifth response is the selected TV mode's request.
+        http.respond(
+            200,
+            r#"[{"ItemId":"tv-library","Name":"Shows","CollectionType":"tvshows"}]"#,
+        );
+        http.respond(200, r#"{"Items":[]}"#);
+        http.respond(200, r#"{"Items":[]}"#);
+        http.respond(200, r#"{"Items":[]}"#);
+        http.respond(
+            200,
+            r#"{"Items":[{"Id":"new-episode","Name":"New episode","Type":"Episode"}],"TotalRecordCount":1}"#,
+        );
+
+        app.refresh_after_stop();
+        let event = loop {
+            match app
+                .lib_rx
+                .recv()
+                .expect("selected TV refresh must complete")
+            {
+                event @ LibEvent::Loaded { .. } | event @ LibEvent::Refreshed { .. } => {
+                    break event
+                }
+                _ => continue,
+            }
+        };
+        match event {
+            LibEvent::Loaded { level, .. } => {
+                assert_eq!(level.item_types.as_deref(), Some("Episode"));
+                assert_eq!(level.items[0].id, "new-episode");
+            }
+            LibEvent::Refreshed { .. } => {
+                panic!("Latest/Upcoming stop refresh must not use the generic ranged fetch")
+            }
+            _ => unreachable!(),
+        }
     }
 }
