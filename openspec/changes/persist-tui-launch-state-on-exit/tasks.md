@@ -25,5 +25,5 @@
 
 ## 5. Verification
 
-- [ ] 5.1 Run `cargo fmt`, `cargo nextest run -p mbv-core`, and `cargo nextest run -p mbv`; fix all failures without broadening the saved snapshot.
-- [ ] 5.2 Run `cargo clippy --workspace --all-targets -- -D warnings`, `openspec validate persist-tui-launch-state-on-exit --strict`, and review the final diff to confirm no Queue selection, nested Workspace selector, scroll offset, unselected-tab state, live component mirror, new dependency, or ctrl/daemon protocol change was introduced.
+- [x] 5.1 Run `cargo fmt`, `cargo nextest run -p mbv-core`, and `cargo nextest run -p mbv`; fix all failures without broadening the saved snapshot.
+- [x] 5.2 Run `cargo clippy --workspace --all-targets -- -D warnings`, `openspec validate persist-tui-launch-state-on-exit --strict`, and review the final diff to confirm no Queue selection, nested Workspace selector, scroll offset, unselected-tab state, live component mirror, new dependency, or ctrl/daemon protocol change was introduced.
