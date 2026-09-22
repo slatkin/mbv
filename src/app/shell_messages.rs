@@ -786,9 +786,13 @@ impl Model {
                         }
                         if acknowledge_latest {
                             self.acknowledge_active_tv_latest();
-                        } else {
-                            self.push_tv_workspace_content();
                         }
+                        // Always repaint the TV owner from the mutated App
+                        // browse state: the acknowledgement path pushes inside
+                        // `acknowledge_home_latest`, but its early returns
+                        // (non-TV library, non-Latest mode) would otherwise
+                        // leave a swallowed click's mutation unpainted.
+                        self.push_tv_workspace_content();
                     }
                     ShellRequest::TvHitDoubleClick { hit } => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {

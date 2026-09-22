@@ -278,7 +278,10 @@ fn home_latest_fetch_after_launch_does_not_add_a_marker() {
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
     let mut item = make_item("Fetched after launch", "Movie");
-    item.date_added = "1970-01-01T00:05:00Z".into();
+    // The item is dated a full hour after the launch cutoff (`current: 200`
+    // = epoch 200): content fetched after launch sits outside the closed
+    // window, so the recomputed marker must be absent.
+    item.date_added = "1970-01-01T01:00:00Z".into();
     harness.model_mut().assign_home_content(ModelHomeContent {
         continue_items: Vec::new(),
         latest: vec![HomeLatestSection {
