@@ -288,8 +288,6 @@ pub(crate) fn make_app_stub() -> App {
         library_route_cache: std::collections::HashMap::new(),
         last_nav_at: Instant::now() - Duration::from_secs(1),
         last_library_nav_at: Instant::now() - Duration::from_secs(1),
-        library_position_dirty: false,
-        library_position_dirty_at: Instant::now() - Duration::from_secs(1),
         // Default to "focused, past grace window" so existing mouse
         // tests dispatch without arming focus explicitly.  The refocus
         // guard itself is tested directly in

@@ -415,12 +415,6 @@ pub struct App {
     pub(super) marquee_started_at: std::time::Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_library_nav_at: Instant,
-    /// Set once `library_position_state` has an unflushed in-memory change.
-    /// The disk write + shared-document sync are debounced off this rather
-    /// than run synchronously on every cursor move -- see
-    /// `save_default_library_position`'s doc comment.
-    pub(super) library_position_dirty: bool,
-    pub(super) library_position_dirty_at: Instant,
     /// Tracks terminal focus and arms a grace window to swallow the
     /// click that merely brings the window into focus.
     ///

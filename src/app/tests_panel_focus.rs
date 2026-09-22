@@ -194,23 +194,23 @@ fn build_restores_home_section_pending_from_prefs() {
 }
 
 #[test]
-fn save_prefs_persists_panel_focus_for_both_values() {
+fn panel_focus_changes_do_not_write_legacy_launch_prefs() {
     let _guard = crate::config::TestStateDirGuard::new();
+    std::fs::write(
+        crate::config::prefs_path(),
+        serde_json::json!({ "panel_focus": "queue_side", "library_tab": 3 }).to_string(),
+    )
+    .expect("write legacy prefs");
     let mut app = make_app_stub();
 
-    app.set_panel_focus(PanelFocus::Queue);
-    let queue_prefs: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
-    )
-    .expect("prefs json");
-    assert_eq!(queue_prefs["panel_focus"].as_str(), Some("queue_side"));
-
     app.set_panel_focus(PanelFocus::Library);
-    let library_prefs: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
+
+    let prefs: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs retained"),
     )
     .expect("prefs json");
-    assert_eq!(library_prefs["panel_focus"].as_str(), Some("library_side"));
+    assert_eq!(prefs["panel_focus"].as_str(), Some("queue_side"));
+    assert_eq!(prefs["library_tab"].as_u64(), Some(3));
 }
 
 #[test]

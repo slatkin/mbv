@@ -105,24 +105,19 @@ impl App {
 
     pub(super) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
-        let existing_home_section = std::fs::read_to_string(&path)
+        // Keep legacy launch keys readable for the one-time migration, but do
+        // not update them during the session. Launch state is written only by
+        // the exit snapshot path; these writes are for unrelated preferences.
+        let mut v = std::fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-            .and_then(|prefs| prefs.get("home_section").cloned());
-        let mut v = serde_json::json!({
-            "ui_volume": self.ui_volume,
-            "mute_on": self.mute_on,
-            "pre_mute_volume": self.pre_mute_volume,
-            "panel_focus": self.panel_focus.pref_value(),
-            "library_tab": self
-                .tab
-                .to_position_with_counts(self.libs.len(), self.feeds_tab_pos()),
-            "queue_column_width": self.queue_column_width,
-            "list_pane_width": self.list_pane_width,
-        });
-        if let Some(home_section) = existing_home_section {
-            v["home_section"] = home_section;
-        }
+            .filter(serde_json::Value::is_object)
+            .unwrap_or_else(|| serde_json::json!({}));
+        v["ui_volume"] = serde_json::json!(self.ui_volume);
+        v["mute_on"] = serde_json::json!(self.mute_on);
+        v["pre_mute_volume"] = serde_json::json!(self.pre_mute_volume);
+        v["queue_column_width"] = serde_json::json!(self.queue_column_width);
+        v["list_pane_width"] = serde_json::json!(self.list_pane_width);
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
         }

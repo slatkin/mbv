@@ -649,8 +649,6 @@ impl Model {
 
             self.app.expire_music_grouping_candidates();
             self.app.sync_volume_from_player();
-            self.app.flush_library_position_if_idle();
-
             // Advance idle feed rotation
             self.app.advance_idle_feed_rotation();
 

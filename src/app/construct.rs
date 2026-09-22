@@ -256,8 +256,6 @@ impl App {
             tab_scroll: 0,
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_library_nav_at: Instant::now() - Duration::from_secs(1),
-            library_position_dirty: false,
-            library_position_dirty_at: Instant::now() - Duration::from_secs(1),
             refocus_at: None,
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_levels: std::collections::HashMap::new(),

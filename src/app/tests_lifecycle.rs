@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::home_content::HomeContent;
+use crate::app::components::msg::{HomeRowTarget, Msg, ShellRequest};
 use crate::app::components::{ComponentId, LibraryKey};
 use mbv_core::config::{FeedKind, FeedSubscription, ServiceKind};
 use mbv_core::playback_queue::FeedEntry;
@@ -272,6 +273,72 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
     assert!(!serialized.contains("queue_slot"));
     assert!(!serialized.contains("unselected-feed-item"));
     assert!(!serialized.contains("unselected-feed-selector"));
+}
+
+#[test]
+fn mounted_tick_navigation_does_not_write_launch_snapshot() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let initial = mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: None,
+        item: None,
+    };
+    mbv_core::config::save_tui_launch_state(&initial).expect("save launch fixture");
+    let before = std::fs::read(mbv_core::config::tui_launch_state_path()).expect("read fixture");
+
+    let mut harness = TickHarness::new(crate::app::render::make_movie_app());
+    harness.model_mut().update_home_owner(|home| {
+        home.set_content(
+            Vec::new(),
+            vec![(
+                "Movies".into(),
+                crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
+                vec![
+                    mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
+                        "Movie one", "Movie",
+                    ))),
+                    mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
+                        "Movie two", "Movie",
+                    ))),
+                ],
+            )],
+            false,
+            std::collections::HashMap::new(),
+        );
+    });
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+
+    let requests = [
+        ShellRequest::HomePillClick { target: 1 },
+        ShellRequest::HomeRowClick {
+            target: HomeRowTarget {
+                item_id: Some("id1".into()),
+                source: Some("emby:lib-movies".into()),
+                from_continue_watching: false,
+            },
+        },
+        ShellRequest::QueueRowClick { slot_id: None },
+        ShellRequest::LibraryPanelFocus,
+        ShellRequest::TabSelect(1),
+    ];
+    for request in requests {
+        let (mut music_resize, mut tv_resize) = (false, false);
+        harness.model_mut().handle_terminal_message(
+            Msg::Shell(request),
+            &mut music_resize,
+            &mut tv_resize,
+        );
+        let after = std::fs::read(mbv_core::config::tui_launch_state_path())
+            .expect("launch snapshot remains present");
+        assert_eq!(after, before, "live navigation must not write launch state");
+    }
 }
 
 #[test]

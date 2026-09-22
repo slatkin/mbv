@@ -85,11 +85,6 @@ impl App {
     }
 
     fn teardown_inner(&mut self, quit_timeout: Duration) {
-        // A position saved just before quitting is still only in memory --
-        // `save_default_library_position` defers the disk write (see its
-        // doc comment) -- so flush it now rather than waiting for the
-        // run loop's idle check, which won't run again.
-        self.flush_library_position_now();
         // Signal the visualizer before starting player shutdown so its worker
         // can stop concurrently with the player thread.
         let visualizer_handle = self.visualizer.take().and_then(|mut worker| {

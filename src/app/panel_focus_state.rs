@@ -63,6 +63,5 @@ impl App {
             self.focus_queue_initial_item();
         }
         self.panel_focus = focus;
-        self.save_prefs();
     }
 }
