@@ -38,8 +38,7 @@ impl App {
         if self.pending_launch_tab_resolved {
             return;
         }
-        let identity = state.tab.clone();
-        let resolved = match identity {
+        let resolved = match &state.tab {
             TabIdentity::Home => Some(TabSelection::Home),
             TabIdentity::Feeds => {
                 if self.has_feeds_subscriptions() {
@@ -49,7 +48,7 @@ impl App {
                 }
             }
             TabIdentity::ServiceLibrary { kind, library_id } => {
-                self.resolve_service_tab(kind, &library_id)
+                self.resolve_service_tab(*kind, library_id)
             }
         };
         if let Some(tab) = resolved {

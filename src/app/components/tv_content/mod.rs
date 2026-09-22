@@ -655,17 +655,7 @@ impl LibraryContentOwner for TvContent {
             Some(SelectorIdentity::Emby {
                 key: EmbySelectorKey::Letter(bucket),
             }) => {
-                let target = match bucket {
-                    EmbyLetterBucket::AToC => 0,
-                    EmbyLetterBucket::DToF => 1,
-                    EmbyLetterBucket::GToI => 2,
-                    EmbyLetterBucket::JToL => 3,
-                    EmbyLetterBucket::MToO => 4,
-                    EmbyLetterBucket::PToR => 5,
-                    EmbyLetterBucket::SToU => 6,
-                    EmbyLetterBucket::VToZ => 7,
-                    EmbyLetterBucket::Hash => 8,
-                };
+                let target = bucket.to_index();
                 (current != Some(target))
                     .then_some(super::library_panel::owner::LaunchSelector::Emby { index: target })
             }

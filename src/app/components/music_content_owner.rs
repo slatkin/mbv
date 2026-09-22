@@ -100,17 +100,7 @@ impl LibraryContentOwner for MusicContent {
         &self,
         state: &mbv_core::config::TuiLaunchState,
     ) -> Option<super::library_panel::owner::LaunchSelector> {
-        let target = match state.selector.as_ref() {
-            Some(SelectorIdentity::Emby {
-                key: EmbySelectorKey::Group(id),
-            }) => self
-                .context
-                .groups
-                .iter()
-                .position(|group| &group.id == id)
-                .unwrap_or(0),
-            _ => 0,
-        };
+        let target = self.group_cursor_for_launch_state(state);
         (self.context.group_cursor != target).then_some(
             super::library_panel::owner::LaunchSelector::Emby { index: target },
         )
@@ -121,17 +111,7 @@ impl LibraryContentOwner for MusicContent {
             return false;
         }
         if !self.context.groups.is_empty() {
-            self.context.group_cursor = match state.selector.as_ref() {
-                Some(SelectorIdentity::Emby {
-                    key: EmbySelectorKey::Group(id),
-                }) => self
-                    .context
-                    .groups
-                    .iter()
-                    .position(|group| &group.id == id)
-                    .unwrap_or(0),
-                _ => 0,
-            };
+            self.context.group_cursor = self.group_cursor_for_launch_state(state);
         }
         let selected = match state.item.as_ref() {
             Some(LibraryItemIdentity::Emby { id }) => self.browser.select_album_target(id),
@@ -565,5 +545,21 @@ impl LibraryContentOwner for MusicContent {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl MusicContent {
+    fn group_cursor_for_launch_state(&self, state: &mbv_core::config::TuiLaunchState) -> usize {
+        match state.selector.as_ref() {
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Group(id),
+            }) => self
+                .context
+                .groups
+                .iter()
+                .position(|group| &group.id == id)
+                .unwrap_or(0),
+            _ => 0,
+        }
     }
 }

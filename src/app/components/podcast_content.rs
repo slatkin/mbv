@@ -123,11 +123,7 @@ impl PodcastContent {
         // to the `All` state pill: the value's show identity no longer
         // exists, and exactly one pill must stay active (design D3).
         let pill_reset = match &self.pill {
-            PillSelection::Show(id) => !self
-                .state
-                .shows
-                .iter()
-                .any(|show| &show.library_item_id == id),
+            PillSelection::Show(id) => !self.show_exists(id),
             PillSelection::State(_) => false,
         };
         if pill_reset {
@@ -141,6 +137,13 @@ impl PodcastContent {
             self.initialized = true;
         }
         self.sync_hero_scroll();
+    }
+
+    fn show_exists(&self, id: &str) -> bool {
+        self.state
+            .shows
+            .iter()
+            .any(|show| show.library_item_id == id)
     }
 
     /// The active pill's scoped episode view: a show pill ignores play
@@ -490,14 +493,7 @@ impl LibraryContentOwner for PodcastContent {
         let target = match state.selector.as_ref() {
             Some(SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::PodcastShow(id),
-            }) if self
-                .state
-                .shows
-                .iter()
-                .any(|show| &show.library_item_id == id) =>
-            {
-                LaunchSelector::AudiobookshelfShow(id.clone())
-            }
+            }) if self.show_exists(id) => LaunchSelector::AudiobookshelfShow(id.clone()),
             _ => LaunchSelector::AudiobookshelfState,
         };
         let current = match &self.pill {
@@ -528,12 +524,7 @@ impl LibraryContentOwner for PodcastContent {
             }
             Some(SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::PodcastShow(id),
-            }) if self
-                .state
-                .shows
-                .iter()
-                .any(|show| &show.library_item_id == id) =>
-            {
+            }) if self.show_exists(id) => {
                 self.set_pill(PillSelection::Show(id.clone()));
             }
             _ => {}

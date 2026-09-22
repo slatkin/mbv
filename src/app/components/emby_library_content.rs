@@ -748,17 +748,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 Some(SelectorIdentity::Emby {
                     key: EmbySelectorKey::Letter(bucket),
                 }) => {
-                    let target = match bucket {
-                        EmbyLetterBucket::AToC => 0,
-                        EmbyLetterBucket::DToF => 1,
-                        EmbyLetterBucket::GToI => 2,
-                        EmbyLetterBucket::JToL => 3,
-                        EmbyLetterBucket::MToO => 4,
-                        EmbyLetterBucket::PToR => 5,
-                        EmbyLetterBucket::SToU => 6,
-                        EmbyLetterBucket::VToZ => 7,
-                        EmbyLetterBucket::Hash => 8,
-                    };
+                    let target = bucket.to_index();
                     (current != Some(target)).then_some(LaunchSelector::Emby { index: target })
                 }
                 // No letter pill is represented by an index. The shell uses

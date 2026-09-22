@@ -214,6 +214,22 @@ impl EmbyLetterBucket {
             _ => return None,
         })
     }
+
+    /// Inverse of [`Self::from_index`]: the bucket's position in the shared
+    /// `LETTER_FILTER_BUCKETS` table.
+    pub fn to_index(self) -> usize {
+        match self {
+            Self::AToC => 0,
+            Self::DToF => 1,
+            Self::GToI => 2,
+            Self::JToL => 3,
+            Self::MToO => 4,
+            Self::PToR => 5,
+            Self::SToU => 6,
+            Self::VToZ => 7,
+            Self::Hash => 8,
+        }
+    }
 }
 
 /// Stable generic-Emby pill identity (task 2.1): letter pills are a closed
