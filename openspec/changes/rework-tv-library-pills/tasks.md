@@ -2,7 +2,7 @@
 
 ## 1. Mode value and the TV bucket set
 
-- [ ] 1.1 Add the TV-specific three-bucket table beside the existing movie table in `src/app/render/screens/sort_filter.rs` (`A-I` = `NameLessThan("J")`, `J-R` = `[J, S)`, `S-Z` = `NameStartsWithOrGreater("S")` with no upper bound) and make `LetterFilter` construction select the table by library kind while movie construction keeps using the existing table unchanged. Verify: `cargo nextest run -p mbv` covers the three TV labels/bounds, a non-letter name resolving to `A-I`, an `S`-or-later name resolving to `S-Z`, and the movie labels still returning the nine-bucket set.
+- [x] 1.1 Add the TV-specific three-bucket table beside the existing movie table in `src/app/render/screens/sort_filter.rs` (`A-I` = `NameLessThan("J")`, `J-R` = `[J, S)`, `S-Z` = `NameStartsWithOrGreater("S")` with no upper bound) and make `LetterFilter` construction select the table by library kind while movie construction keeps using the existing table unchanged. Verify: `cargo nextest run -p mbv` covers the three TV labels/bounds, a non-letter name resolving to `A-I`, an `S`-or-later name resolving to `S-Z`, and the movie labels still returning the nine-bucket set.
 - [ ] 1.2 Introduce a closed `TvContentMode` value (`Latest`, `Upcoming`, `All`, range) on the top-level TV `BrowseLevel` and remove the overloaded use of `letter_filter: Option<LetterFilter>` as both "no filter" and "the auto-applied default". Verify: `cargo check -p mbv` is clean and focused tests cover each mode's content selector and the unresolved/absent default.
 
 ## 2. Row composition, threshold, and defaults
