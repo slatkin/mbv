@@ -15,7 +15,7 @@
 
 ## 3. Shared tree presentation and Panel integration
 
-- [x] 3.1 Add one destination-neutral TreeBrowser Render Component under `src/app/render/components/tree_browser/` and move the current label renderer and fixed visual policy into it: plain indentation, depth roles, semantic playback emphasis, selected and aggregate-mark bars, group-relative zebra, focused marquee, and optional trailing metadata. Destinations pass semantic data only and never call the Render Component directly. Verify: focused Render Component tests preserve conditional metadata-gutter width, no state glyphs, and the existing Music pixels.
+- [x] 3.1 Add one destination-neutral TreeBrowser Render Component under `src/app/render/components/tree_browser/` and move the current label renderer and fixed visual policy into it: plain indentation, depth roles, semantic playback emphasis, selected and aggregate-mark roles, group-relative zebra, focused marquee, and optional trailing metadata. Destinations pass semantic data only and never call the Render Component directly. Verify: focused Render Component tests preserve conditional metadata-gutter width, no state glyphs, and the existing Music pixels.
 - [x] 3.2 Make `TreeBrowser::Component::view` the only interactive view entry point and delegate tree widget composition, parent insets, full-width selected claims, temporary crate-buffer handling, shared scrollbar, and completed-frame geometry retention to the shared Render Component. Provide no inherent or destination-owned alternative view method. Verify: existing Wide and smallest non-Wide buffer tests retain their assertions, and pointer tests prove changed or incomplete geometry claims no point.
 - [x] 3.3 Replace `impl PanelList for MusicTreeBrowser` with one generic `impl<Target> PanelList for TreeBrowser<Target>` that receives only focus and geometry from the Library panel and invokes `Component::view`. Verify: Library-panel tests paint and hit-test the shared tree through `ListSlot::Media` with no tree-specific slot arm or alternate view entry point.
 
@@ -35,7 +35,7 @@
 
 ## 6. Verification and close-out
 
-- [ ] 6.1 Run `cargo nextest run -p mbv` with the shared-tree, Music component, Music render, and mounted Music interaction coverage in place. Verify: the package suite is green with no TV test or production edit required by this change.
-- [ ] 6.2 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `cargo nextest run --workspace`. Verify: all commands are clean.
-- [ ] 6.3 Sync the `shared-list-components` delta into `openspec/specs/`, add the `TreeBrowser` term to `CONTEXT.md` without renaming an existing term, and run `openspec validate --all`. Verify: the main spec states the complete-component contract, the term names its ownership boundary, and validation is clean.
-- [ ] 6.4 Commit the implementation and associated planning/spec/domain artifacts, then archive `extract-shared-tree-browser`. Verify: `openspec list --json` no longer reports the change active, `openspec validate --all` remains clean, and `git status --short` is empty.
+- [x] 6.1 Run `cargo nextest run -p mbv` with the shared-tree, Music component, Music render, and mounted Music interaction coverage in place. Verify: the package suite is green with no TV test or production edit required by this change.
+- [x] 6.2 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `cargo nextest run --workspace`. Verify: all commands are clean.
+- [x] 6.3 Sync the `shared-list-components` delta into `openspec/specs/`, add the `TreeBrowser` term to `CONTEXT.md` without renaming an existing term, and run `openspec validate --all`. Verify: the main spec states the complete-component contract, the term names its ownership boundary, and validation is clean.
+- [x] 6.4 Commit the implementation and associated planning/spec/domain artifacts, then archive `extract-shared-tree-browser`. Verify: `openspec list --json` no longer reports the change active, `openspec validate --all` remains clean, and `git status --short` is empty.
