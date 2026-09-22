@@ -1037,21 +1037,3 @@ fn enter_enters_a_root_reached_while_the_track_pane_holds_focus() {
         "no stale album Workspace paints under an artist root"
     );
 }
-
-#[test]
-fn debug_first_click() {
-    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
-    owner.expand_all_tree_roots();
-    let area = Rect::new(0, 0, 48, 8);
-    paint_tree(&mut owner, area);
-    let root = find(&owner, |target| target.is_artist());
-    let root_at = tree_point(&owner, &root);
-    eprintln!(
-        "DBG root_at={root_at:?} resolve={:?}",
-        owner.browser.resolve_current_point(root_at)
-    );
-    let msg = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
-        root_at,
-    )));
-    eprintln!("DBG msg={msg:?}");
-}
