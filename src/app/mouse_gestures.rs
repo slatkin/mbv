@@ -225,14 +225,17 @@ impl App {
         } else if let TvHit::EpisodeRow(target) = hit {
             // Flat Latest/Upcoming rows resolve through the browser level;
             // series-workspace rows resolve through the cached season detail.
-            // Both are leaf episodes: play directly and never enter the
-            // series activation/workspace path.
+            // A playable leaf episode plays directly; an id-less Upcoming
+            // placeholder (no episode id, `series_id` set) navigates to its
+            // series' Workspace instead.
             let item = self
                 .resolve_tv_series_target(lib_idx, &target)
                 .map(|(_, item)| item)
                 .or_else(|| self.resolve_tv_episode_target(&target));
             if let Some(item) = item.filter(|item| item.item_type == "Episode") {
-                self.play_item(item);
+                if !self.open_series_for_unplayable_episode(lib_idx, &item) {
+                    self.play_item(item);
+                }
             }
         }
     }

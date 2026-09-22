@@ -30,9 +30,17 @@ impl Model {
         match request {
             // The owner resolved the episode from its own season detail and
             // carried the stable item (design.md D4); the shell plays it
-            // directly without reading any owner cursor.
+            // directly without reading any owner cursor. An id-less
+            // `/Shows/Upcoming` placeholder carries a `series_id` instead of
+            // a playable episode id: navigate to that series' Workspace
+            // rather than submitting an empty-id item to playback.
             ShellRequest::TvEpisodeActivate { episode } => {
-                self.app.play_item(episode);
+                if !self
+                    .app
+                    .open_series_for_unplayable_episode(lib_idx, &episode)
+                {
+                    self.app.play_item(episode);
+                }
             }
             // Activation, back, and letter-pill effects resolve the
             // owner's selection directly (item-targeted) or from the App
@@ -44,11 +52,15 @@ impl Model {
             | ShellRequest::TvCycleLetterPill { .. } => {
                 match request {
                     ShellRequest::TvActivate { item } => {
-                        // Latest/Upcoming rows are leaf episodes. Keep a
+                        // Flat Latest/Upcoming rows are leaf episodes. Keep a
                         // defensive item-kind gate here so a stale or legacy
-                        // request can never enter the Series workspace.
+                        // request can never enter the Series workspace -- an
+                        // id-less Upcoming placeholder is the one exception
+                        // and routes to its series' Workspace.
                         if item.item_type == "Episode" {
-                            self.app.play_item(item);
+                            if !self.app.open_series_for_unplayable_episode(lib_idx, &item) {
+                                self.app.play_item(item);
+                            }
                         } else {
                             let owner_has_target = self
                                 .tv_owner()

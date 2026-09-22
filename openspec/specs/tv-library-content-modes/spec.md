@@ -73,21 +73,25 @@ list of episodes; the list SHALL NOT nest.
 - **THEN** the list shows that library's upcoming episodes from the `Upcoming` route scoped to the library
 - **AND** the rows are a flat episode list with no nesting
 
-### Requirement: Latest and Upcoming rows play directly and never open a series workspace
+### Requirement: Latest and Upcoming rows play directly or open their series
 
-Activating a `Latest` or `Upcoming` row SHALL play that episode. The TV library
-SHALL NOT open a series detail or Workspace in response to activating a
-`Latest` or `Upcoming` row. A selected `Latest` or `Upcoming` episode SHALL show
-a hero only in mini view; in every other geometry the mode presents its flat
-list without an episode hero.
+Activating a `Latest` or `Upcoming` row that carries a playable episode id
+SHALL play that episode and SHALL NOT open a series detail or Workspace.
+Activating an `Upcoming` row that carries no episode id but names its series
+SHALL navigate the library to that series and open its Workspace instead of
+playing. A selected `Latest` or `Upcoming` episode SHALL show a hero only in
+mini view; in every other geometry the mode presents its flat list without an
+episode hero.
 
-#### Scenario: Activating an episode row plays it
-- **WHEN** the user selects a `Latest` or `Upcoming` episode row and activates it
+#### Scenario: Activating a playable episode row plays it
+- **WHEN** the user selects a `Latest` or `Upcoming` episode row with an episode id and activates it
 - **THEN** that episode plays
+- **AND** no series detail, season selector, or episode Workspace opens
 
-#### Scenario: No series workspace opens
-- **WHEN** the user selects a `Latest` or `Upcoming` episode row
-- **THEN** no series detail, season selector, or episode Workspace opens
+#### Scenario: Activating an id-less Upcoming placeholder opens its series
+- **WHEN** the user selects an `Upcoming` row with no episode id but a series reference and activates it
+- **THEN** the library navigates to that series and opens its Workspace
+- **AND** no episode plays
 
 #### Scenario: Mini view shows the episode hero
 - **WHEN** the TV library is in mini view and a `Latest` or `Upcoming` episode is selected
