@@ -22,8 +22,8 @@
 
 ## 5. Episode activation and hero
 
-- [ ] 5.1 Make `Latest` and `Upcoming` episode rows activate play, and ensure the TV component never treats an episode target as a series selection (no workspace, no season selector, no detail request). Verify: a real-`Application::tick()` integration test asserts activation plays the episode and that no series workspace opens.
-- [ ] 5.2 Show the selected episode's hero only in the mini-view presentation, and none in the other geometries. Verify: `cargo nextest run -p mbv` covers mini view painting the episode hero and a non-mini geometry painting none.
+- [x] 5.1 Make `Latest` and `Upcoming` episode rows activate play, and ensure the TV component never treats an episode target as a series selection (no workspace, no season selector, no detail request). Verify: a real-`Application::tick()` integration test asserts activation plays the episode and that no series workspace opens.
+- [x] 5.2 Show the selected episode's hero only in the mini-view presentation, and none in the other geometries. Verify: `cargo nextest run -p mbv` covers mini view painting the episode hero and a non-mini geometry painting none.
 
 ## 6. Persistence, cycling, and mouse
 
