@@ -3,7 +3,7 @@ use super::super::super::panel_targets::PanelTarget;
 use super::super::super::ui_util::{fmt_duration_short, trunc_str};
 use super::chrome;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
@@ -88,8 +88,8 @@ pub(in crate::app) fn render_sessions_overlay_content(
         } else {
             palette::TEXT_PRIMARY
         };
-        let dim = Style::default().fg(on_connected_bar(palette::TEXT_MUTED, connected));
-        let meta_fg = on_connected_bar(palette::TEXT_SECONDARY, connected);
+        let dim = Style::default().fg(palette::bar_role_fg(palette::TEXT_MUTED, connected));
+        let meta_style = dim.fg(palette::bar_role_fg(palette::TEXT_SECONDARY, connected));
 
         if connected {
             // Underpaint the card (the divider row below it stays panel
@@ -139,10 +139,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
 
                 let meta = format!("{} · {}@{}", s.client, s.user_name, s.host);
                 f.render_widget(
-                    Paragraph::new(Span::styled(
-                        trunc_str(&meta, text_w),
-                        Style::default().fg(meta_fg),
-                    )),
+                    Paragraph::new(Span::styled(trunc_str(&meta, text_w), meta_style)),
                     Rect {
                         x: text_x,
                         y: entry_y + 1,
@@ -203,10 +200,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
 
                 let meta = format!("{}:{}", r.host, r.port);
                 f.render_widget(
-                    Paragraph::new(Span::styled(
-                        trunc_str(&meta, text_w),
-                        Style::default().fg(meta_fg),
-                    )),
+                    Paragraph::new(Span::styled(trunc_str(&meta, text_w), meta_style)),
                     Rect {
                         x: text_x,
                         y: entry_y + 1,
@@ -271,17 +265,17 @@ fn render_kind_labelled_line(
     let name_line = Line::from(vec![
         Span::styled(
             kind_tag,
-            Style::default().fg(on_connected_bar(palette::TEXT_MUTED, connected)),
+            Style::default().fg(palette::bar_role_fg(palette::TEXT_MUTED, connected)),
         ),
         Span::styled(
             trunc_str(name, name_max),
             Style::default()
-                .fg(on_connected_bar(name_color, connected))
+                .fg(palette::bar_role_fg(name_color, connected))
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             badge,
-            Style::default().fg(on_connected_bar(palette::ACCENT_ACTIVE, connected)),
+            Style::default().fg(palette::bar_role_fg(palette::ACCENT_ACTIVE, connected)),
         ),
     ]);
     f.render_widget(
@@ -293,17 +287,4 @@ fn render_kind_labelled_line(
             height: 1,
         },
     );
-}
-
-/// The connected-bar text policy: a row on the opaque Iris `✚` bar paints
-/// every line in the bar's own Ink foreground (`SELECTED_ROW_FG`, the pair
-/// the media list and queue use on the same bar), because the ordinary
-/// text roles do not read on the light fill. Rows on the panel keep the
-/// role they were given.
-fn on_connected_bar(role: Color, connected: bool) -> Color {
-    if connected {
-        palette::SELECTED_ROW_FG
-    } else {
-        role
-    }
 }

@@ -300,7 +300,8 @@ pub(in crate::app) fn media_list_row<Target>(
 }
 
 fn selected_row_foreground(selected_bg: Color) -> Option<Color> {
-    (selected_bg == palette::SELECTED_ROW_BG).then_some(palette::SELECTED_ROW_FG)
+    let on_bar = selected_bg == palette::SELECTED_ROW_BG;
+    on_bar.then(|| palette::bar_role_fg(palette::SELECTED_ROW_FG, on_bar))
 }
 
 /// Columns the row's right inset reserves inside `inner_width`.

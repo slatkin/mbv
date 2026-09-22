@@ -145,6 +145,14 @@ fn panel_body_fill() -> Color {
     palette::surface_colors(palette::Surface::SidebarBody, false).fill
 }
 
+fn assert_card_bg_uniform(buf: &Buffer, card: Rect, want: Color) {
+    for y in card.y..card.y + card.height {
+        for x in card.x..card.x + card.width {
+            assert_eq!(buf[(x, y)].bg, want, "card cell ({x}, {y})");
+        }
+    }
+}
+
 #[test]
 fn a_connected_session_row_paints_the_iris_bar_with_the_bars_own_ink_text() {
     let (terminal, cards) = render_targets(
@@ -155,15 +163,7 @@ fn a_connected_session_row_paints_the_iris_bar_with_the_bars_own_ink_text() {
     );
     let buf = terminal.backend().buffer();
     let card = cards[0].0;
-    for y in card.y..card.y + card.height {
-        for x in card.x..card.x + card.width {
-            assert_eq!(
-                buf[(x, y)].bg,
-                palette::SELECTED_ROW_BG,
-                "connected bar cell ({x}, {y})"
-            );
-        }
-    }
+    assert_card_bg_uniform(buf, card, palette::SELECTED_ROW_BG);
     assert_eq!(
         buf[(card.x, card.y + card.height)].bg,
         panel_body_fill(),
@@ -192,15 +192,7 @@ fn a_session_row_without_a_connection_keeps_the_panel_background() {
         render_targets(vec![make_session("Living Room", "Emby")], &[], None, None);
     let buf = terminal.backend().buffer();
     let card = cards[0].0;
-    for y in card.y..card.y + card.height {
-        for x in card.x..card.x + card.width {
-            assert_eq!(
-                buf[(x, y)].bg,
-                panel_body_fill(),
-                "idle row cell ({x}, {y}) must not take the connected bar"
-            );
-        }
-    }
+    assert_card_bg_uniform(buf, card, panel_body_fill());
     assert_eq!(
         buf[(cell_x(buf, card.y, "L"), card.y)].fg,
         palette::ACCENT_ACTIVE,
@@ -219,15 +211,7 @@ fn an_attached_cast_receiver_row_takes_the_same_iris_bar() {
     let (terminal, cards) = render_targets(vec![], &[receiver], None, Some("cast-1"));
     let buf = terminal.backend().buffer();
     let card = cards[0].0;
-    for y in card.y..card.y + card.height {
-        for x in card.x..card.x + card.width {
-            assert_eq!(
-                buf[(x, y)].bg,
-                palette::SELECTED_ROW_BG,
-                "attached bar cell ({x}, {y})"
-            );
-        }
-    }
+    assert_card_bg_uniform(buf, card, palette::SELECTED_ROW_BG);
     assert_eq!(
         buf[(cell_x(buf, card.y, "L"), card.y)].fg,
         palette::SELECTED_ROW_FG,

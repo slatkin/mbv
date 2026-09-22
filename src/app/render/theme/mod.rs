@@ -134,6 +134,18 @@ pub const SELECTED_ROW_FG: Color = Palette::Ink.color();
 /// (`SURFACE_RESTING`, `HERO_CREDITS_STRIPE`): equal today and independently
 /// editable, so a resting-surface edit moves the surface alone.
 pub const SELECTED_ROW_PROGRESS_FG: Color = Palette::Storm.color();
+/// The selected/connected-bar text policy: a row painted over the opaque
+/// `SELECTED_ROW_BG` bar renders in the bar's own foreground because
+/// ordinary text roles do not read on the light fill; elsewhere a row keeps
+/// the role it was given. Shared by the media list and the sessions sidebar,
+/// the two surfaces that paint this bar.
+pub fn bar_role_fg(role: Color, on_bar: bool) -> Color {
+    if on_bar {
+        SELECTED_ROW_FG
+    } else {
+        role
+    }
+}
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours
