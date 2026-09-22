@@ -5,10 +5,19 @@
 //! the primitive hooks required by the composed traits.
 
 mod cursor;
+mod expandable;
+mod marks;
+mod paint;
 mod row_flow;
 mod viewport;
 
 pub use self::cursor::Cursored;
+#[allow(unused_imports)]
+pub use self::expandable::{AggregateMarkState, Expandable};
+#[allow(unused_imports)]
+pub use self::marks::{MarkSelection, MarkSelectionState};
+#[allow(unused_imports)]
+pub use self::paint::{PaintRetained, PaintRetainedState};
 #[allow(unused_imports)]
 pub use self::row_flow::{Row, RowFlow};
 #[allow(unused_imports)]
