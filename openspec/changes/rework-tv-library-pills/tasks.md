@@ -37,9 +37,9 @@
 
 ## 8. Verification and close-out
 
-- [ ] 8.1 Run the full gate: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run -p mbv`, and `cargo nextest run --workspace`. Verify: all commands are clean.
-- [ ] 8.2 Manually confirm against a real Emby server that `/Shows/Upcoming` scoped to a TV library returns playable rows (or record the filtering needed if it does not), and record the result. Verify: a note exists naming the observed behavior and any follow-up.
-- [ ] 8.3 Sync the applied deltas into `openspec/specs/`: apply the modified `tv-letter-filtering` and `home-latest-sections` requirements and add the `tv-library-content-modes` capability. Verify: `openspec validate --all` is clean.
-- [ ] 8.4 Record any new domain vocabulary (the content-mode value and the TV range set) in `CONTEXT.md` without renaming existing terms. Verify: the terms appear with definitions.
-- [ ] 8.5 Commit the implementation and the synced main specs. Verify: `git status --short` is empty after the commit.
-- [ ] 8.6 Archive the change with `openspec archive rework-tv-library-pills`. Verify: `openspec list --json` no longer reports the change as active and `openspec validate --all` stays clean.
+- [x] 8.1 Run the full gate: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `cargo nextest run -p mbv`, and `cargo nextest run --workspace`. Verify: all commands are clean.
+- [x] 8.2 Manually confirm against a real Emby server that `/Shows/Upcoming` scoped to a TV library returns playable rows (or record the filtering needed if it does not), and record the result. Verify: a note exists naming the observed behavior and any follow-up.
+- [x] 8.3 Sync the applied deltas into `openspec/specs/`: apply the modified `tv-letter-filtering` and `home-latest-sections` requirements and add the `tv-library-content-modes` capability. Verify: `openspec validate --all` is clean.
+- [x] 8.4 Record any new domain vocabulary (the content-mode value and the TV range set) in `CONTEXT.md` without renaming existing terms. Verify: the terms appear with definitions.
+- [x] 8.5 Commit the implementation and the synced main specs. Verify: `git status --short` is empty after the commit.
+- [x] 8.6 Archive the change with `openspec archive rework-tv-library-pills`. Verify: `openspec list --json` no longer reports the change as active and `openspec validate --all` stays clean.
