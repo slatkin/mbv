@@ -361,13 +361,8 @@ pub struct WideViewport {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowGeometry<Target> {
     offset: usize,
-    rows: Vec<FlowRow<Target>>,
+    rows: Vec<Option<Target>>,
     selected_row: Option<usize>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct FlowRow<Target> {
-    target: Option<Target>,
 }
 
 impl<Target> RowGeometry<Target> {
@@ -415,13 +410,15 @@ impl<Target> RowGeometry<Target> {
             .min(self.rows.len());
         (self.offset..end)
             .filter_map(|flow_row| {
-                let target = self.rows.get(flow_row)?.target.as_ref()?.clone();
-                let row_area = Rect {
-                    y: content_rect.y,
-                    height: content_rect.height,
+                let target = self.rows.get(flow_row)?.clone()?;
+                // Rows anchor at `content_rect.y` (where the list paints)
+                // but inherit x/width from the claim rectangle.
+                let rect = Rect {
+                    y: content_rect.y + (flow_row - self.offset) as u16,
+                    height: 1,
                     ..claim_rect
                 };
-                Some((self.row_rect(row_area, flow_row), target))
+                Some((rect, target))
             })
             .collect()
     }
@@ -437,9 +434,7 @@ impl<Target: Clone> RowGeometry<Target> {
             offset,
             rows: rows
                 .iter()
-                .map(|row| FlowRow {
-                    target: row.selectable_target().cloned(),
-                })
+                .map(|row| row.selectable_target().cloned())
                 .collect(),
             selected_row,
         }
