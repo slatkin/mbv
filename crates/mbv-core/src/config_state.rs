@@ -36,28 +36,11 @@ pub fn clear_queue_state() -> Result<(), String> {
 }
 
 const HOME_LATEST_LAUNCH_STATE_VERSION: u8 = 1;
-static HOME_LATEST_LAUNCH_TMP_COUNTER: std::sync::atomic::AtomicU64 =
-    std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct HomeLatestLaunchState {
     version: u8,
     launch_secs: u64,
-}
-
-fn home_latest_launch_tmp_path(path: &std::path::Path) -> PathBuf {
-    let filename = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("home_latest_launch.json");
-    let counter = HOME_LATEST_LAUNCH_TMP_COUNTER.fetch_add(
-        1,
-        std::sync::atomic::Ordering::Relaxed,
-    );
-    path.with_file_name(format!(
-        ".{filename}.tmp-{}-{counter}",
-        std::process::id()
-    ))
 }
 
 fn save_home_latest_launch_at(path: &std::path::Path, launch_secs: u64) -> Result<(), String> {
@@ -71,7 +54,7 @@ fn save_home_latest_launch_at(path: &std::path::Path, launch_secs: u64) -> Resul
     };
     let json = serde_json::to_string(&state)
         .map_err(|error| format!("serialize {}: {error}", path.display()))?;
-    let tmp = home_latest_launch_tmp_path(path);
+    let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, json).map_err(|error| format!("write {}: {error}", tmp.display()))?;
     std::fs::rename(&tmp, path)
         .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))

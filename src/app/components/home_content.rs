@@ -506,11 +506,9 @@ impl LibraryContentOwner for HomeContent {
                     )
                     .collect(),
                 markers: std::iter::once(false)
-                    .chain(self.latest.iter().enumerate().map(|(index, section)| {
-                        let pill_index = index + 1;
+                    .chain(self.latest.iter().map(|section| {
                         section.has_new_content
                             && !self.visited_latest_sources.contains(&section.source)
-                            && pill_index != self.section
                     }))
                     .collect(),
                 active: Some(self.section),
