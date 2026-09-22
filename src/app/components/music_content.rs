@@ -548,13 +548,22 @@ impl MusicContent {
                 // the pre-filter anchor, then re-select it: the shared
                 // `ClearFilter` restores `filter_anchor`, so without this the
                 // tree (and with it Hero/Workspace/persistence) would revert
-                // to the row the filter started on. Legacy parity.
+                // to the row the filter started on. `AnchorSelection` rather
+                // than `Select` because the filter can reach a leaf under a
+                // collapsed artist root: `Select` only addresses a visible
+                // row, so the re-selection would come back `Unhandled` and
+                // the tree would revert. `AnchorSelection` reveals the
+                // ancestor path (legacy `select_album_target` parity) and
+                // re-arms the viewport visibility rule for the next view.
                 let target = self.browser.selected_target().cloned();
                 let item = self.selected_item()?;
                 self.inline_search.close();
                 self.browser.apply(TreeOperation::ClearFilter);
                 if let Some(target) = target {
-                    self.browser.apply(TreeOperation::Select(target));
+                    self.browser.apply(TreeOperation::AnchorSelection {
+                        target,
+                        flow_offset: 0,
+                    });
                 }
                 if self.track_list.rows().is_empty() {
                     Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item }))

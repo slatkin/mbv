@@ -979,6 +979,59 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
         Some(LibraryItemIdentity::Emby { id: "a-1".into() }),
         "the launch snapshot keeps the activated album"
     );
+
+    // The filter can reach a leaf under a collapsed artist root: dismissing it
+    // restores the pre-filter anchor, so a plain `Select` cannot re-address the
+    // hidden leaf and the tree would revert. The re-selection must reveal the
+    // ancestor path instead (legacy `select_album_target` parity).
+    assert!(owner
+        .on_key(&KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE,
+        })
+        .is_some());
+    owner
+        .browser
+        .apply(TreeOperation::EditFilter("b-0".to_string()));
+    let beta_root = find(&owner, |target| target.is_artist());
+    assert!(
+        !owner.browser.is_expanded(&beta_root),
+        "the filter reaches the leaf while its artist root stays collapsed"
+    );
+    assert_eq!(
+        owner.selected_album_target().as_deref(),
+        None,
+        "the collapsed root is the first filtered row"
+    );
+    press(&mut owner, Key::Down);
+    assert_eq!(owner.selected_album_target().as_deref(), Some("b-0"));
+    match press(&mut owner, Key::Enter) {
+        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item })) => {
+            assert_eq!(item.id, "b-0")
+        }
+        other => panic!("expected album activation, got {other:?}"),
+    }
+    assert_eq!(
+        owner.selected_album_target().as_deref(),
+        Some("b-0"),
+        "the dismissed filter keeps the collapsed root's activated album"
+    );
+    assert!(
+        owner.browser.is_expanded(&beta_root),
+        "the re-selection revealed the activated album's ancestor path"
+    );
+    assert!(
+        owner
+            .browser
+            .visible_targets()
+            .contains(&MusicTreeTarget::Album("b-0".into())),
+        "the activated album is revealed in the tree"
+    );
+    assert_eq!(
+        owner.launch_snapshot().1,
+        Some(LibraryItemIdentity::Emby { id: "b-0".into() }),
+        "the launch snapshot keeps the collapsed root's activated album"
+    );
 }
 
 /// An album-leaf Enter focuses the Wide inline track pane, but moving the tree
