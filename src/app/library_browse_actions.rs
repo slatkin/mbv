@@ -327,6 +327,42 @@ type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<EmbyItem>, usize), String> + 'a;
 const ALBUM_INDEX_PAGE_SIZE: usize = 200;
 
+trait TvLatestSource {
+    fn get_latest_episodes(&self, view_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String>;
+}
+
+impl TvLatestSource for EmbyClient {
+    fn get_latest_episodes(&self, view_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
+        EmbyClient::get_latest_episodes(self, view_id, limit)
+    }
+}
+
+fn build_tv_latest_level<S: TvLatestSource>(
+    source: &S,
+    parent_id: String,
+    title: String,
+) -> Result<BrowseLevel, String> {
+    let items = source.get_latest_episodes(&parent_id, 30)?;
+    let total_count = items.len();
+    Ok(BrowseLevel {
+        parent_id,
+        title,
+        items,
+        fetched_rows: total_count,
+        total_count,
+        resting: BrowseResting::new(0, 0),
+        item_types: Some("Episode".into()),
+        unplayed_only: false,
+        sort_by: "DateCreated".into(),
+        sort_order: "Descending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        tv_content_mode: None,
+        music_grouping: None,
+    })
+}
+
 // Visibility bump: private -> `pub(super)`. Exercised directly by
 // `actions_tests.rs` (a submodule of `actions.rs`, so it needs an explicit
 // `crate::app::library_browse_actions::...` import once this lives outside
@@ -690,33 +726,18 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
-        std::thread::spawn(move || match client.get_latest_episodes(&parent_id, 30) {
-            Ok(items) => {
-                let total_count = items.len();
-                let _ = tx.send(LibEvent::Loaded {
-                    lib_idx,
-                    parent_id: parent_id.clone(),
-                    level: Box::new(BrowseLevel {
+        std::thread::spawn(move || {
+            match build_tv_latest_level(&client, parent_id.clone(), title) {
+                Ok(level) => {
+                    let _ = tx.send(LibEvent::Loaded {
+                        lib_idx,
                         parent_id,
-                        title,
-                        items,
-                        fetched_rows: total_count,
-                        total_count,
-                        resting: BrowseResting::new(0, 0),
-                        item_types: Some("Episode".into()),
-                        unplayed_only: false,
-                        sort_by: "DateCreated".into(),
-                        sort_order: "Descending".into(),
-                        loading: false,
-                        all_items: None,
-                        letter_filter: None,
-                        tv_content_mode: None,
-                        music_grouping: None,
-                    }),
-                });
-            }
-            Err(e) => {
-                let _ = tx.send(LibEvent::Error(e));
+                        level: Box::new(level),
+                    });
+                }
+                Err(e) => {
+                    let _ = tx.send(LibEvent::Error(e));
+                }
             }
         });
     }
@@ -978,5 +999,47 @@ impl App {
                 });
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tv_latest_tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    struct FakeLatestSource {
+        request: RefCell<Option<(String, usize)>>,
+        items: Vec<EmbyItem>,
+    }
+
+    impl TvLatestSource for FakeLatestSource {
+        fn get_latest_episodes(
+            &self,
+            view_id: &str,
+            limit: usize,
+        ) -> Result<Vec<EmbyItem>, String> {
+            *self.request.borrow_mut() = Some((view_id.into(), limit));
+            Ok(self.items.clone())
+        }
+    }
+
+    #[test]
+    fn latest_library_fetch_uses_home_feed_request_without_home_state() {
+        let mut episode = crate::app::tests::make_item("Feed episode", "Episode");
+        episode.id = "feed-episode".into();
+        let source = FakeLatestSource {
+            request: RefCell::new(None),
+            items: vec![episode.clone()],
+        };
+
+        let level = build_tv_latest_level(&source, "view-id".into(), "TV".into())
+            .expect("fake Latest request succeeds");
+
+        assert_eq!(
+            source.request.borrow().as_ref(),
+            Some(&("view-id".into(), 30))
+        );
+        assert_eq!(level.items, vec![episode]);
+        assert_eq!(level.item_types.as_deref(), Some("Episode"));
     }
 }

@@ -305,6 +305,12 @@ impl TvContent {
                 self.refresh_episode_rows();
                 self.episodes.select_first();
             }
+            TvHit::EpisodeRow(target) if self.flat_episode_mode() => {
+                // Flat episode rows are painted by the browser carrier, not
+                // the hidden season workspace. Keep the click on that owner
+                // and leave pane focus unchanged.
+                self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
+            }
             TvHit::EpisodeRow(target) => {
                 self.pane = Pane::Episodes;
                 self.episodes.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));

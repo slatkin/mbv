@@ -1,5 +1,81 @@
 use super::*;
 use crate::app::tests::*;
+use rstest::rstest;
+
+#[rstest]
+#[case(mbv_core::config::TvContentMode::Latest)]
+#[case(mbv_core::config::TvContentMode::Upcoming)]
+#[case(mbv_core::config::TvContentMode::All)]
+#[case(mbv_core::config::TvContentMode::Range(1))]
+fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
+    #[case] mode: mbv_core::config::TvContentMode,
+) {
+    let mut saved = crate::config::LibraryPositionLevel {
+        parent_id: "lib-tv".into(),
+        title: "TV".into(),
+        item_types: Some("Episode".into()),
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        tv_content_mode: Some(mode.clone()),
+        library_total: Some(301),
+        ..Default::default()
+    };
+    let item = make_item("Restored episode", "Episode");
+    let level = BrowseLevel::from_position_level_with_fetched_rows_for_kind(
+        &saved,
+        vec![item.clone()],
+        1,
+        10,
+        Some(1),
+        crate::app::render::LetterFilterKind::Tv,
+    );
+    let snapshot = level.to_position_level();
+    assert_eq!(snapshot.tv_content_mode, Some(mode.clone()));
+    assert_eq!(snapshot.focused_item_id, Some(item.id.clone()));
+
+    saved.focused_item_id = snapshot.focused_item_id;
+    let restored = BrowseLevel::from_position_level_with_fetched_rows_for_kind(
+        &saved,
+        vec![item.clone()],
+        1,
+        10,
+        Some(1),
+        crate::app::render::LetterFilterKind::Tv,
+    );
+    assert_eq!(restored.tv_content_mode, Some(mode));
+    assert_eq!(restored.items[0].id, item.id);
+}
+
+#[test]
+fn restoring_upcoming_position_skips_the_unfiltered_episode_fetch() {
+    let saved = crate::config::LibraryPosition {
+        levels: vec![crate::config::LibraryPositionLevel {
+            parent_id: "lib-tv".into(),
+            title: "TV".into(),
+            item_types: Some("Episode".into()),
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            tv_content_mode: Some(mbv_core::config::TvContentMode::Upcoming),
+            library_total: Some(301),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let restored = restore_library_position_with_fetched_rows_for_kind(
+        &saved,
+        10,
+        crate::app::render::LetterFilterKind::Tv,
+        |_| panic!("Upcoming restore must not issue a library fetch"),
+    )
+    .expect("restore result")
+    .expect("restored position");
+    assert_eq!(
+        restored.1[0].tv_content_mode,
+        Some(mbv_core::config::TvContentMode::Upcoming)
+    );
+    assert!(restored.1[0].items.is_empty());
+}
 
 #[test]
 fn library_position_snapshot_captures_path_focus_and_feed_group() {
