@@ -143,7 +143,10 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_tv_pill() {
     harness.model_mut().app.libs[0].library_total = Some(100);
     let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
     level.total_count = 100;
-    level.letter_filter = crate::app::render::LetterFilter::for_index(2);
+    level.letter_filter = crate::app::render::LetterFilter::for_index_for_kind(
+        2,
+        crate::app::render::LetterFilterKind::Tv,
+    );
     level.items = vec![crate::app::tests::make_item("Series G", "Series")];
     level.loading = false;
     harness.model_mut().sync_mounted_surfaces();

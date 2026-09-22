@@ -302,7 +302,7 @@ fn activate_searched_series_marks_the_series_pill_and_cursor() {
 
     let level = app.libs[0].nav_stack.last().unwrap();
     let filter = level.letter_filter.as_ref().expect("pill group marked");
-    assert_eq!(filter.label, "V\u{2013}Z");
+    assert_eq!(filter.label, "S-Z");
     assert_eq!(
         level
             .items
@@ -365,14 +365,14 @@ fn select_letter_pill_scopes_tv_to_series() {
     push_top_level_tv(&mut app.libs[0], 10);
     app.libs[0].library_total = Some(1000);
 
-    app.select_letter_pill(0, 4); // "M–O"
+    app.select_letter_pill(0, 1); // "J-R"
 
     let lvl = app.libs[0].nav_stack.last().unwrap();
     let filter = lvl.letter_filter.as_ref().expect("pill should be set");
-    assert_eq!(filter.index, 4);
-    assert_eq!(filter.label, "M\u{2013}O");
-    assert_eq!(filter.name_ge, Some("M"));
-    assert_eq!(filter.name_lt, Some("P"));
+    assert_eq!(filter.index, 1);
+    assert_eq!(filter.label, "J-R");
+    assert_eq!(filter.name_ge, Some("J"));
+    assert_eq!(filter.name_lt, Some("S"));
     assert_eq!(lvl.item_types, Some("Series".to_string()));
     assert_eq!(lvl.resting().cursor(), 0);
     assert_eq!(lvl.resting().scroll(), 0);
@@ -395,8 +395,8 @@ fn cycle_letter_pill_wraps_on_tvshows_library() {
         .as_ref()
         .unwrap();
     assert_eq!(
-        filter.label, "#",
-        "wrapping back from default should land on #"
+        filter.label, "S-Z",
+        "wrapping back from default should land on S-Z"
     );
 
     app.cycle_letter_pill(0, 1);
@@ -408,8 +408,8 @@ fn cycle_letter_pill_wraps_on_tvshows_library() {
         .as_ref()
         .unwrap();
     assert_eq!(
-        filter.label, "A\u{2013}C",
-        "wrapping forward from # should land on A–C"
+        filter.label, "A-I",
+        "wrapping forward from S-Z should land on A-I"
     );
 }
 

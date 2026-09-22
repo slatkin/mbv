@@ -430,6 +430,9 @@ impl App {
         if self.libs[idx].nav_stack.is_empty() {
             if let Some(saved) = self.saved_library_position(idx) {
                 if let Some(root) = saved.levels.first() {
+                    let filter_kind = super::render::LetterFilterKind::from_collection_type(
+                        self.libs[idx].library.collection_type.as_str(),
+                    );
                     self.libs[idx].library_total = root.library_total;
                     self.libs[idx].nav_stack.push(BrowseLevel {
                         parent_id: root.parent_id.clone(),
@@ -445,9 +448,9 @@ impl App {
                         loading: true,
 
                         all_items: None,
-                        letter_filter: root
-                            .letter_filter_index
-                            .and_then(super::render::LetterFilter::for_index),
+                        letter_filter: root.letter_filter_index.and_then(|index| {
+                            super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                        }),
                         music_grouping: None,
                     });
                     self.spawn_restore_library_position(idx, saved);
@@ -508,14 +511,18 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
+        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+            self.libs[lib_idx].library.collection_type.as_str(),
+        );
         std::thread::spawn(move || {
-            let restored = super::restore_library_position_with_fetched_rows(
+            let restored = super::restore_library_position_with_fetched_rows_for_kind(
                 &saved,
                 visible_rows,
+                filter_kind,
                 |saved_level| {
-                    let letter_filter = saved_level
-                        .letter_filter_index
-                        .and_then(super::render::LetterFilter::for_index);
+                    let letter_filter = saved_level.letter_filter_index.and_then(|index| {
+                        super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                    });
                     let (name_ge, name_lt) = letter_filter
                         .as_ref()
                         .map(|f| (f.name_ge, f.name_lt))

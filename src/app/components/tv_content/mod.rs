@@ -24,7 +24,9 @@ use super::media_list::{
     MediaListTrailing, MediaSemanticState, RowIntent, ViewportAnchor,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
-use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
+use crate::app::render::{
+    effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
+};
 use crate::app::ui_util::{fmt_duration_gutter, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
@@ -165,7 +167,8 @@ impl TvContent {
     }
     #[cfg(test)]
     pub(in crate::app) fn test_set_letter_filter(&mut self, index: usize) {
-        self.context.list.letter_filter = crate::app::render::LetterFilter::for_index(index);
+        self.context.list.letter_filter =
+            LetterFilter::for_index_for_kind(index, LetterFilterKind::Tv);
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
@@ -361,7 +364,7 @@ impl TvContent {
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
         let selector = if !searching && self.context.show_letter_pills {
             Some(SelectorRow {
-                pills: crate::app::render::LetterFilter::labels(),
+                pills: LetterFilter::labels_for_kind(LetterFilterKind::Tv),
                 markers: vec![],
                 active: Some(
                     self.context

@@ -145,7 +145,14 @@ impl App {
         // The pill group the series sorts into (pills only exist at the
         // top level of pill-eligible libraries).
         let filter = if self.should_show_letter_pills(lib_idx) {
-            LetterFilter::for_sort_key(effective_sort_str(item))
+            let filter_kind = super::render::LetterFilterKind::from_collection_type(
+                self.libs[lib_idx].library.collection_type.as_str(),
+            );
+            if filter_kind == super::render::LetterFilterKind::Movie {
+                LetterFilter::for_sort_key(effective_sort_str(item))
+            } else {
+                LetterFilter::for_sort_key_for_kind(effective_sort_str(item), filter_kind)
+            }
         } else {
             None
         };

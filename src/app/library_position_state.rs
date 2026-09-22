@@ -121,9 +121,14 @@ impl App {
                     loading: true,
 
                     all_items: None,
-                    letter_filter: root
-                        .letter_filter_index
-                        .and_then(crate::app::render::LetterFilter::for_index),
+                    letter_filter: root.letter_filter_index.and_then(|index| {
+                        crate::app::render::LetterFilter::for_index_for_kind(
+                            index,
+                            crate::app::render::LetterFilterKind::from_collection_type(
+                                self.libs[lib_idx].library.collection_type.as_str(),
+                            ),
+                        )
+                    }),
                     music_grouping: None,
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {

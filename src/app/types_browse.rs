@@ -150,12 +150,31 @@ impl BrowseLevel {
         )
     }
 
+    #[cfg(test)]
     pub(super) fn from_position_level_with_fetched_rows(
         saved: &crate::config::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
         visible_rows: usize,
         fetched_rows: Option<usize>,
+    ) -> Self {
+        Self::from_position_level_with_fetched_rows_for_kind(
+            saved,
+            items,
+            total_count,
+            visible_rows,
+            fetched_rows,
+            crate::app::render::LetterFilterKind::Movie,
+        )
+    }
+
+    pub(super) fn from_position_level_with_fetched_rows_for_kind(
+        saved: &crate::config::LibraryPositionLevel,
+        items: Vec<EmbyItem>,
+        total_count: usize,
+        visible_rows: usize,
+        fetched_rows: Option<usize>,
+        filter_kind: crate::app::render::LetterFilterKind,
     ) -> Self {
         let cursor = saved
             .focused_item_id
@@ -176,9 +195,9 @@ impl BrowseLevel {
             sort_order: saved.sort_order.clone(),
             loading: false,
             all_items: None,
-            letter_filter: saved
-                .letter_filter_index
-                .and_then(crate::app::render::LetterFilter::for_index),
+            letter_filter: saved.letter_filter_index.and_then(|index| {
+                crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+            }),
             music_grouping: None,
         }
     }
@@ -243,9 +262,27 @@ where
     })
 }
 
+#[cfg(test)]
 pub(super) fn restore_library_position_with_fetched_rows<F>(
     saved: &crate::config::LibraryPosition,
     visible_rows: usize,
+    fetch_level: F,
+) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
+where
+    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize, usize), String>,
+{
+    restore_library_position_with_fetched_rows_for_kind(
+        saved,
+        visible_rows,
+        crate::app::render::LetterFilterKind::Movie,
+        fetch_level,
+    )
+}
+
+pub(super) fn restore_library_position_with_fetched_rows_for_kind<F>(
+    saved: &crate::config::LibraryPosition,
+    visible_rows: usize,
+    filter_kind: crate::app::render::LetterFilterKind,
     mut fetch_level: F,
 ) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
 where
@@ -265,12 +302,13 @@ where
 
     for (idx, saved_level) in saved.levels.iter().enumerate() {
         let (items, total_count, fetched_rows) = fetch_level(saved_level)?;
-        let level = BrowseLevel::from_position_level_with_fetched_rows(
+        let level = BrowseLevel::from_position_level_with_fetched_rows_for_kind(
             saved_level,
             items,
             total_count,
             visible_rows,
             Some(fetched_rows),
+            filter_kind,
         );
         let can_descend = saved
             .levels

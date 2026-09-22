@@ -50,8 +50,8 @@ impl App {
     /// `total_count` is the only place that number comes from. If the
     /// library qualifies for the letter-range pill row
     /// (`LIBRARY_PILL_THRESHOLD`) and no pill was already restored from a
-    /// saved session, this applies the default (`A–C`) pill and issues one
-    /// scoped refresh to replace the level's items with that range -- see
+    /// saved session, this applies the library's default first-range pill and
+    /// issues one scoped refresh to replace the level's items with that range -- see
     /// plan §5. A no-op for every subsequent load of the same level
     /// (`library_total` is already `Some`), for music/feed/podcast
     /// libraries, and for non-root levels.
@@ -77,13 +77,20 @@ impl App {
         let unplayed_only = level.unplayed_only;
         let sort_by = level.sort_by.clone();
         let sort_order = level.sort_order.clone();
+        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+            lib.library.collection_type.as_str(),
+        );
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
         }
         if total <= super::render::LIBRARY_PILL_THRESHOLD {
             return;
         }
-        let filter = super::render::LetterFilter::default_filter();
+        let filter = if filter_kind == super::render::LetterFilterKind::Movie {
+            super::render::LetterFilter::default_filter()
+        } else {
+            super::render::LetterFilter::default_filter_for_kind(filter_kind)
+        };
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
             last.letter_filter = Some(filter.clone());
