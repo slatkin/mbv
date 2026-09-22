@@ -449,7 +449,13 @@ impl App {
 
                         all_items: None,
                         letter_filter: root.letter_filter_index.and_then(|index| {
-                            super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                            if filter_kind == super::render::LetterFilterKind::Tv
+                                && index >= super::render::LetterFilter::count_for_kind(filter_kind)
+                            {
+                                None
+                            } else {
+                                super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                            }
                         }),
                         music_grouping: None,
                     });

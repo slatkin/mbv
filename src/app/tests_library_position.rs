@@ -84,9 +84,12 @@ fn restored_position_uses_actual_server_rows_over_stale_persisted_count() {
         ..Default::default()
     };
 
-    let restored = restore_library_position_with_fetched_rows(&saved, 3, |_| {
-        Ok((make_items(103), 105, 105))
-    })
+    let restored = restore_library_position_with_fetched_rows_for_kind(
+        &saved,
+        3,
+        crate::app::render::LetterFilterKind::Movie,
+        |_| Ok((make_items(103), 105, 105)),
+    )
     .expect("restore result")
     .expect("restored position");
 

@@ -237,11 +237,8 @@ impl App {
         let filter_kind = super::render::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
-        let Some(filter) = (if filter_kind == super::render::LetterFilterKind::Movie {
-            super::render::LetterFilter::for_index(pill_index)
-        } else {
-            super::render::LetterFilter::for_index_for_kind(pill_index, filter_kind)
-        }) else {
+        let Some(filter) = super::render::LetterFilter::for_index_for_kind(pill_index, filter_kind)
+        else {
             return;
         };
         let Some(lvl) = self.libs[lib_idx].nav_stack.last() else {
@@ -286,11 +283,7 @@ impl App {
         let filter_kind = super::render::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
-        let n = if filter_kind == super::render::LetterFilterKind::Movie {
-            super::render::LetterFilter::count()
-        } else {
-            super::render::LetterFilter::count_for_kind(filter_kind)
-        };
+        let n = super::render::LetterFilter::count_for_kind(filter_kind);
         if n == 0 {
             return;
         }

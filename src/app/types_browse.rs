@@ -141,29 +141,12 @@ impl BrowseLevel {
         total_count: usize,
         visible_rows: usize,
     ) -> Self {
-        Self::from_position_level_with_fetched_rows(
-            saved,
-            items,
-            total_count,
-            visible_rows,
-            saved.fetched_rows,
-        )
-    }
-
-    #[cfg(test)]
-    pub(super) fn from_position_level_with_fetched_rows(
-        saved: &crate::config::LibraryPositionLevel,
-        items: Vec<EmbyItem>,
-        total_count: usize,
-        visible_rows: usize,
-        fetched_rows: Option<usize>,
-    ) -> Self {
         Self::from_position_level_with_fetched_rows_for_kind(
             saved,
             items,
             total_count,
             visible_rows,
-            fetched_rows,
+            saved.fetched_rows,
             crate::app::render::LetterFilterKind::Movie,
         )
     }
@@ -254,28 +237,16 @@ pub(super) fn restore_library_position<F>(
 where
     F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize), String>,
 {
-    restore_library_position_with_fetched_rows(saved, visible_rows, |saved_level| {
-        fetch_level(saved_level).map(|(items, total_count)| {
-            let fetched_rows = saved_level.fetched_rows.unwrap_or(items.len());
-            (items, total_count, fetched_rows)
-        })
-    })
-}
-
-#[cfg(test)]
-pub(super) fn restore_library_position_with_fetched_rows<F>(
-    saved: &crate::config::LibraryPosition,
-    visible_rows: usize,
-    fetch_level: F,
-) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
-where
-    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize, usize), String>,
-{
     restore_library_position_with_fetched_rows_for_kind(
         saved,
         visible_rows,
         crate::app::render::LetterFilterKind::Movie,
-        fetch_level,
+        |saved_level| {
+            fetch_level(saved_level).map(|(items, total_count)| {
+                let fetched_rows = saved_level.fetched_rows.unwrap_or(items.len());
+                (items, total_count, fetched_rows)
+            })
+        },
     )
 }
 

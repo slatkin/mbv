@@ -86,11 +86,7 @@ impl App {
         if total <= super::render::LIBRARY_PILL_THRESHOLD {
             return;
         }
-        let filter = if filter_kind == super::render::LetterFilterKind::Movie {
-            super::render::LetterFilter::default_filter()
-        } else {
-            super::render::LetterFilter::default_filter_for_kind(filter_kind)
-        };
+        let filter = super::render::LetterFilter::default_filter_for_kind(filter_kind);
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
             last.letter_filter = Some(filter.clone());

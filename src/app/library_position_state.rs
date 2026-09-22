@@ -122,12 +122,18 @@ impl App {
 
                     all_items: None,
                     letter_filter: root.letter_filter_index.and_then(|index| {
-                        crate::app::render::LetterFilter::for_index_for_kind(
-                            index,
+                        let filter_kind =
                             crate::app::render::LetterFilterKind::from_collection_type(
                                 self.libs[lib_idx].library.collection_type.as_str(),
-                            ),
-                        )
+                            );
+                        if filter_kind == crate::app::render::LetterFilterKind::Tv
+                            && index
+                                >= crate::app::render::LetterFilter::count_for_kind(filter_kind)
+                        {
+                            None
+                        } else {
+                            crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                        }
                     }),
                     music_grouping: None,
                 };

@@ -135,7 +135,7 @@ use self::notify_actions::ToastSeverity;
 pub(in crate::app) use self::playback_target::NowPlayingStatus;
 use self::resize::spawn_resize_worker;
 #[cfg(test)]
-use self::types_browse::{restore_library_position, restore_library_position_with_fetched_rows};
+use self::types_browse::restore_library_position;
 use self::types_browse::{
     restore_library_position_with_fetched_rows_for_kind, AlbumIndex, AlbumIndexState,
     AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
