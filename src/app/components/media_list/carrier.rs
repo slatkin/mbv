@@ -95,7 +95,7 @@ impl<Target> MediaListCarrier<Target> {
     }
 }
 
-impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
+impl<Target: Clone + Eq> MediaListCarrier<Target> {
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         self.wide.set_content(rows);
     }

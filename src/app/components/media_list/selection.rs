@@ -1,6 +1,28 @@
-use super::MediaList;
+use super::{MediaList, MediaListOperation, MediaListSurfaceInput};
 
-impl<Target: Clone + PartialEq> MediaList<Target> {
+impl MediaListSurfaceInput {
+    pub fn into_operation<Target>(
+        self,
+        target: Option<Target>,
+    ) -> Option<MediaListOperation<Target>> {
+        Some(match self {
+            Self::Move(delta) => MediaListOperation::Move(delta),
+            Self::Page(delta) => MediaListOperation::Page(delta),
+            Self::First => MediaListOperation::First,
+            Self::Last => MediaListOperation::Last,
+            Self::Activate => MediaListOperation::ActivateCurrent,
+            Self::Context => MediaListOperation::ContextCurrent,
+            Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
+            Self::Click(_) => MediaListOperation::Select(target?),
+            Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
+            Self::RangeClick(_) => MediaListOperation::Range(target?),
+            Self::DoubleClick(_) => MediaListOperation::Activate(target?),
+            Self::ContextClick(_) => MediaListOperation::Context(target?),
+        })
+    }
+}
+
+impl<Target: Clone + Eq> MediaList<Target> {
     /// Toggle a target and freeze the resulting explicit set. The first toggle
     /// includes the row that was under the cursor, matching Ctrl+Click.
     pub fn toggle_selection(&mut self, target: &Target) {
@@ -8,23 +30,23 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         if was_empty {
             let cursor = self.selected_target().cloned();
             if let Some(cursor) = cursor {
-                self.multi_selection.push(cursor.clone());
+                self.multi_selection.add(cursor.clone());
                 self.selection_anchor = Some(cursor);
             }
         }
-        if let Some(index) = self.multi_selection.iter().position(|item| item == target) {
+        if self.multi_selection.contains(target) {
             if !was_empty {
-                self.multi_selection.remove(index);
+                self.multi_selection.remove(target);
             }
         } else if self.position_of(target).is_some() {
-            self.multi_selection.push(target.clone());
+            self.multi_selection.add(target.clone());
         }
         if self.multi_selection.is_empty() {
             self.clear_selection();
         } else if self.selection_anchor.is_none() {
             self.selection_anchor = Some(target.clone());
         }
-        self.frozen_selection = self.multi_selection.clone();
+        self.frozen_selection = self.multi_selection.targets().to_vec();
         self.live_range = false;
     }
 
@@ -40,7 +62,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .unwrap_or_else(|| target.clone());
         let Some(start) = self.position_of(&anchor) else {
             self.selection_anchor = Some(target.clone());
-            self.multi_selection = vec![target.clone()];
+            self.multi_selection.set_targets([target.clone()]);
             return;
         };
         let (lo, hi) = if start <= end {
@@ -48,7 +70,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         } else {
             (end, start)
         };
-        self.multi_selection = self
+        let selected: Vec<Target> = self
             .selectable
             .iter()
             .enumerate()
@@ -59,6 +81,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
                 .then(|| candidate.clone())
             })
             .collect();
+        self.multi_selection.set_targets(selected);
         self.selection_anchor = Some(anchor);
     }
 
@@ -136,8 +159,8 @@ mod tests {
 
         list.set_content(vec![item(2), item(5), item(7), item(8)]);
         assert_eq!(list.multi_selection(), &[5, 7]);
-        assert_eq!(list.selected_target(), Some(&7));
-        assert_eq!(list.selection_anchor.as_ref(), Some(&7));
+        assert_eq!(list.selected_target(), Some(&2));
+        assert_eq!(list.selection_anchor.as_ref(), Some(&2));
     }
 
     #[test]
@@ -187,14 +210,14 @@ mod tests {
     }
 
     #[test]
-    fn refresh_reanchors_after_rows_above_cursor_are_removed() {
+    fn refresh_reanchors_when_the_cursor_row_leaves_the_flow() {
         let mut list = list();
         list.select_target(&3);
         list.toggle_selection(&6);
         list.set_content(vec![item(2), item(4), item(6), item(7)]);
         assert_eq!(list.multi_selection(), &[6]);
-        assert_eq!(list.selected_target(), Some(&6));
-        assert_eq!(list.selection_anchor.as_ref(), Some(&6));
+        assert_eq!(list.selected_target(), Some(&2));
+        assert_eq!(list.selection_anchor.as_ref(), Some(&2));
     }
 
     #[test]

@@ -129,9 +129,9 @@ impl MusicContent {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (_id, index) = self.browser.hit_node(at)?;
+                            let target = self.browser.hit_node(at)?;
                             self.browser.clear_marks();
-                            self.browser.select_index(index);
+                            self.browser.select_target(&target);
                             self.pointer_album_selection_request(AlbumCursorKind::Move)
                         }
                         MediaListSurfaceInput::ToggleClick(at) => {
@@ -146,17 +146,17 @@ impl MusicContent {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (id, index) = self.browser.hit_node(at)?;
-                            if self.browser.model_is_track(id) {
+                            let target = self.browser.hit_node(at)?;
+                            if self.browser.model_is_track(&target) {
                                 // Resolve the stable identity from the resolved
-                                // node before any local mutation, so a track
+                                // target before any local mutation, so a track
                                 // gesture never changes the selection and then
                                 // returns no message.
                                 let (album_target, track_id) =
-                                    self.browser.track_identity_of(id)?;
+                                    self.browser.track_identity_of(&target)?;
                                 let album_target = album_target.to_string();
                                 let track_id = track_id.to_string();
-                                self.browser.select_index(index);
+                                self.browser.select_target(&target);
                                 return Some(Msg::Shell(
                                     ShellRequest::MusicTreeTrackActivate {
                                         album_target,
@@ -164,13 +164,13 @@ impl MusicContent {
                                     },
                                 ));
                             }
-                            self.browser.select_index(index);
-                            if self.browser.model_is_artist(id) {
-                                self.browser.toggle_root(id);
+                            self.browser.select_target(&target);
+                            if self.browser.model_is_artist(&target) {
+                                self.browser.toggle_root(&target);
                                 return Some(Msg::Shell(ShellRequest::LibraryPanelFocus));
                             }
-                            if self.browser.node_has_children(id) {
-                                self.browser.toggle_node(id);
+                            if self.browser.node_has_children(&target) {
+                                self.browser.toggle_node(&target);
                             }
                             Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
                         }
@@ -178,19 +178,19 @@ impl MusicContent {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (id, index) = self.browser.hit_node(at)?;
+                            let target = self.browser.hit_node(at)?;
                             let marked = self.browser.selected_album_targets_in_display_order();
-                            let clicked_marked = if let Some(target) = self.browser.target_of(id) {
-                                marked.iter().any(|selected| selected == target)
-                            } else if self.browser.model_is_artist(id) {
+                            let clicked_marked = if let Some(album) = target.album_leaf_target() {
+                                marked.iter().any(|selected| selected == album)
+                            } else if self.browser.model_is_artist(&target) {
                                 self.browser
-                                    .artist_album_targets(id)
+                                    .artist_album_targets(&target)
                                     .into_iter()
                                     .any(|target| marked.iter().any(|selected| selected == &target))
                             } else {
                                 false
                             };
-                            self.browser.select_index(index);
+                            self.browser.select_target(&target);
                             if !marked.is_empty() && clicked_marked {
                                 let (items, unresolved_targets) = self.selected_tree_items()?;
                                 if items.is_empty() && unresolved_targets.is_empty() {

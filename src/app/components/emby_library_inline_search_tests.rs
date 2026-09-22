@@ -199,7 +199,13 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
     });
     owner.inline_search_mut().set_pool(SearchPool::Items(vec![
         make_item("Search Result Alpha", "Movie"),
-        make_item("Search Result Beta", "Movie"),
+        {
+            let mut beta = make_item("Search Result Beta", "Movie");
+            // Stable targets must be unique: the target-addressed list cannot
+            // distinguish two rows sharing the default fixture id.
+            beta.id = "search-beta".into();
+            beta
+        },
     ]));
     // Score a query so the result rows exist (an empty query shows none):
     // type a character, then fire the debounce with a clock tick past the

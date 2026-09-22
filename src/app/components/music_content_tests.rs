@@ -158,9 +158,9 @@ fn grouped_music_filter_keeps_the_tree_panel_owner_and_uses_the_shared_query_edi
     drop(content);
     let titles: Vec<&str> = owner
         .browser
-        .projected_nodes()
+        .projected_node_targets()
         .iter()
-        .map(|node| owner.browser.title_of(node.id()))
+        .filter_map(|target| owner.browser.title_of(target))
         .collect();
     assert_eq!(titles, ["Artist", "Second Album"]);
 }
@@ -483,9 +483,10 @@ fn artist_hero_switches_to_the_selected_track_album_artwork() {
     owner.expand_all_tree_roots();
     owner.set_hero_image(HeroImageState::Loading);
 
-    let album_a0 = owner.browser.projected_nodes()[1].id();
-    owner.browser.expand_node(album_a0);
-    owner.browser.select_index(2);
+    let album_a0 = owner.browser.projected_node_targets()[1].clone();
+    owner.browser.expand_node(&album_a0);
+    let track_a0 = owner.browser.projected_node_targets()[2].clone();
+    owner.browser.select_target(&track_a0);
     assert_eq!(
         owner.browser.selected_track_identity(),
         Some(("a-0", "track-a-0"))
@@ -497,9 +498,10 @@ fn artist_hero_switches_to_the_selected_track_album_artwork() {
             if item_id == "a-0" && cache_key == "a-0:P"
     ));
 
-    let album_a1 = owner.browser.projected_nodes()[3].id();
-    owner.browser.expand_node(album_a1);
-    owner.browser.select_index(4);
+    let album_a1 = owner.browser.projected_node_targets()[3].clone();
+    owner.browser.expand_node(&album_a1);
+    let track_a1 = owner.browser.projected_node_targets()[4].clone();
+    owner.browser.select_target(&track_a1);
     assert_eq!(
         owner.browser.selected_track_identity(),
         Some(("a-1", "track-a-1"))

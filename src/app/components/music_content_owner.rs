@@ -416,9 +416,9 @@ impl LibraryContentOwner for MusicContent {
             // Workspace entry) is task 6.4 and stays unhandled here.
             Key::Left if !self.track_focused => {
                 if self.browser.selected_is_artist() {
-                    if let Some(root) = self.browser.selected_id() {
-                        if self.browser.root_is_expanded(root) {
-                            self.browser.collapse_root(root);
+                    if let Some(root) = self.browser.selected_target() {
+                        if self.browser.root_is_expanded(&root) {
+                            self.browser.collapse_root(&root);
                         }
                     }
                     None
@@ -434,9 +434,9 @@ impl LibraryContentOwner for MusicContent {
             // the shell already owns any missing album-track fetch and this
             // local operation only projects settled cache data.
             Key::Right if !self.track_focused && !self.browser.selected_is_artist() => {
-                if let Some(id) = self.browser.selected_id() {
-                    if !self.browser.node_is_expanded(id) {
-                        self.browser.expand_node(id);
+                if let Some(target) = self.browser.selected_target() {
+                    if !self.browser.node_is_expanded(&target) {
+                        self.browser.expand_node(&target);
                     }
                 }
                 None
@@ -447,9 +447,9 @@ impl LibraryContentOwner for MusicContent {
             // cursor locally, non-Wide asks the shell to open the Library
             // Hero overlay and focus the same Workspace.
             Key::Right if !self.track_focused && self.browser.selected_is_artist() => {
-                let root = self.browser.selected_id()?;
-                if !self.browser.root_is_expanded(root) {
-                    self.browser.expand_root(root);
+                let root = self.browser.selected_target()?;
+                if !self.browser.root_is_expanded(&root) {
+                    self.browser.expand_root(&root);
                     return None;
                 }
                 if self.inline_track_focus_enabled {

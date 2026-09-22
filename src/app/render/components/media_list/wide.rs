@@ -38,7 +38,7 @@ pub(super) struct MediaListPaint<Target> {
 /// [`WideMediaList::set_scroll`] before returning, so the offset persists across
 /// frames without the caller threading a `usize` back.
 #[cfg(test)]
-pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
+pub(super) fn render_wide_media_list<Target: Clone + Eq>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
@@ -57,7 +57,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     )
 }
 
-pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
+pub(super) fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
@@ -192,7 +192,7 @@ fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> C
 }
 
 /// Component-view adapter for the retained-result seam.
-pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq>(
+pub(in crate::app) fn render_wide_media_list_component<Target: Clone + Eq>(
     f: &mut Frame,
     area: Rect,
     list: &mut WideMediaList<Target>,

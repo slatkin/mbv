@@ -449,9 +449,9 @@ impl MusicContent {
                 self.album_selection_request(AlbumCursorKind::Jump)
             }
             Key::Left if self.browser.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_id() {
-                    if self.browser.root_is_expanded(root) {
-                        self.browser.collapse_root(root);
+                if let Some(root) = self.browser.selected_target() {
+                    if self.browser.root_is_expanded(&root) {
+                        self.browser.collapse_root(&root);
                     }
                 }
                 None
@@ -461,9 +461,9 @@ impl MusicContent {
                 self.album_selection_request(AlbumCursorKind::Move)
             }
             Key::Right if self.browser.selected_is_artist() => {
-                let root = self.browser.selected_id()?;
-                if !self.browser.root_is_expanded(root) {
-                    self.browser.expand_root(root);
+                let root = self.browser.selected_target()?;
+                if !self.browser.root_is_expanded(&root) {
+                    self.browser.expand_root(&root);
                     None
                 } else {
                     self.artist_detail_target()
@@ -471,14 +471,14 @@ impl MusicContent {
                 }
             }
             Key::Right => {
-                if let Some(id) = self.browser.selected_id() {
-                    self.browser.expand_node(id);
+                if let Some(target) = self.browser.selected_target() {
+                    self.browser.expand_node(&target);
                 }
                 None
             }
             Key::Enter if self.browser.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_id() {
-                    self.browser.toggle_root(root);
+                if let Some(root) = self.browser.selected_target() {
+                    self.browser.toggle_root(&root);
                 }
                 None
             }

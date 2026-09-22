@@ -101,15 +101,13 @@ A row carrying a secondary title SHALL paint as a split row: the primary text (t
 
 ### Requirement: WideMediaList owns fixed-row mechanics
 
-`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
+`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for the flat list shape. It SHALL own fixed-height one-column row placement, semantic painting delegation, and scrollbar presentation. Row flow, cursor, scroll, viewport clamping, selected target, retained current-frame geometry, and point resolution SHALL come from the shared list seam rather than from this presentation. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
 The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. Every fixed-row presentation SHALL render its selected row with the selected-row bar: while the list holds focus the whole row paints the bar fill across its full width, overriding its zebra stripe, its two-column gutters, and any owning-surface identity, while every span keeps the ordinary unselected foreground role, so no title is bold and no accent title colour is introduced. There SHALL be no per-list opt-in or opt-out, and no marker glyph. An unfocused list SHALL paint no bar for its cursor row. A multi-selected row SHALL paint the bar too, including while the list is unfocused.
 
 The policy's owning-surface identity SHALL NOT move the selected row's fill: every selected row paints the bar whatever surface owns it. A list that paints a scrollbar column SHALL keep the parent background there — the bar reaches the panel edge on its own row only.
 
-The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve it from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no selected geometry.
-
-It SHALL support Wide Hero browser rails except the Grouped Music tree browser, non-Wide Library browser lists except that tree browser, provider Workspace rows, and Queue fixed rows, but SHALL NOT implement selected-row replacement or Grid placement. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use the shared canonical owner with this presentation in every Panel mode.
+It SHALL support Wide Hero browser rails, non-Wide Library browser lists, provider Workspace rows, and Queue fixed rows for destinations whose flow is flat, but SHALL NOT implement selected-row replacement or Grid placement. A destination whose flow nests uses the tree list shape over the same seam instead. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use this presentation in every Panel mode.
 
 #### Scenario: A selected row paints the selected-row bar
 - **WHEN** a fixed-row list renders its selected row while focused
@@ -129,41 +127,30 @@ It SHALL support Wide Hero browser rails except the Grouped Music tree browser, 
 
 #### Scenario: Wide TV rail composes the control
 - **WHEN** the TV browser renders in Wide or non-Wide geometry
-- **THEN** its series rail is painted by one fixed-row presentation over the shared owner
+- **THEN** its series rail is painted by one fixed-row presentation over the shared seam
 - **AND** the parent retains Workspace, Hero, images, chrome, overlay, and effects
 
 #### Scenario: Queue paints and resolves one current row flow
 - **WHEN** Queue paints a non-empty fixed-row list in any Panel mode
 - **THEN** its presentation receives equal established claim and row-flow rectangles through one component view and paints ordinary rows once
-- **AND** Queue resolves a later row point to the `QueueSlotId` from that current retained result
+- **AND** Queue resolves a later row point to the `QueueSlotId` from the seam's retained result
 - **AND** Queue does not rebuild row rectangles or a selectable row map
 
 #### Scenario: Grouped Music paints both Wide row flows
 - **WHEN** Grouped Music paints its album-track or artist-track Workspace
-- **THEN** the flow uses the fixed-row presentation over its shared owner
-- **AND** Grouped Music resolves later row points from the current retained result without a cursor mirror or row map
-- **AND** the tree browser is not projected into this owner
+- **THEN** the flow uses the fixed-row presentation over the shared seam
+- **AND** Grouped Music resolves later row points from the seam's retained result without a cursor mirror or row map
+- **AND** the tree browser uses the tree list shape rather than this presentation
 
 #### Scenario: Other provider workspaces paint fixed rows
 - **WHEN** TV paints episodes, Audiobookshelf Podcast paints episodes, or Audiobookshelf Book paints chapter or audio-part rows
-- **THEN** each flow uses the fixed-row presentation over its shared owner
-- **AND** the destination resolves later row points from the current retained result without a cursor mirror or row map
+- **THEN** each flow uses the fixed-row presentation over the shared seam
+- **AND** the destination resolves later row points from the seam's retained result without a cursor mirror or row map
 
 #### Scenario: A Wide result expires before another view
 - **WHEN** a fixed-row presentation is configured for a new frame or receives an empty or zero-area view
-- **THEN** its prior point claim and selected-row geometry are unavailable
+- **THEN** the seam's retained geometry is invalidated, so its prior point claim and selected-row geometry are unavailable
 - **AND** a parent treats the presentation as having no list target until the current view finishes
-
-### Requirement: Responsive handoff preserves an explicit anchor
-
-A geometry change for one logical list SHALL reuse its shared canonical owner and fixed-row presentation. The presentation SHALL preserve the selected ordinary row's viewport offset when possible and clamp it to its new viewport otherwise. It SHALL NOT copy cursor, selected target, scroll, or other row-local state into a presentation-specific control. Ordinary refresh SHALL preserve the stable target and locally clamp. Only a discrete navigation or restoration boundary MAY explicitly re-anchor the shared owner from a shell-owned stable target and row offset.
-
-#### Scenario: TV re-anchors across breakpoints
-
-- **WHEN** TV changes between Wide and non-Wide geometry
-- **THEN** the same logical series owner and fixed-row presentation preserve the selected stable target and row-local state
-- **AND** the viewport preserves or clamps the selected row offset
-- **AND** no shell cursor or scroll mirror is adopted
 
 ### Requirement: Named destinations compose without changing provider authority
 
@@ -268,31 +255,6 @@ When grouped Music or an Audiobookshelf Podcast or Book destination meets the sh
 - **THEN** it uses the same predicate, pane framing, content spacing, and short-height fallback as TV/Movies
 - **AND** it does not introduce a destination-specific arrangement or breakpoint
 
-### Requirement: One shared owner supports list-local extension
-
-Every in-scope logical canonical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its fixed-row presentation SHALL operate on that owner in Wide and non-Wide geometry rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
-
-The in-scope flows SHALL be Queue slots; Home rows; generic Emby catalog rows; Movies and the Emby homevideos feed view; Grouped Music album-track and artist-track Workspace rows; TV series and episodes; Feeds entries; Audiobookshelf Podcast episode rows; and Audiobookshelf Book titles and chapter/audio-part rows. The Grouped Music artist/album browser SHALL be owned by its shallow tree and is not a canonical media-row flow.
-
-Parent destinations SHALL retain Service content, stable-target-to-domain lookup, active pane and component focus, section/group/filter/bucket/season/scope chrome, Workspaces, loading, images, effects, persistence, and provider-specific typed intent translation. They SHALL NOT retain a second cursor, scroll, membership or range state, hit map, or authoritative selected-row identity for either a canonical flow or the Grouped Music tree.
-
-#### Scenario: A list-local behavior has one implementation site
-- **WHEN** a developer adds a purely canonical-list-local state transition and visual decoration
-- **THEN** the production change is confined to the shared canonical media-list state/behavior owner and shared row painter
-- **AND** no destination production file changes
-- **AND** browser and provider-Workspace canonical media rows receive the behavior through their existing composition
-
-#### Scenario: Responsive presentation does not synchronize local state
-- **WHEN** one logical canonical list changes between Wide and non-Wide geometry
-- **THEN** the same shared owner and fixed-row presentation remain active
-- **AND** no cursor, scroll, membership, range, or other row-local state is copied between controls
-
-#### Scenario: Parent authority remains outside the row owner
-- **WHEN** a destination changes a section, group, filter, surname bucket, season, queue scope, focused pane, or Library Hero overlay state
-- **THEN** the destination or owning Panel remains authoritative for that chrome, Workspace, or overlay state
-- **AND** it projects the resulting media rows into the shared owner, or the settled Grouped Music catalog into the tree owner
-- **AND** provider-specific effects remain typed destination intents
-
 ### Requirement: Row-local input uses one delegation contract
 
 After the mounted destination resolves overlay, chrome, and active-pane precedence, it SHALL offer every remaining eligible row-local key and normalized pointer gesture to one provider-neutral media-list delegation contract. Pointer input SHALL be resolved through current painted geometry to a stable target before the shared owner applies the corresponding target-bearing operation; keyboard and pointer delivery SHALL remain distinct before this resolution and SHALL converge on the same row-local state operations afterward.
@@ -347,23 +309,6 @@ Every selectable media row SHALL use a stable opaque target whose identity survi
 - **WHEN** an episode, chapter, audio part, track, or Home row requests an external effect
 - **THEN** the typed request carries its stable opaque target
 - **AND** the shell does not query component cursor state or recompute the target from a row index.
-
-### Requirement: Canonical geometry has no compatibility path
-
-Every in-scope media-row presentation SHALL paint through its shared presentation adapter once and retain the completed current frame's read-only claim, content, selected-row, and point-resolution facts. Configuring content or geometry, beginning view, or viewing an empty or zero-area region SHALL invalidate prior facts. Destination parents SHALL NOT receive or reconstruct mutable row maps, selectable maps, row rectangles, or caller-supplied point-resolution geometry.
-
-#### Scenario: Workspace row painting completes once
-
-- **WHEN** a Music track, TV episode, Audiobookshelf podcast episode, or Book chapter/audio-part flow paints
-- **THEN** its shared presentation adapter paints the media rows once
-- **AND** content and selection are not reseeded during painting
-- **AND** a later point resolves only through retained current-frame geometry.
-
-#### Scenario: Stale geometry cannot claim input
-
-- **WHEN** a presentation is configured for a new frame but has not completed its current view
-- **THEN** it claims no row point
-- **AND** the parent has no compatibility fallback using prior or reconstructed geometry.
 
 ### Requirement: Selection summaries do not duplicate list authority
 

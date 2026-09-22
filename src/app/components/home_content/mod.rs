@@ -74,7 +74,8 @@ impl HomeContent {
     /// Replace the shell-owned content snapshot (task 5.3d's projection
     /// shape, now addressed by `LibraryKey`): section/cursor clamp to the new
     /// content; an ordinary refresh preserves the selected target through
-    /// `MediaList::set_content` and locally clamps.
+    /// `MediaList::set_content`, and a target absent from the new content
+    /// resolves to its first selectable row.
     pub(in crate::app) fn set_content(
         &mut self,
         continue_items: Vec<QueueItem>,

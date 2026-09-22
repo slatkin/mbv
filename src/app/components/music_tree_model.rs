@@ -59,6 +59,10 @@ enum MusicNode {
 /// (`reset`).
 pub(in crate::app) struct MusicTreeModel {
     nodes: Vec<MusicNode>,
+    /// Stable target per arena id, aligned with `nodes`. Node ids are
+    /// append-only, so a target can be borrowed by the seam
+    /// (`Cursored::selected_target`) without rebuilding one per call.
+    targets: Vec<MusicTreeTarget>,
     intern: HashMap<MusicNodeKey, usize>,
     roots: Vec<usize>,
     /// Per node id: its artist root's settled child leaves. Album nodes and
@@ -75,6 +79,7 @@ impl MusicTreeModel {
     pub(in crate::app) fn new() -> Self {
         Self {
             nodes: Vec::new(),
+            targets: Vec::new(),
             intern: HashMap::new(),
             roots: Vec::new(),
             children: Vec::new(),
@@ -175,6 +180,7 @@ impl MusicTreeModel {
     #[cfg(test)]
     pub(in crate::app) fn reset(&mut self) {
         self.nodes.clear();
+        self.targets.clear();
         self.intern.clear();
         self.roots.clear();
         self.children.clear();
@@ -199,6 +205,7 @@ impl MusicTreeModel {
             key: key.clone(),
             name: name.to_string(),
         });
+        self.targets.push(MusicTreeTarget::Artist(key.clone()));
         self.intern.insert(node_key, id);
         id
     }
@@ -235,6 +242,10 @@ impl MusicTreeModel {
             target: track.target.clone(),
             title: track.title.clone(),
             search_title: track.search_title.clone(),
+        });
+        self.targets.push(MusicTreeTarget::Track {
+            album: album_target.to_string(),
+            track: track.target.clone(),
         });
         self.intern.insert(node_key, id);
         id
@@ -288,23 +299,39 @@ impl MusicTreeModel {
             target: target.to_string(),
             semantic_state: semantic_state.clone(),
         });
+        self.targets
+            .push(MusicTreeTarget::Album(target.to_string()));
         self.intern.insert(node_key, id);
         id
     }
 
-    /// The interned node id for a semantic key, if any.
-    pub(in crate::app) fn node_id(&self, key: &MusicNodeKey) -> Option<usize> {
-        self.intern.get(key).copied()
+    /// The interned arena id for a stable target, when the arena holds it.
+    /// This is the target→node half of the boundary map; the arena index it
+    /// returns never leaves this module.
+    fn id_of(&self, target: &MusicTreeTarget) -> Option<usize> {
+        self.intern.get(&MusicNodeKey::from(target)).copied()
+    }
+
+    /// The stable target of an interned node id. This is the node→target half
+    /// of the boundary map; an unknown (tombstoned or out-of-range) id has no
+    /// target.
+    fn target_of_node(&self, id: usize) -> Option<MusicTreeTarget> {
+        self.target_ref_of_node(id).cloned()
+    }
+
+    /// Borrow the stable target of an interned node id for the shared seam.
+    fn target_ref_of_node(&self, id: usize) -> Option<&MusicTreeTarget> {
+        self.targets.get(id)
     }
 
     /// Whether the node is an artist root.
-    pub(in crate::app) fn is_artist(&self, id: usize) -> bool {
+    fn is_artist(&self, id: usize) -> bool {
         matches!(self.nodes.get(id), Some(MusicNode::Artist { .. }))
     }
 
     /// The artist root's settled identity (node-to-domain translation, D2);
     /// album leaves have none.
-    pub(in crate::app) fn artist_key_of(&self, id: usize) -> Option<&ArtistKey> {
+    fn artist_key_of(&self, id: usize) -> Option<&ArtistKey> {
         match self.nodes.get(id) {
             Some(MusicNode::Artist { key, .. }) => Some(key),
             _ => None,
@@ -312,46 +339,28 @@ impl MusicTreeModel {
     }
 
     /// The artist root's settled display name; album leaves have none.
-    pub(in crate::app) fn artist_name_of(&self, id: usize) -> Option<&str> {
+    fn artist_name_of(&self, id: usize) -> Option<&str> {
         match self.nodes.get(id) {
             Some(MusicNode::Artist { name, .. }) => Some(name),
             _ => None,
         }
     }
 
-    /// The model's current revision value.
-    #[cfg(test)]
-    pub(in crate::app) fn revision_value(&self) -> u64 {
-        self.revision.get()
-    }
-
-    /// The settled child album ids of an artist root.
-    #[cfg(test)]
-    pub(in crate::app) fn children_of(&self, id: usize) -> Vec<usize> {
-        self.children[id].clone()
-    }
-
-    /// The projected artist root ids in settled order.
-    #[cfg(test)]
-    pub(in crate::app) fn root_ids(&self) -> Vec<usize> {
-        self.roots.clone()
-    }
-
-    pub(in crate::app) fn title_of(&self, id: usize) -> &str {
+    fn title_of(&self, id: usize) -> &str {
         match &self.nodes[id] {
             MusicNode::Artist { name, .. } => name,
             MusicNode::Album { title, .. } | MusicNode::Track { title, .. } => title,
         }
     }
 
-    pub(in crate::app) fn year_of(&self, id: usize) -> Option<&str> {
+    fn year_of(&self, id: usize) -> Option<&str> {
         match &self.nodes[id] {
             MusicNode::Album { year, .. } => year.as_deref().filter(|year| !year.is_empty()),
             MusicNode::Artist { .. } | MusicNode::Track { .. } => None,
         }
     }
 
-    pub(in crate::app) fn target_of(&self, id: usize) -> Option<&str> {
+    fn target_of(&self, id: usize) -> Option<&str> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { target, .. }) => Some(target),
             _ => None,
@@ -359,7 +368,7 @@ impl MusicTreeModel {
     }
 
     /// Resolves an album identity for an album or one of its track children.
-    pub(in crate::app) fn album_target_of(&self, id: usize) -> Option<&str> {
+    fn album_target_of(&self, id: usize) -> Option<&str> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { target, .. }) => Some(target),
             Some(MusicNode::Track { album_target, .. }) => Some(album_target),
@@ -369,7 +378,7 @@ impl MusicTreeModel {
 
     /// Resolves the stable `(album target, track target)` identity of a track
     /// node. Track rows never use projection indexes as identities.
-    pub(in crate::app) fn track_identity_of(&self, id: usize) -> Option<(&str, &str)> {
+    fn track_identity_of(&self, id: usize) -> Option<(&str, &str)> {
         match self.nodes.get(id) {
             Some(MusicNode::Track {
                 album_target,
@@ -387,7 +396,7 @@ impl MusicTreeModel {
     /// no longer
     /// matches through its artist's name, and a track no longer matches
     /// through its album's.
-    pub(in crate::app) fn search_text_of(&self, id: usize) -> Option<String> {
+    fn search_text_of(&self, id: usize) -> Option<String> {
         match self.nodes.get(id) {
             Some(MusicNode::Artist { name, .. }) => Some(name.clone()),
             Some(MusicNode::Album { title, year, .. }) => {
@@ -402,7 +411,7 @@ impl MusicTreeModel {
     /// ordinary grouping rows and carry none, and a cached track reports its
     /// album's through the label renderer's own parent lookup. Played/unplayed
     /// is normalized away before a state reaches the arena.
-    pub(in crate::app) fn semantic_state_of(&self, id: usize) -> Option<&MediaSemanticState> {
+    fn semantic_state_of(&self, id: usize) -> Option<&MediaSemanticState> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { semantic_state, .. }) => Some(semantic_state),
             _ => None,
@@ -412,7 +421,7 @@ impl MusicTreeModel {
     /// The node's top-level group zebra phase. The header and every visible
     /// descendant deliberately share one band, so expanding a group does not
     /// introduce row-based colour changes.
-    pub(in crate::app) fn is_striped(&self, id: usize) -> bool {
+    fn is_striped(&self, id: usize) -> bool {
         self.root_position
             .get(id)
             .is_some_and(|position| *position != usize::MAX && position.is_multiple_of(2))
