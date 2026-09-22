@@ -32,8 +32,8 @@
 
 ## 7. Shared new-content marker
 
-- [ ] 7.1 Hoist the acknowledged `HomeLatestSource` set out of the Home component into shell-owned state and have the Home selector read it; keep the marker value the shell-computed `has_new_content`. Verify: `cargo nextest run -p mbv` covers Home's marker rendering through the shell-owned set and that a fetch after launch does not add a marker.
-- [ ] 7.2 Render that same marker on the TV library's `Latest` mode for the matching library view, and share acknowledgement so selecting either surface clears both. Verify: a real-`Application::tick()` integration test selects the library `Latest` mode and asserts both markers clear, and the reverse via Home's pill.
+- [x] 7.1 Hoist the acknowledged `HomeLatestSource` set out of the Home component into shell-owned state and have the Home selector read it; keep the marker value the shell-computed `has_new_content`. Verify: `cargo nextest run -p mbv` covers Home's marker rendering through the shell-owned set and that a fetch after launch does not add a marker.
+- [x] 7.2 Render that same marker on the TV library's `Latest` mode for the matching library view, and share acknowledgement so selecting either surface clears both. Verify: a real-`Application::tick()` integration test selects the library `Latest` mode and asserts both markers clear, and the reverse via Home's pill.
 
 ## 8. Verification and close-out
 
