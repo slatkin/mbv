@@ -3,9 +3,9 @@ use super::super::super::panel_targets::PanelTarget;
 use super::super::super::ui_util::{fmt_duration_short, trunc_str};
 use super::chrome;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 
 /// Paint the Sessions sidebar from an owned runtime snapshot and return the
@@ -76,13 +76,34 @@ pub(in crate::app) fn render_sessions_overlay_content(
         }
 
         let selected = i == *cursor;
+        // Connected (an Emby session we drive) or attached (a cast receiver
+        // we drive): the same `✚` badge, so the same opaque Iris bar across
+        // the row's card.
+        let connected = match target {
+            PanelTarget::Emby(s) => connected_session_id == Some(s.id.as_str()),
+            PanelTarget::Cast(r) => cast_attachment_id == Some(r.id.as_str()),
+        };
         let name_color = if selected {
             palette::ACCENT_ACTIVE
         } else {
             palette::TEXT_PRIMARY
         };
-        let dim = Style::default().fg(palette::TEXT_MUTED);
+        let dim = Style::default().fg(on_connected_bar(palette::TEXT_MUTED, connected));
+        let meta_fg = on_connected_bar(palette::TEXT_SECONDARY, connected);
 
+        if connected {
+            // Underpaint the card (the divider row below it stays panel
+            // background) so every line and glyph of this row sits on the bar.
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::SELECTED_ROW_BG)),
+                Rect {
+                    x: ix,
+                    y: entry_y,
+                    width: inner_w,
+                    height: CARD_H,
+                },
+            );
+        }
         if selected {
             let bar: Vec<Line> = (0..CARD_H)
                 .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::ACCENT))))
@@ -102,8 +123,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
 
         match target {
             PanelTarget::Emby(s) => {
-                let is_connected = connected_session_id == Some(s.id.as_str());
-                let badge = if is_connected { " ✚" } else { "" };
+                let badge = if connected { " ✚" } else { "" };
                 render_kind_labelled_line(
                     f,
                     "EMBY",
@@ -114,13 +134,14 @@ pub(in crate::app) fn render_sessions_overlay_content(
                     entry_y,
                     inner_w,
                     text_w,
+                    connected,
                 );
 
                 let meta = format!("{} · {}@{}", s.client, s.user_name, s.host);
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         trunc_str(&meta, text_w),
-                        dim.fg(palette::TEXT_SECONDARY),
+                        Style::default().fg(meta_fg),
                     )),
                     Rect {
                         x: text_x,
@@ -166,8 +187,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
                 );
             }
             PanelTarget::Cast(r) => {
-                let attached = cast_attachment_id == Some(r.id.as_str());
-                let badge = if attached { " ✚" } else { "" };
+                let badge = if connected { " ✚" } else { "" };
                 render_kind_labelled_line(
                     f,
                     "CAST",
@@ -178,13 +198,14 @@ pub(in crate::app) fn render_sessions_overlay_content(
                     entry_y,
                     inner_w,
                     text_w,
+                    connected,
                 );
 
                 let meta = format!("{}:{}", r.host, r.port);
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         trunc_str(&meta, text_w),
-                        dim.fg(palette::TEXT_SECONDARY),
+                        Style::default().fg(meta_fg),
                     )),
                     Rect {
                         x: text_x,
@@ -241,18 +262,27 @@ fn render_kind_labelled_line(
     entry_y: u16,
     inner_w: u16,
     text_w: usize,
+    connected: bool,
 ) {
     let kind_tag = format!("[{kind}] ");
     let name_max = text_w
         .saturating_sub(kind_tag.len())
         .saturating_sub(badge.len());
     let name_line = Line::from(vec![
-        Span::styled(kind_tag, Style::default().fg(palette::TEXT_MUTED)),
+        Span::styled(
+            kind_tag,
+            Style::default().fg(on_connected_bar(palette::TEXT_MUTED, connected)),
+        ),
         Span::styled(
             trunc_str(name, name_max),
-            Style::default().fg(name_color).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(on_connected_bar(name_color, connected))
+                .add_modifier(Modifier::BOLD),
         ),
-        Span::styled(badge, Style::default().fg(palette::ACCENT_ACTIVE)),
+        Span::styled(
+            badge,
+            Style::default().fg(on_connected_bar(palette::ACCENT_ACTIVE, connected)),
+        ),
     ]);
     f.render_widget(
         Paragraph::new(name_line),
@@ -263,4 +293,17 @@ fn render_kind_labelled_line(
             height: 1,
         },
     );
+}
+
+/// The connected-bar text policy: a row on the opaque Iris `✚` bar paints
+/// every line in the bar's own Ink foreground (`SELECTED_ROW_FG`, the pair
+/// the media list and queue use on the same bar), because the ordinary
+/// text roles do not read on the light fill. Rows on the panel keep the
+/// role they were given.
+fn on_connected_bar(role: Color, connected: bool) -> Color {
+    if connected {
+        palette::SELECTED_ROW_FG
+    } else {
+        role
+    }
 }
