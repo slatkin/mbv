@@ -67,6 +67,18 @@ impl App {
         #[cfg(test)]
         let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
+        let pending_launch_state = mbv_core::config::load_tui_launch_state();
+        // The legacy selected-tab preference is only a migration input. Never
+        // let it compete with a versioned launch snapshot that already exists.
+        let legacy_launch_tab = pending_launch_state
+            .is_none()
+            .then(|| {
+                prefs["library_tab"]
+                    .as_u64()
+                    .or_else(|| prefs["power_left_tab"].as_u64())
+                    .and_then(|position| usize::try_from(position).ok())
+            })
+            .flatten();
         let bare_owner = mbv_core::player_owner_state::PlayerOwnerState::new(
             init.player_tab.queue.clone(),
             crate::config::QueueSource::Unknown,
@@ -170,9 +182,16 @@ impl App {
             panel_mode: PanelMode::default(),
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
-            // Always start on Home. The saved queue is restored independently;
-            // the saved library tab remains available for runtime persistence.
+            // Always start on Home until the live catalog resolves the
+            // stable pending launch tab. The saved queue is restored
+            // independently; destination state remains pending for task 3.2.
             library_tab_pending: 0,
+            pending_launch_tab_resolved: false,
+            pending_launch_state,
+            legacy_launch_tab,
+            legacy_launch_migration_attempted: false,
+            emby_catalog_ready: false,
+            audiobookshelf_catalog_ready: false,
             pending_navigate_tab_switch: None,
             pending_series_landing: None,
             pending_series_handoff: None,
@@ -254,8 +273,6 @@ impl App {
             tab_scroll: 0,
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_library_nav_at: Instant::now() - Duration::from_secs(1),
-            library_position_dirty: false,
-            library_position_dirty_at: Instant::now() - Duration::from_secs(1),
             refocus_at: None,
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_levels: std::collections::HashMap::new(),

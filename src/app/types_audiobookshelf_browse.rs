@@ -284,6 +284,9 @@ const SURNAME_BUCKET_UPPER: [char; 8] = ['c', 'f', 'i', 'l', 'o', 'r', 'u', 'z']
 /// surname-sorted `books` list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct SurnameBucket {
+    /// Position in the fixed label/range table, independent of the populated
+    /// buckets vec's position after empty ranges are omitted.
+    pub index: usize,
     pub label: &'static str,
     pub start: usize,
     pub end: usize,
@@ -321,6 +324,7 @@ pub(super) fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<Surname
         };
         if end > start {
             buckets.push(SurnameBucket {
+                index: i,
                 label: SURNAME_BUCKET_LABELS[i],
                 start,
                 end,
@@ -557,6 +561,7 @@ pub(in crate::app) fn podcast_display_rows(
 mod tests {
     use super::*;
     use mbv_core::audiobookshelf::audiobook_author_sort_key;
+    use mbv_core::config::AudiobookshelfBookBucket;
 
     fn library() -> AudiobookshelfLibrary {
         AudiobookshelfLibrary {
@@ -808,6 +813,33 @@ mod tests {
             AudiobookshelfBrowseKind::from_media_type("book"),
             AudiobookshelfBrowseKind::Book,
             "book resolves to Book every time — dispatch forks once and never re-reads media_type"
+        );
+    }
+
+    #[test]
+    fn surname_bucket_table_matches_mbv_core_bucket_indices() {
+        for (index, (&label, &upper)) in SURNAME_BUCKET_LABELS
+            .iter()
+            .zip(SURNAME_BUCKET_UPPER.iter())
+            .enumerate()
+        {
+            let bucket = AudiobookshelfBookBucket::from_bucket_index(index)
+                .expect("every app-side surname bucket has a core identity");
+            let (expected_label, expected_upper) = match bucket {
+                AudiobookshelfBookBucket::AToC => ("A\u{2013}C", 'c'),
+                AudiobookshelfBookBucket::DToF => ("D\u{2013}F", 'f'),
+                AudiobookshelfBookBucket::GToI => ("G\u{2013}I", 'i'),
+                AudiobookshelfBookBucket::JToL => ("J\u{2013}L", 'l'),
+                AudiobookshelfBookBucket::MToO => ("M\u{2013}O", 'o'),
+                AudiobookshelfBookBucket::PToR => ("P\u{2013}R", 'r'),
+                AudiobookshelfBookBucket::SToU => ("S\u{2013}U", 'u'),
+                AudiobookshelfBookBucket::VToZ => ("V\u{2013}Z", 'z'),
+            };
+            assert_eq!((label, upper), (expected_label, expected_upper));
+        }
+        assert_eq!(
+            AudiobookshelfBookBucket::from_bucket_index(SURNAME_BUCKET_LABELS.len()),
+            None
         );
     }
 

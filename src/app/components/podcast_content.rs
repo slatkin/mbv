@@ -11,13 +11,16 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
+use mbv_core::config::{
+    AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
+};
 use mbv_core::playback_queue::AudiobookshelfQueueItem;
 
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::library_panel::hero::hero_content_abs_episode;
-use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
@@ -120,11 +123,7 @@ impl PodcastContent {
         // to the `All` state pill: the value's show identity no longer
         // exists, and exactly one pill must stay active (design D3).
         let pill_reset = match &self.pill {
-            PillSelection::Show(id) => !self
-                .state
-                .shows
-                .iter()
-                .any(|show| &show.library_item_id == id),
+            PillSelection::Show(id) => !self.show_exists(id),
             PillSelection::State(_) => false,
         };
         if pill_reset {
@@ -138,6 +137,13 @@ impl PodcastContent {
             self.initialized = true;
         }
         self.sync_hero_scroll();
+    }
+
+    fn show_exists(&self, id: &str) -> bool {
+        self.state
+            .shows
+            .iter()
+            .any(|show| show.library_item_id == id)
     }
 
     /// The active pill's scoped episode view: a show pill ignores play
@@ -484,6 +490,99 @@ impl Default for PodcastContent {
 }
 
 impl LibraryContentOwner for PodcastContent {
+    fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
+        let target = match state.selector.as_ref() {
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastShow(id),
+            }) if self.show_exists(id) => LaunchSelector::AudiobookshelfShow(id.clone()),
+            _ => LaunchSelector::AudiobookshelfState,
+        };
+        let current = match &self.pill {
+            PillSelection::Show(id) => Some(id.as_str()),
+            PillSelection::State(_) => None,
+        };
+        let desired = match &target {
+            LaunchSelector::AudiobookshelfShow(id) => Some(id.as_str()),
+            LaunchSelector::AudiobookshelfState => None,
+            LaunchSelector::Emby { .. } => None,
+        };
+        (current != desired).then_some(target)
+    }
+
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        // The shell applies the selector through App before this item-level
+        // re-anchor. Restore the saved pill here so the component scopes its
+        // rows before selecting the saved item.
+        match state.selector.as_ref() {
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastFilter(filter),
+            }) => {
+                self.set_pill(PillSelection::State(match filter {
+                    AudiobookshelfPodcastFilter::All => AudiobookshelfEpisodeFilter::All,
+                    AudiobookshelfPodcastFilter::Unplayed => AudiobookshelfEpisodeFilter::Unplayed,
+                    AudiobookshelfPodcastFilter::Played => AudiobookshelfEpisodeFilter::Played,
+                }));
+            }
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastShow(id),
+            }) if self.show_exists(id) => {
+                self.set_pill(PillSelection::Show(id.clone()));
+            }
+            _ => {}
+        }
+        if let PillSelection::Show(id) = &self.pill {
+            if !self.state.detail_cache.contains_key(id) {
+                return false;
+            }
+        }
+        let selected = state
+            .item
+            .as_ref()
+            .and_then(|item| match item {
+                LibraryItemIdentity::Audiobookshelf { id } => id.split_once('\0'),
+                _ => None,
+            })
+            .map(|(library_item_id, episode_id)| {
+                self.episodes.select_target(&PodcastEpisodeTarget::new(
+                    library_item_id.to_owned(),
+                    episode_id.to_owned(),
+                ))
+            })
+            .unwrap_or(false);
+        if !selected {
+            self.episodes.select_first();
+        }
+        self.sync_hero_scroll();
+        true
+    }
+
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        let selector = if self.state.shows.is_empty() {
+            None
+        } else {
+            let key = match &self.pill {
+                PillSelection::State(filter) => {
+                    AudiobookshelfSelectorKey::PodcastFilter(match filter {
+                        AudiobookshelfEpisodeFilter::All => AudiobookshelfPodcastFilter::All,
+                        AudiobookshelfEpisodeFilter::Unplayed => {
+                            AudiobookshelfPodcastFilter::Unplayed
+                        }
+                        AudiobookshelfEpisodeFilter::Played => AudiobookshelfPodcastFilter::Played,
+                    })
+                }
+                PillSelection::Show(id) => AudiobookshelfSelectorKey::PodcastShow(id.clone()),
+            };
+            Some(SelectorIdentity::Audiobookshelf { key })
+        };
+        let item =
+            self.episodes
+                .selected_target()
+                .map(|target| LibraryItemIdentity::Audiobookshelf {
+                    id: format!("{}\0{}", target.library_item_id(), target.episode_id()),
+                });
+        (selector, item)
+    }
+
     fn clear_selection(&mut self) {
         self.episodes.clear_owner_selection();
     }
@@ -803,6 +902,76 @@ mod tests {
         owner.set_now_secs(NOW);
         owner.set_content(&fixture_state(), false);
         owner
+    }
+
+    #[test]
+    fn reanchor_launch_state_falls_back_to_first_show_scope_and_episode() {
+        let mut owner = owner();
+        let state = mbv_core::config::TuiLaunchState {
+            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_core::config::TabIdentity::Home,
+            panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+            selector: Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastShow("gone".into()),
+            }),
+            item: Some(LibraryItemIdentity::Audiobookshelf {
+                id: "gone\0episode".into(),
+            }),
+        };
+        assert!(owner.reanchor_launch_state(&state));
+        assert_eq!(
+            owner.pill(),
+            &PillSelection::State(AudiobookshelfEpisodeFilter::All)
+        );
+        assert_eq!(
+            owner.selected_episode_target().unwrap().library_item_id(),
+            "alpha"
+        );
+    }
+
+    #[test]
+    fn launch_snapshot_uses_filter_and_episode_identity() {
+        let mut owner = owner();
+        owner.set_pill(PillSelection::State(AudiobookshelfEpisodeFilter::Played));
+
+        let (selector, item) = owner.launch_snapshot();
+        assert_eq!(
+            selector,
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastFilter(AudiobookshelfPodcastFilter::Played,),
+            })
+        );
+        assert_eq!(
+            item,
+            Some(LibraryItemIdentity::Audiobookshelf {
+                id: "alpha\0dated".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn launch_snapshot_uses_show_id_and_selected_episode_identity() {
+        let mut owner = owner();
+        owner.set_pill(PillSelection::Show("beta".into()));
+
+        assert_eq!(
+            owner.launch_snapshot(),
+            (
+                Some(SelectorIdentity::Audiobookshelf {
+                    key: AudiobookshelfSelectorKey::PodcastShow("beta".into()),
+                }),
+                Some(LibraryItemIdentity::Audiobookshelf {
+                    id: "beta\0beta-one".into(),
+                }),
+            )
+        );
+    }
+
+    #[test]
+    fn launch_snapshot_is_empty_without_shows_or_selected_episode() {
+        let mut owner = PodcastContent::new();
+        owner.set_content(&AudiobookshelfBrowseState::new(library()), false);
+        assert_eq!(owner.launch_snapshot(), (None, None));
     }
 
     fn item_rows(owner: &PodcastContent) -> Vec<(&str, &str)> {

@@ -102,7 +102,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
 }
 
 #[test]
-fn restored_default_library_fallback_rewrites_state_file_after_success() {
+fn restored_default_library_fallback_updates_legacy_state_in_memory_only() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Library;
@@ -141,7 +141,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
         ],
         ..Default::default()
     };
-    app.replace_saved_library_position(0, stale);
+    app.replace_saved_library_position(0, stale.clone());
 
     let restored_items = make_items(2);
     let restored_nav = vec![BrowseLevel {
@@ -167,11 +167,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
 
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
-        requested_position: crate::config::load_library_position_state()
-            .libraries
-            .get("lib-movies")
-            .cloned()
-            .expect("requested position"),
+        requested_position: stale.clone(),
         position: restored_position.clone(),
         nav_stack: restored_nav,
     });
@@ -179,16 +175,16 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
     // `restored_position` was snapshotted from the nav_stack alone, before
     // `handle_lib_event` ran. The restore also captures the library's
     // true total via `maybe_capture_library_total_and_apply_default_pill`
-    // (see #325 follow-up fix), so the state actually persisted carries
+    // (see #325 follow-up fix), so the in-memory legacy state carries
     // `library_total: Some(2)` (this level's `total_count`) rather than
-    // the `None` `restored_position` was built with.
+    // the `None` `restored_position` was built with. The legacy file is not
+    // rewritten during a live refresh.
     let mut expected_position = restored_position;
     expected_position.levels[0].library_total = Some(2);
-    let saved = crate::config::load_library_position_state();
-    assert_eq!(
-        saved.libraries.get("lib-movies").cloned(),
-        Some(expected_position)
-    );
+    assert_eq!(app.saved_library_position(0), Some(expected_position));
+    assert!(!crate::config::load_library_position_state()
+        .libraries
+        .contains_key("lib-movies"));
 }
 
 #[test]
@@ -314,6 +310,5 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
     // `active_library_position_scope_for` says it's not the active
     // library and the restore must be ignored.
     assert_eq!(app.libs[0].nav_stack[0].title, "Power");
-    let saved = crate::config::load_library_position_state();
-    assert_eq!(saved.libraries.get("lib-movies").cloned(), Some(position));
+    assert_eq!(app.saved_library_position(0), Some(position));
 }

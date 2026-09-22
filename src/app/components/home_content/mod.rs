@@ -32,7 +32,10 @@ use crate::app::types_context_menu::ContextMenuTargets;
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
 use crate::app::ui_util::{fmt_publish_date_short, trunc_str};
+use mbv_core::config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_core::playback_queue::QueueItem;
+
+mod launch_state;
 
 /// The embedded content owner for the Home destination (design D2). Plain
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
@@ -655,6 +658,19 @@ impl LibraryContentOwner for HomeContent {
             }
             None => LeafKeyResult::Unhandled,
         }
+    }
+
+    /// Bounded read-only launch-state identities (task 2.1): the current
+    /// section pill as a stable source key — Continue Watching as the fixed
+    /// scope, a latest section as its persisted `pref_key` — plus the
+    /// shared carrier's stable item target. No pill index or title crosses;
+    /// an empty section reports no item.
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        self.reanchor_launch_state_impl(state)
+    }
+
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        self.launch_snapshot_impl()
     }
 
     /// The current hero's content data, for the shell's image projection

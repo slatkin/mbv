@@ -141,10 +141,18 @@ impl Model {
                     scroll,
                 )
             };
-        let feed_groups: Vec<String> = self.app.libs[index]
+        // Keep the painted names and launch identities aligned from one
+        // structural source; the snapshot resolves a selected group to its
+        // folder content ID, never to the display name.
+        let (feed_groups, feed_group_ids): (Vec<String>, Vec<String>) = self.app.libs[index]
             .feed_home_video
             .as_ref()
-            .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
+            .map(|s| {
+                s.groups
+                    .iter()
+                    .map(|g| (g.folder.name.clone(), g.folder.id.clone()))
+                    .unzip()
+            })
             .unwrap_or_default();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
         let poster_window = items.clone();
@@ -157,6 +165,7 @@ impl Model {
             group_pills: feed_group_view,
             show_letter_pills,
             feed_groups,
+            feed_group_ids,
             feed_group_cursor,
         };
         let identity = self.emby_library_owner_identity(index);

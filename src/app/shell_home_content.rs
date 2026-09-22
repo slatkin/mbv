@@ -221,13 +221,9 @@ impl Model {
             .and_then(|owner| owner.as_any().downcast_ref::<HomeOwner>())
     }
 
-    /// Persist a selected section's semantic source (task 5.3d, numeric Home
-    /// section deletion): `[`/`]`/pill selection arrives here as a numeric
-    /// section; the component owns that number, so the shell maps it to its
-    /// `HomeLatestSource` via `source_for_section`, stores it in the
-    /// shell-owned semantic preference, and persists through the unchanged
-    /// `App::save_prefs`. Continue Watching (section 0) resolves to `None`
-    /// (the empty-string sentinel); a missing component is a defensive no-op.
+    /// Resolve a component-owned numeric section to the semantic Home source
+    /// identity retained in memory for the current session. Continue Watching
+    /// (section 0) resolves to `None`; a missing component is a defensive no-op.
     pub(super) fn select_home_section_from_component(&mut self, section: usize) {
         let Some(source) = self
             .home_owner_shared()
@@ -237,13 +233,11 @@ impl Model {
         };
         if self.home_section_pref_semantic != source {
             self.home_section_pref_semantic = source;
-            self.persist_home_section_pref();
         }
     }
 
-    /// Test-only accessor (the production path persists via
-    /// `persist_home_section_pref`; shell_home.rs and tests_home_latest.rs
-    /// assert through this). Gated to avoid a dead-code warning in
+    /// Test-only accessor for the retained semantic source. Gated to avoid a
+    /// dead-code warning in
     /// non-test builds (task 5.3d, 2c cleanup).
     #[cfg(test)]
     pub(super) fn home_section_pref(&self) -> String {
@@ -251,30 +245,6 @@ impl Model {
             .as_ref()
             .map(super::types_playback::HomeLatestSource::pref_key)
             .unwrap_or_default()
-    }
-
-    pub(super) fn persist_home_section_pref(&self) {
-        let path = crate::config::prefs_path();
-        let mut prefs = super::App::load_prefs();
-        if !prefs.is_object() {
-            prefs = serde_json::json!({});
-        }
-        let value = self
-            .home_section_pref_semantic
-            .as_ref()
-            .map(super::types_playback::HomeLatestSource::pref_key)
-            .unwrap_or_default();
-        if prefs
-            .get("home_section")
-            .and_then(serde_json::Value::as_str)
-            == Some(value.as_str())
-        {
-            return;
-        }
-        prefs["home_section"] = serde_json::Value::String(value);
-        if let Ok(serialized) = serde_json::to_string(&prefs) {
-            let _ = std::fs::write(path, serialized);
-        }
     }
 }
 

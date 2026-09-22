@@ -96,6 +96,57 @@ impl LibraryContentOwner for MusicContent {
             .then_some(crate::app::components::media_list::SelectionSummary { count, origin })
     }
 
+    fn launch_selector(
+        &self,
+        state: &mbv_core::config::TuiLaunchState,
+    ) -> Option<super::library_panel::owner::LaunchSelector> {
+        let target = self.group_cursor_for_launch_state(state);
+        (self.context.group_cursor != target).then_some(
+            super::library_panel::owner::LaunchSelector::Emby { index: target },
+        )
+    }
+
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.context.list.loading && self.context.list.items.is_empty() {
+            return false;
+        }
+        if !self.context.groups.is_empty() {
+            self.context.group_cursor = self.group_cursor_for_launch_state(state);
+        }
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Emby { id }) => self.browser.select_album_target(id),
+            _ => false,
+        };
+        if !selected {
+            if let Some(target) = self.context.album_targets.first().cloned() {
+                self.browser.select_album_target(&target);
+            } else {
+                self.browser.select_first_visible();
+            }
+        }
+        true
+    }
+
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        // Group pills are Music's main Selector. The artist/album/track tree
+        // is Workspace content, so it contributes no selector identity; its
+        // selected album target is the stable library-item identity.
+        let selector = self
+            .context
+            .groups
+            .get(self.context.group_cursor)
+            .cloned()
+            .map(|group| SelectorIdentity::Emby {
+                key: EmbySelectorKey::Group(group.id),
+            });
+        let item = self
+            .browser
+            .selected_album_target()
+            .map(str::to_owned)
+            .map(|id| LibraryItemIdentity::Emby { id });
+        (selector, item)
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }
@@ -494,5 +545,21 @@ impl LibraryContentOwner for MusicContent {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl MusicContent {
+    fn group_cursor_for_launch_state(&self, state: &mbv_core::config::TuiLaunchState) -> usize {
+        match state.selector.as_ref() {
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Group(id),
+            }) => self
+                .context
+                .groups
+                .iter()
+                .position(|group| &group.id == id)
+                .unwrap_or(0),
+            _ => 0,
+        }
     }
 }

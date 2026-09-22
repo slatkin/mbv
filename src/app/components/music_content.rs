@@ -7,6 +7,7 @@
 //! painters until the later Music panel slices move painting and registration.
 
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use std::collections::HashMap;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 

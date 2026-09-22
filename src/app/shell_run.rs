@@ -46,6 +46,9 @@ impl Model {
         // drives its owner map (retention + the active pointer) before the
         // focus pass routes to the active surface.
         self.sync_library_panel();
+        // Task 3.2: restore the selected destination's main Selector before
+        // its library item, then consume the pending intent exactly once.
+        self.reanchor_pending_launch_destination();
         // Task 3.1: a landing that completed during this iteration's lib-event
         // drain owes the Series detail hand-off. Consume it here, after the
         // panel's active pointer follows the landed tab and before the hero
@@ -646,8 +649,6 @@ impl Model {
 
             self.app.expire_music_grouping_candidates();
             self.app.sync_volume_from_player();
-            self.app.flush_library_position_if_idle();
-
             // Advance idle feed rotation
             self.app.advance_idle_feed_rotation();
 
@@ -683,7 +684,7 @@ impl Model {
             }
         }
 
-        self.app.teardown(quit_timeout);
+        self.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
                                             // Printed only after the terminal is restored (task 7.2): anything
                                             // written while still in the alternate screen would never be

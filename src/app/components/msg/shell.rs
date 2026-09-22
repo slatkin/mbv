@@ -509,7 +509,8 @@ pub enum ShellRequest {
     OpenUrl(String),
     /// A library list wheel movement resolved by the embedded owner. The
     /// stable library key and owner-resolved cursor/scroll cross the panel
-    /// boundary; the shell persists the resting scroll without re-reading it.
+    /// boundary; the shell retains the legacy migration snapshot in memory
+    /// without re-reading the component cursor.
     LibraryScroll {
         key: crate::app::components::library_panel::LibraryKey,
         index: usize,
@@ -520,7 +521,7 @@ pub enum ShellRequest {
     /// Emby browser local navigation): the component resolves the target item
     /// index against its own painted geometry and reports it here. The shell
     /// applies the resolved index through the App nav level only to retain
-    /// App-owned effects (`save_default_library_position` /
+    /// App-owned effects (the in-memory legacy snapshot /
     /// `mark_library_navigation` / `maybe_fetch_next_page` / `last_nav_at`);
     /// it never recomputes the movement from a delta. The legacy season-grid
     /// branch is unreachable here: the Browser mount gate excludes TV.
