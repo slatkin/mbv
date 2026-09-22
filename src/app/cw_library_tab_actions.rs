@@ -180,11 +180,10 @@ impl App {
                     })
             })
         };
-        let item = position
-            .levels
-            .iter()
-            .rev()
-            .find_map(|level| level.focused_item_id.clone())
+        let item_level =
+            root.filter(|level| !audiobookshelf || level.item_types.as_deref() == Some("book"));
+        let item = item_level
+            .and_then(|level| level.focused_item_id.clone())
             .map(|id| {
                 if audiobookshelf {
                     LibraryItemIdentity::Audiobookshelf { id }
