@@ -301,17 +301,15 @@ pub(super) fn paint_tree(owner: &mut MusicContent, area: Rect) {
         .expect("tree frame");
 }
 
-pub(super) fn tree_point(owner: &MusicContent, area: Rect, target: &MusicTreeTarget) -> Position {
-    let row = owner
+/// The retained painted point of a target's row in the latest tree frame. The
+/// owner resolves its own painted geometry, so the test never re-derives a
+/// point from the projection index.
+pub(super) fn tree_point(owner: &MusicContent, target: &MusicTreeTarget) -> Position {
+    let rect = owner
         .browser
-        .projected_node_targets()
-        .iter()
-        .position(|candidate| candidate == target)
-        .expect("node is projected");
-    let visible_row = row
-        .checked_sub(owner.browser.offset())
+        .row_rect_for(target)
         .expect("node is inside the painted viewport");
-    Position::new(area.x, area.y.saturating_add(visible_row as u16))
+    Position::new(rect.x, rect.y)
 }
 
 #[test]
@@ -324,8 +322,8 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
     let root = find(&owner, |target| target.is_artist());
     let album_0 = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
     let album_1 = find(&owner, |target| target.album_leaf_target() == Some("a-1"));
-    let root_at = tree_point(&owner, area, &root);
-    let album_0_at = tree_point(&owner, area, &album_0);
+    let root_at = tree_point(&owner, &root);
+    let album_0_at = tree_point(&owner, &album_0);
 
     // A click resolves the painted artist row and changes local selection;
     // the grouping root manufactures no album request, but its resolved
@@ -422,7 +420,7 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     let area = Rect::new(0, 0, 48, 8);
     paint_tree(&mut owner, area);
     let root = find(&owner, |target| target.is_artist());
-    let root_at = tree_point(&owner, area, &root);
+    let root_at = tree_point(&owner, &root);
 
     // The first click resolves the root's artist request; repeating the same
     // painted selection has no other effect and emits the single focus request.
@@ -439,7 +437,7 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     // Double-click expansion is local and still crosses once for focus.
     let was_expanded = owner.browser.root_is_expanded(&root);
     paint_tree(&mut owner, area);
-    let root_at = tree_point(&owner, area, &root);
+    let root_at = tree_point(&owner, &root);
     assert_eq!(owner.browser.hit_node(root_at), Some(root.clone()));
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
@@ -454,7 +452,7 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
 
     paint_tree(&mut owner, area);
     let album = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
-    let album_at = tree_point(&owner, area, &album);
+    let album_at = tree_point(&owner, &album);
     // A childless album claims double-click without opening a Hero or changing
     // expansion, and a wheel at the final row focuses even when movement clamps.
     assert!(matches!(
@@ -465,7 +463,7 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
     ));
     let _ = owner.browser.take_album_selection_change();
     paint_tree(&mut owner, area);
-    let album_at = tree_point(&owner, area, &album);
+    let album_at = tree_point(&owner, &album);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
             at: album_at,
@@ -490,7 +488,7 @@ fn tree_double_click_cached_album_toggles_expansion_and_focuses_once() {
     let area = Rect::new(0, 0, 48, 8);
     paint_tree(&mut owner, area);
     let album = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
-    let album_at = tree_point(&owner, area, &album);
+    let album_at = tree_point(&owner, &album);
     assert!(!owner.browser.node_is_expanded(&album));
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
@@ -501,7 +499,7 @@ fn tree_double_click_cached_album_toggles_expansion_and_focuses_once() {
     assert!(owner.browser.node_is_expanded(&album));
 
     paint_tree(&mut owner, area);
-    let album_at = tree_point(&owner, area, &album);
+    let album_at = tree_point(&owner, &album);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             album_at
@@ -607,7 +605,7 @@ fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
     let area = Rect::new(0, 0, 48, 12);
     paint_tree(&mut owner, area);
     let id = node.resolve(&owner);
-    let at = tree_point(&owner, area, &id);
+    let at = tree_point(&owner, &id);
     let double_click = |owner: &mut MusicContent| {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             at,
@@ -683,7 +681,7 @@ fn filtered_pointer_gestures_resolve_tree_geometry_not_the_flat_carrier() {
     let area = Rect::new(0, 0, 48, 12);
     paint_tree(&mut owner, area);
     let album_0 = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
-    let album_0_at = tree_point(&owner, area, &album_0);
+    let album_0_at = tree_point(&owner, &album_0);
 
     // A click selects the filtered row the tree painted and reports the
     // resolved album move; the empty carrier resolves nothing.
@@ -716,7 +714,7 @@ fn tree_context_click_outside_selection_clears_only_tree_marks() {
     let a0 = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
     let b0 = find(&owner, |target| target.album_leaf_target() == Some("b-0"));
     owner.browser.set_marked(&a0, true);
-    let b0_at = tree_point(&owner, area, &b0);
+    let b0_at = tree_point(&owner, &b0);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(b0_at))),
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
