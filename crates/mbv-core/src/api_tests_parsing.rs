@@ -70,6 +70,7 @@ fn parse_item_basic_fields() {
         "Id": "abc", "Name": "Test", "Type": "Movie",
         "IsFolder": false, "MediaType": "Video",
         "RunTimeTicks": 36_000_000_000i64,
+        "DateCreated": "2026-09-21T19:39:41.1234567Z",
         "SortName": "test",
         "UserData": { "Played": true, "PlaybackPositionTicks": 5_000_000i64 }
     });
@@ -77,6 +78,7 @@ fn parse_item_basic_fields() {
     assert_eq!(item.id, "abc");
     assert_eq!(item.name, "Test");
     assert_eq!(item.runtime_ticks, 36_000_000_000);
+    assert_eq!(item.date_added, "2026-09-21T19:39:41.1234567Z");
     assert!(item.played);
     assert_eq!(item.playback_position_ticks, 5_000_000);
 }

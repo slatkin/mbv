@@ -30,6 +30,7 @@ fn narrow_skeleton_keeps_fixed_rows_and_panel_slots() {
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
+            markers: vec![],
             active: Some(0),
         }),
         list: ListSlot::Media(&mut carrier),
@@ -112,6 +113,7 @@ fn narrow_search_paints_one_search_bar_and_one_result_list() {
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
             pills: vec!["All".into()],
+            markers: vec![],
             active: Some(0),
         }),
         list: ListSlot::Search(&mut search),

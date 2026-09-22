@@ -430,6 +430,22 @@ The Home tab content: Continue Watching across libraries and per-library Latest
 additions. Each section maintains its own cursor and scroll.
 _Avoid_: home screen, dashboard, landing
 
+**Launch cutoff / launch window**:
+The pair of client-launch timestamps bounding what counts as new content: the
+previous client-launch timestamp (the launch cutoff, read and atomically
+replaced at startup) and the current launch timestamp. An item is new in a
+Home Latest section only when its provider timestamp falls strictly after the
+previous launch and no later than the current launch. The first launch
+establishes the baseline and marks nothing.
+_Avoid_: session start, boot time, last-seen timestamp
+
+**New-content marker**:
+The Iris `•` shown after a Home Latest pill label when its section contains an
+item new in the launch window. Continue is never marked; selecting (or already
+having selected) the pill acknowledges the section and clears the marker for
+the remainder of the client run.
+_Avoid_: unread dot, badge, unread count
+
 **Library position**:
 The saved per-library drill depth, focused item, cursor index, sort, letter
 filter, and for feed-view libraries selected group and video cursor/scroll.

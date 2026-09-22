@@ -63,6 +63,8 @@ pub struct LibraryPanel {
     /// The main Selector row's locally resolved hovered pill, independent of
     /// selection and the other pill surfaces owned by this panel.
     hovered_selector: Option<usize>,
+    #[cfg(test)]
+    projected_selector_markers: Vec<bool>,
     /// The Wide hero provider-link label under the pointer, if any.
     hovered_link: Option<usize>,
     painted_link_urls: Vec<String>,
@@ -132,6 +134,8 @@ impl LibraryPanel {
             owners: LibraryOwners::new(),
             focused: false,
             hovered_selector: None,
+            #[cfg(test)]
+            projected_selector_markers: Vec::new(),
             hovered_link: None,
             painted_link_urls: Vec::new(),
             list_pane_width: None,
@@ -351,6 +355,12 @@ impl LibraryPanel {
         &self,
     ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
         &self.hits.selector
+    }
+
+    /// The selector markers projected into the last mounted panel frame.
+    #[cfg(test)]
+    pub(in crate::app) fn test_selector_markers(&self) -> &[bool] {
+        &self.projected_selector_markers
     }
 
     #[cfg(test)]

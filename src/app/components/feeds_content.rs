@@ -562,6 +562,7 @@ impl LibraryContentOwner for FeedsContent {
                     .map(|subscription| trunc_str(&subscription.name, MAX_GROUP_LABEL)),
             )
             .collect(),
+            markers: vec![],
             // `[`/`]` move the feed-group selection, so the active pill and
             // overflow window follow that group within the combined row.
             active: Some(WatchedFilter::COUNT + self.selected_group),

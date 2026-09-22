@@ -265,11 +265,7 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
             .and_then(|s| s.get(..10))
             .map(|s| s.to_string())
             .unwrap_or_default(),
-        date_added: raw["DateCreated"]
-            .as_str()
-            .and_then(|s| s.get(..10))
-            .map(|s| s.to_string())
-            .unwrap_or_default(),
+        date_added: raw["DateCreated"].as_str().unwrap_or_default().to_string(),
         total_count,
         container: raw["Container"].as_str().unwrap_or("").to_string(),
         genres: raw["Genres"]

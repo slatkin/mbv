@@ -24,10 +24,21 @@ mod mpris;
 mod single_instance;
 mod tray;
 
-use app::{App, Model};
+use app::{capture_launch_window, current_launch_secs, App, Model};
 use config::load_config;
 use mbv_core::api::EmbyClient;
 use mbv_core::{applog, player, remote_player};
+
+/// Captures the launch window, initializes image pickers, and runs the TUI
+/// with the launch window available to the model.
+fn run_tui(mut app: App) {
+    let launch_window = capture_launch_window(current_launch_secs());
+    app.init_image_pickers();
+    if let Err(e) = Model::new_with_launch_window(app, launch_window).run() {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
+}
 
 /// Shared by both daemon-connection call sites in `main()` below: run the
 /// TUI as a thin client of a connected daemon, exiting with an error if the
@@ -50,12 +61,8 @@ fn run_remote_app(
     endpoint: remote_player::DaemonEndpoint,
     config: config::Config,
 ) {
-    let mut app = App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config);
-    app.init_image_pickers();
-    if let Err(e) = Model::new(app).run() {
-        eprintln!("Error: {e}");
-        std::process::exit(1);
-    }
+    let app = App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config);
+    run_tui(app);
 }
 
 fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
@@ -388,12 +395,8 @@ fn main() {
             if let Err(e) = guard.write_pid() {
                 log::warn!(target: "startup", "failed to write pid into lock file: {e}");
             }
-            let mut app = App::new_independent(config);
-            app.init_image_pickers();
-            if let Err(e) = Model::new(app).run() {
-                eprintln!("Error: {e}");
-                std::process::exit(1);
-            }
+            let app = App::new_independent(config);
+            run_tui(app);
             // `guard` drops here (end of scope) at real process exit,
             // releasing the flock -- also happens automatically on any
             // process death (ADR 0006).

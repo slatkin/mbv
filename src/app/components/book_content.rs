@@ -426,6 +426,7 @@ impl BookContent {
                 .iter()
                 .map(|bucket| bucket.label.to_string())
                 .collect(),
+            markers: vec![],
             active: Some(self.selected_bucket),
         });
         let list = if self.state.books.is_empty() {

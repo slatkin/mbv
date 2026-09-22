@@ -6,6 +6,7 @@ use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,
 };
+use super::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
@@ -538,6 +539,7 @@ impl Model {
 
     /// Construct the model, starting the TuiRealm crossterm listener and
     /// mounting the permanent root observer.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(app: App) -> Self {
         Self::new_with_listener(
             app,
@@ -546,11 +548,49 @@ impl Model {
         )
     }
 
+    pub(crate) fn new_with_launch_window(
+        app: App,
+        home_latest_launch_window: HomeLatestLaunchWindow,
+    ) -> Self {
+        Self::new_with_listener_and_window(
+            app,
+            EventListenerCfg::default()
+                .crossterm_input_listener(TERMINAL_LISTENER_INTERVAL, TERMINAL_LISTENER_MAX_POLL),
+            home_latest_launch_window,
+        )
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn new_with_listener(
         app: App,
         listener_cfg: EventListenerCfg<UserEvent>,
     ) -> Self {
+        Self::new_with_listener_at(app, listener_cfg, current_launch_secs())
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(in crate::app) fn new_with_listener_at(
+        app: App,
+        listener_cfg: EventListenerCfg<UserEvent>,
+        current_launch: u64,
+    ) -> Self {
+        Self::new_with_listener_and_window(
+            app,
+            listener_cfg,
+            HomeLatestLaunchWindow {
+                previous: None,
+                current: current_launch,
+            },
+        )
+    }
+
+    fn new_with_listener_and_window(
+        mut app: App,
+        listener_cfg: EventListenerCfg<UserEvent>,
+        home_latest_launch_window: HomeLatestLaunchWindow,
+    ) -> Self {
         let application = Application::init(listener_cfg);
+        app.home_latest_launch_window = home_latest_launch_window;
         let home_section = App::load_prefs()["home_section"]
             .as_str()
             .and_then(HomeLatestSource::from_pref_key);

@@ -169,6 +169,7 @@ pub struct App {
     pub(super) home_is_local_daemon: bool,
     pub(super) hidden_libraries: Vec<String>,
     pub(super) hidden_latest: Vec<String>,
+    pub(super) home_latest_launch_window: super::home_latest::HomeLatestLaunchWindow,
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
     /// lookup -- see `mbv_core::config::resolve_library_route`.

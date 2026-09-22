@@ -572,7 +572,7 @@ fn mounted_tick_navigation_does_not_write_launch_snapshot() {
     harness.model_mut().update_home_owner(|home| {
         home.set_content(
             Vec::new(),
-            vec![(
+            vec![crate::app::types_playback::HomeLatestSection::new(
                 "Movies".into(),
                 crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
                 vec![

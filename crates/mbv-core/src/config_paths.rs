@@ -24,6 +24,10 @@ pub fn library_position_state_path() -> PathBuf {
     state_dir().join("library_position_state.json")
 }
 
+pub fn home_latest_launch_path() -> PathBuf {
+    state_dir().join("home_latest_launch.json")
+}
+
 /// Visibility/size of the now-playing panel, cycled with `h` and remembered across restarts.
 fn migrate_to_state(filename: &str) -> PathBuf {
     let dest = state_dir().join(filename);

@@ -596,6 +596,7 @@ impl MusicContent {
                 .iter()
                 .map(|group| trunc_str(&group.name, 12).to_string())
                 .collect(),
+            markers: vec![],
             active: Some(self.context.group_cursor),
         });
         // Grouped Music keeps the tree as the browser owner while the shared

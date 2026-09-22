@@ -355,12 +355,14 @@ impl TvContent {
                     .iter()
                     .map(|season| season.display_name())
                     .collect(),
+                markers: vec![],
                 active: Some(self.season_cursor.min(detail.seasons.len() - 1)),
             });
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
         let selector = if !searching && self.context.show_letter_pills {
             Some(SelectorRow {
                 pills: crate::app::render::LetterFilter::labels(),
+                markers: vec![],
                 active: Some(
                     self.context
                         .list

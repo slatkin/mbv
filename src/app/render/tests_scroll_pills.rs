@@ -25,6 +25,7 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
                 area,
                 PillBar {
                     labels: &labels,
+                    markers: &[],
                     ids: &ids,
                     selected_pos: 0,
                     hovered: None,
@@ -58,6 +59,29 @@ fn pill_bar_hitboxes_carry_caller_ids_not_display_positions() {
     for pair in tabs.windows(2) {
         assert!(pair[0].0.x + pair[0].0.width <= pair[1].0.x);
     }
+}
+
+#[test]
+fn marked_pill_width_changes_hitbox_and_overflow_fit() {
+    let labels = vec!["A".to_string(), "B".to_string()];
+    let ids = vec![0usize, 1];
+
+    let unmarked = render_pill_bar_hitboxes_with_markers(&labels, &[false, false], &ids, 0, 10);
+    let marked = render_pill_bar_hitboxes_with_markers(&labels, &[false, true], &ids, 0, 10);
+    assert_eq!(
+        unmarked.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+        ids,
+        "both unmarked pills fit"
+    );
+    assert_eq!(
+        marked.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+        vec![0],
+        "the marker's extra column participates in overflow fitting"
+    );
+
+    let unmarked = render_pill_bar_hitboxes_with_markers(&labels, &[false, false], &ids, 0, 20);
+    let marked = render_pill_bar_hitboxes_with_markers(&labels, &[false, true], &ids, 0, 20);
+    assert_eq!(unmarked[1].0.width + 1, marked[1].0.width);
 }
 
 #[test]

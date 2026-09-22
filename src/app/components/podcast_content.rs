@@ -455,6 +455,7 @@ impl PodcastContent {
                         .map(|show| trunc_str(&show.title, MAX_GROUP_LABEL)),
                 )
                 .collect(),
+            markers: vec![],
             active: self.active_pill_index(),
         });
         let list = if !has_shows {

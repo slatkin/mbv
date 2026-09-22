@@ -11,7 +11,7 @@ use super::components::library_panel::LibraryPanel;
 use super::components::ComponentId;
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
-use super::types_playback::HomeContent;
+use super::types_playback::{HomeContent, HomeLatestSection};
 use mbv_core::playback_queue::QueueItem;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -28,6 +28,7 @@ impl Model {
     /// pending startup skeleton.
     pub(super) fn assign_home_content(&mut self, mut content: HomeContent) {
         content.feed_names = self.resolve_home_feed_names(&content);
+        recompute_home_latest_markers(&mut content, self.app.home_latest_launch_window);
         self.home_content = content;
         self.push_home_content();
     }
@@ -40,7 +41,7 @@ impl Model {
         content
             .latest
             .iter()
-            .flat_map(|(_, _, items)| items)
+            .flat_map(|section| &section.items)
             .filter_map(|item| item.as_feed())
             .filter_map(|entry| {
                 Some((
@@ -67,14 +68,7 @@ impl Model {
     /// Model-owned `latest` (the shared cross-provider splice canonicalizes
     /// pill order and preserves cursors) and re-project. Delivered from
     /// `LibEvent::AudiobookshelfLatestRebuilt` (task 5.3d).
-    pub(super) fn merge_home_abs_sections(
-        &mut self,
-        sections: Vec<(
-            String,
-            super::types_playback::HomeLatestSource,
-            Vec<QueueItem>,
-        )>,
-    ) {
+    pub(super) fn merge_home_abs_sections(&mut self, sections: Vec<HomeLatestSection>) {
         super::library_load_actions::merge_home_sections(
             &mut self.home_content.latest,
             sections,
@@ -85,6 +79,7 @@ impl Model {
                 )
             },
         );
+        recompute_home_latest_markers(&mut self.home_content, self.app.home_latest_launch_window);
         self.push_home_content();
     }
 
@@ -92,14 +87,7 @@ impl Model {
     /// the Model-owned `latest` (the shared cross-provider splice canonicalizes
     /// pill order and preserves cursors) and re-project. Delivered from
     /// `LibEvent::FeedsLatestRebuilt` at the lib_rx drain (task 5.3d).
-    pub(super) fn merge_home_feeds_sections(
-        &mut self,
-        sections: Vec<(
-            String,
-            super::types_playback::HomeLatestSource,
-            Vec<QueueItem>,
-        )>,
-    ) {
+    pub(super) fn merge_home_feeds_sections(&mut self, sections: Vec<HomeLatestSection>) {
         super::library_load_actions::merge_home_sections(
             &mut self.home_content.latest,
             sections,
@@ -108,6 +96,7 @@ impl Model {
         // Merged feed sections never pass through `assign_home_content`, so
         // re-resolve the lookup over the merged content (design D2).
         self.home_content.feed_names = self.resolve_home_feed_names(&self.home_content);
+        recompute_home_latest_markers(&mut self.home_content, self.app.home_latest_launch_window);
         self.push_home_content();
     }
 
@@ -135,9 +124,10 @@ impl Model {
         self.home_content
             .latest
             .iter()
-            .find(|(_, source, _)| target.source.as_deref() == Some(source.pref_key().as_str()))
-            .and_then(|(_, _, items)| {
-                items
+            .find(|section| target.source.as_deref() == Some(section.source.pref_key().as_str()))
+            .and_then(|section| {
+                section
+                    .items
                     .iter()
                     .find(|item| Some(item.id()) == target.item_id.as_deref())
                     .cloned()
@@ -255,5 +245,14 @@ impl Model {
             .as_ref()
             .map(super::types_playback::HomeLatestSource::pref_key)
             .unwrap_or_default()
+    }
+}
+
+fn recompute_home_latest_markers(
+    content: &mut HomeContent,
+    launch_window: super::home_latest::HomeLatestLaunchWindow,
+) {
+    for section in &mut content.latest {
+        section.recompute_new_content(launch_window);
     }
 }

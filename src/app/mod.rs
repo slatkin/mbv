@@ -26,6 +26,8 @@ mod feed_tab_actions;
 mod feeds_manage_actions;
 mod fuzzy_match;
 mod home_actions;
+mod home_latest;
+pub(crate) use self::home_latest::{capture_launch_window, current_launch_secs};
 pub(crate) mod images;
 mod input;
 mod input_browse_dispatch;

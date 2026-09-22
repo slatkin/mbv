@@ -74,6 +74,7 @@ impl LibraryContentOwner for FixtureOwner {
         LibraryPanelContent {
             selector: Some(SelectorRow {
                 pills: vec!["All".into(), "New".into()],
+                markers: vec![],
                 active: Some(0),
             }),
             list: ListSlot::Media(&mut self.carrier),

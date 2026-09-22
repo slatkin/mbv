@@ -315,13 +315,9 @@ fn mixed_home_app() -> App {
 
 /// The mixed Books+Feeds pill data the Home-characterization seeds into
 /// Model-owned `home_content.latest` (task 5.3d).
-fn mixed_home_latest() -> Vec<(
-    String,
-    crate::app::types_playback::HomeLatestSource,
-    Vec<QueueItem>,
-)> {
+fn mixed_home_latest() -> Vec<crate::app::types_playback::HomeLatestSection> {
     vec![
-        (
+        crate::app::types_playback::HomeLatestSection::new(
             "Books".into(),
             crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
             vec![QueueItem::AudiobookshelfBook(
@@ -337,7 +333,7 @@ fn mixed_home_latest() -> Vec<(
                 },
             )],
         ),
-        (
+        crate::app::types_playback::HomeLatestSection::new(
             "Feeds".into(),
             crate::app::types_playback::HomeLatestSource::Feeds,
             vec![QueueItem::Feed(FeedEntry {

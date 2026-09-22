@@ -19,7 +19,7 @@ impl HomeContent {
             }) => self
                 .latest
                 .iter()
-                .position(|(_, candidate, _)| candidate.pref_key() == *source)
+                .position(|candidate| candidate.source.pref_key() == *source)
                 .map(|index| index + 1)
                 .unwrap_or(0),
             Some(SelectorIdentity::Home {
@@ -76,7 +76,7 @@ mod tests {
 
     use super::*;
     use crate::app::tests::make_item;
-    use crate::app::types_playback::HomeLatestSource;
+    use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
 
     fn continue_owner(ids: &[&str]) -> HomeContent {
         let mut owner = HomeContent::new();
@@ -148,7 +148,7 @@ mod tests {
         let mut owner = HomeContent::new();
         owner.set_content(
             Vec::new(),
-            vec![(
+            vec![HomeLatestSection::new(
                 "Latest Movies".into(),
                 HomeLatestSource::Emby("lib-movies".into()),
                 vec![QueueItem::Emby(Box::new(episode))],
@@ -193,7 +193,7 @@ mod tests {
         let mut owner = HomeContent::new();
         owner.set_content(
             Vec::new(),
-            vec![(
+            vec![HomeLatestSection::new(
                 "Latest Episodes".into(),
                 HomeLatestSource::Feeds,
                 vec![QueueItem::Feed(FeedEntry {

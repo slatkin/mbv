@@ -162,6 +162,10 @@ pub(crate) fn make_app_stub() -> App {
         hidden_libraries: Vec::new(),
         library_routes: std::collections::HashMap::new(),
         hidden_latest: Vec::new(),
+        home_latest_launch_window: super::home_latest::HomeLatestLaunchWindow {
+            previous: None,
+            current: 0,
+        },
         music_levels: Vec::new(),
         album_indexes: std::collections::HashMap::new(),
         player_tab: PlayerTab::default(),
