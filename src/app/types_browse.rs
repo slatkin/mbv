@@ -298,18 +298,7 @@ where
     let mut nav_stack = Vec::new();
 
     for (idx, saved_level) in saved.levels.iter().enumerate() {
-        // Upcoming is intentionally paint-only until its feed request is
-        // wired. A saved Upcoming position must not replay its persisted
-        // `Episode` item type through the ordinary library fetch on restore.
-        let (items, total_count, fetched_rows) = if idx == 0
-            && matches!(
-                saved_level.tv_content_mode,
-                Some(mbv_core::config::TvContentMode::Upcoming)
-            ) {
-            (Vec::new(), 0, 0)
-        } else {
-            fetch_level(saved_level)?
-        };
+        let (items, total_count, fetched_rows) = fetch_level(saved_level)?;
         let level = BrowseLevel::from_position_level_with_fetched_rows_for_kind(
             saved_level,
             items,

@@ -70,6 +70,27 @@ fn sessions_parse_playable_media_types(
 }
 
 #[test]
+fn upcoming_request_scopes_to_library_and_parses_episodes() {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"episode-1","Name":"Episode One","Type":"Episode","MediaType":"Video","SeriesId":"series-1","SeriesName":"Series One","IndexNumber":2,"ParentIndexNumber":1,"DateCreated":"2026-09-22T00:00:00Z"}]}"#,
+    );
+
+    let episodes = client.get_upcoming("library-7", 30).unwrap();
+    let request = &http.requests()[0];
+    assert!(request.starts_with("GET /Shows/Upcoming?"));
+    assert!(request.contains("ParentId=library-7"));
+    assert!(request.contains("Limit=30"));
+    assert!(request.contains("Fields="));
+    assert_eq!(episodes.len(), 1);
+    assert_eq!(episodes[0].id, "episode-1");
+    assert_eq!(episodes[0].item_type, "Episode");
+    assert_eq!(episodes[0].series_id, "series-1");
+}
+
+#[test]
 fn library_items_request_includes_external_urls_field() {
     let (mut client, http) = mock_client(TEST_URL);
     client.user_id = "user".into();

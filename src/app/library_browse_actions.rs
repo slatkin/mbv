@@ -337,6 +337,16 @@ impl TvLatestSource for EmbyClient {
     }
 }
 
+trait TvUpcomingSource {
+    fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String>;
+}
+
+impl TvUpcomingSource for EmbyClient {
+    fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
+        EmbyClient::get_upcoming(self, parent_id, limit)
+    }
+}
+
 fn build_tv_latest_level<S: TvLatestSource>(
     source: &S,
     parent_id: String,
@@ -355,6 +365,32 @@ fn build_tv_latest_level<S: TvLatestSource>(
         unplayed_only: false,
         sort_by: "DateCreated".into(),
         sort_order: "Descending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        tv_content_mode: None,
+        music_grouping: None,
+    })
+}
+
+fn build_tv_upcoming_level<S: TvUpcomingSource>(
+    source: &S,
+    parent_id: String,
+    title: String,
+) -> Result<BrowseLevel, String> {
+    let items = source.get_upcoming(&parent_id, 30)?;
+    let total_count = items.len();
+    Ok(BrowseLevel {
+        parent_id,
+        title,
+        items,
+        fetched_rows: total_count,
+        total_count,
+        resting: BrowseResting::new(0, 0),
+        item_types: Some("Episode".into()),
+        unplayed_only: false,
+        sort_by: "PremiereDate".into(),
+        sort_order: "Ascending".into(),
         loading: false,
         all_items: None,
         letter_filter: None,
@@ -594,6 +630,11 @@ impl App {
                         let total_count = items.len();
                         return Ok((items, total_count, total_count));
                     }
+                    if matches!(tv_mode, Some(mbv_core::config::TvContentMode::Upcoming)) {
+                        let items = client.get_upcoming(&saved_level.parent_id, 30)?;
+                        let total_count = items.len();
+                        return Ok((items, total_count, total_count));
+                    }
                     let letter_filter = match tv_mode {
                         Some(mbv_core::config::TvContentMode::Range(index)) => {
                             super::render::LetterFilter::for_index_for_kind(index, filter_kind)
@@ -728,6 +769,27 @@ impl App {
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             match build_tv_latest_level(&client, parent_id.clone(), title) {
+                Ok(level) => {
+                    let _ = tx.send(LibEvent::Loaded {
+                        lib_idx,
+                        parent_id,
+                        level: Box::new(level),
+                    });
+                }
+                Err(e) => {
+                    let _ = tx.send(LibEvent::Error(e));
+                }
+            }
+        });
+    }
+
+    pub(super) fn spawn_tv_upcoming(&self, lib_idx: usize, parent_id: String, title: String) {
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            match build_tv_upcoming_level(&client, parent_id.clone(), title) {
                 Ok(level) => {
                     let _ = tx.send(LibEvent::Loaded {
                         lib_idx,
@@ -1023,6 +1085,18 @@ mod tv_latest_tests {
         }
     }
 
+    struct FakeUpcomingSource {
+        request: RefCell<Option<(String, usize)>>,
+        items: Vec<EmbyItem>,
+    }
+
+    impl TvUpcomingSource for FakeUpcomingSource {
+        fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
+            *self.request.borrow_mut() = Some((parent_id.into(), limit));
+            Ok(self.items.clone())
+        }
+    }
+
     #[test]
     fn latest_library_fetch_uses_home_feed_request_without_home_state() {
         let mut episode = crate::app::tests::make_item("Feed episode", "Episode");
@@ -1038,6 +1112,26 @@ mod tv_latest_tests {
         assert_eq!(
             source.request.borrow().as_ref(),
             Some(&("view-id".into(), 30))
+        );
+        assert_eq!(level.items, vec![episode]);
+        assert_eq!(level.item_types.as_deref(), Some("Episode"));
+    }
+
+    #[test]
+    fn upcoming_library_fetch_uses_library_parent_and_flat_episode_rows() {
+        let mut episode = crate::app::tests::make_item("Upcoming episode", "Episode");
+        episode.id = "upcoming-episode".into();
+        let source = FakeUpcomingSource {
+            request: RefCell::new(None),
+            items: vec![episode.clone()],
+        };
+
+        let level = build_tv_upcoming_level(&source, "library-id".into(), "TV".into())
+            .expect("fake Upcoming request succeeds");
+
+        assert_eq!(
+            source.request.borrow().as_ref(),
+            Some(&("library-id".into(), 30))
         );
         assert_eq!(level.items, vec![episode]);
         assert_eq!(level.item_types.as_deref(), Some("Episode"));

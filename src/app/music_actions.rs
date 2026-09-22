@@ -331,12 +331,15 @@ impl App {
                     );
                 }
                 mbv_core::config::TvContentMode::Upcoming => {
-                    // The mode is persisted and painted now; its server feed
-                    // is implemented by the Upcoming unit.
                     if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                        last.loading = false;
+                        last.loading = true;
                         last.item_types = Some("Episode".into());
                     }
+                    self.spawn_tv_upcoming(
+                        lib_idx,
+                        parent_id,
+                        self.libs[lib_idx].library.name.clone(),
+                    );
                 }
                 mbv_core::config::TvContentMode::All => {
                     if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {

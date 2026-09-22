@@ -47,7 +47,7 @@ fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
 }
 
 #[test]
-fn restoring_upcoming_position_skips_the_unfiltered_episode_fetch() {
+fn restoring_upcoming_position_loads_upcoming_episode_content() {
     let saved = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
             parent_id: "lib-tv".into(),
@@ -62,11 +62,12 @@ fn restoring_upcoming_position_skips_the_unfiltered_episode_fetch() {
         ..Default::default()
     };
 
+    let episode = make_item("Upcoming episode", "Episode");
     let restored = restore_library_position_with_fetched_rows_for_kind(
         &saved,
         10,
         crate::app::render::LetterFilterKind::Tv,
-        |_| panic!("Upcoming restore must not issue a library fetch"),
+        |_| Ok((vec![episode.clone()], 1, 1)),
     )
     .expect("restore result")
     .expect("restored position");
@@ -74,7 +75,7 @@ fn restoring_upcoming_position_skips_the_unfiltered_episode_fetch() {
         restored.1[0].tv_content_mode,
         Some(mbv_core::config::TvContentMode::Upcoming)
     );
-    assert!(restored.1[0].items.is_empty());
+    assert_eq!(restored.1[0].items, vec![episode]);
 }
 
 #[test]
