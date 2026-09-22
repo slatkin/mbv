@@ -11,7 +11,7 @@ use super::components::library_panel::LibraryPanel;
 use super::components::ComponentId;
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
-use super::types_playback::{HomeContent, HomeLatestSection};
+use super::types_playback::{HomeContent, HomeLatestSection, HomeLatestSource};
 use mbv_core::playback_queue::QueueItem;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -213,7 +213,7 @@ impl Model {
     /// The Home owner for shared reads, through the panel's owner map
     /// (design D2: addressed by `LibraryKey`, never by a destination
     /// component). `None` before the first `push_home_content` installs it.
-    fn home_owner_shared(&self) -> Option<&HomeOwner> {
+    pub(super) fn home_owner_shared(&self) -> Option<&HomeOwner> {
         self.application
             .get_component(&ComponentId::Library)
             .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
@@ -234,6 +234,18 @@ impl Model {
         if self.home_section_pref_semantic != source {
             self.home_section_pref_semantic = source;
         }
+    }
+
+    /// Acknowledge a Home Latest section from either surface. The set is
+    /// shell-owned, then both mounted owners are re-projected so their
+    /// markers clear in the same tick. This deliberately updates the Home
+    /// owner directly instead of pushing its content: a direct shell request
+    /// may precede the component's local selection projection.
+    pub(super) fn acknowledge_home_latest(&mut self, source: HomeLatestSource) {
+        self.acknowledged_home_latest_sources.insert(source);
+        let acknowledged = self.acknowledged_home_latest_sources.clone();
+        self.update_home_owner(|home| home.set_acknowledged_latest_sources(&acknowledged));
+        self.push_tv_workspace_content();
     }
 
     /// Test-only accessor for the retained semantic source. Gated to avoid a

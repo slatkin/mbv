@@ -572,7 +572,7 @@ impl Model {
                         self.push_home_content();
                     }
                     ShellRequest::HomePillClick { target } => {
-                        self.select_home_section_from_component(target);
+                        self.acknowledge_home_section(target);
                     }
                     // Home typed effects (task 5.3d, Home typed-effect
                     // prep): `HomeComponent` owns the cursor and reports the
@@ -779,10 +779,16 @@ impl Model {
                     | ShellRequest::TvEpisodeMove { .. }
                     | ShellRequest::TvSeasonMove { .. }) => self.handle_tv_request(request),
                     ShellRequest::TvHitClick { hit } => {
+                        let acknowledge_latest =
+                            matches!(hit, crate::app::components::msg::TvHit::LetterPill(0));
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
                             self.app.handle_mouse_single_click_tv(lib_idx, hit);
                         }
-                        self.push_tv_workspace_content();
+                        if acknowledge_latest {
+                            self.acknowledge_active_tv_latest();
+                        } else {
+                            self.push_tv_workspace_content();
+                        }
                     }
                     ShellRequest::TvHitDoubleClick { hit } => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {

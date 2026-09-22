@@ -11,7 +11,8 @@ use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::palette;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+use crate::app::home_latest::HomeLatestLaunchWindow;
+use crate::app::types_playback::{HomeContent as ModelHomeContent, HomeLatestSection, HomeLatestSource};
 use crate::app::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::playback_queue::QueueItem;
 
@@ -168,11 +169,11 @@ fn tick_frame_is_nonempty_in_mini_view() {
 }
 
 /// Section content can arrive after the Home owner is mounted. The marker is
-/// projected through the mounted Library panel, and visiting its pill remains
-/// a component-local acknowledgement when the shell pushes the same snapshot
+/// projected through the mounted Library panel, and visiting its pill records
+/// a shell-owned acknowledgement when the shell pushes the same snapshot
 /// again (the shell snapshot deliberately stays marked).
 #[test]
-fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
+fn home_latest_marker_arrival_and_pill_acknowledgement_flow_through_tick() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut harness = home_harness(160, 30, 0);
     let _ = draw(&mut harness, 160, 30);
@@ -214,6 +215,10 @@ fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
     handle_tick_messages(&mut harness, outcome.messages);
     let _ = draw(&mut harness, 160, 30);
     assert_eq!(selector_markers(&harness), &[false, false]);
+    assert!(harness
+        .model()
+        .acknowledged_home_latest_sources
+        .contains(&marked_source));
 
     let other_source = HomeLatestSource::Audiobookshelf("other-library".into());
     harness.model_mut().home_content.latest = vec![
@@ -241,7 +246,7 @@ fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
     // projection; the other source is still marked before it is selected.
     assert_eq!(selector_markers(&harness), &[false, true, false]);
 
-    // Select Other so the visited source is unselected. Its missing marker
+    // Select Other so the acknowledged source is unselected. Its missing marker
     // then proves source-based acknowledgement rather than selected-pill
     // suppression.
     let other_region = pill_region(&harness, 1);
@@ -260,6 +265,33 @@ fn home_latest_marker_arrival_and_pill_visit_flow_through_tick() {
     assert_eq!(selector_markers(&harness), &[false, false, false]);
     assert_eq!(home_owner(&harness).section(), 1);
     assert!(harness.model().home_content.latest[1].has_new_content);
+}
+
+#[test]
+fn home_latest_fetch_after_launch_does_not_add_a_marker() {
+    let mut app = make_app_stub();
+    app.home_latest_launch_window = HomeLatestLaunchWindow {
+        previous: Some(100),
+        current: 200,
+    };
+    app.tab = TabSelection::Home;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    let mut item = make_item("Fetched after launch", "Movie");
+    item.date_added = "1970-01-01T00:05:00Z".into();
+    harness.model_mut().assign_home_content(ModelHomeContent {
+        continue_items: Vec::new(),
+        latest: vec![HomeLatestSection {
+            title: "Latest".into(),
+            source: HomeLatestSource::Emby("library".into()),
+            items: vec![QueueItem::Emby(Box::new(item))],
+            has_new_content: true,
+        }],
+        loading: false,
+        feed_names: std::collections::HashMap::new(),
+    });
+
+    assert!(!harness.model().home_content.latest[0].has_new_content);
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {

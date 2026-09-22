@@ -82,6 +82,8 @@ pub(in crate::app) struct TvContent {
     /// the panel, design D2). In Narrow geometry only the overlay focuses
     /// the Episodes pane, so this gates the overlay Workspace's key routing.
     hero_overlay_open: bool,
+    latest_has_new_content: bool,
+    latest_acknowledged: bool,
 }
 
 /// Build the embedded episode `WideMediaList`'s rows from a season's
@@ -140,6 +142,8 @@ impl TvContent {
             inline_search: InlineSearch::new(),
             is_wide: true,
             hero_overlay_open: false,
+            latest_has_new_content: false,
+            latest_acknowledged: false,
         }
     }
     /// Records the session-only Wide hero list-pane width override for the
@@ -157,6 +161,11 @@ impl TvContent {
     }
     pub(in crate::app) fn set_hero_overlay_open(&mut self, open: bool) {
         self.hero_overlay_open = open;
+    }
+
+    pub(in crate::app) fn set_latest_marker(&mut self, has_new_content: bool, acknowledged: bool) {
+        self.latest_has_new_content = has_new_content;
+        self.latest_acknowledged = acknowledged;
     }
     /// Keep the shared owner in its fixed-row presentation and clamp its
     /// viewport for the current geometry. No content or cursor state is copied
@@ -394,6 +403,7 @@ impl TvContent {
                 .library_total
                 .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
             let mut pills = vec!["Latest".to_string(), "Upcoming".to_string()];
+            let latest_marker = self.latest_has_new_content && !self.latest_acknowledged;
             if large {
                 pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));
             } else {
@@ -413,8 +423,10 @@ impl TvContent {
                 }
             };
             Some(SelectorRow {
+                markers: std::iter::once(latest_marker)
+                    .chain(std::iter::repeat_n(false, pills.len().saturating_sub(1)))
+                    .collect(),
                 pills,
-                markers: vec![],
                 active: Some(active),
             })
         } else {

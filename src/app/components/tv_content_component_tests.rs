@@ -172,6 +172,22 @@ fn tv_mode_selector_composes_the_threshold_rows_in_order(
 }
 
 #[test]
+fn tv_latest_marker_reads_shell_projection_and_acknowledgement() {
+    let mut list = LibraryListRenderCtx::from_items(vec![make_item("Episode", "Episode")], 0);
+    list.library_total = Some(301);
+    let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+    context.set_tv_content_mode(Some(TvContentMode::Latest));
+    let mut owner = TvContent::new();
+    owner.set_latest_marker(true, false);
+    owner.set_content(context.clone());
+    assert!(owner.content().selector.expect("TV mode selector").markers[0]);
+
+    owner.set_latest_marker(true, true);
+    owner.set_content(context);
+    assert!(!owner.content().selector.expect("TV mode selector").markers[0]);
+}
+
+#[test]
 fn tv_latest_mode_projects_feed_episodes_without_series_workspace() {
     let mut first = make_item("Latest Episode", "Episode");
     first.id = "latest-episode".into();

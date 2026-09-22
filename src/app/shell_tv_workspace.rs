@@ -63,7 +63,8 @@ impl Model {
                     }
                     ShellRequest::TvBack => self.app.go_back(lib_idx),
                     ShellRequest::TvCycleLetterPill { delta } => {
-                        self.app.cycle_letter_pill(lib_idx, delta)
+                        self.app.cycle_letter_pill(lib_idx, delta);
+                        self.acknowledge_active_tv_latest();
                     }
                     // closed set: the outer arm's guard already restricts this to
                     // TvMoveRows/TvJumpCursor/TvActivate/TvBack/
@@ -221,6 +222,22 @@ impl Model {
         }
     }
 
+    pub(super) fn acknowledge_active_tv_latest(&mut self) {
+        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+            return;
+        };
+        let Some(library) = self.app.libs.get(index) else {
+            return;
+        };
+        if library.library.collection_type == "tvshows"
+            && library.tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
+        {
+            self.acknowledge_home_latest(super::types_playback::HomeLatestSource::Emby(
+                library.library.id.clone(),
+            ));
+        }
+    }
+
     /// The active TV library's owner key (design D2's
     /// `LibraryKey::Service(LibraryKey)`), or `None` for every other tab.
     fn tv_owner_key(&self) -> Option<LibraryKey> {
@@ -371,6 +388,7 @@ impl Model {
         let Some(library) = self.app.libs.get(index) else {
             return;
         };
+        let library_id = library.library.id.clone();
         if library.library.collection_type != "tvshows" {
             return;
         }
@@ -434,6 +452,17 @@ impl Model {
             self.app.should_show_letter_pills(index),
         );
         context.set_tv_content_mode(tv_content_mode);
+        let latest_source = super::types_playback::HomeLatestSource::Emby(library_id);
+        let latest_has_new_content = self
+            .home_content
+            .latest
+            .iter()
+            .find(|section| section.source == latest_source)
+            .is_some_and(|section| section.has_new_content);
+        let latest_acknowledged = self
+            .acknowledged_home_latest_sources
+            .contains(&latest_source);
+        let latest_marker = (latest_has_new_content, latest_acknowledged);
         let list_pane_width = self.app.list_pane_width;
         // Panel focus is the library area's focus bit; the owner paints its
         // focused pane and claims local chords from it (task 8.4).
@@ -442,6 +471,7 @@ impl Model {
         self.update_tv_owner(|owner| {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);
+            owner.set_latest_marker(latest_marker.0, latest_marker.1);
             owner.set_content(context);
             owner.set_focused(library_focused);
         });

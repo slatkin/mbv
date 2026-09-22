@@ -50,7 +50,7 @@ pub(in crate::app) struct HomeContent {
     /// never enters components, so the shell resolves at assignment and the
     /// projection reads entries up by `feed_id`.
     feed_names: HashMap<String, String>,
-    visited_latest_sources: HashSet<HomeLatestSource>,
+    acknowledged_latest_sources: HashSet<HomeLatestSource>,
     section: usize,
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
@@ -65,7 +65,7 @@ impl HomeContent {
             carrier: MediaListCarrier::new(),
             loading: false,
             feed_names: HashMap::new(),
-            visited_latest_sources: HashSet::new(),
+            acknowledged_latest_sources: HashSet::new(),
             section: 0,
             hero_image: HeroImageState::None,
         }
@@ -98,10 +98,14 @@ impl HomeContent {
             }
         }
         self.clamp_section();
-        if let Some(source) = self.source_for_section(self.section) {
-            self.visited_latest_sources.insert(source);
-        }
         self.project_active_section();
+    }
+
+    pub(in crate::app) fn set_acknowledged_latest_sources(
+        &mut self,
+        sources: &HashSet<HomeLatestSource>,
+    ) {
+        self.acknowledged_latest_sources = sources.clone();
     }
 
     /// The flat cursor (Continue Watching + every latest section) the shell's
@@ -140,7 +144,6 @@ impl HomeContent {
             .iter()
             .position(|section| section.source == *source)
         {
-            self.visited_latest_sources.insert(source.clone());
             self.section = idx + 1;
             self.clamp_section();
             self.project_active_section();
@@ -315,15 +318,9 @@ impl HomeContent {
             return false;
         };
         if resolved == self.section {
-            if let Some(source) = self.source_for_section(self.section) {
-                self.visited_latest_sources.insert(source);
-            }
             return false;
         }
         self.section = resolved;
-        if let Some(source) = self.source_for_section(self.section) {
-            self.visited_latest_sources.insert(source);
-        }
         // A discrete section change re-projects the active section and parks
         // the shared owner at its first row (no per-section cursor cache).
         self.project_active_section();
@@ -512,7 +509,7 @@ impl LibraryContentOwner for HomeContent {
                 markers: std::iter::once(false)
                     .chain(self.latest.iter().map(|section| {
                         section.has_new_content
-                            && !self.visited_latest_sources.contains(&section.source)
+                            && !self.acknowledged_latest_sources.contains(&section.source)
                     }))
                     .collect(),
                 active: Some(self.section),
@@ -783,8 +780,8 @@ mod tests {
         owner.set_content(
             Vec::new(),
             vec![
-                section("First", first, Vec::new(), true),
-                section("Second", second, Vec::new(), true),
+                section("First", first.clone(), Vec::new(), true),
+                section("Second", second.clone(), Vec::new(), true),
             ],
             false,
             HashMap::new(),
@@ -794,10 +791,12 @@ mod tests {
         assert_eq!(markers, vec![false, true, true]);
 
         assert!(owner.select_section(1));
+        owner.set_acknowledged_latest_sources(&HashSet::from([first.clone()]));
         let markers = owner.content().selector.expect("selector row").markers;
         assert_eq!(markers, vec![false, false, true]);
 
         assert!(owner.select_section(2));
+        owner.set_acknowledged_latest_sources(&HashSet::from([first.clone(), second.clone()]));
         let markers = owner.content().selector.expect("selector row").markers;
         assert_eq!(markers, vec![false, false, false]);
     }
@@ -818,7 +817,8 @@ mod tests {
         );
 
         assert!(owner.select_section(1));
-        assert!(owner.visited_latest_sources.contains(&first));
+        owner.set_acknowledged_latest_sources(&HashSet::from([first.clone()]));
+        assert!(owner.acknowledged_latest_sources.contains(&first));
 
         // The selected source receives content after selection; identity, not
         // its new index, keeps the acknowledgement in force.
@@ -835,17 +835,18 @@ mod tests {
             .source_for_section(owner.section())
             .expect("selected latest source");
         assert_eq!(active_source, first);
-        assert!(owner.visited_latest_sources.contains(&active_source));
+        assert!(owner.acknowledged_latest_sources.contains(&active_source));
 
         assert!(owner.restore_section(&second));
-        assert!(owner.visited_latest_sources.contains(&second));
+        owner.set_acknowledged_latest_sources(&HashSet::from([first, second.clone()]));
+        assert!(owner.acknowledged_latest_sources.contains(&second));
         owner.set_content(
             Vec::new(),
             vec![section("Second", second.clone(), Vec::new(), true)],
             false,
             HashMap::new(),
         );
-        assert!(owner.visited_latest_sources.contains(&second));
+        assert!(owner.acknowledged_latest_sources.contains(&second));
     }
 
     #[test]

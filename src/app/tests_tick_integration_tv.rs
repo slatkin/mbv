@@ -14,6 +14,8 @@ use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::render::make_movie_app;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_events::NavigateLanding;
+use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+use mbv_core::playback_queue::QueueItem;
 use crate::app::{LibEvent, PanelFocus, PanelMode, TabSelection};
 use std::time::{Duration, Instant};
 
@@ -45,6 +47,50 @@ fn tv_harness() -> TickHarness {
     harness.model_mut().sync_tv_content();
     harness.model_mut().sync_active_destination();
     harness
+}
+
+#[test]
+fn tv_latest_selection_acknowledges_the_matching_home_marker_through_tick() {
+    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
+    let source = HomeLatestSource::Emby("lib-movies".into());
+    let mut item = crate::app::tests::make_item("New episode", "Episode");
+    item.id = "new-episode".into();
+    harness.model_mut().home_content.latest = vec![HomeLatestSection {
+        title: "Latest TV".into(),
+        source,
+        items: vec![QueueItem::Emby(Box::new(item))],
+        has_new_content: true,
+    }];
+    harness.model_mut().push_home_content();
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+    assert!(panel(&harness).test_selector_markers()[0]);
+
+    let (pill, _) = panel(&harness)
+        .test_selector_hits()
+        .regions()
+        .first()
+        .cloned()
+        .expect("Latest pill geometry");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: pill.x,
+        row: pill.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+    draw(&mut harness);
+
+    assert!(!panel(&harness).test_selector_markers()[0]);
+    assert!(harness
+        .model()
+        .acknowledged_home_latest_sources
+        .contains(&HomeLatestSource::Emby("lib-movies".into())));
+
+    harness.model_mut().app.tab = TabSelection::Home;
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+    assert_eq!(panel(&harness).test_selector_markers(), &[false, false]);
 }
 
 #[test]
