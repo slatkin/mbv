@@ -361,6 +361,47 @@ fn launch_reanchor_restores_podcast_show_pill_before_detail_arrival() {
 }
 
 #[test]
+fn launch_reanchor_restores_podcast_filter_pill_on_cold_start() {
+    let mut app = audiobookshelf_app();
+    app.pending_launch_tab_resolved = true;
+    app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: ServiceKind::Audiobookshelf,
+            library_id: "abs-podcasts".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Audiobookshelf {
+            key: mbv_core::config::AudiobookshelfSelectorKey::PodcastFilter(
+                mbv_core::config::AudiobookshelfPodcastFilter::Unplayed,
+            ),
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Audiobookshelf {
+            id: "show-a\0episode-a".into(),
+        }),
+    });
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(harness.model().app.pending_launch_state.is_none());
+    assert_eq!(
+        podcast(&mut harness).pill(),
+        &crate::app::types_audiobookshelf_browse::PillSelection::State(
+            crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Unplayed,
+        )
+    );
+    assert_eq!(
+        podcast(&mut harness)
+            .selected_episode_target()
+            .expect("the saved unplayed episode is selected")
+            .episode_id(),
+        "episode-a"
+    );
+    let selector = podcast(&mut harness).content().selector.expect("podcast selector");
+    assert_eq!(selector.active, Some(1), "the saved filter pill is the active selector");
+}
+
+#[test]
 fn podcast_owner_survives_tab_reselection_with_the_remembered_pill() {
     let mut app = audiobookshelf_app();
     app.audiobookshelf_libraries.push(mbv_core::audiobookshelf::AudiobookshelfLibrary { id: "abs-books".into(), name: "Books".into(), media_type: "book".into() });

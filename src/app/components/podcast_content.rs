@@ -514,20 +514,29 @@ impl LibraryContentOwner for PodcastContent {
 
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
         // The shell applies the selector through App before this item-level
-        // re-anchor. Restore the saved show pill here so the component scopes
-        // its rows to the same show while the detail cache becomes ready.
-        if let Some(SelectorIdentity::Audiobookshelf {
-            key: AudiobookshelfSelectorKey::PodcastShow(id),
-        }) = state.selector.as_ref()
-        {
-            if self
+        // re-anchor. Restore the saved pill here so the component scopes its
+        // rows before selecting the saved item.
+        match state.selector.as_ref() {
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastFilter(filter),
+            }) => {
+                self.set_pill(PillSelection::State(match filter {
+                    AudiobookshelfPodcastFilter::All => AudiobookshelfEpisodeFilter::All,
+                    AudiobookshelfPodcastFilter::Unplayed => AudiobookshelfEpisodeFilter::Unplayed,
+                    AudiobookshelfPodcastFilter::Played => AudiobookshelfEpisodeFilter::Played,
+                }));
+            }
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::PodcastShow(id),
+            }) if self
                 .state
                 .shows
                 .iter()
-                .any(|show| &show.library_item_id == id)
+                .any(|show| &show.library_item_id == id) =>
             {
                 self.set_pill(PillSelection::Show(id.clone()));
             }
+            _ => {}
         }
         if let PillSelection::Show(id) = &self.pill {
             if !self.state.detail_cache.contains_key(id) {
