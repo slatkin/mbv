@@ -1168,8 +1168,10 @@ mod tv_latest_tests {
     #[case::upcoming(mbv_core::config::TvContentMode::Upcoming)]
     fn refresh_after_stop_reloads_selected_tv_mode(#[case] mode: mbv_core::config::TvContentMode) {
         let mut app = crate::app::tests::make_app_stub();
-        let mut config = crate::config::Config::default();
-        config.server_url = "http://127.0.0.1:1".into();
+        let config = crate::config::Config {
+            server_url: "http://127.0.0.1:1".into(),
+            ..crate::config::Config::default()
+        };
         let http = mbv_core::mock_http::MockHttp::new();
         let client = mbv_core::api::EmbyClient::new(config).with_test_agent(http.agent());
         app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
