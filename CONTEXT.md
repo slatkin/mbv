@@ -375,6 +375,14 @@ targets and held by the MediaList beside its cursor. A non-empty
 multi-selection is Visual mode. "Selection" alone still means the cursor row.
 _Avoid_: marked rows, selection (for the set), checked items
 
+**Mark**:
+One stable target's membership in a Multi-selection. The seam's
+`MarkSelection` carrier owns the ordered marks of a list; adding, removing,
+toggling, and clearing marks are the operations on that carrier. A mark is
+multi-selection membership, not a row highlight — "selection" alone continues
+to mean the cursor row.
+_Avoid_: marked rows (for the membership), mark (for the cursor row)
+
 **WideMediaList**:
 The provider-neutral, one-column fixed-row TuiRealm Component over a
 `MediaList<Target>`. It is the canonical control for Library browser rails,
