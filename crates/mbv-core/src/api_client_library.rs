@@ -1,3 +1,12 @@
+/// `Fields` for `get_latest`. Must include every field its parser
+/// (`parse_item`) reads — in particular `DateCreated`, which Home Latest's
+/// new-content marker and date gutter depend on (mbv/#756).
+const LATEST_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId,Overview,PremiereDate,DateCreated";
+
+/// `Fields` for `get_latest_episodes`. Same `DateCreated` dependency as
+/// [`LATEST_FIELDS`].
+const LATEST_EPISODES_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,Overview,PremiereDate,DateCreated";
+
 impl EmbyClient {
     fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<EmbyItem>, String> {
         let mut req = self.get(path);
@@ -202,7 +211,7 @@ impl EmbyClient {
             .query("ParentId", parent_id)
             .query("Limit", limit.to_string())
             .query("GroupItems", "true")
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId,Overview,PremiereDate")
+            .query("Fields", LATEST_FIELDS)
             .call().map_err(|e| e.to_string())?
             .body_mut().read_json().map_err(|e| e.to_string())?;
         Ok(resp
@@ -225,7 +234,7 @@ impl EmbyClient {
             ("SortBy",            "DateCreated"),
             ("SortOrder",         "Descending"),
             ("IsPlayed",          "false"),
-            ("Fields",            "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,Overview,PremiereDate"),
+            ("Fields",            LATEST_EPISODES_FIELDS),
         ])
     }
 
@@ -346,5 +355,16 @@ impl EmbyClient {
             "{}/embywebsocket?api_key={}&deviceId={}",
             base, self.token, self.device_id
         )
+    }
+}
+
+#[cfg(test)]
+mod tests_api_client_library {
+    use super::*;
+
+    #[test]
+    fn latest_fetches_request_date_created() {
+        assert!(LATEST_FIELDS.contains("DateCreated"));
+        assert!(LATEST_EPISODES_FIELDS.contains("DateCreated"));
     }
 }
