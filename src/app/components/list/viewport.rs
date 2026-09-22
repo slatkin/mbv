@@ -251,6 +251,27 @@ mod tests {
     }
 
     #[rstest]
+    #[case(-1, Some(6), 5)]
+    #[case(1, Some(1), 0)]
+    fn visible_viewport_paging_recovers_missing_selection_and_keeps_it_visible(
+        #[case] direction: isize,
+        #[case] expected_selected: Option<u8>,
+        #[case] expected_offset: usize,
+    ) {
+        let rows = flow();
+        let mut list = TestListState {
+            selected: None,
+            offset: 4,
+        };
+
+        let selected = list.page(&rows, 3, direction, PagingPolicy::VisibleViewport);
+
+        assert_eq!(selected, Some(if direction < 0 { 7 } else { 0 }));
+        assert_eq!(list.selected, expected_selected);
+        assert_eq!(list.offset, expected_offset);
+    }
+
+    #[rstest]
     #[case(1, 4, Some(2), Some(3))]
     #[case(3, 2, Some(4), Some(2))]
     fn paging_policies_remain_distinct_over_structural_rows(
