@@ -8,6 +8,7 @@ use super::{Cursored, Row, RowFlow};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PagingPolicy {
     /// Move a fixed number of selectable rows, used by flat lists.
+    #[cfg_attr(not(test), allow(dead_code))]
     FixedSelectableDistance(usize),
     /// Move by one visible viewport, used by nested/tree-shaped lists.
     VisibleViewport,
@@ -15,11 +16,13 @@ pub enum PagingPolicy {
 
 impl PagingPolicy {
     /// The flat-list policy with a fixed selectable-row distance.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub const fn fixed_selectable_distance(distance: usize) -> Self {
         Self::FixedSelectableDistance(distance)
     }
 
     /// The tree/list policy whose page is the visible viewport.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub const fn visible_viewport() -> Self {
         Self::VisibleViewport
     }
@@ -104,6 +107,7 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
 
     /// Keep this cursor visible using its current target, if it is present in
     /// the flow.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn keep_cursor_visible(&mut self, flow: &RowFlow<Target>, viewport_len: usize) -> usize {
         let selected_position = self.index(flow);
         self.keep_selection_visible(flow, viewport_len, selected_position)
@@ -190,6 +194,7 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
 
     /// Clamp geometry and then keep the current cursor visible. This is the
     /// operation used after a resize or content replacement.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn reconcile_viewport(&mut self, flow: &RowFlow<Target>, viewport_len: usize) -> usize {
         self.clamp_viewport(flow, viewport_len);
         self.keep_cursor_visible(flow, viewport_len)

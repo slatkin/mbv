@@ -400,26 +400,30 @@ impl<Target: Clone + Eq> MediaList<Target> {
     }
 
     /// Replace the display rows. The selected target is preserved when it is
-    /// still present; otherwise the cursor and scroll are locally clamped
-    /// (design.md D3). Structural rows are filtered out of the selectable
+    /// still present; a vanished target resolves through the shared cursor seam
+    /// to the first selectable row, never from a carried-over numeric position
+    /// (`shared-list-components`: "Content replacement preserves selection by
+    /// stable identity"). Structural rows are filtered out of the selectable
     /// index here so they can never become selected.
     fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         let previous = self.selected_target().cloned();
-        let selectable: Vec<usize> = rows
+        self.rows = rows;
+        self.selectable = self
+            .rows
             .iter()
             .enumerate()
             .filter(|(_, row)| row.selectable_target().is_some())
             .map(|(index, _)| index)
             .collect();
-        let cursor = previous
-            .and_then(|target| {
-                selectable
-                    .iter()
-                    .position(|&row| rows[row].selectable_target() == Some(&target))
-            })
-            .unwrap_or_else(|| self.cursor.min(selectable.len().saturating_sub(1)));
-        self.rows = rows;
-        self.selectable = selectable;
+        if let Some(target) = previous {
+            let flow = self.row_flow();
+            Cursored::select_target(self, &flow, &target);
+        } else {
+            self.cursor = self.cursor.min(self.selectable.len().saturating_sub(1));
+        }
+        if self.selectable.is_empty() {
+            self.cursor = 0;
+        }
         let present: Vec<Target> = self
             .selectable
             .iter()
@@ -429,11 +433,6 @@ impl<Target: Clone + Eq> MediaList<Target> {
             .retain(|target| present.contains(target));
         self.frozen_selection
             .retain(|target| present.contains(target));
-        self.cursor = if self.selectable.is_empty() {
-            0
-        } else {
-            cursor.min(self.selectable.len() - 1)
-        };
         if self
             .selection_anchor
             .as_ref()

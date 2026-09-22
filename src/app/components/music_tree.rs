@@ -450,10 +450,12 @@ impl MusicTreeBrowser {
 
     /// Moves the selection to the visible parent: an album leaf's artist root
     /// (task 2.4 Left). Returns false for an artist root, which has no parent
-    /// to move to. The crate's selection change re-arms the viewport
+    /// to move to. The movement is the shared `Expandable` arithmetic over the
+    /// visible row flow, and the crate's selection change re-arms the viewport
     /// visibility rule.
     pub(in crate::app) fn move_to_parent(&mut self) -> bool {
-        self.state.select_parent()
+        let flow = self.row_flow();
+        Expandable::select_parent(self, &flow).is_some()
     }
 
     /// Whether an artist root is persistently expanded.

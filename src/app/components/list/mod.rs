@@ -3,6 +3,13 @@
 //! This module is intentionally independent of both concrete list shapes and
 //! of `tui-treelistview`. Adapters retain their own state and implement only
 //! the primitive hooks required by the composed traits.
+//!
+//! The seam ships its whole contract ahead of its second adopter, so an item
+//! without a production caller carries its own attribute rather than the module
+//! carrying a blanket `allow`: `#[cfg_attr(not(test), allow(dead_code))]` when
+//! only tests call it, `#[allow(dead_code)]` when it is contract-only. Accidental
+//! dead code in this module therefore still warns, and an item's attribute is
+//! dropped once a production adopter lands.
 
 mod cursor;
 mod expandable;
@@ -12,15 +19,10 @@ mod row_flow;
 mod viewport;
 
 pub use self::cursor::Cursored;
-#[allow(unused_imports)]
 pub use self::expandable::{AggregateMarkState, Expandable};
-#[allow(unused_imports)]
 pub use self::marks::{MarkSelection, MarkSelectionState};
-#[allow(unused_imports)]
 pub use self::paint::{PaintRetained, PaintRetainedState};
-#[allow(unused_imports)]
 pub use self::row_flow::{Row, RowFlow};
-#[allow(unused_imports)]
 pub use self::viewport::{PagingPolicy, Viewported};
 
 #[cfg(test)]

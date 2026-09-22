@@ -92,7 +92,7 @@ fn raising_the_window_keeps_the_selections_group_heading_visible() {
 }
 
 #[test]
-fn refresh_preserves_target_and_locally_clamps_missing_target() {
+fn refresh_preserves_target_and_resolves_a_missing_target_to_the_first_row() {
     let rows = vec![item("a"), item("b"), item("c"), item("d")];
     let mut list = WideMediaList::new();
     list.set_content(rows.clone());
@@ -102,7 +102,7 @@ fn refresh_preserves_target_and_locally_clamps_missing_target() {
     assert_eq!(list.selected_target(), Some(&"c".to_string()));
     assert_eq!(list.scroll(), 2);
     list.set_content(vec![item("a"), item("b")]);
-    assert_eq!(list.selected_target(), Some(&"b".to_string()));
+    assert_eq!(list.selected_target(), Some(&"a".to_string()));
     assert!(list.scroll() <= 1);
 }
 

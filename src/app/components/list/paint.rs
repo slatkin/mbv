@@ -38,6 +38,7 @@ impl<Target> PaintRetainedState<Target> {
 
     /// Start a paint.  Until [`Self::finish`] completes, the previous frame is
     /// not eligible for hit testing.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn begin(&mut self) {
         self.completed = None;
     }
@@ -134,6 +135,7 @@ pub trait PaintRetained<Target> {
     fn paint_retained_mut(&mut self) -> &mut PaintRetainedState<Target>;
 
     /// Begin a frame and invalidate the previous geometry.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn begin(&mut self) {
         self.paint_retained_mut().begin();
     }
@@ -159,21 +161,25 @@ pub trait PaintRetained<Target> {
     }
 
     /// Whether a completed frame is currently retained.
+    #[allow(dead_code)]
     fn has_paint(&self) -> bool {
         self.paint_retained().is_valid()
     }
 
     /// The latest completed frame's claim rectangle.
+    #[allow(dead_code)]
     fn claim_rect(&self) -> Option<Rect> {
         self.paint_retained().claim_rect()
     }
 
     /// The latest completed frame's row-flow rectangle.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn content_rect(&self) -> Option<Rect> {
         self.paint_retained().content_rect()
     }
 
     /// The latest completed frame's display-row offset at the viewport top.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn flow_offset(&self) -> Option<usize> {
         self.paint_retained().flow_offset()
     }
@@ -190,6 +196,7 @@ pub trait PaintRetained<Target> {
     }
 
     /// Resolve `point` to a stable target from the latest completed frame.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn resolve_point(&self, point: Position) -> Option<&Target> {
         self.paint_retained().resolve_point(point)
     }

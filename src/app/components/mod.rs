@@ -15,7 +15,6 @@ pub mod inline_search;
 pub mod library_panel;
 pub mod library_playback_panel;
 pub mod library_routes;
-#[allow(dead_code)]
 pub mod list;
 pub mod media_list;
 pub mod mouse;

@@ -58,6 +58,7 @@ impl<Target: PartialEq> MarkSelectionState<Target> {
     }
 
     /// Toggle membership while retaining addition order for newly added marks.
+    #[allow(dead_code)]
     pub fn toggle(&mut self, target: Target) -> bool {
         if self.remove(&target) {
             false
@@ -119,6 +120,7 @@ pub trait MarkSelection<Target: PartialEq> {
     }
 
     /// Toggle a stable target's membership.
+    #[allow(dead_code)]
     fn toggle_mark(&mut self, target: Target) -> bool {
         let added = self.mark_selection_mut().toggle(target);
         self.after_mark_mutation();
@@ -140,6 +142,7 @@ pub trait MarkSelection<Target: PartialEq> {
     }
 
     /// Stored membership in addition order.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn marked_targets(&self) -> &[Target] {
         self.mark_selection().targets()
     }

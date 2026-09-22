@@ -8,6 +8,7 @@
 use super::{Cursored, RowFlow, Viewported};
 
 /// Aggregate mark state for a parent with visible children.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AggregateMarkState {
     /// No visible child is marked.
@@ -47,9 +48,11 @@ pub trait Expandable<Target: Eq>: Cursored<Target> + Viewported<Target> {
     /// Shape-owned aggregate state for a parent.  This is deliberately not
     /// derived from mark membership: tree shapes may have hidden children and
     /// therefore different aggregation policy.
+    #[allow(dead_code)]
     fn aggregate_mark_state(&self, target: &Target) -> AggregateMarkState;
 
     /// Toggle expansion without taking ownership of a shape-specific handle.
+    #[allow(dead_code)]
     fn toggle_expanded(&mut self, target: &Target) {
         let expanded = !self.is_expanded(target);
         self.set_expanded(target, expanded);
@@ -65,6 +68,7 @@ pub trait Expandable<Target: Eq>: Cursored<Target> + Viewported<Target> {
     }
 
     /// Move the cursor to the first visible child of the selected target.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn select_first_child(&mut self, flow: &RowFlow<Target>) -> Option<usize> {
         let position = self
             .selected_target()
@@ -76,6 +80,7 @@ pub trait Expandable<Target: Eq>: Cursored<Target> + Viewported<Target> {
     }
 
     /// Move the cursor to the last visible child of the selected target.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn select_last_child(&mut self, flow: &RowFlow<Target>) -> Option<usize> {
         let position = self
             .selected_target()
@@ -90,6 +95,7 @@ pub trait Expandable<Target: Eq>: Cursored<Target> + Viewported<Target> {
     /// Validate selection after a projection change, then reuse the shared
     /// viewport clamp/keep-visible arithmetic.  A collapsed descendant is
     /// therefore repaired to the seam's deterministic first-row fallback.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn reconcile_after_change(&mut self, flow: &RowFlow<Target>, viewport_len: usize) -> usize {
         if self.index(flow).is_none() {
             self.first(flow);
