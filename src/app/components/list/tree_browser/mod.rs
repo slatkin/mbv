@@ -73,6 +73,10 @@ pub(crate) struct TreePaintRow {
     pub(crate) semantic_state: MediaSemanticState,
 }
 
+pub(crate) fn tree_row_is_full_width(selected: bool, marked: bool, aggregate_marked: bool) -> bool {
+    selected || marked || aggregate_marked
+}
+
 #[allow(dead_code)]
 #[derive(Clone)]
 pub(super) struct ArenaNode<Target> {

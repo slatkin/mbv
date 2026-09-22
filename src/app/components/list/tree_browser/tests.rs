@@ -480,3 +480,44 @@ fn shared_view_paints_depth_metadata_bars_and_scrollbar_without_state_glyphs() {
         .is_some());
     assert!(browser.resolve_current_point(Position::new(2, 2)).is_none());
 }
+
+#[test]
+fn ordinary_row_keeps_trailing_metadata_inside_inset_content_area() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            named_node(
+                Target::Root,
+                None,
+                "Ordinary",
+                "ordinary",
+                TreeMarkPolicy::Direct,
+            )
+            .with_trailing("2026"),
+            named_node(
+                Target::Other,
+                None,
+                "Other",
+                "other",
+                TreeMarkPolicy::Direct,
+            ),
+        ])
+        .unwrap();
+    browser.set_geometry(Rect::new(1, 0, 18, 2), Rect::new(5, 0, 14, 2));
+    browser.apply(super::TreeOperation::Select(Target::Other));
+
+    let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(1, 0, 18, 2)))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let ordinary_row = (5..19)
+        .map(|x| buffer[(x, 0)].symbol())
+        .collect::<Vec<_>>()
+        .concat();
+
+    assert!(
+        ordinary_row.contains("2026"),
+        "ordinary row: {ordinary_row:?}"
+    );
+}

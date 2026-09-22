@@ -13,7 +13,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::list::tree_browser::TreePaintRow;
+use crate::app::components::list::tree_browser::{tree_row_is_full_width, TreePaintRow};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
@@ -46,7 +46,7 @@ pub(in crate::app) fn render_tree_browser(
         // Selected and marked rows claim the complete panel width. Ordinary
         // rows remain inside the parent's text insets, so the panel—not a
         // destination—owns the side bands around a tree.
-        let full_width = row.selected || row.marked || row.aggregate_marked;
+        let full_width = tree_row_is_full_width(row.selected, row.marked, row.aggregate_marked);
         let row_area = if full_width {
             Rect::new(claim_rect.x, y, claim_rect.width, 1)
         } else {
@@ -89,7 +89,9 @@ pub(in crate::app) fn render_tree_browser(
             ));
         }
         let painted = spans.iter().map(|span| span.content.width()).sum::<usize>();
-        let target_width = left_inset + content_width.saturating_sub(gutter);
+        let target_width = content_width
+            .saturating_sub(gutter)
+            .saturating_add(if full_width { left_inset } else { 0 });
         if painted < target_width {
             spans.push(Span::raw(" ".repeat(target_width - painted)));
         }

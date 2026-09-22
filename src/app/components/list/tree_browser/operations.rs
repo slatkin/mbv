@@ -11,8 +11,8 @@ use crate::app::components::list::{
 };
 
 use super::{
-    TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary, TreePaintRow,
-    TreeSelectionChange, TreeTransition,
+    tree_row_is_full_width, TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy,
+    TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition,
 };
 
 /// The shared list traits are implemented only for this private adapter.
@@ -551,13 +551,17 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 (y < content_rect.bottom()).then(|| {
                     self.arena.get(&id).map(|entry| {
                         let target = entry.node.target.clone();
-                        let full_width = self.selected.as_ref() == Some(&target)
-                            || (entry.node.mark_policy == TreeMarkPolicy::Aggregate
-                                && matches!(
-                                    self.aggregate_mark_state_for(&target),
-                                    AggregateMarkState::Marked | AggregateMarkState::Partial
-                                ))
-                            || self.marks.contains(&target);
+                        let marked = self.marks.contains(&target);
+                        let aggregate_marked = entry.node.mark_policy == TreeMarkPolicy::Aggregate
+                            && matches!(
+                                self.aggregate_mark_state_for(&target),
+                                AggregateMarkState::Marked | AggregateMarkState::Partial
+                            );
+                        let full_width = tree_row_is_full_width(
+                            self.selected.as_ref() == Some(&target),
+                            marked,
+                            aggregate_marked,
+                        );
                         let rect = if full_width {
                             Rect::new(claim_rect.x, y, claim_rect.width, 1)
                         } else {
