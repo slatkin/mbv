@@ -24,7 +24,7 @@ A stable target's identity SHALL survive reorder and ordinary refresh. A target 
 
 ### Requirement: Shared list mechanics have exactly one implementation site
 
-Cursor movement, viewport resolution and clamping, retained paint geometry, point resolution, and ordered multi-selection membership SHALL each have one shared algorithm or state-carrier implementation over the row flow and SHALL NOT be reimplemented per list shape. A list shape SHALL supply only primitive access to its existing state owner, how its rows and completed-paint geometry are produced, and any behavior its shape defines differently where the seam names an explicit policy. A shape adapter SHALL NOT reproduce the shared arithmetic.
+Cursor movement, viewport resolution and clamping, anchor restore and re-anchoring, retained paint geometry, point resolution, and ordered multi-selection membership SHALL each have one shared algorithm or state-carrier implementation over the row flow and SHALL NOT be reimplemented per list shape. A list shape SHALL supply only primitive access to its existing state owner, how its rows and completed-paint geometry are produced, and any behavior its shape defines differently where the seam names an explicit policy. A shape adapter SHALL NOT reproduce the shared arithmetic.
 
 Adding or correcting one of these shared mechanics without changing its primitive adapter contract SHALL be possible by changing the shared implementation alone, without editing either list shape's own code.
 
@@ -43,7 +43,7 @@ Adding or correcting one of these shared mechanics without changing its primitiv
 
 A list's public surface SHALL address rows by stable opaque target. It SHALL NOT expose an internal row index, node handle, arena identifier, or any other position- or storage-derived value by which a caller could address a row.
 
-A request a list emits because of a row SHALL carry that stable target. Internal identifiers a list uses to store or project its rows SHALL remain private to that list's implementation.
+A request a list emits because of a row SHALL carry that stable target. Internal identifiers a list uses to store or project its rows SHALL remain private to that list's implementation. A viewport anchor (see *The viewport keeps the selection visible and clamps at bounds*) pairs its row offset only with a stable target and addresses only the selected row's viewport placement; it is not a row address and this requirement does not forbid it.
 
 #### Scenario: A caller cannot address a row by internal identity
 - **WHEN** a destination selects a row, resolves a point to a row, or requests an effect for a row
@@ -80,7 +80,7 @@ Movement SHALL be defined over the rows currently present in the flow, so that r
 
 A list SHALL keep its selection visible in its viewport. When the selection survives a content or geometry change, the list SHALL preserve its prior viewport offset where bounds permit, and otherwise apply only the minimum scroll needed to bring it into view, clamping at flow bounds.
 
-A geometry change SHALL clamp the existing viewport in place and SHALL NOT transfer viewport or cursor state into a second control. Paging distance SHALL be an explicitly named policy a list shape selects, because shapes differ in what a page means over their flow.
+A geometry change SHALL clamp the existing viewport in place and SHALL NOT transfer viewport or cursor state into a second control. A responsive handoff SHALL pass the selection as an explicit anchor — the selected stable target plus its zero-based viewport row offset — and the receiving list SHALL restore that target and place it at that offset where the receiving geometry allows, clamping otherwise; the anchor carries no cursor or scroll mirror. Only a discrete navigation or restoration boundary MAY explicitly re-anchor a list from a shell-owned stable target and row offset. Paging distance SHALL be an explicitly named policy a list shape selects — `FixedSelectableStride` (a five-row stride over selectable rows, skipping structural rows) or `FixedVisibleStride` (a five-row stride over the shape's projected rows) — because shapes differ in what a page means over their flow.
 
 #### Scenario: A surviving selection keeps its viewport row
 - **WHEN** content is replaced and the selected target is still present
@@ -92,6 +92,11 @@ A geometry change SHALL clamp the existing viewport in place and SHALL NOT trans
 - **THEN** the same list retains its cursor, viewport, and selection
 - **AND** the viewport is clamped to the new bounds without copying state elsewhere
 
+#### Scenario: A responsive handoff restores an explicit anchor
+- **WHEN** one logical list passes its selection across a geometry change or a restoration boundary
+- **THEN** the receiving list restores the anchored stable target and places it at the anchored viewport row offset where bounds permit, clamping otherwise
+- **AND** no cursor, scroll, or viewport state is copied into a second control
+
 #### Scenario: Paging is a named shape policy
 - **WHEN** two list shapes page their viewports
 - **THEN** each applies its own explicitly named paging policy
@@ -101,7 +106,7 @@ A geometry change SHALL clamp the existing viewport in place and SHALL NOT trans
 
 A list SHALL retain the geometry of its latest completed paint and SHALL resolve a point only from that retained geometry. Changing content or geometry, or beginning a paint that does not complete, SHALL invalidate the retained geometry; while invalid the list SHALL claim no point and SHALL expose no selected-row geometry.
 
-A point-resolution call SHALL accept only the point and SHALL return the stable target of the row it resolves to, if any. A list SHALL NOT expose a mutable row map, row rectangles, or caller-supplied resolution geometry.
+A point-resolution call SHALL accept only the point and SHALL return the stable target of the row it resolves to, if any. A list SHALL NOT expose a mutable row map, a per-row rectangle set, or caller-supplied resolution geometry; the one rectangle it MAY retain and expose is the read-only rect of its selected row.
 
 #### Scenario: Stale geometry claims no point
 - **WHEN** a list's content or geometry changes and it has not completed a subsequent paint
@@ -118,7 +123,7 @@ A point-resolution call SHALL accept only the point and SHALL return the stable 
 
 A list that supports multi-selection SHALL retain its selected targets in the order they were added. Removing a target SHALL preserve the relative order of the rest. Multi-selection membership SHALL be expressed in stable targets. Read-only presentation state that depends on mark history MAY use this addition order.
 
-An action or context intent SHALL emit selected targets in the current visible row-flow order, preserving the canonical list-order contract independently of addition order. Aggregating a multi-selection across nested rows SHALL belong to the list shape that has nesting, and SHALL NOT be required of a shape without it.
+An action or context intent SHALL emit selected targets in the current visible row-flow order, preserving the canonical list-order contract independently of addition order. Aggregating a multi-selection across nested rows SHALL belong to the list shape that has nesting, and SHALL NOT be required of a shape without it. This requirement states once for every list shape the ordering that `media-list-multi-select` (*Play, Shuffle and Add to Queue use list order*) and `canonical-media-lists` (*Selection intents preserve list order and origin*) state per surface; those per-surface requirements remain and SHALL be read as consistent with this one.
 
 #### Scenario: Stored addition order survives addition and removal
 - **WHEN** rows are added to and removed from a multi-selection

@@ -10,8 +10,7 @@ duplicate seven concerns outright: stable-target selection, viewport and
 keep-visible, retained paint geometry, hit resolution, ordered multi-selection,
 zebra/selected-bar/marquee presentation, and identity-preserving reconciliation.
 The duplication is already drifting — paint invalidation alone is spelled two
-ways (`WideMediaList::invalidate_paint` versus the tree's `paint_complete` flag
-cleared at three sites).
+ways (`WideMediaList::invalidate_paint` versus the tree's `paint_complete` flag set in the painter and cleared on selection change).
 
 Migrating TV Shows to a tree is the trigger, but writing a second hand-rolled
 tree adapter beside music's would make three implementations of the same
@@ -21,8 +20,8 @@ destination — an adoption rather than another copy.
 ## What Changes
 
 - Introduce a shared list seam: composable traits over a single row-flow
-  abstraction, with default implementations carrying the cursor, viewport, and
-  retained-geometry arithmetic that both sides currently hand-roll.
+  abstraction, with default implementations carrying the cursor, viewport and
+  anchor, and retained-geometry arithmetic that both sides currently hand-roll.
 - Express the existing flat canonical media list as the seam's flat
   implementation, with no externally observable behavior change.
 - Express the Grouped Music tree browser as the seam's tree implementation,
@@ -33,10 +32,11 @@ destination — an adoption rather than another copy.
   implementation details. No user-visible behavior changes; the Grouped Music
   tree test suites that assert against arena indices are rewritten against the
   target surface.
-- Delete the now-duplicated cursor, viewport, and retained-geometry mechanics
-  from both implementations. Production line-count change is recorded as a
-  diagnostic: a non-negative result triggers review for a parallel abstraction,
-  but no numeric reduction threshold gates an otherwise-correct implementation.
+- Delete the now-duplicated cursor, viewport, anchor, and retained-geometry
+  mechanics and the duplicated ordered-mark storage from both implementations.
+  Production line-count change is recorded as a diagnostic: a non-negative
+  result triggers review for a parallel abstraction, but no numeric reduction
+  threshold gates an otherwise-correct implementation.
 - Filtering is explicitly out of scope. Flat destinations keep their embedded
   `InlineSearch` control and the tree keeps its internal filter session,
   unchanged and un-accommodated.
@@ -78,20 +78,23 @@ capability neither existing implementation has today.
 Affected code:
 
 - `src/app/components/media_list/` — `mod.rs`, `wide.rs`, `carrier.rs`,
-  `anchor.rs`, `selection.rs`. `mod.rs` currently exceeds the 800-line cap and
+  `anchor.rs`, `selection.rs`, `grouping.rs`. `mod.rs` currently exceeds the 800-line cap and
   must be split mechanically before behavior changes.
 - `src/app/components/music_tree.rs`, `music_tree_model.rs`, `music_tree_view.rs`,
   `music_tree_selection.rs`, `music_tree_label.rs` — the arena id goes private
   and the shared arithmetic is deleted in favour of the seam. These files are
   already below the cap and are split only if implementation growth would push
   one over it.
-- `src/app/components/music_content*.rs` — call sites that currently pass arena
-  ids move to stable targets.
+- `src/app/components/music_content*.rs` and
+  `src/app/components/music_interaction.rs` — call sites that currently pass
+  arena ids move to stable targets.
 - New module for the seam itself.
 
 Tests: `media_list/tests.rs`, `music_tree_tests.rs`, `music_tree_browser_tests.rs`,
-`music_content_tree_tests.rs`, `render/tests_music_characterization.rs`,
-`render/tests_music_groups.rs`, and the music tick-integration suites. Tree tests
+`music_content_tree_tests.rs`, `music_content_artist_actions_tests.rs`,
+`music_content_artist_workspace_tests.rs`,
+`render/tests_music_characterization.rs`, `render/tests_music_groups.rs`, and the
+music tick-integration suites. Tree tests
 bound to arena indices are rewritten against the target surface rather than
 translated case by case.
 

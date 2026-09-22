@@ -9,9 +9,12 @@ See `proposal.md` — Why. The constraints that shape the approach:
   verification is through the existing unit/buffer/tick-integration suites; the
   repo forbids live or smoke tests.
 - **The tree's machinery is not ours.** `tui-treelistview` 0.2.2 is pinned, and
-  `music_tree.rs` is explicitly documented as the one boundary to it. The seam
-  must sit *above* that boundary — if seam types leak crate types, the flat list
-  ends up depending on a tree crate.
+  the `music_tree*` modules are the one production boundary family to it
+  (`music_tree_view.rs` styles with crate types inside that family; outside it,
+  only test helpers and render characterization tests import crate types, and
+  those move to seam vocabulary in tasks 3.6/3.8). The seam must sit *above*
+  that boundary — if seam types leak crate types, the flat list ends up
+  depending on a tree crate.
 - **The crate has no non-selectable node.** `TreeModel` is `roots()` +
   `children()` + `revision()`; every projected node is selectable and
   hit-testable. The seam supports structural rows because the flat list already
@@ -23,7 +26,7 @@ See `proposal.md` — Why. The constraints that shape the approach:
   both sides — the seam is unifying code we control, not overriding a dependency.
 - **File sizes.** `media_list/mod.rs` is currently the only governed production
   file over the 800-line cap. It is split mechanically before behavior changes;
-  tree files are split only if this implementation would push one over the cap.
+  tree files are split only if this implementation would push one over the cap. (The main `canonical-media-lists` spec frames the 800-line gate as a pre-push check that does not gate acceptance of individual changes; this change splits up front anyway so the substantive diffs read cleanly.)
 
 ## Goals / Non-Goals
 
@@ -59,9 +62,12 @@ one carrying a stable target. Over it sit `Cursored`, `Viewported`,
 
 The traits separate shared algorithms from shape storage. `Cursored` requires
 primitive selected-target read/write operations; `Viewported` requires offset
-read/write operations; their default methods own movement, clamping, and
-keep-visible arithmetic over `RowFlow`. The flat adapter mutates its existing
-fields, while the tree adapter delegates those primitives to
+read/write operations plus the explicit viewport anchor (`ViewportAnchor<Target>`:
+the selected stable target with its zero-based viewport row offset, migrated
+from `media_list/anchor.rs` and re-exported there so existing callers keep their
+paths), and their default methods own movement, clamping, keep-visible, and
+anchor restore-with-clamp arithmetic over `RowFlow`. The flat adapter mutates its
+existing fields, while the tree adapter delegates those primitives to
 `TreeListViewState`. `PaintRetained` and `MarkSelection` use shared state carriers
 held by each owner, replacing `WidePaintResult`/`paint_complete` and each shape's
 ordered-membership vector. These small adapters are required per shape; the
@@ -115,22 +121,36 @@ and behavior decision, not hidden scope in this extraction.
 
 ### D4: Paging is an explicit policy hook, not a shared default
 
-Flat lists keep their existing fixed selectable-row page distance; the tree
-keeps its existing visible-viewport paging. Both are correct for their current
-shape and must remain behavior-neutral in this extraction.
+Both shapes page by the same fixed five-row stride today —
+`delta.saturating_mul(5)` over `MediaList`'s selectable index
+(`media_list/mod.rs`, `MediaListOperation::Page`) and over the tree's projected
+rows (`music_tree_view.rs::page_selection`, whose doc calls it "the shared media
+list's five-row page stride"). They differ only in what the stride counts:
+`FixedSelectableStride` (flat) counts selectable rows and skips structural rows;
+`FixedVisibleStride` (tree) counts projected rows, all of which are selectable
+while the crate has no structural nodes. Both policies keep today's exact
+behavior in this extraction.
 
-Rationale: a shared default would silently regress one of them. Naming it as a
-policy keeps the divergence deliberate and visible. This is the only behavioral
-hook in the seam — everything else is genuinely common.
+Rationale: the stride unit is shape-determined — a structural-row run makes the
+two diverge — so naming it as a policy keeps the difference deliberate and
+visible without pretending a page is viewport-extent-sized anywhere (neither
+shape pages by viewport height). Under today's tree content the two policies
+are arithmetically identical. This is the only behavioral hook in the seam —
+everything else is genuinely common.
 
 ### D5: Mark aggregation belongs to `Expandable`, not `MarkSelection`
 
 `MarkSelection` owns ordered membership, which both shapes have.
 Parent-rolls-up-children `Partial` state only exists where there are children.
+The aggregate vocabulary is seam-owned — `AggregateMark::{Unmarked, Partial,
+Marked}`, matching `media-list-multi-select`'s wording — and `Expandable`
+computes it from its children's membership; the crate's `TreeMarkState` stays
+private to the tree adapter instead of leaking through the seam.
 
 Rationale: keeps `MarkSelection` implementable by a flat list with no stub, and
 keeps music's deliberate divergence from the crate's aggregation (for hidden
-filtered children) local to the shape that has the concept.
+filtered children) local to the shape that has the concept — while giving tests
+and painters one aggregate type that carries no `tui-treelistview` name.
 
 ### D6: Paint invalidation uses one shared retained-state implementation
 
