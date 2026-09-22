@@ -12,12 +12,12 @@ fn multi_select_bar(model: &MusicTreeModel, id: usize, mark: TreeMarkState) -> b
 
 /// Derives marks from the owner selection rather than the crate's full-model
 /// aggregation. This keeps hidden album marks out of a filtered root's
-/// Partial/Marked state while preserving them in `selection_order`.
+/// Partial/Marked state while preserving them in the mark carrier.
 fn computed_mark_state(
     model: &MusicTreeModel,
     query: &TreeQuery<MusicTreeFilter>,
     state: &TreeListViewState<usize>,
-    selection_order: &[String],
+    marks: &[MusicTreeTarget],
     id: usize,
 ) -> TreeMarkState {
     let visible = |candidate| {
@@ -30,8 +30,8 @@ fn computed_mark_state(
     };
     let marked = |candidate| {
         model
-            .target_of(candidate)
-            .is_some_and(|target| selection_order.iter().any(|item| item == target))
+            .target_ref_of_node(candidate)
+            .is_some_and(|target| marks.iter().any(|item| item == target))
     };
     if model.target_of(id).is_some() {
         return if visible(id) && marked(id) {
@@ -59,84 +59,124 @@ fn computed_mark_state(
     }
 }
 
+/// The classified region of a latest-render hit for test assertions: a row
+/// carries its stable target, and the non-row regions stay distinguishable
+/// without leaking the crate's arena ids.
+#[cfg(test)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) enum MusicTreeHit {
+    Row(MusicTreeTarget),
+    Header,
+    VerticalScrollbar,
+    HorizontalScrollbar,
+}
+
 impl MusicTreeBrowser {
-    /// Latest-completed-render hit resolution: the node id and its projection
-    /// row for the row under `at`, if any.
-    pub(in crate::app) fn hit_node(&self, at: Position) -> Option<(usize, usize)> {
-        match self.hit_test(at)? {
-            TreeHit::Row { id, index, .. } => Some((id, index)),
+    /// under `at`, if any. A hit row is always interned, so a row the arena no
+    /// longer holds is an explicit absent result.
+    pub(in crate::app) fn hit_node(&self, at: Position) -> Option<MusicTreeTarget> {
+        match self.hit_test_row(at)? {
+            TreeHit::Row { id, .. } => self.model.target_of_node(id),
             TreeHit::Header { .. } | TreeHit::VerticalScrollbar | TreeHit::HorizontalScrollbar => {
                 None
             }
         }
     }
 
-    /// Moves the selection `delta` visible rows (the tree's own visible-node
-    /// movement), clamped at the projection bounds by the crate.
-    pub(in crate::app) fn move_selection(&mut self, delta: i64) {
-        for _ in 0..delta.unsigned_abs() {
-            let _ = if delta < 0 {
-                self.state.select_prev()
-            } else {
-                self.state.select_next()
-            };
+    /// The classified hit region for render-test assertions: a row carries its
+    /// stable target, and the non-row regions stay distinguishable without
+    /// leaking the crate's arena ids.
+    #[cfg(test)]
+    pub(in crate::app) fn hit_region(&self, at: Position) -> Option<MusicTreeHit> {
+        match self.hit_test_row(at)? {
+            TreeHit::Row { id, .. } => self.model.target_of_node(id).map(MusicTreeHit::Row),
+            TreeHit::Header { .. } => Some(MusicTreeHit::Header),
+            TreeHit::VerticalScrollbar => Some(MusicTreeHit::VerticalScrollbar),
+            TreeHit::HorizontalScrollbar => Some(MusicTreeHit::HorizontalScrollbar),
         }
     }
 
-    /// Moves the selection one viewport page (the shared media list's five-row
-    /// page stride), keeping the tree's own visible-node movement.
+    /// Latest-completed-render hit resolution into the crate's arena ids, kept
+    /// private because the arena index never crosses the seam.
+    fn hit_test_row(&self, at: Position) -> Option<TreeHit<usize>> {
+        self.paint.is_valid().then(|| self.state.hit_test(at)).flatten()
+    }
+
+    /// Moves the selection `delta` visible rows (the tree's own visible-node
+    /// movement), clamped at the projection bounds by the shared default.
+    pub(in crate::app) fn move_selection(&mut self, delta: i64) {
+        let flow = self.row_flow();
+        Cursored::move_by(self, &flow, delta as isize);
+    }
+
+    /// The tree's established viewport height, from the same geometry the
+    /// painter resolves: the parent-configured content rect when the panel has
+    /// declared one, otherwise the content rect of the last completed frame.
+    /// `None` until one of those exists.
+    fn viewport_len(&self) -> Option<usize> {
+        self.configured_geometry
+            .map(|(_, content_rect)| content_rect.height as usize)
+            .or_else(|| self.last_area.map(|area| area.height as usize))
+    }
+
+    /// Moves the selection one visible viewport under the shared named
+    /// `PagingPolicy::VisibleViewport`, whose page distance is the tree's
+    /// established viewport height and which keeps the selection visible. No
+    /// geometry means no viewport to page, so this is a deterministic no-op.
     pub(in crate::app) fn page_selection(&mut self, delta: i64) {
-        self.move_selection(delta.saturating_mul(5));
+        let direction = delta.signum() as isize;
+        if direction == 0 {
+            return;
+        }
+        let Some(viewport_len) = self.viewport_len() else {
+            return;
+        };
+        let flow = self.row_flow();
+        Viewported::page(
+            self,
+            &flow,
+            viewport_len,
+            direction,
+            PagingPolicy::VisibleViewport,
+        );
     }
 
     pub(in crate::app) fn select_first_visible(&mut self) {
-        let _ = self.state.select_first();
+        let flow = self.row_flow();
+        Cursored::first(self, &flow);
     }
 
     pub(in crate::app) fn select_last_visible(&mut self) {
-        let _ = self.state.select_last();
+        let flow = self.row_flow();
+        Cursored::last(self, &flow);
     }
 
+    #[cfg(test)]
     fn row_rect_for_index(&self, index: usize) -> Option<Rect> {
-        if !self.paint_complete {
+        if !self.paint.is_valid() {
             return None;
         }
-        let area = self.last_area?;
-        let row = index.checked_sub(self.state.offset())?;
-        if row as u16 >= area.height {
-            return None;
-        }
-        Some(Rect {
-            x: area.x,
-            y: area.y.saturating_add(row as u16),
-            width: area.width,
-            height: 1,
-        })
+        raw_row_rect(self.last_area?, self.state.offset(), index)
     }
 
     /// The selected row's one-line rect from the latest completed view, when
     /// the node is visible (the panel's retained selected-row geometry).
     pub(in crate::app) fn selected_row_rect(&self) -> Option<Rect> {
-        self.state
-            .selected_index()
-            .and_then(|index| self.row_rect_for_index(index))
+        PaintRetained::selected_row_rect(self)
     }
 
-    /// A visible node's one-line rect from the latest completed view.
+    /// A visible node's one-line rect from the latest completed view. A target
+    /// absent from the current projection is an explicit absent result.
     #[cfg(test)]
-    pub(in crate::app) fn row_rect_for(&self, id: usize) -> Option<Rect> {
-        let index = self
-            .state
-            .projection()
-            .nodes()
-            .iter()
-            .position(|node| node.id() == id)?;
+    pub(in crate::app) fn row_rect_for(&self, target: &MusicTreeTarget) -> Option<Rect> {
+        let id = self.model.id_of(target)?;
+        let index = self.state.visible_index_of(id)?;
         self.row_rect_for_index(index)
     }
 
     /// Whether the latest completed view's retained geometry claims `at`.
     pub(in crate::app) fn claims_point(&self, at: Position) -> bool {
-        self.hit_test(at).is_some()
+        PaintRetained::claims_point(self, at)
     }
 
     /// Arms the crate's `KeepInView` rule for the current selection without
@@ -148,20 +188,14 @@ impl MusicTreeBrowser {
         rearm_selection_visibility_for(&mut self.state);
     }
 
-    pub(in crate::app) fn hit_test(&self, position: Position) -> Option<TreeHit<usize>> {
-        self.paint_complete
-            .then(|| self.state.hit_test(position))
-            .flatten()
-    }
-
     #[cfg(test)]
-    pub(in crate::app) fn projection_len(&self) -> usize {
-        self.state.visible_len()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn projected_nodes(&self) -> &[ProjectedNode<usize>] {
-        self.state.projection().nodes()
+    pub(in crate::app) fn projected_node_targets(&self) -> Vec<MusicTreeTarget> {
+        self.state
+            .projection()
+            .nodes()
+            .iter()
+            .filter_map(|node| self.model.target_of_node(node.id()))
+            .collect()
     }
 
     /// Injects the marquee clock directly (no sleeps): `key` must be the
@@ -191,7 +225,7 @@ impl MusicTreeBrowser {
             marquee_started,
             configured_geometry,
             last_area,
-            selection_order,
+            marks,
             ..
         } = self;
         let (claim_rect, content_rect) = configured_geometry.unwrap_or((area, area));
@@ -218,7 +252,7 @@ impl MusicTreeBrowser {
             // Re-arm the selected row's visibility for the new height without
             // touching expansion. The crate only arms its `KeepInView` rule
             // when the selection actually changes, so clear and restore the
-            // current projection row; `select_id`/`select_by_id` must not be
+            // current projection row; `select_music_target`/`select_by_id` must not be
             // used here because their `expand_to` would promote filter-forced
             // expansion into persistent expansion on every resize (D5).
             rearm_selection_visibility_for(state);
@@ -263,7 +297,7 @@ impl MusicTreeBrowser {
                 model,
                 node.id(),
                 node.level(),
-                computed_mark_state(model, query, state, selection_order, node.id()),
+                computed_mark_state(model, query, state, marks.targets(), node.id()),
             );
             let parts = vec![(title.to_string(), role)];
             marquee_spans(
@@ -282,11 +316,12 @@ impl MusicTreeBrowser {
             .projection()
             .nodes()
             .iter()
-            .map(|node| {
-                (
-                    node.id(),
-                    computed_mark_state(model, query, state, selection_order, node.id()),
-                )
+            .filter_map(|node| {
+                let target = model.target_of_node(node.id())?;
+                Some((
+                    target,
+                    computed_mark_state(model, query, state, marks.targets(), node.id()),
+                ))
             })
             .collect();
         let label = MusicTreeLabelRenderer {
@@ -360,7 +395,7 @@ impl MusicTreeBrowser {
                     || multi_select_bar(
                         model,
                         node.id(),
-                        computed_mark_state(model, query, state, selection_order, node.id()),
+                        computed_mark_state(model, query, state, marks.targets(), node.id()),
                     );
                 if full_bleed {
                     continue;
@@ -415,7 +450,41 @@ impl MusicTreeBrowser {
                 palette::SCROLLBAR,
             );
         }
-        self.paint_complete = true;
+        let retained_selected = state
+            .selected_index()
+            .and_then(|index| raw_row_rect(content_rect, state.offset(), index));
+        let retained_rows: Vec<(Rect, MusicTreeTarget)> = state
+            .projection()
+            .nodes()
+            .iter()
+            .enumerate()
+            .skip(visible_start)
+            .take(visible_end.saturating_sub(visible_start))
+            .filter_map(|(projection_row, node)| {
+                let target = model.target_ref_of_node(node.id())?.clone();
+                let y = content_rect
+                    .y
+                    .saturating_add((projection_row - visible_start) as u16);
+                Some((
+                    Rect {
+                        x: content_rect.x,
+                        y,
+                        width: content_rect.width,
+                        height: 1,
+                    },
+                    target,
+                ))
+            })
+            .collect();
+        let flow_offset = state.offset();
+        PaintRetained::finish(
+            self,
+            content_rect,
+            content_rect,
+            flow_offset,
+            retained_rows,
+            retained_selected,
+        );
     }
 }
 
@@ -427,6 +496,22 @@ fn rearm_selection_visibility_for(state: &mut TreeListViewState<usize>) {
         state.select_index(None);
         state.select_index(Some(index));
     }
+}
+
+/// The one-line rect a visible projection row occupies in the painted content
+/// area, or `None` when the row is outside the viewport. One formula for the
+/// shape's retained selected-row geometry and its `row_rect_for` read.
+fn raw_row_rect(area: Rect, offset: usize, index: usize) -> Option<Rect> {
+    let row = index.checked_sub(offset)?;
+    if row as u16 >= area.height {
+        return None;
+    }
+    Some(Rect {
+        x: area.x,
+        y: area.y.saturating_add(row as u16),
+        width: area.width,
+        height: 1,
+    })
 }
 
 /// The tree's glyph set. Grouped Music deliberately has no symbols: levels

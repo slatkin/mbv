@@ -1,22 +1,53 @@
 use super::{
     MediaList, MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition,
-    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
+    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
 };
+use crate::app::components::list::{
+    Cursored, MarkSelection, MarkSelectionState, PaintRetained, PaintRetainedState, Viewported,
+};
+use crate::app::palette;
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Color;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-/// The read-only facts retained by one completed `WideMediaList::view`.
-struct WidePaintResult<Target> {
-    claim_rect: Rect,
-    content_rect: Rect,
-    row_geometry: RowGeometry<Target>,
-    #[cfg_attr(not(test), allow(dead_code))]
-    selected_target: Option<Target>,
-    selected_row_rect: Option<Rect>,
+/// The Queue's row palette, shared by the Queue and Grouped Music tree so
+/// their base and zebra fills cannot drift apart. The base fill is the
+/// recessed QueuePanel surface; the stripe is the QueueColumn surface.
+pub(crate) fn queue_row_background(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueuePanel, focused).fill
+}
+
+pub(crate) fn queue_row_zebra(focused: bool) -> Color {
+    palette::surface_colors(palette::Surface::QueueColumn, focused).fill
+}
+
+pub(crate) fn queue_row_zebra_stripe() -> ZebraStripe {
+    ZebraStripe {
+        focused: queue_row_zebra(true),
+        unfocused: queue_row_zebra(false),
+    }
+}
+
+/// The text a list's marquee clock keys on for one row: the full title text the
+/// painter marquees — a split row's context text and item title, one space
+/// apart — or `None` for a row with no title. One formula for both sides: the
+/// presenter keys its clock with this text and hands the painter the same
+/// string, so the two cannot drift. A drift makes the clock restart every frame
+/// and the marquee hold at the start forever.
+pub(crate) fn row_marquee_key<Target>(row: &MediaListRow<Target>) -> Option<String> {
+    match row {
+        MediaListRow::Item {
+            primary, secondary, ..
+        } => Some(match secondary.as_deref().filter(|sec| !sec.is_empty()) {
+            Some(sec) => format!("{primary} {sec}"),
+            None => primary.clone(),
+        }),
+        MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
+    }
 }
 
 /// Embedded plain fixed-height, one-column media list: owns the display-row
@@ -24,12 +55,13 @@ struct WidePaintResult<Target> {
 /// offset through its shared [`MediaList`] owner. It has no mouse hit-resolution API
 /// and accepts no column-count or inline-detail options (design.md D1).
 /// Painting is performed by its `Component::view` through the render adapter;
-/// current-frame point resolution is retained alongside the painted flow.
+/// current-frame point resolution and geometry are retained by the shared
+/// paint carrier.
 pub struct WideMediaList<Target> {
     core: MediaList<Target>,
     policy: WideMediaListPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
-    paint: Option<WidePaintResult<Target>>,
+    paint: PaintRetainedState<Target>,
 }
 
 impl<Target> Default for WideMediaList<Target> {
@@ -50,12 +82,12 @@ impl<Target> WideMediaList<Target> {
             core,
             policy: WideMediaListPaintPolicy::new(false),
             configured_geometry: None,
-            paint: None,
+            paint: PaintRetainedState::new(),
         }
     }
 
     pub fn invalidate_paint(&mut self) {
-        self.paint = None;
+        self.paint.invalidate();
     }
 
     /// Configure the semantic policy used by the next `view`.
@@ -89,66 +121,46 @@ impl<Target> WideMediaList<Target> {
     ) where
         Target: Clone,
     {
-        self.paint = Some(WidePaintResult {
+        let rows = row_geometry.target_rects(claim_rect, content_rect);
+        PaintRetained::finish(
+            self,
             claim_rect,
             content_rect,
-            row_geometry,
-            selected_target: self.core.selected_target().cloned(),
+            row_geometry.offset(),
+            rows,
             selected_row_rect,
-        });
+        );
     }
 
     /// The current frame's claimed list rectangle, if `view` completed.
+    #[allow(dead_code)]
     pub fn current_claim_rect(&self) -> Option<Rect> {
-        self.paint.as_ref().map(|paint| paint.claim_rect)
+        self.paint.claim_rect()
     }
 
     /// The current frame's content rectangle, if `view` completed.
     pub fn current_content_rect(&self) -> Option<Rect> {
-        self.paint.as_ref().map(|paint| paint.content_rect)
-    }
-
-    /// The current frame's selected target, if `view` completed.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_selected_target(&self) -> Option<&Target> {
-        self.paint
-            .as_ref()
-            .and_then(|paint| paint.selected_target.as_ref())
+        self.paint.content_rect()
     }
 
     /// The current frame's selected-row rectangle, if it is visible.
     pub fn current_selected_row_rect(&self) -> Option<Rect> {
-        self.paint
-            .as_ref()
-            .and_then(|paint| paint.selected_row_rect)
+        self.paint.selected_row_rect()
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_offset(&self) -> Option<usize> {
-        self.paint.as_ref().map(|paint| paint.row_geometry.offset())
+        self.paint.flow_offset()
     }
 
     /// Whether the current frame's painted list claims `point`.
     pub fn claims_current_point(&self, point: Position) -> bool {
-        self.current_claim_rect()
-            .is_some_and(|rect| rect.contains(point))
+        self.paint.claims_point(point)
     }
 
     /// Resolve `point` from the current frame's retained painted geometry.
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
-        let paint = self.paint.as_ref()?;
-        if !paint.claim_rect.contains(point)
-            || point.y < paint.content_rect.y
-            || point.y >= paint.content_rect.bottom()
-        {
-            return None;
-        }
-        let row = (point.y - paint.content_rect.y) as usize + paint.row_geometry.offset();
-        paint
-            .row_geometry
-            .source_row(row)
-            .and_then(|source_row| self.core.rows().get(source_row))
-            .and_then(MediaListRow::selectable_target)
+        self.paint.resolve_point(point)
     }
 
     pub fn rows(&self) -> &[MediaListRow<Target>] {
@@ -212,7 +224,34 @@ impl<Target> WideMediaList<Target> {
     pub(crate) fn set_marquee_started_at(&mut self, text: &str, at: std::time::Instant) {
         self.core.set_marquee_started_at(text, at);
     }
+}
 
+impl<Target: Clone + Eq> WideMediaList<Target> {
+    /// The clamped viewport for a painted `viewport_height`, keeping the
+    /// selected row on screen.
+    pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
+        self.core.resolve_viewport(viewport_height)
+    }
+
+    /// Export the fixed one-column flow used by the painter.
+    pub fn row_geometry(&self, viewport_height: usize) -> RowGeometry<Target> {
+        let viewport = self.core.resolve_viewport(viewport_height);
+        RowGeometry::source(
+            self.core.rows(),
+            viewport.offset,
+            self.core.selected_display_row(),
+        )
+    }
+
+    /// Zero-based screen-row offset from the viewport top to the selected
+    /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
+        self.core.selected_row_offset(viewport_height)
+    }
+}
+
+impl<Target: Clone + Eq> WideMediaList<Target> {
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
     pub fn move_selection(&mut self, delta: i64) {
         self.core.move_selection(delta);
@@ -230,34 +269,9 @@ impl<Target> WideMediaList<Target> {
     pub fn select_index(&mut self, index: usize) {
         self.core.select_index(index);
     }
-
-    /// The clamped viewport for a painted `viewport_height`, keeping the
-    /// selected row on screen.
-    pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
-        self.core.resolve_viewport(viewport_height)
-    }
-
-    /// Zero-based screen-row offset from the viewport top to the selected
-    /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
-        self.core.selected_row_offset(viewport_height)
-    }
 }
 
-impl<Target: Clone> WideMediaList<Target> {
-    /// Export the fixed one-column flow used by the painter.
-    pub fn row_geometry(&self, viewport_height: usize) -> RowGeometry<Target> {
-        let viewport = self.core.resolve_viewport(viewport_height);
-        RowGeometry::source(
-            self.core.rows(),
-            viewport.offset,
-            self.core.selected_display_row(),
-        )
-    }
-}
-
-impl<Target: Clone + PartialEq> WideMediaList<Target> {
+impl<Target: Clone + Eq> WideMediaList<Target> {
     pub fn enter_visual_mode(&mut self) {
         self.invalidate_paint();
         self.core.enter_visual_mode();
@@ -328,7 +342,51 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     }
 }
 
-impl<Target: Clone + PartialEq> Component for WideMediaList<Target> {
+impl<Target: Clone + Eq> Cursored<Target> for WideMediaList<Target> {
+    fn selected_target(&self) -> Option<&Target> {
+        self.core.selected_target()
+    }
+
+    fn set_selected_target(&mut self, target: Option<&Target>) {
+        Cursored::set_selected_target(&mut self.core, target);
+    }
+}
+
+impl<Target: Clone + Eq> Viewported<Target> for WideMediaList<Target> {
+    fn viewport_offset(&self) -> usize {
+        self.core.scroll()
+    }
+
+    fn set_viewport_offset(&mut self, offset: usize) {
+        self.set_scroll(offset);
+    }
+}
+
+impl<Target: Clone + Eq> MarkSelection<Target> for WideMediaList<Target> {
+    fn mark_selection(&self) -> &MarkSelectionState<Target> {
+        self.core.mark_selection()
+    }
+
+    fn mark_selection_mut(&mut self) -> &mut MarkSelectionState<Target> {
+        self.core.mark_selection_mut()
+    }
+
+    fn after_mark_mutation(&mut self) {
+        self.core.after_mark_mutation();
+    }
+}
+
+impl<Target> PaintRetained<Target> for WideMediaList<Target> {
+    fn paint_retained(&self) -> &PaintRetainedState<Target> {
+        &self.paint
+    }
+
+    fn paint_retained_mut(&mut self) -> &mut PaintRetainedState<Target> {
+        &mut self.paint
+    }
+}
+
+impl<Target: Clone + Eq> Component for WideMediaList<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         crate::app::render::render_wide_media_list_component(frame, area, self, self.policy);
     }

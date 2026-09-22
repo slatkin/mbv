@@ -226,9 +226,9 @@ fn inline_search_debounce_applies_grouped_music_filter_through_shell_host() {
     let owner = harness.model().test_music_owner();
     let titles: Vec<&str> = owner
         .browser
-        .projected_nodes()
+        .projected_node_targets()
         .iter()
-        .map(|node| owner.browser.title_of(node.id()))
+        .filter_map(|target| owner.browser.title_of(target))
         .collect();
     assert_eq!(
         titles,

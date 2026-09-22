@@ -296,13 +296,13 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
         ["album-1", "album-2"].map(|target| {
             let node = music
                 .browser
-                .projected_nodes()
-                .iter()
-                .find(|node| music.browser.target_of(node.id()) == Some(target))
+                .projected_node_targets()
+                .into_iter()
+                .find(|candidate| candidate.album_leaf_target() == Some(target))
                 .expect("painted album node");
             let row = music
                 .browser
-                .row_rect_for(node.id())
+                .row_rect_for(&node)
                 .expect("painted album row");
             (row.x, row.y)
         })

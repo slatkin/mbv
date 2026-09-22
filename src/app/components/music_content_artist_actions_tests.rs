@@ -3,6 +3,7 @@
 
 use super::tree_tests::{press, tree_owner};
 use super::*;
+use crate::app::components::music_tree::MusicTreeTarget;
 
 fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicContent {
     let mut items = Vec::new();
@@ -98,9 +99,9 @@ fn artist_actions_materialize_all_albums_for_collapsed_and_expanded_roots() {
     press(&mut collapsed, Key::Home);
     let root = collapsed
         .browser
-        .selected_id()
+        .selected_target()
         .expect("artist root selected");
-    collapsed.browser.collapse_root(root);
+    collapsed.browser.collapse_root(&root);
     for code in [
         Key::Char('p'),
         Key::Char('a'),
@@ -114,9 +115,9 @@ fn artist_actions_materialize_all_albums_for_collapsed_and_expanded_roots() {
     press(&mut expanded, Key::Home);
     let root = expanded
         .browser
-        .selected_id()
+        .selected_target()
         .expect("artist root selected");
-    expanded.browser.expand_root(root);
+    expanded.browser.expand_root(&root);
     for code in [
         Key::Char('p'),
         Key::Char('a'),
@@ -131,13 +132,11 @@ fn artist_actions_materialize_all_albums_for_collapsed_and_expanded_roots() {
 fn filtered_artist_actions_materialize_only_matching_leaves_in_settled_order() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1", "a-2", "a-3", "a-4"])]);
     press(&mut owner, Key::Home);
-    let matching: Vec<usize> = owner
+    let matching: Vec<MusicTreeTarget> = owner
         .browser
-        .projected_nodes()
-        .iter()
-        .filter_map(|node| {
-            matches!(owner.browser.target_of(node.id()), Some("a-1" | "a-3")).then_some(node.id())
-        })
+        .projected_node_targets()
+        .into_iter()
+        .filter(|target| matches!(target.album_leaf_target(), Some("a-1" | "a-3")))
         .collect();
     owner.browser.set_filter_matches(Some(&matching));
 

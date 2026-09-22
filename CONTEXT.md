@@ -354,12 +354,34 @@ the skeleton and slot; the destination retains Service content and typed
 translation.
 _Avoid_: generic list, generic media list, two-column list
 
+**Row flow**:
+The one ordered sequence of rows a list presents, in paint order. Row position, viewport
+offset, and point resolution all address this same sequence; a list's ordering is the order
+its rows paint. Owned by the shared `src/app/components/list/` seam; cursor movement,
+viewport resolution, retained paint geometry, and multi-selection each have one shared
+implementation over it.
+_Avoid_: item list, row list, flat list
+
+**Structural row**:
+A row that occupies a position in a Row flow but carries no stable target and can never
+be the selection — e.g. a Group heading or a Spacer. The cursor moves between selectable
+rows and never rests on a structural row.
+_Avoid_: non-selectable row (bare), filler row, separator row
+
 **Multi-selection**:
 The set of rows a user has picked in one MediaList for a bulk action, built by
 Ctrl+Click, Shift+Click, or keyboard Visual mode (`V`), keyed by stable
 targets and held by the MediaList beside its cursor. A non-empty
 multi-selection is Visual mode. "Selection" alone still means the cursor row.
 _Avoid_: marked rows, selection (for the set), checked items
+
+**Mark**:
+One stable target's membership in a Multi-selection. The seam's
+`MarkSelection` carrier owns the ordered marks of a list; adding, removing,
+toggling, and clearing marks are the operations on that carrier. A mark is
+multi-selection membership, not a row highlight — "selection" alone continues
+to mean the cursor row.
+_Avoid_: marked rows (for the membership), mark (for the cursor row)
 
 **WideMediaList**:
 The provider-neutral, one-column fixed-row TuiRealm Component over a

@@ -179,8 +179,11 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
 #[test]
 fn artist_workspace_root_enter_is_handled_by_the_non_wide_panel_gate() {
     let mut owner = artist_workspace_owner();
-    let root = owner.browser.selected_id().expect("artist root selected");
-    assert!(owner.browser.root_is_expanded(root));
+    let root = owner
+        .browser
+        .selected_target()
+        .expect("artist root selected");
+    assert!(owner.browser.root_is_expanded(&root));
     assert!(!owner.track_focused(), "the rail owns the focus");
 
     // The mounted non-Wide panel intercepts this chord before the owner and
@@ -188,7 +191,7 @@ fn artist_workspace_root_enter_is_handled_by_the_non_wide_panel_gate() {
     // request to emit on this geometry.
     assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(
-        owner.browser.root_is_expanded(root),
+        owner.browser.root_is_expanded(&root),
         "unfiltered Enter preserves expansion"
     );
 }
@@ -197,9 +200,12 @@ fn artist_workspace_root_enter_is_handled_by_the_non_wide_panel_gate() {
 fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
     press(&mut owner, Key::Home);
-    let root = owner.browser.selected_id().expect("artist root selected");
+    let root = owner
+        .browser
+        .selected_target()
+        .expect("artist root selected");
     // The initial album adoption expanded the first root's path.
-    assert!(owner.browser.root_is_expanded(root));
+    assert!(owner.browser.root_is_expanded(&root));
     press(&mut owner, Key::Down);
     assert_eq!(owner.browser.selected_album_target(), Some("a-0"));
 
@@ -213,16 +219,16 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
         }
         other => panic!("expected the typed artist-track request, got {other:?}"),
     }
-    assert_eq!(owner.browser.selected_id(), Some(root));
+    assert_eq!(owner.browser.selected_target(), Some(root.clone()));
     assert!(
-        owner.browser.root_is_expanded(root),
+        owner.browser.root_is_expanded(&root),
         "moving to the parent must not collapse it"
     );
 
     // Left on the expanded root collapses it in place.
     assert_eq!(press(&mut owner, Key::Left), None);
-    assert!(!owner.browser.root_is_expanded(root));
-    assert_eq!(owner.browser.selected_id(), Some(root));
+    assert!(!owner.browser.root_is_expanded(&root));
+    assert_eq!(owner.browser.selected_target(), Some(root.clone()));
 }
 
 #[test]
@@ -233,9 +239,12 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
     press(&mut owner, Key::Home);
     press(&mut owner, Key::Down);
     press(&mut owner, Key::Down);
-    let root = owner.browser.selected_id().expect("artist root selected");
+    let root = owner
+        .browser
+        .selected_target()
+        .expect("artist root selected");
     assert!(owner.browser.selected_is_artist());
-    assert!(!owner.browser.root_is_expanded(root));
+    assert!(!owner.browser.root_is_expanded(&root));
 
     // The first Right on the collapsed root expands it and nothing else
     // (task 6.4): the artist Workspace is entered only by a later Right.
@@ -245,7 +254,7 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
         "expand emits no request"
     );
     assert!(
-        owner.browser.root_is_expanded(root),
+        owner.browser.root_is_expanded(&root),
         "Right expands the root"
     );
     assert!(
@@ -263,8 +272,8 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
         }
         other => panic!("expected the artist Workspace entry, got {other:?}"),
     }
-    assert!(owner.browser.root_is_expanded(root));
-    assert_eq!(owner.browser.selected_id(), Some(root));
+    assert!(owner.browser.root_is_expanded(&root));
+    assert_eq!(owner.browser.selected_target(), Some(root.clone()));
 }
 
 /// Task 6.4: in Wide geometry the later Right on an expanded artist root takes
@@ -273,8 +282,11 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
 fn wide_right_on_an_expanded_artist_root_takes_the_inline_workspace_focus() {
     let mut owner = artist_workspace_owner();
     owner.set_inline_track_focus_enabled(true);
-    let root = owner.browser.selected_id().expect("artist root selected");
-    assert!(owner.browser.root_is_expanded(root));
+    let root = owner
+        .browser
+        .selected_target()
+        .expect("artist root selected");
+    assert!(owner.browser.root_is_expanded(&root));
     assert!(!owner.track_focused());
 
     assert_eq!(press(&mut owner, Key::Right), None);

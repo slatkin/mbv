@@ -190,14 +190,14 @@ fn right_on_a_collapsed_artist_root_expands_first_then_opens_its_workspace() {
         .model()
         .test_music_owner()
         .browser
-        .selected_id()
+        .selected_target()
         .expect("artist root selected");
     assert!(
         !harness
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(root),
+            .root_is_expanded(&root),
         "Left collapses the expanded root"
     );
 
@@ -208,7 +208,7 @@ fn right_on_a_collapsed_artist_root_expands_first_then_opens_its_workspace() {
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(root),
+            .root_is_expanded(&root),
         "the first Right expands the root"
     );
     assert!(
@@ -267,13 +267,13 @@ fn enter_on_an_unfiltered_artist_root_enters_wide_workspace_without_relayout() {
         .model()
         .test_music_owner()
         .browser
-        .selected_id()
+        .selected_target()
         .expect("artist root selected");
     let expanded = harness
         .model()
         .test_music_owner()
         .browser
-        .root_is_expanded(root);
+        .root_is_expanded(&root);
     let before = music_panel(&harness)
         .test_wide_geometry()
         .expect("Wide geometry")
@@ -286,7 +286,7 @@ fn enter_on_an_unfiltered_artist_root_enters_wide_workspace_without_relayout() {
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(root),
+            .root_is_expanded(&root),
         expanded,
         "Enter does not toggle the artist root"
     );
@@ -316,13 +316,13 @@ fn enter_on_an_unfiltered_artist_root_opens_the_non_wide_hero_workspace() {
         .model()
         .test_music_owner()
         .browser
-        .selected_id()
+        .selected_target()
         .expect("artist root selected");
     let expanded = harness
         .model()
         .test_music_owner()
         .browser
-        .root_is_expanded(root);
+        .root_is_expanded(&root);
 
     tick_key(&mut harness, Key::Enter);
 
@@ -339,7 +339,7 @@ fn enter_on_an_unfiltered_artist_root_opens_the_non_wide_hero_workspace() {
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(root),
+            .root_is_expanded(&root),
         expanded,
         "Hero entry does not toggle expansion"
     );
@@ -374,14 +374,14 @@ fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
             .model()
             .test_music_owner()
             .browser
-            .selected_id()
+            .selected_target()
             .expect("artist root selected");
         assert!(
             harness
                 .model()
                 .test_music_owner()
                 .browser
-                .root_is_expanded(root)
+                .root_is_expanded(&root)
         );
 
         tick_key(&mut harness, Key::Char('/'));
@@ -398,7 +398,7 @@ fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
                 .model()
                 .test_music_owner()
                 .browser
-                .root_is_expanded(root),
+                .root_is_expanded(&root),
             "{width}x{height}: filtered Enter toggles the root locally"
         );
         assert!(

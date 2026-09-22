@@ -13,7 +13,7 @@ struct MusicTreeLabelRenderer<'a> {
     /// itself can stay `&self` inside the crate's trait signature.
     selected_title_spans: Option<Vec<Span<'static>>>,
     selected_title_budget: usize,
-    visible_mark_states: HashMap<usize, TreeMarkState>,
+    visible_mark_states: HashMap<MusicTreeTarget, TreeMarkState>,
     _marker: std::marker::PhantomData<&'a ()>,
 }
 
@@ -25,10 +25,9 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         context: &TreeRowContext<'_>,
         glyphs: &TreeGlyphs<'a>,
     ) -> Cell<'a> {
-        let mark = self
-            .visible_mark_states
-            .get(&id)
-            .copied()
+        let mark = model
+            .target_of_node(id)
+            .and_then(|target| self.visible_mark_states.get(&target).copied())
             .unwrap_or(TreeMarkState::Unmarked);
         let year = model.year_of(id);
         // The pinned year-gutter contract (design D8): the six-column date

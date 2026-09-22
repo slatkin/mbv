@@ -18,7 +18,7 @@ pub struct ViewportAnchor<Target> {
     pub selected_row_offset: usize,
 }
 
-impl<Target: Clone + PartialEq> MediaList<Target> {
+impl<Target: Clone + Eq> MediaList<Target> {
     /// Produce an anchor from the current selection for a painted viewport
     /// height. `None` when nothing is selectable.
     pub(super) fn viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<Target>> {

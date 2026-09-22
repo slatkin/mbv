@@ -3,6 +3,7 @@ use ratatui::Terminal;
 use rstest::rstest;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use crate::app::components::music_tree::MusicTreeTarget;
 use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest, UserEvent};
 use crate::app::render::{make_music_group_app, make_music_group_app_with_second_album};
 use crate::app::tests::make_item;
@@ -204,10 +205,15 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
 
     let tree_point = {
         let music = harness.model().test_music_owner();
-        let node = music.browser.projected_nodes().first().expect("tree root");
+        let root = music
+            .browser
+            .projected_node_targets()
+            .first()
+            .expect("tree root")
+            .clone();
         let row = music
             .browser
-            .row_rect_for(node.id())
+            .row_rect_for(&root)
             .expect("painted tree row");
         (row.x, row.y)
     };
@@ -338,13 +344,13 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
         let point_for = |target: Option<&str>| {
             let node = music
                 .browser
-                .projected_nodes()
-                .iter()
-                .find(|node| music.browser.target_of(node.id()) == target)
+                .projected_node_targets()
+                .into_iter()
+                .find(|candidate| candidate.album_leaf_target() == target)
                 .expect("painted tree node");
             let row = music
                 .browser
-                .row_rect_for(node.id())
+                .row_rect_for(&node)
                 .expect("painted tree row");
             (row.x, row.y)
         };
@@ -473,16 +479,15 @@ fn music_panel(harness: &TickHarness) -> &crate::app::components::library_panel:
         .expect("LibraryPanel")
 }
 
-/// The settled album leaf's arena id, resolved from the tree projection
+/// The settled album leaf's stable target, resolved from the tree projection
 /// without needing a completed frame.
-fn album_node_id(harness: &TickHarness, target: &str) -> usize {
+fn album_target(harness: &TickHarness, target: &str) -> MusicTreeTarget {
     let music = harness.model().test_music_owner();
     music
         .browser
-        .projected_nodes()
-        .iter()
-        .map(|node| node.id())
-        .find(|id| music.browser.target_of(*id) == Some(target))
+        .projected_node_targets()
+        .into_iter()
+        .find(|candidate| candidate.album_leaf_target() == Some(target))
         .expect("projected album node")
 }
 
@@ -497,16 +502,17 @@ enum TreeDoubleClickNode {
 
 impl TreeDoubleClickNode {
     /// The case's settled node, resolved from the projection by identity.
-    fn resolve(self, harness: &TickHarness) -> usize {
+    fn resolve(self, harness: &TickHarness) -> MusicTreeTarget {
         let music = harness.model().test_music_owner();
         music
             .browser
-            .projected_nodes()
-            .iter()
-            .map(|node| node.id())
-            .find(|id| match self {
-                TreeDoubleClickNode::ArtistRoot => music.browser.model_is_artist(*id),
-                TreeDoubleClickNode::AlbumLeaf => music.browser.target_of(*id) == Some("album-1"),
+            .projected_node_targets()
+            .into_iter()
+            .find(|candidate| match self {
+                TreeDoubleClickNode::ArtistRoot => candidate.is_artist(),
+                TreeDoubleClickNode::AlbumLeaf => {
+                    candidate.album_leaf_target() == Some("album-1")
+                }
             })
             .expect("the case's projected tree node")
     }
@@ -531,12 +537,12 @@ fn cached_track(id: &str, number: i64) -> mbv_core::api::EmbyItem {
 }
 
 /// The painted point of any tree row, resolved from the tree's completed frame.
-fn tree_node_point(harness: &TickHarness, id: usize) -> (u16, u16) {
+fn tree_node_point(harness: &TickHarness, target: &MusicTreeTarget) -> (u16, u16) {
     let row = harness
         .model()
         .test_music_owner()
         .browser
-        .row_rect_for(id)
+        .row_rect_for(target)
         .expect("painted tree row");
     (row.x, row.y)
 }
@@ -569,12 +575,12 @@ fn music_tree_track_app(autoload: bool) -> crate::app::App {
 fn expanded_track_harness(app: crate::app::App) -> TickHarness {
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let album_id = album_node_id(&harness, "album-1");
+    let album_id = album_target(&harness, "album-1");
     harness
         .model_mut()
         .test_music_owner_mut()
         .browser
-        .expand_node(album_id);
+        .expand_node(&album_id);
     draw_frame(&mut harness);
     harness
 }
@@ -654,7 +660,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
         .model()
         .test_music_owner()
         .browser
-        .node_is_expanded(node_id);
+        .node_is_expanded(&node_id);
 
     // Open the production filter through the router, then feed the
     // destination's own query (the panel paints the tree, never a flat result
@@ -675,7 +681,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
 
     // The first click resolves the row; the run loop paints the next frame
     // before the second press, as the real event loop does.
-    let at = tree_node_point(&harness, node_id);
+    let at = tree_node_point(&harness, &node_id);
     harness.inject(left_click(at.0, at.1));
     dispatch_step(&mut harness);
     draw_frame(&mut harness);
@@ -703,7 +709,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
             .model()
             .test_music_owner()
             .browser
-            .node_is_expanded(node_id),
+            .node_is_expanded(&node_id),
         was_expanded,
         "{width}x{height} {node:?} filtered={filtered}: double-click toggles persistent expansion"
     );
@@ -729,12 +735,12 @@ fn track_point(harness: &TickHarness, track: &str) -> (u16, u16) {
     let music = harness.model().test_music_owner();
     let node = music
         .browser
-        .projected_nodes()
-        .iter()
-        .find(|node| {
+        .projected_node_targets()
+        .into_iter()
+        .find(|candidate| {
             music
                 .browser
-                .track_identity_of(node.id())
+                .track_identity_of(candidate)
                 .is_some_and(|(album_target, track_target)| {
                     album_target == "album-1" && track_target == track
                 })
@@ -742,7 +748,7 @@ fn track_point(harness: &TickHarness, track: &str) -> (u16, u16) {
         .expect("painted track node");
     let row = music
         .browser
-        .row_rect_for(node.id())
+        .row_rect_for(&node)
         .expect("painted track row");
     (row.x, row.y)
 }
@@ -831,16 +837,16 @@ fn double_click_a_childless_album_claims_the_gesture_unchanged() {
     harness.model_mut().sync_mounted_surfaces();
     draw_frame(&mut harness);
 
-    let childless = album_node_id(&harness, "album-2");
+    let childless = album_target(&harness, "album-2");
     assert!(
         !harness
             .model()
             .test_music_owner()
             .browser
-            .node_is_expanded(childless),
+            .node_is_expanded(&childless),
         "the childless leaf starts collapsed"
     );
-    let at = tree_node_point(&harness, childless);
+    let at = tree_node_point(&harness, &childless);
 
     harness.inject(left_click(at.0, at.1));
     dispatch_step(&mut harness);
@@ -868,7 +874,7 @@ fn double_click_a_childless_album_claims_the_gesture_unchanged() {
             .model()
             .test_music_owner()
             .browser
-            .node_is_expanded(childless),
+            .node_is_expanded(&childless),
         "the claimed childless leaf keeps its expansion state"
     );
     assert!(
