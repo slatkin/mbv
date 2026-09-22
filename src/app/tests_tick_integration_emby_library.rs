@@ -179,6 +179,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+            tv_content_mode: None,
                 music_grouping: None,
             }),
         });
@@ -537,6 +538,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     });
     let mut harness = TickHarness::new(app);
@@ -570,6 +572,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     };
     harness

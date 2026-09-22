@@ -55,6 +55,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -132,6 +133,7 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -308,6 +310,7 @@ fn f5_on_feeds_tab_does_not_reach_emby_or_audiobookshelf_refresh() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -380,6 +383,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)

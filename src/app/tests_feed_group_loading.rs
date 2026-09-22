@@ -29,6 +29,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
             loading: true,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -63,6 +64,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }),
     });
@@ -106,6 +108,7 @@ fn make_home_video_app() -> App {
             loading: true,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -146,6 +149,7 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }),
     });
@@ -263,6 +267,7 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -324,6 +329,7 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)

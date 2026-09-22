@@ -274,6 +274,7 @@ impl App {
             nav_stack: Vec<BrowseLevel>,
             feed_home_video: Option<FeedHomeVideoState>,
             library_total: Option<usize>,
+            tv_content_mode: Option<mbv_core::config::TvContentMode>,
         }
         let old_libs: HashMap<String, SavedLibState> = self
             .libs
@@ -285,6 +286,7 @@ impl App {
                         nav_stack: std::mem::take(&mut l.nav_stack),
                         feed_home_video: l.feed_home_video,
                         library_total: l.library_total,
+                        tv_content_mode: l.tv_content_mode,
                     },
                 )
             })
@@ -313,6 +315,7 @@ impl App {
                             resting: lvl.resting(),
                             all_items: lvl.all_items.clone(),
                             letter_filter: lvl.letter_filter.clone(),
+                            tv_content_mode: lvl.tv_content_mode.clone(),
                             music_grouping: lvl.music_grouping.clone(),
                         })
                         .collect()
@@ -320,10 +323,22 @@ impl App {
                 .unwrap_or_default();
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
             let library_total = saved.and_then(|s| s.library_total);
+            let tv_content_mode = saved.and_then(|s| s.tv_content_mode.clone()).or_else(|| {
+                (view.collection_type == "tvshows").then(|| {
+                    if library_total
+                        .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
+                    {
+                        mbv_core::config::TvContentMode::Latest
+                    } else {
+                        mbv_core::config::TvContentMode::All
+                    }
+                })
+            });
             self.libs.push(super::LibraryTab {
                 nav_stack: stack,
                 feed_home_video,
                 library_total,
+                tv_content_mode,
                 ..super::LibraryTab::new(view.clone())
             });
         }

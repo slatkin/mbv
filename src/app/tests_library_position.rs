@@ -18,6 +18,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             loading: false,
             all_items: Some(make_items(3)),
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -55,6 +56,7 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
         sort_by: "SortName".into(),
         sort_order: "Ascending".into(),
         letter_filter_index: None,
+                tv_content_mode: None,
         library_total: None,
     };
 
@@ -121,6 +123,7 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: Some(0),
+                tv_content_mode: None,
                 library_total: Some(301),
             },
             crate::config::LibraryPositionLevel {
@@ -134,6 +137,7 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
         ],
@@ -187,6 +191,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
             crate::config::LibraryPositionLevel {
@@ -200,6 +205,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
         ],
@@ -243,6 +249,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
             crate::config::LibraryPositionLevel {
@@ -256,6 +263,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
         ],
@@ -307,6 +315,7 @@ fn applying_library_position_preserves_persisted_feed_group_state() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
     );
@@ -343,6 +352,7 @@ fn save_default_library_position_persists_focused_item() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -378,6 +388,7 @@ fn legacy_library_position_updates_are_memory_only() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -411,6 +422,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -429,6 +441,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             }],
             ..Default::default()
@@ -464,6 +477,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -484,6 +498,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             }],
             ..Default::default()
@@ -518,6 +533,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -537,6 +553,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             }],
             ..Default::default()

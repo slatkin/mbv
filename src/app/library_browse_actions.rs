@@ -306,6 +306,7 @@ fn build_chain_nav_stack(
 
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         });
     }
@@ -434,6 +435,18 @@ impl App {
                         self.libs[idx].library.collection_type.as_str(),
                     );
                     self.libs[idx].library_total = root.library_total;
+                    self.libs[idx].tv_content_mode = root.tv_content_mode.clone().or_else(|| {
+                        (self.libs[idx].library.collection_type == "tvshows").then(|| {
+                            if root
+                                .library_total
+                                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
+                            {
+                                mbv_core::config::TvContentMode::Latest
+                            } else {
+                                mbv_core::config::TvContentMode::All
+                            }
+                        })
+                    });
                     self.libs[idx].nav_stack.push(BrowseLevel {
                         parent_id: root.parent_id.clone(),
                         title: root.title.clone(),
@@ -457,6 +470,7 @@ impl App {
                                 super::render::LetterFilter::for_index_for_kind(index, filter_kind)
                             }
                         }),
+                        tv_content_mode: root.tv_content_mode.clone(),
                         music_grouping: None,
                     });
                     self.spawn_restore_library_position(idx, saved);
@@ -493,6 +507,7 @@ impl App {
 
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             });
             self.spawn_browse(
@@ -526,9 +541,31 @@ impl App {
                 visible_rows,
                 filter_kind,
                 |saved_level| {
-                    let letter_filter = saved_level.letter_filter_index.and_then(|index| {
-                        super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                    let tv_mode = saved_level.tv_content_mode.clone().or_else(|| {
+                        (filter_kind == super::render::LetterFilterKind::Tv).then(|| {
+                            if saved_level
+                                .library_total
+                                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
+                            {
+                                mbv_core::config::TvContentMode::Latest
+                            } else {
+                                mbv_core::config::TvContentMode::All
+                            }
+                        })
                     });
+                    if matches!(tv_mode, Some(mbv_core::config::TvContentMode::Latest)) {
+                        let items = client.get_latest_episodes(&saved_level.parent_id, 30)?;
+                        let total_count = items.len();
+                        return Ok((items, total_count, total_count));
+                    }
+                    let letter_filter = match tv_mode {
+                        Some(mbv_core::config::TvContentMode::Range(index)) => {
+                            super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                        }
+                        _ => saved_level.letter_filter_index.and_then(|index| {
+                            super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                        }),
+                    };
                     let (name_ge, name_lt) = letter_filter
                         .as_ref()
                         .map(|f| (f.name_ge, f.name_lt))
@@ -648,6 +685,42 @@ impl App {
         }
     }
 
+    pub(super) fn spawn_tv_latest(&self, lib_idx: usize, parent_id: String, title: String) {
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || match client.get_latest_episodes(&parent_id, 30) {
+            Ok(items) => {
+                let total_count = items.len();
+                let _ = tx.send(LibEvent::Loaded {
+                    lib_idx,
+                    parent_id: parent_id.clone(),
+                    level: Box::new(BrowseLevel {
+                        parent_id,
+                        title,
+                        items,
+                        fetched_rows: total_count,
+                        total_count,
+                        resting: BrowseResting::new(0, 0),
+                        item_types: Some("Episode".into()),
+                        unplayed_only: false,
+                        sort_by: "DateCreated".into(),
+                        sort_order: "Descending".into(),
+                        loading: false,
+                        all_items: None,
+                        letter_filter: None,
+                        tv_content_mode: None,
+                        music_grouping: None,
+                    }),
+                });
+            }
+            Err(e) => {
+                let _ = tx.send(LibEvent::Error(e));
+            }
+        });
+    }
+
     pub(super) fn spawn_browse(
         &self,
         lib_idx: usize,
@@ -697,6 +770,7 @@ impl App {
 
                             all_items: None,
                             letter_filter: None,
+                            tv_content_mode: None,
                             music_grouping: None,
                         }),
                     });

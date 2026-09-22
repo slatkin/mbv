@@ -135,6 +135,7 @@ impl App {
                             crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
                         }
                     }),
+                    tv_content_mode: root.tv_content_mode.clone(),
                     music_grouping: None,
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -204,6 +205,7 @@ impl App {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: Some(state.total),
             }],
             ..Default::default()
@@ -233,6 +235,7 @@ impl App {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: Some(state.total),
             }],
             ..Default::default()

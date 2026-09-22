@@ -28,6 +28,7 @@ fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -71,6 +72,7 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+            tv_content_mode: None,
                 music_grouping: None,
             },
             BrowseLevel {
@@ -87,6 +89,7 @@ fn feed_home_video_group_view_stays_enabled_with_cached_groups() {
                 loading: false,
                 all_items: Some(vec![video.clone()]),
                 letter_filter: None,
+            tv_content_mode: None,
                 music_grouping: None,
             },
         ],
@@ -136,6 +139,7 @@ fn fetch_home_preserves_feed_home_video_state() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -192,6 +196,7 @@ fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -248,6 +253,7 @@ fn select_feed_folder_group_zero_pushes_all_videos_level() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -315,6 +321,7 @@ fn select_feed_folder_group_uses_client_side_all_items_cache() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -387,6 +394,7 @@ fn select_feed_folder_group_updates_feed_state_when_detail_level_exists() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -451,6 +459,7 @@ fn go_back_keeps_feed_home_video_group_view_intact() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -510,6 +519,7 @@ fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() 
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -569,6 +579,7 @@ fn refresh_lib_targets_feed_selection() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {

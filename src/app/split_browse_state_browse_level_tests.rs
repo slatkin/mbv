@@ -29,6 +29,7 @@ fn movie_level(items: Vec<EmbyItem>, total_count: usize, cursor: usize) -> Brows
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     }
 }
@@ -56,6 +57,7 @@ fn entering_library_restores_cursor_from_saved_focused_item_and_round_trips() {
         sort_by: "SortName".into(),
         sort_order: "Ascending".into(),
         letter_filter_index: None,
+                tv_content_mode: None,
         library_total: None,
     };
 

@@ -269,6 +269,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
             BrowseLevel {
@@ -285,6 +286,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
         ],
@@ -364,6 +366,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     model.sync_mounted_surfaces();

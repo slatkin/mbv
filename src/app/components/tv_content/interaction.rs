@@ -284,10 +284,12 @@ impl TvContent {
     /// Resolve a click in the Browser pane's list slot to the series row it
     /// landed on from the carrier's own retained frame geometry.
     fn resolve_series_hit(&mut self, at: Position) -> Option<TvHit> {
-        self.carrier
-            .resolve_current_point(at)
-            .cloned()
-            .map(TvHit::SeriesRow)
+        let target = self.carrier.resolve_current_point(at).cloned()?;
+        Some(if self.flat_episode_mode() {
+            TvHit::EpisodeRow(target)
+        } else {
+            TvHit::SeriesRow(target)
+        })
     }
 
     /// Move the owner's local pane + pane cursor to the clicked `hit` (Wide

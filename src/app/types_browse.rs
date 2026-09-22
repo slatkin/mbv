@@ -120,9 +120,11 @@ pub(super) struct BrowseLevel {
     pub(super) sort_order: String,
     pub(super) loading: bool,
     pub(super) all_items: Option<Vec<EmbyItem>>, // prefetched full list for instant search
-    /// Active letter-range pill scope for a large library's top browse level
-    /// (`None` = unfiltered). See `render::LetterFilter`.
+    /// Active letter-range pill scope for a large non-TV library.
     pub(super) letter_filter: Option<crate::app::render::LetterFilter>,
+    /// Selected top-level TV content mode; absent means resolve the size
+    /// default after the unfiltered capture load.
+    pub(super) tv_content_mode: Option<mbv_core::config::TvContentMode>,
     /// Grouping lifecycle state for a music album level (candidate +
     /// settled catalog). `None` for non-music or non-album levels.
     pub(super) music_grouping: Option<super::music_grouping::MusicGroupingState>,
@@ -178,8 +180,27 @@ impl BrowseLevel {
             sort_order: saved.sort_order.clone(),
             loading: false,
             all_items: None,
-            letter_filter: saved.letter_filter_index.and_then(|index| {
-                crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+            letter_filter: match (filter_kind, saved.tv_content_mode.as_ref()) {
+                (
+                    crate::app::render::LetterFilterKind::Tv,
+                    Some(mbv_core::config::TvContentMode::Range(index)),
+                ) => crate::app::render::LetterFilter::for_index_for_kind(*index, filter_kind),
+                (crate::app::render::LetterFilterKind::Tv, Some(_)) => None,
+                _ => saved.letter_filter_index.and_then(|index| {
+                    crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                }),
+            },
+            tv_content_mode: saved.tv_content_mode.clone().or_else(|| {
+                (filter_kind == crate::app::render::LetterFilterKind::Tv).then(|| {
+                    if saved
+                        .library_total
+                        .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD)
+                    {
+                        mbv_core::config::TvContentMode::Latest
+                    } else {
+                        mbv_core::config::TvContentMode::All
+                    }
+                })
             }),
             music_grouping: None,
         }
@@ -211,7 +232,12 @@ impl BrowseLevel {
             unplayed_only: self.unplayed_only,
             sort_by: self.sort_by.clone(),
             sort_order: self.sort_order.clone(),
-            letter_filter_index: self.letter_filter.as_ref().map(|f| f.index),
+            letter_filter_index: self
+                .tv_content_mode
+                .is_none()
+                .then(|| self.letter_filter.as_ref().map(|f| f.index))
+                .flatten(),
+            tv_content_mode: self.tv_content_mode.clone(),
             // Only meaningful for the root level; `library_position_snapshot`
             // (the `LibraryTab` method) fills this in for `levels[0]` from
             // `LibraryTab.library_total` after collecting all levels here.

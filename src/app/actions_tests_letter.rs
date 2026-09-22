@@ -99,6 +99,7 @@ fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
 }
@@ -260,6 +261,7 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
 }
@@ -274,6 +276,48 @@ fn should_show_letter_pills_true_for_tvshows_total(#[case] total: usize) {
     app.libs[0].library_total = Some(total);
 
     assert!(app.should_show_letter_pills(0));
+}
+
+#[test]
+fn tv_first_capture_resolves_all_without_refetch_for_small_library() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 4);
+    app.libs[0].nav_stack[0].total_count = 4;
+
+    app.maybe_capture_library_total_and_apply_default_pill(0);
+
+    assert_eq!(
+        app.libs[0].tv_content_mode,
+        Some(mbv_core::config::TvContentMode::All)
+    );
+    assert_eq!(
+        app.libs[0].nav_stack[0].tv_content_mode,
+        app.libs[0].tv_content_mode
+    );
+    assert_eq!(app.libs[0].nav_stack[0].items.len(), 4);
+    assert!(!app.libs[0].nav_stack[0].loading);
+}
+
+#[test]
+fn tv_first_capture_resolves_latest_and_replaces_large_library_rows() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 301);
+    app.libs[0].nav_stack[0].total_count = 301;
+
+    app.maybe_capture_library_total_and_apply_default_pill(0);
+
+    assert_eq!(
+        app.libs[0].tv_content_mode,
+        Some(mbv_core::config::TvContentMode::Latest)
+    );
+    assert!(app.libs[0].nav_stack[0].items.is_empty());
+    assert_eq!(
+        app.libs[0].nav_stack[0].item_types.as_deref(),
+        Some("Episode")
+    );
+    assert!(app.libs[0].nav_stack[0].loading);
 }
 
 fn series(id: &str, name: &str) -> EmbyItem {

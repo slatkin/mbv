@@ -363,6 +363,11 @@ impl Model {
                 .last()
                 .map_or(0, |l| l.resting().cursor()),
         );
+        let tv_content_mode = self.app.libs[index]
+            .nav_stack
+            .last()
+            .and_then(|level| level.tv_content_mode.clone())
+            .or_else(|| self.app.libs[index].tv_content_mode.clone());
         // The TV owner owns the selection cursor. Derive the pushed Series
         // snapshot from the owner's authoritative selection (its own cursor
         // over its cached list), not the App browse cursor. Only on first
@@ -377,6 +382,16 @@ impl Model {
                     .cloned()
                     .filter(|item| item.item_type == "Series")
             });
+        let selected_series = if matches!(
+            tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        ) {
+            None
+        } else {
+            selected_series
+        };
         if let Some(item) = selected_series.as_ref() {
             // Detail loading is an App-owned effect; schedule it at the shell
             // hand-off rather than from the render context or painter.
@@ -390,7 +405,7 @@ impl Model {
         // every migrated owner, and TV is one since task 8.4. Pushing a second
         // projection here would race the sync-pass one (double fetch, and the
         // sync-pass `Loading` state overwriting the push's `Ready`).
-        let context = TvWideRenderCtx::new(
+        let mut context = TvWideRenderCtx::new(
             list,
             selected_series,
             series_detail,
@@ -398,6 +413,7 @@ impl Model {
             None,
             self.app.should_show_letter_pills(index),
         );
+        context.set_tv_content_mode(tv_content_mode);
         let list_pane_width = self.app.list_pane_width;
         // Panel focus is the library area's focus bit; the owner paints its
         // focused pane and claims local chords from it (task 8.4).

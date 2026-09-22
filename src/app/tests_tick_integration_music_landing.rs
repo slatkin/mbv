@@ -19,6 +19,7 @@ fn landed_album_level(
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     }
 }

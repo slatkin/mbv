@@ -297,6 +297,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     model.handle_tv_request(ShellRequest::TvBack);

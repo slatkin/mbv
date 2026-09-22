@@ -173,51 +173,63 @@ impl TvContent {
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
-        let grouped = !self.inline_search.is_active()
-            && (context.show_letter_pills
-                || context.list.has_letter_filter()
-                || context.list.true_total() >= 50);
-        let bucket_total = if context.list.has_letter_filter() {
-            usize::MAX
+        let episode_mode = matches!(
+            context.tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        );
+        let rows = if episode_mode {
+            build_episode_rows(&context.list.items)
         } else {
-            context.list.true_total()
-        };
-        let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
-        sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        let rows = sorted_items.iter().enumerate().flat_map(|(index, item)| {
-            let heading = grouped
-                .then(|| {
-                    let current = letter_bucket(item, bucket_total);
-                    let previous = index
-                        .checked_sub(1)
-                        .map(|i| letter_bucket(sorted_items[i], bucket_total));
-                    (previous.as_deref() != Some(current.as_str())).then(|| {
-                        let heading = MediaListRow::Heading { text: current };
-                        if previous.is_some() {
-                            vec![MediaListRow::Spacer, heading]
-                        } else {
-                            vec![heading]
-                        }
-                    })
+            let grouped = !self.inline_search.is_active()
+                && (context.show_letter_pills
+                    || context.list.has_letter_filter()
+                    || context.list.true_total() >= 50);
+            let bucket_total = if context.list.has_letter_filter() {
+                usize::MAX
+            } else {
+                context.list.true_total()
+            };
+            let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
+            sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+            sorted_items
+                .iter()
+                .enumerate()
+                .flat_map(|(index, item)| {
+                    let heading = grouped
+                        .then(|| {
+                            let current = letter_bucket(item, bucket_total);
+                            let previous = index
+                                .checked_sub(1)
+                                .map(|i| letter_bucket(sorted_items[i], bucket_total));
+                            (previous.as_deref() != Some(current.as_str())).then(|| {
+                                let heading = MediaListRow::Heading { text: current };
+                                if previous.is_some() {
+                                    vec![MediaListRow::Spacer, heading]
+                                } else {
+                                    vec![heading]
+                                }
+                            })
+                        })
+                        .flatten();
+                    heading
+                        .into_iter()
+                        .flatten()
+                        .chain(std::iter::once(MediaListRow::Item {
+                            target: item.id.clone(),
+                            primary: item.display_name(),
+                            secondary: None,
+                            trailing: (item.production_year > 0).then(|| {
+                                MediaListTrailing::Gutter(item.production_year.to_string())
+                            }),
+                            duration: None,
+                            kind: MediaKind::Collection,
+                            semantic_state: MediaSemanticState::from_emby(item),
+                        }))
                 })
-                .flatten();
-            heading
-                .into_iter()
-                .flatten()
-                .chain(std::iter::once(MediaListRow::Item {
-                    target: item.id.clone(),
-                    primary: item.display_name(),
-                    secondary: None,
-                    trailing: (item.production_year > 0)
-                        .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
-                    duration: None,
-                    kind: MediaKind::Collection,
-                    // The one canonical state derivation; the series rail no
-                    // longer diverges by geometry.
-                    semantic_state: MediaSemanticState::from_emby(item),
-                }))
-        });
-        let rows = rows.collect::<Vec<_>>();
+                .collect::<Vec<_>>()
+        };
         // The canonical cursor is in the rendered (natural-sort) order. Seed
         // the local list from that stable target on first mount; thereafter
         // preserve the stable target already owned by the component.
@@ -363,17 +375,34 @@ impl TvContent {
             });
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
         let selector = if !searching && self.context.show_letter_pills {
+            let large = self
+                .context
+                .list
+                .library_total
+                .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+            let mut pills = vec!["Latest".to_string(), "Upcoming".to_string()];
+            if large {
+                pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));
+            } else {
+                pills.push("All".to_string());
+            }
+            let active = match self.context.tv_content_mode.as_ref() {
+                Some(mbv_core::config::TvContentMode::Latest) => 0,
+                Some(mbv_core::config::TvContentMode::Upcoming) => 1,
+                Some(mbv_core::config::TvContentMode::All) => 2,
+                Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
+                None => {
+                    if large {
+                        0
+                    } else {
+                        2
+                    }
+                }
+            };
             Some(SelectorRow {
-                pills: LetterFilter::labels_for_kind(LetterFilterKind::Tv),
+                pills,
                 markers: vec![],
-                active: Some(
-                    self.context
-                        .list
-                        .letter_filter
-                        .as_ref()
-                        .map(|filter| filter.index)
-                        .unwrap_or(0),
-                ),
+                active: Some(active),
             })
         } else {
             None
@@ -524,9 +553,36 @@ impl TvContent {
     /// from the pushed season detail (design.md D4: the component carries the
     /// stable episode identity; the shell never reads the cursor).
     pub(in crate::app) fn selected_episode_item(&self) -> Option<EmbyItem> {
+        if matches!(
+            self.context.tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        ) {
+            return self
+                .carrier
+                .selected_target()
+                .and_then(|target| {
+                    self.context
+                        .list
+                        .items
+                        .iter()
+                        .find(|item| item.id == *target)
+                })
+                .cloned();
+        }
         self.current_season_episodes()
             .get(self.episodes.cursor())
             .cloned()
+    }
+
+    fn flat_episode_mode(&self) -> bool {
+        matches!(
+            self.context.tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        )
     }
     /// Test-only: the episode owner's selectable cursor index, used to prove
     /// the cursor survives a loading refresh where no episode item is

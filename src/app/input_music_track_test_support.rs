@@ -51,6 +51,7 @@ pub(super) fn make_music_album_app() -> App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
             BrowseLevel {
@@ -67,6 +68,7 @@ pub(super) fn make_music_album_app() -> App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
         ],
@@ -144,6 +146,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
             BrowseLevel {
@@ -160,6 +163,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
         ],
