@@ -12,11 +12,8 @@
 //! the shell's dispatch is keyed by the active tab, not by which owner sent
 //! it.
 
-use super::components::library_panel::LibraryKey;
-#[cfg(test)]
-use super::components::library_panel::LibraryPanel;
+use super::components::library_panel::{LibraryKey, LibraryPanel};
 use super::components::tv_content::TvContent;
-#[cfg(test)]
 use super::components::ComponentId;
 use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
@@ -47,14 +44,21 @@ impl Model {
             | ShellRequest::TvCycleLetterPill { .. } => {
                 match request {
                     ShellRequest::TvActivate { item } => {
-                        let owner_has_target = self
-                            .tv_owner()
-                            .and_then(TvContent::selected_item)
-                            .is_some_and(|selected| selected.id == item.id);
-                        if self.app.wide_tv_library_area(lib_idx).is_some() {
-                            self.app.activate_selected_series_item(lib_idx, &item);
-                        } else if owner_has_target {
-                            self.open_library_hero_overlay();
+                        // Latest/Upcoming rows are leaf episodes. Keep a
+                        // defensive item-kind gate here so a stale or legacy
+                        // request can never enter the Series workspace.
+                        if item.item_type == "Episode" {
+                            self.app.play_item(item);
+                        } else {
+                            let owner_has_target = self
+                                .tv_owner()
+                                .and_then(TvContent::selected_item)
+                                .is_some_and(|selected| selected.id == item.id);
+                            if self.app.wide_tv_library_area(lib_idx).is_some() {
+                                self.app.activate_selected_series_item(lib_idx, &item);
+                            } else if owner_has_target {
+                                self.open_library_hero_overlay();
+                            }
                         }
                     }
                     ShellRequest::TvBack => self.app.go_back(lib_idx),
@@ -342,6 +346,22 @@ impl Model {
     /// owner map.
     pub(super) fn sync_tv_content(&mut self) {
         self.push_tv_workspace_content();
+    }
+
+    /// The compact mini-view is the one presentation where a selected flat
+    /// TV episode gets the existing Library Hero overlay. It is synchronized
+    /// after the panel points at the active owner, so opening it never targets
+    /// the previous tab's owner.
+    pub(super) fn sync_tv_mini_view_hero(&mut self) {
+        let mini_view = self.app.terminal_width < crate::app::MINI_VIEW_THRESHOLD
+            && matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        if let Some(panel) = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        {
+            panel.sync_mini_view_hero_overlay(mini_view);
+        }
     }
 
     pub(super) fn push_tv_workspace_content(&mut self) {

@@ -53,6 +53,11 @@ impl TvContent {
             // The Browser pane's series list.
             LibrarySlotEvent::List(input) => self.series_list_event(input),
             LibrarySlotEvent::HeroActivate => match self.pane {
+                Pane::Series if self.flat_episode_mode() => {
+                    self.selected_episode_item().map(|episode| {
+                        Msg::Shell(ShellRequest::TvEpisodeActivate { episode })
+                    })
+                }
                 Pane::Series => self
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::TvActivate { item })),

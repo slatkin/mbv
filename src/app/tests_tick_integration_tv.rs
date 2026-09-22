@@ -1,5 +1,6 @@
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use rstest::rstest;
 use tuirealm::application::PollStrategy;
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -204,6 +205,24 @@ fn panel(harness: &TickHarness) -> &LibraryPanel {
         .as_any()
         .downcast_ref::<LibraryPanel>()
         .expect("LibraryPanel")
+}
+
+fn flat_episode_harness(mode: mbv_core::config::TvContentMode) -> TickHarness {
+    let mut harness = tv_harness();
+    let mut episode = crate::app::tests::make_item("Latest Episode", "Episode");
+    episode.id = "latest-episode".into();
+    // Keep the fixture on the direct single-item play path; the series
+    // continuation policy is unrelated to flat-mode activation.
+    episode.series_id.clear();
+    let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
+    level.items = vec![episode];
+    level.item_types = Some("Episode".into());
+    level.tv_content_mode = Some(mode.clone());
+    level.loading = false;
+    harness.model_mut().app.libs[0].library_total = Some(301);
+    harness.model_mut().app.libs[0].tv_content_mode = Some(mode);
+    harness.model_mut().sync_mounted_surfaces();
+    harness
 }
 
 fn draw(harness: &mut TickHarness) {
@@ -413,6 +432,62 @@ fn tv_wide_narrow_wide_tick_navigation_keeps_the_selected_target() {
         .expect("final Wide TV viewport anchor");
     assert_eq!(final_anchor.selected_target, narrow_anchor.selected_target);
     assert_eq!(final_anchor.selected_row_offset, narrow_anchor.selected_row_offset);
+}
+
+#[rstest]
+#[case::latest(mbv_core::config::TvContentMode::Latest)]
+#[case::upcoming(mbv_core::config::TvContentMode::Upcoming)]
+fn flat_episode_activation_plays_without_opening_a_series_workspace(
+    #[case] mode: mbv_core::config::TvContentMode,
+) {
+    let mut harness = flat_episode_harness(mode);
+    let stack_len = harness.model().app.libs[0].nav_stack.len();
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+
+    assert_eq!(harness.model().app.libs[0].nav_stack.len(), stack_len);
+    assert_eq!(tv(&harness).selected_series_snapshot(), None);
+    assert!(!tv(&harness).episode_pane_focused());
+    assert_eq!(
+        harness.model().app.player_tab.total_queue_len(),
+        1,
+        "flat episode activation must submit the selected episode to playback"
+    );
+}
+
+#[test]
+fn flat_episode_hero_is_painted_only_in_mini_view() {
+    let mut mini = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
+    mini.model_mut().app.terminal_width = crate::app::MINI_VIEW_THRESHOLD - 1;
+    mini.model_mut().app.mini_view_focus = PanelFocus::Library;
+    mini.model_mut().sync_mounted_surfaces();
+    draw(&mut mini);
+    assert!(panel(&mini).test_hero_overlay_open());
+    assert_eq!(
+        mini
+            .model_mut()
+            .test_tv_owner_mut()
+            .hero_data()
+            .map(|data| data.facts.title),
+        Some("Latest Episode".into())
+    );
+    assert!(panel(&mini).test_overlay_geometry().is_some());
+
+    let mut narrow = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
+    narrow.model_mut().app.terminal_width = crate::app::MINI_VIEW_THRESHOLD;
+    narrow.model_mut().sync_mounted_surfaces();
+    draw(&mut narrow);
+    assert!(!panel(&narrow).test_hero_overlay_open());
+    assert!(narrow
+        .model_mut()
+        .test_tv_owner_mut()
+        .hero_data()
+        .is_none());
+    assert!(panel(&narrow).test_overlay_geometry().is_none());
 }
 
 #[test]

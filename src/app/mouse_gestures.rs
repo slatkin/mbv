@@ -213,8 +213,15 @@ impl App {
             if let Some((_, item)) = self.resolve_tv_series_target(lib_idx, target) {
                 self.activate_selected_series_item(lib_idx, &item);
             }
-        } else if matches!(hit, TvHit::EpisodeRow(_)) {
-            self.activate_selected_series(lib_idx);
+        } else if let TvHit::EpisodeRow(target) = hit {
+            // Flat Latest/Upcoming rows are episodes, not Series targets.
+            // Resolve the painted stable target and play it directly; never
+            // route through the series activation/workspace path.
+            if let Some((_, item)) = self.resolve_tv_series_target(lib_idx, &target) {
+                if item.item_type == "Episode" {
+                    self.play_item(item);
+                }
+            }
         }
     }
 }

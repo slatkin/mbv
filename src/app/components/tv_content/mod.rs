@@ -351,8 +351,21 @@ impl TvContent {
         let searching = self.inline_search.is_active();
         // Hero facts first: reading the projected snapshot and image state
         // ends before the Workspace borrows the episode carrier mutably.
-        let hero_data = self.context.selected_series.as_ref().map(|series| {
-            let mut data = hero_content_emby(series);
+        let flat_episode_mode = self.flat_episode_mode();
+        let hero_item = if flat_episode_mode && !self.is_wide && self.hero_overlay_open {
+            self.selected_episode_item()
+        } else {
+            None
+        };
+        let hero_data = if flat_episode_mode {
+            hero_item.map(|episode| hero_content_emby(&episode))
+        } else {
+            self.context
+                .selected_series
+                .clone()
+                .map(|series| hero_content_emby(&series))
+        };
+        let hero_data = hero_data.map(|mut data| {
             data.facts.artwork.image = self.context.hero_image.clone();
             data
         });
@@ -411,7 +424,7 @@ impl TvContent {
             facts: data.facts,
             overview: data.overview,
             credits: data.credits,
-            workspace: Some(Workspace {
+            workspace: (!flat_episode_mode).then_some(Workspace {
                 header: None,
                 selector: workspace_selector,
                 list: &mut self.episodes,
@@ -636,7 +649,15 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn hero_overlay_target_available(&mut self) -> bool {
-        self.selected_item().is_some()
+        !self.flat_episode_mode() && self.selected_item().is_some()
+    }
+
+    fn mini_view_hero_available(&mut self) -> bool {
+        !self.is_wide && self.flat_episode_mode() && self.selected_episode_item().is_some()
+    }
+
+    fn browser_rows_are_hero_bearing(&mut self) -> bool {
+        !self.flat_episode_mode()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
@@ -783,7 +804,14 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
-        self.context.selected_series.as_ref().map(hero_content_emby)
+        if self.flat_episode_mode() {
+            (self.hero_overlay_open && !self.is_wide)
+                .then(|| self.selected_episode_item())
+                .flatten()
+                .map(|episode| hero_content_emby(&episode))
+        } else {
+            self.context.selected_series.as_ref().map(hero_content_emby)
+        }
     }
     fn set_hero_image(&mut self, state: HeroImageState) {
         self.context.hero_image = state;

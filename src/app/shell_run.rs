@@ -46,6 +46,10 @@ impl Model {
         // drives its owner map (retention + the active pointer) before the
         // focus pass routes to the active surface.
         self.sync_library_panel();
+        // Flat TV episodes use the existing Library Hero overlay only in
+        // compact mini view; this must run after the panel's active owner
+        // hand-off above.
+        self.sync_tv_mini_view_hero();
         // Task 3.2: restore the selected destination's main Selector before
         // its library item, then consume the pending intent exactly once.
         self.reanchor_pending_launch_destination();
