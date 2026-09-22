@@ -287,6 +287,31 @@ fn item_without_declared_artwork_falls_back_to_landscape_placeholder() {
     assert!(artwork.source.is_none());
 }
 
+/// A home-video (`Type: "Video"`) declared landscape only by its `Thumb`
+/// must request that `Thumb`: the default landscape arm used to omit it and
+/// fetch `Backdrop`/`Primary`/`Logo` only, so a `Thumb`-only item resolved
+/// empty and painted the placeholder while its artwork existed.
+#[test]
+fn thumb_only_video_requests_the_declared_thumb() {
+    let item = emby_item(json!({
+        "Id": "hv1", "Name": "Bean Bag", "Type": "Video",
+        "ImageTags": { "Thumb": "thumb" }, "UserData": {}
+    }));
+    let artwork = emby_artwork_policy(&item);
+    assert_eq!(shape(&artwork), ArtworkShape::Landscape);
+    match source(&artwork) {
+        ArtworkSource::Emby {
+            image_types,
+            cache_key,
+            ..
+        } => {
+            assert_eq!(image_types.first().map(String::as_str), Some("Thumb"));
+            assert_eq!(cache_key, "hv1:Thumb,Backdrop,Primary,Logo");
+        }
+        _ => panic!("expected Emby source"),
+    }
+}
+
 #[test]
 fn podcast_episode_is_square() {
     let artwork = abs_episode_artwork_policy(&episode_item(Some("cover")));

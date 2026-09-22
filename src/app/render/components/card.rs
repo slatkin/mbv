@@ -35,7 +35,9 @@ fn card_image_types(item_type: &str) -> &'static [&'static str] {
         "MusicAlbum" => super::widgets::MUSIC_ALBUM_IMAGE_TYPES,
         "Audio" => &["Primary"],
         "Movie" => &["Backdrop", "Primary", "Logo"],
-        _ => &["Primary", "Backdrop", "Logo"],
+        // `Thumb` before the poster chain: home videos (and other non-Movie
+        // video items) often carry only a landscape `Thumb`.
+        _ => &["Primary", "Thumb", "Backdrop", "Logo"],
     }
 }
 
