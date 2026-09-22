@@ -3,6 +3,9 @@
 //! [`WideMediaList`] is the fixed-row presentation over one [`MediaList`]
 //! owner. Painting lives in `crate::app::render::components::media_list`.
 
+use crate::app::components::list::{
+    Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, Viewported,
+};
 use crate::app::ui_util::move_cursor;
 use std::time::Instant;
 
@@ -45,7 +48,7 @@ pub struct MediaList<Target> {
     /// happens in `resolve_viewport` at paint time.
     scroll: usize,
     /// Stable targets selected for a bulk action, in selection order.
-    multi_selection: Vec<Target>,
+    multi_selection: MarkSelectionState<Target>,
     /// The stable target from which range selection is extended.
     selection_anchor: Option<Target>,
     /// Selection retained when a live range is re-anchored or extended.
@@ -66,7 +69,7 @@ impl<Target> MediaList<Target> {
             selectable: Vec::new(),
             cursor: 0,
             scroll: 0,
-            multi_selection: Vec::new(),
+            multi_selection: MarkSelectionState::new(),
             selection_anchor: None,
             frozen_selection: Vec::new(),
             live_range: false,
@@ -142,7 +145,7 @@ impl<Target> MediaList<Target> {
 
     /// Stable targets currently selected for a bulk action.
     pub fn multi_selection(&self) -> &[Target] {
-        &self.multi_selection
+        self.multi_selection.targets()
     }
 
     /// A non-empty multi-selection is Visual mode.
@@ -155,6 +158,23 @@ impl<Target> MediaList<Target> {
         if !self.selectable.is_empty() {
             self.cursor = move_cursor(self.cursor, delta, self.selectable.len());
         }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn row_flow(&self) -> RowFlow<Target>
+    where
+        Target: Clone,
+    {
+        RowFlow::new(
+            self.rows
+                .iter()
+                .map(|row| {
+                    row.selectable_target()
+                        .cloned()
+                        .map_or_else(Row::structural, Row::selectable)
+                })
+                .collect(),
+        )
     }
 
     fn select_first(&mut self) {
@@ -320,6 +340,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         if self.is_visual_mode() {
             if self
                 .multi_selection
+                .targets()
                 .iter()
                 .any(|selected| selected == &target)
             {
@@ -329,6 +350,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
                     .filter_map(|&row| self.rows[row].selectable_target())
                     .filter(|candidate| {
                         self.multi_selection
+                            .targets()
                             .iter()
                             .any(|selected| selected == *candidate)
                     })
@@ -348,10 +370,11 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
     pub fn enter_visual_mode(&mut self) {
         if let Some(target) = self.selected_target().cloned() {
             if self.multi_selection.is_empty() {
-                self.multi_selection = vec![target.clone()];
+                self.multi_selection.clear();
+                self.multi_selection.add(target.clone());
                 self.frozen_selection.clear();
             } else {
-                self.frozen_selection = self.multi_selection.clone();
+                self.frozen_selection = self.multi_selection.targets().to_vec();
             }
             self.selection_anchor = Some(target);
             self.live_range = true;
@@ -420,5 +443,37 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             self.live_range = false;
         }
         self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
+    }
+}
+
+impl<Target: Eq> Cursored<Target> for MediaList<Target> {
+    fn selected_target(&self) -> Option<&Target> {
+        self.selected_target()
+    }
+
+    fn set_selected_target(&mut self, target: Option<&Target>) {
+        self.cursor = target
+            .and_then(|target| self.position_of(target))
+            .unwrap_or(0);
+    }
+}
+
+impl<Target: Eq> Viewported<Target> for MediaList<Target> {
+    fn viewport_offset(&self) -> usize {
+        self.scroll()
+    }
+
+    fn set_viewport_offset(&mut self, offset: usize) {
+        self.set_scroll(offset);
+    }
+}
+
+impl<Target: Eq> MarkSelection<Target> for MediaList<Target> {
+    fn mark_selection(&self) -> &MarkSelectionState<Target> {
+        &self.multi_selection
+    }
+
+    fn mark_selection_mut(&mut self) -> &mut MarkSelectionState<Target> {
+        &mut self.multi_selection
     }
 }

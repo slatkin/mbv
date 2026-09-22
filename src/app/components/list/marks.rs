@@ -11,17 +11,33 @@ pub struct MarkSelectionState<Target> {
     marked: Vec<Target>,
 }
 
-impl<Target: Eq> Default for MarkSelectionState<Target> {
+impl<Target> Default for MarkSelectionState<Target> {
     fn default() -> Self {
         Self { marked: Vec::new() }
     }
 }
 
-impl<Target: Eq> MarkSelectionState<Target> {
+impl<Target> MarkSelectionState<Target> {
     /// Create an empty ordered-mark carrier.
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Marks in their stored addition order.
+    pub fn targets(&self) -> &[Target] {
+        &self.marked
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.marked.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.marked.len()
+    }
+}
+
+impl<Target: PartialEq> MarkSelectionState<Target> {
     /// Add `target` at the end of the addition order.  Returns `false` when it
     /// was already marked.
     pub fn add(&mut self, target: Target) -> bool {
@@ -61,22 +77,18 @@ impl<Target: Eq> MarkSelectionState<Target> {
         self.marked.clear();
     }
 
-    /// Marks in their stored addition order.
-    pub fn targets(&self) -> &[Target] {
-        &self.marked
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.marked.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.marked.len()
+    /// Retain marks matching the supplied predicate without changing the
+    /// relative addition order of survivors.
+    pub fn retain<F>(&mut self, mut keep: F)
+    where
+        F: FnMut(&Target) -> bool,
+    {
+        self.marked.retain(|target| keep(target));
     }
 }
 
 /// Shared ordered-mark operations supplied by a list shape's state owner.
-pub trait MarkSelection<Target: Eq> {
+pub trait MarkSelection<Target: PartialEq> {
     /// Borrow the shape-owned ordered membership carrier.
     fn mark_selection(&self) -> &MarkSelectionState<Target>;
 

@@ -30,23 +30,23 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         if was_empty {
             let cursor = self.selected_target().cloned();
             if let Some(cursor) = cursor {
-                self.multi_selection.push(cursor.clone());
+                self.multi_selection.add(cursor.clone());
                 self.selection_anchor = Some(cursor);
             }
         }
-        if let Some(index) = self.multi_selection.iter().position(|item| item == target) {
+        if self.multi_selection.contains(target) {
             if !was_empty {
-                self.multi_selection.remove(index);
+                self.multi_selection.remove(target);
             }
         } else if self.position_of(target).is_some() {
-            self.multi_selection.push(target.clone());
+            self.multi_selection.add(target.clone());
         }
         if self.multi_selection.is_empty() {
             self.clear_selection();
         } else if self.selection_anchor.is_none() {
             self.selection_anchor = Some(target.clone());
         }
-        self.frozen_selection = self.multi_selection.clone();
+        self.frozen_selection = self.multi_selection.targets().to_vec();
         self.live_range = false;
     }
 
@@ -62,7 +62,8 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .unwrap_or_else(|| target.clone());
         let Some(start) = self.position_of(&anchor) else {
             self.selection_anchor = Some(target.clone());
-            self.multi_selection = vec![target.clone()];
+            self.multi_selection.clear();
+            self.multi_selection.add(target.clone());
             return;
         };
         let (lo, hi) = if start <= end {
@@ -70,7 +71,7 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         } else {
             (end, start)
         };
-        self.multi_selection = self
+        let selected: Vec<Target> = self
             .selectable
             .iter()
             .enumerate()
@@ -81,6 +82,10 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
                 .then(|| candidate.clone())
             })
             .collect();
+        self.multi_selection.clear();
+        for target in selected {
+            self.multi_selection.add(target);
+        }
         self.selection_anchor = Some(anchor);
     }
 

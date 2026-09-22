@@ -399,9 +399,38 @@ impl<Target> RowGeometry<Target> {
             })
     }
 
-    /// Resolve a flow row to its source row for canonical painting.
-    pub(crate) fn source_row(&self, row: usize) -> Option<usize> {
-        self.rows.get(row).and_then(|row| row.source_row)
+    /// Produce target-bearing rectangles for the visible portion of the
+    /// completed fixed-row paint. Structural rows remain in the flow but do
+    /// not enter retained hit geometry.
+    pub(crate) fn target_rects(
+        &self,
+        rows: &[MediaListRow<Target>],
+        claim_rect: Rect,
+        content_rect: Rect,
+    ) -> Vec<(Rect, Target)>
+    where
+        Target: Clone,
+    {
+        let end = self
+            .offset
+            .saturating_add(content_rect.height as usize)
+            .min(self.rows.len());
+        (self.offset..end)
+            .filter_map(|flow_row| {
+                let source_row = self.rows.get(flow_row)?.source_row?;
+                let target = rows.get(source_row)?.selectable_target()?.clone();
+                let y = content_rect.y + (flow_row - self.offset) as u16;
+                Some((
+                    Rect {
+                        x: claim_rect.x,
+                        y,
+                        width: claim_rect.width,
+                        height: 1,
+                    },
+                    target,
+                ))
+            })
+            .collect()
     }
 }
 

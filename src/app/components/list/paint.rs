@@ -9,6 +9,9 @@ use ratatui::layout::{Position, Rect};
 
 struct CompletedPaint<Target> {
     claim_rect: Rect,
+    content_rect: Option<Rect>,
+    flow_offset: Option<usize>,
+    selected_target: Option<Target>,
     rows: Vec<(Rect, Target)>,
     selected_row_rect: Option<Rect>,
 }
@@ -51,11 +54,60 @@ impl<Target> PaintRetainedState<Target> {
     where
         I: IntoIterator<Item = (Rect, Target)>,
     {
+        self.finish_with_geometry(claim_rect, None, None, None, rows, selected_row_rect);
+    }
+
+    /// Publish completed geometry together with the shape's flow metadata.
+    /// The metadata remains private to this carrier just like the row map.
+    pub fn finish_with_geometry<I>(
+        &mut self,
+        claim_rect: Rect,
+        content_rect: Option<Rect>,
+        flow_offset: Option<usize>,
+        selected_target: Option<Target>,
+        rows: I,
+        selected_row_rect: Option<Rect>,
+    ) where
+        I: IntoIterator<Item = (Rect, Target)>,
+    {
         self.completed = Some(CompletedPaint {
             claim_rect,
+            content_rect,
+            flow_offset,
+            selected_target,
             rows: rows.into_iter().collect(),
             selected_row_rect,
         });
+    }
+
+    /// Whether a completed frame is currently retained.
+    pub fn is_valid(&self) -> bool {
+        self.completed.is_some()
+    }
+
+    /// The latest completed frame's claim rectangle.
+    pub fn claim_rect(&self) -> Option<Rect> {
+        self.completed.as_ref().map(|paint| paint.claim_rect)
+    }
+
+    /// The latest completed frame's content rectangle, when supplied by the
+    /// shape adapter.
+    pub fn content_rect(&self) -> Option<Rect> {
+        self.completed.as_ref().and_then(|paint| paint.content_rect)
+    }
+
+    /// The latest completed frame's flow offset, when supplied by the shape
+    /// adapter.
+    pub fn flow_offset(&self) -> Option<usize> {
+        self.completed.as_ref().and_then(|paint| paint.flow_offset)
+    }
+
+    /// The latest completed frame's selected target, when supplied by the
+    /// shape adapter.
+    pub fn selected_target(&self) -> Option<&Target> {
+        self.completed
+            .as_ref()
+            .and_then(|paint| paint.selected_target.as_ref())
     }
 
     /// Whether the latest completed paint claims `point`.
@@ -106,6 +158,53 @@ pub trait PaintRetained<Target> {
     {
         self.paint_retained_mut()
             .finish(claim_rect, rows, selected_row_rect);
+    }
+
+    /// Finish a frame with shape-specific completed-frame metadata.
+    fn finish_with_geometry<I>(
+        &mut self,
+        claim_rect: Rect,
+        content_rect: Option<Rect>,
+        flow_offset: Option<usize>,
+        selected_target: Option<Target>,
+        rows: I,
+        selected_row_rect: Option<Rect>,
+    ) where
+        I: IntoIterator<Item = (Rect, Target)>,
+    {
+        self.paint_retained_mut().finish_with_geometry(
+            claim_rect,
+            content_rect,
+            flow_offset,
+            selected_target,
+            rows,
+            selected_row_rect,
+        );
+    }
+
+    /// Whether a completed frame is currently retained.
+    fn has_paint(&self) -> bool {
+        self.paint_retained().is_valid()
+    }
+
+    /// The latest completed frame's claim rectangle.
+    fn claim_rect(&self) -> Option<Rect> {
+        self.paint_retained().claim_rect()
+    }
+
+    /// The latest completed frame's content rectangle.
+    fn content_rect(&self) -> Option<Rect> {
+        self.paint_retained().content_rect()
+    }
+
+    /// The latest completed frame's flow offset.
+    fn flow_offset(&self) -> Option<usize> {
+        self.paint_retained().flow_offset()
+    }
+
+    /// The latest completed frame's selected target.
+    fn selected_target(&self) -> Option<&Target> {
+        self.paint_retained().selected_target()
     }
 
     /// Explicitly invalidate retained geometry after content or geometry
