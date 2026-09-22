@@ -51,7 +51,6 @@ use crate::app::components::list::{
     AggregateMarkState, Cursored, Expandable, MarkSelection, MarkSelectionState, PaintRetained,
     PaintRetainedState, Viewported,
 };
-#[cfg(test)]
 use crate::app::components::list::{Row, RowFlow};
 use crate::app::components::media_list::{
     queue_row_background, queue_row_zebra, MediaSemanticState,

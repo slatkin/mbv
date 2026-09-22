@@ -21,7 +21,7 @@ impl MusicTreeBrowser {
     /// Selects a node by stable target, loading its ancestor path, and arms
     /// the viewport to keep it visible (design D3 step 4). A target the arena
     /// has not interned is an explicit absent result.
-    pub(in crate::app) fn select_id(&mut self, target: &MusicTreeTarget) -> bool {
+    pub(in crate::app) fn select_music_target(&mut self, target: &MusicTreeTarget) -> bool {
         let Some(id) = self.model.id_of(target) else {
             return false;
         };
@@ -408,7 +408,7 @@ impl MusicTreeBrowser {
     /// tree replaces the album carrier for the shell's selected-album
     /// projection).
     pub(in crate::app) fn select_album_target(&mut self, target: &str) -> bool {
-        self.select_id(&MusicTreeTarget::Album(target.to_string()))
+        self.select_music_target(&MusicTreeTarget::Album(target.to_string()))
     }
 
     /// The current visible projection's album targets: `Some(target)` per album
@@ -468,17 +468,10 @@ impl MusicTreeBrowser {
     /// then re-arms the selected node's visibility: the panel's per-frame
     /// `PanelList` viewport clamp for this owner. The crate re-applies the
     /// minimum scroll during the next render.
-    /// Clamps the viewport to a painted height without transferring owner state,
-    /// then re-arms the selected node's visibility: the panel's per-frame
-    /// `PanelList` viewport clamp for this owner. The crate re-applies the
-    /// minimum scroll during the next render.
     pub(in crate::app) fn clamp_viewport_to(&mut self, viewport_height: usize) {
         self.invalidate();
-        let max = self
-            .state
-            .visible_len()
-            .saturating_sub(viewport_height.max(1));
-        self.state.set_offset(self.state.offset().min(max));
+        let flow = self.row_flow();
+        Viewported::clamp_viewport(self, &flow, viewport_height);
         self.rearm_selection_visibility();
     }
 
@@ -535,10 +528,9 @@ impl MusicTreeBrowser {
 
     /// The visible projection as the seam's ordered row flow. Every projected
     /// node carries a stable target; the current tree has no structural rows,
-    /// so every row is selectable. Test-only: the action scope deliberately
-    /// does not read the expanded projection.
-    #[cfg(test)]
-    fn row_flow(&self) -> RowFlow<MusicTreeTarget> {
+    /// so every row is selectable. The action scope deliberately does not read
+    /// the expanded projection.
+    pub(in crate::app) fn row_flow(&self) -> RowFlow<MusicTreeTarget> {
         RowFlow::new(
             self.state
                 .projection()

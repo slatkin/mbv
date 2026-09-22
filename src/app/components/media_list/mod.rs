@@ -6,8 +6,11 @@
 use crate::app::components::list::{
     Cursored, MarkSelection, MarkSelectionState, Row, RowFlow, Viewported,
 };
-use crate::app::ui_util::move_cursor;
 use std::time::Instant;
+
+/// The flat shape's fixed selectable-row page distance (design D4). Flat
+/// lists keep a fixed row count per page; the tree owns its own policy.
+const PAGE_DISTANCE: usize = 5;
 
 mod anchor;
 mod carrier;
@@ -154,12 +157,40 @@ impl<Target> MediaList<Target> {
     }
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
-    fn move_selection(&mut self, delta: i64) {
-        if !self.selectable.is_empty() {
-            self.cursor = move_cursor(self.cursor, delta, self.selectable.len());
-        }
+    fn move_selection(&mut self, delta: i64)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::move_by(self, &flow, delta as isize);
     }
 
+    fn select_first(&mut self)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::first(self, &flow);
+    }
+
+    fn select_last(&mut self)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::last(self, &flow);
+    }
+
+    /// Place the cursor at selectable index `index`, clamped to the last row.
+    fn select_index(&mut self, index: usize)
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        Cursored::select_selectable_ordinal(self, &flow, index);
+    }
+
+    /// The display rows as the seam's ordered row flow.
     pub(crate) fn row_flow(&self) -> RowFlow<Target>
     where
         Target: Clone,
@@ -176,49 +207,33 @@ impl<Target> MediaList<Target> {
         )
     }
 
-    fn select_first(&mut self) {
-        self.cursor = 0;
-    }
-
-    fn select_last(&mut self) {
-        self.cursor = self.selectable.len().saturating_sub(1);
-    }
-
-    /// Place the cursor at selectable index `index`, clamped to the last row.
-    fn select_index(&mut self, index: usize) {
-        self.cursor = index.min(self.selectable.len().saturating_sub(1));
-    }
-
     /// The clamped viewport for a painted `viewport_height`, keeping the
     /// selected row on screen.
-    fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
-        let total_rows = self.rows.len();
-        let height = viewport_height.max(1);
-        let mut offset = self.scroll.min(total_rows.saturating_sub(height));
-        if let Some(row) = self.selected_display_row() {
-            if row < offset {
-                offset = row;
-                // Keep the label of the selection's group visible: the raise
-                // continues over the contiguous Heading/Spacer rows directly
-                // above it and stops at the previous selectable row (#731).
-                while offset > 0 && self.rows[offset - 1].selectable_target().is_none() {
-                    offset -= 1;
-                }
-            } else if row >= offset + height {
-                offset = row + 1 - height;
-            }
-        }
+    fn resolve_viewport(&self, viewport_height: usize) -> WideViewport
+    where
+        Target: Clone + Eq,
+    {
+        let flow = self.row_flow();
+        let offset = Viewported::resolved_viewport_offset(
+            self,
+            &flow,
+            viewport_height,
+            self.selected_display_row(),
+        );
         WideViewport {
             offset,
-            height,
-            total_rows,
+            height: viewport_height.max(1),
+            total_rows: self.rows.len(),
         }
     }
 
     /// Zero-based screen-row offset from the viewport top to the selected
     /// row (design.md D3). `None` when nothing is selectable.
     #[cfg_attr(not(test), allow(dead_code))]
-    fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
+    fn selected_row_offset(&self, viewport_height: usize) -> Option<usize>
+    where
+        Target: Clone + Eq,
+    {
         let row = self.selected_display_row()?;
         Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
     }
@@ -229,7 +244,7 @@ impl<Target> MediaList<Target> {
         operation: MediaListOperation<Target>,
     ) -> MediaListTransition<Target>
     where
-        Target: Clone + PartialEq,
+        Target: Clone + Eq,
     {
         let before = self.selected_target().cloned();
         let before_count = self.multi_selection.len();
@@ -246,7 +261,7 @@ impl<Target> MediaList<Target> {
                 None
             }
             MediaListOperation::Page(delta) => {
-                self.move_selection(delta.saturating_mul(5));
+                self.move_selection(delta.saturating_mul(PAGE_DISTANCE as i64));
                 None
             }
             MediaListOperation::First => {
@@ -334,7 +349,7 @@ impl<Target: PartialEq> MediaList<Target> {
     }
 }
 
-impl<Target: Clone + PartialEq> MediaList<Target> {
+impl<Target: Clone + Eq> MediaList<Target> {
     fn context_intent(&mut self, target: Target) -> RowIntent<Target> {
         if self.is_visual_mode() {
             if self
@@ -431,7 +446,8 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             self.selection_anchor = None;
             self.live_range = false;
         }
-        self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
+        let flow = self.row_flow();
+        Viewported::clamp_viewport(self, &flow, 1);
     }
 }
 
@@ -454,6 +470,12 @@ impl<Target: Eq> Viewported<Target> for MediaList<Target> {
 
     fn set_viewport_offset(&mut self, offset: usize) {
         self.set_scroll(offset);
+    }
+
+    /// A grouped flat list keeps the selection's group heading or spacer
+    /// visible when it scrolls the selection back into view from above (#731).
+    fn raise_over_leading_structural_rows(&self) -> bool {
+        true
     }
 }
 

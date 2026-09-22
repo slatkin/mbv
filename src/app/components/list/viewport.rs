@@ -2,7 +2,7 @@
 
 use std::convert::TryFrom;
 
-use super::{Cursored, RowFlow};
+use super::{Cursored, Row, RowFlow};
 
 /// The deliberate paging policies supported by the current list shapes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,10 +52,20 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
         offset
     }
 
-    /// Keep a selected flow position visible with the minimum scroll needed.
-    /// Existing offset is preserved when it already satisfies visibility.
-    fn keep_selection_visible(
-        &mut self,
+    /// Whether scrolling a selection into view from above also raises over
+    /// the contiguous structural rows directly above it, keeping a grouped
+    /// list's heading visible with its first selected item (#731). The
+    /// default is the minimum-scroll behavior; a shape with leading structural
+    /// rows opts in.
+    fn raise_over_leading_structural_rows(&self) -> bool {
+        false
+    }
+
+    /// The offset that keeps `selected_position` visible without mutating
+    /// this owner. Existing offset is preserved when it already satisfies
+    /// visibility; otherwise only the minimum scroll is applied.
+    fn resolved_viewport_offset(
+        &self,
         flow: &RowFlow<Target>,
         viewport_len: usize,
         selected_position: Option<usize>,
@@ -66,11 +76,28 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
         if let Some(position) = selected_position {
             if position < offset {
                 offset = position;
+                if self.raise_over_leading_structural_rows() {
+                    while offset > 0 && flow.row_at(offset - 1).is_some_and(Row::is_structural) {
+                        offset -= 1;
+                    }
+                }
             } else if position >= offset.saturating_add(height) {
                 offset = position + 1 - height;
             }
             offset = offset.min(max_offset);
         }
+        offset
+    }
+
+    /// Keep a selected flow position visible with the minimum scroll needed.
+    /// Existing offset is preserved when it already satisfies visibility.
+    fn keep_selection_visible(
+        &mut self,
+        flow: &RowFlow<Target>,
+        viewport_len: usize,
+        selected_position: Option<usize>,
+    ) -> usize {
+        let offset = self.resolved_viewport_offset(flow, viewport_len, selected_position);
         self.set_viewport_offset(offset);
         offset
     }
@@ -176,6 +203,37 @@ mod tests {
     use super::{PagingPolicy, Viewported};
     use crate::app::components::list::{Cursored, Row, RowFlow, TestListState};
 
+    /// A shape that opts into the leading-structural-raise policy (#731).
+    #[derive(Default)]
+    struct RaisingListState {
+        selected: Option<u8>,
+        offset: usize,
+    }
+
+    impl Cursored<u8> for RaisingListState {
+        fn selected_target(&self) -> Option<&u8> {
+            self.selected.as_ref()
+        }
+
+        fn set_selected_target(&mut self, target: Option<&u8>) {
+            self.selected = target.copied();
+        }
+    }
+
+    impl Viewported<u8> for RaisingListState {
+        fn viewport_offset(&self) -> usize {
+            self.offset
+        }
+
+        fn set_viewport_offset(&mut self, offset: usize) {
+            self.offset = offset;
+        }
+
+        fn raise_over_leading_structural_rows(&self) -> bool {
+            true
+        }
+    }
+
     fn flow() -> RowFlow<u8> {
         RowFlow::new(vec![
             Row::selectable(1),
@@ -200,6 +258,26 @@ mod tests {
             Row::selectable(3),
             Row::selectable(4),
         ])
+    }
+
+    #[test]
+    fn raising_over_structural_rows_keeps_the_group_heading_visible() {
+        let rows = RowFlow::new(vec![
+            Row::selectable(1),
+            Row::structural(),
+            Row::selectable(2),
+            Row::selectable(3),
+            Row::selectable(4),
+            Row::selectable(5),
+            Row::selectable(6),
+        ]);
+        let mut list = RaisingListState {
+            selected: Some(2),
+            offset: 4,
+        };
+
+        assert_eq!(list.keep_cursor_visible(&rows, 3), 1);
+        assert_eq!(list.offset, 1);
     }
 
     #[test]

@@ -59,6 +59,11 @@ fn computed_mark_state(
     }
 }
 
+/// The tree's named paging policy (design D4): one page moves this many
+/// visible projection rows. Kept as an explicit shape policy rather than an
+/// implicit shared stride.
+const TREE_PAGE_ROWS: usize = 5;
+
 /// The classified region of a latest-render hit for test assertions: a row
 /// carries its stable target, and the non-row regions stay distinguishable
 /// without leaking the crate's arena ids.
@@ -103,29 +108,28 @@ impl MusicTreeBrowser {
     }
 
     /// Moves the selection `delta` visible rows (the tree's own visible-node
-    /// movement), clamped at the projection bounds by the crate.
+    /// movement), clamped at the projection bounds by the shared default.
     pub(in crate::app) fn move_selection(&mut self, delta: i64) {
-        for _ in 0..delta.unsigned_abs() {
-            let _ = if delta < 0 {
-                self.state.select_prev()
-            } else {
-                self.state.select_next()
-            };
-        }
+        let flow = self.row_flow();
+        Cursored::move_by(self, &flow, delta as isize);
     }
 
-    /// Moves the selection one viewport page (the shared media list's five-row
-    /// page stride), keeping the tree's own visible-node movement.
+    /// Moves the selection one page under the tree's named fixed visible-row
+    /// policy, clamped by the shared movement default.
     pub(in crate::app) fn page_selection(&mut self, delta: i64) {
-        self.move_selection(delta.saturating_mul(5));
+        let flow = self.row_flow();
+        let distance = delta.saturating_mul(TREE_PAGE_ROWS as i64);
+        Cursored::move_by(self, &flow, distance as isize);
     }
 
     pub(in crate::app) fn select_first_visible(&mut self) {
-        let _ = self.state.select_first();
+        let flow = self.row_flow();
+        Cursored::first(self, &flow);
     }
 
     pub(in crate::app) fn select_last_visible(&mut self) {
-        let _ = self.state.select_last();
+        let flow = self.row_flow();
+        Cursored::last(self, &flow);
     }
 
     #[cfg(test)]
@@ -229,7 +233,7 @@ impl MusicTreeBrowser {
             // Re-arm the selected row's visibility for the new height without
             // touching expansion. The crate only arms its `KeepInView` rule
             // when the selection actually changes, so clear and restore the
-            // current projection row; `select_id`/`select_by_id` must not be
+            // current projection row; `select_music_target`/`select_by_id` must not be
             // used here because their `expand_to` would promote filter-forced
             // expansion into persistent expansion on every resize (D5).
             rearm_selection_visibility_for(state);
@@ -453,7 +457,13 @@ impl MusicTreeBrowser {
                 ))
             })
             .collect();
-        self.paint.finish(content_rect, retained_rows, retained_selected);
+        self.paint.store_completed(
+            content_rect,
+            content_rect,
+            state.offset(),
+            retained_rows,
+            retained_selected,
+        );
     }
 }
 

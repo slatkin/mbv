@@ -44,7 +44,7 @@ fn a_geometry_change_keeps_the_selection_visible_within_bounds() {
     let entries = viewport_entries();
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
     browser.expand_all_roots();
-    browser.select_id(&album("beta-11"));
+    browser.select_music_target(&album("beta-11"));
 
     frame(&mut browser, 30);
     assert_eq!(browser.offset(), 0, "the tall viewport needs no scroll");
@@ -101,7 +101,7 @@ fn a_removed_selected_album_falls_back_to_a_visible_node() {
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
     let alpha_root = artist("artist-alpha");
     browser.expand_all_roots();
-    browser.select_id(&album("album-1"));
+    browser.select_music_target(&album("album-1"));
     frame(&mut browser, 5);
 
     let replacement: Vec<MusicTreeEntry> = entries
@@ -130,7 +130,7 @@ fn album_selection_persistence_changes_only_with_the_resolved_album() {
     assert_eq!(browser.selected_target(), Some(alpha_root.clone()));
     assert_eq!(browser.take_album_selection_change(), None);
 
-    browser.select_id(&album_1);
+    browser.select_music_target(&album_1);
     assert_eq!(
         browser.take_album_selection_change().as_deref(),
         Some("album-1")
@@ -142,16 +142,16 @@ fn album_selection_persistence_changes_only_with_the_resolved_album() {
     );
 
     // Focusing an artist root neither emits nor overwrites the retained album.
-    browser.select_id(&alpha_root);
+    browser.select_music_target(&alpha_root);
     assert_eq!(browser.take_album_selection_change(), None);
-    browser.select_id(&album_1);
+    browser.select_music_target(&album_1);
     assert_eq!(
         browser.take_album_selection_change(),
         None,
         "returning to the retained album is still not a change"
     );
 
-    browser.select_id(&album_3);
+    browser.select_music_target(&album_3);
     assert_eq!(
         browser.take_album_selection_change().as_deref(),
         Some("album-3")
@@ -226,7 +226,7 @@ fn neighbour_prefetch_is_suppressed_for_an_artist_root_or_an_unpainted_frame() {
     browser.expand_all_roots();
     frame(&mut browser, 8);
 
-    browser.select_id(&artist("artist-alpha"));
+    browser.select_music_target(&artist("artist-alpha"));
     frame(&mut browser, 8);
     assert_eq!(
         browser.neighbour_prefetch_targets(),
@@ -447,10 +447,10 @@ fn filter_session_restores_anchor_expansion_and_hidden_marks() {
     let root = artist("artist-alpha");
     browser.expand_root(&root);
     let album_2 = album("album-2");
-    browser.select_id(&album_2);
+    browser.select_music_target(&album_2);
     browser.set_marked(&album_2, true);
     browser.collapse_root(&root);
-    browser.select_id(&root);
+    browser.select_music_target(&root);
 
     browser.open_filter();
     browser.apply_filter_query("First");

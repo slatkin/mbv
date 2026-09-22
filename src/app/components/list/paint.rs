@@ -9,11 +9,17 @@ use ratatui::layout::{Position, Rect};
 
 struct CompletedPaint<Target> {
     claim_rect: Rect,
+    content_rect: Rect,
+    flow_offset: usize,
     rows: Vec<(Rect, Target)>,
     selected_row_rect: Option<Rect>,
 }
 
 /// State carrier used by a list shape's retained-paint adapter.
+///
+/// The carrier owns the single completed-paint snapshot: claim and content
+/// rectangles, the flow offset, target-bearing row geometry, and the selected
+/// row rectangle. A shape keeps no second paint-result carrier.
 pub struct PaintRetainedState<Target> {
     completed: Option<CompletedPaint<Target>>,
 }
@@ -47,12 +53,25 @@ impl<Target> PaintRetainedState<Target> {
     /// returns the row rectangles or their map; point resolution is the only
     /// read path.  A row that is structural can simply be omitted from the
     /// target-bearing geometry and will resolve to `None`.
-    pub fn finish<I>(&mut self, claim_rect: Rect, rows: I, selected_row_rect: Option<Rect>)
-    where
+    ///
+    /// `content_rect` is the row-flow rectangle this frame painted and
+    /// `flow_offset` the display-row index parked at its top; both are the
+    /// shape's own completed-paint facts, retained here so no shape keeps a
+    /// second paint-result carrier.
+    pub fn store_completed<I>(
+        &mut self,
+        claim_rect: Rect,
+        content_rect: Rect,
+        flow_offset: usize,
+        rows: I,
+        selected_row_rect: Option<Rect>,
+    ) where
         I: IntoIterator<Item = (Rect, Target)>,
     {
         self.completed = Some(CompletedPaint {
             claim_rect,
+            content_rect,
+            flow_offset,
             rows: rows.into_iter().collect(),
             selected_row_rect,
         });
@@ -66,6 +85,16 @@ impl<Target> PaintRetainedState<Target> {
     /// The latest completed frame's claim rectangle.
     pub fn claim_rect(&self) -> Option<Rect> {
         self.completed.as_ref().map(|paint| paint.claim_rect)
+    }
+
+    /// The latest completed frame's row-flow rectangle.
+    pub fn content_rect(&self) -> Option<Rect> {
+        self.completed.as_ref().map(|paint| paint.content_rect)
+    }
+
+    /// The latest completed frame's display-row offset at the viewport top.
+    pub fn flow_offset(&self) -> Option<usize> {
+        self.completed.as_ref().map(|paint| paint.flow_offset)
     }
 
     /// Whether the latest completed paint claims `point`.
@@ -110,12 +139,23 @@ pub trait PaintRetained<Target> {
     }
 
     /// Finish a frame by consuming its target-bearing geometry.
-    fn finish<I>(&mut self, claim_rect: Rect, rows: I, selected_row_rect: Option<Rect>)
-    where
+    fn finish<I>(
+        &mut self,
+        claim_rect: Rect,
+        content_rect: Rect,
+        flow_offset: usize,
+        rows: I,
+        selected_row_rect: Option<Rect>,
+    ) where
         I: IntoIterator<Item = (Rect, Target)>,
     {
-        self.paint_retained_mut()
-            .finish(claim_rect, rows, selected_row_rect);
+        self.paint_retained_mut().store_completed(
+            claim_rect,
+            content_rect,
+            flow_offset,
+            rows,
+            selected_row_rect,
+        );
     }
 
     /// Whether a completed frame is currently retained.
@@ -126,6 +166,16 @@ pub trait PaintRetained<Target> {
     /// The latest completed frame's claim rectangle.
     fn claim_rect(&self) -> Option<Rect> {
         self.paint_retained().claim_rect()
+    }
+
+    /// The latest completed frame's row-flow rectangle.
+    fn content_rect(&self) -> Option<Rect> {
+        self.paint_retained().content_rect()
+    }
+
+    /// The latest completed frame's display-row offset at the viewport top.
+    fn flow_offset(&self) -> Option<usize> {
+        self.paint_retained().flow_offset()
     }
 
     /// Explicitly invalidate retained geometry after content or geometry
@@ -177,6 +227,8 @@ mod tests {
         let claim = Rect::new(2, 3, 4, 2);
         paint.finish(
             claim,
+            claim,
+            0,
             [(Rect::new(2, 3, 4, 1), 7)],
             Some(Rect::new(2, 3, 4, 1)),
         );
@@ -187,9 +239,13 @@ mod tests {
         assert!(!paint.claims_point(Position { x: 2, y: 3 }));
         assert_eq!(paint.resolve_point(Position { x: 2, y: 3 }), None);
         assert_eq!(paint.selected_row_rect(), None);
+        assert_eq!(paint.content_rect(), None);
+        assert_eq!(paint.flow_offset(), None);
 
         paint.finish(
             claim,
+            claim,
+            0,
             [(Rect::new(2, 3, 4, 1), 7)],
             Some(Rect::new(2, 3, 4, 1)),
         );
@@ -203,6 +259,8 @@ mod tests {
         let mut paint = TestPaint::default();
         paint.finish(
             Rect::new(0, 0, 8, 3),
+            Rect::new(0, 0, 8, 3),
+            1,
             [(Rect::new(0, 0, 8, 1), 11), (Rect::new(0, 2, 8, 1), 29)],
             None,
         );
@@ -211,5 +269,7 @@ mod tests {
         assert_eq!(paint.resolve_point(Position { x: 4, y: 1 }), None);
         assert_eq!(paint.resolve_point(Position { x: 4, y: 2 }), Some(&29));
         assert_eq!(paint.resolve_point(Position { x: 9, y: 0 }), None);
+        assert_eq!(paint.content_rect(), Some(Rect::new(0, 0, 8, 3)));
+        assert_eq!(paint.flow_offset(), Some(1));
     }
 }

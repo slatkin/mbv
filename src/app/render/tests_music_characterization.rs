@@ -1149,7 +1149,7 @@ fn music_tree_title_clock_resets_when_the_selection_changes() {
 
     // Select the first title and inject a mid-scroll clock: its window has
     // travelled eight columns, not its hold start.
-    browser.select_id(&first);
+    browser.select_music_target(&first);
     browser.set_marquee_clock_for_test(RESET_TITLE_FIRST, 600 + 150 * 8);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let first_row = music_tree_row_text(&term, 1, 0, WIDTH);
@@ -1162,7 +1162,7 @@ fn music_tree_title_clock_resets_when_the_selection_changes() {
     // Select the second title without touching the clock. Its title text
     // differs, so the primitive resets the clock and it paints its hold
     // window from the start.
-    browser.select_id(&second);
+    browser.select_music_target(&second);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let second_row = music_tree_row_text(&term, 2, 0, WIDTH);
     let second_name = name_slot(&second_row);

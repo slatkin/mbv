@@ -24,7 +24,7 @@ fn zebra_stripe(surface: Surface) -> ZebraStripe {
     }
 }
 
-impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
+impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
     fn clamp_viewport(&mut self, viewport_height: usize) {
         // The carrier's own viewport clamp (no same-named inherent pair, so
         // no recursion ambiguity to dodge).
@@ -320,7 +320,7 @@ mod panel_list_tests {
             })
             .unwrap();
         let wide_offset = carrier.wide().current_flow_offset().expect("wide painted");
-        let wide_selected = carrier.wide().current_selected_target().cloned();
+        let wide_selected = carrier.selected_target().cloned();
 
         // The panel keeps the same fixed-row owner while geometry changes.
         PanelList::clamp_viewport(&mut carrier, 2);
@@ -346,7 +346,7 @@ mod panel_list_tests {
             "the re-anchored offset survives the panel-driven transition"
         );
         assert_eq!(
-            carrier.wide().current_selected_target().cloned(),
+            carrier.selected_target().cloned(),
             wide_selected,
             "the shared owner's selection is preserved across the transition"
         );

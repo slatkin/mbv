@@ -225,12 +225,12 @@ fn target_to_domain_translation_maps_artist_keys_and_album_targets() {
     let root = MusicTreeTarget::Artist(key.clone());
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&base_entries()));
 
-    assert!(browser.select_id(&album("album-2")));
+    assert!(browser.select_music_target(&album("album-2")));
     assert_eq!(browser.selected_target(), Some(album("album-2")));
     assert_eq!(browser.selected_album_target(), Some("album-2"));
     assert_eq!(browser.selected_artist_key(), None);
 
-    assert!(browser.select_id(&root));
+    assert!(browser.select_music_target(&root));
     assert_eq!(browser.selected_artist_key(), Some(&key));
     assert_eq!(browser.selected_artist_name(), Some("Alpha"));
     assert_eq!(
@@ -364,7 +364,7 @@ fn settled_replacement_retains_the_selected_node_expansion_and_marks() {
     let album_2 = album("album-2");
     browser.expand_root(&alpha_root);
     browser.expand_root(&beta_root);
-    browser.select_id(&album_1);
+    browser.select_music_target(&album_1);
 
     // Aggregate root state is derived: an artist root is never a stored
     // mark target (design D6).
@@ -449,7 +449,7 @@ fn viewport_keeps_its_offset_and_scrolls_only_the_minimum() {
     let beta_11 = album("beta-11");
 
     // Scroll the selected leaf to the viewport's last row.
-    browser.select_id(&alpha_5);
+    browser.select_music_target(&alpha_5);
     frame(&mut browser, 5);
     assert_eq!(browser.offset(), 2, "the leaf sits at the viewport bottom");
     assert_selection_visible(&browser, 5);
@@ -485,7 +485,7 @@ fn viewport_keeps_its_offset_and_scrolls_only_the_minimum() {
     assert_selection_visible(&browser, 5);
 
     // A jump to the last projection row clamps at the projection bounds.
-    browser.select_id(&beta_11);
+    browser.select_music_target(&beta_11);
     frame(&mut browser, 5);
     assert_eq!(browser.offset(), browser.projected_node_targets().len() - 5);
     assert_selection_visible(&browser, 5);
@@ -499,7 +499,7 @@ fn seam_adapters_move_by_stable_parent_and_child_targets() {
     let alpha_root = artist("artist-alpha");
     let album_1 = album("album-1");
     browser.expand_root(&alpha_root);
-    browser.select_id(&album_1);
+    browser.select_music_target(&album_1);
 
     assert_eq!(browser.selected_target(), Some(album_1.clone()));
     assert_eq!(Cursored::selected_target(&browser), Some(&album_1));

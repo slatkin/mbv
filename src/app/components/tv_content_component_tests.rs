@@ -688,6 +688,11 @@ fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
         make_item("Beta", "Series"),
     ];
     items.extend((3..50).map(|index| make_item(&format!("Series {index}"), "Series")));
+    // Stable targets must be unique: the target-addressed list cannot move
+    // between rows that share the default fixture id.
+    for (index, item) in items.iter_mut().enumerate() {
+        item.id = format!("tv-series-{index}");
+    }
 
     let mut owner = TvContent::new();
 

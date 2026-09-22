@@ -12,14 +12,12 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
         seasons: vec![season],
         episodes: [("season-1".into(), vec![episode])].into_iter().collect(),
     };
+    let mut series_a = make_item("Series A", "Series");
+    series_a.id = "series-a".into();
+    let mut series_b = make_item("Series B", "Series");
+    series_b.id = "series-b".into();
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(
-            vec![
-                make_item("Series A", "Series"),
-                make_item("Series B", "Series"),
-            ],
-            0,
-        ),
+        LibraryListRenderCtx::from_items(vec![series_a, series_b], 0),
         None,
         Some(detail),
         0,

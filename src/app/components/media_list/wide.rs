@@ -55,19 +55,13 @@ pub(crate) fn row_marquee_key<Target>(row: &MediaListRow<Target>) -> Option<Stri
 /// offset through its shared [`MediaList`] owner. It has no mouse hit-resolution API
 /// and accepts no column-count or inline-detail options (design.md D1).
 /// Painting is performed by its `Component::view` through the render adapter;
-/// current-frame point resolution is retained alongside the painted flow.
-struct WidePaintGeometry<Target> {
-    content_rect: Rect,
-    flow_offset: usize,
-    selected_target: Option<Target>,
-}
-
+/// current-frame point resolution and geometry are retained by the shared
+/// paint carrier.
 pub struct WideMediaList<Target> {
     core: MediaList<Target>,
     policy: WideMediaListPaintPolicy,
     configured_geometry: Option<(Rect, Rect)>,
     paint: PaintRetainedState<Target>,
-    paint_geometry: Option<WidePaintGeometry<Target>>,
 }
 
 impl<Target> Default for WideMediaList<Target> {
@@ -89,13 +83,11 @@ impl<Target> WideMediaList<Target> {
             policy: WideMediaListPaintPolicy::new(false),
             configured_geometry: None,
             paint: PaintRetainedState::new(),
-            paint_geometry: None,
         }
     }
 
     pub fn invalidate_paint(&mut self) {
         self.paint.invalidate();
-        self.paint_geometry = None;
     }
 
     /// Configure the semantic policy used by the next `view`.
@@ -130,12 +122,13 @@ impl<Target> WideMediaList<Target> {
         Target: Clone,
     {
         let rows = row_geometry.target_rects(claim_rect, content_rect);
-        self.paint.finish(claim_rect, rows, selected_row_rect);
-        self.paint_geometry = Some(WidePaintGeometry {
+        self.paint.store_completed(
+            claim_rect,
             content_rect,
-            flow_offset: row_geometry.offset(),
-            selected_target: self.core.selected_target().cloned(),
-        });
+            row_geometry.offset(),
+            rows,
+            selected_row_rect,
+        );
     }
 
     /// The current frame's claimed list rectangle, if `view` completed.
@@ -146,17 +139,7 @@ impl<Target> WideMediaList<Target> {
 
     /// The current frame's content rectangle, if `view` completed.
     pub fn current_content_rect(&self) -> Option<Rect> {
-        self.paint_geometry
-            .as_ref()
-            .map(|geometry| geometry.content_rect)
-    }
-
-    /// The current frame's selected target, if `view` completed.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_selected_target(&self) -> Option<&Target> {
-        self.paint_geometry
-            .as_ref()
-            .and_then(|geometry| geometry.selected_target.as_ref())
+        self.paint.content_rect()
     }
 
     /// The current frame's selected-row rectangle, if it is visible.
@@ -166,9 +149,7 @@ impl<Target> WideMediaList<Target> {
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_offset(&self) -> Option<usize> {
-        self.paint_geometry
-            .as_ref()
-            .map(|geometry| geometry.flow_offset)
+        self.paint.flow_offset()
     }
 
     /// Whether the current frame's painted list claims `point`.
@@ -242,7 +223,34 @@ impl<Target> WideMediaList<Target> {
     pub(crate) fn set_marquee_started_at(&mut self, text: &str, at: std::time::Instant) {
         self.core.set_marquee_started_at(text, at);
     }
+}
 
+impl<Target: Clone + Eq> WideMediaList<Target> {
+    /// The clamped viewport for a painted `viewport_height`, keeping the
+    /// selected row on screen.
+    pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
+        self.core.resolve_viewport(viewport_height)
+    }
+
+    /// Export the fixed one-column flow used by the painter.
+    pub fn row_geometry(&self, viewport_height: usize) -> RowGeometry<Target> {
+        let viewport = self.core.resolve_viewport(viewport_height);
+        RowGeometry::source(
+            self.core.rows(),
+            viewport.offset,
+            self.core.selected_display_row(),
+        )
+    }
+
+    /// Zero-based screen-row offset from the viewport top to the selected
+    /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
+        self.core.selected_row_offset(viewport_height)
+    }
+}
+
+impl<Target: Clone + Eq> WideMediaList<Target> {
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
     pub fn move_selection(&mut self, delta: i64) {
         self.core.move_selection(delta);
@@ -260,34 +268,9 @@ impl<Target> WideMediaList<Target> {
     pub fn select_index(&mut self, index: usize) {
         self.core.select_index(index);
     }
-
-    /// The clamped viewport for a painted `viewport_height`, keeping the
-    /// selected row on screen.
-    pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
-        self.core.resolve_viewport(viewport_height)
-    }
-
-    /// Zero-based screen-row offset from the viewport top to the selected
-    /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
-        self.core.selected_row_offset(viewport_height)
-    }
 }
 
-impl<Target: Clone> WideMediaList<Target> {
-    /// Export the fixed one-column flow used by the painter.
-    pub fn row_geometry(&self, viewport_height: usize) -> RowGeometry<Target> {
-        let viewport = self.core.resolve_viewport(viewport_height);
-        RowGeometry::source(
-            self.core.rows(),
-            viewport.offset,
-            self.core.selected_display_row(),
-        )
-    }
-}
-
-impl<Target: Clone + PartialEq> WideMediaList<Target> {
+impl<Target: Clone + Eq> WideMediaList<Target> {
     pub fn enter_visual_mode(&mut self) {
         self.invalidate_paint();
         self.core.enter_visual_mode();
@@ -400,25 +383,9 @@ impl<Target> PaintRetained<Target> for WideMediaList<Target> {
     fn paint_retained_mut(&mut self) -> &mut PaintRetainedState<Target> {
         &mut self.paint
     }
-
-    fn begin(&mut self) {
-        self.invalidate_paint();
-    }
-
-    fn finish<I>(&mut self, claim_rect: Rect, rows: I, selected_row_rect: Option<Rect>)
-    where
-        I: IntoIterator<Item = (Rect, Target)>,
-    {
-        self.paint.finish(claim_rect, rows, selected_row_rect);
-        self.paint_geometry = None;
-    }
-
-    fn invalidate(&mut self) {
-        self.invalidate_paint();
-    }
 }
 
-impl<Target: Clone + PartialEq> Component for WideMediaList<Target> {
+impl<Target: Clone + Eq> Component for WideMediaList<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         crate::app::render::render_wide_media_list_component(frame, area, self, self.policy);
     }
