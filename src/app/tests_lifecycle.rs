@@ -456,6 +456,106 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
 }
 
 #[test]
+fn two_apps_diverge_in_memory_and_last_orderly_exit_replaces_whole_snapshot() {
+    let _guard = crate::config::TestStateDirGuard::new();
+
+    let mut first = Model::new(make_app_stub());
+    first.app.panel_focus = PanelFocus::Library;
+    let mut first_item = make_item("First app item", "Movie");
+    first_item.id = "first-app-item".into();
+    first.update_library_owner(
+        LibraryKey::Home,
+        || Box::new(HomeContent::new()),
+        |owner| {
+            owner.set_content(
+                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(first_item))],
+                Vec::new(),
+                false,
+                std::collections::HashMap::new(),
+            );
+        },
+    );
+    first.sync_library_panel();
+
+    let mut second = Model::new(make_app_stub());
+    second.app.tab = TabSelection::Feeds;
+    second.app.panel_focus = PanelFocus::Queue;
+    let second_feed_item = FeedEntry {
+        guid: "second-app-item".into(),
+        title: "Second app item".into(),
+        enclosure_url: Some("https://example.test/second-app-item.mp3".into()),
+        link: None,
+        mime_type: Some("audio/mpeg".into()),
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(FeedKind::Audio),
+        feed_id: Some("second-app-feed".into()),
+        position_ticks: 0,
+        played: false,
+    };
+    second.update_library_owner(
+        LibraryKey::Feeds,
+        || Box::new(FeedsContent::new()),
+        |owner| {
+            owner.set_content(FeedsOwnerPush {
+                subscriptions: vec![FeedSubscription {
+                    name: "Second app feed".into(),
+                    url: "https://example.test/second-app-feed".into(),
+                    kind: FeedKind::Audio,
+                }],
+                entries: vec![vec![second_feed_item.clone()]],
+                all_entries: vec![second_feed_item],
+                loading: false,
+            });
+            owner.cycle_group(1);
+        },
+    );
+    second.sync_library_panel();
+
+    let first_state = mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Home {
+            key: mbv_core::config::HomeSelectorKey::Continue,
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Home {
+            id: "first-app-item".into(),
+        }),
+    };
+    let second_state = mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Feeds,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Queue,
+        selector: Some(mbv_core::config::SelectorIdentity::Feeds {
+            key: mbv_core::config::FeedsSelectorKey::Group(
+                mbv_core::config::FeedGroupKey::Feed(
+                    "https://example.test/second-app-feed".into(),
+                ),
+            ),
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Feeds {
+            id: "second-app-item".into(),
+        }),
+    };
+
+    assert_eq!(mbv_core::config::load_tui_launch_state(), None);
+    assert_eq!(second.launch_state_snapshot(), second_state);
+
+    first.teardown(Duration::from_secs(1));
+    assert_eq!(
+        mbv_core::config::load_tui_launch_state(),
+        Some(first_state.clone())
+    );
+    // The first App's exit must not alter the second App's independent
+    // component-owned launch state before its own orderly exit.
+    assert_eq!(second.launch_state_snapshot(), second_state);
+
+    second.teardown(Duration::from_secs(1));
+    assert_eq!(mbv_core::config::load_tui_launch_state(), Some(second_state));
+}
+
+#[test]
 fn mounted_tick_navigation_does_not_write_launch_snapshot() {
     let _guard = crate::config::TestStateDirGuard::new();
     let initial = mbv_core::config::TuiLaunchState {
