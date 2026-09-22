@@ -72,26 +72,25 @@ list of episodes; the list SHALL NOT nest.
 - **THEN** the list shows that library's upcoming episodes from the `Upcoming` route scoped to the library
 - **AND** the rows are a flat episode list with no nesting
 
-### Requirement: Latest and Upcoming rows play directly and never open a series workspace
+### Requirement: Latest and Upcoming rows play directly or open their series (REVISED 2026-09-22 to match the main spec as amended)
 
-Activating a `Latest` or `Upcoming` row SHALL play that episode. The TV library
-SHALL NOT open a series detail or Workspace in response to activating a
-`Latest` or `Upcoming` row. A selected `Latest` or `Upcoming` episode SHALL show
-a hero only in mini view; in every other geometry the mode presents its flat
-list without an episode hero.
+Activating a `Latest` or `Upcoming` row that carries a playable episode id SHALL play that episode and SHALL NOT open a series detail or Workspace. Activating an `Upcoming` row that carries no episode id but names its series SHALL navigate the library to that series and open its Workspace instead of playing. Keyboard and mouse activation SHALL take the same path. A selected `Latest` or `Upcoming` episode SHALL show a hero only in mini view; in every other geometry the mode presents its flat list across the full panel with no reserved hero pane.
 
-#### Scenario: Activating an episode row plays it
-- **WHEN** the user selects a `Latest` or `Upcoming` episode row and activates it
+#### Scenario: Activating a playable episode row plays it
+- **WHEN** the user selects a `Latest` or `Upcoming` episode row with an episode id and activates it
 - **THEN** that episode plays
+- **AND** no series detail, season selector, or episode Workspace opens
 
-#### Scenario: No series workspace opens
-- **WHEN** the user selects a `Latest` or `Upcoming` episode row
-- **THEN** no series detail, season selector, or episode Workspace opens
+#### Scenario: Activating an id-less Upcoming placeholder opens its series
+- **WHEN** the user selects an `Upcoming` row with no episode id but a series reference and activates it, by keyboard or by mouse
+- **THEN** the library navigates to that series and opens its Workspace
+- **AND** no episode plays
+- **AND** the landed series is the activated row's series on both input paths
 
 #### Scenario: Mini view shows the episode hero
 - **WHEN** the TV library is in mini view and a `Latest` or `Upcoming` episode is selected
 - **THEN** the episode's hero is shown
-- **AND** the same selection in any other geometry shows no episode hero
+- **AND** the same selection in any other geometry shows no episode hero and reserves no hero pane
 
 ### Requirement: The content mode is part of the sticky library position
 
@@ -134,3 +133,20 @@ provider identity.
 #### Scenario: Content after launch does not mark
 - **WHEN** `Latest` content appears after the current client launch
 - **THEN** it does not add a marker during the current run
+
+### Requirement: Upcoming rows are grouped and identified by series (ADDED 2026-09-22)
+
+`Upcoming` rows SHALL be grouped under `Heading` rows derived from `PremiereDate` with relative labels (mirroring Emby web). Each row SHALL render `SeriesName` as primary and `"Sxx:Eyy — episode title"` (from `ParentIndexNumber`/`IndexNumber`/`Name`) as subtitle. Id-less rows SHALL carry synthesized stable per-row targets keyed by series + season/episode identity; no two rows SHALL share an empty-`Id` target.
+
+#### Scenario: Upcoming groups by date with series context
+- **WHEN** the user selects the `Upcoming` mode and the feed carries `PremiereDate`s, `SeriesName`s, and season/episode numbers
+- **THEN** rows appear under relative-date headings with the series name and `Sxx:Eyy — title` on each row
+- **AND** two id-less rows in one list resolve independently
+
+### Requirement: TV Latest renders identically to Home Latest (ADDED 2026-09-22)
+
+The same items SHALL produce the same row text (primary, secondary, trailing) in the TV `Latest` mode and in Home's `Latest` section for that library.
+
+#### Scenario: Differential rendering
+- **WHEN** identical items are fed to both render paths
+- **THEN** the row text is identical on both surfaces

@@ -44,9 +44,7 @@ depends on the tree, and the tree change will adopt these pills unchanged.
   of Home, so Home need not have loaded.
 - Add an `Upcoming` mode backed by the Emby `GET /Shows/Upcoming` route scoped
   to the library.
-- `Latest` and `Upcoming` are flat episode lists: Enter plays the episode, and
-  they never open a series detail or workspace. A hero appears for the selected
-  episode only in mini view.
+- `Latest` and `Upcoming` are flat episode lists: activating a row with a playable episode id plays it; activating an `Upcoming` row with no episode id but a series reference navigates to that series and opens its Workspace (the real server returns Virtual/id-less placeholders — see upcoming-manual-check.md). A hero appears for the selected episode only in mini view. (REVISED 2026-09-22.)
 - The content mode becomes part of the library's sticky navigation position:
   it is saved and restored on reopen, and the existing keyboard cycling
   (`[`/`]`) moves across every mode.
@@ -58,7 +56,8 @@ depends on the tree, and the tree change will adopt these pills unchanged.
 Non-goals: converting TV to a tree (the following change); changing movie,
 music, feed, or Audiobookshelf pills; changing the `Latest`/`Upcoming` fetch
 semantics beyond reusing Home's existing `Latest` source; adding a hero or
-workspace for episodes in non-mini-view geometry.
+*episode* workspace in non-mini-view geometry (id-less `Upcoming` rows navigate
+to the *series* Workspace per above — that is a goal, added 2026-09-22).
 
 ## Capabilities
 

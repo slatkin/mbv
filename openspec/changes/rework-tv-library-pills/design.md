@@ -113,8 +113,10 @@ behavior change from the old `A-C` default.
 `get_latest_episodes(view_id, 30)` — but issues its own request from the library
 path, so Home need not have loaded. `Upcoming` adds
 `get_upcoming(parent_id, limit)` over `GET /Shows/Upcoming` with `ParentId` set
-to the library. Both produce flat `EmbyItem` episode lists; they do not open a
-series detail and do not build a season workspace.
+to the library. Both produce flat `EmbyItem` episode lists. Rows with a playable
+episode id play directly and never open a series detail; `Upcoming` rows with no
+episode id but a series reference navigate to that series and open its Workspace
+(REVISED 2026-09-22 — the real server returns Virtual/id-less placeholders).
 
 ### D5: The new-content acknowledgement moves to the shell
 
@@ -130,12 +132,9 @@ private visited set. Note for review: `extract-shared-list-components` touches
 component state-carrier ownership; this hoist should land as a small shell-owned
 set, not a new component abstraction.
 
-### D6: Episode rows play directly; no series workspace
+### D6: Episode rows play when playable, otherwise open their series (REVISED 2026-09-22)
 
-`Latest` and `Upcoming` rows carry the episode as their stable target and
-activate play, matching Home's episode rows. The TV component must not treat an
-episode target as a series selection: no detail fetch, no season selector, no
-workspace. The episode hero is produced only for the mini-view presentation.
+`Latest` and `Upcoming` rows with a playable episode id carry the episode as their stable target and activate play, matching Home's episode rows. `Upcoming` rows with no episode id but a series reference carry a synthesized stable target (series + season/episode identity, never a shared empty `Id`) and activate navigation to that series' Workspace. Keyboard and mouse activation take the same path. The episode hero is produced only for the mini-view presentation, and non-mini geometries reclaim the hero pane instead of reserving it.
 
 ### D7: Cycling and mouse selection follow the painted row
 
@@ -150,7 +149,10 @@ diverging.
 - **`/Shows/Upcoming` may include episodes not playable from the library.** →
   Manual check against a real server before implementation is called done; if
   unplayable rows appear, either filter to items present locally or play through
-  the same failure path as any unavailable item.
+  the same failure path as any unavailable item. (2026-09-22 LESSON: the check ran
+  at close-out instead of before, and its negative finding was filed through 8.2's
+  "or record" branch rather than reopening planning. Row 8.2 now requires a negative
+  finding to reopen planning; the Virtual/id-less slate is tracked by tasks §9.)
 - **Hoisting acknowledgement conflicts with the in-flight seam work.** →
   Sequence this change after `extract-shared-list-components` lands, and keep
   the hoist to a shell-owned set with no new abstraction.
