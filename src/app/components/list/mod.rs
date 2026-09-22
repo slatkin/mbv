@@ -16,6 +16,7 @@ mod expandable;
 mod marks;
 mod paint;
 mod row_flow;
+pub mod tree_browser;
 mod viewport;
 
 pub use self::cursor::Cursored;

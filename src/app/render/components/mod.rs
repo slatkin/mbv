@@ -40,6 +40,7 @@ pub(super) mod search_sidebar;
 pub(super) mod sessions;
 pub(super) mod settings;
 pub(super) mod settings_component;
+pub(super) mod tree_browser;
 pub(super) mod tv_wide;
 pub(super) mod visualizer;
 pub(in crate::app) mod widgets;
