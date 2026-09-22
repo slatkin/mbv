@@ -11,8 +11,8 @@ use crate::app::components::list::{
 };
 
 use super::{
-    tree_row_is_full_width, TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy,
-    TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition,
+    tree_row_is_full_width, TreeAggregateMark, TreeBrowser, TreeConsumed, TreeExternalIntent,
+    TreeMarkPolicy, TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition,
 };
 
 /// The shared list traits are implemented only for this private adapter.
@@ -189,11 +189,17 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         {
             self.with_state(|state| Cursored::first(state, &flow));
         }
+        // Keep the selection visible against the established viewport: the
+        // panel-declared content height, or the latest completed frame's.
+        // Before either exists there is no viewport to reconcile, so the
+        // offset stays untouched and the next view applies the real rule.
         let height = self
             .configured_geometry
             .map(|(_, content)| usize::from(content.height))
-            .unwrap_or(1);
-        self.with_state(|state| Viewported::reconcile_viewport(state, &flow, height));
+            .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
+        if let Some(height) = height {
+            self.with_state(|state| Viewported::reconcile_viewport(state, &flow, height));
+        }
     }
 
     fn aggregate_mark_state_for(&self, target: &Target) -> AggregateMarkState {
@@ -304,9 +310,21 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.reconcile_selection();
             }
             super::TreeOperation::Page(direction) => {
+                // The page distance is the established visible viewport: the
+                // panel-declared content height, or the latest completed
+                // frame's height. No viewport means no page.
                 let height = self
                     .configured_geometry
-                    .map_or(1, |(_, content)| usize::from(content.height));
+                    .map(|(_, content)| usize::from(content.height))
+                    .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
+                let Some(height) = height else {
+                    return self.transition(
+                        previous,
+                        previous_marks,
+                        TreeConsumed::Unhandled,
+                        external_intent,
+                    );
+                };
                 self.with_state(|state| {
                     Viewported::page(
                         state,
@@ -341,10 +359,20 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     {
                         self.with_state(|state| Expandable::toggle_expanded(state, &target));
                         self.reconcile_selection();
-                        self.invalidate_paint();
                     } else {
                         disposition = TreeConsumed::Unhandled;
                     }
+                } else {
+                    disposition = TreeConsumed::Unhandled;
+                }
+            }
+            super::TreeOperation::ToggleExpansionTarget(target) => {
+                if self
+                    .children_of(&target)
+                    .is_some_and(|children| !children.is_empty())
+                {
+                    self.with_state(|state| Expandable::toggle_expanded(state, &target));
+                    self.reconcile_selection();
                 } else {
                     disposition = TreeConsumed::Unhandled;
                 }
@@ -425,6 +453,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             }
             super::TreeOperation::EditFilter(query) => self.filter_edit(query),
             super::TreeOperation::ClearFilter => self.clear_filter(),
+            super::TreeOperation::ClearMarks => self.marks.clear(),
         }
         self.invalidate_paint();
         self.transition(previous, previous_marks, disposition, external_intent)
@@ -514,11 +543,15 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             };
             let target = &entry.node.target;
             let marked = self.marks.contains(target);
-            let aggregate_marked = entry.node.mark_policy == TreeMarkPolicy::Aggregate
-                && matches!(
-                    self.aggregate_mark_state_for(target),
-                    AggregateMarkState::Marked | AggregateMarkState::Partial
-                );
+            let aggregate_mark = if entry.node.mark_policy == TreeMarkPolicy::Aggregate {
+                match self.aggregate_mark_state_for(target) {
+                    AggregateMarkState::Marked => TreeAggregateMark::Full,
+                    AggregateMarkState::Partial => TreeAggregateMark::Partial,
+                    AggregateMarkState::Unmarked => TreeAggregateMark::None,
+                }
+            } else {
+                TreeAggregateMark::None
+            };
             rows.push(TreePaintRow {
                 title: entry.node.title.clone(),
                 trailing: entry
@@ -530,7 +563,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 root_index: entry.root_index,
                 selected: self.selected.as_ref() == Some(target),
                 marked,
-                aggregate_marked,
+                aggregate_mark,
                 semantic_state: entry.node.semantic_state.clone(),
             });
         }
@@ -552,16 +585,8 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     self.arena.get(&id).map(|entry| {
                         let target = entry.node.target.clone();
                         let marked = self.marks.contains(&target);
-                        let aggregate_marked = entry.node.mark_policy == TreeMarkPolicy::Aggregate
-                            && matches!(
-                                self.aggregate_mark_state_for(&target),
-                                AggregateMarkState::Marked | AggregateMarkState::Partial
-                            );
-                        let full_width = tree_row_is_full_width(
-                            self.selected.as_ref() == Some(&target),
-                            marked,
-                            aggregate_marked,
-                        );
+                        let selected = self.focused && self.selected.as_ref() == Some(&target);
+                        let full_width = tree_row_is_full_width(selected, marked);
                         let rect = if full_width {
                             Rect::new(claim_rect.x, y, claim_rect.width, 1)
                         } else {

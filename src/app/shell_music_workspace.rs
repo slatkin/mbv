@@ -416,7 +416,10 @@ mod tests {
         let mut model = Model::new(settled_service_artist_app());
         model.app.panel_focus = crate::app::PanelFocus::Library;
         model.sync_mounted_surfaces();
-        model.test_music_owner_mut().browser.select_first_visible();
+        model
+            .test_music_owner_mut()
+            .browser
+            .apply(crate::app::components::list::tree_browser::TreeOperation::First);
         assert!(model.test_music_owner().selected_is_artist());
         model.push_music_workspace_content();
         let generation = model.app.emby_runtime.generation();
@@ -499,7 +502,10 @@ mod tests {
         let mut model = Model::new(app);
         model.app.panel_focus = crate::app::PanelFocus::Library;
         model.sync_mounted_surfaces();
-        model.test_music_owner_mut().browser.select_first_visible();
+        model
+            .test_music_owner_mut()
+            .browser
+            .apply(crate::app::components::list::tree_browser::TreeOperation::First);
         assert!(model.test_music_owner().selected_is_artist());
         model.push_music_workspace_content();
 

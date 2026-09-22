@@ -13,7 +13,9 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::list::tree_browser::{tree_row_is_full_width, TreePaintRow};
+use crate::app::components::list::tree_browser::{
+    tree_row_is_full_width, TreeAggregateMark, TreePaintRow,
+};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
@@ -43,10 +45,12 @@ pub(in crate::app) fn render_tree_browser(
         if y >= content_rect.bottom() || content_width == 0 {
             break;
         }
-        // Selected and marked rows claim the complete panel width. Ordinary
-        // rows remain inside the parent's text insets, so the panel—not a
-        // destination—owns the side bands around a tree.
-        let full_width = tree_row_is_full_width(row.selected, row.marked, row.aggregate_marked);
+        // Selected and directly marked rows claim the complete panel width.
+        // Ordinary rows remain inside the parent's text insets, so the
+        // panel—not a destination—owns the side bands around a tree. The bar
+        // is the focused selected row's canonical claim; aggregate states
+        // resolve title roles, not bars (design D5).
+        let full_width = tree_row_is_full_width(focused && row.selected, row.marked);
         let row_area = if full_width {
             Rect::new(claim_rect.x, y, claim_rect.width, 1)
         } else {
@@ -54,7 +58,7 @@ pub(in crate::app) fn render_tree_browser(
         };
         let fill = if full_width {
             palette::SELECTED_ROW_BG
-        } else if row.root_index % 2 == 1 {
+        } else if row.root_index % 2 == 0 {
             zebra
         } else {
             base
@@ -130,22 +134,25 @@ pub(in crate::app) fn render_tree_browser(
 
 #[allow(dead_code)]
 fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
-    if row.marked {
-        return palette::STATUS_AVAILABLE;
-    }
-    if row.aggregate_marked {
-        return palette::TEXT_ACCENT_MUTED;
-    }
-    if matches!(
-        row.semantic_state,
-        MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
-    ) {
-        return palette::TEXT_EMPHASIS;
-    }
-    match row.depth {
-        0 => palette::MUSIC_HEADER,
-        1 => palette::TEXT_FOCUS_ACCENT,
-        _ => palette::ACCENT,
+    // Directly marked rows paint the full-width bar and never reach this
+    // role; aggregate states keep their own title roles (design D5).
+    match row.aggregate_mark {
+        TreeAggregateMark::Partial => palette::TEXT_ACCENT_MUTED,
+        TreeAggregateMark::Full => palette::STATUS_AVAILABLE,
+        TreeAggregateMark::None => {
+            if matches!(
+                row.semantic_state,
+                MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
+            ) {
+                palette::TEXT_EMPHASIS
+            } else {
+                match row.depth {
+                    0 => palette::MUSIC_HEADER,
+                    1 => palette::TEXT_FOCUS_ACCENT,
+                    _ => palette::ACCENT,
+                }
+            }
+        }
     }
 }
 

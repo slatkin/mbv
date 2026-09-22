@@ -59,6 +59,18 @@ impl<Target> TreeReconciliationError<Target> {
     }
 }
 
+/// The derived aggregate-mark state of one aggregate-policy row.
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum TreeAggregateMark {
+    /// No visible direct descendant is marked.
+    None,
+    /// Some, but not all, visible direct descendants are marked.
+    Partial,
+    /// Every visible direct descendant is marked.
+    Full,
+}
+
 /// A row prepared for the destination-neutral render component.
 #[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,12 +81,15 @@ pub(crate) struct TreePaintRow {
     pub(crate) root_index: usize,
     pub(crate) selected: bool,
     pub(crate) marked: bool,
-    pub(crate) aggregate_marked: bool,
+    pub(crate) aggregate_mark: TreeAggregateMark,
     pub(crate) semantic_state: MediaSemanticState,
 }
 
-pub(crate) fn tree_row_is_full_width(selected: bool, marked: bool, aggregate_marked: bool) -> bool {
-    selected || marked || aggregate_marked
+/// The rows that paint the canonical full-width bar: the focused selected row
+/// and directly marked leaves. Aggregate states resolve title roles, not bars
+/// (design D5's aggregate-mark roles).
+pub(crate) fn tree_row_is_full_width(selected: bool, marked: bool) -> bool {
+    selected || marked
 }
 
 #[allow(dead_code)]
@@ -111,6 +126,9 @@ pub struct TreeBrowser<Target> {
     pub(super) focused: bool,
     pub(super) marquee_text: String,
     pub(super) marquee_started_at: Instant,
+    /// The area of the latest completed `view`, the paging viewport fallback
+    /// when the panel has not declared geometry yet.
+    pub(super) last_painted: Option<Rect>,
 }
 
 #[allow(dead_code)]
@@ -143,6 +161,7 @@ impl<Target> TreeBrowser<Target> {
             focused: true,
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
+            last_painted: None,
         }
     }
 
@@ -370,6 +389,83 @@ impl<Target> TreeBrowser<Target> {
 
     pub fn marked_targets(&self) -> &[Target] {
         self.marks.targets()
+    }
+
+    /// The current visible row flow's stable targets in projection order.
+    /// This is a read-only stable-target query: destinations translate their
+    /// own windows and scopes over it, never over positions or internals.
+    pub fn visible_targets(&self) -> Vec<Target>
+    where
+        Target: Clone + Eq + Hash,
+    {
+        self.visible_node_ids()
+            .into_iter()
+            .filter_map(|id| self.arena.get(&id).map(|entry| entry.node.target.clone()))
+            .collect()
+    }
+
+    /// Whether a completed frame is currently retained (the latest-render
+    /// pointer contract's validity read).
+    pub fn has_completed_paint(&self) -> bool {
+        self.paint.is_valid()
+    }
+
+    /// Restore a persisted position: select `target`, revealing its ancestor
+    /// path, and anchor the viewport at the persisted fully-expanded flow
+    /// `offset`. The persisted value names a row in the complete settled
+    /// order, not the current projection, so the anchor rounds forward to the
+    /// next visible row instead of parking the viewport on a hidden one. A
+    /// target the owner does not hold is an explicit absent result.
+    pub fn anchor_selection_to(&mut self, target: &Target, flow_offset: usize) -> bool
+    where
+        Target: Clone + Eq + Hash,
+    {
+        let Some(id) = self.target_to_node.get(target).copied() else {
+            return false;
+        };
+        // Reveal the target's ancestor path without touching any other
+        // branch's expansion.
+        let mut cursor = id;
+        while let Some(parent) = self.arena[&cursor].node.parent.clone() {
+            self.expanded.insert(parent.clone());
+            cursor = self.target_to_node[&parent];
+        }
+        self.selected = Some(target.clone());
+        if let Some(row) = self.visible_row_for_flow_offset(flow_offset) {
+            self.viewport_offset = row;
+        }
+        // The next view reconciles the viewport against its real height, the
+        // same deferred keep-visible rule a Panel-driven restore follows.
+        self.invalidate_paint();
+        true
+    }
+
+    /// The visible row of the first node at or after a persisted
+    /// fully-expanded flow offset. The walk counts roots and their direct
+    /// children, mirroring the persisted settled order.
+    fn visible_row_for_flow_offset(&self, offset: usize) -> Option<usize>
+    where
+        Target: Clone + Eq + Hash,
+    {
+        let visible = self.visible_node_ids();
+        let mut position = 0;
+        for &root in &self.roots {
+            if position >= offset {
+                if let Some(row) = visible.iter().position(|&id| id == root) {
+                    return Some(row);
+                }
+            }
+            position += 1;
+            for &leaf in &self.arena[&root].children {
+                if position >= offset {
+                    if let Some(row) = visible.iter().position(|&id| id == leaf) {
+                        return Some(row);
+                    }
+                }
+                position += 1;
+            }
+        }
+        None
     }
 
     pub fn marked_action_targets(&self) -> Vec<Target>

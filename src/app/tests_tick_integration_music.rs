@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::LibEvent;
 
 fn wide_music_harness() -> (TickHarness, ComponentId) {
@@ -226,9 +227,9 @@ fn inline_search_debounce_applies_grouped_music_filter_through_shell_host() {
     let owner = harness.model().test_music_owner();
     let titles: Vec<&str> = owner
         .browser
-        .projected_node_targets()
+        .visible_targets()
         .iter()
-        .filter_map(|target| owner.browser.title_of(target))
+        .filter_map(|target| owner.browser.node(target).map(|node| node.title.as_str()))
         .collect();
     assert_eq!(
         titles,

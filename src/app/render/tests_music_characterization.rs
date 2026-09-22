@@ -13,6 +13,7 @@ use std::collections::HashMap;
 use tui_treelistview::TreeMarkState;
 
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
+use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::media_list::{
     queue_row_background, queue_row_zebra, MediaSemanticState,
 };
@@ -108,20 +109,26 @@ fn numbered_tree_track_labels_are_painted_at_fixture_widths(
         vec![0],
         Some(vec![indexed, fallback]),
     ));
-    let root = MusicTreeTarget::Artist(ArtistKey::Fallback("Artist".into()));
-    owner.browser.expand_root(&root);
+    // The album adoption already revealed the artist root's path; expand the
+    // album leaf so its cached track rows join the projection.
     let album_target = owner
         .browser
-        .projected_node_targets()
+        .visible_targets()
         .into_iter()
-        .find(|target| owner.browser.title_of(target) == Some("Album"))
+        .find(|target| owner.browser.node(target).map(|node| node.title.as_str()) == Some("Album"))
         .expect("album leaf");
-    owner.browser.expand_node(&album_target);
+    if !owner.browser.is_expanded(&album_target) {
+        owner
+            .browser
+            .apply(TreeOperation::ToggleExpansionTarget(album_target));
+    }
     let indexed_target = owner
         .browser
-        .projected_node_targets()
+        .visible_targets()
         .into_iter()
-        .find(|target| owner.browser.title_of(target) == Some("7. Indexed Track"))
+        .find(|target| {
+            owner.browser.node(target).map(|node| node.title.as_str()) == Some("7. Indexed Track")
+        })
         .expect("indexed track");
 
     let mut model = mounted_model_at(make_music_tree_group_app(), width, height);
@@ -131,21 +138,32 @@ fn numbered_tree_track_labels_are_painted_at_fixture_widths(
     } else {
         mounted_music_narrow_geometry(&model).list_area
     };
-    let term = music_tree_frame(&mut owner.browser, list_area, width, height);
-    let row = music_tree_row_text(
-        &term,
-        row_y(&owner.browser, &indexed_target),
-        list_area.x,
-        list_area.right(),
-    );
+    let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
+    term.draw(|frame| tuirealm::component::Component::view(&mut owner.browser, frame, list_area))
+        .unwrap();
+    let row_y_of = |target: &MusicTreeTarget| {
+        (0..height).find(|y| {
+            owner
+                .browser
+                .resolve_current_point(ratatui::layout::Position::new(list_area.x, *y))
+                == Some(target)
+        })
+    };
+    let indexed_y = row_y_of(&indexed_target).expect("indexed track row painted");
+    let row = music_tree_row_text(&term, indexed_y, list_area.x, list_area.right());
     assert!(row.contains("7. Indexed Track"), "painted row: {row:?}");
+    let fallback_target = owner
+        .browser
+        .visible_targets()
+        .into_iter()
+        .find(|target| {
+            owner.browser.node(target).map(|node| node.title.as_str()) == Some("2. Fallback Track")
+        })
+        .expect("fallback track");
+    let fallback_y = row_y_of(&fallback_target).expect("fallback row painted");
     assert!(
-        owner.browser.projected_node_targets().iter().any(|target| {
-            owner.browser.row_rect_for(target).is_some_and(|rect| {
-                music_tree_row_text(&term, rect.y, list_area.x, list_area.right())
-                    .contains("2. Fallback Track")
-            })
-        }),
+        music_tree_row_text(&term, fallback_y, list_area.x, list_area.right())
+            .contains("2. Fallback Track"),
         "fallback label is painted"
     );
 }

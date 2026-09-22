@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
+use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::msg::{Msg, MusicArtistTarget, ShellRequest};
 use crate::app::library_browse_actions::{
     build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
@@ -150,7 +151,10 @@ fn artist_dispatch_model() -> (Model, MusicArtistTarget) {
     let mut model = Model::new(app);
     model.app.panel_focus = PanelFocus::Library;
     model.sync_mounted_surfaces();
-    model.test_music_owner_mut().browser.select_first_visible();
+    model
+        .test_music_owner_mut()
+        .browser
+        .apply(TreeOperation::First);
     let target = model
         .test_music_owner()
         .artist_detail_target()

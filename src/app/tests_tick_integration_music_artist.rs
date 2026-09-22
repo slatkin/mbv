@@ -95,7 +95,7 @@ fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_sel
         .model_mut()
         .test_music_owner_mut()
         .browser
-        .select_first_visible();
+        .apply(crate::app::components::list::tree_browser::TreeOperation::First);
     assert!(
         harness.model().test_music_owner().selected_is_artist(),
         "the fixture focuses the Service artist root"
@@ -191,13 +191,14 @@ fn right_on_a_collapsed_artist_root_expands_first_then_opens_its_workspace() {
         .test_music_owner()
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
     assert!(
         !harness
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(&root),
+            .is_expanded(&root),
         "Left collapses the expanded root"
     );
 
@@ -208,7 +209,7 @@ fn right_on_a_collapsed_artist_root_expands_first_then_opens_its_workspace() {
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(&root),
+            .is_expanded(&root),
         "the first Right expands the root"
     );
     assert!(
@@ -268,12 +269,13 @@ fn enter_on_an_unfiltered_artist_root_enters_wide_workspace_without_relayout() {
         .test_music_owner()
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
     let expanded = harness
         .model()
         .test_music_owner()
         .browser
-        .root_is_expanded(&root);
+        .is_expanded(&root);
     let before = music_panel(&harness)
         .test_wide_geometry()
         .expect("Wide geometry")
@@ -286,7 +288,7 @@ fn enter_on_an_unfiltered_artist_root_enters_wide_workspace_without_relayout() {
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(&root),
+            .is_expanded(&root),
         expanded,
         "Enter does not toggle the artist root"
     );
@@ -317,12 +319,13 @@ fn enter_on_an_unfiltered_artist_root_opens_the_non_wide_hero_workspace() {
         .test_music_owner()
         .browser
         .selected_target()
+        .cloned()
         .expect("artist root selected");
     let expanded = harness
         .model()
         .test_music_owner()
         .browser
-        .root_is_expanded(&root);
+        .is_expanded(&root);
 
     tick_key(&mut harness, Key::Enter);
 
@@ -339,7 +342,7 @@ fn enter_on_an_unfiltered_artist_root_opens_the_non_wide_hero_workspace() {
             .model()
             .test_music_owner()
             .browser
-            .root_is_expanded(&root),
+            .is_expanded(&root),
         expanded,
         "Hero entry does not toggle expansion"
     );
@@ -371,17 +374,18 @@ fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
         let (mut harness, _id) = mounted_music_app_at(mounted_neighbour_app(), width, height);
         tick_key(&mut harness, Key::Left);
         let root = harness
-            .model()
-            .test_music_owner()
-            .browser
-            .selected_target()
+        .model()
+        .test_music_owner()
+        .browser
+        .selected_target()
+            .cloned()
             .expect("artist root selected");
         assert!(
             harness
                 .model()
                 .test_music_owner()
                 .browser
-                .root_is_expanded(&root)
+                .is_expanded(&root)
         );
 
         tick_key(&mut harness, Key::Char('/'));
@@ -389,7 +393,7 @@ fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
             .model_mut()
             .test_music_owner_mut()
             .browser
-            .apply_filter_query("Alpha");
+            .apply(TreeOperation::EditFilter("Alpha".to_string()));
         draw_music_frame(&mut harness);
         tick_key(&mut harness, Key::Enter);
 
@@ -398,7 +402,7 @@ fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
                 .model()
                 .test_music_owner()
                 .browser
-                .root_is_expanded(&root),
+                .is_expanded(&root),
             "{width}x{height}: filtered Enter toggles the root locally"
         );
         assert!(
@@ -667,7 +671,12 @@ fn neighbour_prefetch_payload_is_the_painted_trees_order_in_both_presentations()
                 .model_mut()
                 .test_music_owner_mut()
                 .browser
-                .select_album_target("album-3"),
+                .anchor_selection_to(
+                    &crate::app::components::music_tree::MusicTreeTarget::Album(
+                        "album-3".into(),
+                    ),
+                    0,
+                ),
             "{width}x{height}: the fixture interns album-3"
         );
         harness.model_mut().sync_mounted_surfaces();
@@ -676,7 +685,8 @@ fn neighbour_prefetch_payload_is_the_painted_trees_order_in_both_presentations()
                 .model()
                 .test_music_owner()
                 .browser
-                .selected_album_target(),
+            .selected_target()
+            .and_then(|target| target.album_leaf_target()),
             Some("album-3"),
             "{width}x{height}: the selection survives the sync"
         );
@@ -716,7 +726,10 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
             .model_mut()
             .test_music_owner_mut()
             .browser
-            .select_album_target("album-3")
+            .anchor_selection_to(
+                &crate::app::components::music_tree::MusicTreeTarget::Album("album-3".into()),
+                0,
+            )
     );
     harness.model_mut().sync_mounted_surfaces();
     // Drop the selected hero's own non-idle fetch so the assertions isolate
@@ -766,7 +779,7 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
         .model_mut()
         .test_music_owner_mut()
         .browser
-        .select_first_visible();
+        .apply(crate::app::components::list::tree_browser::TreeOperation::First);
     harness.model_mut().sync_mounted_surfaces();
     draw_music_frame(&mut harness);
     assert!(

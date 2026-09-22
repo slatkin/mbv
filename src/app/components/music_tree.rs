@@ -1,4 +1,5 @@
 //! Grouped Music's destination-specific tree adapter (design D1/D8).
+#![allow(dead_code)]
 //!
 //! This module is the one boundary between mbv and the locked
 //! `tui-treelistview` 0.2.2 dependency. It owns the destination-local node

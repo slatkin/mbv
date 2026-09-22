@@ -25,7 +25,10 @@ use super::media_list::{
 };
 use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
-use super::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel, MusicTreeTrack};
+use super::music_tree::MusicTreeTarget;
+use crate::app::components::list::tree_browser::{
+    TreeBrowser, TreeMarkPolicy, TreeNode, TreeOperation,
+};
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::{fmt_duration_gutter, trunc_str};
 
@@ -58,12 +61,18 @@ pub(in crate::app) fn wide_album_metadata(album: &EmbyItem, artist: &str) -> (St
         .to_string();
     (title, album.production_year)
 }
+/// The neighbour album-artwork window (design D4): the shell prefetches up
+/// to one visible album leaf behind the selected leaf and up to three ahead.
+const NEIGHBOUR_PREFETCH_BEHIND: usize = 1;
+const NEIGHBOUR_PREFETCH_AHEAD: usize = 3;
+
 pub struct MusicContent {
     pub(in crate::app) context: MusicWideRenderCtx,
-    /// The Grouped Music browser: the destination-local shallow tree (task
-    /// 2.3). It is the only browser owner and painter — the parallel flat album
-    /// carrier and its row projection are gone.
-    pub(in crate::app) browser: MusicTreeBrowser,
+    /// The Grouped Music browser: the shared embedded tree owner over
+    /// `MusicTreeTarget` rows. It is the only browser owner and painter — the
+    /// destination projects settled snapshots into nodes and translates the
+    /// owner's stable-target transitions (design D6).
+    pub(in crate::app) browser: TreeBrowser<MusicTreeTarget>,
     pub(in crate::app) track_list: MediaListCarrier<String>,
     pub(in crate::app) track_focused: bool,
     /// Whether this frame's geometry hosts the inline track list (the Wide
@@ -105,6 +114,16 @@ pub struct MusicContent {
     /// after the shell changes its selected-album snapshot.
     tree_tracks: HashMap<String, Vec<EmbyItem>>,
     tree_track_revision: Option<u64>,
+    /// The last album target reported for the shell's destination-position
+    /// persistence (design D3 step 5). An artist-root focus resolves to no
+    /// album and never clears or overwrites it. This is a destination
+    /// translation of the shared owner's selected stable target.
+    last_reported_album: Option<String>,
+    /// Whether this owner already adopted the shell's projected album position
+    /// (design D3 step 4). Later pushes never re-point the tree — the tree
+    /// owns selection, and an explicit shell re-anchor request (`re_anchor`)
+    /// adopts a navigated position.
+    tree_adopted: bool,
 }
 
 impl MusicContent {
@@ -121,7 +140,7 @@ impl MusicContent {
                 Vec::new(),
                 None,
             ),
-            browser: MusicTreeBrowser::new(MusicTreeModel::new()),
+            browser: TreeBrowser::new(),
             track_list: MediaListCarrier::new(),
             track_focused: false,
             inline_track_focus_enabled: false,
@@ -137,6 +156,8 @@ impl MusicContent {
             hero_overlay_open: false,
             tree_tracks: HashMap::new(),
             tree_track_revision: None,
+            last_reported_album: None,
+            tree_adopted: false,
         }
     }
 
@@ -148,32 +169,14 @@ impl MusicContent {
         self.context.focused = focused;
 
         self.project_tree_tracks();
-        let tracks_by_album = self
-            .tree_tracks
-            .iter()
-            .map(|(album, tracks)| {
-                (
-                    album.clone(),
-                    tracks
-                        .iter()
-                        .enumerate()
-                        .map(|(index, track)| MusicTreeTrack {
-                            target: track.id.clone(),
-                            title: track_row_label(track, index),
-                            search_title: track.name.clone(),
-                        })
-                        .collect(),
-                )
-            })
-            .collect();
-        self.browser.set_track_items(tracks_by_album);
-        let album_rows = self.tree_entries();
-        self.browser.reconcile(&album_rows);
-        // A fresh owner (or a destination whose tree has no selection yet)
-        // adopts the shell's projected album position once. Later pushes never
-        // re-point the tree — the tree owns selection, and an explicit shell
-        // re-anchor request (`re_anchor`) adopts a navigated position.
-        if !self.browser.has_selection() {
+        let projection = self.tree_projection();
+        let _ = self.browser.reconcile(projection);
+        // A fresh owner adopts the shell's projected album position once
+        // (design D3 step 4). Later pushes never re-point the tree — the tree
+        // owns selection, and an explicit shell re-anchor request
+        // (`re_anchor`) adopts a navigated position.
+        if !self.tree_adopted {
+            self.tree_adopted = true;
             let adopted = self
                 .context
                 .selected_album
@@ -187,7 +190,8 @@ impl MusicContent {
                 })
                 .and_then(|position| self.context.album_targets.get(position).cloned());
             if let Some(target) = adopted {
-                self.browser.select_album_target(&target);
+                self.browser
+                    .anchor_selection_to(&MusicTreeTarget::Album(target), 0);
             }
         }
         // The Workspace rows and the Hero facts resolve from the same tree
@@ -207,13 +211,12 @@ impl MusicContent {
 
 impl MusicContent {
     fn selected_album_index(&self) -> usize {
-        self.browser
-            .selected_album_target()
+        self.selected_album_target()
             .and_then(|target| {
                 self.context
                     .album_targets
                     .iter()
-                    .position(|candidate| candidate == target)
+                    .position(|candidate| candidate == &target)
             })
             .unwrap_or(0)
     }
@@ -230,7 +233,7 @@ impl MusicContent {
         // Every local tree movement resolves here after the move: a selection
         // that left the armed root voids its Wide Workspace entry.
         self.void_artist_workspace_focus_off_root();
-        if let Some(target) = self.browser.take_album_selection_change() {
+        if let Some(target) = self.take_album_selection_change() {
             self.last_artist_request = None;
             let index = self
                 .context
@@ -258,28 +261,43 @@ impl MusicContent {
         Some(Msg::Shell(ShellRequest::MusicArtistTracks { target }))
     }
 
+    /// The album-selection persistence translation for the shell (design D3
+    /// step 5): `Some(target)` only when the resolved selected album differs
+    /// from the last one reported, and `None` while an artist root is focused
+    /// — an artist focus never overwrites (or clears) the retained album
+    /// identity.
+    fn take_album_selection_change(&mut self) -> Option<String> {
+        let resolved = self.selected_album_target()?;
+        if self.last_reported_album.as_deref() != Some(resolved.as_str()) {
+            self.last_reported_album = Some(resolved.clone());
+            return Some(resolved);
+        }
+        None
+    }
+
     /// Moves the tree owner's selection by `delta` visible rows and reports the
     /// resolved album-selection change.
     fn move_album(&mut self, delta: i64, kind: AlbumCursorKind) -> Option<Msg> {
-        self.browser.move_selection(delta);
+        self.browser.apply(TreeOperation::Move(delta));
         self.album_selection_request(kind)
     }
 
     /// Moves the tree owner's selection one viewport page and reports the
     /// resolved album-selection change.
     fn page_album(&mut self, delta: i64, kind: AlbumCursorKind) -> Option<Msg> {
-        self.browser.page_selection(delta);
+        self.browser.apply(TreeOperation::Page(delta));
         self.album_selection_request(kind)
     }
 
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
         let cursor = cursor.min(self.context.album_targets.len().saturating_sub(1));
         if let Some(target) = self.context.album_targets.get(cursor).cloned() {
-            // The persisted offset is a flat-flow row (artist row + leaves),
-            // not a tree projection row: the tree owner translates it so an
-            // interleaved artist root can never anchor the viewport to the
-            // wrong album.
-            self.browser.anchor_album_target(&target, scroll);
+            // The persisted offset is a settled-flow row (artist row +
+            // leaves), not a tree projection row: the tree owner translates
+            // it so an interleaved artist root can never anchor the viewport
+            // to the wrong album.
+            self.browser
+                .anchor_selection_to(&MusicTreeTarget::Album(target), scroll);
         }
         // A re-anchor is a discrete navigation transition: a cursor that no
         // longer rests on the armed root voids its Wide Workspace entry.
@@ -339,7 +357,7 @@ impl MusicContent {
     }
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_scroll(&self) -> usize {
-        self.browser.offset()
+        self.browser.viewport_offset()
     }
     pub(in crate::app) fn track_focused(&self) -> bool {
         self.track_focused
@@ -354,15 +372,29 @@ impl MusicContent {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {
         // The tree's visible-node row flow: one entry per projected node, an
-        // album target for leaves and `None` for artist roots.
-        self.browser.projected_targets()
+        // album target for leaves and `None` for artist roots and tracks.
+        self.browser
+            .visible_targets()
+            .iter()
+            .map(|target| target.album_leaf_target().map(str::to_string))
+            .collect()
     }
 
-    /// Expands every artist root (test fixture for the tree's settled visible
-    /// album order).
+    /// Expands every projected node (test fixture for the tree's settled
+    /// visible order, tracks included).
     #[cfg(test)]
     pub(in crate::app) fn expand_all_tree_roots(&mut self) {
-        self.browser.expand_all_roots();
+        let targets: Vec<MusicTreeTarget> = self
+            .browser
+            .nodes()
+            .map(|node| node.target.clone())
+            .collect();
+        for target in targets {
+            if !self.browser.is_expanded(&target) {
+                self.browser
+                    .apply(TreeOperation::ToggleExpansionTarget(target));
+            }
+        }
     }
 
     #[cfg(test)]
@@ -416,7 +448,7 @@ impl MusicContent {
         match key.code {
             Key::Esc => {
                 self.inline_search.close();
-                self.browser.close_filter();
+                self.browser.apply(TreeOperation::ClearFilter);
                 None
             }
             Key::Backspace => {
@@ -426,9 +458,9 @@ impl MusicContent {
                     Some(super::inline_search::InlineSearchAction::Dismiss)
                 ) {
                     self.inline_search.close();
-                    self.browser.close_filter();
+                    self.browser.apply(TreeOperation::ClearFilter);
                 } else if self.inline_search.query().is_empty() {
-                    self.browser.apply_filter_query("");
+                    self.browser.apply(TreeOperation::EditFilter(String::new()));
                 }
                 None
             }
@@ -441,29 +473,31 @@ impl MusicContent {
             Key::PageUp => self.page_album(-1, AlbumCursorKind::Page),
             Key::PageDown => self.page_album(1, AlbumCursorKind::Page),
             Key::Home => {
-                self.browser.select_first_visible();
+                self.browser.apply(TreeOperation::First);
                 self.album_selection_request(AlbumCursorKind::Jump)
             }
             Key::End => {
-                self.browser.select_last_visible();
+                self.browser.apply(TreeOperation::Last);
                 self.album_selection_request(AlbumCursorKind::Jump)
             }
-            Key::Left if self.browser.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_target() {
-                    if self.browser.root_is_expanded(&root) {
-                        self.browser.collapse_root(&root);
+            Key::Left if self.selected_is_artist() => {
+                if let Some(root) = self.browser.selected_target().cloned() {
+                    if self.browser.is_expanded(&root) {
+                        self.browser
+                            .apply(TreeOperation::ToggleExpansionTarget(root));
                     }
                 }
                 None
             }
             Key::Left => {
-                self.browser.move_to_parent();
+                self.browser.apply(TreeOperation::Parent);
                 self.album_selection_request(AlbumCursorKind::Move)
             }
-            Key::Right if self.browser.selected_is_artist() => {
-                let root = self.browser.selected_target()?;
-                if !self.browser.root_is_expanded(&root) {
-                    self.browser.expand_root(&root);
+            Key::Right if self.selected_is_artist() => {
+                let root = self.browser.selected_target().cloned()?;
+                if !self.browser.is_expanded(&root) {
+                    self.browser
+                        .apply(TreeOperation::ToggleExpansionTarget(root));
                     None
                 } else {
                     self.artist_detail_target()
@@ -471,18 +505,22 @@ impl MusicContent {
                 }
             }
             Key::Right => {
-                if let Some(target) = self.browser.selected_target() {
-                    self.browser.expand_node(&target);
+                if let Some(target) = self.browser.selected_target().cloned() {
+                    if !self.browser.is_expanded(&target) {
+                        self.browser
+                            .apply(TreeOperation::ToggleExpansionTarget(target));
+                    }
                 }
                 None
             }
-            Key::Enter if self.browser.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_target() {
-                    self.browser.toggle_root(&root);
+            Key::Enter if self.selected_is_artist() => {
+                if let Some(root) = self.browser.selected_target().cloned() {
+                    self.browser
+                        .apply(TreeOperation::ToggleExpansionTarget(root));
                 }
                 None
             }
-            Key::Enter if self.browser.selected_is_track() => {
+            Key::Enter if self.selected_is_track() => {
                 let (album_target, track_id) = self.selected_tree_track()?;
                 Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
                     album_target,
@@ -490,11 +528,9 @@ impl MusicContent {
                 }))
             }
             Key::Enter => {
-                let target = self.browser.selected_album_target()?.to_string();
                 let item = self.selected_item()?;
                 self.inline_search.close();
-                self.browser.close_filter();
-                self.browser.select_album_target(&target);
+                self.browser.apply(TreeOperation::ClearFilter);
                 if self.track_list.rows().is_empty() {
                     Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
                 } else if self.inline_track_focus_enabled {
@@ -510,6 +546,7 @@ impl MusicContent {
 }
 
 include!("music_interaction.rs");
+include!("music_content_tree_target.rs");
 include!("music_content_workspace.rs");
 include!("music_content_owner.rs");
 

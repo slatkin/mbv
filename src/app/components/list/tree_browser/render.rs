@@ -11,6 +11,7 @@ use super::TreeBrowser;
 
 impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
+        self.last_painted = Some(area);
         let (claim_rect, content_rect) = self.configured_geometry.unwrap_or((area, area));
         self.reconcile_selection();
         self.paint.begin();
@@ -30,7 +31,7 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
             .iter()
             .position(|row| row.selected)
             .and_then(|index| content_rect.y.checked_add(index as u16))
-            .map(|y| Rect::new(claim_rect.x, y, claim_rect.width, 1));
+            .map(|y| Rect::new(content_rect.x, y, content_rect.width, 1));
         self.paint.store_completed(
             claim_rect,
             content_rect,

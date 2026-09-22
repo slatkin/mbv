@@ -296,15 +296,25 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
         ["album-1", "album-2"].map(|target| {
             let node = music
                 .browser
-                .projected_node_targets()
+                .visible_targets()
                 .into_iter()
                 .find(|candidate| candidate.album_leaf_target() == Some(target))
                 .expect("painted album node");
-            let row = music
-                .browser
-                .row_rect_for(&node)
+            let point = (0..256u16)
+                .find_map(|y| {
+                    (0..256u16).find_map(|x| {
+                        (music
+                            .browser
+                            .resolve_current_point(ratatui::layout::Position::new(x, y))
+                            == Some(&node))
+                        .then_some((x, y))
+                    })
+                })
                 .expect("painted album row");
-            (row.x, row.y)
+            // Click inside the row's text area: a selected row's retained
+            // rect starts at the panel's claim edge, two columns left of the
+            // content rect the panel delivers within.
+            (point.0 + 2, point.1)
         })
     };
     let click = |column, row, modifiers| {
@@ -325,13 +335,16 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
                 .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
         }
         harness.model_mut().sync_mounted_surfaces();
+        // Each modified click's mutation invalidates the tree's completed
+        // frame; re-paint so the next click resolves the latest geometry.
+        draw_music_frame(&mut harness);
+        harness.model_mut().sync_mounted_surfaces();
     }
 
     assert_eq!(
         harness
             .model()
             .test_music_owner()
-            .browser
             .selected_album_targets_in_display_order(),
         vec!["album-1".to_string(), "album-2".to_string()]
     );
@@ -430,7 +443,6 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
         harness
             .model()
             .test_music_owner()
-            .browser
             .selected_album_targets()
             .len(),
         2,
@@ -444,7 +456,6 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
     assert!(harness
         .model()
         .test_music_owner()
-        .browser
         .selected_album_targets()
         .is_empty());
 }
@@ -499,7 +510,7 @@ fn grouped_music_browser_has_one_tree_owner_and_painter_in_every_panel_mode() {
         let row = tree_selected.expect("tree selected row");
         let position = ratatui::layout::Position { x: row.x, y: row.y };
         assert!(
-            owner.browser.claims_point(position),
+            owner.browser.claims_current_point(position),
             "{width}x{height}: the tree claims the row it painted"
         );
         assert!(
@@ -530,7 +541,8 @@ fn grouped_music_browser_reuses_one_tree_owner_across_panel_modes() {
     let (mut harness, id) = mounted_music_at(160, 40);
     let selected = music_workspace(&harness, &id)
         .browser
-        .selected_album_target()
+        .selected_target()
+        .and_then(|target| target.album_leaf_target())
         .map(str::to_owned);
     assert!(
         selected.is_some(),
@@ -549,7 +561,7 @@ fn grouped_music_browser_reuses_one_tree_owner_across_panel_modes() {
     );
     let mini = music_workspace(&harness, &id);
     assert_eq!(
-        mini.browser.selected_album_target().map(str::to_owned),
+        mini.selected_album_target().as_deref().map(str::to_owned),
         selected,
         "the responsive change keeps the tree's selected album"
     );
@@ -569,7 +581,7 @@ fn grouped_music_browser_reuses_one_tree_owner_across_panel_modes() {
     );
     let wide = music_workspace(&harness, &id);
     assert_eq!(
-        wide.browser.selected_album_target().map(str::to_owned),
+        wide.selected_album_target().as_deref().map(str::to_owned),
         selected,
         "the tree's selection survives the full round trip"
     );
@@ -931,3 +943,4 @@ fn rejected_non_grouped_music_shape_flashes_and_leaves_every_committed_value_unc
         "the retained component selection is unchanged"
     );
 }
+

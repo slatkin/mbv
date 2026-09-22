@@ -113,6 +113,9 @@ pub enum TreeOperation<Target> {
     Parent,
     Child,
     ToggleExpansion,
+    /// Toggle one node's persistent expansion without changing selection.
+    /// A childless target is an explicit `Unhandled` result.
+    ToggleExpansionTarget(Target),
     Select(Target),
     ToggleMark,
     ToggleMarkTarget(Target),
@@ -124,6 +127,8 @@ pub enum TreeOperation<Target> {
     ContextTarget(Target),
     EditFilter(String),
     ClearFilter,
+    /// Clear the ordered mark set.
+    ClearMarks,
 }
 
 /// One complete operation result.  The independent fields let a caller
