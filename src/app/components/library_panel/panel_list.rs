@@ -7,6 +7,7 @@
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
+use std::hash::Hash;
 use tuirealm::component::Component;
 
 use crate::app::components::inline_search::InlineSearch;
@@ -73,6 +74,51 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
 
     fn claims_point(&self, point: Position) -> bool {
         self.claims_current_point(point)
+    }
+}
+
+/// The complete shared tree owner uses the same erased PanelList surface as
+/// the flat carrier. The panel supplies only focus and claim/content geometry;
+/// all tree painting and retained target geometry stay behind
+/// `TreeBrowser::Component::view`.
+impl<Target: Clone + Eq + Hash> PanelList
+    for crate::app::components::list::tree_browser::TreeBrowser<Target>
+{
+    fn clamp_viewport(&mut self, viewport_height: usize) {
+        self.clamp_viewport_to(viewport_height);
+    }
+
+    fn clear_selection(&mut self) {
+        self.clear_marks_for_panel();
+    }
+
+    fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
+        let focused = match policy {
+            PanelListPaintPolicy::Wide { focused }
+            | PanelListPaintPolicy::WideWorkspace { focused } => focused,
+        };
+        self.set_focused(focused);
+        self.invalidate_paint();
+    }
+
+    fn view(&mut self, frame: &mut Frame, rect: Rect) {
+        Component::view(self, frame, rect);
+    }
+
+    fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        self.set_geometry(claim_rect, content_rect);
+    }
+
+    fn selected_row_rect(&self) -> Option<Rect> {
+        self.selected_row_rect()
+    }
+
+    fn claims_point(&self, point: Position) -> bool {
+        self.claims_current_point(point)
+    }
+
+    fn search_bar(&self) -> Option<(String, bool)> {
+        self.search_bar()
     }
 }
 
@@ -182,6 +228,57 @@ mod panel_list_tests {
             kind: MediaKind::Media,
             semantic_state: MediaSemanticState::Ordinary,
         }
+    }
+
+    #[derive(Clone, Debug, Eq, Hash, PartialEq)]
+    enum TreeTarget {
+        Root,
+        Child,
+    }
+
+    #[test]
+    fn shared_tree_uses_the_media_slot_panel_surface_for_paint_and_hits() {
+        use crate::app::components::list::tree_browser::{TreeBrowser, TreeMarkPolicy, TreeNode};
+
+        let mut tree = TreeBrowser::new();
+        tree.reconcile([
+            TreeNode::new(
+                TreeTarget::Root,
+                None,
+                "Root",
+                "root",
+                MediaSemanticState::Ordinary,
+                TreeMarkPolicy::Direct,
+            ),
+            TreeNode::new(
+                TreeTarget::Child,
+                Some(TreeTarget::Root),
+                "Child",
+                "child",
+                MediaSemanticState::Ordinary,
+                TreeMarkPolicy::Direct,
+            ),
+        ])
+        .unwrap();
+        let claim = Rect::new(1, 0, 18, 2);
+        let content = Rect::new(3, 0, 14, 2);
+        let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+        terminal
+            .draw(|frame| {
+                PanelList::set_paint_policy(
+                    &mut tree,
+                    PanelListPaintPolicy::Wide { focused: true },
+                );
+                PanelList::set_geometry(&mut tree, claim, content);
+                PanelList::view(&mut tree, frame, claim);
+            })
+            .unwrap();
+
+        assert!(PanelList::claims_point(&tree, Position::new(2, 0)));
+        assert_eq!(
+            tree.resolve_current_point(Position::new(2, 0)),
+            Some(&TreeTarget::Root)
+        );
     }
 
     /// The selected-row bar is intentionally identical across the browser

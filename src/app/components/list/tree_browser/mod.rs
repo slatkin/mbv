@@ -392,6 +392,30 @@ impl<Target> TreeBrowser<Target> {
         self.viewport_offset
     }
 
+    /// Clamp the retained flow offset to a Panel-provided viewport without
+    /// changing the selected stable target.
+    pub fn clamp_viewport_to(&mut self, viewport_height: usize)
+    where
+        Target: Clone + Eq + Hash,
+    {
+        let max_offset = self.visible_len().saturating_sub(viewport_height);
+        self.viewport_offset = self.viewport_offset.min(max_offset);
+        self.invalidate_paint();
+    }
+
+    /// Clear ordered marks when the Library panel replaces its active owner.
+    pub fn clear_marks_for_panel(&mut self)
+    where
+        Target: PartialEq,
+    {
+        self.marks.clear();
+        self.invalidate_paint();
+    }
+
+    pub fn selected_row_rect(&self) -> Option<Rect> {
+        self.paint.selected_row_rect()
+    }
+
     pub fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect)
     where
         Target: Clone + Eq + Hash,
@@ -407,7 +431,7 @@ impl<Target> TreeBrowser<Target> {
         self.focused = focused;
     }
 
-    pub(super) fn invalidate_paint(&mut self) {
+    pub fn invalidate_paint(&mut self) {
         self.paint.invalidate();
     }
 

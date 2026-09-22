@@ -18,7 +18,10 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
         crate::app::render::render_tree_browser(
             frame,
             claim_rect,
+            content_rect,
             &rows,
+            self.visible_len(),
+            self.viewport_offset,
             self.focused,
             &mut self.marquee_text,
             &mut self.marquee_started_at,
@@ -26,13 +29,13 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
         let selected_row = rows
             .iter()
             .position(|row| row.selected)
-            .and_then(|index| claim_rect.y.checked_add(index as u16))
+            .and_then(|index| content_rect.y.checked_add(index as u16))
             .map(|y| Rect::new(claim_rect.x, y, claim_rect.width, 1));
         self.paint.store_completed(
             claim_rect,
             content_rect,
             self.viewport_offset,
-            self.retained_rows(claim_rect),
+            self.retained_rows(claim_rect, content_rect),
             selected_row,
         );
     }

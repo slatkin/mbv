@@ -377,6 +377,30 @@ fn marks_aggregate_and_context_use_visible_display_order() {
 }
 
 #[test]
+fn one_operation_reports_selection_and_mark_changes_together() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            named_node(Target::Root, None, "Root", "root", TreeMarkPolicy::Direct),
+            named_node(
+                Target::Other,
+                None,
+                "Other",
+                "other",
+                TreeMarkPolicy::Direct,
+            ),
+        ])
+        .unwrap();
+
+    let transition = browser.apply(super::TreeOperation::ToggleMarkTarget(Target::Other));
+    assert_eq!(transition.disposition, super::TreeConsumed::Consumed);
+    assert_eq!(transition.selected_target, Some(Target::Other));
+    assert!(transition.selected_target_change.is_some());
+    assert_eq!(transition.mark_summary.unwrap().marked_count, 1);
+    assert!(transition.mark_summary_change.is_some());
+}
+
+#[test]
 fn pointer_operations_use_the_latest_completed_frame() {
     let mut browser = TreeBrowser::new();
     browser
@@ -387,4 +411,72 @@ fn pointer_operations_use_the_latest_completed_frame() {
     assert_eq!(transition.disposition, super::TreeConsumed::Consumed);
     assert_eq!(browser.marked_targets(), &[Target::Other]);
     assert!(browser.resolve_current_point(Position::new(2, 1)).is_none());
+}
+
+#[test]
+fn shared_view_paints_depth_metadata_bars_and_scrollbar_without_state_glyphs() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            named_node(
+                Target::Root,
+                None,
+                "Root",
+                "root",
+                TreeMarkPolicy::Aggregate,
+            ),
+            named_node(
+                Target::Branch,
+                Some(Target::Root),
+                "Branch",
+                "branch",
+                TreeMarkPolicy::Excluded,
+            ),
+            named_node(
+                Target::Leaf,
+                Some(Target::Branch),
+                "Leaf",
+                "leaf",
+                TreeMarkPolicy::Direct,
+            )
+            .with_trailing("2026"),
+            named_node(
+                Target::Other,
+                None,
+                "Other",
+                "other",
+                TreeMarkPolicy::Direct,
+            ),
+        ])
+        .unwrap();
+    browser.set_geometry(Rect::new(1, 0, 18, 2), Rect::new(3, 0, 14, 2));
+    browser.apply(super::TreeOperation::ToggleExpansion);
+    browser.apply(super::TreeOperation::Child);
+    browser.apply(super::TreeOperation::ToggleExpansion);
+    browser.apply(super::TreeOperation::Child);
+    browser.apply(super::TreeOperation::ToggleMark);
+
+    let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(1, 0, 18, 2)))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let selected = browser.selected_row_rect().expect("selected row retained");
+    assert_eq!(
+        buffer[(selected.x, selected.y)].bg,
+        crate::app::palette::SELECTED_ROW_BG
+    );
+    assert!(buffer.content().iter().any(|cell| cell.symbol() == "2"));
+    assert!(buffer
+        .content()
+        .iter()
+        .all(|cell| { cell.symbol() != "▸" && cell.symbol() != "▾" }));
+    assert!(
+        buffer[(19, 0)].fg == crate::app::palette::SCROLLBAR
+            || buffer[(19, 1)].fg == crate::app::palette::SCROLLBAR
+    );
+    assert!(browser
+        .resolve_current_point(Position::new(2, selected.y))
+        .is_some());
+    assert!(browser.resolve_current_point(Position::new(2, 2)).is_none());
 }

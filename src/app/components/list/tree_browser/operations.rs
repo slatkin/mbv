@@ -164,6 +164,10 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         visible
     }
 
+    pub(super) fn visible_len(&self) -> usize {
+        self.visible_node_ids().len()
+    }
+
     pub(super) fn current_flow(&self) -> RowFlow<Target> {
         RowFlow::new(
             self.visible_node_ids()
@@ -533,19 +537,33 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         rows
     }
 
-    pub(super) fn retained_rows(&self, area: Rect) -> Vec<(Rect, Target)> {
+    pub(super) fn retained_rows(
+        &self,
+        claim_rect: Rect,
+        content_rect: Rect,
+    ) -> Vec<(Rect, Target)> {
         self.visible_node_ids()
             .into_iter()
             .skip(self.viewport_offset)
             .enumerate()
             .filter_map(|(index, id)| {
-                let y = area.y.checked_add(index as u16)?;
-                (y < area.bottom()).then(|| {
+                let y = content_rect.y.checked_add(index as u16)?;
+                (y < content_rect.bottom()).then(|| {
                     self.arena.get(&id).map(|entry| {
-                        (
-                            Rect::new(area.x, y, area.width, 1),
-                            entry.node.target.clone(),
-                        )
+                        let target = entry.node.target.clone();
+                        let full_width = self.selected.as_ref() == Some(&target)
+                            || (entry.node.mark_policy == TreeMarkPolicy::Aggregate
+                                && matches!(
+                                    self.aggregate_mark_state_for(&target),
+                                    AggregateMarkState::Marked | AggregateMarkState::Partial
+                                ))
+                            || self.marks.contains(&target);
+                        let rect = if full_width {
+                            Rect::new(claim_rect.x, y, claim_rect.width, 1)
+                        } else {
+                            Rect::new(content_rect.x, y, content_rect.width, 1)
+                        };
+                        (rect, target)
                     })
                 })?
             })
