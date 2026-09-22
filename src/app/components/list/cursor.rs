@@ -1,6 +1,6 @@
 //! Shared cursor arithmetic over an ordered [`RowFlow`](super::RowFlow).
 
-use super::{Row, RowFlow};
+use super::RowFlow;
 
 /// Primitive cursor state supplied by a list shape.
 ///
@@ -21,16 +21,17 @@ pub trait Cursored<Target: Eq> {
             .and_then(|target| flow.position_of(target))
     }
 
-    /// Select a target that is present in `flow`.
+    /// Select a target, falling back when it is absent from `flow`.
     ///
-    /// An absent target is not reachable and clears stale selection rather
-    /// than leaving a selection that no longer belongs to the flow.
+    /// An absent target falls back to the first selectable row, giving content
+    /// replacement one deterministic recovery rule without translating the
+    /// old selection's numeric position.
     fn select_target(&mut self, flow: &RowFlow<Target>, target: &Target) -> bool {
         if flow.position_of(target).is_some() {
             self.set_selected_target(Some(target));
             true
         } else {
-            self.set_selected_target(None);
+            self.first(flow);
             false
         }
     }
@@ -53,8 +54,15 @@ pub trait Cursored<Target: Eq> {
     }
 
     /// Select the `ordinal`th selectable row, clamping to the last row.
-    fn select_index(&mut self, flow: &RowFlow<Target>, ordinal: usize) -> Option<usize> {
-        let last = flow.selectable_len().checked_sub(1)?;
+    fn select_selectable_ordinal(
+        &mut self,
+        flow: &RowFlow<Target>,
+        ordinal: usize,
+    ) -> Option<usize> {
+        let Some(last) = flow.selectable_len().checked_sub(1) else {
+            self.set_selected_target(None);
+            return None;
+        };
         let position = flow.position_of_selectable(ordinal.min(last));
         self.set_selected_target(position.and_then(|position| flow.target_at(position)));
         position
@@ -75,37 +83,14 @@ pub trait Cursored<Target: Eq> {
 
         let current_ordinal = self
             .index(flow)
-            .and_then(|position| ordinal_at(flow, position));
+            .and_then(|position| flow.selectable_ordinal_at(position));
         let ordinal = match current_ordinal {
             Some(current) => shift_clamped(current, delta, selectable_len),
             None if delta < 0 => selectable_len - 1,
             None => 0,
         };
-        self.select_index(flow, ordinal)
+        self.select_selectable_ordinal(flow, ordinal)
     }
-
-    /// Alias named for adapters that expose cursor movement as selection.
-    fn move_selection(&mut self, flow: &RowFlow<Target>, delta: isize) -> Option<usize> {
-        self.move_by(flow, delta)
-    }
-
-    /// Alias for [`Cursored::first`].
-    fn select_first(&mut self, flow: &RowFlow<Target>) -> Option<usize> {
-        self.first(flow)
-    }
-
-    /// Alias for [`Cursored::last`].
-    fn select_last(&mut self, flow: &RowFlow<Target>) -> Option<usize> {
-        self.last(flow)
-    }
-}
-
-fn ordinal_at<Target: Eq>(flow: &RowFlow<Target>, position: usize) -> Option<usize> {
-    flow.rows()[..=position]
-        .iter()
-        .filter(|row| matches!(row, Row::Selectable(_)))
-        .count()
-        .checked_sub(1)
 }
 
 fn shift_clamped(current: usize, delta: isize, len: usize) -> usize {
@@ -122,22 +107,7 @@ mod tests {
     use rstest::rstest;
 
     use super::Cursored;
-    use crate::app::components::list::{Row, RowFlow};
-
-    #[derive(Default)]
-    struct Cursor {
-        selected: Option<u8>,
-    }
-
-    impl Cursored<u8> for Cursor {
-        fn selected_target(&self) -> Option<&u8> {
-            self.selected.as_ref()
-        }
-
-        fn set_selected_target(&mut self, target: Option<&u8>) {
-            self.selected = target.copied();
-        }
-    }
+    use crate::app::components::list::{Row, RowFlow, TestListState};
 
     fn flow() -> RowFlow<u8> {
         RowFlow::new(vec![
@@ -159,7 +129,7 @@ mod tests {
         #[case] expected_target: Option<u8>,
     ) {
         let rows = flow();
-        let mut cursor = Cursor::default();
+        let mut cursor = TestListState::default();
         cursor.first(&rows);
         if let Some(position) = starting_position {
             cursor.select_target(&rows, rows.row_at(position).and_then(Row::target).unwrap());
@@ -175,7 +145,7 @@ mod tests {
     #[test]
     fn first_and_last_skip_structural_rows_without_wrap() {
         let rows = flow();
-        let mut cursor = Cursor::default();
+        let mut cursor = TestListState::default();
 
         assert_eq!(cursor.first(&rows), Some(0));
         assert_eq!(cursor.move_by(&rows, -1), Some(0));
@@ -184,12 +154,47 @@ mod tests {
     }
 
     #[test]
-    fn absent_targets_are_not_selectable() {
+    fn absent_target_falls_back_to_first_selectable_row() {
         let rows = flow();
-        let mut cursor = Cursor { selected: Some(2) };
+        let mut cursor = TestListState {
+            selected: Some(2),
+            ..Default::default()
+        };
 
         assert!(!cursor.select_target(&rows, &99));
-        assert_eq!(cursor.selected_target(), None);
-        assert_eq!(cursor.index(&rows), None);
+        assert_eq!(cursor.selected_target(), Some(&1));
+        assert_eq!(cursor.index(&rows), Some(0));
+    }
+
+    #[rstest]
+    #[case(-1, Some(4), Some(3))]
+    #[case(1, Some(0), Some(1))]
+    fn movement_repairs_selection_for_rows_absent_from_flow(
+        #[case] delta: isize,
+        #[case] expected_position: Option<usize>,
+        #[case] expected_target: Option<u8>,
+    ) {
+        let rows = flow();
+        let mut cursor = TestListState {
+            selected: Some(99),
+            ..Default::default()
+        };
+
+        assert_eq!(cursor.move_by(&rows, delta), expected_position);
+        assert_eq!(cursor.selected, expected_target);
+    }
+
+    #[test]
+    fn selecting_an_ordinal_in_an_empty_flow_clears_stale_selection() {
+        let mut cursor = TestListState {
+            selected: Some(2),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            cursor.select_selectable_ordinal(&RowFlow::new(vec![]), 0),
+            None
+        );
+        assert_eq!(cursor.selected, None);
     }
 }

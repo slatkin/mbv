@@ -108,31 +108,25 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
         selected
     }
 
-    /// Page by flow rows rather than selectable ordinals. This keeps the
-    /// visible-viewport policy honest if a future nested shape includes
-    /// structural rows in its flow.
+    /// Page by flow rows while using [`Cursored::move_by`] for selection and
+    /// its single stale-selection recovery rule.
     fn page_by_visible_rows(
         &mut self,
         flow: &RowFlow<Target>,
         viewport_len: usize,
         direction: isize,
     ) -> Option<usize> {
-        if flow.is_empty() {
-            self.set_selected_target(None);
-            return None;
-        }
-        let current = self.index(flow).unwrap_or_else(|| {
-            if direction.is_negative() {
-                flow.len()
-            } else {
-                0
-            }
-        });
+        let Some(current) = self.index(flow) else {
+            let recovery_delta = if direction.is_negative() { -1 } else { 1 };
+            return self.move_by(flow, recovery_delta);
+        };
         let distance = viewport_len.max(1);
         let desired = if direction.is_negative() {
             current.saturating_sub(distance)
         } else {
-            current.saturating_add(distance).min(flow.len() - 1)
+            current
+                .saturating_add(distance)
+                .min(flow.len().saturating_sub(1))
         };
         let position = if direction.is_negative() {
             (0..=desired)
@@ -150,8 +144,21 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
                         .find(|&position| flow.target_at(position).is_some())
                 })
         };
-        self.set_selected_target(position.and_then(|position| flow.target_at(position)));
-        position
+        let Some(position) = position else {
+            return self.move_by(flow, if direction.is_negative() { -1 } else { 1 });
+        };
+        let (Some(current_ordinal), Some(target_ordinal)) = (
+            flow.selectable_ordinal_at(current),
+            flow.selectable_ordinal_at(position),
+        ) else {
+            return self.move_by(flow, if direction.is_negative() { -1 } else { 1 });
+        };
+        let delta = if target_ordinal >= current_ordinal {
+            isize::try_from(target_ordinal - current_ordinal).unwrap_or(isize::MAX)
+        } else {
+            -isize::try_from(current_ordinal - target_ordinal).unwrap_or(isize::MAX)
+        };
+        self.move_by(flow, delta)
     }
 
     /// Clamp geometry and then keep the current cursor visible. This is the
@@ -167,33 +174,7 @@ mod tests {
     use rstest::rstest;
 
     use super::{PagingPolicy, Viewported};
-    use crate::app::components::list::{Cursored, Row, RowFlow};
-
-    #[derive(Default)]
-    struct List {
-        selected: Option<u8>,
-        offset: usize,
-    }
-
-    impl Cursored<u8> for List {
-        fn selected_target(&self) -> Option<&u8> {
-            self.selected.as_ref()
-        }
-
-        fn set_selected_target(&mut self, target: Option<&u8>) {
-            self.selected = target.copied();
-        }
-    }
-
-    impl Viewported<u8> for List {
-        fn viewport_offset(&self) -> usize {
-            self.offset
-        }
-
-        fn set_viewport_offset(&mut self, offset: usize) {
-            self.offset = offset;
-        }
-    }
+    use crate::app::components::list::{Cursored, Row, RowFlow, TestListState};
 
     fn flow() -> RowFlow<u8> {
         RowFlow::new(vec![
@@ -208,10 +189,23 @@ mod tests {
         ])
     }
 
+    fn structural_heavy_flow() -> RowFlow<u8> {
+        RowFlow::new(vec![
+            Row::selectable(1),
+            Row::structural(),
+            Row::structural(),
+            Row::selectable(2),
+            Row::structural(),
+            Row::structural(),
+            Row::selectable(3),
+            Row::selectable(4),
+        ])
+    }
+
     #[test]
     fn preserves_offset_when_selection_is_visible() {
         let rows = flow();
-        let mut list = List {
+        let mut list = TestListState {
             selected: Some(3),
             offset: 2,
         };
@@ -230,7 +224,7 @@ mod tests {
         #[case] expected_offset: usize,
     ) {
         let rows = flow();
-        let mut list = List {
+        let mut list = TestListState {
             selected,
             offset: usize::MAX,
         };
@@ -245,7 +239,7 @@ mod tests {
     #[test]
     fn geometry_clamping_preserves_offset_when_bounds_allow() {
         let rows = flow();
-        let mut list = List {
+        let mut list = TestListState {
             selected: Some(2),
             offset: 3,
         };
@@ -256,30 +250,31 @@ mod tests {
         assert_eq!(list.offset, 0);
     }
 
-    #[test]
-    fn fixed_selectable_distance_pages_by_named_policy() {
-        let rows = flow();
-        let mut list = List::default();
-        list.first(&rows);
+    #[rstest]
+    #[case(1, 4, Some(2), Some(3))]
+    #[case(3, 2, Some(4), Some(2))]
+    fn paging_policies_remain_distinct_over_structural_rows(
+        #[case] distance: usize,
+        #[case] viewport_len: usize,
+        #[case] expected_fixed: Option<u8>,
+        #[case] expected_visible: Option<u8>,
+    ) {
+        let rows = structural_heavy_flow();
+        let mut fixed = TestListState::default();
+        let mut visible = TestListState::default();
+        fixed.first(&rows);
+        visible.first(&rows);
 
-        assert_eq!(
-            list.page(&rows, 3, 1, PagingPolicy::fixed_selectable_distance(2)),
-            Some(3)
+        fixed.page(
+            &rows,
+            viewport_len,
+            1,
+            PagingPolicy::fixed_selectable_distance(distance),
         );
-        assert_eq!(list.selected, Some(3));
-    }
+        visible.page(&rows, viewport_len, 1, PagingPolicy::visible_viewport());
 
-    #[test]
-    fn visible_viewport_pages_by_visible_geometry() {
-        let rows = flow();
-        let mut list = List::default();
-        list.first(&rows);
-
-        assert_eq!(
-            list.page(&rows, 3, 1, PagingPolicy::visible_viewport()),
-            Some(3)
-        );
-        assert_eq!(list.selected, Some(3));
-        assert_eq!(list.offset, 1);
+        assert_eq!(fixed.selected, expected_fixed);
+        assert_eq!(visible.selected, expected_visible);
+        assert_ne!(fixed.selected, visible.selected);
     }
 }

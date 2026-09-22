@@ -48,29 +48,14 @@ impl<Target> RowFlow<Target> {
         Self { rows }
     }
 
-    /// An empty flow.
-    pub const fn empty() -> Self {
-        Self { rows: Vec::new() }
-    }
-
     /// Number of rows, including structural rows.
     pub fn len(&self) -> usize {
         self.rows.len()
     }
 
-    /// Whether the flow has no rows.
-    pub fn is_empty(&self) -> bool {
-        self.rows.is_empty()
-    }
-
     /// Borrow a row by its flow position.
     pub fn row_at(&self, position: usize) -> Option<&Row<Target>> {
         self.rows.get(position)
-    }
-
-    /// Borrow all rows in paint order.
-    pub fn rows(&self) -> &[Row<Target>] {
-        &self.rows
     }
 
     /// Find a target's flow position. Structural rows never match.
@@ -84,7 +69,7 @@ impl<Target> RowFlow<Target> {
     }
 
     /// Count selectable rows.
-    pub fn selectable_len(&self) -> usize {
+    pub(crate) fn selectable_len(&self) -> usize {
         self.rows
             .iter()
             .filter(|row| row.target().is_some())
@@ -96,6 +81,15 @@ impl<Target> RowFlow<Target> {
         self.row_at(position).and_then(Row::target)
     }
 
+    /// Find a selectable row's ordinal in the flow.
+    pub(crate) fn selectable_ordinal_at(&self, position: usize) -> Option<usize> {
+        self.rows[..=position]
+            .iter()
+            .filter(|row| row.target().is_some())
+            .count()
+            .checked_sub(1)
+    }
+
     /// Find the flow position of the `ordinal`th selectable row.
     pub(crate) fn position_of_selectable(&self, ordinal: usize) -> Option<usize> {
         self.rows
@@ -103,12 +97,6 @@ impl<Target> RowFlow<Target> {
             .enumerate()
             .filter_map(|(position, row)| row.target().map(|_| position))
             .nth(ordinal)
-    }
-}
-
-impl<Target> From<Vec<Row<Target>>> for RowFlow<Target> {
-    fn from(rows: Vec<Row<Target>>) -> Self {
-        Self::new(rows)
     }
 }
 
