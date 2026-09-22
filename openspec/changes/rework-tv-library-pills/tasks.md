@@ -3,17 +3,17 @@
 ## 1. Mode value and the TV bucket set
 
 - [x] 1.1 Add the TV-specific three-bucket table beside the existing movie table in `src/app/render/screens/sort_filter.rs` (`A-I` = `NameLessThan("J")`, `J-R` = `[J, S)`, `S-Z` = `NameStartsWithOrGreater("S")` with no upper bound) and make `LetterFilter` construction select the table by library kind while movie construction keeps using the existing table unchanged. Verify: `cargo nextest run -p mbv` covers the three TV labels/bounds, a non-letter name resolving to `A-I`, an `S`-or-later name resolving to `S-Z`, and the movie labels still returning the nine-bucket set.
-- [ ] 1.2 Introduce a closed `TvContentMode` value (`Latest`, `Upcoming`, `All`, range) on the top-level TV `BrowseLevel` and remove the overloaded use of `letter_filter: Option<LetterFilter>` as both "no filter" and "the auto-applied default". Verify: `cargo check -p mbv` is clean and focused tests cover each mode's content selector and the unresolved/absent default.
+- [x] 1.2 Introduce a closed `TvContentMode` value (`Latest`, `Upcoming`, `All`, range) on the top-level TV `BrowseLevel` and remove the overloaded use of `letter_filter: Option<LetterFilter>` as both "no filter" and "the auto-applied default". Verify: `cargo check -p mbv` is clean and focused tests cover each mode's content selector and the unresolved/absent default.
 
 ## 2. Row composition, threshold, and defaults
 
-- [ ] 2.1 Compose the TV content-mode row from the mode list in design D3: above `LIBRARY_PILL_THRESHOLD` the row is `Latest | Upcoming | A-I | J-R | S-Z` with `Latest` selected; at or below it the row is `Latest | Upcoming | All` with `All` selected. Verify: `cargo nextest run -p mbv` covers both rows, their order, the selected mode, and that `All` is absent above the threshold.
-- [ ] 2.2 In `src/app/lib_event_actions.rs::maybe_capture_library_total_and_apply_default_pill`, keep the `library_total` capture unchanged and scope the change to TV: a TV library replaces the `A-C` auto-apply with default-mode selection (above the threshold auto-select `Latest` after the capture load and fetch its episodes; at or below it select `All` over the already-loaded unfiltered list with no re-fetch), and the small-library quirk where the TV row painted `A-C` highlighted over an unfiltered list is removed. Movie, feed, and podcast libraries keep today's auto-scope `A-C` behavior and row byte-for-byte. Verify: `cargo nextest run -p mbv` covers that a small TV library's first load is unfiltered with `All` selected and no second fetch, that a large TV library's first load selects `Latest` after the capture load with one episode fetch and no letter-scoped fetch, and that a large movie library still auto-applies `A-C` with its scoped refresh.
+- [x] 2.1 Compose the TV content-mode row from the mode list in design D3: above `LIBRARY_PILL_THRESHOLD` the row is `Latest | Upcoming | A-I | J-R | S-Z` with `Latest` selected; at or below it the row is `Latest | Upcoming | All` with `All` selected. Verify: `cargo nextest run -p mbv` covers both rows, their order, the selected mode, and that `All` is absent above the threshold.
+- [x] 2.2 In `src/app/lib_event_actions.rs::maybe_capture_library_total_and_apply_default_pill`, keep the `library_total` capture unchanged and scope the change to TV: a TV library replaces the `A-C` auto-apply with default-mode selection (above the threshold auto-select `Latest` after the capture load and fetch its episodes; at or below it select `All` over the already-loaded unfiltered list with no re-fetch), and the small-library quirk where the TV row painted `A-C` highlighted over an unfiltered list is removed. Movie, feed, and podcast libraries keep today's auto-scope `A-C` behavior and row byte-for-byte. Verify: `cargo nextest run -p mbv` covers that a small TV library's first load is unfiltered with `All` selected and no second fetch, that a large TV library's first load selects `Latest` after the capture load with one episode fetch and no letter-scoped fetch, and that a large movie library still auto-applies `A-C` with its scoped refresh.
 
 ## 3. Latest mode
 
-- [ ] 3.1 Wire the `Latest` mode to the same feed Home's TV section uses (`get_latest_episodes(view_id, 30)`) through the library's own fetch path, so it loads whether or not Home has. Verify: `cargo nextest run -p mbv` covers `Latest` producing the feed's episodes with no dependency on a loaded Home section.
-- [ ] 3.2 Pass the `Latest` mode into the TV component's selector row with flat episode rows and no series detail fetch. Verify: `cargo nextest run -p mbv` covers the selector's active mode and that selecting `Latest` does not request a series detail.
+- [x] 3.1 Wire the `Latest` mode to the same feed Home's TV section uses (`get_latest_episodes(view_id, 30)`) through the library's own fetch path, so it loads whether or not Home has. Verify: `cargo nextest run -p mbv` covers `Latest` producing the feed's episodes with no dependency on a loaded Home section.
+- [x] 3.2 Pass the `Latest` mode into the TV component's selector row with flat episode rows and no series detail fetch. Verify: `cargo nextest run -p mbv` covers the selector's active mode and that selecting `Latest` does not request a series detail.
 
 ## 4. Upcoming mode
 
@@ -27,8 +27,8 @@
 
 ## 6. Persistence, cycling, and mouse
 
-- [ ] 6.1 Persist the selected `TvContentMode` in `LibraryPositionLevel` and restore it (and its content load) when the library position is reopened. Verify: `cargo nextest run -p mbv` covers save/restore for each mode.
-- [ ] 6.2 Make `[`/`]` cycle over the modes actually present in the painted row with wrap, and make mouse selection select the clicked mode. Verify: `cargo nextest run -p mbv` covers wrap on the three-mode small-library row, wrap on the five-mode large-library row, and mouse selection of each mode.
+- [x] 6.1 Persist the selected `TvContentMode` in `LibraryPositionLevel` and restore it (and its content load) when the library position is reopened. Verify: `cargo nextest run -p mbv` covers save/restore for each mode.
+- [x] 6.2 Make `[`/`]` cycle over the modes actually present in the painted row with wrap, and make mouse selection select the clicked mode. Verify: `cargo nextest run -p mbv` covers wrap on the three-mode small-library row, wrap on the five-mode large-library row, and mouse selection of each mode.
 
 ## 7. Shared new-content marker
 
