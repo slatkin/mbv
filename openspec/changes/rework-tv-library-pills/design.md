@@ -97,7 +97,12 @@ after capture. When the count lands, the default mode is auto-selected:
 a second fetch, but never a letter-scoped one), `All` for a small one (the
 unfiltered list already is the `All` content, so no re-fetch). Every reopen
 resolves the mode from the restored `library_total` before any fetch, so a
-large library's reopen loads `Latest` directly as its initial load. The
+large library's reopen loads `Latest` directly as its initial load. A restored
+mode the current count no longer offers — the library crossed the threshold
+between runs — is re-clamped to that count's default before paint or fetch: a
+saved `All` above the threshold becomes `Latest`, a saved range below it
+becomes `All`. The stale-mode row must not resurrect the retired quirk of a
+pill highlighted over content it does not select. The
 `A-C` auto-apply arm is removed for TV only; movie, feed, and podcast
 libraries keep today's auto-scope and their small-library `A-C`-highlighted
 row byte-for-byte.
