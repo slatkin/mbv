@@ -327,6 +327,14 @@ impl App {
                 ..super::LibraryTab::new(view.clone())
             });
         }
+
+        // Rebuilding the tabs from live views IS the live Emby catalog
+        // boundary. A plain local launch reaches it through the Emby startup
+        // worker's bootstrap, but a local-daemon/remote attach has a live
+        // client at construction and never runs that worker: its catalog
+        // arrives here, through `fetch_home`. Without this the launch tab
+        // could never resolve stable Emby identities on that path.
+        self.emby_catalog_ready = true;
     }
 
     /// Compute the full Home content snapshot (task 5.3d): the Emby-derived
