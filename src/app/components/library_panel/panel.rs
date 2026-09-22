@@ -496,6 +496,43 @@ impl LibraryPanel {
         self.owners.get(key)
     }
 
+    /// Read the bounded launch identities from exactly one destination owner.
+    /// The shell calls this only for the selected key during orderly teardown;
+    /// inactive owners are never queried.
+    pub(in crate::app) fn launch_snapshot(
+        &self,
+        key: &LibraryKey,
+    ) -> Option<(
+        Option<mbv_core::config::SelectorIdentity>,
+        Option<mbv_core::config::LibraryItemIdentity>,
+    )> {
+        self.owners
+            .get(key)
+            .map(LibraryContentOwner::launch_snapshot)
+    }
+
+    /// Apply the one discrete startup launch re-anchor to exactly one active
+    /// destination owner. The panel does not mirror the resulting local state.
+    pub(in crate::app) fn launch_selector(
+        &self,
+        key: &LibraryKey,
+        state: &mbv_core::config::TuiLaunchState,
+    ) -> Option<super::owner::LaunchSelector> {
+        self.owners
+            .get(key)
+            .and_then(|owner| owner.launch_selector(state))
+    }
+
+    pub(in crate::app) fn reanchor_launch_state(
+        &mut self,
+        key: &LibraryKey,
+        state: &mbv_core::config::TuiLaunchState,
+    ) -> bool {
+        self.owners
+            .get_mut(key)
+            .is_some_and(|owner| owner.reanchor_launch_state(state))
+    }
+
     /// Take the hero image paint the last view retained (the shell paints it
     /// right after `view` returns).
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<PanelHeroImagePaint> {

@@ -15,7 +15,9 @@ use tuirealm::event::KeyEvent;
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::msg::{LeafKeyResult, Msg};
-use mbv_core::config::ServiceKind;
+use mbv_core::config::{
+    LibraryItemIdentity, SelectorIdentity, ServiceKind, TabIdentity, TuiLaunchState,
+};
 
 use super::content::{HeroImageState, LibraryPanelContent};
 use super::hero::HeroContentData;
@@ -80,6 +82,55 @@ mod library_kind_tests {
         );
         assert_eq!(LibraryKind::from_collection_type(""), LibraryKind::Generic);
     }
+
+    /// Task 2.1: every `LibraryKey` maps to a stable launch-state tab
+    /// identity. Fixed tabs map to themselves; every `LibraryKind`
+    /// maps through with its Service kind plus library ID intact (the
+    /// browse kind selects the pill/item interpretation, never the tab).
+    /// Uses `super::*` so the mapping test reads the same names as the
+    /// contract it pins.
+    #[test]
+    fn tab_identity_covers_every_key_shape() {
+        use super::*;
+
+        assert_eq!(LibraryKey::Home.tab_identity(), TabIdentity::Home);
+        assert_eq!(LibraryKey::Feeds.tab_identity(), TabIdentity::Feeds);
+        for kind in [
+            LibraryKind::Generic,
+            LibraryKind::Movies,
+            LibraryKind::TvShows,
+            LibraryKind::Music,
+            LibraryKind::HomeVideos,
+            LibraryKind::AudiobookshelfPodcast,
+            LibraryKind::AudiobookshelfBook,
+        ] {
+            assert_eq!(
+                LibraryKey::Service {
+                    service: ServiceKind::Emby,
+                    library_id: "lib-1".to_string(),
+                    kind,
+                }
+                .tab_identity(),
+                TabIdentity::ServiceLibrary {
+                    kind: ServiceKind::Emby,
+                    library_id: "lib-1".to_string(),
+                },
+                "kind {kind:?} must map through"
+            );
+        }
+        assert_eq!(
+            LibraryKey::Service {
+                service: ServiceKind::Audiobookshelf,
+                library_id: "abs-lib".to_string(),
+                kind: LibraryKind::AudiobookshelfPodcast,
+            }
+            .tab_identity(),
+            TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Audiobookshelf,
+                library_id: "abs-lib".to_string(),
+            }
+        );
+    }
 }
 
 /// The identity of one library destination, keying the panel's owner map.
@@ -92,6 +143,28 @@ pub enum LibraryKey {
         library_id: String,
         kind: LibraryKind,
     },
+}
+
+impl LibraryKey {
+    /// The stable launch-state tab identity for this destination (task 2.1).
+    /// Every [`LibraryKind`] maps through — the tab identity carries only
+    /// the Service kind plus library ID, so the browse kind selects the
+    /// destination-tagged pill/item interpretation, never the tab.
+    // Consumed by selected-tab teardown assembly in task 2.3.
+    pub fn tab_identity(&self) -> TabIdentity {
+        match self {
+            Self::Home => TabIdentity::Home,
+            Self::Feeds => TabIdentity::Feeds,
+            Self::Service {
+                service,
+                library_id,
+                kind: _,
+            } => TabIdentity::ServiceLibrary {
+                kind: *service,
+                library_id: library_id.clone(),
+            },
+        }
+    }
 }
 
 /// A semantic slot event the panel resolved from pointer input against its
@@ -118,6 +191,16 @@ pub(in crate::app) enum LibrarySlotEvent {
     /// intent. This is the semantic equivalent of the keyboard Enter path;
     /// pointer delivery must not fabricate a raw key event.
     HeroActivate,
+}
+
+/// The resolved selector effect needed to restore a destination before its
+/// item. The shell applies this against App-owned browse state, then pushes the
+/// resulting content back through the normal projection seam.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::app) enum LaunchSelector {
+    Emby { index: usize },
+    AudiobookshelfShow(String),
+    AudiobookshelfState,
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot
@@ -275,6 +358,35 @@ pub(in crate::app) trait LibraryContentOwner {
     /// for the shell's pure reads (is-open, selected result).
     fn inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
         None
+    }
+
+    /// Bounded read-only launch-state identities for orderly-teardown
+    /// snapshot assembly (task 2.1, design D2): the current main-Selector
+    /// pill and selected library-item identities. The shell invokes this
+    /// ONLY on the active owner (via `Model::active_library_key`); never
+    /// for unselected destinations. No live mirroring: local pill/item
+    /// movement emits no persistence message for this, and no sync/render
+    /// pass copies these values into `App` (the framework spec's
+    /// exit-snapshot rule). Owners without narrowed identities yet (their
+    /// unit keeps the default) report absence.
+    // Consumed by selected-tab teardown assembly in task 2.3.
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        (None, None)
+    }
+
+    /// Resolve the current destination's main Selector into an App-owned
+    /// effect. The shell applies it before the item-level re-anchor, so a
+    /// projection cannot overwrite a component-local downward mirror.
+    fn launch_selector(&self, _state: &TuiLaunchState) -> Option<LaunchSelector> {
+        None
+    }
+
+    /// Apply the item-level part of one discrete startup re-anchor after the
+    /// destination's current content has been projected. Returning `true`
+    /// consumes the destination-level pending state; ordinary refreshes never
+    /// call this operation.
+    fn reanchor_launch_state(&mut self, _state: &TuiLaunchState) -> bool {
+        false
     }
 
     /// Downcast support for the shell's per-destination pushes (the shell

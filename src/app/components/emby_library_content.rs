@@ -27,7 +27,7 @@ use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::library_panel::hero::hero_content_emby;
-use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+use super::library_panel::owner::{LaunchSelector, LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::library_panel::LibraryKind;
 use super::media_list::{
@@ -36,6 +36,7 @@ use super::media_list::{
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
+use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 
 /// Browse identity used to decide when a projected position should be applied.
 #[derive(Clone, Default, PartialEq, Eq)]
@@ -85,6 +86,10 @@ pub(in crate::app) struct BrowserOwnerPush {
     pub group_pills: bool,
     pub show_letter_pills: bool,
     pub feed_groups: Vec<String>,
+    /// The group folders' Service content IDs, aligned 1:1 with
+    /// `feed_groups` (task 2.1): the launch snapshot resolves the selected
+    /// group pill to its content ID, never to the display name above.
+    pub feed_group_ids: Vec<String>,
     pub feed_group_cursor: usize,
 }
 
@@ -101,6 +106,7 @@ pub(in crate::app) struct EmbyLibraryContent {
     group_pills: bool,
     show_letter_pills: bool,
     feed_groups: Vec<String>,
+    feed_group_ids: Vec<String>,
     feed_group_cursor: usize,
     /// The one shared canonical owner of the active level's rows; the panel
     /// drives its Wide/Inline presentation from its own breakpoint (design
@@ -136,6 +142,7 @@ impl EmbyLibraryContent {
             group_pills: false,
             show_letter_pills: false,
             feed_groups: Vec::new(),
+            feed_group_ids: Vec::new(),
             feed_group_cursor: 0,
             carrier: MediaListCarrier::new(),
             last_identity: None,
@@ -159,6 +166,7 @@ impl EmbyLibraryContent {
         self.group_pills = push.group_pills;
         self.show_letter_pills = push.show_letter_pills;
         self.feed_groups = push.feed_groups;
+        self.feed_group_ids = push.feed_group_ids;
         self.feed_group_cursor = push.feed_group_cursor;
         self.feed_owner();
     }
@@ -709,6 +717,104 @@ impl LibraryContentOwner for EmbyLibraryContent {
 
     fn inline_search_active(&self) -> bool {
         self.inline_search.is_active()
+    }
+
+    /// Bounded read-only launch-state identities (task 2.1): the current
+    /// main-Selector pill as a stable key — the closed letter bucket's fixed
+    /// value, or the selected feed/home-video group's folder content ID —
+    /// plus the shared carrier's stable item target. The "All" group pill
+    /// and the unfiltered letter view use an explicit unfiltered identity;
+    /// a destination with no pills, or an empty list, reports absence. No
+    /// pill index, group display name, or row position crosses.
+    fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
+        if self.group_pills {
+            let target = match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Group(id),
+                }) => self
+                    .feed_group_ids
+                    .iter()
+                    .position(|candidate| candidate == id)
+                    .map(|index| index + 1)
+                    .unwrap_or(0),
+                _ => 0,
+            };
+            return (self.feed_group_cursor != target)
+                .then_some(LaunchSelector::Emby { index: target });
+        }
+        if self.show_letter_pills {
+            let current = self.letter_filter.as_ref().map(|filter| filter.index);
+            return match state.selector.as_ref() {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Letter(bucket),
+                }) => {
+                    let target = bucket.to_index();
+                    (current != Some(target)).then_some(LaunchSelector::Emby { index: target })
+                }
+                // No letter pill is represented by an index. The shell uses
+                // this out-of-band value for the distinct clear intent.
+                _ if current.is_some() => Some(LaunchSelector::Emby { index: usize::MAX }),
+                _ => None,
+            };
+        }
+        None
+    }
+
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.loading && self.items.is_empty() {
+            return false;
+        }
+        // The shell applies the selector through App and pushes the resulting
+        // content before this item-level re-anchor. Do not rewrite the
+        // component-local selector here; that brief mirror could disagree
+        // with the shell projection until the next sync pass.
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
+            _ => false,
+        };
+        if !selected {
+            self.carrier.select_first();
+        }
+        true
+    }
+
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        let selector = if self.group_pills {
+            if self.feed_group_cursor == 0 {
+                Some(SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Unfiltered,
+                })
+            } else {
+                self.feed_group_cursor.checked_sub(1).and_then(|group| {
+                    self.feed_group_ids
+                        .get(group)
+                        .cloned()
+                        .map(|id| SelectorIdentity::Emby {
+                            key: EmbySelectorKey::Group(id),
+                        })
+                })
+            }
+        } else if self.show_letter_pills {
+            Some(SelectorIdentity::Emby {
+                key: self
+                    .letter_filter
+                    .as_ref()
+                    .map(|filter| {
+                        EmbyLetterBucket::from_index(filter.index)
+                            .expect("LetterFilter index comes from LETTER_FILTER_BUCKETS")
+                    })
+                    .map(EmbySelectorKey::Letter)
+                    .unwrap_or(EmbySelectorKey::Unfiltered),
+            })
+        } else {
+            None
+        };
+        let item = self
+            .carrier
+            .selected_target()
+            .cloned()
+            .map(|id| LibraryItemIdentity::Emby { id });
+        (selector, item)
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

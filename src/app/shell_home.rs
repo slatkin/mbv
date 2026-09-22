@@ -186,7 +186,6 @@ impl Model {
                 .unwrap_or_else(|| self.home_section_pref_semantic.clone());
             if self.home_section_pref_semantic != source {
                 self.home_section_pref_semantic = source;
-                self.persist_home_section_pref();
             }
         }
     }
@@ -360,12 +359,13 @@ mod tests {
     }
 
     /// Task 5.3d, numeric Home section deletion: explicit pill selection at
-    /// the Model boundary persists the selected section's semantic
+    /// the Model boundary retains the selected section's semantic
     /// `HomeLatestSource` (or `None`/empty for Continue Watching section 0),
     /// never a numeric index — resolved through the owner's
-    /// `source_for_section`, driven via `HomeSectionSelected`.
+    /// `source_for_section`, driven via `HomeSectionSelected`, while keeping
+    /// the semantic identity in memory only.
     #[test]
-    fn shell_home_section_selection_persists_semantic_source() {
+    fn shell_home_section_selection_updates_semantic_source_in_memory() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
         model.home_content.latest = vec![
@@ -386,29 +386,31 @@ mod tests {
         ];
         model.push_home_content();
 
-        // Continue Watching (section 0) persists as the empty sentinel, never
+        // Continue Watching (section 0) remains the empty sentinel, never
         // as a `latest` pill's key.
         model.handle_home_request(ShellRequest::HomeSectionSelected(0));
         assert!(
             model.home_section_pref().is_empty(),
-            "Continue Watching persists as no section key"
+            "Continue Watching retains no section key"
         );
 
-        // Real pills persist their own keys (off-by-one: section 1 == latest[0]).
+        // Real pills retain their own keys (off-by-one: section 1 == latest[0]).
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
         assert_eq!(model.home_section_pref(), "emby:lib-movies");
         model.handle_home_request(ShellRequest::HomeSectionSelected(2));
         assert_eq!(model.home_section_pref(), "abs:abs-pod");
     }
 
-    /// Task 5.3d, numeric Home section deletion: after a Home source is
-    /// selected through the real owner/Model-boundary path, an unrelated
-    /// `save_prefs()` retains that semantic identity on disk — there is no
-    /// numeric App section to clobber it (the selection wrote
-    /// `home_section_pref_semantic`).
+    /// Home selection is retained in memory while an unrelated preference
+    /// save leaves the legacy launch key unchanged for migration.
     #[test]
-    fn shell_home_unrelated_save_retains_selected_source() {
+    fn shell_home_unrelated_save_does_not_write_selected_source() {
         let _guard = crate::config::TestStateDirGuard::new();
+        std::fs::write(
+            crate::config::prefs_path(),
+            serde_json::json!({ "home_section": "emby:legacy" }).to_string(),
+        )
+        .expect("write legacy preference");
         let mut model = Model::new(make_app_stub());
         model.home_content.latest = vec![(
             "Movies".into(),
@@ -420,20 +422,20 @@ mod tests {
         model.push_home_content();
         model.handle_home_request(ShellRequest::HomeSectionSelected(1));
 
-        // An unrelated preference save persists the retained semantic source.
+        // An unrelated preference save does not persist the current source.
         model.app.save_prefs();
         let saved = crate::config::prefs_path();
         let parsed: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
         assert_eq!(
-            parsed["home_section"], "emby:lib-movies",
-            "unrelated save must keep the selected Home source identity"
+            parsed["home_section"], "emby:legacy",
+            "unrelated save must leave the legacy Home source unchanged"
         );
     }
 
     /// Task 5.3d, Home mouse-click handoff: the shell routes each typed
-    /// `HomeRow*`/`HomePillClick` request at the Model boundary. A pill persists the section
-    /// through the existing section-selection mechanism; a single row click
+    /// `HomeRow*`/`HomePillClick` request at the Model boundary. A pill updates
+    /// the in-memory section identity; a single row click
     /// focuses the Library panel but does **not** mutate App's independent
     /// Continue Watching `continue_cursor` or the per-latest pill cursors
     /// (the owner owns the flat cursor); a double click additionally
@@ -494,13 +496,13 @@ mod tests {
             "double click must activate the clicked flat target"
         );
 
-        // Pill click: the clicked pill's semantic source is persisted via the
+        // Pill click: the clicked pill's semantic source is retained by the
         // Model-boundary selection (`select_home_section_from_component`).
         route(&mut model, ShellRequest::HomePillClick { target: 1 });
         assert_eq!(
             model.home_section_pref(),
             "emby:lib",
-            "pill click must persist the clicked pill's source"
+            "pill click must retain the clicked pill's source"
         );
 
         // Right-click: focuses Library and opens a Pointer-anchored context

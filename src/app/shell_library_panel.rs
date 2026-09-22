@@ -12,11 +12,12 @@ use ratatui::layout::Rect;
 
 use super::components::book_content::BookContent;
 use super::components::library_panel::content::HeroImageState;
+use super::components::library_panel::owner::LaunchSelector;
 use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::shell::Model;
-use super::{PanelMode, TabSelection};
+use super::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -49,6 +50,38 @@ impl Model {
         }
     }
 
+    /// Assemble the selected destination's bounded launch identities. This is
+    /// a teardown-only query: the panel asks only its active owner, never any
+    /// unselected destination.
+    pub(super) fn launch_state_snapshot(&self) -> mbv_core::config::TuiLaunchState {
+        let key = self.active_library_key();
+        let (selector, item) = key
+            .as_ref()
+            .and_then(|key| {
+                self.application
+                    .get_component(&ComponentId::Library)
+                    .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+                    .and_then(|panel| panel.launch_snapshot(key))
+            })
+            .unwrap_or((None, None));
+        // A stale Service index has no stable library identity; represent it
+        // as Home so startup follows the ordered first-guaranteed-tab fallback.
+        let tab = key.as_ref().map_or(
+            mbv_core::config::TabIdentity::Home,
+            LibraryKey::tab_identity,
+        );
+        mbv_core::config::TuiLaunchState {
+            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+            tab,
+            panel_focus: match self.app.effective_panel_focus() {
+                PanelFocus::Library => mbv_core::config::LaunchPanelFocus::Library,
+                PanelFocus::Queue => mbv_core::config::LaunchPanelFocus::Queue,
+            },
+            selector,
+            item,
+        }
+    }
+
     /// The active library's stable selection origin (design D6/D7): the
     /// identity a projection or delayed action carries so a clear intent can
     /// route to the list that produced it, never the dispatch-time focus.
@@ -60,6 +93,124 @@ impl Model {
                 crate::app::components::media_list::LibrarySelectionOrigin::from(key),
             )
         })
+    }
+
+    fn apply_launch_selector(&mut self, key: &LibraryKey, selector: LaunchSelector) {
+        match selector {
+            LaunchSelector::Emby { index } => {
+                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    if index == usize::MAX {
+                        self.clear_emby_letter_filter_for_launch(lib_idx);
+                    } else {
+                        self.app.handle_mouse_selector_click_emby(lib_idx, index);
+                    }
+                }
+            }
+            LaunchSelector::AudiobookshelfShow(library_item_id) => {
+                self.app.select_audiobookshelf_show_target(&library_item_id);
+            }
+            LaunchSelector::AudiobookshelfState => {
+                self.app.commit_audiobookshelf_podcast_state_scope();
+            }
+        }
+        match key {
+            LibraryKey::Service {
+                kind: LibraryKind::Music,
+                ..
+            } => self.push_music_workspace_content(),
+            LibraryKey::Service {
+                kind: LibraryKind::TvShows,
+                ..
+            } => self.push_tv_workspace_content(),
+            LibraryKey::Service {
+                kind: LibraryKind::AudiobookshelfPodcast,
+                ..
+            } => self.push_audiobookshelf_podcast_content(),
+            _ => self.push_active_emby_library_owner_content(),
+        }
+    }
+
+    /// Return an Emby letter-pilled library to its unfiltered top-level scope
+    /// while restoring launch state. This is the clear counterpart to the
+    /// ordinary pill click: it refreshes the full range instead of treating
+    /// index zero as an A–C pill.
+    fn clear_emby_letter_filter_for_launch(&mut self, lib_idx: usize) {
+        if !self.app.should_show_letter_pills(lib_idx) {
+            return;
+        }
+        let Some(level) = self.app.libs[lib_idx].nav_stack.last() else {
+            return;
+        };
+        if level.letter_filter.is_none() {
+            return;
+        }
+        let parent_id = level.parent_id.clone();
+        let item_types = level.item_types.clone();
+        let unplayed_only = level.unplayed_only;
+        let sort_by = level.sort_by.clone();
+        let sort_order = level.sort_order.clone();
+        if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+            level.letter_filter = None;
+            level.set_resting_cursor(0);
+            level.set_resting_scroll(0);
+            level.loading = true;
+            level.items.clear();
+            level.all_items = None;
+        }
+        self.app.spawn_refresh(
+            lib_idx,
+            parent_id,
+            item_types,
+            unplayed_only,
+            sort_by,
+            sort_order,
+            0,
+            None,
+        );
+        self.app.save_default_library_position(lib_idx);
+    }
+
+    /// Consume the pending destination-level launch state after the selected
+    /// owner has received its current content. Resolution is deliberately
+    /// pill-before-item and happens once; later refreshes only project content.
+    pub(super) fn reanchor_pending_launch_destination(&mut self) {
+        if !self.app.pending_launch_tab_resolved {
+            return;
+        }
+        let Some(state) = self.app.pending_launch_state.clone() else {
+            return;
+        };
+        let Some(key) = self.active_library_key() else {
+            return;
+        };
+        let selector = self
+            .application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.launch_selector(&key, &state));
+        if let Some(selector) = selector {
+            self.apply_launch_selector(&key, selector);
+        }
+        let applied = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .is_some_and(|panel| panel.reanchor_launch_state(&key, &state));
+        if applied {
+            let focus = match state.panel_focus {
+                mbv_core::config::LaunchPanelFocus::Library => PanelFocus::Library,
+                mbv_core::config::LaunchPanelFocus::Queue => PanelFocus::Queue,
+            };
+            self.app.set_panel_focus(focus);
+            // Queue focus is restored only after the selected destination has
+            // accepted its launch state. Re-run the normal Queue projection
+            // so its framework focus, frame state, and local selection follow
+            // the same path as an ordinary panel-focus change; no Queue
+            // target is carried by the launch snapshot.
+            self.sync_queue();
+            self.app.pending_launch_state = None;
+            self.app.pending_launch_tab_resolved = false;
+        }
     }
 
     /// Every [`LibraryKey`] currently in the catalog: the shell tabs that are

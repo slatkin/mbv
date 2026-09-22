@@ -190,6 +190,12 @@ pub(crate) fn make_app_stub() -> App {
         panel_mode: PanelMode::default(),
         mini_view_focus: PanelFocus::Queue,
         library_tab_pending: 0,
+        pending_launch_state: None,
+        pending_launch_tab_resolved: false,
+        legacy_launch_tab: None,
+        legacy_launch_migration_attempted: false,
+        emby_catalog_ready: false,
+        audiobookshelf_catalog_ready: false,
         pending_navigate_tab_switch: None,
         pending_series_landing: None,
         pending_series_handoff: None,
@@ -284,8 +290,6 @@ pub(crate) fn make_app_stub() -> App {
         library_route_cache: std::collections::HashMap::new(),
         last_nav_at: Instant::now() - Duration::from_secs(1),
         last_library_nav_at: Instant::now() - Duration::from_secs(1),
-        library_position_dirty: false,
-        library_position_dirty_at: Instant::now() - Duration::from_secs(1),
         // Default to "focused, past grace window" so existing mouse
         // tests dispatch without arming focus explicitly.  The refocus
         // guard itself is tested directly in

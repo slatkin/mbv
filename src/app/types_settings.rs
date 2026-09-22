@@ -13,13 +13,6 @@ impl PanelFocus {
             _ => Self::default(),
         }
     }
-
-    pub(super) fn pref_value(self) -> &'static str {
-        match self {
-            Self::Queue => "queue_side",
-            Self::Library => "library_side",
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]

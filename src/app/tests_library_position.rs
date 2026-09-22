@@ -356,8 +356,7 @@ fn save_default_library_position_persists_focused_item() {
 }
 
 #[test]
-fn flush_library_position_persists_session_scroll_without_navigation() {
-    let _guard = crate::config::TestStateDirGuard::new();
+fn legacy_library_position_updates_are_memory_only() {
     let mut app = make_app_stub();
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -382,9 +381,7 @@ fn flush_library_position_persists_session_scroll_without_navigation() {
     });
 
     app.save_default_library_position(0);
-    app.flush_library_position_now();
 
-    assert!(!app.library_position_dirty);
     assert_eq!(
         app.library_position_state.libraries["lib-movies"].levels[0].cursor_index,
         0

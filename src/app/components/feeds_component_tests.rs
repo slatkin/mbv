@@ -9,7 +9,10 @@ use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
 use crate::app::types_feed_tab::WatchedFilter;
-use mbv_core::config::{FeedKind, FeedSubscription};
+use mbv_core::config::{
+    FeedGroupKey, FeedKind, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
+    SelectorIdentity,
+};
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -115,6 +118,67 @@ fn key(code: Key) -> KeyEvent {
 
 fn down(owner: &mut FeedsContent, code: Key) -> Option<Msg> {
     owner.on_key(&key(code))
+}
+
+#[test]
+fn launch_snapshot_uses_feed_filter_and_selected_entry_identity() {
+    let mut owner = component();
+    down(&mut owner, Key::Char('w'));
+    down(&mut owner, Key::Down);
+
+    assert_eq!(
+        owner.launch_snapshot(),
+        (
+            Some(SelectorIdentity::Feeds {
+                key: FeedsSelectorKey::Filter(FeedsFilter::Played),
+            }),
+            Some(LibraryItemIdentity::Feeds {
+                id: "Second".into(),
+            }),
+        )
+    );
+}
+
+#[test]
+fn feeds_owner_reanchors_missing_group_and_item_to_first_choices() {
+    use mbv_core::config::{LaunchPanelFocus, TabIdentity, TuiLaunchState};
+
+    let mut owner = grouped_component();
+    let state = TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: TabIdentity::Feeds,
+        panel_focus: LaunchPanelFocus::Library,
+        selector: Some(SelectorIdentity::Feeds {
+            key: FeedsSelectorKey::Group(FeedGroupKey::Feed("gone".into())),
+        }),
+        item: Some(LibraryItemIdentity::Feeds { id: "gone".into() }),
+    };
+    assert!(owner.reanchor_launch_state(&state));
+    assert_eq!(owner.selected_group(), 0);
+    assert_eq!(owner.watched_filter(), WatchedFilter::All);
+    assert_eq!(
+        owner.canonical_selected_target(),
+        Some(&"A-unplayed".to_string())
+    );
+}
+
+#[test]
+fn launch_snapshot_uses_feed_url_for_group_identity() {
+    let mut owner = grouped_component();
+    down(&mut owner, Key::Char(']'));
+
+    assert_eq!(
+        owner.launch_snapshot().0,
+        Some(SelectorIdentity::Feeds {
+            key: FeedsSelectorKey::Group(FeedGroupKey::Feed("https://example.test/A".into(),)),
+        })
+    );
+}
+
+#[test]
+fn launch_snapshot_is_empty_without_feed_pills_or_selected_item() {
+    let owner = FeedsContent::new();
+    assert_eq!(owner.launch_snapshot(), (None, None));
 }
 
 #[test]

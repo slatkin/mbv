@@ -217,6 +217,22 @@ pub struct App {
     pub(super) list_pane_width: Option<u16>,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
+    /// The one startup launch snapshot loaded from disk. Its tab identity is
+    /// the sole source for tab restoration; `pending_launch_tab_resolved`
+    /// consumes only that level while selector/item identities remain pending
+    /// for the selected destination's discrete re-anchor.
+    pub(super) pending_launch_state: Option<mbv_core::config::TuiLaunchState>,
+    pub(super) pending_launch_tab_resolved: bool,
+    /// Legacy selected-tab preference retained only until its stable identity
+    /// can be recovered from the current catalogs. It is never used as a
+    /// launch-state identity after migration.
+    pub(super) legacy_launch_tab: Option<usize>,
+    /// Prevents a legacy seed from being derived more than once in this
+    /// process. The legacy files remain read-only compatibility inputs; the
+    /// orderly-exit snapshot makes the new file authoritative.
+    pub(super) legacy_launch_migration_attempted: bool,
+    pub(super) emby_catalog_ready: bool,
+    pub(super) audiobookshelf_catalog_ready: bool,
     /// Deferred tab switch for a `NavigateLanding::Album` landing (design D4
     /// of change `per-destination-item-navigation`): set when the recursive
     /// album activation spawns, consumed on its `RecursiveAlbumActivated`
@@ -407,12 +423,6 @@ pub struct App {
     pub(super) marquee_started_at: std::time::Instant,
     pub(super) last_nav_at: Instant,
     pub(super) last_library_nav_at: Instant,
-    /// Set once `library_position_state` has an unflushed in-memory change.
-    /// The disk write + shared-document sync are debounced off this rather
-    /// than run synchronously on every cursor move -- see
-    /// `save_default_library_position`'s doc comment.
-    pub(super) library_position_dirty: bool,
-    pub(super) library_position_dirty_at: Instant,
     /// Tracks terminal focus and arms a grace window to swallow the
     /// click that merely brings the window into focus.
     ///

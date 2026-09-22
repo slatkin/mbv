@@ -1,6 +1,7 @@
 //! Shutdown/teardown handling, split out of `run_loop_events.rs` to keep that
 //! file within the repository's file-size limit.
 
+use crate::app::shell::Model;
 use crate::app::{App, QUIT_REQUESTED};
 use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
@@ -13,6 +14,16 @@ fn player_join_outer_bound(quit_timeout: Duration) -> Duration {
 fn join_visualizer_worker(handle: Option<JoinHandle<()>>) {
     if let Some(handle) = handle {
         crate::app::visualizer_worker::join_worker(handle);
+    }
+}
+
+impl Model {
+    /// Finish an orderly TUI teardown after taking the selected destination's
+    /// bounded launch snapshot. The App remains the persistence authority;
+    /// this shell query is the only reverse read from the mounted owner.
+    pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
+        let launch_state = self.launch_state_snapshot();
+        self.app.teardown(quit_timeout, Some(launch_state));
     }
 }
 
@@ -57,12 +68,23 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
-        // A position saved just before quitting is still only in memory --
-        // `save_default_library_position` defers the disk write (see its
-        // doc comment) -- so flush it now rather than waiting for the
-        // run loop's idle check, which won't run again.
-        self.flush_library_position_now();
+    /// Persist the launch snapshot supplied by the shell at this discrete
+    /// orderly-exit boundary, then run the normal teardown. App never mirrors
+    /// component-owned state while the TUI is running.
+    pub(in crate::app) fn teardown(
+        &mut self,
+        quit_timeout: Duration,
+        launch_state: Option<mbv_core::config::TuiLaunchState>,
+    ) {
+        if let Some(state) = launch_state {
+            if let Err(error) = mbv_core::config::save_tui_launch_state(&state) {
+                log::warn!(target: "launch_state", "failed to save TUI launch state: {error}");
+            }
+        }
+        self.teardown_inner(quit_timeout);
+    }
+
+    fn teardown_inner(&mut self, quit_timeout: Duration) {
         // Signal the visualizer before starting player shutdown so its worker
         // can stop concurrently with the player thread.
         let visualizer_handle = self.visualizer.take().and_then(|mut worker| {

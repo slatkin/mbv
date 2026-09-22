@@ -121,16 +121,12 @@ impl App {
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
         let old_token = mbv_core::config::load_service_secret(ServiceKind::Emby);
         let old_queue = mbv_core::config::load_queue_state();
-        let old_positions = mbv_core::config::load_library_position_state();
         let filtered = old_queue.as_ref().map(QueueState::without_emby);
-        if let Err(error) =
-            mbv_core::config::save_library_position_state_result(&Default::default())
-                .and_then(|_| mbv_core::config::remove_emby_setup_and_secret())
-                .and_then(|_| self.persist_filtered_queue(&filtered))
+        if let Err(error) = mbv_core::config::remove_emby_setup_and_secret()
+            .and_then(|_| self.persist_filtered_queue(&filtered))
         {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
             Self::restore_persisted_queue(old_queue.as_ref());
-            let _ = mbv_core::config::save_library_position_state_result(&old_positions);
             self.flash(
                 format!("Could not remove Emby safely: {error}"),
                 ToastSeverity::Error,
@@ -155,18 +151,15 @@ impl App {
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
         let old_token = mbv_core::config::load_service_secret(ServiceKind::Emby);
         let old_queue = mbv_core::config::load_queue_state();
-        let old_positions = mbv_core::config::load_library_position_state();
         let filtered = old_queue.as_ref().map(QueueState::without_emby);
         let replacement = candidate.setup.clone();
         let token = candidate.client.token.clone();
-        let result = mbv_core::config::save_library_position_state_result(&Default::default())
-            .and_then(|_| mbv_core::config::remove_emby_setup_and_secret())
+        let result = mbv_core::config::remove_emby_setup_and_secret()
             .and_then(|_| self.persist_filtered_queue(&filtered))
             .and_then(|_| mbv_core::config::persist_emby_setup_and_secret(&replacement, &token));
         if let Err(error) = result {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
             Self::restore_persisted_queue(old_queue.as_ref());
-            let _ = mbv_core::config::save_library_position_state_result(&old_positions);
             self.flash(
                 format!("Could not replace Emby safely: {error}"),
                 ToastSeverity::Error,

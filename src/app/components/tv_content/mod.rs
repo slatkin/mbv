@@ -27,6 +27,7 @@ use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit}
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{fmt_duration_gutter, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use ratatui::layout::Position;
 #[cfg(test)]
 use tuirealm::event::Key;
@@ -162,6 +163,11 @@ impl TvContent {
         let viewport_height = self.painted_viewport_height();
         self.carrier.clamp_viewport(viewport_height);
     }
+    #[cfg(test)]
+    pub(in crate::app) fn test_set_letter_filter(&mut self, index: usize) {
+        self.context.list.letter_filter = crate::app::render::LetterFilter::for_index(index);
+    }
+
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
         let grouped = !self.inline_search.is_active()
@@ -630,6 +636,76 @@ impl LibraryContentOwner for TvContent {
     }
     fn inline_search_active(&self) -> bool {
         self.inline_search.is_active()
+    }
+
+    fn launch_selector(
+        &self,
+        state: &mbv_core::config::TuiLaunchState,
+    ) -> Option<super::library_panel::owner::LaunchSelector> {
+        if !self.context.show_letter_pills {
+            return None;
+        }
+        let current = self
+            .context
+            .list
+            .letter_filter
+            .as_ref()
+            .map(|filter| filter.index);
+        match state.selector.as_ref() {
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Letter(bucket),
+            }) => {
+                let target = bucket.to_index();
+                (current != Some(target))
+                    .then_some(super::library_panel::owner::LaunchSelector::Emby { index: target })
+            }
+            // No letter pill is represented by an index. The shell uses
+            // this out-of-band value for the distinct clear intent.
+            _ if current.is_some() => {
+                Some(super::library_panel::owner::LaunchSelector::Emby { index: usize::MAX })
+            }
+            _ => None,
+        }
+    }
+
+    fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
+        if self.context.list.loading && self.context.list.items.is_empty() {
+            return false;
+        }
+        // The shell applies the selector through App and pushes the resulting
+        // content before this item-level re-anchor. Keep selector state
+        // owned by that projection rather than mirroring it here.
+        let selected = match state.item.as_ref() {
+            Some(LibraryItemIdentity::Emby { id }) => self.carrier.select_target(id),
+            _ => false,
+        };
+        if !selected {
+            self.carrier.select_first();
+        }
+        true
+    }
+
+    fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
+        // TV's season pills live in the Hero Workspace and are deliberately
+        // excluded from the bounded launch snapshot. Only the main letter
+        // Selector and the selected series belong here.
+        let selector = self.context.show_letter_pills.then(|| {
+            let key = self
+                .context
+                .list
+                .letter_filter
+                .as_ref()
+                .and_then(|filter| EmbyLetterBucket::from_index(filter.index))
+                .map(EmbySelectorKey::Letter)
+                .unwrap_or(EmbySelectorKey::Unfiltered);
+            SelectorIdentity::Emby { key }
+        });
+        let item = self
+            .carrier
+            .selected_target()
+            .cloned()
+            .map(|id| LibraryItemIdentity::Emby { id });
+        (selector, item)
     }
 
     fn focus_hero_workspace(&mut self) -> bool {

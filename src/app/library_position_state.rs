@@ -2,27 +2,10 @@ use super::types_browse::BrowseLevel;
 use super::types_browse::BrowseResting;
 use super::types_feed::FeedHomeVideoState;
 use super::App;
-use std::time::{Duration, Instant};
-
-/// How long a library-position change must sit unflushed before the
-/// deferred write in `flush_library_position_if_idle` fires. Keeps rapid
-/// scrolling (arrow-key repeat, mouse wheel, PageUp/PageDown) from doing a
-/// disk write on every single step -- see `save_default_library_position`'s
-/// doc comment.
-const LIBRARY_POSITION_FLUSH_DELAY: Duration = Duration::from_millis(150);
-
 impl App {
-    /// Records the current position of `lib_idx` in memory (#361 collapsed
-    /// the old Default/Power scope split -- there is one view and one saved
-    /// position per library now). The disk write is deferred: this is called
-    /// on every cursor move (arrow keys, PageUp/Down, mouse wheel), so doing
-    /// that I/O here would put a synchronous disk write on every scroll tick.
-    /// Callers
-    /// that need the in-memory state (tests, immediate reads) still see it
-    /// updated synchronously; only the persistence is deferred, via
-    /// `flush_library_position_if_idle` (called from the run loop) and
-    /// `flush_library_position_now` (called at teardown so a final burst is
-    /// never lost).
+    /// Keeps the legacy browse snapshot current in memory for the migration
+    /// reader. It deliberately never writes the legacy per-library document;
+    /// launch state is serialized only by the orderly-exit snapshot path.
     pub(super) fn persist_library_scroll(&mut self, lib_idx: usize, scroll: usize) {
         if let Some(level) = self
             .libs
@@ -34,6 +17,8 @@ impl App {
         }
     }
 
+    /// Updates the legacy snapshot only in memory. The legacy document is a
+    /// startup migration source, never a live persistence target.
     pub(super) fn save_default_library_position(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
@@ -43,32 +28,6 @@ impl App {
         self.library_position_state
             .libraries
             .insert(library_id, position);
-        self.library_position_dirty = true;
-        self.library_position_dirty_at = Instant::now();
-    }
-
-    /// Flushes a pending library-position change once it has sat unflushed
-    /// for `LIBRARY_POSITION_FLUSH_DELAY` -- called each run-loop
-    /// iteration. A steady stream of cursor moves keeps resetting
-    /// `library_position_dirty_at`, so the write only lands once scrolling
-    /// pauses.
-    pub(in crate::app) fn flush_library_position_if_idle(&mut self) {
-        if self.library_position_dirty
-            && self.library_position_dirty_at.elapsed() >= LIBRARY_POSITION_FLUSH_DELAY
-        {
-            self.flush_library_position_now();
-        }
-    }
-
-    /// Unconditionally persists the in-memory library-position state,
-    /// regardless of how recently it changed. Used at teardown so a
-    /// position change made just before quitting is never dropped.
-    pub(in crate::app) fn flush_library_position_now(&mut self) {
-        if !self.library_position_dirty {
-            return;
-        }
-        self.library_position_dirty = false;
-        crate::config::save_library_position_state(&self.library_position_state);
     }
 
     /// Whether `lib_idx` is the library currently visible in the left
@@ -100,7 +59,6 @@ impl App {
         self.library_position_state
             .libraries
             .insert(lib.library.id.clone(), position);
-        crate::config::save_library_position_state(&self.library_position_state);
     }
 
     pub(super) fn focus_queue_initial_item(&mut self) {
@@ -194,18 +152,12 @@ impl App {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
-        if self
-            .library_position_state
+        self.library_position_state
             .libraries
-            .remove(&lib.library.id)
-            .is_none()
-        {
-            return;
-        }
-        crate::config::save_library_position_state(&self.library_position_state);
+            .remove(&lib.library.id);
     }
 
-    fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {
+    pub(super) fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {
         let library = self.audiobookshelf_libraries.get(index)?;
         let server = self
             .config
@@ -246,8 +198,6 @@ impl App {
             ..Default::default()
         };
         self.library_position_state.libraries.insert(key, position);
-        self.library_position_dirty = true;
-        self.library_position_dirty_at = Instant::now();
     }
 
     /// Book-shaped sibling of `save_audiobookshelf_position`, keyed by the
@@ -277,8 +227,6 @@ impl App {
             ..Default::default()
         };
         self.library_position_state.libraries.insert(key, position);
-        self.library_position_dirty = true;
-        self.library_position_dirty_at = Instant::now();
     }
 
     pub(super) fn activate_audiobookshelf_position(&mut self, index: usize) {
