@@ -21,7 +21,7 @@
 
 - [x] 4.1 Remove launch-state writes from live tab, Panel-focus, pill, item, refresh, and idle-flush paths; remove obsolete per-library dirty/flush state while preserving unrelated preference, configuration, queue, progress, cache, and auto-reconnect writes; verify a mounted tick test can change tab/pill/item/focus without changing the launch-state file before teardown.
 - [x] 4.2 When the new file is absent, derive at most one initial snapshot from legacy selected-tab/Panel-focus preferences and the selected tab's recoverable stable browse identity; do not infer identities from stale cursor indices or retain unselected-tab state, and verify new-file precedence plus legacy/malformed fallback in deterministic migration tests.
-- [ ] 4.3 Add a two-App hermetic persistence test proving independent in-memory divergence and whole-snapshot last-exit-wins behavior, with no sleeps, live daemon, real state directory, locking, merge, or Client identity.
+- [x] 4.3 Add a two-App hermetic persistence test proving independent in-memory divergence and whole-snapshot last-exit-wins behavior, with no sleeps, live daemon, real state directory, locking, merge, or Client identity.
 
 ## 5. Verification
 
