@@ -24,7 +24,7 @@ The Library panel already erases list shape through `PanelList`, but it has a co
 - No Hero, Workspace, shell-effect, playback, or routing changes.
 - No changes to the flat `MediaList` shape.
 - No new tree behavior or visual variant.
-- No `tui-treelistview` upgrade or new dependency.
+- No new tree dependency and no replacement for the removed `tui-treelistview` crate.
 
 ## Decisions
 

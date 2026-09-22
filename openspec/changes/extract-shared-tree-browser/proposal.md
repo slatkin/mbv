@@ -11,7 +11,7 @@ PR #759 extracted shared row-flow mechanics but left the complete tree control i
 - Limit destinations to supplying plain `TreeNode<Target>` values and translating emitted stable-target intents. Destinations supply no trait implementation, callback, closure, model/query/state object, renderer, painter, navigation rule, filter matcher, aggregation algorithm, or action-order policy.
 - Convert Grouped Music to consume the shared `TreeBrowser` while preserving its current behavior and rendered style.
 - Remove `MusicTreeBrowser` and the destination-specific copies of tree-control behavior after Music adopts the shared component.
-- Keep `tui-treelistview` private to the shared Interactive Component and its shared Render Component in production and tests.
+- Keep internal tree-library types private to the shared Interactive Component and its shared Render Component in production and tests.
 - Do not migrate TV, change any Hero or Workspace, add a second consumer, or change user-visible Music behavior in this change.
 
 ## Capabilities
@@ -26,4 +26,4 @@ None.
 
 ## Impact
 
-Affected code is concentrated in `src/app/components/list/`, the current `src/app/components/music_tree*.rs` implementation, `src/app/components/music_content*.rs`, the Library panel's list adapter, and existing Music tree tests. The current `tui-treelistview` 0.2.2 dependency remains pinned and no dependency is added. Public behavior, Music presentation, TV, Hero content, Workspace content, shell effects, and playback are unchanged.
+Affected code is concentrated in `src/app/components/list/`, the current `src/app/components/music_tree*.rs` implementation, `src/app/components/music_content*.rs`, the Library panel's list adapter, and existing Music tree tests. The `tui-treelistview` dependency was removed (57f029f9) with no replacement; internal tree-library types stay private to those two shared modules in production and tests. Public behavior, Music presentation, TV, Hero content, Workspace content, shell effects, and playback are unchanged.
