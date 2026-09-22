@@ -218,12 +218,17 @@ pub(in crate::app) fn music_album_artwork(item: &EmbyItem) -> HeroArtwork {
 
 /// The landscape chain for a non-music item with a declared landscape image:
 /// Series and episodes use the `Thumb`-first series chain; other videos keep
-/// the movie hero's backdrop-first chain (design D5).
+/// the movie hero's backdrop-first chain with `Thumb` in front (design D5).
+/// `Thumb` is load-bearing here: this arm is also reached by a `Thumb`-only
+/// declaration (`landscape_declared` counts `ImageTags.Thumb`), and a home
+/// video's landscape image is commonly a `Thumb` with no Primary/Backdrop at
+/// all — omitting it left those items fetching nothing and painting the
+/// placeholder while the artwork existed.
 fn landscape_image_chain(item: &EmbyItem) -> &'static [&'static str] {
     match item.item_type.as_str() {
         "Series" | "Episode" => SERIES_LANDSCAPE_IMAGE_TYPES,
         "Movie" => &["Backdrop", "Primary"],
-        _ => &["Backdrop", "Primary", "Logo"],
+        _ => &["Thumb", "Backdrop", "Primary", "Logo"],
     }
 }
 
