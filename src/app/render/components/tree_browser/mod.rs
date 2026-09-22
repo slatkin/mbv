@@ -104,7 +104,7 @@ pub(in crate::app) fn render_tree_browser(
         if focused && row.selected {
             spans.extend(marquee_spans(
                 &row.title,
-                &[(row.title.clone(), title_color)],
+                &[(row.title.as_str(), title_color)],
                 budget,
                 marquee_text,
                 marquee_started_at,
@@ -112,7 +112,7 @@ pub(in crate::app) fn render_tree_browser(
             ));
         } else {
             spans.push(Span::styled(
-                truncate(&row.title, budget),
+                crate::app::ui_util::trunc_str(&row.title, budget),
                 Style::default().fg(title_color),
             ));
         }
@@ -183,24 +183,4 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
             }
         }
     }
-}
-
-#[allow(dead_code)]
-fn truncate(text: &str, width: usize) -> String {
-    if text.width() <= width {
-        return text.to_owned();
-    }
-    if width <= 1 {
-        return "…".chars().take(width).collect();
-    }
-    let mut output = String::new();
-    for character in text.chars() {
-        if output.width() + unicode_width::UnicodeWidthChar::width(character).unwrap_or(0) >= width
-        {
-            break;
-        }
-        output.push(character);
-    }
-    output.push('…');
-    output
 }

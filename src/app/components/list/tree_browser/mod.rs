@@ -27,7 +27,6 @@ pub use types::{
 ///
 /// The error deliberately contains only stable targets.  Arena identifiers
 /// are an implementation detail and never cross this boundary.
-#[allow(dead_code)]
 #[derive(Clone, PartialEq, Eq)]
 pub enum TreeReconciliationError<Target> {
     DuplicateTarget { target: Target },
@@ -47,20 +46,7 @@ impl<Target> std::fmt::Debug for TreeReconciliationError<Target> {
     }
 }
 
-#[allow(dead_code)]
-impl<Target> TreeReconciliationError<Target> {
-    pub fn target(&self) -> &Target {
-        match self {
-            Self::DuplicateTarget { target }
-            | Self::SelfParent { target }
-            | Self::Cycle { target }
-            | Self::MissingParent { target, .. } => target,
-        }
-    }
-}
-
 /// The derived aggregate-mark state of one aggregate-policy row.
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum TreeAggregateMark {
     /// No visible direct descendant is marked.
@@ -72,7 +58,6 @@ pub(crate) enum TreeAggregateMark {
 }
 
 /// A row prepared for the destination-neutral render component.
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TreePaintRow {
     pub(crate) title: String,
@@ -85,7 +70,6 @@ pub(crate) struct TreePaintRow {
     pub(crate) semantic_state: MediaSemanticState,
 }
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub(super) struct ArenaNode<Target> {
     pub(super) node: TreeNode<Target>,
@@ -98,7 +82,6 @@ pub(super) struct ArenaNode<Target> {
 ///
 /// The arena and its identifiers are private.  In particular, callers can
 /// only select, expand, mark, and resolve rows through destination targets.
-#[allow(dead_code)]
 pub struct TreeBrowser<Target> {
     pub(super) arena: HashMap<usize, ArenaNode<Target>>,
     pub(super) target_to_node: HashMap<Target, usize>,
@@ -124,14 +107,12 @@ pub struct TreeBrowser<Target> {
     pub(super) last_painted: Option<Rect>,
 }
 
-#[allow(dead_code)]
 impl<Target> Default for TreeBrowser<Target> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[allow(dead_code)]
 impl<Target> TreeBrowser<Target> {
     pub fn new() -> Self {
         Self {
@@ -324,6 +305,7 @@ impl<Target> TreeBrowser<Target> {
         Ok(())
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn model_revision(&self) -> u64 {
         self.model_revision
     }
@@ -363,14 +345,11 @@ impl<Target> TreeBrowser<Target> {
             .map(|entry| &entry.node)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn nodes(&self) -> impl Iterator<Item = &TreeNode<Target>> {
         self.ordered_nodes
             .iter()
             .filter_map(|id| self.arena.get(id).map(|entry| &entry.node))
-    }
-
-    pub fn expanded_targets(&self) -> impl Iterator<Item = &Target> {
-        self.expanded.iter()
     }
 
     pub fn is_expanded(&self, target: &Target) -> bool
@@ -462,17 +441,11 @@ impl<Target> TreeBrowser<Target> {
         None
     }
 
-    pub fn marked_action_targets(&self) -> Vec<Target>
-    where
-        Target: Clone + Eq + Hash,
-    {
-        self.action_targets()
-    }
-
     pub fn filter_active(&self) -> bool {
         self.filter_active
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn filter_query(&self) -> &str {
         &self.filter_query
     }
@@ -482,6 +455,7 @@ impl<Target> TreeBrowser<Target> {
             .then(|| (self.filter_query.clone(), false))
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn viewport_offset(&self) -> usize {
         self.viewport_offset
     }

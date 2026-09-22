@@ -15,13 +15,14 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
         let (claim_rect, content_rect) = self.configured_geometry.unwrap_or((area, area));
         self.reconcile_selection();
         self.paint.begin();
-        let rows = self.visible_rows();
+        let visible_ids = self.visible_node_ids();
+        let rows = self.visible_rows(&visible_ids);
         crate::app::render::render_tree_browser(
             frame,
             claim_rect,
             content_rect,
             &rows,
-            self.visible_len(),
+            visible_ids.len(),
             self.viewport_offset,
             self.focused,
             &mut self.marquee_text,
@@ -36,7 +37,7 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
             claim_rect,
             content_rect,
             self.viewport_offset,
-            self.retained_rows(claim_rect, content_rect),
+            self.retained_rows(&visible_ids, claim_rect, content_rect),
             selected_row,
         );
     }

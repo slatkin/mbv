@@ -14,7 +14,7 @@ use unicode_width::UnicodeWidthStr;
 /// `add-grouped-music-tree-browser`).
 pub(in crate::app) fn marquee_spans(
     key: &str,
-    parts: &[(String, Color)],
+    parts: &[(&str, Color)],
     max_width: usize,
     marquee_text: &mut String,
     marquee_started_at: &mut std::time::Instant,
@@ -26,7 +26,7 @@ pub(in crate::app) fn marquee_spans(
     if total_width <= max_width && !force_scroll {
         return parts
             .iter()
-            .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))
+            .map(|(text, color)| Span::styled(text.to_string(), Style::default().fg(*color)))
             .collect();
     }
     if *marquee_text != key {
@@ -70,7 +70,7 @@ fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
 }
 
 fn colored_width_window(
-    parts: &[(String, Color)],
+    parts: &[(&str, Color)],
     start_col: usize,
     width: usize,
 ) -> Vec<Span<'static>> {
@@ -122,7 +122,7 @@ mod tests {
     /// of returning it static.
     #[test]
     fn forced_scroll_carries_a_fitting_title_out_and_back() {
-        let parts = vec![("Show A".to_string(), Color::Reset)];
+        let parts = vec![("Show A", Color::Reset)];
         let mut text = String::new();
         let mut started = Instant::now();
         let window = |text: &mut String, started: &mut Instant, elapsed_ms: u64| {

@@ -103,7 +103,6 @@ impl<Target: Clone + Eq + Hash> Expandable<Target> for TreeState<'_, Target> {
     }
 }
 
-#[allow(dead_code)]
 impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     fn with_state<R>(&mut self, action: impl FnOnce(&mut TreeState<'_, Target>) -> R) -> R {
         action(&mut TreeState { browser: self })
@@ -551,13 +550,9 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .collect()
     }
 
-    pub(super) fn visible_rows(&self) -> Vec<TreePaintRow> {
+    pub(super) fn visible_rows(&self, visible_ids: &[usize]) -> Vec<TreePaintRow> {
         let mut rows = Vec::new();
-        for id in self
-            .visible_node_ids()
-            .into_iter()
-            .skip(self.viewport_offset)
-        {
+        for &id in visible_ids.iter().skip(self.viewport_offset) {
             let Some(entry) = self.arena.get(&id) else {
                 continue;
             };
@@ -592,11 +587,13 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
 
     pub(super) fn retained_rows(
         &self,
+        visible_ids: &[usize],
         claim_rect: Rect,
         content_rect: Rect,
     ) -> Vec<(Rect, Target)> {
-        self.visible_node_ids()
-            .into_iter()
+        visible_ids
+            .iter()
+            .copied()
             .skip(self.viewport_offset)
             .enumerate()
             .filter_map(|(index, id)| {
