@@ -66,7 +66,11 @@ impl TvContent {
         // geometry, so the actual breakpoint — not the pushed bit alone —
         // gates these arms: a stale bit in Wide must never shadow the Wide
         // workspace's own handling.
-        if !self.is_wide && self.hero_overlay_open && self.pane == Pane::Episodes {
+        if !self.is_wide
+            && self.hero_overlay_open
+            && self.pane == Pane::Episodes
+            && !self.flat_episode_mode()
+        {
             return self.handle_key_overlay_workspace(key);
         }
         if self.is_wide {

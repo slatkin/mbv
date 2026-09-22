@@ -106,8 +106,9 @@ pub struct LibraryPanel {
     focused_summary: Option<SelectionSummary>,
     hero_overlay_open: bool,
     /// Whether the current overlay was opened automatically for a compact
-    /// flat-episode hero. Explicit series overlays are never closed by the
-    /// mini-view synchronization pass.
+    /// flat-episode hero. This remains armed after an explicit dismissal so
+    /// the mini-view sync pass does not immediately reopen the overlay.
+    /// Explicit series overlays are never closed by that pass.
     mini_view_hero_auto_open: bool,
     overlay_geometry: Option<OverlayGeometry>,
 }
@@ -271,7 +272,7 @@ impl LibraryPanel {
                 .active_mut()
                 .is_some_and(|owner| owner.mini_view_hero_available());
         if available {
-            if !self.hero_overlay_open {
+            if !self.hero_overlay_open && !self.mini_view_hero_auto_open {
                 if let Some(owner) = self.owners.active_mut() {
                     owner.focus_hero_workspace();
                     owner.set_hero_overlay_open(true);

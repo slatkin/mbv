@@ -460,6 +460,55 @@ fn flat_episode_activation_plays_without_opening_a_series_workspace(
 }
 
 #[test]
+fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
+    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
+    let mut second = crate::app::tests::make_item("Upcoming Episode", "Episode");
+    second.id = "upcoming-episode".into();
+    second.series_id.clear();
+    harness.model_mut().app.libs[0].nav_stack[0].items.push(second);
+    harness.model_mut().app.terminal_width = crate::app::MINI_VIEW_THRESHOLD - 1;
+    harness.model_mut().app.mini_view_focus = PanelFocus::Library;
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+
+    assert!(panel(&harness).test_hero_overlay_open());
+    assert!(!tv(&harness).episode_pane_focused());
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let movement = harness.step();
+    assert!(movement.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 })
+    )));
+    assert_eq!(tv(&harness).selected_item_id(), Some("upcoming-episode".into()));
+    assert!(!tv(&harness).episode_pane_focused());
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let cycle = harness.step();
+    assert!(cycle.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::TvCycleLetterPill { delta: 1 })
+    )));
+    assert!(!cycle.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::TvSeasonMove { .. })
+    )));
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Esc,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(!panel(&harness).test_hero_overlay_open());
+    assert!(!tv(&harness).episode_pane_focused());
+}
+
+#[test]
 fn flat_episode_hero_is_painted_only_in_mini_view() {
     let mut mini = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
     mini.model_mut().app.terminal_width = crate::app::MINI_VIEW_THRESHOLD - 1;

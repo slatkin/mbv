@@ -791,6 +791,12 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn focus_hero_workspace(&mut self) -> bool {
+        if self.flat_episode_mode() {
+            // The compact flat-episode hero is passive: its browser carrier
+            // remains focused so movement and mode cycling keep reaching the
+            // visible list rather than the hidden season workspace.
+            return false;
+        }
         self.pane = Pane::Episodes;
         true
     }

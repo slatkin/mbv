@@ -174,6 +174,15 @@ impl App {
             })
     }
 
+    fn resolve_tv_episode_target(&self, target: &str) -> Option<EmbyItem> {
+        self.series_detail_cache
+            .values()
+            .flat_map(|detail| detail.episodes.values())
+            .flatten()
+            .find(|episode| episode.id == target)
+            .cloned()
+    }
+
     pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
@@ -214,13 +223,16 @@ impl App {
                 self.activate_selected_series_item(lib_idx, &item);
             }
         } else if let TvHit::EpisodeRow(target) = hit {
-            // Flat Latest/Upcoming rows are episodes, not Series targets.
-            // Resolve the painted stable target and play it directly; never
-            // route through the series activation/workspace path.
-            if let Some((_, item)) = self.resolve_tv_series_target(lib_idx, &target) {
-                if item.item_type == "Episode" {
-                    self.play_item(item);
-                }
+            // Flat Latest/Upcoming rows resolve through the browser level;
+            // series-workspace rows resolve through the cached season detail.
+            // Both are leaf episodes: play directly and never enter the
+            // series activation/workspace path.
+            let item = self
+                .resolve_tv_series_target(lib_idx, &target)
+                .map(|(_, item)| item)
+                .or_else(|| self.resolve_tv_episode_target(&target));
+            if let Some(item) = item.filter(|item| item.item_type == "Episode") {
+                self.play_item(item);
             }
         }
     }
