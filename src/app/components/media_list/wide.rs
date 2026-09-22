@@ -122,7 +122,8 @@ impl<Target> WideMediaList<Target> {
         Target: Clone,
     {
         let rows = row_geometry.target_rects(claim_rect, content_rect);
-        self.paint.store_completed(
+        PaintRetained::finish(
+            self,
             claim_rect,
             content_rect,
             row_geometry.offset(),
@@ -361,7 +362,7 @@ impl<Target: Clone + Eq> Viewported<Target> for WideMediaList<Target> {
     }
 }
 
-impl<Target: PartialEq> MarkSelection<Target> for WideMediaList<Target> {
+impl<Target: Clone + Eq> MarkSelection<Target> for WideMediaList<Target> {
     fn mark_selection(&self) -> &MarkSelectionState<Target> {
         self.core.mark_selection()
     }

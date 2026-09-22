@@ -18,6 +18,7 @@ use crate::app::tests::make_item;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
 use mbv_core::config::ServiceKind;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -475,9 +476,9 @@ fn music_owner_reanchor_lands_regardless_of_prior_local_move() {
 // ── Keyboard: album-level navigation (task 9.4 restored this entirely; see
 // commit 40b7a361) ─────────────────────────────────────────────────────────
 
-/// Down/PageDown move the owner's album cursor by one row / by the shared
-/// carrier's page stride, and the shell applies the emitted requests onto
-/// the resting browse position -- not just the owner's own local state.
+/// Down/PageDown move the owner's album cursor by one row / by the tree's
+/// visible viewport, and the shell applies the emitted requests onto the
+/// resting browse position -- not just the owner's own local state.
 #[test]
 fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
     let mut model = Model::new(make_music_group_app());
@@ -489,6 +490,12 @@ fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
     }
     model.app.panel_focus = PanelFocus::Library;
     model.sync_mounted_surfaces();
+    // The tree pages by its visible viewport, so the panel geometry must be
+    // established for a page chord to move at all.
+    model
+        .test_music_owner_mut()
+        .browser
+        .set_geometry(Rect::new(0, 0, 80, 3), Rect::new(0, 0, 80, 3));
 
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
         code: Key::Down,
@@ -515,11 +522,11 @@ fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
         matches!(
             message,
             Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                target: 4,
                 kind: AlbumCursorKind::Page,
-                ..
             }))
         ),
-        "PageDown must move by the shared carrier's page stride: {message:?}"
+        "PageDown must move by the tree's visible viewport (here 3 rows): {message:?}"
     );
 }
 

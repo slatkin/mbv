@@ -59,11 +59,6 @@ fn computed_mark_state(
     }
 }
 
-/// The tree's named paging policy (design D4): one page moves this many
-/// visible projection rows. Kept as an explicit shape policy rather than an
-/// implicit shared stride.
-const TREE_PAGE_ROWS: usize = 5;
-
 /// The classified region of a latest-render hit for test assertions: a row
 /// carries its stable target, and the non-row regions stay distinguishable
 /// without leaking the crate's arena ids.
@@ -114,12 +109,36 @@ impl MusicTreeBrowser {
         Cursored::move_by(self, &flow, delta as isize);
     }
 
-    /// Moves the selection one page under the tree's named fixed visible-row
-    /// policy, clamped by the shared movement default.
+    /// The tree's established viewport height, from the same geometry the
+    /// painter resolves: the parent-configured content rect when the panel has
+    /// declared one, otherwise the content rect of the last completed frame.
+    /// `None` until one of those exists.
+    fn viewport_len(&self) -> Option<usize> {
+        self.configured_geometry
+            .map(|(_, content_rect)| content_rect.height as usize)
+            .or_else(|| self.last_area.map(|area| area.height as usize))
+    }
+
+    /// Moves the selection one visible viewport under the shared named
+    /// `PagingPolicy::VisibleViewport`, whose page distance is the tree's
+    /// established viewport height and which keeps the selection visible. No
+    /// geometry means no viewport to page, so this is a deterministic no-op.
     pub(in crate::app) fn page_selection(&mut self, delta: i64) {
+        let direction = delta.signum() as isize;
+        if direction == 0 {
+            return;
+        }
+        let Some(viewport_len) = self.viewport_len() else {
+            return;
+        };
         let flow = self.row_flow();
-        let distance = delta.saturating_mul(TREE_PAGE_ROWS as i64);
-        Cursored::move_by(self, &flow, distance as isize);
+        Viewported::page(
+            self,
+            &flow,
+            viewport_len,
+            direction,
+            PagingPolicy::VisibleViewport,
+        );
     }
 
     pub(in crate::app) fn select_first_visible(&mut self) {
@@ -457,10 +476,12 @@ impl MusicTreeBrowser {
                 ))
             })
             .collect();
-        self.paint.store_completed(
+        let flow_offset = state.offset();
+        PaintRetained::finish(
+            self,
             content_rect,
             content_rect,
-            state.offset(),
+            flow_offset,
             retained_rows,
             retained_selected,
         );

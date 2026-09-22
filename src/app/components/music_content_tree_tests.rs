@@ -768,12 +768,59 @@ fn home_end_and_page_move_over_the_tree_visible_nodes() {
     press(&mut owner, Key::Home);
     assert_eq!(owner.browser.selected_target(), first_visible);
 
-    // The page stride is the shared visible-node stride (5): it must never
-    // inherit a Heading-based group jump.
+    // Paging moves by the established visible viewport (here 3 rows), never a
+    // fixed stride and never a Heading-based group jump.
+    paint_tree(&mut owner, Rect::new(0, 0, 48, 3));
     press(&mut owner, Key::PageDown);
-    assert_eq!(selected_row(&owner), 5, "PageDown moves one page of rows");
+    assert_eq!(
+        selected_row(&owner),
+        3,
+        "PageDown moves one visible viewport"
+    );
     press(&mut owner, Key::PageUp);
-    assert_eq!(selected_row(&owner), 0, "PageUp mirrors the page stride");
+    assert_eq!(selected_row(&owner), 0, "PageUp mirrors the viewport page");
+}
+
+/// The page distance is the visible viewport height, not a fixed row count:
+/// two different painted heights produce two different page distances, which
+/// a fixed-stride implementation cannot satisfy.
+#[test]
+fn page_distance_tracks_the_visible_viewport_height() {
+    let page_down_row = |height: u16| {
+        let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1", "a-2", "a-3", "a-4", "a-5"])]);
+        owner.expand_all_tree_roots();
+        press(&mut owner, Key::Home);
+        paint_tree(&mut owner, Rect::new(0, 0, 48, height));
+        assert_eq!(selected_row(&owner), 0, "Home starts the page from row 0");
+        press(&mut owner, Key::PageDown);
+        selected_row(&owner)
+    };
+
+    assert_eq!(page_down_row(2), 2, "a 2-row viewport pages 2 rows");
+    assert_eq!(page_down_row(4), 4, "a 4-row viewport pages 4 rows");
+}
+
+/// Before any geometry is established there is no visible viewport to page,
+/// so a page chord is a deterministic no-op rather than a made-up stride.
+#[test]
+fn paging_without_established_geometry_does_not_move() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1", "a-2"])]);
+    owner.expand_all_tree_roots();
+    press(&mut owner, Key::Home);
+    assert_eq!(selected_row(&owner), 0);
+
+    press(&mut owner, Key::PageDown);
+    assert_eq!(
+        selected_row(&owner),
+        0,
+        "no viewport geometry means no page"
+    );
+    press(&mut owner, Key::PageUp);
+    assert_eq!(
+        selected_row(&owner),
+        0,
+        "no viewport geometry means no page"
+    );
 }
 
 #[test]

@@ -329,7 +329,7 @@ impl<Target> MediaList<Target> {
     }
 }
 
-impl<Target: PartialEq> MediaList<Target> {
+impl<Target: Clone + Eq> MediaList<Target> {
     /// The selectable-index position of `target`, if it is present.
     fn position_of(&self, target: &Target) -> Option<usize> {
         self.selectable
@@ -451,7 +451,7 @@ impl<Target: Clone + Eq> MediaList<Target> {
     }
 }
 
-impl<Target: Eq> Cursored<Target> for MediaList<Target> {
+impl<Target: Clone + Eq> Cursored<Target> for MediaList<Target> {
     fn selected_target(&self) -> Option<&Target> {
         self.selected_target()
     }
@@ -463,7 +463,7 @@ impl<Target: Eq> Cursored<Target> for MediaList<Target> {
     }
 }
 
-impl<Target: Eq> Viewported<Target> for MediaList<Target> {
+impl<Target: Clone + Eq> Viewported<Target> for MediaList<Target> {
     fn viewport_offset(&self) -> usize {
         self.scroll()
     }
@@ -479,7 +479,7 @@ impl<Target: Eq> Viewported<Target> for MediaList<Target> {
     }
 }
 
-impl<Target: PartialEq> MarkSelection<Target> for MediaList<Target> {
+impl<Target: Clone + Eq> MarkSelection<Target> for MediaList<Target> {
     fn mark_selection(&self) -> &MarkSelectionState<Target> {
         &self.multi_selection
     }

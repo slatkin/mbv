@@ -22,7 +22,7 @@ impl MediaListSurfaceInput {
     }
 }
 
-impl<Target: Clone + PartialEq> MediaList<Target> {
+impl<Target: Clone + Eq> MediaList<Target> {
     /// Toggle a target and freeze the resulting explicit set. The first toggle
     /// includes the row that was under the cursor, matching Ctrl+Click.
     pub fn toggle_selection(&mut self, target: &Target) {

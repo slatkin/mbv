@@ -48,8 +48,8 @@ use tui_treelistview::{
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::components::list::{
-    AggregateMarkState, Cursored, Expandable, MarkSelection, MarkSelectionState, PaintRetained,
-    PaintRetainedState, Viewported,
+    AggregateMarkState, Cursored, Expandable, MarkSelection, MarkSelectionState, PagingPolicy,
+    PaintRetained, PaintRetainedState, Viewported,
 };
 use crate::app::components::list::{Row, RowFlow};
 use crate::app::components::media_list::{
