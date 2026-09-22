@@ -115,9 +115,15 @@ and behavior decision, not hidden scope in this extraction.
 
 ### D4: Paging is an explicit policy hook, not a shared default
 
-Flat lists keep their existing fixed selectable-row page distance; the tree
-keeps its existing visible-viewport paging. Both are correct for their current
-shape and must remain behavior-neutral in this extraction.
+Flat lists keep their existing fixed selectable-row page distance. The tree's
+paging was a fixed 5-row stride (`TREE_PAGE_ROWS`) when this change began, not
+the visible-viewport paging named here — the `PagingPolicy::VisibleViewport`
+variant shipped with no production adopter. This change aligns the tree to the
+named visible-viewport policy rather than leaving the policy named but unwired
+and this decision's premise false. That alignment is the one intentional,
+user-approved behaviour change in this extraction: Grouped Music's PageUp/PageDown
+stride changes from a fixed 5 rows to the visible viewport. Flat lists must
+remain behavior-neutral; the tree does not.
 
 Rationale: a shared default would silently regress one of them. Naming it as a
 policy keeps the divergence deliberate and visible. This is the only behavioral

@@ -26,7 +26,9 @@ destination — an adoption rather than another copy.
 - Express the existing flat canonical media list as the seam's flat
   implementation, with no externally observable behavior change.
 - Express the Grouped Music tree browser as the seam's tree implementation,
-  with no externally observable behavior change.
+  with no externally observable behavior change — except one intentional,
+  user-approved deviation: the tree's PageUp/PageDown paging changes from its
+  legacy fixed 5-row stride to the seam's named visible-viewport policy.
 - **BREAKING** (internal API only): `MusicTreeBrowser`'s public surface stops
   exposing `tui-treelistview` arena node ids (`usize`) and speaks stable
   `Target` values instead. `MusicNodeKey` and the arena become private
