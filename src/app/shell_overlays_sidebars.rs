@@ -110,7 +110,7 @@ impl Model {
             return;
         }
         let panel_area = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
-        let connected_session_id = self.app.connected_session_id.as_deref();
+        let connected_session_id = self.app.sessions_panel_connected_id();
         let cast_attachment_id = self
             .app
             .cast_attachment

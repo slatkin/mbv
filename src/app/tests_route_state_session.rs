@@ -187,6 +187,38 @@ fn disconnect_remote_clears_attached_remote_session() {
 }
 
 #[test]
+fn direct_remote_control_of_a_remote_owner_keeps_the_sessions_row_mark() {
+    let mut app = make_app_stub();
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    let sess = make_session("music", "mbv");
+
+    app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
+
+    assert!(
+        app.connected_session_id.is_none(),
+        "the control socket must not be reported as Session watch"
+    );
+    assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
+    assert_eq!(app.sessions_panel_connected_id(), Some(sess.id.as_str()));
+}
+
+#[test]
+fn the_stay_alive_process_is_not_a_sessions_row_mark() {
+    let mut app = make_app_stub();
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    let sess = make_session("this-machine", "mbv");
+
+    app.switch_to_direct_remote(
+        &sess,
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
+    );
+
+    assert!(app.sessions_panel_connected_id().is_none());
+}
+
+#[test]
 fn disconnect_remote_restores_local_for_sessions_panel_direct_remote() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);

@@ -371,6 +371,11 @@ pub struct App {
     pub(super) next_playlist_mutation: u64,
     pub(super) direct_remote_connected: bool,
     pub(super) direct_remote_label: Option<String>,
+    /// Emby session id of a remote owner under Direct remote control, so the
+    /// Sessions sidebar can still mark that row after the control socket
+    /// takes over. Never set for the Stay-alive process: that process is not
+    /// a remote session.
+    pub(super) direct_remote_session_id: Option<String>,
     pub(super) last_session_poll: Instant,
     pub(super) session_miss_count: u8, // consecutive polls that didn't find the connected session
     pub(super) remote_pos_s: i64,      // monotonic position estimate for the connected remote

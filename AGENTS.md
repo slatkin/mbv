@@ -1,7 +1,7 @@
 # mbv
 
 Rust terminal media client for Emby, Audiobookshelf, Feeds. Embeds mpv; playback
-runs Bare, via Local daemon (Stay-alive), or packaged `mbvd` Player owner.
+runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 
 ## Start here
 

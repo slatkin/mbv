@@ -45,6 +45,15 @@ impl App {
                 })
     }
 
+    /// Emby session id the Sessions sidebar should mark. Session watch and
+    /// Direct remote control of a remote owner both count. The Stay-alive
+    /// process does not: it is not a remote session.
+    pub(super) fn sessions_panel_connected_id(&self) -> Option<&str> {
+        self.connected_session_id
+            .as_deref()
+            .or(self.direct_remote_session_id.as_deref())
+    }
+
     pub(super) fn can_disconnect_remote(&self) -> bool {
         self.connected_session_id.is_some()
             || self.connected_session_state.is_some()

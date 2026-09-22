@@ -281,6 +281,7 @@ pub(crate) fn make_app_stub() -> App {
         next_playlist_mutation: 1,
         direct_remote_connected: false,
         direct_remote_label: None,
+        direct_remote_session_id: None,
         last_session_poll: std::time::Instant::now(),
         session_miss_count: 0,
         remote_pos_s: 0,

@@ -257,6 +257,7 @@ impl App {
             next_playlist_mutation: 1,
             direct_remote_connected: false,
             direct_remote_label: None,
+            direct_remote_session_id: None,
             last_session_poll: Instant::now() - Duration::from_secs(60),
             session_miss_count: 0,
             remote_pos_s: 0,

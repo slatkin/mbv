@@ -2,7 +2,7 @@
 
 A terminal client for Emby, Audiobookshelf, and Feeds that browses catalogs and
 plays media. Playback may run inside the terminal process itself, or be hosted by an
-out-of-process Player owner — the Local daemon on the same machine — so it survives
+out-of-process Player owner — the Stay-alive process on the same machine — so it survives
 the terminal closing.
 
 ## Services
@@ -62,7 +62,7 @@ never in `config.toml`.
 _Avoid_: account credential, mbv token, control token
 
 **Control credential**:
-An mbv-owned secret used by a Local daemon to admit Clients independently of all
+An mbv-owned secret used by a Stay-alive process to admit Clients independently of all
 Service credentials. It grants control access, not an identity or login;
 packaged mbvd does not use this mechanism yet — it currently still uses legacy
 Emby-token ctrl authentication and will migrate to filesystem/trusted-LAN
@@ -87,7 +87,7 @@ The rule by which a Player owner decides whether a QueueItem may enter its Bound
 queue. It evaluates media kind (audio vs video), whether the required Remote
 Service setup and credential are loaded in that owner process, and whether ctrl
 peers negotiated transport for that item kind. Bare mode may admit Emby, Feed,
-and Audiobookshelf items when their Services are Ready; Local daemon and packaged
+and Audiobookshelf items when their Services are Ready; the Stay-alive process and packaged
 mbvd currently admit Emby and Feed (audio-only owners admit only the audio
 subset of a mixed submission); Audiobookshelf daemon admission is tracked in
 milestone #524.
@@ -102,10 +102,10 @@ Different owner kinds have different Service eligibility.
 _Avoid_: instance, master, host
 
 **Out-of-process owner**:
-A Player owner running outside the terminal application's own process — the Local
-daemon or packaged mbvd — reached over ctrl. Out-of-process says which process holds
-playback, not which machine: a Local daemon is always on this machine and still
-classifies as on-this-machine; only TCP or Unix daemon endpoints point elsewhere
+A Player owner running outside the terminal application's own process — the
+Stay-alive process or packaged mbvd — reached over ctrl. Out-of-process says which process holds
+playback, not which machine: a Stay-alive process is always on this machine and still
+classifies as on-this-machine; only TCP or Unix endpoints point elsewhere
 (`player-target-locality`). Bare mode is never out-of-process.
 _Avoid_: remote owner (bare), background owner, external player
 
@@ -116,8 +116,8 @@ eligible for Audiobookshelf podcast and book playback.
 _Avoid_: foreground mode, standalone, normal mode
 
 **Stay-alive**:
-The mode in which playback is hosted by a Local daemon rather than the terminal
-UI, so playback continues after every terminal window closes. The Local daemon
+The mode in which playback is hosted by a Stay-alive process rather than the terminal
+UI, so playback continues after every terminal window closes. That process
 is the Player owner; Clients are disposable UIs that attach to it.
 _Avoid_: daemon mode, background mode, alive mode, persistent mode
 
@@ -128,7 +128,7 @@ contains audio is accepted minus the non-audio items (wholly non-audio remains
 refused). When a Client explicitly plays a video through an eligible ctrl
 attachment or controlled Emby session, mbv prompts with the owner and selection
 named; confirmation stops the owner, ends the attachment, and plays locally,
-while a decline changes nothing. The Local stay-alive daemon is never audio-only.
+while a decline changes nothing. The Stay-alive process is never audio-only.
 See `openspec/changes/play-locally-when-owner-cannot` for this shipped behavior.
 _Avoid_: audio daemon, headless audio owner, mbvd audio mode
 
@@ -167,18 +167,18 @@ _Avoid_: script source (bare), active script, script lookup
 
 ## Processes
 
-**Local daemon**:
-The Player owner in stay-alive mode: a user-owned background process on the same
-machine as its clients, holding no terminal. One exists per user. It starts
-without authenticating any Remote Service (Service-independent Local daemon per
-ADR 0018) and is stopped only by explicit lifecycle request when stay-alive is
-off.
-_Avoid_: relay, backend, server, session host
+**Stay-alive process**:
+The foreground Player owner on this machine when Stay-alive is on. It hosts
+playback so a terminal can close, and a Client falls back to it when Direct
+remote control or a Library route ends. It is not a daemon and not a Session.
+One exists per user. A bare-mode client has none; ending remote control there
+resumes its own in-process Player directly.
+_Avoid_: local daemon, home daemon, daemon, session, background process, background service, relay, backend, server
 
 **mbvd**:
 The separately packaged daemon, run as a system service, with its own
-configuration, state, and socket. A different product surface from the local
-daemon, never started by a terminal UI. On `main` it is still Emby-gated: it
+configuration, state, and socket. A different product surface from the
+Stay-alive process, never started by a terminal UI. On `main` it is still Emby-gated: it
 constructs `EmbyClient` unconditionally, requires cached credentials to start,
 and uses legacy Emby-token ctrl authentication. Service-independent startup
 (zero Services), Feed playback without Emby, optional Emby runtime, filesystem/
@@ -196,14 +196,15 @@ _Avoid_: thin client, terminal client, viewer, attachment
 **Tray**:
 The desktop status icon belonging to the Player owner, giving playback controls
 and a stop action while no client is on screen. Only present when the owner
-enables it; for the Local daemon this means stay-alive mode.
+enables it; for the Stay-alive process this means stay-alive mode.
 _Avoid_: systray, status icon, indicator
 
-**Daemon endpoint**:
-The address form used to reach any Player owner's control socket: either
-Local (this machine's own Local daemon) or a network address (Unix or TCP)
-pointing at another Local daemon or an mbvd.
-_Avoid_: connection string, remote address, socket path
+**Player endpoint**:
+The address used to reach a Player owner's control socket. Local is this
+machine's Stay-alive process. A network address points at a remote owner
+(another machine's Player owner, or an mbvd). mbvd is a daemon. The
+Stay-alive process is not, on this machine or any other.
+_Avoid_: daemon endpoint, connection string, remote address, socket path
 
 ## Continuity
 
@@ -270,7 +271,7 @@ _Avoid_: queue origin, queue type, source type
 Removal of an item from the queue once it finishes playing, as in ncmpcpp.
 Purely a queue operation — it says nothing about where the queue came from and
 never edits anything on the server. Driven only by the authoritative Player
-owner's playback lifecycle (a local in-process Player, a Local daemon, or a
+owner's playback lifecycle (a local in-process Player, a Stay-alive process, or a
 directly controlled remote Player owner); a Session watch of another device's
 generic Emby Session never consumes, because that observation carries no mbv
 queue authority. Addresses canonical slot identity; removes only the consumed
@@ -790,7 +791,7 @@ The QueueItem snapshot of a downloaded podcast episode. It carries content
 identity, presentation, progress, completion, and Service-scoped artwork
 identity, but no credential, server URL, playback-session ID, resolved source,
 or request headers. Currently eligible only for bare-mode owners with
-Audiobookshelf setup and credential (Local daemon and mbvd eligibility is
+Audiobookshelf setup and credential (Stay-alive process and mbvd eligibility is
 milestone #524 — issues #525-528).
 _Avoid_: Audiobookshelf episode, ABS item, feed entry
 
@@ -847,9 +848,9 @@ _Avoid_: episode, post, feed item, rss item
 ## Remote sessions
 
 A client can also reach *another* device's playback, discovered through Emby
-rather than through this project's own local-daemon substrate. This is a
-distinct relationship from Attach above, even though both involve one process
-reaching a Player owner over a socket.
+rather than through the Stay-alive process. The Stay-alive process is never a
+remote session. This is a distinct relationship from Attach above, even though
+both involve one process reaching a Player owner over a socket.
 
 **Session**:
 An Emby-tracked record that some device is playing something. Exists
@@ -871,16 +872,18 @@ _Avoid_: attach, session attach, monitor, remote session (bare), tracked session
 
 **Direct remote control**:
 A client has its own control-socket connection to another device's Player
-owner, giving the same queue management as a local session — reorder,
-remove, play next, all of it. This is what the aqua queue-scope pill
-indicates.
+owner, giving the same queue management as local playback — reorder,
+remove, play next, all of it. The device stays the connected row in the
+Sessions sidebar; taking the control socket does not erase that. The
+Stay-alive process is never Direct remote control. This is what the aqua
+queue-scope pill indicates.
 _Avoid_: green pill, remote takeover, queue management (alone)
 
 **Queue scope**:
 Local or Remote — whether the queue on the controlling terminal's local side or
 the directly controlled remote Player owner's queue is currently shown in the
 queue panel. Exists during Sessions-sidebar Direct remote control and explicit
-remote daemon attachment, not Session watch or a Library route. Remote scope is
+remote owner attachment, not Session watch or a Library route. Remote scope is
 only selectable when a direct remote queue exists; otherwise Local is forced.
 _Avoid_: split view, pill state
 
@@ -894,12 +897,6 @@ Sessions sidebar tears down an active route first. F2 Settings manages routes;
 hand-editing `config.toml` is supported. Malformed non-`tcp://` values are
 logged and skipped.
 _Avoid_: routing, daemon route
-
-**Home daemon**:
-The Local daemon a stay-alive client falls back to once Direct remote
-control or a Library route ends. A bare-mode client has no home daemon;
-ending remote control there resumes its own in-process Player directly.
-_Avoid_: home base, origin daemon
 
 ## Cast
 

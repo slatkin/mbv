@@ -104,6 +104,7 @@ impl App {
         self.connected_session_state = None;
         self.direct_remote_connected = false;
         self.direct_remote_label = None;
+        self.direct_remote_session_id = None;
         self.ws_send_tx = None;
         self.emby_runtime.client = None;
         self.player
