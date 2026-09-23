@@ -281,7 +281,6 @@ fn build_help_sections(
     ];
     let sec_home = vec![
         help_section_line("Continue"),
-        help_line(key_w, "[ / ]", "Switch sections"),
         help_line(key_w, "Ctrl+W", "Toggle watched"),
         help_line(key_w, "Ctrl+A", "Add to Queue"),
         help_blank(),
@@ -522,7 +521,7 @@ mod tests {
     }
 
     #[test]
-    fn home_help_lists_section_switch_watched_and_enqueue() {
+    fn home_help_lists_watched_and_enqueue() {
         let sections = build_help_sections(16, &Keybinds::default());
         let order = help_section_order(HelpDestination::Home);
         assert_eq!(order[0], HelpSection::Home);
@@ -533,11 +532,9 @@ mod tests {
             .unwrap();
         let text = lines_to_text(home);
         assert!(text.iter().any(|line| line == "Continue"));
-        assert!(text.iter().any(|line| line.contains("[ / ]")));
         assert!(text.iter().any(|line| line.contains("Ctrl+W")));
         assert!(text.iter().any(|line| line.contains("Ctrl+A")));
-        // Section switching is `[` / `]`, not the removed Alt+↑/↓ binding.
-        assert!(!text.iter().any(|line| line.contains("Alt")));
+        assert!(!text.iter().any(|line| line.contains("Switch sections")));
     }
 
     #[test]
