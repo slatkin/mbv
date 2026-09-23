@@ -14,11 +14,11 @@
 
 ## 3. Input and Mode Boundaries
 
-- [ ] 3.1a Translate tree selection and expansion by stable TV target in Narrow and Wide; keep headings non-actionable and the Hero Workspace cursor independent. Verify focused component tests for show and season movement/expansion, including Wide navigation and Narrow visual-key handling.
-- [ ] 3.1b Translate show, season, and episode activation, context, and playback through typed shell requests using the selected tree target, not the flat carrier or Hero Workspace cursor. Verify focused tests for show Hero opening, season toggle, inline episode playback, and heading no-op.
-- [ ] 3.1c Restore show-mode Esc/Backspace navigation to `TvBack` in both geometries; verify one focused keyboard regression.
-- [ ] 3.1d Resolve show activation's Hero gate from the tree-selected show rather than the stale flat carrier; verify one focused shell regression.
-- [ ] 3.1e Stabilize and accept 3.1a–d: fix WIP whitespace, verify focused tree actions and Narrow visual-key handling, run compile/targeted tests, commit scoped code, and obtain focused review before checking these rows.
+- [x] 3.1a Translate tree selection and expansion by stable TV target in Narrow and Wide; keep headings non-actionable and the Hero Workspace cursor independent. Verify focused component tests for show and season movement/expansion, including Wide navigation and Narrow visual-key handling.
+- [x] 3.1b Translate show, season, and episode activation, context, and playback through typed shell requests using the selected tree target, not the flat carrier or Hero Workspace cursor. Verify focused tests for show Hero opening, season toggle, inline episode playback, and heading no-op.
+- [x] 3.1c Restore show-mode Esc/Backspace navigation to `TvBack` in both geometries; verify one focused keyboard regression.
+- [x] 3.1d Resolve show activation's Hero gate from the tree-selected show rather than the stale flat carrier; verify one focused shell regression.
+- [x] 3.1e Stabilize and accept 3.1a–d: fix WIP whitespace, verify focused tree actions and Narrow visual-key handling, run compile/targeted tests, commit scoped code, and obtain focused review before checking these rows.
 - [ ] 3.2a Keep Latest/Upcoming on the flat episode control with their current pill and Hero rules; verify mode switches and direct episode activation without opening a show Workspace.
 - [ ] 3.2b Keep Inline Search on its separate flat result control without changing the show tree's settled selection or expansion; verify dismissal and selector restore across mode changes.
 - [ ] 3.3a Exercise mounted `Application::tick()` through the shell sync pass for TV tree keyboard navigation and activation in Wide, Narrow, and Mini; verify resolved targets.
