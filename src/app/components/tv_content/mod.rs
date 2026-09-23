@@ -31,6 +31,7 @@ use crate::app::ui_util::{fmt_duration_gutter, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use ratatui::layout::Position;
+use time::{Date, Month};
 #[cfg(test)]
 use tuirealm::event::Key;
 use tuirealm::event::KeyEvent;
@@ -115,6 +116,69 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
         })
         .collect()
 }
+
+fn parse_premiere_date(value: &str) -> Option<Date> {
+    let date = value.split('T').next()?;
+    let mut parts = date.split('-');
+    let year = parts.next()?.parse().ok()?;
+    let month = Month::try_from(parts.next()?.parse::<u8>().ok()?).ok()?;
+    let day = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Date::from_calendar_date(year, month, day).ok()
+}
+
+fn upcoming_date_heading(date: Date, today: Date) -> String {
+    match (today - date).whole_days() {
+        0 => "Today".into(),
+        1 => "Yesterday".into(),
+        _ => format!("{}, {} {}", date.weekday(), date.month(), date.day()),
+    }
+}
+
+fn upcoming_episode_rows(episodes: &[EmbyItem], today: Date) -> Vec<MediaListRow<String>> {
+    let mut groups: Vec<(Option<Date>, Vec<&EmbyItem>)> = Vec::new();
+    for episode in episodes {
+        let date = parse_premiere_date(&episode.premiere_date);
+        if let Some((_, rows)) = groups
+            .iter_mut()
+            .find(|(group_date, _)| *group_date == date)
+        {
+            rows.push(episode);
+        } else {
+            groups.push((date, vec![episode]));
+        }
+    }
+
+    groups
+        .into_iter()
+        .flat_map(|(date, episodes)| {
+            let heading = date.map(|date| MediaListRow::Heading {
+                text: upcoming_date_heading(date, today),
+            });
+            heading
+                .into_iter()
+                .chain(episodes.into_iter().map(|episode| {
+                    let trailing = (episode.runtime_ticks > 0)
+                        .then(|| fmt_duration_gutter(episode.runtime_ticks / TICKS_PER_SECOND))
+                        .map(MediaListTrailing::Gutter);
+                    MediaListRow::Item {
+                        target: episode.id.clone(),
+                        primary: episode.series_name.clone(),
+                        secondary: Some(format!(
+                            "S{:02}:E{:02} — {}",
+                            episode.parent_index_number, episode.index_number, episode.name
+                        )),
+                        trailing,
+                        duration: None,
+                        kind: MediaKind::Media,
+                        semantic_state: MediaSemanticState::from_emby(episode),
+                    }
+                }))
+        })
+        .collect()
+}
 impl TvContent {
     pub fn new() -> Self {
         let mut context = TvWideRenderCtx::new(
@@ -189,7 +253,12 @@ impl TvContent {
             )
         );
         let rows = if episode_mode {
-            build_episode_rows(&context.list.items)
+            if context.tv_content_mode == Some(mbv_core::config::TvContentMode::Upcoming) {
+                let today = time::OffsetDateTime::now_utc().date();
+                upcoming_episode_rows(&context.list.items, today)
+            } else {
+                build_episode_rows(&context.list.items)
+            }
         } else {
             let grouped = !self.inline_search.is_active()
                 && (context.show_letter_pills

@@ -305,3 +305,90 @@ fn episode_rows_project_runtime_in_the_green_gutter() {
     assert_eq!(trailing, &Some(MediaListTrailing::Gutter("1:01".into())));
     assert_eq!(duration, &None);
 }
+
+#[test]
+fn upcoming_episode_rows_group_dates_in_first_seen_order_with_relative_headings() {
+    let today = time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap();
+    let mut yesterday = make_item("Yesterday episode", "Episode");
+    yesterday.series_name = "Yesterday episode".into();
+    yesterday.premiere_date = "2026-09-22T00:00:00Z".into();
+    let mut today_episode = make_item("Today episode", "Episode");
+    today_episode.series_name = "Today episode".into();
+    today_episode.premiere_date = "2026-09-23".into();
+    let mut another_yesterday = make_item("Another yesterday", "Episode");
+    another_yesterday.series_name = "Another yesterday".into();
+    another_yesterday.premiere_date = "2026-09-22".into();
+    let mut older_episode = make_item("Older episode", "Episode");
+    older_episode.series_name = "Older episode".into();
+    older_episode.premiere_date = "2026-09-21".into();
+
+    let rows = upcoming_episode_rows(
+        &[yesterday, today_episode, another_yesterday, older_episode],
+        today,
+    );
+    let headings: Vec<&str> = rows
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Heading { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(headings, ["Yesterday", "Today", "Monday, September 21"]);
+    assert_eq!(
+        rows.iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item { primary, .. } => Some(primary.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>(),
+        [
+            "Yesterday episode",
+            "Another yesterday",
+            "Today episode",
+            "Older episode"
+        ]
+    );
+}
+
+#[test]
+fn upcoming_rows_without_dates_have_no_headings() {
+    let rows = upcoming_episode_rows(
+        &[
+            make_item("First", "Episode"),
+            make_item("Second", "Episode"),
+        ],
+        time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap(),
+    );
+    assert!(rows
+        .iter()
+        .all(|row| !matches!(row, MediaListRow::Heading { .. })));
+}
+
+#[test]
+fn virtual_idless_upcoming_rows_show_series_and_episode_context() {
+    let mut virtual_episode = make_item("Pilot", "Episode");
+    virtual_episode.id.clear();
+    virtual_episode.series_name = "Example Show".into();
+    virtual_episode.parent_index_number = 2;
+    virtual_episode.index_number = 7;
+    virtual_episode.premiere_date = "2026-09-23".into();
+
+    let rows = upcoming_episode_rows(
+        &[virtual_episode],
+        time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap(),
+    );
+    let Some(MediaListRow::Item {
+        target,
+        primary,
+        secondary,
+        ..
+    }) = rows
+        .iter()
+        .find(|row| matches!(row, MediaListRow::Item { .. }))
+    else {
+        panic!("upcoming episode row missing");
+    };
+    assert!(target.is_empty());
+    assert_eq!(primary, "Example Show");
+    assert_eq!(secondary.as_deref(), Some("S02:E07 — Pilot"));
+}
