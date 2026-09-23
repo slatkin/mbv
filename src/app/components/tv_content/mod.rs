@@ -852,15 +852,33 @@ impl TvContent {
     /// stable target; the next content push preserves it.
     pub(in crate::app) fn select_series_target(&mut self, target: &str) {
         self.carrier.select_target(&target.to_string());
-        if let Some(tree_target) = self.browser.roots().into_iter().find(|tree_target| {
+
+        let mut shows: Vec<_> = self.context.list.items.iter().collect();
+        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+        let mut id_counts = std::collections::HashMap::new();
+        for show in &shows {
+            *id_counts.entry(show.id.as_str()).or_insert(0usize) += 1;
+        }
+        let mut occurrences = std::collections::HashMap::new();
+        let mut target_by_id = std::collections::HashMap::new();
+        for show in shows {
+            let duplicate_id = id_counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
+            let base = Self::stable_show_target(show, duplicate_id, 0);
+            let occurrence = occurrences.entry(base.clone()).or_insert(0usize);
+            let show_target = Self::stable_show_target(show, duplicate_id, *occurrence);
+            *occurrence += 1;
+            target_by_id.entry(show.id.as_str()).or_insert(show_target);
+        }
+        if let Some(tree_target) = self.browser.roots().into_iter().find_map(|tree_target| {
             let TvTreeTarget::Show(show_target) = tree_target else {
-                return false;
+                return None;
             };
-            self.show_item_for_tree_target(&TvTreeTarget::Show(show_target.clone()))
-                .is_some_and(|show| show.id == target)
+            (target_by_id
+                .get(target)
+                .is_some_and(|candidate| candidate.as_str() == show_target.as_str()))
+            .then_some(TvTreeTarget::Show(show_target.clone()))
         }) {
-            self.browser
-                .apply(TreeOperation::Select(tree_target.clone()));
+            self.browser.apply(TreeOperation::Select(tree_target));
         }
     }
     /// Enter episode selection (the wide second-Enter move; the same

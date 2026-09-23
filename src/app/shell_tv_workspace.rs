@@ -111,7 +111,7 @@ impl Model {
                 }
             }
             // unreachable: shell_messages.rs routes only the Tv* group
-            // (MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
+            // (TreeExpand/MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
             // CycleLetterPill/EpisodeMove/SeasonMove) into handle_tv_request;
             // every one has an arm above.
             _ => {}

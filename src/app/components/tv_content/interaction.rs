@@ -408,34 +408,25 @@ impl TvContent {
         match target {
             TvTreeTarget::Show(_) => Some(show),
             TvTreeTarget::Season {
-                show: target_show,
                 season,
                 occurrence,
-            } => {
-                let selected = self.context.selected_series.as_ref()?;
-                if target_show != show_target || selected.id != show.id || selected.name != show.name {
-                    return None;
-                }
-                self.context
-                    .series_detail
-                    .as_ref()?
-                    .seasons
-                    .iter()
-                    .filter(|item| item.id == *season)
-                    .nth(*occurrence)
-                    .cloned()
-            }
+                ..
+            } => self
+                .context
+                .series_detail
+                .as_ref()?
+                .seasons
+                .iter()
+                .filter(|item| item.id == *season)
+                .nth(*occurrence)
+                .cloned(),
             TvTreeTarget::Episode {
-                show: target_show,
                 season,
                 season_occurrence,
                 episode,
                 occurrence,
+                ..
             } => {
-                let selected = self.context.selected_series.as_ref()?;
-                if target_show != show_target || selected.id != show.id || selected.name != show.name {
-                    return None;
-                }
                 let detail = self.context.series_detail.as_ref()?;
                 detail
                     .seasons
@@ -449,7 +440,7 @@ impl TvContent {
                         } else {
                             item.id.clone()
                         };
-                        id == *episode
+                        id == *episode && (item.series_id.is_empty() || item.series_id == show.id)
                     })
                     .nth(*occurrence)
                     .cloned()
