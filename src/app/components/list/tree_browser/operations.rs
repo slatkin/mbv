@@ -386,6 +386,29 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.with_state(|state| Expandable::select_first_child(state, &flow));
                 self.reconcile_selection();
             }
+            super::TreeOperation::Right => {
+                if let Some(target) = self.selected.clone() {
+                    if self.is_expandable(&target) {
+                        if self.expanded.contains(&target) {
+                            if self
+                                .target_to_node
+                                .get(&target)
+                                .and_then(|id| self.arena.get(id))
+                                .is_some_and(|entry| entry.node.parent.is_none())
+                            {
+                                external_intent = Some(TreeExternalIntent::Activate(target));
+                            }
+                        } else {
+                            self.with_state(|state| Expandable::toggle_expanded(state, &target));
+                            self.reconcile_selection();
+                        }
+                    } else {
+                        disposition = TreeConsumed::Unhandled;
+                    }
+                } else {
+                    disposition = TreeConsumed::Unhandled;
+                }
+            }
             super::TreeOperation::ToggleExpansion => {
                 if let Some(target) = self.selected.clone() {
                     if self.is_expandable(&target) {

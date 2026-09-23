@@ -44,6 +44,37 @@ fn generic_tree_browser_implements_tuirealm_component() {
 }
 
 #[test]
+fn right_expands_nodes_then_activates_only_an_expanded_root() {
+    let mut browser = TreeBrowser::new();
+    let root = node(Target::Root, None).with_expandable(true);
+    browser
+        .reconcile([
+            root,
+            node(Target::Branch, Some(Target::Root)).with_expandable(true),
+            node(Target::Leaf, Some(Target::Branch)),
+        ])
+        .unwrap();
+
+    let collapsed_root = browser.apply(TreeOperation::Right);
+    assert_eq!(collapsed_root.external_intent, None);
+    assert!(browser.is_expanded(&Target::Root));
+
+    let expanded_root = browser.apply(TreeOperation::Right);
+    assert_eq!(
+        expanded_root.external_intent,
+        Some(super::TreeExternalIntent::Activate(Target::Root))
+    );
+    assert!(browser.is_expanded(&Target::Root));
+
+    browser.apply(TreeOperation::Select(Target::Branch));
+    browser.apply(TreeOperation::Right);
+    assert!(browser.is_expanded(&Target::Branch));
+    let expanded_branch = browser.apply(TreeOperation::Right);
+    assert_eq!(expanded_branch.external_intent, None);
+    assert!(browser.is_expanded(&Target::Branch));
+}
+
+#[test]
 fn three_level_forest_preserves_stable_selection_through_reorder_and_removal() {
     let mut browser = TreeBrowser::new();
     browser

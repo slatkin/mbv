@@ -192,9 +192,25 @@ impl TvContent {
                 }
             }
             Key::Right => {
-                let expansion = target.and_then(|target| self.toggle_tree_expansion(target));
+                let intent = self.browser.apply(TreeOperation::Right).external_intent;
+                let activation = match intent {
+                    Some(
+                        crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
+                            TvTreeTarget::Show(_),
+                        ),
+                    ) => item.map(|item| {
+                        if self.is_wide {
+                            self.episodes.select_first();
+                            self.pane = Pane::Episodes;
+                        }
+                        ShellRequest::TvActivate { item }
+                    }),
+                    _ => None,
+                };
                 return Some(
-                    expansion.unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+                    activation
+                        .map(Msg::Shell)
+                        .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
                 );
             }
             Key::Left => {

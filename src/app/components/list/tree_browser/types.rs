@@ -146,6 +146,9 @@ pub enum TreeOperation<Target> {
     Last,
     Parent,
     Child,
+    /// Expand the selected node, or activate an already-expanded root.
+    /// Expanded descendants consume Right without collapsing or activating.
+    Right,
     ToggleExpansion,
     /// Toggle one node's persistent expansion without changing selection.
     /// A target with neither loaded children nor declared expandability is

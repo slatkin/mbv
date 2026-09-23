@@ -1740,6 +1740,29 @@ fn tv_tree_mouse_uses_the_latest_painted_geometry_across_resize(
 #[case::wide(160, false)]
 #[case::narrow(80, false)]
 #[case::mini(crate::app::MINI_VIEW_THRESHOLD - 1, true)]
+fn right_on_expanded_show_activates_its_workspace_through_tick(
+    #[case] width: u16,
+    #[case] mini: bool,
+) {
+    let mut harness = tv_tree_geometry(width, mini);
+    tick_tv_key(&mut harness, Key::Right);
+
+    let messages = tick_tv_key(&mut harness, Key::Right);
+    assert!(messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
+    )), "Right on the expanded Show must emit its stable-target activation: {messages:?}");
+    assert_eq!(
+        tv(&harness).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:8:series-0".into())),
+        "Workspace activation must not collapse or move the tree selection"
+    );
+}
+
+#[rstest]
+#[case::wide(160, false)]
+#[case::narrow(80, false)]
+#[case::mini(crate::app::MINI_VIEW_THRESHOLD - 1, true)]
 fn tv_tree_episode_activation_plays_the_resolved_episode_in_every_geometry(
     #[case] width: u16,
     #[case] mini: bool,
@@ -1757,7 +1780,12 @@ fn tv_tree_episode_activation_plays_the_resolved_episode_in_every_geometry(
             if show == "tv-id:8:series-0" && season == "season-1"
     ));
     tick_tv_key(&mut harness, Key::Enter); // Expand Season 1.
-    tick_tv_key(&mut harness, Key::Down); // Select Episode 1.
+    let messages = tick_tv_key(&mut harness, Key::Right);
+    assert!(!messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::TvActivate { .. })
+    )), "Right on an expanded Season must not activate its Show Workspace");
+    tick_tv_key(&mut harness, Key::Down); // Still-visible Episode 1 proves Right did not collapse.
     assert!(matches!(
         tv(&harness).selected_tree_target(),
         Some(TvTreeTarget::Episode { show, season, episode, .. })
