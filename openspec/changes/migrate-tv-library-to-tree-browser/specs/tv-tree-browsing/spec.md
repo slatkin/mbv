@@ -24,6 +24,8 @@ When browsing shows in `All` or a letter-range mode, the TV library SHALL displa
 - **THEN** they label their following shows but cannot be selected or activated
 - **AND** a non-selectable spacer still separates consecutive groups
 
+Show rows SHALL present this hierarchy through the shared tree visual contract: show, season, and episode titles take the depth-based cream, yellow, and aqua fallback roles, headings sit on the depth-zero baseline with stripes resetting at each heading and holding stable across scroll.
+
 #### Scenario: Preserve the selected row on refresh and resize
 - **WHEN** the TV list refreshes or changes between panel geometries and its selected row still exists
 - **THEN** the same show, season, or episode remains selected and the viewport keeps it visible

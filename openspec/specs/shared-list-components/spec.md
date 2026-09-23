@@ -171,6 +171,23 @@ Expansion state SHALL survive content replacement by stable identity. A list sha
 - **WHEN** a list shape has no nesting
 - **THEN** it satisfies the seam without providing expansion behavior
 
+### Requirement: Tree rows share one visual hierarchy
+The shared Render Component SHALL paint nested rows with one destination-neutral visual hierarchy. An ordinary node title's resting foreground role SHALL fall back by nesting depth: the cream emphasis role at depth zero, the yellow focus-accent role at depth one, and the aqua accent role at deeper depths; semantic-state and selected-row roles SHALL still take precedence when they apply. A heading SHALL paint bold in the metadata role with its title sitting on the same baseline as a depth-zero node title, taking the shared content inset as its effective two-column inset. Zebra striping SHALL reset at each heading: a row's stripe SHALL derive from its position within the group that heading introduces, not from its absolute position in the flow or viewport, so stripes remain stable across scrolling and no stripe runs continuously across group boundaries.
+
+#### Scenario: Depth colours fall back cream, yellow, aqua
+- **WHEN** an ordinary unselected node title paints at depth zero, depth one, or depth two and deeper
+- **THEN** its resting foreground role is the cream emphasis, yellow focus-accent, or aqua accent role respectively
+- **AND** a selected or semantically emphasised row still paints its own role instead of the depth fallback
+
+#### Scenario: A heading aligns with the depth-zero baseline
+- **WHEN** a heading and the depth-zero nodes of its following group paint
+- **THEN** the heading's title starts on the same baseline as those node titles, via the effective two-column inset
+
+#### Scenario: Stripes reset per heading and hold across scroll
+- **WHEN** the viewport scrolls a grouped tree
+- **THEN** each row's stripe still matches its position within its heading's group
+- **AND** no stripe claim runs continuously from one group across a heading into the next
+
 ### Requirement: Nesting destinations use one complete shared TreeBrowser
 
 Every destination that presents a nested row flow SHALL use one shared `TreeBrowser<Target>` as the complete nesting counterpart to the complete flat-list component. `TreeBrowser<Target>` SHALL implement TuiRealm `Component`; it SHALL remain embedded rather than independently mounted, focused, subscribed, or assigned a `ComponentId`. The shared Interactive Component SHALL own tree model reconciliation, expansion state, filtering state, cursor and viewport behavior, keyboard tree operations, ordered multi-selection and aggregate mark presentation, retained point geometry, marquee state, and all presentation state. Its `Component::view` SHALL be the only interactive view entry point and SHALL delegate indentation, zebra striping, selected-row treatment, optional trailing metadata, marquee, and scrollbar painting to one shared destination-neutral Render Component.
