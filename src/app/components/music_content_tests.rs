@@ -662,6 +662,141 @@ fn a_local_album_move_never_paints_the_prior_albums_tracks() {
     assert_eq!(owner.track_list.rows().len(), 1);
 }
 
+#[test]
+fn latest_pill_remains_selectable_when_source_and_group_list_are_empty() {
+    let mut owner = tree_owner(&[]);
+    let content = owner.panel_content();
+    let selector = content
+        .selector
+        .as_ref()
+        .expect("Latest selector is present");
+    assert_eq!(selector.pills, vec!["Latest"]);
+    assert_eq!(selector.active, Some(0));
+    assert!(matches!(content.list, ListSlot::Media(_)));
+    drop(content);
+    assert!(owner.latest_list.rows().is_empty());
+    assert!(owner
+        .on_slot_event(LibrarySlotEvent::SelectorPicked(0))
+        .is_some());
+    assert!(owner.latest_mode());
+}
+
+#[test]
+fn latest_round_trip_preserves_grouped_music_tree_and_uses_item_addressed_actions() {
+    let mut owner = tree_owner(&[("Artist", &["album-a", "album-b"])]);
+    let mut group = make_item("Artist", "MusicArtist");
+    group.id = "group-a".into();
+    owner.context.groups = vec![group];
+    let mut latest = make_item("Latest Track", "Audio");
+    latest.id = "latest-track".into();
+    latest.album = "Latest Album".into();
+    latest.artist = "Artist".into();
+    latest.date_added = "2026-09-22T00:00:00Z".into();
+    owner.set_latest_items(vec![latest.clone()]);
+    owner.set_latest_has_new_content(true);
+
+    let root = owner
+        .browser
+        .nodes()
+        .find(|node| matches!(node.target, MusicTreeTarget::Artist(_)))
+        .expect("artist root")
+        .target
+        .clone();
+    owner
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(root));
+    owner.browser.apply(TreeOperation::Move(1));
+    let tree_selection = owner.browser.selected_target().cloned();
+    let tree_rows = owner.browser.visible_targets();
+    let tree_expansion: Vec<_> = owner
+        .browser
+        .nodes()
+        .map(|node| {
+            let target = node.target.clone();
+            let expanded = owner.browser.is_expanded(&target);
+            (target, expanded)
+        })
+        .collect();
+
+    {
+        let panel_content = owner.panel_content();
+        assert_eq!(
+            panel_content
+                .selector
+                .as_ref()
+                .expect("Latest is always selectable")
+                .markers
+                .first(),
+            Some(&true)
+        );
+    }
+    assert!(owner
+        .on_slot_event(LibrarySlotEvent::SelectorPicked(0))
+        .is_some());
+    assert!(owner.latest_mode());
+    let panel_content = owner.panel_content();
+    let selector = panel_content
+        .selector
+        .as_ref()
+        .expect("Latest is always selectable");
+    assert_eq!(selector.markers.first(), Some(&false));
+    assert!(matches!(panel_content.list, ListSlot::Media(_)));
+    drop(panel_content);
+    let Some(MediaListRow::Item {
+        primary,
+        secondary,
+        trailing,
+        ..
+    }) = owner.latest_list.rows().first()
+    else {
+        panic!("Latest projects its track row");
+    };
+    assert_eq!(primary, "Artist");
+    assert_eq!(secondary.as_deref(), Some("Latest Track"));
+    assert!(trailing.is_some(), "provider date is in the row gutter");
+    assert_eq!(
+        owner.launch_snapshot().0,
+        Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Latest,
+        })
+    );
+    let play = owner.on_key(&KeyEvent {
+        code: Key::Char('p'),
+        modifiers: KeyModifiers::CONTROL,
+    });
+    assert!(matches!(
+        play,
+        Some(Msg::Shell(ShellRequest::EmbyLibraryPlay { item })) if item.id == latest.id
+    ));
+    let enqueue = owner.on_key(&KeyEvent {
+        code: Key::Char('a'),
+        modifiers: KeyModifiers::CONTROL,
+    });
+    assert!(matches!(
+        enqueue,
+        Some(Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item })) if item.id == latest.id
+    ));
+
+    assert!(owner
+        .on_slot_event(LibrarySlotEvent::SelectorPicked(1))
+        .is_none());
+    assert!(!owner.latest_mode());
+    assert_eq!(owner.browser.selected_target().cloned(), tree_selection);
+    assert_eq!(owner.browser.visible_targets(), tree_rows);
+    assert_eq!(
+        owner
+            .browser
+            .nodes()
+            .map(|node| {
+                let target = node.target.clone();
+                let expanded = owner.browser.is_expanded(&target);
+                (target, expanded)
+            })
+            .collect::<Vec<_>>(),
+        tree_expansion
+    );
+}
+
 #[cfg(test)]
 #[path = "music_content_tree_fixtures.rs"]
 mod tree_fixtures;

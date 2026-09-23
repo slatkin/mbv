@@ -74,6 +74,10 @@ pub struct MusicContent {
     /// owner's stable-target transitions (design D6).
     pub(in crate::app) browser: TreeBrowser<MusicTreeTarget>,
     pub(in crate::app) track_list: MediaListCarrier<String>,
+    latest_items: Vec<EmbyItem>,
+    latest_list: MediaListCarrier<String>,
+    latest_has_new_content: bool,
+    latest_mode: bool,
     pub(in crate::app) track_focused: bool,
     /// Whether this frame's geometry hosts the inline track list (the Wide
     /// pane). Pushed each sync pass beside the track-focus clear; narrow
@@ -142,6 +146,10 @@ impl MusicContent {
             ),
             browser: TreeBrowser::new(),
             track_list: MediaListCarrier::new(),
+            latest_items: Vec::new(),
+            latest_list: MediaListCarrier::new(),
+            latest_has_new_content: false,
+            latest_mode: false,
             track_focused: false,
             inline_track_focus_enabled: false,
             track_rows_owner: None,
@@ -159,6 +167,65 @@ impl MusicContent {
             last_reported_album: None,
             tree_adopted: false,
         }
+    }
+
+    pub(in crate::app) fn set_latest_items(&mut self, items: Vec<EmbyItem>) {
+        if self.latest_items == items {
+            return;
+        }
+        self.latest_items = items;
+        self.latest_list.set_content(
+            self.latest_items
+                .iter()
+                .map(|item| {
+                    let queue_item =
+                        mbv_core::playback_queue::QueueItem::Emby(Box::new(item.clone()));
+                    let parts = queue_item.playback_title_parts(None);
+                    let (primary, secondary) = match parts.context {
+                        Some(context) => (context.text, Some(parts.title.text)),
+                        None => (parts.title.text, None),
+                    };
+                    MediaListRow::Item {
+                        target: item.id.clone(),
+                        primary,
+                        secondary,
+                        trailing: crate::app::home_latest::provider_timestamp_secs(&queue_item)
+                            .map(crate::app::ui_util::fmt_publish_date_short)
+                            .filter(|date| !date.is_empty())
+                            .map(MediaListTrailing::Gutter),
+                        duration: None,
+                        kind: MediaKind::Media,
+                        semantic_state: MediaSemanticState::from_emby(item),
+                    }
+                })
+                .collect(),
+        );
+    }
+
+    pub(in crate::app) fn set_latest_mode(&mut self, latest: bool) {
+        self.latest_mode = latest;
+    }
+
+    pub(in crate::app) fn set_latest_has_new_content(&mut self, has_new_content: bool) {
+        self.latest_has_new_content = has_new_content;
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn latest_mode(&self) -> bool {
+        self.latest_mode
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn latest_row_count(&self) -> usize {
+        self.latest_list.rows().len()
+    }
+
+    fn latest_selected_item(&self) -> Option<EmbyItem> {
+        let target = self.latest_list.selected_target()?;
+        self.latest_items
+            .iter()
+            .find(|item| item.id == *target)
+            .cloned()
     }
 
     pub(in crate::app) fn set_content(&mut self, context: MusicWideRenderCtx) {

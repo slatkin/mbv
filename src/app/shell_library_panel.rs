@@ -17,6 +17,7 @@ use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::shell::Model;
+use super::types_playback::HomeLatestSource;
 use super::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
@@ -113,7 +114,21 @@ impl Model {
 
     fn apply_launch_selector(&mut self, key: &LibraryKey, selector: LaunchSelector) {
         match selector {
-            LaunchSelector::EmbyLatest => self.set_emby_owner_latest_mode(key, true),
+            LaunchSelector::EmbyLatest => {
+                if let LibraryKey::Service {
+                    kind: LibraryKind::Music,
+                    library_id,
+                    ..
+                } = key
+                {
+                    self.update_music_owner(|owner| owner.set_latest_mode(true));
+                    self.record_home_latest_acknowledgement(HomeLatestSource::Emby(
+                        library_id.clone(),
+                    ));
+                } else {
+                    self.set_emby_owner_latest_mode(key, true);
+                }
+            }
             LaunchSelector::Emby { index } => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     if index == usize::MAX {

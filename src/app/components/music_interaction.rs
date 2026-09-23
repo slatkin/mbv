@@ -17,10 +17,72 @@ impl MusicContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
-                let delta = index as i64 - self.context.group_cursor as i64;
+                if index == 0 {
+                    self.latest_mode = true;
+                    self.latest_has_new_content = false;
+                    return Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected));
+                }
+                self.latest_mode = false;
+                let delta = (index - 1) as i64 - self.context.group_cursor as i64;
                 (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
             }
             LibrarySlotEvent::List(input) => {
+                if self.latest_mode {
+                    return match input {
+                        MediaListSurfaceInput::Wheel { at, delta } => {
+                            if !self.latest_list.claims_current_point(at) {
+                                return None;
+                            }
+                            self.latest_list.delegate_operation(
+                                MediaListSurfaceInput::Wheel { at, delta }
+                                    .into_operation(None)
+                                    .expect("wheel converts without a target"),
+                            );
+                            Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                        }
+                        MediaListSurfaceInput::Click(at)
+                        | MediaListSurfaceInput::ToggleClick(at)
+                        | MediaListSurfaceInput::RangeClick(at) => {
+                            if !self.latest_list.claims_current_point(at) {
+                                return None;
+                            }
+                            let target = self.latest_list.resolve_current_point(at)?.clone();
+                            self.latest_list.delegate_operation(
+                                input.into_operation(Some(target))
+                                    .expect("resolved media-list pointer target"),
+                            );
+                            Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
+                        }
+                        MediaListSurfaceInput::DoubleClick(at) => {
+                            let target = self.latest_list.resolve_current_point(at)?.clone();
+                            self.latest_list.delegate_operation(
+                                input.into_operation(Some(target.clone()))
+                                    .expect("resolved media-list pointer target"),
+                            );
+                            self.latest_items
+                                .iter()
+                                .find(|item| item.id == target)
+                                .cloned()
+                                .map(|item| Msg::Shell(ShellRequest::EmbyLibraryPlay { item }))
+                        }
+                        MediaListSurfaceInput::ContextClick(at) => {
+                            let target = self.latest_list.resolve_current_point(at)?.clone();
+                            self.latest_list.delegate_operation(
+                                input.into_operation(Some(target.clone()))
+                                    .expect("resolved media-list pointer target"),
+                            );
+                            self.latest_items
+                                .iter()
+                                .find(|item| item.id == target)
+                                .cloned()
+                                .map(|item| Msg::Shell(ShellRequest::MusicRowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                                    Some((at.x, at.y)),
+                                )))
+                        }
+                        _ => None,
+                    };
+                }
                 let filtered_tree = self.local_filter_owns_input();
                 if self.inline_search.is_active() && !filtered_tree {
                     // Inline Search pointer handling (design.md D4): the

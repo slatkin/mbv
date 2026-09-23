@@ -1,6 +1,8 @@
 // Included into `music_content` via `include!` (the module's doc and
 // imports live there, beside the split's other parts).
 
+use super::media_list::MediaListOperation;
+
 impl InlineSearchHost for MusicContent {
     fn inline_search(&self) -> &InlineSearch {
         &self.inline_search
@@ -105,6 +107,15 @@ impl LibraryContentOwner for MusicContent {
         &self,
         state: &mbv_core::config::TuiLaunchState,
     ) -> Option<super::library_panel::owner::LaunchSelector> {
+        if matches!(
+            state.selector.as_ref(),
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            })
+        ) {
+            return (!self.latest_mode)
+                .then_some(super::library_panel::owner::LaunchSelector::EmbyLatest);
+        }
         let target = self.group_cursor_for_launch_state(state);
         (self.context.group_cursor != target).then_some(
             super::library_panel::owner::LaunchSelector::Emby { index: target },
@@ -115,8 +126,21 @@ impl LibraryContentOwner for MusicContent {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }
-        if !self.context.groups.is_empty() {
+        let latest = matches!(
+            state.selector.as_ref(),
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            })
+        );
+        self.latest_mode = latest;
+        if !latest && !self.context.groups.is_empty() {
             self.context.group_cursor = self.group_cursor_for_launch_state(state);
+        }
+        if latest {
+            if let Some(LibraryItemIdentity::Emby { id }) = state.item.as_ref() {
+                self.latest_list.select_target(id);
+            }
+            return true;
         }
         let selected = match state.item.as_ref() {
             Some(LibraryItemIdentity::Emby { id }) => {
@@ -144,20 +168,25 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        // Group pills are Music's main Selector. The artist/album/track tree
-        // is Workspace content, so it contributes no selector identity; its
-        // selected album target is the stable library-item identity.
-        let selector = self
-            .context
-            .groups
-            .get(self.context.group_cursor)
-            .cloned()
-            .map(|group| SelectorIdentity::Emby {
-                key: EmbySelectorKey::Group(group.id),
-            });
-        let item = self
-            .selected_album_target()
-            .map(|id| LibraryItemIdentity::Emby { id });
+        let selector = if self.latest_mode {
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            })
+        } else {
+            self.context
+                .groups
+                .get(self.context.group_cursor)
+                .cloned()
+                .map(|group| SelectorIdentity::Emby {
+                    key: EmbySelectorKey::Group(group.id),
+                })
+        };
+        let item = if self.latest_mode {
+            self.latest_selected_item()
+        } else {
+            self.selected_item()
+        }
+        .map(|item| LibraryItemIdentity::Emby { id: item.id });
         (selector, item)
     }
 
@@ -209,6 +238,68 @@ impl LibraryContentOwner for MusicContent {
                     Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
                 }
                 None => None,
+            };
+        }
+        // Latest is the same destination owner's flat list slot; the tree
+        // remains untouched and resumes with its retained selection.
+        if self.latest_mode {
+            let item = self.latest_selected_item();
+            let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+            return match key.code {
+                Key::Up | Key::Char('k') => {
+                    self.latest_list.delegate_operation(MediaListOperation::Move(-1));
+                    None
+                }
+                Key::Down | Key::Char('j') => {
+                    self.latest_list.delegate_operation(MediaListOperation::Move(1));
+                    None
+                }
+                Key::PageUp => {
+                    self.latest_list.delegate_operation(MediaListOperation::Page(-1));
+                    None
+                }
+                Key::PageDown => {
+                    self.latest_list.delegate_operation(MediaListOperation::Page(1));
+                    None
+                }
+                Key::Home => {
+                    self.latest_list.delegate_operation(MediaListOperation::First);
+                    None
+                }
+                Key::End => {
+                    self.latest_list.delegate_operation(MediaListOperation::Last);
+                    None
+                }
+                Key::Enter => item.map(|item| {
+                    Msg::Shell(ShellRequest::EmbyLibraryPlay { item })
+                }),
+                Key::Char('p') if ctrl => item.map(|item| {
+                    Msg::Shell(ShellRequest::EmbyLibraryPlay { item })
+                }),
+                Key::Char('a') if ctrl => item.map(|item| {
+                    Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item })
+                }),
+                Key::Char('s') if ctrl => item.map(|item| {
+                    Msg::Shell(ShellRequest::EmbyLibraryShuffle { item })
+                }),
+                Key::Char('r') if ctrl => {
+                    Some(Msg::Shell(ShellRequest::EmbyLibraryRescan))
+                }
+                Key::Char('r') => Some(Msg::Shell(ShellRequest::EmbyLibraryRefresh)),
+                Key::Char('[') | Key::Char(']') if !ctrl => {
+                    let current: i64 = 0;
+                    let count = self.context.groups.len() + 1;
+                    let step = if key.code == Key::Char('[') { -1 } else { 1 };
+                    let next = (current + step).rem_euclid(count as i64) as usize;
+                    self.on_slot_event(LibrarySlotEvent::SelectorPicked(next))
+                }
+                Key::Char('.') => item.map(|item| {
+                    Msg::Shell(ShellRequest::MusicRowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                        None,
+                    ))
+                }),
+                _ => None,
             };
         }
         // The LibraryPanel is the framework focus boundary; reaching this
@@ -398,11 +489,12 @@ impl LibraryContentOwner for MusicContent {
             {
                 Some(Msg::Shell(ShellRequest::EmbyLibraryRefresh))
             }
-            Key::Char('[') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }))
-            }
-            Key::Char(']') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }))
+            Key::Char('[' | ']') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let count = self.context.groups.len() + 1;
+                let current = self.context.group_cursor + 1;
+                let delta = if key.code == Key::Char('[') { -1 } else { 1 };
+                let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+                self.on_slot_event(LibrarySlotEvent::SelectorPicked(next))
             }
             // Album-level navigation (unfocused track pane): the earlier
             // `self.track_focused` arms above take precedence while the

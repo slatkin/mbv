@@ -524,6 +524,76 @@ fn grouped_music_browser_has_one_tree_owner_and_painter_in_every_panel_mode() {
     }
 }
 
+/// Music Latest uses the existing Library selector/list slots at Wide and
+/// Narrow. Cycling to Latest and back through the real tick path preserves the
+/// tree's exact selected target and expansion state, while the Panel paints a
+/// single skeleton and therefore a single list slot in either mode.
+#[test]
+fn music_latest_round_trip_preserves_tree_and_one_list_slot_wide_and_narrow() {
+    for (width, height) in [(160, 40), (60, 30)] {
+        let (mut harness, id) = mounted_music_at(width, height);
+        let original = music_workspace(&harness, &id);
+        let selected = original.browser.selected_target().cloned();
+        let expanded: Vec<_> = original
+            .browser
+            .nodes()
+            .map(|node| {
+                let target = node.target.clone();
+                (target.clone(), original.browser.is_expanded(&target))
+            })
+            .collect();
+
+        let mut latest = crate::app::tests::make_item("Latest Track", "Audio");
+        latest.id = "music-latest-track".into();
+        latest.album = "Latest Album".into();
+        latest.artist = "Artist".into();
+        latest.date_added = "2026-09-22T00:00:00Z".into();
+        harness.model_mut().update_emby_latest_snapshot(
+            "lib-music".into(),
+            "Music".into(),
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(latest))],
+        );
+        harness.model_mut().sync_mounted_surfaces();
+        draw_music_frame(&mut harness);
+
+        tick_key(&mut harness, Key::Char('['));
+        assert!(music_workspace(&harness, &id).latest_mode());
+        let panel = music_panel(&harness);
+        let (wide, narrow) = (panel.test_wide_geometry(), panel.test_narrow_geometry());
+        assert!(
+            wide.is_some() ^ narrow.is_some(),
+            "{width}x{height}: Latest paints one Library skeleton/list slot"
+        );
+        assert_eq!(
+            music_workspace(&harness, &id).latest_row_count(),
+            1,
+            "{width}x{height}: Latest rows are projected through its active list slot"
+        );
+        let geometry = wide.or(narrow).expect("one Library skeleton");
+        assert!(
+            geometry.list_area.height > 0,
+            "{width}x{height}: the canonical list slot has painted geometry"
+        );
+
+        tick_key(&mut harness, Key::Char(']'));
+        let returned = music_workspace(&harness, &id);
+        assert!(!returned.latest_mode());
+        assert_eq!(returned.browser.selected_target().cloned(), selected);
+        assert_eq!(
+            returned
+                .browser
+                .nodes()
+                .map(|node| {
+                    let target = node.target.clone();
+                    (target.clone(), returned.browser.is_expanded(&target))
+                })
+                .collect::<Vec<_>>(),
+            expanded,
+            "{width}x{height}: returning from Latest restores exact tree state"
+        );
+    }
+}
+
 /// Task 2.3 / design D3: a responsive Panel-mode change reuses the *same* tree
 /// owner instead of copying its selection into another control. The selected
 /// album and the projected row flow survive Wide -> Mini -> Wide unchanged.

@@ -12,7 +12,7 @@ use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    fn music_owner_key(&self) -> Option<LibraryKey> {
+    pub(super) fn music_owner_key(&self) -> Option<LibraryKey> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
@@ -31,7 +31,10 @@ impl Model {
         self.library_owner(&key)
     }
 
-    fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
+    pub(super) fn update_music_owner<R>(
+        &mut self,
+        f: impl FnOnce(&mut MusicContent) -> R,
+    ) -> Option<R> {
         let key = self.music_owner_key()?;
         self.update_library_owner(key, || Box::new(MusicContent::new()), f)
     }
@@ -210,6 +213,20 @@ impl Model {
                 .project_music_artist_detail(&key, base_context, target),
             None => base_context,
         };
+        let latest_snapshot = self
+            .tv_latest_snapshots
+            .get(&self.app.libs[index].library.id);
+        let latest_items: Vec<mbv_core::api::EmbyItem> = latest_snapshot
+            .map(|snapshot| {
+                snapshot
+                    .items
+                    .iter()
+                    .filter_map(|item| item.as_emby().cloned())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let latest_has_new_content =
+            latest_snapshot.is_some_and(|snapshot| snapshot.has_new_content);
         // Grouped Music's album-track fetch follows the tree owner's resolved
         // album selection: an artist-root focus has no album, so no album-track
         // fetch starts for it (the artist-track request is a later row).
@@ -237,6 +254,8 @@ impl Model {
         // re-push to retry, rather than re-arming `self` from inside.
         let rearm = self
             .update_music_owner(|owner| {
+                owner.set_latest_items(latest_items);
+                owner.set_latest_has_new_content(latest_has_new_content);
                 owner.set_content(context);
                 if let Some((c, s)) = reanchor {
                     owner.re_anchor(c, s);

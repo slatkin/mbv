@@ -575,24 +575,35 @@ impl MusicContent {
                 }),
             }
         });
-        let selector = (!self.context.groups.is_empty()).then(|| SelectorRow {
-            pills: self
-                .context
+        let mut pills = vec!["Latest".to_string()];
+        pills.extend(
+            self.context
                 .groups
                 .iter()
-                .map(|group| trunc_str(&group.name, 12).to_string())
-                .collect(),
-            markers: vec![],
-            active: Some(self.context.group_cursor),
+                .map(|group| trunc_str(&group.name, 12).to_string()),
+        );
+        let mut markers = vec![self.latest_has_new_content];
+        markers.resize(pills.len(), false);
+        let selector = Some(SelectorRow {
+            pills,
+            markers,
+            active: Some(if self.latest_mode || self.context.groups.is_empty() {
+                0
+            } else {
+                self.context.group_cursor + 1
+            }),
         });
-        // Grouped Music keeps the tree as the browser owner while the shared
-        // Inline Search control supplies only the query editor/debounce and
-        // the panel's one-row search-bar projection.
-        let list = ListSlot::Media(&mut self.browser);
+        // The tree and flat Latest flow remain embedded in this same owner;
+        // the Library Panel paints exactly one in the canonical list slot.
+        let list = if self.latest_mode {
+            ListSlot::Media(&mut self.latest_list)
+        } else {
+            ListSlot::Media(&mut self.browser)
+        };
         LibraryPanelContent {
             selector,
             list,
-            hero,
+            hero: (!self.latest_mode).then_some(hero).flatten(),
         }
     }
 }

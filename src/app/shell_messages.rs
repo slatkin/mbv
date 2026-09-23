@@ -543,7 +543,18 @@ impl Model {
                         self.push_active_emby_library_owner_content();
                     }
                     ShellRequest::EmbyLibraryLatestSelected => {
-                        self.push_active_emby_library_owner_content();
+                        if let (Some(_), Some(lib_idx)) =
+                            (self.music_owner_key(), self.app.tab.emby_library_index())
+                        {
+                            if let Some(library) = self.app.libs.get(lib_idx) {
+                                self.record_home_latest_acknowledgement(HomeLatestSource::Emby(
+                                    library.library.id.clone(),
+                                ));
+                            }
+                            self.push_music_workspace_content();
+                        } else {
+                            self.push_active_emby_library_owner_content();
+                        }
                     }
                     ShellRequest::EmbyLibraryLatestExit { target } => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
