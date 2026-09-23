@@ -107,7 +107,7 @@ impl HomeContent {
             rows.insert(
                 0,
                 MediaListRow::Heading {
-                    text: "Keep Watching".into(),
+                    text: "Continue watching".into(),
                 },
             );
         }
@@ -471,8 +471,8 @@ mod tests {
         let rows = owner.test_active_rows();
         assert_eq!(rows.len(), 2);
         assert!(
-            matches!(&rows[0], MediaListRow::Heading { text } if text == "Keep Watching"),
-            "the first row is the Keep Watching group heading: {:?}",
+            matches!(&rows[0], MediaListRow::Heading { text } if text == "Continue watching"),
+            "the first row is the Continue watching group heading: {:?}",
             rows[0]
         );
     }

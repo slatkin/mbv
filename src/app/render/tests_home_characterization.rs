@@ -131,7 +131,7 @@ fn wide_home_stripes_its_browser_list_with_the_selected_bar() {
         let buffer = terminal.backend().buffer();
         (
             buffer[(selected.x, selected.y)].style().bg,
-            // Grouped under the Keep Watching heading, members alternate from
+            // Grouped under the Continue watching heading, members alternate from
             // the striped secondary fill: member 0 is the selected row (bar),
             // member 1 is plain, member 2 carries the stripe again.
             buffer[(selected.x, selected.y + 2)].style().bg,

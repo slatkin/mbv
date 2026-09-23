@@ -498,7 +498,7 @@ fn mounted_home_latest_restore_falls_back_to_continue_only_content() {
     }));
     assert_eq!(
         home.test_active_rows().len(),
-        3, // the Keep Watching group heading plus two Continue Watching rows
+        3, // the Continue watching group heading plus two Continue Watching rows
         "Home exposes only Continue Watching rows under the group heading"
     );
     assert_eq!(
