@@ -104,6 +104,13 @@ impl<Target: Clone + Eq + Hash> Expandable<Target> for TreeState<'_, Target> {
 }
 
 impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
+    fn is_expandable(&self, target: &Target) -> bool {
+        self.target_to_node
+            .get(target)
+            .and_then(|id| self.arena.get(id))
+            .is_some_and(|entry| entry.node.expandable || !entry.children.is_empty())
+    }
+
     fn with_state<R>(&mut self, action: impl FnOnce(&mut TreeState<'_, Target>) -> R) -> R {
         action(&mut TreeState { browser: self })
     }
@@ -381,10 +388,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             }
             super::TreeOperation::ToggleExpansion => {
                 if let Some(target) = self.selected.clone() {
-                    if self
-                        .children_of(&target)
-                        .is_some_and(|children| !children.is_empty())
-                    {
+                    if self.is_expandable(&target) {
                         self.with_state(|state| Expandable::toggle_expanded(state, &target));
                         self.reconcile_selection();
                     } else {
@@ -395,10 +399,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 }
             }
             super::TreeOperation::ToggleExpansionTarget(target) => {
-                if self
-                    .children_of(&target)
-                    .is_some_and(|children| !children.is_empty())
-                {
+                if self.is_expandable(&target) {
                     self.with_state(|state| Expandable::toggle_expanded(state, &target));
                     self.reconcile_selection();
                 } else {

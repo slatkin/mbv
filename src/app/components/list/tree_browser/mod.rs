@@ -318,8 +318,11 @@ impl<Target> TreeBrowser<Target> {
         let expanded = self
             .expanded
             .iter()
-            .filter(|target| new_target_to_node.contains_key(*target))
-            .cloned()
+            .filter_map(|target| {
+                let id = *new_target_to_node.get(target)?;
+                let node = &arena[&id];
+                (node.node.expandable || !node.children.is_empty()).then(|| target.clone())
+            })
             .collect();
         let marks: Vec<Target> = self
             .marks

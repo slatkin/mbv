@@ -316,6 +316,87 @@ fn structural_refresh_preserves_stable_selection_and_clamps_viewport() {
     assert!(browser.viewport_offset() <= browser.visible_len().saturating_sub(2));
 }
 
+#[rstest]
+#[case::selected(TreeOperation::ToggleExpansion)]
+#[case::target(TreeOperation::ToggleExpansionTarget(Target::Root))]
+fn declared_expandability_retains_pending_expansion_and_reveals_children(
+    #[case] operation: TreeOperation<Target>,
+) {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([node(Target::Root, None).with_expandable(true)])
+        .unwrap();
+    browser.viewport_offset = 1;
+
+    let transition = browser.apply(operation);
+    assert_eq!(transition.disposition, super::TreeConsumed::Consumed);
+    assert!(browser.is_expanded(&Target::Root));
+    assert_eq!(browser.visible_len(), 1);
+    assert_eq!(browser.visible_targets(), vec![Target::Root]);
+
+    browser
+        .reconcile([
+            node(Target::Root, None).with_expandable(true),
+            node(Target::Branch, Some(Target::Root)),
+        ])
+        .unwrap();
+
+    assert!(browser.is_expanded(&Target::Root));
+    assert_eq!(
+        browser.visible_targets(),
+        vec![Target::Root, Target::Branch]
+    );
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    assert_eq!(browser.viewport_offset(), 1);
+}
+
+#[rstest]
+#[case::declaration_retained(true, false, true)]
+#[case::children_arrived(false, true, true)]
+#[case::empty_completion(false, false, false)]
+fn reconciliation_keeps_pending_expansion_only_while_expandable_or_populated(
+    #[case] declared_expandable: bool,
+    #[case] has_child: bool,
+    #[case] expected_expanded: bool,
+) {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([node(Target::Root, None).with_expandable(true)])
+        .unwrap();
+    browser.apply(TreeOperation::ToggleExpansion);
+    assert!(browser.is_expanded(&Target::Root));
+
+    let mut projection = vec![node(Target::Root, None).with_expandable(declared_expandable)];
+    if has_child {
+        projection.push(node(Target::Branch, Some(Target::Root)));
+    }
+    browser.reconcile(projection).unwrap();
+
+    assert_eq!(browser.is_expanded(&Target::Root), expected_expanded);
+    assert_eq!(
+        browser.visible_targets(),
+        if expected_expanded && has_child {
+            vec![Target::Root, Target::Branch]
+        } else {
+            vec![Target::Root]
+        }
+    );
+}
+
+#[rstest]
+#[case::selected(TreeOperation::ToggleExpansion)]
+#[case::target(TreeOperation::ToggleExpansionTarget(Target::Root))]
+fn undeclared_childless_music_node_remains_unhandled(#[case] operation: TreeOperation<Target>) {
+    let mut browser = TreeBrowser::new();
+    browser.reconcile([node(Target::Root, None)]).unwrap();
+
+    assert_eq!(
+        browser.apply(operation).disposition,
+        super::TreeConsumed::Unhandled
+    );
+    assert!(!browser.is_expanded(&Target::Root));
+}
+
 #[test]
 fn heading_free_tree_keeps_music_row_flow_navigation_and_marks() {
     let mut browser = TreeBrowser::new();
