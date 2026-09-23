@@ -788,6 +788,35 @@ fn shared_view_paints_depth_metadata_bars_and_scrollbar_without_state_glyphs() {
 }
 
 #[test]
+fn grouped_tree_zebra_parity_survives_scrolling_past_its_heading() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            TreeEntry::Heading("First group".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Spacer,
+            TreeEntry::Heading("Second group".into()),
+            TreeEntry::Node(node(Target::Branch, None)),
+        ])
+        .unwrap();
+    browser.focused = false;
+
+    let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 5)))
+        .unwrap();
+    let branch_fill_before_scroll = terminal.backend().buffer()[(0, 4)].bg;
+
+    browser.viewport_offset = 4;
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 5)))
+        .unwrap();
+    let branch_fill_after_scroll = terminal.backend().buffer()[(0, 0)].bg;
+
+    assert_eq!(branch_fill_after_scroll, branch_fill_before_scroll);
+}
+
+#[test]
 fn ordinary_row_keeps_trailing_metadata_inside_inset_content_area() {
     let mut browser = TreeBrowser::new();
     browser

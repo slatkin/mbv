@@ -73,6 +73,7 @@ pub(crate) struct TreePaintRow {
     pub(crate) trailing: Option<String>,
     pub(crate) depth: usize,
     pub(crate) root_index: usize,
+    pub(crate) group_root_index: usize,
     pub(crate) selected: bool,
     pub(crate) marked: bool,
     pub(crate) aggregate_mark: TreeAggregateMark,

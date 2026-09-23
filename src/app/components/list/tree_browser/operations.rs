@@ -579,25 +579,27 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
 
     pub(super) fn visible_rows(&self, visible_rows: &[VisibleRow]) -> Vec<TreePaintRow> {
         let mut rows = Vec::new();
-        for &visible in visible_rows.iter().skip(self.viewport_offset) {
-            let VisibleRow::Node(id) = visible else {
-                if let VisibleRow::Structural(root, index) = visible {
-                    let Some(entry) = self.arena.get(&root) else {
-                        continue;
-                    };
-                    let Some(structure) = self
-                        .root_structures
-                        .get(&entry.node.target)
-                        .and_then(|structures| structures.get(index))
-                    else {
-                        continue;
-                    };
-                    let (kind, title) = match structure {
-                        StructuralRow::Heading(title) => {
-                            (super::TreePaintRowKind::Heading, title.clone())
-                        }
-                        StructuralRow::Spacer => (super::TreePaintRowKind::Spacer, String::new()),
-                    };
+        let mut group_root_index = 0;
+        for (flow_index, &visible) in visible_rows.iter().enumerate() {
+            if let VisibleRow::Structural(root, index) = visible {
+                let Some(entry) = self.arena.get(&root) else {
+                    continue;
+                };
+                let Some(structure) = self
+                    .root_structures
+                    .get(&entry.node.target)
+                    .and_then(|structures| structures.get(index))
+                else {
+                    continue;
+                };
+                let (kind, title) = match structure {
+                    StructuralRow::Heading(title) => {
+                        group_root_index = entry.root_index;
+                        (super::TreePaintRowKind::Heading, title.clone())
+                    }
+                    StructuralRow::Spacer => (super::TreePaintRowKind::Spacer, String::new()),
+                };
+                if flow_index >= self.viewport_offset {
                     rows.push(TreePaintRow {
                         kind,
                         title,
@@ -605,6 +607,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                         trailing: None,
                         depth: 0,
                         root_index: entry.root_index,
+                        group_root_index,
                         selected: false,
                         marked: false,
                         aggregate_mark: TreeAggregateMark::None,
@@ -612,6 +615,12 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                             crate::app::components::media_list::MediaSemanticState::Ordinary,
                     });
                 }
+                continue;
+            }
+            if flow_index < self.viewport_offset {
+                continue;
+            }
+            let VisibleRow::Node(id) = visible else {
                 continue;
             };
             let Some(entry) = self.arena.get(&id) else {
@@ -639,6 +648,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     .map(|trailing| trailing.text.clone()),
                 depth: entry.depth,
                 root_index: entry.root_index,
+                group_root_index,
                 selected: self.selected.as_ref() == Some(target),
                 marked,
                 aggregate_mark,

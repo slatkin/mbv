@@ -60,12 +60,8 @@ pub(in crate::app) fn render_tree_browser(
     let left_inset = usize::from(content_rect.x.saturating_sub(claim_rect.x));
     let right_inset = usize::from(claim_rect.right().saturating_sub(content_rect.right()));
     let content_width = usize::from(content_rect.width);
-    let mut group_root_index = 0;
 
     for (index, row) in rows.iter().enumerate() {
-        if row.kind == TreePaintRowKind::Heading {
-            group_root_index = row.root_index;
-        }
         let Some(y) = content_rect.y.checked_add(index as u16) else {
             break;
         };
@@ -85,7 +81,7 @@ pub(in crate::app) fn render_tree_browser(
         };
         let fill = if full_width {
             palette::SELECTED_ROW_BG
-        } else if row.root_index.saturating_sub(group_root_index) % 2 == 0 {
+        } else if row.root_index.saturating_sub(row.group_root_index) % 2 == 0 {
             zebra
         } else {
             base
