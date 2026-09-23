@@ -60,8 +60,12 @@ pub(in crate::app) fn render_tree_browser(
     let left_inset = usize::from(content_rect.x.saturating_sub(claim_rect.x));
     let right_inset = usize::from(claim_rect.right().saturating_sub(content_rect.right()));
     let content_width = usize::from(content_rect.width);
+    let mut group_root_index = 0;
 
     for (index, row) in rows.iter().enumerate() {
+        if row.kind == TreePaintRowKind::Heading {
+            group_root_index = row.root_index;
+        }
         let Some(y) = content_rect.y.checked_add(index as u16) else {
             break;
         };
@@ -81,15 +85,15 @@ pub(in crate::app) fn render_tree_browser(
         };
         let fill = if full_width {
             palette::SELECTED_ROW_BG
-        } else if row.root_index % 2 == 0 {
+        } else if row.root_index.saturating_sub(group_root_index) % 2 == 0 {
             zebra
         } else {
             base
         };
         let (prefix, title) = match row.kind {
             TreePaintRowKind::Node => (" ".repeat(row.depth.saturating_mul(2)), row.title.clone()),
-            TreePaintRowKind::Heading => ("  ".to_owned(), row.title.to_uppercase()),
-            TreePaintRowKind::Spacer => ("  ".to_owned(), String::new()),
+            TreePaintRowKind::Heading => (String::new(), row.title.to_uppercase()),
+            TreePaintRowKind::Spacer => (String::new(), String::new()),
         };
         let gutter = row
             .trailing
@@ -190,7 +194,11 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
                 match row.title_role {
                     TreeTitleRole::Heading => palette::TEXT_EMPHASIS,
                     TreeTitleRole::Secondary => palette::TEXT_FOCUS_ACCENT,
-                    TreeTitleRole::Standard => palette::ACCENT,
+                    TreeTitleRole::Standard => match row.depth {
+                        0 => palette::TEXT_EMPHASIS,
+                        1 => palette::TEXT_FOCUS_ACCENT,
+                        _ => palette::ACCENT,
+                    },
                 }
             }
         }

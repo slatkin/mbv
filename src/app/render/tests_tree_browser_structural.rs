@@ -60,6 +60,7 @@ fn draw<Target: Clone + Eq + Hash>(
 fn tree_browser_paints_heading_and_spacer_rows_with_shared_group_semantics() {
     let mut tree = grouped_tree();
     tree.set_focused(false);
+    tree.set_geometry(Rect::new(0, 0, 42, 6), Rect::new(2, 0, 40, 6));
     let terminal = draw(&mut tree, 42, 6);
     let buffer = terminal.backend().buffer();
     let output = buffer_to_string(&terminal);
@@ -72,7 +73,44 @@ fn tree_browser_paints_heading_and_spacer_rows_with_shared_group_semantics() {
     assert_eq!(buffer[(2, 0)].fg, palette::TEXT_METADATA);
     assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(10, 0)].bg, buffer[(10, 1)].bg);
-    assert_eq!(buffer[(10, 2)].bg, buffer[(10, 4)].bg);
+    assert_eq!(buffer[(10, 1)].bg, buffer[(10, 4)].bg);
+    assert_ne!(buffer[(10, 2)].bg, buffer[(10, 4)].bg);
+}
+
+#[test]
+fn grouped_tree_uses_shared_depth_colours_for_default_node_roles() {
+    let mut tree = TreeBrowser::new();
+    tree.reconcile([
+        TreeEntry::Heading("Shows".into()),
+        TreeEntry::Node(node(Target::Alpha, "Show")),
+        TreeEntry::Node(TreeNode::new(
+            Target::Beta,
+            Some(Target::Alpha),
+            "Season",
+            "Season",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Direct,
+        )),
+        TreeEntry::Node(TreeNode::new(
+            Target::Gamma,
+            Some(Target::Beta),
+            "Episode",
+            "Episode",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Direct,
+        )),
+    ])
+    .unwrap();
+    tree.apply(TreeOperation::ToggleExpansionTarget(Target::Alpha));
+    tree.apply(TreeOperation::ToggleExpansionTarget(Target::Beta));
+    tree.set_geometry(Rect::new(0, 0, 42, 4), Rect::new(2, 0, 40, 4));
+    tree.set_focused(false);
+
+    let terminal = draw(&mut tree, 42, 4);
+    let buffer = terminal.backend().buffer();
+    assert_eq!(buffer[(2, 1)].fg, palette::TEXT_EMPHASIS);
+    assert_eq!(buffer[(4, 2)].fg, palette::TEXT_FOCUS_ACCENT);
+    assert_eq!(buffer[(6, 3)].fg, palette::ACCENT);
 }
 
 #[test]
