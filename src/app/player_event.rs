@@ -422,6 +422,16 @@ impl App {
                         .unwrap_or(active_cursor)
                 };
 
+                // A locally replaced queue is fenced one generation ahead of
+                // the owner (`replace_playback_queue`) until its next submit.
+                // The snapshot then describes the owner's previous queue, so
+                // adopting it would replace the user's queue with items they
+                // replaced — skip the whole adoption; a later submit or a new
+                // replacement resolves the divergence.
+                if !self.local_queue_is_owner_queue(self.playing_queue_scope()) {
+                    return true;
+                }
+
                 // Adopt only the owner's queue slots and coordinates. The
                 // snapshot's `source` is the owner's copy of the queue-source
                 // label, which goes stale whenever the shell changes the

@@ -20,13 +20,29 @@ impl App {
         matches!(self.playback_target(), PlaybackTarget::Local(_))
     }
 
+    /// Whether the scope's canonical queue is the playback owner's accepted
+    /// submission. A locally replaced queue is fenced one generation ahead of
+    /// the owner until its next submit (`replace_playback_queue`); while
+    /// fenced, the owner still holds the previous queue, so neither edits nor
+    /// appends may be forwarded to it, and its broadcasts must not replace
+    /// the local copy. Same predicate the jump-to-slot path enforces.
+    pub(super) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
+        if scope == QueueScope::Remote {
+            return true;
+        }
+        self.queue_for_scope(scope).sequence_generation
+            <= self.player.status.lock().unwrap().sequence_generation
+    }
+
     /// Whether a canonical-queue edit in `scope` should also be sent to the
     /// player as a live command. `active` is the player's current playing
     /// state (`self.player.status.lock().unwrap().active`), passed in since
     /// callers already hold it.
     pub(super) fn queue_edit_reaches_player(&self, scope: QueueScope, active: bool) -> bool {
         scope == QueueScope::Remote
-            || (active || self.player.is_remote()) && self.queue_edits_reach_owner()
+            || (active || self.player.is_remote())
+                && self.queue_edits_reach_owner()
+                && self.local_queue_is_owner_queue(scope)
     }
 
     pub(super) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
@@ -115,6 +131,11 @@ impl App {
             return true;
         }
         if scope != QueueScope::Remote && !self.queue_edits_reach_owner() {
+            return true;
+        }
+        if scope != QueueScope::Remote && !self.local_queue_is_owner_queue(scope) {
+            // Fenced-ahead local queue: the owner holds a previous queue, so
+            // the append stays local until the next submit cold-starts it.
             return true;
         }
         if !self.player.is_remote() && !self.player.status.lock().unwrap().active {

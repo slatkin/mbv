@@ -628,6 +628,60 @@ fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue()
 }
 
 #[test]
+fn fenced_queue_delete_is_not_forwarded_to_the_owner() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    // The daemon still holds the previously submitted queue (its own stub
+    // items); the user then loads a playlist locally, which fences the tab
+    // one generation ahead of the owner until the next submit.
+    let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
+    let taskmaster = make_items(2);
+    app.replace_playback_queue(taskmaster.clone(), 0);
+    // Drain the attach-time sync commands so only the delete's own traffic
+    // is observable below.
+    while cmd_rx.try_recv().is_ok() {}
+
+    app.remove_from_queue(1);
+
+    // The owner must not be told anything: it holds a different queue, and
+    // editing it would re-broadcast the old items over the user's queue.
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "a fenced queue edit must not reach the playback owner"
+    );
+    assert_eq!(
+        app.player_tab.emby_items().len(),
+        1,
+        "the removal still applies to the local canonical queue"
+    );
+    assert_eq!(
+        app.player_tab.emby_items()[0].id,
+        taskmaster[0].id
+    );
+}
+
+#[test]
+fn owner_broadcast_does_not_replace_a_fenced_local_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, _) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
+    let taskmaster = make_items(2);
+    app.replace_playback_queue(taskmaster.clone(), 0);
+
+    // The owner's snapshot describes its own previous queue.
+    let stale = emby_unified_state(&make_items(3), 0);
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(stale)));
+
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        taskmaster.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+        "the owner's stale queue must not clobber a fenced local replacement"
+    );
+}
+
+#[test]
 fn queue_broadcast_does_not_revert_saved_playlist_source() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_local_daemon_app_stub(make_items(4));

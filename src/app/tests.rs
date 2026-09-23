@@ -632,23 +632,31 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
 }
 
 pub(crate) fn make_local_daemon_app_stub(remote_items: Vec<EmbyItem>) -> App {
+    make_local_daemon_app_stub_with_cmd_rx(remote_items).0
+}
+
+pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
+    remote_items: Vec<EmbyItem>,
+) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
 
-    let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
+    let (remote, player_rx, cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
     let config = Config {
         stay_alive: true,
         ..Default::default()
     };
     // A local-daemon stub is always stay-alive: tests that model this
     // path must never send RequestShutdown to the real daemon socket.
-    App::new_remote_with_config(
+    let app = App::new_remote_with_config(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
         mbv_core::remote_player::DaemonEndpoint::Local,
         config,
-    )
+    );
+    (app, cmd_rx)
 }
 
 // ── cursor preservation during home refresh ──────────────────────────────
