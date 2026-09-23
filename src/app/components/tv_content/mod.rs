@@ -584,11 +584,13 @@ impl TvContent {
             self.carrier.set_content(rows.clone());
             self.last_series_rows = Some(rows);
         }
+        let mut seed_series_id = None;
         if !self.initialized {
             // First mount seeds from the shell's stable target, not its
             // numeric display cursor (design.md D4/D5).
             if let Some(item) = context.list.items.get(context.list.cursor()) {
                 self.carrier.select_target(&item.id);
+                seed_series_id = Some(item.id.clone());
             }
         } else if let Some(target) = restore_target {
             self.carrier.select_target(&target);
@@ -617,6 +619,14 @@ impl TvContent {
         let focused = self.context.focused;
         self.context = context;
         self.context.focused = focused;
+        // First mount seeds the tree from the same shell stable target the
+        // carrier seeds from: `reconcile_selection` otherwise defaults the
+        // tree onto root 0 and the next push resolves (and fetches) that
+        // show instead. Flat episode modes and Inline Search reconcile no
+        // tree, so there the select finds no matching root and no-ops.
+        if let Some(target) = seed_series_id {
+            self.select_series_target(&target);
+        }
         let season_count = self
             .context
             .series_detail
