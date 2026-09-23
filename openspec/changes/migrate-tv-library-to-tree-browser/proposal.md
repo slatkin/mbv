@@ -21,7 +21,8 @@ TV's show browser still uses a flat MediaList and a separate season/episode Work
 ### Modified Capabilities
 
 - `shared-list-components`: TreeBrowser can project structural group headings without giving them selection, expansion, marks, or actions.
+- `canonical-media-lists`: TV show-mode browser rows use the tree rather than the flat media-list presentation; Latest/Upcoming and Hero Workspace episodes remain flat. A delta for this capability is still required before implementation.
 
 ## Impact
 
-Shared TreeBrowser data, flow, painter, and pointer operations; TV content owner and shell projections for show/season/episode data; Library Panel list-slot integration; focused component, buffer, and mounted-tick tests. No new dependency or Service protocol. Planning assumes the completed `rework-tv-library-pills` behavior (currently present in its change artifacts but not this checkout's TV source) is incorporated before TV migration; do not overwrite that change's modes or selectors.
+Shared TreeBrowser data, flow, painter, and pointer operations; TV content owner and shell projections for show/season/episode data; Library Panel list-slot integration; focused component, buffer, and mounted-tick tests. No new dependency or Service protocol. Planning requires incorporating the completed `rework-tv-library-pills` code and syncing its spec deltas before TV migration; its behavior is currently present in change artifacts but not this checkout's TV source. Do not overwrite that change's modes or selectors.

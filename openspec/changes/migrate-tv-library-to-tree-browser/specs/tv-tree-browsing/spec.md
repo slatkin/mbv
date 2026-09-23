@@ -7,16 +7,22 @@ TV show-browsing modes expose a nested show, season, and episode list while reta
 ## ADDED Requirements
 
 ### Requirement: Show-browsing modes expose the TV hierarchy
-When browsing shows in `All` or a letter-range mode, the TV library SHALL display shows as selectable expandable roots, their seasons as selectable expandable children, and episodes as selectable children of seasons. The existing show group headings SHALL remain visible and non-selectable. Collapsed descendants SHALL not be reachable until expanded. A show's identity SHALL remain stable across refresh and geometry changes, and season and episode identities SHALL be scoped to their show and season where needed to distinguish occurrences.
+When browsing shows in `All` or a letter-range mode, the TV library SHALL display shows as selectable expandable roots, their seasons as selectable expandable children, and episodes as selectable children of seasons. The existing show group headings and between-group spacers SHALL remain visible and non-selectable. Collapsed descendants SHALL not be reachable until expanded. Shows and seasons that can have children SHALL be expandable even when their children are not yet loaded: opening such a branch SHALL retain expansion while loading, and loaded children SHALL appear beneath it without replacing the selected target. A show's identity SHALL remain stable across refresh and geometry changes, and season and episode identities SHALL be scoped to their show and season where needed to distinguish occurrences.
 
 #### Scenario: Expand a show and season
 - **WHEN** a user expands a show and then one of its seasons
 - **THEN** the list reveals that show's seasons and that season's episodes inline at successive depths
 - **AND** collapsing either branch hides its descendants from navigation
 
+#### Scenario: Expand before children arrive
+- **WHEN** a user expands a show or season with unloaded children
+- **THEN** the branch remains expanded while the shell loads its children
+- **AND** the children appear under that branch when they arrive without losing the selected target
+
 #### Scenario: Group headings remain labels
 - **WHEN** a show mode presents alphabet group headings
 - **THEN** they label their following shows but cannot be selected or activated
+- **AND** a non-selectable spacer still separates consecutive groups
 
 #### Scenario: Preserve the selected row on refresh and resize
 - **WHEN** the TV list refreshes or changes between panel geometries and its selected row still exists
