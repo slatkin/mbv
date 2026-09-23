@@ -83,15 +83,16 @@ mbv SHALL fetch Audiobookshelf podcast artwork through the configured Service cr
 - **WHEN** the user confirms Audiobookshelf Service replacement
 - **THEN** cached artwork belonging to the previous server SHALL NOT be displayed for items from the replacement server
 
-### Requirement: Personalized shelves are absent from the podcast tab
+### Requirement: Personalized shelves appear only as podcast Latest
 
-The Audiobookshelf podcast tab SHALL NOT render or navigate personalized shelf data, and shelf data SHALL
+The Audiobookshelf podcast tab SHALL NOT render or navigate personalized shelf data except the `Newest Episodes` shelf, which SHALL be used only by that library's `Latest` pill. Other shelf data SHALL
 NOT affect show order, selection, scrolling, hit testing, or pagination.
 
 #### Scenario: Catalog includes personalized shelves
 
 - **WHEN** Audiobookshelf returns personalized shelf data
-- **THEN** the podcast tab's pill row, episode list and hero SHALL remain unaffected
+- **THEN** the podcast tab's state and show pills, episode list and hero SHALL remain unaffected
+- **AND** only the `Latest` pill consumes the `Newest Episodes` shelf
 
 ### Requirement: Catalog results obey the current Service lifecycle
 Every asynchronous Audiobookshelf catalog, detail, progress, shelf, and artwork result SHALL be reconciled with the Service setup generation that initiated it. Replacement, removal, authentication rejection, or a newer setup generation SHALL prevent old-server data from becoming visible.

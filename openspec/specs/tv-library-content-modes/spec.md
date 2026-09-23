@@ -46,19 +46,14 @@ SHALL be `All`.
 
 ### Requirement: Latest mode presents the library's newest episodes
 
-The `Latest` mode SHALL present the same content as Home's `Latest` section for
-that library, sourced from the same Emby request. Selecting the mode SHALL
-obtain that content independently of whether Home has loaded any section, and
-SHALL NOT require Home to have been visited. The rows SHALL be a flat list of
-episodes; the list SHALL NOT nest.
+The `Latest` mode SHALL present the TV library's newest episodes from its library-scoped Latest source. Selecting the mode SHALL obtain that content independently of Home; Home SHALL NOT contain a matching Latest section. The rows SHALL be a flat list of episodes; the list SHALL NOT nest.
 
 #### Scenario: Latest shows the library's newest episodes
 - **WHEN** the user selects the `Latest` mode for a TV library
-- **THEN** the list shows that library's newest episodes from the same source as Home's `Latest` section
-- **AND** the rows are a flat episode list with no nesting
+- **THEN** the list shows that library's newest episodes as a flat episode list with no nesting
 
 #### Scenario: Latest loads without Home
-- **WHEN** the user opens a TV library and selects `Latest` without Home having loaded that library's `Latest` section
+- **WHEN** the user opens a TV library and selects `Latest` without visiting Home
 - **THEN** the library loads and shows the newest episodes
 
 ### Requirement: Upcoming mode presents the library's upcoming episodes
@@ -81,28 +76,6 @@ grouping requirement below); the list SHALL NOT nest.
 - **WHEN** the user selects the `Upcoming` mode and the feed carries `PremiereDate`s, `SeriesName`s, and season/episode numbers
 - **THEN** rows appear under relative-date headings with the series name and `Sxx:Eyy — title` on each row
 - **AND** two id-less rows in one list resolve independently
-
-### Requirement: TV Latest renders identically to Home Latest (ADDED 2026-09-22)
-
-The same items SHALL produce the same row text (primary, secondary, trailing) in the TV `Latest` mode and in Home's `Latest` section for that library.
-
-#### Scenario: Differential rendering
-- **WHEN** identical items are fed to both render paths
-- **THEN** the row text is identical on both surfaces
-
-### Requirement: Home and the library present one shared Latest list (ADDED 2026-09-23)
-
-Home's `Latest` section for a TV library and the library's `Latest` mode SHALL present one shared, shell-owned snapshot of that library's newest episodes; neither surface SHALL hold or fetch its own independent copy. A load or refresh issued by either surface SHALL update the shared snapshot once, and the other surface SHALL present the updated items without issuing its own fetch. The new-content marker SHALL remain keyed to the launch window, so a refresh SHALL NOT change the marker.
-
-#### Scenario: A load on one surface is visible on both
-- **WHEN** the `Latest` section is loaded or refreshed from either Home or the library's `Latest` mode
-- **THEN** both surfaces present the same items
-- **AND** the section was fetched once, not once per surface
-
-#### Scenario: A refresh propagates without a second fetch
-- **WHEN** one surface refreshes the shared `Latest` snapshot while the other surface is also presented in the same run
-- **THEN** the other surface shows the refreshed items through the shell sync pass
-- **AND** it issues no fetch of its own
 
 ### Requirement: Latest and Upcoming rows play directly or open their series
 
@@ -148,28 +121,3 @@ clicked mode.
 - **WHEN** the user cycles forward from the last mode, or backward from the first
 - **THEN** the selection wraps to the opposite end
 - **AND** every mode in the row participates in the cycle
-
-### Requirement: The Latest mode reflects the library's shared new-content marker
-
-When the shell marks a library's `Latest` section as having new content since
-the previous launch, the library's `Latest` mode SHALL show that marker.
-Selecting the library's `Latest` mode SHALL acknowledge the section, and that
-acknowledgement SHALL be shared with Home's `Latest` pill for the same library
-so that acknowledging on either surface clears the marker on both for the
-remainder of the client run. Acknowledgement SHALL be keyed by the section's
-provider identity.
-
-#### Scenario: The marker appears on both surfaces
-- **WHEN** a library's `Latest` section has new content since the previous launch
-- **THEN** Home's `Latest` pill for that library shows the marker
-- **AND** the library's `Latest` mode shows the marker
-
-#### Scenario: Acknowledging on either surface clears both
-- **WHEN** the user selects the library's `Latest` mode while its marker is shown
-- **THEN** the marker clears on the library's `Latest` mode and on Home's `Latest` pill for that library
-- **WHEN** the user instead selects Home's `Latest` pill for that library
-- **THEN** the marker also clears on the library's `Latest` mode
-
-#### Scenario: Content after launch does not mark
-- **WHEN** `Latest` content appears after the current client launch
-- **THEN** it does not add a marker during the current run
