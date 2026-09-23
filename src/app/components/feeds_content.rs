@@ -24,7 +24,7 @@ use mbv_core::config::{
     FeedGroupKey, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
 };
-use mbv_core::playback_queue::FeedEntry;
+use mbv_core::playback_queue::{FeedEntry, QueueItem};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::library_panel::content::{
@@ -35,7 +35,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, MediaSemanticState, RowIntent,
+    MediaListTrailing, MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{current_time_secs, feed_display_rows, FeedDisplayRow};
@@ -386,11 +386,33 @@ impl FeedsContent {
                 },
                 FeedDisplayRow::Entry(index) => {
                     let entry = &self.visible_entries[index];
+                    let (primary, secondary, trailing) = if self.latest_selected {
+                        let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
+                            self.subscriptions
+                                .iter()
+                                .find(|subscription| subscription.url == feed_id)
+                                .map(|subscription| subscription.name.as_str())
+                        });
+                        let queue_item = QueueItem::Feed(entry.clone());
+                        let parts = queue_item.playback_title_parts(feed_name);
+                        let (primary, secondary) = match parts.context {
+                            Some(context) => (context.text, Some(parts.title.text)),
+                            None => (parts.title.text, None),
+                        };
+                        let trailing =
+                            crate::app::home_latest::provider_timestamp_secs(&queue_item)
+                                .map(crate::app::ui_util::fmt_publish_date_short)
+                                .filter(|date| !date.is_empty())
+                                .map(MediaListTrailing::Gutter);
+                        (primary, secondary, trailing)
+                    } else {
+                        (entry.title.clone(), None, None)
+                    };
                     MediaListRow::Item {
                         target: entry.guid.clone(),
-                        primary: entry.title.clone(),
-                        secondary: None,
-                        trailing: None,
+                        primary,
+                        secondary,
+                        trailing,
                         // Library lists carry no time column (only the Queue
                         // list and the sessions modal show one).
                         duration: None,

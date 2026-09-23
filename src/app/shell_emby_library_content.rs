@@ -156,17 +156,32 @@ impl Model {
             .unwrap_or_default();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
         let poster_window = items.clone();
-        let latest_items = self
+        let library_id = self.app.libs[index].library.id.clone();
+        let (latest_items, latest_has_new_content) = self
             .tv_latest_snapshots
-            .get(&self.app.libs[index].library.id)
+            .get(&library_id)
             .map(|snapshot| {
-                snapshot
-                    .items
-                    .iter()
-                    .filter_map(|item| item.as_emby().cloned())
-                    .collect()
+                (
+                    snapshot
+                        .items
+                        .iter()
+                        .filter_map(|item| item.as_emby().cloned())
+                        .collect(),
+                    snapshot.has_new_content,
+                )
             })
             .unwrap_or_default();
+        let latest_source = super::HomeLatestSource::Emby(library_id);
+        if self.active_emby_library_owner_is_latest()
+            && !self
+                .acknowledged_home_latest_sources
+                .contains(&latest_source)
+        {
+            self.record_home_latest_acknowledgement(latest_source.clone());
+        }
+        let latest_acknowledged = self
+            .acknowledged_home_latest_sources
+            .contains(&latest_source);
         let push = BrowserOwnerPush {
             items,
             latest_items,
@@ -182,6 +197,7 @@ impl Model {
         };
         let identity = self.emby_library_owner_identity(index);
         let landed_cursor = self.update_emby_library_owner(key, kind, |owner| {
+            owner.set_latest_marker(latest_has_new_content, latest_acknowledged);
             owner.set_content(push);
             if owner.note_browse_identity(identity) {
                 owner.apply_position(cursor, scroll);

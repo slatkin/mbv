@@ -124,6 +124,46 @@ fn feeds_paints_one_pill_bar_and_the_policy_header() {
 /// Clicking the painted Watched pill changes the filter through the panel's
 /// Selector slot-event resolution.
 #[test]
+fn feeds_latest_paints_provider_date_subscription_title_marker_and_wide_hero() {
+    for (width, height, wide) in [(240, 30, true), (80, 30, false)] {
+        let mut owner =
+            feed_owner_with_entries(vec![feed_entry("latest", "Latest Episode", false)]);
+        owner.set_latest_marker(true, false);
+        let mut panel = panel_with(owner, true);
+        let _ = terminal_for(&mut panel, width, height);
+        let (latest, _) = panel
+            .test_selector_hits()
+            .regions()
+            .iter()
+            .find(|(_, id)| *id == 0)
+            .expect("Latest pill is painted");
+        let click = Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: latest.x,
+            row: latest.y,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert!(panel.on(&click).is_some());
+        let terminal = terminal_for(&mut panel, width, height);
+        let output = buffer_to_string(&terminal);
+        assert!(output.contains("14 Nov"), "Latest date gutter: {output:?}");
+        assert!(
+            output.contains("Test Feed") && output.contains("Latest Episode"),
+            "{output:?}"
+        );
+        assert!(output.contains('•'), "Latest selector marker: {output:?}");
+        if wide {
+            let geometry = panel.test_wide_geometry().expect("Wide panel");
+            assert!(area_contains(
+                terminal.backend().buffer(),
+                geometry.hero_area,
+                "Latest Episode"
+            ));
+        }
+    }
+}
+
+#[test]
 fn watched_pill_click_changes_the_filter() {
     let mut panel = panel_with(feed_owner(), true);
     let _terminal = terminal_for(&mut panel, 240, 30);

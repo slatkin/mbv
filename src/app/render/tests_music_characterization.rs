@@ -11,11 +11,17 @@ use super::*;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use rstest::rstest;
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::props::{AttrValue, Attribute};
 
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::music_content::MusicContent;
 use crate::app::components::music_tree_target::MusicTreeTarget;
+use crate::app::components::LibraryKind;
 use crate::app::music_grouping::ArtistKey;
+use mbv_core::config::ServiceKind;
 
 /// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
 /// now (task 3.8), so route the narrow characterization renders through the
@@ -23,6 +29,59 @@ use crate::app::music_grouping::ArtistKey;
 fn render_narrow_music(app: App, width: u16, height: u16) -> String {
     let mut model = mounted_model_at(app, width, height);
     draw_mounted_frame(&mut model, width, height)
+}
+
+#[test]
+fn music_latest_paints_provider_date_marker_and_selected_hero_at_wide_and_narrow() {
+    for (width, height, wide) in [(240, 30, true), (80, 30, false)] {
+        let mut item = crate::app::tests::make_item("Latest Track", "Audio");
+        item.id = "latest-track".into();
+        item.album = "Latest Album".into();
+        item.artist = "Latest Artist".into();
+        item.date_added = "2023-11-14T00:00:00Z".into();
+        let mut owner = MusicContent::new();
+        owner.set_latest_items(vec![item]);
+        owner.set_latest_mode(true);
+        owner.set_latest_has_new_content(true);
+        let key = LibraryKey::Service {
+            service: ServiceKind::Emby,
+            library_id: "music".into(),
+            kind: LibraryKind::Music,
+        };
+        let mut panel = LibraryPanel::new();
+        panel.insert_owner(key.clone(), Box::new(owner));
+        panel.set_active(Some(key));
+        Component::attr(&mut panel, Attribute::Focus, AttrValue::Flag(true));
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal
+            .draw(|frame| Component::view(&mut panel, frame, Rect::new(0, 0, width, height)))
+            .unwrap();
+        let list = panel.test_list_rect().expect("Latest list area");
+        let _ = panel.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: list.x + 1,
+            row: list.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        terminal
+            .draw(|frame| Component::view(&mut panel, frame, Rect::new(0, 0, width, height)))
+            .unwrap();
+        let output = buffer_to_string(&terminal);
+        assert!(output.contains("14 Nov"), "Latest date gutter: {output:?}");
+        assert!(output.contains('•'), "Latest selector marker: {output:?}");
+        if wide {
+            let geometry = panel.test_wide_geometry().expect("Wide panel");
+            assert!(
+                (geometry.hero_area.top()..geometry.hero_area.bottom()).any(|y| {
+                    (geometry.hero_area.left()..geometry.hero_area.right())
+                        .map(|x| terminal.backend().buffer()[(x, y)].symbol())
+                        .collect::<String>()
+                        .contains("Latest Track")
+                }),
+                "selected Latest detail hero paints: {output:?}"
+            );
+        }
+    }
 }
 
 #[rstest]

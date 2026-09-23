@@ -17,10 +17,12 @@ use mbv_core::audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfShow,
 };
 use mbv_core::config::ServiceKind;
+use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tuirealm::component::Component;
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute};
 
 const DAY: u64 = 24 * 60 * 60;
@@ -201,6 +203,58 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
         wide.hero_area,
         "01:00:00"
     ));
+}
+
+#[test]
+fn podcast_latest_paints_date_marker_and_selected_hero_at_wide_and_narrow() {
+    for (width, height, wide) in [(240, 30, true), (80, 30, false)] {
+        let mut owner = podcast_owner();
+        owner.set_latest_items(&[QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+            library_item_id: "alpha".into(),
+            episode_id: "latest-episode".into(),
+            title: "Latest Episode".into(),
+            show_title: Some("Alpha Show".into()),
+            author: None,
+            description: Some("Latest detail".into()),
+            duration_ticks: Some(3600 * mbv_core::api::TICKS_PER_SECOND as u64),
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: Some(NOW - DAY),
+            is_finished: false,
+            cover_path: None,
+        })]);
+        owner.set_latest_marker(true, false);
+        let mut panel = panel_with(owner, true);
+        let _ = terminal_for(&mut panel, width, height);
+        let (latest, _) = panel
+            .test_selector_hits()
+            .regions()
+            .iter()
+            .find(|(_, id)| *id == 0)
+            .expect("Latest pill is painted");
+        let msg = panel.on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: latest.x,
+            row: latest.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        assert!(msg.is_some());
+        let terminal = terminal_for(&mut panel, width, height);
+        let output = buffer_to_string(&terminal);
+        assert!(
+            output.contains("30 Jan"),
+            "Latest provider date: {output:?}"
+        );
+        assert!(output.contains('•'), "Latest marker: {output:?}");
+        if wide {
+            let geometry = panel.test_wide_geometry().expect("Wide panel");
+            assert!(area_contains(
+                terminal.backend().buffer(),
+                geometry.hero_area,
+                "Latest Episode"
+            ));
+        }
+    }
 }
 
 /// Ordinary non-Wide rows (row 4.3): the Narrow panel paints the same

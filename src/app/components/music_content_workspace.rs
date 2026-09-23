@@ -559,22 +559,34 @@ impl MusicContent {
         // list mutably for the returned slots.
         let focused = self.context.focused;
         let track_focused = self.track_focused;
-        let hero = self.resolved_hero_data().map(|data| {
-            HeroContent {
-                facts: data.facts,
-                // Music has no separate overview box when the album does not
-                // provide an overview; the panel's generic producer already
-                // represents that as `None`.
-                overview: data.overview,
-                credits: data.credits,
-                workspace: Some(Workspace {
-                    header: Some(WorkspaceHeader::Tracklist),
-                    selector: None,
-                    list: &mut self.track_list,
-                    focused: focused && track_focused,
-                }),
-            }
-        });
+        let hero = if self.latest_mode {
+            self.latest_selected_item().map(|item| {
+                let data = super::library_panel::hero::hero_content_emby(&item);
+                HeroContent {
+                    facts: data.facts,
+                    overview: data.overview,
+                    credits: data.credits,
+                    workspace: None,
+                }
+            })
+        } else {
+            self.resolved_hero_data().map(|data| {
+                HeroContent {
+                    facts: data.facts,
+                    // Music has no separate overview box when the album does not
+                    // provide an overview; the panel's generic producer already
+                    // represents that as `None`.
+                    overview: data.overview,
+                    credits: data.credits,
+                    workspace: Some(Workspace {
+                        header: Some(WorkspaceHeader::Tracklist),
+                        selector: None,
+                        list: &mut self.track_list,
+                        focused: focused && track_focused,
+                    }),
+                }
+            })
+        };
         let mut pills = vec!["Latest".to_string()];
         pills.extend(
             self.context
@@ -603,7 +615,7 @@ impl MusicContent {
         LibraryPanelContent {
             selector,
             list,
-            hero: (!self.latest_mode).then_some(hero).flatten(),
+            hero,
         }
     }
 }

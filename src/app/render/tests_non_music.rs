@@ -1,5 +1,13 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
+use crate::app::components::LibraryKind;
+use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
+use ratatui::Terminal;
+use tuirealm::component::Component;
+use tuirealm::props::{AttrValue, Attribute};
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
@@ -63,6 +71,66 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
             !output.contains(marker),
             "legacy base frame must not paint browser rows at the wide breakpoint: {output:?}"
         );
+    }
+}
+
+#[test]
+fn emby_latest_rows_marker_and_wide_hero_use_shared_panel_painters() {
+    for kind in [
+        LibraryKind::Movies,
+        LibraryKind::Generic,
+        LibraryKind::HomeVideos,
+    ] {
+        for (width, height, wide) in [(240, 30, true), (80, 30, false)] {
+            let mut item = crate::app::tests::make_item("Latest Movie", "Movie");
+            item.id = "latest-movie".into();
+            item.date_added = "2023-11-14T00:00:00Z".into();
+            item.overview = "Latest overview".into();
+            let mut owner = EmbyLibraryContent::new(kind);
+            owner.set_content(BrowserOwnerPush {
+                items: Vec::new(),
+                latest_items: vec![item],
+                total_count: 0,
+                library_total: None,
+                letter_filter: None,
+                loading: false,
+                group_pills: kind == LibraryKind::HomeVideos,
+                show_letter_pills: kind != LibraryKind::HomeVideos,
+                feed_groups: Vec::new(),
+                feed_group_ids: Vec::new(),
+                feed_group_cursor: 0,
+            });
+            owner.set_latest_mode(true);
+            owner.set_latest_marker(true, false);
+            let key = LibraryKey::Service {
+                service: mbv_core::config::ServiceKind::Emby,
+                library_id: format!("{kind:?}"),
+                kind,
+            };
+            let mut panel = LibraryPanel::new();
+            panel.insert_owner(key.clone(), Box::new(owner));
+            panel.set_active(Some(key));
+            Component::attr(&mut panel, Attribute::Focus, AttrValue::Flag(true));
+            let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+            terminal
+                .draw(|frame| Component::view(&mut panel, frame, Rect::new(0, 0, width, height)))
+                .unwrap();
+            let output = buffer_to_string(&terminal);
+            assert!(output.contains("14 Nov"), "Latest date gutter: {output:?}");
+            assert!(output.contains('•'), "Latest selector marker: {output:?}");
+            if wide {
+                let geometry = panel.test_wide_geometry().expect("Wide panel");
+                assert!(
+                    (geometry.hero_area.top()..geometry.hero_area.bottom()).any(|y| {
+                        (geometry.hero_area.left()..geometry.hero_area.right())
+                            .map(|x| terminal.backend().buffer()[(x, y)].symbol())
+                            .collect::<String>()
+                            .contains("Latest Movie")
+                    }),
+                    "selected Latest detail hero paints"
+                );
+            }
+        }
     }
 }
 

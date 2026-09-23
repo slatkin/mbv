@@ -446,7 +446,7 @@ impl PodcastContent {
 
     /// The selected episode as the existing hero producer's input: the
     /// downloaded episode over its parent show's identity (title, author,
-    /// cover). The hero facts themselves are corrected by row 3.5.
+    /// cover).
     fn selected_episode_item(&self) -> Option<AudiobookshelfQueueItem> {
         let target = self.episodes.selected_target()?;
         if matches!(self.pill, PillSelection::Latest) {
