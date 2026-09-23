@@ -290,6 +290,7 @@ impl App {
             series_detail_cache: std::collections::HashMap::new(),
             series_detail_loading: std::collections::HashSet::new(),
             series_season_loading: std::collections::HashSet::new(),
+            pending_series_season_expansions: std::collections::HashSet::new(),
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,

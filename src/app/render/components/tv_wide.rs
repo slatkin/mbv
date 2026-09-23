@@ -20,6 +20,12 @@ pub(in crate::app) struct TvWideRenderCtx {
     pub(in crate::app) list: LibraryListRenderCtx,
     pub(in crate::app) selected_series: Option<EmbyItem>,
     pub(in crate::app) series_detail: Option<SeriesDetail>,
+    /// Loaded details for every listed show, keyed by series id. The tree
+    /// projects children per show from this map so an expanded show keeps
+    /// its loaded children while another show is selected; `series_detail`
+    /// remains the selected show's detail for the workspace/hero paths.
+    /// Empty in unit-test contexts that only push the selected detail.
+    pub(in crate::app) series_details: std::collections::HashMap<String, SeriesDetail>,
     pub(in crate::app) season_cursor: usize,
     pub(in crate::app) episode_cursor: Option<usize>,
     pub(in crate::app) focused: bool,
@@ -38,6 +44,13 @@ impl TvWideRenderCtx {
         self.tv_content_mode = mode;
     }
 
+    pub(in crate::app) fn set_series_details(
+        &mut self,
+        details: std::collections::HashMap<String, SeriesDetail>,
+    ) {
+        self.series_details = details;
+    }
+
     pub(in crate::app) fn new(
         list: LibraryListRenderCtx,
         selected_series: Option<EmbyItem>,
@@ -50,6 +63,7 @@ impl TvWideRenderCtx {
             list,
             selected_series,
             series_detail,
+            series_details: std::collections::HashMap::new(),
             season_cursor,
             episode_cursor,
             // Framework focus is owned by the mounted `LibraryPanel` and

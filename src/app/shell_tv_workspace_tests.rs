@@ -2,6 +2,7 @@ use super::*;
 use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::make_movie_app;
 use crate::app::types_browse::BrowseResting;
+use mbv_core::mock_http::MockHttp;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -12,6 +13,27 @@ mod group_tests;
 
 #[path = "shell_tv_workspace_selection_tests.rs"]
 mod selection_tests;
+
+fn mounted_tv_model_with_mock_emby(http: &MockHttp) -> Model {
+    let mut model = mounted_tv_model();
+    let mut config = model.app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    crate::app::tests::install_test_emby(&mut model.app, config);
+    let client = model
+        .app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    model
+}
 
 fn mounted_tv_model() -> Model {
     let mut app = make_movie_app();
@@ -97,6 +119,187 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
 }
 
 #[test]
+fn expanding_an_uncached_show_starts_the_detail_fetch() {
+    let http = MockHttp::new();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    let mut model = mounted_tv_model_with_mock_emby(&http);
+    assert!(model.app.series_detail_loading.is_empty());
+    assert!(model.app.series_detail_cache.is_empty());
+
+    model.handle_tv_request(ShellRequest::TvTreeExpand {
+        target: crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:13:movie-focused".into(),
+        ),
+    });
+
+    assert_eq!(
+        model.app.series_detail_loading,
+        std::collections::HashSet::from(["movie-focused".into()]),
+        "uncached expansion must arm the detail fetch"
+    );
+}
+
+#[test]
+fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
+    let http = MockHttp::new();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    let mut model = mounted_tv_model_with_mock_emby(&http);
+
+    model
+        .app
+        .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
+    // Duplicate expansion intent is deduplicated while detail is in flight.
+    model
+        .app
+        .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
+    assert_eq!(
+        model.app.pending_series_season_expansions,
+        std::collections::HashSet::from([("movie-focused".into(), "season-2".into())])
+    );
+    assert!(model.app.series_detail_loading.contains("movie-focused"));
+
+    let seasons = ["season-1", "season-2", "season-3"]
+        .into_iter()
+        .map(|id| {
+            let mut season = crate::app::tests::make_item(id, "Season");
+            season.id = id.into();
+            season
+        })
+        .collect();
+    model.app.handle_series_detail_fetched(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons,
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    assert!(model.app.pending_series_season_expansions.is_empty());
+    assert_eq!(
+        model.app.series_season_loading,
+        std::collections::HashSet::from([
+            ("movie-focused".into(), "season-1".into()),
+            ("movie-focused".into(), "season-2".into()),
+        ]),
+        "preserve the Hero's first-season fetch and fetch the expanded season, but not every season"
+    );
+}
+
+#[test]
+fn pending_season_expansion_does_not_strand_without_emby_snapshot() {
+    let mut model = mounted_tv_model();
+    model
+        .app
+        .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
+
+    let seasons = ["season-1", "season-2"]
+        .into_iter()
+        .map(|id| {
+            let mut season = crate::app::tests::make_item(id, "Season");
+            season.id = id.into();
+            season
+        })
+        .collect();
+    model.app.handle_series_detail_fetched(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons,
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    // Without an Emby client no season fetch can start, and the request must
+    // not strand a pending key no drain can ever consume: the detail drain is
+    // unreachable on a cache hit, so the no-client arm stays a silent no-op.
+    assert!(model.app.pending_series_season_expansions.is_empty());
+    assert!(model.app.series_season_loading.is_empty());
+}
+
+#[test]
+fn expanding_an_uncached_season_starts_only_its_episode_fetch() {
+    let http = MockHttp::new();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    let mut model = mounted_tv_model_with_mock_emby(&http);
+    let mut season = crate::app::tests::make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    model.app.series_detail_cache.insert(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+    model.push_tv_workspace_content();
+    assert!(model.app.series_season_loading.is_empty());
+
+    model.handle_tv_request(ShellRequest::TvTreeExpand {
+        target: crate::app::components::tv_tree_target::TvTreeTarget::Season {
+            show: "tv-id:13:movie-focused".into(),
+            season: "season-1".into(),
+            occurrence: 0,
+        },
+    });
+
+    assert_eq!(
+        model.app.series_season_loading,
+        std::collections::HashSet::from([("movie-focused".into(), "season-1".into())]),
+        "season expansion must arm its episode fetch"
+    );
+    assert_eq!(model.app.series_season_loading.len(), 1);
+}
+
+#[test]
+fn expanding_a_show_reuses_the_hero_detail_request() {
+    let mut model = mounted_tv_model();
+    model
+        .app
+        .series_detail_loading
+        .insert("movie-focused".into());
+
+    model.handle_tv_request(ShellRequest::TvTreeExpand {
+        target: crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:13:movie-focused".into(),
+        ),
+    });
+
+    assert_eq!(
+        model.app.series_detail_loading,
+        std::collections::HashSet::from(["movie-focused".into()]),
+        "tree expansion must share the in-flight Hero detail request"
+    );
+}
+
+#[test]
+fn late_series_detail_completion_does_not_replace_cached_detail() {
+    let mut app = make_movie_app();
+    let mut cached_season = crate::app::tests::make_item("Current", "Season");
+    cached_season.id = "current-season".into();
+    app.series_detail_cache.insert(
+        "show-id".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![cached_season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    let mut stale_season = crate::app::tests::make_item("Stale", "Season");
+    stale_season.id = "stale-season".into();
+    app.handle_series_detail_fetched(
+        "show-id".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![stale_season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    assert_eq!(
+        app.series_detail_cache["show-id"].seasons[0].id,
+        "current-season"
+    );
+}
+
+#[test]
 fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
     let mut model = mounted_tv_model();
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
@@ -147,17 +350,29 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     let mut model = mounted_tv_model();
     assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
 
-    // Move the component cursor to row 1 (movie-second) and Enter to the
-    // Episodes pane: both are non-default state that a remount would reset.
+    // Move the tree selection to movie-second and translate the stable show
+    // target through the existing shell row-selection request.
     let move_request = model.test_tv_owner_mut().test_key(&KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     });
     assert!(matches!(
         move_request,
-        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: crate::app::components::msg::TvHit::SeriesRow(ref target)
+        })) if target == "movie-second"
     ));
-    let selected_id = |model: &mut Model| model.test_tv_owner().selected_item_id();
+    model.app.handle_mouse_single_click_tv(
+        0,
+        crate::app::components::msg::TvHit::SeriesRow("movie-second".into()),
+    );
+    model.push_tv_workspace_content();
+    let selected_id = |model: &mut Model| {
+        model
+            .test_tv_owner()
+            .selected_tree_show()
+            .map(|item| item.id)
+    };
     assert_eq!(selected_id(&mut model), Some("movie-second".into()));
 
     // Seed detail for the selected series (movie-second, the row the
@@ -267,11 +482,15 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     });
     assert!(matches!(
         &moved,
-        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: crate::app::components::msg::TvHit::SeriesRow(target)
+        })) if target == "movie-second"
     ));
-    if let Some(Msg::Shell(request)) = moved {
-        model.handle_tv_request(request);
-    }
+    model.app.handle_mouse_single_click_tv(
+        0,
+        crate::app::components::msg::TvHit::SeriesRow("movie-second".into()),
+    );
+    model.push_tv_workspace_content();
     model.sync_active_destination();
     let mut initial_wide_terminal = Terminal::new(TestBackend::new(160, 40)).unwrap();
     initial_wide_terminal
@@ -281,8 +500,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
 
     let wide_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("wide TV workspace has a selected series");
+        .selected_tree_show()
+        .expect("wide TV tree has a selected show")
+        .id;
     assert_eq!(wide_target, "movie-second");
 
     // Flip to narrow: the same owner stays mounted and focused, and its
@@ -297,8 +517,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         .unwrap();
     let narrow_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("narrow TV workspace has a selected series");
+        .selected_tree_show()
+        .expect("narrow TV tree has a selected show")
+        .id;
     assert_eq!(
         narrow_target, wide_target,
         "wide→narrow flip must preserve the selected series target"
@@ -312,11 +533,22 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     let Some(Msg::Shell(request)) = up else {
         panic!("narrow Up must emit a typed shell request");
     };
-    model.handle_emby_library_request(request);
+    assert!(matches!(
+        request,
+        ShellRequest::TvHitClick {
+            hit: crate::app::components::msg::TvHit::SeriesRow(ref target)
+        } if target == "movie-focused"
+    ));
+    model.app.handle_mouse_single_click_tv(
+        0,
+        crate::app::components::msg::TvHit::SeriesRow("movie-focused".into()),
+    );
+    model.push_tv_workspace_content();
     let narrow_return_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("narrow TV workspace has a selected series after move");
+        .selected_tree_show()
+        .expect("narrow TV tree has a selected show after move")
+        .id;
     assert_eq!(narrow_return_target, "movie-focused");
 
     // Flip back to wide: the same owner keeps the series selected while
@@ -326,8 +558,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     let final_wide_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("wide TV workspace has a selected series after return");
+        .selected_tree_show()
+        .expect("wide TV tree has a selected show after return")
+        .id;
     assert_eq!(
         final_wide_target, narrow_return_target,
         "narrow→wide flip must preserve the selected series target"

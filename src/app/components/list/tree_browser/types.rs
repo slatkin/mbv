@@ -36,6 +36,22 @@ pub enum TreeMarkPolicy {
     Excluded,
 }
 
+/// Plain destination input for one tree projection. Structural rows are
+/// positioned among root groups and are never tree nodes.
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TreeEntry<Target> {
+    Node(TreeNode<Target>),
+    Heading(String),
+    Spacer,
+}
+
+impl<Target> From<TreeNode<Target>> for TreeEntry<Target> {
+    fn from(node: TreeNode<Target>) -> Self {
+        Self::Node(node)
+    }
+}
+
 /// Plain destination data for one tree row.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeNode<Target> {
@@ -47,6 +63,8 @@ pub struct TreeNode<Target> {
     pub trailing: Option<TreeTrailing>,
     pub semantic_state: MediaSemanticState,
     pub mark_policy: TreeMarkPolicy,
+    /// Whether the destination expects children, including before they load.
+    pub expandable: bool,
 }
 
 impl<Target> TreeNode<Target> {
@@ -67,6 +85,7 @@ impl<Target> TreeNode<Target> {
             trailing: None,
             semantic_state,
             mark_policy,
+            expandable: false,
         }
     }
 
@@ -77,6 +96,11 @@ impl<Target> TreeNode<Target> {
 
     pub fn with_title_role(mut self, title_role: TreeTitleRole) -> Self {
         self.title_role = title_role;
+        self
+    }
+
+    pub fn with_expandable(mut self, expandable: bool) -> Self {
+        self.expandable = expandable;
         self
     }
 }
@@ -122,9 +146,13 @@ pub enum TreeOperation<Target> {
     Last,
     Parent,
     Child,
+    /// Expand the selected node, or activate an already-expanded root.
+    /// Expanded descendants consume Right without collapsing or activating.
+    Right,
     ToggleExpansion,
     /// Toggle one node's persistent expansion without changing selection.
-    /// A childless target is an explicit `Unhandled` result.
+    /// A target with neither loaded children nor declared expandability is
+    /// an explicit `Unhandled` result.
     ToggleExpansionTarget(Target),
     /// Restore a persisted position: select `target`, reveal its ancestor
     /// path, and anchor the viewport at the persisted settled-flow

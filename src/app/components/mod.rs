@@ -35,6 +35,7 @@ pub mod settings;
 pub mod status_bar_panel;
 pub mod tab_panel;
 pub mod tv_content;
+pub(crate) mod tv_tree_target;
 pub mod user_event;
 
 pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};

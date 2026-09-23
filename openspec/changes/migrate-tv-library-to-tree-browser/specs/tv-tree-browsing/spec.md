@@ -24,6 +24,8 @@ When browsing shows in `All` or a letter-range mode, the TV library SHALL displa
 - **THEN** they label their following shows but cannot be selected or activated
 - **AND** a non-selectable spacer still separates consecutive groups
 
+Show rows SHALL present this hierarchy through the shared tree visual contract: show, season, and episode titles take the depth-based cream, yellow, and aqua fallback roles, a played row uses the existing muted/played palette role above those depth colours, headings sit on the depth-zero baseline, headings and spacers paint unstriped, and stripes reset at each heading while holding stable across scroll and clip.
+
 #### Scenario: Preserve the selected row on refresh and resize
 - **WHEN** the TV list refreshes or changes between panel geometries and its selected row still exists
 - **THEN** the same show, season, or episode remains selected and the viewport keeps it visible
@@ -40,7 +42,7 @@ The TV Hero SHALL continue to show the selected show's detail, including its exi
 - **THEN** the Hero continues to show its containing show's detail rather than an episode Hero
 
 ### Requirement: Tree rows retain TV browse actions
-Show activation SHALL retain the TV show-detail interaction, season activation SHALL expand or collapse that season, and episode activation SHALL play that episode. Context and playback actions SHALL resolve the selected row's stable TV identity to the corresponding item, not to a stale numeric index or to the Hero Workspace's separate episode cursor. A heading SHALL emit no action.
+Show activation SHALL retain the TV show-detail interaction, season activation SHALL expand or collapse that season, and episode activation SHALL play that episode. `Right` follows the shared TreeBrowser operation: on an expanded show root it activates the show detail, on an expanded season or episode row it is a no-op, and on an unexpanded expandable row it expands it. Context and playback actions SHALL resolve the selected row's stable TV identity to the corresponding item, not to a stale numeric index or to the Hero Workspace's separate episode cursor. A heading SHALL emit no action.
 
 #### Scenario: Activate an episode inline
 - **WHEN** the user activates an expanded episode row

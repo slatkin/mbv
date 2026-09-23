@@ -70,10 +70,13 @@ impl TvContent {
         }
     }
 
-    /// The series list's row-local input. Wide and Narrow share the one
-    /// carrier, so the resolved target and the emitted `TvHit` are the same
-    /// at both breakpoints; the shell's `TvHit*` arms do the rest.
+    /// The series list's row-local input. Flat episode modes retain their
+    /// carrier path; show modes resolve against the tree's latest painted
+    /// geometry and keep selection in that one owner.
     fn series_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        if !self.flat_episode_mode() {
+            return self.show_tree_list_event(input);
+        }
         match input {
             MediaListSurfaceInput::Wheel { at, delta } => {
                 // The series rail is the only scrollable TV surface. Its
@@ -286,8 +289,151 @@ impl TvContent {
         }
     }
 
-    /// Resolve a click in the Browser pane's list slot to the series row it
-    /// landed on from the carrier's own retained frame geometry.
+    fn show_tree_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        match input {
+            MediaListSurfaceInput::Wheel { at, delta } => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                self.browser.apply(TreeOperation::Move(delta));
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            MediaListSurfaceInput::Click(at)
+            | MediaListSurfaceInput::ToggleClick(at)
+            | MediaListSurfaceInput::RangeClick(at) => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                let target = self.browser.resolve_current_point(at).cloned()?;
+                let show = self.show_item_for_tree_target(&target);
+                self.browser
+                    .apply(TreeOperation::Select(target.clone()));
+                match target {
+                    TvTreeTarget::Show(_) => show.map(|item| {
+                        Msg::Shell(ShellRequest::TvHitClick {
+                            hit: TvHit::SeriesRow(item.id),
+                        })
+                    }),
+                    TvTreeTarget::Season { .. } | TvTreeTarget::Episode { .. } => self
+                        .show_for_tree_target(&target)
+                        .map(|item| Msg::Shell(ShellRequest::TvHitClick {
+                            hit: TvHit::SeriesRow(item.id),
+                        }))
+                }
+            }
+            MediaListSurfaceInput::DoubleClick(at) => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                let target = self.browser.resolve_current_point(at)?.clone();
+                self.browser.apply(TreeOperation::Select(target.clone()));
+                match target {
+                    TvTreeTarget::Show(_) => self.show_item_for_tree_target(&target).map(|item| {
+                        Msg::Shell(ShellRequest::TvHitDoubleClick {
+                            hit: TvHit::SeriesRow(item.id),
+                        })
+                    }),
+                    TvTreeTarget::Season { .. } => self.toggle_tree_expansion(target),
+                    TvTreeTarget::Episode { .. } => self
+                        .show_item_for_tree_target(&target)
+                        .map(|episode| Msg::Shell(ShellRequest::TvEpisodeActivate { episode })),
+                }
+            }
+            MediaListSurfaceInput::ContextClick(at) => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                let target = self.browser.resolve_current_point(at)?.clone();
+                let item = self.show_item_for_tree_target(&target)?;
+                self.browser.apply(TreeOperation::Select(target));
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                    Some((at.x, at.y)),
+                )))
+            }
+            _ => None,
+        }
+    }
+
+    fn show_target_str(target: &TvTreeTarget) -> &str {
+        match target {
+            TvTreeTarget::Show(show) | TvTreeTarget::Season { show, .. }
+            | TvTreeTarget::Episode { show, .. } => show,
+        }
+    }
+
+    fn show_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
+        let show_target = Self::show_target_str(target).to_string();
+        self.show_item_for_tree_target(&TvTreeTarget::Show(show_target))
+    }
+
+    pub(in crate::app) fn selected_tree_show(&self) -> Option<EmbyItem> {
+        if self.flat_episode_mode() || self.inline_search.is_active() {
+            return None;
+        }
+        self.browser
+            .selected_target()
+            .and_then(|target| self.show_for_tree_target(target))
+    }
+
+    pub(super) fn tree_selection_request(&self, target: &TvTreeTarget) -> Option<Msg> {
+        let show = self.show_for_tree_target(target)?;
+        let already_selected = self
+            .context
+            .selected_series
+            .as_ref()
+            .is_some_and(|selected| selected.id == show.id && selected.name == show.name);
+        (!already_selected).then_some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(show.id),
+        }))
+    }
+
+    fn show_item_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
+        let show_target = Self::show_target_str(target);
+        let show = TvContent::resolve_show_target(&self.context.list.items, show_target)?.clone();
+        match target {
+            TvTreeTarget::Show(_) => Some(show),
+            TvTreeTarget::Season {
+                season,
+                occurrence,
+                ..
+            } => self
+                .detail_for_show(&show)?
+                .seasons
+                .iter()
+                .filter(|item| item.id == *season)
+                .nth(*occurrence)
+                .cloned(),
+            TvTreeTarget::Episode {
+                season,
+                season_occurrence,
+                episode,
+                occurrence,
+                ..
+            } => {
+                let detail = self.detail_for_show(&show)?;
+                detail
+                    .seasons
+                    .iter()
+                    .filter(|item| item.id == *season)
+                    .nth(*season_occurrence)?;
+                detail.episodes.get(season)?.iter()
+                    .filter(|item| {
+                        let id = if item.id.is_empty() {
+                            upcoming_episode_target(item)
+                        } else {
+                            item.id.clone()
+                        };
+                        id == *episode && (item.series_id.is_empty() || item.series_id == show.id)
+                    })
+                    .nth(*occurrence)
+                    .cloned()
+            }
+        }
+    }
+
+    /// Resolve a click in the flat Browser list slot to the row it landed on
+    /// from the carrier's own retained frame geometry.
     fn resolve_series_hit(&mut self, at: Position) -> Option<TvHit> {
         let target = self.carrier.resolve_current_point(at).cloned()?;
         Some(if self.flat_episode_mode() {

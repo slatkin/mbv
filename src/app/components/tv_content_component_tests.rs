@@ -9,6 +9,7 @@ use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::media_list::MediaSemanticState;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::tv_content::TvContent;
+use super::tv_tree_target::TvTreeTarget;
 use crate::app::components::LibraryKind;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
@@ -212,6 +213,34 @@ fn tv_latest_mode_projects_feed_episodes_without_series_workspace() {
 }
 
 #[test]
+fn tv_latest_and_upcoming_enter_play_the_selected_episode_directly() {
+    for (mode, id) in [
+        (TvContentMode::Latest, "latest-episode"),
+        (TvContentMode::Upcoming, "upcoming-episode"),
+    ] {
+        let mut episode = make_item("Episode", "Episode");
+        episode.id = id.into();
+        let mut list = LibraryListRenderCtx::from_items(vec![episode], 0);
+        list.library_total = Some(301);
+        let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+        context.set_tv_content_mode(Some(mode));
+        let mut owner = TvContent::new();
+        owner.set_content(context);
+
+        let activation = owner.test_key(&KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert!(matches!(
+            activation,
+            Some(Msg::Shell(ShellRequest::TvEpisodeActivate { episode })) if episode.id == id
+        ));
+        assert!(owner.selected_series_snapshot().is_none());
+        assert!(owner.content().hero.is_none());
+    }
+}
+
+#[test]
 fn tv_flat_episode_click_moves_the_browser_carrier_without_entering_workspace() {
     let mut first = make_item("Episode A", "Episode");
     first.id = "episode-a".into();
@@ -273,6 +302,9 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
         })) if target == "id"
     ));
 
+    // Selection invalidates the tree's retained hit geometry; the next input
+    // must resolve against a newly painted frame.
+    paint(&mut panel, 100, 20);
     let right = panel.on(&mouse(MouseEventKind::Down(MouseButton::Right), col, row));
     assert!(matches!(
         right,
@@ -286,7 +318,7 @@ fn tv_keyboard_context_menu_uses_all_selected_rows_and_single_row_without_select
     first.id = "series-a".into();
     let mut second = make_item("Series B", "Series");
     second.id = "series-b".into();
-    let content = TvWideRenderCtx::new(
+    let mut content = TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![first, second], 0),
         None,
         None,
@@ -294,6 +326,7 @@ fn tv_keyboard_context_menu_uses_all_selected_rows_and_single_row_without_select
         None,
         false,
     );
+    content.set_tv_content_mode(Some(TvContentMode::Latest));
 
     let mut selected = TvContent::new();
     selected.set_content(content.clone());
@@ -372,7 +405,12 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
             hit: TvHit::SeriesRow(ref target),
         })) if target == "series-b"
     ));
-    assert_eq!(tv(&panel).selected_item_id(), Some("series-b".into()));
+    assert_eq!(
+        tv(&panel).selected_tree_target(),
+        Some(&crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:8:series-b".into()
+        ))
+    );
 
     let blank = panel.on(&mouse(
         MouseEventKind::Down(MouseButton::Left),
@@ -381,12 +419,19 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
     ));
     assert!(blank.is_none());
 
+    // The click changed tree selection and invalidated the prior hit frame.
+    paint(&mut panel, 100, 20);
     let wheel = panel.on(&mouse(MouseEventKind::ScrollDown, col, row));
     assert!(matches!(
         wheel,
         Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
     ));
-    assert_eq!(tv(&panel).selected_item_id(), Some("series-b".into()));
+    assert_eq!(
+        tv(&panel).selected_tree_target(),
+        Some(&crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:8:series-b".into()
+        ))
+    );
 }
 
 #[test]
@@ -459,9 +504,18 @@ fn tv_right_does_not_move_focus_between_panes() {
         code,
         modifiers: KeyModifiers::NONE,
     };
-    assert_eq!(owner.on_key(&key(Key::Right)), None);
-    assert_eq!(owner.on_key(&key(Key::Left)), None);
-    // Enter still resolves the Series-pane arm — the pane never moved.
+    assert!(matches!(
+        owner.on_key(&key(Key::Right)),
+        Some(Msg::Shell(ShellRequest::TvTreeExpand {
+            target: TvTreeTarget::Show(_)
+        }))
+    ));
+    assert!(matches!(
+        owner.on_key(&key(Key::Left)),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    ));
+    // Right expands the selected tree branch, not the Episodes pane; Enter
+    // still activates the selected show.
     assert!(matches!(
         owner.on_key(&key(Key::Enter)),
         Some(Msg::Shell(ShellRequest::TvActivate { .. }))
@@ -790,6 +844,167 @@ fn tv_launch_snapshot_reports_absence_without_letter_pills_or_series() {
 }
 
 #[test]
+fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
+    for is_wide in [true, false] {
+        let mut show = make_item("Series A", "Series");
+        show.id = "series-a".into();
+        let mut season = make_item("Season 1", "Season");
+        season.id = "season-1".into();
+        let mut episode = make_item("Episode 1", "Episode");
+        episode.id = "episode-1".into();
+        let detail = crate::app::SeriesDetail {
+            seasons: vec![season.clone()],
+            episodes: [(season.id.clone(), vec![episode.clone()])]
+                .into_iter()
+                .collect(),
+        };
+        let mut owner = TvContent::new();
+        owner.set_is_wide(is_wide);
+        owner.set_content(TvWideRenderCtx::new(
+            LibraryListRenderCtx::from_items(vec![show.clone()], 0),
+            Some(show.clone()),
+            Some(detail),
+            0,
+            None,
+            false,
+        ));
+        let show_target = owner.selected_tree_target().cloned().unwrap();
+        assert!(owner.on_key(&key(Key::Char('p'))).is_none());
+        assert!(matches!(
+            owner.on_key(&key(Key::Right)),
+            Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == show_target
+        ));
+        assert!(matches!(
+            owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
+            Some(Msg::Shell(ShellRequest::EmbyLibraryPlay { item })) if item.id == show.id
+        ));
+        assert!(matches!(
+            owner.on_key(&key(Key::Char('.'))),
+            Some(Msg::Shell(ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Emby(items), None
+            ))) if items.len() == 1 && items[0].id == show.id
+        ));
+        assert!(matches!(
+            owner.on_key(&key(Key::Down)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        let season_target = owner.selected_tree_target().cloned().unwrap();
+        assert!(matches!(season_target, TvTreeTarget::Season { .. }));
+        assert!(matches!(
+            owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
+            Some(Msg::Shell(ShellRequest::EmbyLibraryPlay { item })) if item.id == season.id
+        ));
+        assert!(matches!(
+            owner.on_key(&key(Key::Char('.'))),
+            Some(Msg::Shell(ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Emby(items), None
+            ))) if items.len() == 1 && items[0].id == season.id
+        ));
+        assert!(matches!(
+            owner.on_key(&key(Key::Enter)),
+            Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == season_target
+        ));
+        assert!(matches!(
+            owner.on_key(&key(Key::Down)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        assert!(matches!(
+            owner.selected_tree_target(),
+            Some(TvTreeTarget::Episode { .. })
+        ));
+        assert!(matches!(
+            owner.on_key(&key(Key::Enter)),
+            Some(Msg::Shell(ShellRequest::TvEpisodeActivate { episode: selected })) if selected.id == episode.id
+        ));
+        assert!(matches!(
+            owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
+            Some(Msg::Shell(ShellRequest::EmbyLibraryPlay { item })) if item.id == episode.id
+        ));
+        assert!(matches!(
+            owner.on_key(&key(Key::Char('.'))),
+            Some(Msg::Shell(ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Emby(items), None
+            ))) if items.len() == 1 && items[0].id == episode.id
+        ));
+        owner.on_key(&key(Key::Home));
+        assert!(matches!(
+            owner.on_key(&key(Key::Enter)),
+            Some(Msg::Shell(ShellRequest::TvActivate { item })) if item.id == show.id
+        ));
+    }
+}
+
+#[test]
+fn tv_show_mode_escape_and_backspace_return_to_tv_back_in_both_geometries() {
+    let mut show = make_item("Series A", "Series");
+    show.id = "series-a".into();
+    let mut context = TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![show], 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+    );
+    context.set_tv_content_mode(Some(TvContentMode::Range(0)));
+
+    for is_wide in [false, true] {
+        for code in [Key::Esc, Key::Backspace] {
+            let mut owner = TvContent::new();
+            owner.set_is_wide(is_wide);
+            owner.set_content(context.clone());
+
+            assert!(matches!(
+                owner.on_key(&key(code)),
+                Some(Msg::Shell(ShellRequest::TvBack))
+            ));
+        }
+    }
+}
+
+#[test]
+fn tv_tree_does_not_enter_the_flat_visual_mode_or_act_on_headings() {
+    let mut first = make_item("Alpha", "Series");
+    first.id = "alpha".into();
+    let mut second = make_item("Zulu", "Series");
+    second.id = "zulu".into();
+    let mut owner = TvContent::new();
+    let list = LibraryListRenderCtx::from_items(vec![first, second], 0);
+    let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+    context.set_tv_content_mode(Some(TvContentMode::Range(0)));
+    owner.set_is_wide(false);
+    owner.set_content(context.clone());
+    let selected_before_visual = owner.selected_tree_target().cloned();
+    assert!(owner
+        .on_key(&KeyEvent {
+            code: Key::Char('V'),
+            modifiers: KeyModifiers::SHIFT,
+        })
+        .is_none());
+    assert_eq!(
+        owner.selected_tree_target(),
+        selected_before_visual.as_ref()
+    );
+
+    owner.set_is_wide(true);
+    let mut panel = panel_with(owner, true);
+    paint(&mut panel, 100, 20);
+    let list_area = panel.test_wide_geometry().unwrap().list_area;
+    assert!(panel
+        .on(&mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            list_area.x,
+            list_area.y
+        ))
+        .is_none());
+    let before = tv(&panel).selection_summary();
+    let visual = panel.on(&Event::Keyboard(key(Key::Char('V'))));
+    assert!(visual.is_none());
+    assert_eq!(tv(&panel).selection_summary(), before);
+    assert!(tv(&panel).selected_tree_target().is_some());
+}
+
+#[test]
 fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     let mut items = vec![
         make_item("Zulu", "Series"),
@@ -817,14 +1032,10 @@ fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     paint(&mut panel, 100, 20);
     let owner = tv(&panel);
     assert_eq!(
-        owner.selected_item().map(|item| item.display_name()),
-        Some("Alpha".to_string()),
+        owner.selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:11:tv-series-1".into())),
         "first mount must resolve the stable target in natural-sort order"
     );
-    // First mount seeds the stable target at the shell's item cursor
-    // (`items[1]` = Alpha, the first sorted row), not the shell's numeric
-    // index as the removed cursor mirror did (design.md D4/D5).
-    assert_eq!(owner.cursor(), 0);
 
     let message = tv_mut(&mut panel).on_key(&KeyEvent {
         code: Key::Down,
@@ -832,9 +1043,19 @@ fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     });
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(ref id)
+        })) if id == "tv-series-2"
     ));
-    assert_eq!(tv(&panel).cursor(), 1);
+    assert_eq!(
+        tv(&panel).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:11:tv-series-2".into()))
+    );
+    assert_eq!(
+        tv(&panel).cursor(),
+        0,
+        "tree movement leaves the Workspace carrier cursor alone"
+    );
 }
 
 #[path = "tv_content_component_tests_search.rs"]

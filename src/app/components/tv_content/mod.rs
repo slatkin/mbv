@@ -19,11 +19,13 @@ use super::library_panel::{
     hero_content_emby, HeroContent, HeroContentData, HeroImageState, LibraryContentOwner,
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
+use super::list::tree_browser::{TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
     MediaListTrailing, MediaSemanticState, RowIntent, ViewportAnchor,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
+use super::tv_tree_target::TvTreeTarget;
 use crate::app::render::{
     effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
 };
@@ -49,6 +51,9 @@ pub(in crate::app) struct TvContent {
     /// presentation at every breakpoint; geometry changes clamp its viewport
     /// in place without transferring state to another presentation.
     carrier: MediaListCarrier<String>,
+    /// Retained TV hierarchy projection for show modes. Flat episode modes
+    /// and Inline Search continue to use `carrier`/their own result list.
+    browser: TreeBrowser<TvTreeTarget>,
     season_cursor: usize,
     /// Embedded canonical control for the recessed episode media-list box
     /// (task 4.2d): owns cursor/scroll/hit-resolution for the current
@@ -242,6 +247,7 @@ impl TvContent {
         Self {
             context,
             carrier: MediaListCarrier::new(),
+            browser: TreeBrowser::new(),
             season_cursor: 0,
             episodes: MediaListCarrier::new(),
             pane: Pane::Series,
@@ -289,6 +295,230 @@ impl TvContent {
     pub(in crate::app) fn test_set_letter_filter(&mut self, index: usize) {
         self.context.list.letter_filter =
             LetterFilter::for_index_for_kind(index, LetterFilterKind::Tv);
+    }
+
+    /// Project the settled show-mode catalog into the shared tree vocabulary.
+    /// Only the selected show's detail snapshot is available at this boundary;
+    /// task 2.2 wires in additional shell-owned loaded details.
+    fn stable_show_target(show: &EmbyItem, duplicate_id: bool, occurrence: usize) -> String {
+        let base = if show.id.is_empty() {
+            format!("tv-name:{}:{}", show.name.len(), show.name)
+        } else if duplicate_id {
+            format!(
+                "tv-id:{}:{}:{}:{}",
+                show.id.len(),
+                show.id,
+                show.name.len(),
+                show.name
+            )
+        } else {
+            format!("tv-id:{}:{}", show.id.len(), show.id)
+        };
+        if occurrence == 0 {
+            base
+        } else {
+            format!("{base}:{occurrence}")
+        }
+    }
+
+    /// Sorted natural-order shows paired with their stable tree target,
+    /// disambiguating duplicate Emby ids the same way `stable_show_target`
+    /// does. The single source of the show-id-collision resolution that
+    /// every show-target lookup (projection, expansion, selection) shares.
+    fn show_targets(items: &[EmbyItem]) -> Vec<(String, &EmbyItem)> {
+        let mut shows: Vec<&EmbyItem> = items.iter().collect();
+        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+        let mut id_counts = std::collections::HashMap::new();
+        for show in &shows {
+            *id_counts.entry(show.id.as_str()).or_insert(0usize) += 1;
+        }
+        let mut occurrences = std::collections::HashMap::new();
+        shows
+            .into_iter()
+            .map(|show| {
+                let duplicate_id = id_counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
+                let base = Self::stable_show_target(show, duplicate_id, 0);
+                let occurrence = occurrences.entry(base).or_insert(0usize);
+                let target = Self::stable_show_target(show, duplicate_id, *occurrence);
+                *occurrence += 1;
+                (target, show)
+            })
+            .collect()
+    }
+
+    /// The show matching a stable tree target string, resolved through the
+    /// same collision-disambiguated ordering [`Self::show_targets`] builds.
+    fn resolve_show_target<'a>(items: &'a [EmbyItem], show_target: &str) -> Option<&'a EmbyItem> {
+        Self::show_targets(items)
+            .into_iter()
+            .find(|(target, _)| target == show_target)
+            .map(|(_, show)| show)
+    }
+
+    /// The loaded detail to project beneath `show`: the shell's per-show map
+    /// entry when present, else the selected show's detail for contexts built
+    /// without the map (existing unit tests).
+    fn detail_for_projection<'a>(
+        context: &'a TvWideRenderCtx,
+        show: &EmbyItem,
+    ) -> Option<&'a crate::app::SeriesDetail> {
+        context.series_details.get(&show.id).or_else(|| {
+            context
+                .selected_series
+                .as_ref()
+                .filter(|selected| selected.id == show.id && selected.name == show.name)
+                .and(context.series_detail.as_ref())
+        })
+    }
+
+    /// The loaded detail holding `show`'s seasons/episodes for target
+    /// resolution: the shell's per-show map entry when present, else the
+    /// pushed selected detail (existing single-detail contexts).
+    fn detail_for_show(&self, show: &EmbyItem) -> Option<&crate::app::SeriesDetail> {
+        self.context
+            .series_details
+            .get(&show.id)
+            .or(self.context.series_detail.as_ref())
+    }
+
+    /// Project the settled show-mode catalog into the shared tree vocabulary.
+    /// Loaded details for every listed show project per show, so an expanded
+    /// show keeps its children while another show is selected. Contexts built
+    /// without the shell's detail map fall back to the selected show's detail.
+    fn tree_projection(context: &TvWideRenderCtx) -> Vec<TreeEntry<TvTreeTarget>> {
+        let grouped = context.show_letter_pills
+            || context.list.has_letter_filter()
+            || context.list.true_total() >= 50;
+        let bucket_total = if context.list.has_letter_filter() {
+            usize::MAX
+        } else {
+            context.list.true_total()
+        };
+        let shows = Self::show_targets(&context.list.items);
+        let mut entries = Vec::with_capacity(shows.len() + 8);
+        let mut previous_bucket: Option<String> = None;
+        for (show_id, show) in shows {
+            let target = TvTreeTarget::Show(show_id.clone());
+            if grouped {
+                let bucket = letter_bucket(show, bucket_total);
+                if previous_bucket.as_deref() != Some(bucket.as_str()) {
+                    if previous_bucket.is_some() {
+                        entries.push(TreeEntry::Spacer);
+                    }
+                    entries.push(TreeEntry::Heading(bucket.clone()));
+                    previous_bucket = Some(bucket);
+                }
+            }
+            let root_index = entries.len();
+            entries.push(TreeEntry::Node(
+                TreeNode::new(
+                    target.clone(),
+                    None,
+                    show.display_name(),
+                    effective_sort_str(show),
+                    MediaSemanticState::from_emby(show),
+                    TreeMarkPolicy::Direct,
+                )
+                .with_expandable(true),
+            ));
+
+            let Some(detail) = Self::detail_for_projection(context, show) else {
+                continue;
+            };
+            // An empty completed detail has no pending children to load.
+            if let TreeEntry::Node(root) = &mut entries[root_index] {
+                root.expandable = !detail.seasons.is_empty();
+            }
+            let mut season_occurrences = std::collections::HashMap::new();
+            for season in &detail.seasons {
+                let occurrence = season_occurrences
+                    .entry(season.id.clone())
+                    .or_insert(0usize);
+                let season_occurrence = *occurrence;
+                let season_target = TvTreeTarget::Season {
+                    show: show_id.clone(),
+                    season: season.id.clone(),
+                    occurrence: season_occurrence,
+                };
+                *occurrence += 1;
+                let episodes = detail.episodes.get(&season.id);
+                entries.push(TreeEntry::Node(
+                    TreeNode::new(
+                        season_target.clone(),
+                        Some(target.clone()),
+                        season.display_name(),
+                        season.name.clone(),
+                        MediaSemanticState::from_emby(season),
+                        TreeMarkPolicy::Direct,
+                    )
+                    .with_expandable(episodes.is_none_or(|episodes| !episodes.is_empty())),
+                ));
+                if let Some(episodes) = episodes {
+                    let mut episode_occurrences = std::collections::HashMap::new();
+                    for (index, episode) in episodes.iter().enumerate() {
+                        let episode_id = if episode.id.is_empty() {
+                            upcoming_episode_target(episode)
+                        } else {
+                            episode.id.clone()
+                        };
+                        let episode_occurrence = episode_occurrences
+                            .entry(episode_id.clone())
+                            .or_insert(0usize);
+                        let number = if episode.index_number > 0 {
+                            episode.index_number
+                        } else {
+                            index as i64 + 1
+                        };
+                        let episode_target = TvTreeTarget::Episode {
+                            show: show_id.clone(),
+                            season: season.id.clone(),
+                            season_occurrence,
+                            episode: episode_id,
+                            occurrence: *episode_occurrence,
+                        };
+                        *episode_occurrence += 1;
+                        entries.push(TreeEntry::Node(TreeNode::new(
+                            episode_target,
+                            Some(season_target.clone()),
+                            format!("{number}. {}", episode.name),
+                            episode.name.clone(),
+                            MediaSemanticState::from_emby(episode),
+                            TreeMarkPolicy::Direct,
+                        )));
+                    }
+                }
+            }
+        }
+        entries
+    }
+
+    pub(crate) fn tree_expansion_source(
+        &self,
+        target: &TvTreeTarget,
+    ) -> Option<(String, Option<String>)> {
+        let (show_target, season_id) = match target {
+            TvTreeTarget::Show(show) => (show, None),
+            TvTreeTarget::Season { show, season, .. } => (show, Some(season.clone())),
+            TvTreeTarget::Episode { .. } => return None,
+        };
+        self.browser.node(target)?;
+        let show = Self::resolve_show_target(&self.context.list.items, show_target)?;
+        (!show.id.is_empty()).then(|| (show.id.clone(), season_id))
+    }
+
+    // Kept as a typed boundary seam until task 3.1 connects mounted tree input.
+    #[allow(dead_code)]
+    pub(crate) fn toggle_tree_expansion(&mut self, target: TvTreeTarget) -> Option<Msg> {
+        let was_expanded = self.browser.is_expanded(&target);
+        let transition = self
+            .browser
+            .apply(TreeOperation::ToggleExpansionTarget(target.clone()));
+        if was_expanded
+            || transition.disposition == super::list::tree_browser::TreeConsumed::Unhandled
+        {
+            return None;
+        }
+        Some(Msg::Shell(ShellRequest::TvTreeExpand { target }))
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
@@ -355,6 +585,16 @@ impl TvContent {
                 })
                 .collect::<Vec<_>>()
         };
+        // Keep the show hierarchy settled beside (not instead of) the flat
+        // Library Panel slot. Flat episode modes and Inline Search must not
+        // disturb the retained tree's selection or expansion.
+        if !episode_mode && !self.inline_search.is_active() {
+            let projection = Self::tree_projection(&context);
+            // Reconciliation is atomic; if malformed service data still
+            // produces a collision, keep the last valid tree instead of
+            // taking down the TUI during refresh.
+            let _ = self.browser.reconcile(projection);
+        }
         // The canonical cursor is in the rendered (natural-sort) order. Seed
         // the local list from that stable target on first mount; thereafter
         // preserve the stable target already owned by the component.
@@ -365,11 +605,13 @@ impl TvContent {
             self.carrier.set_content(rows.clone());
             self.last_series_rows = Some(rows);
         }
+        let mut seed_series_id = None;
         if !self.initialized {
             // First mount seeds from the shell's stable target, not its
             // numeric display cursor (design.md D4/D5).
             if let Some(item) = context.list.items.get(context.list.cursor()) {
                 self.carrier.select_target(&item.id);
+                seed_series_id = Some(item.id.clone());
             }
         } else if let Some(target) = restore_target {
             self.carrier.select_target(&target);
@@ -398,6 +640,14 @@ impl TvContent {
         let focused = self.context.focused;
         self.context = context;
         self.context.focused = focused;
+        // First mount seeds the tree from the same shell stable target the
+        // carrier seeds from: `reconcile_selection` otherwise defaults the
+        // tree onto root 0 and the next push resolves (and fetches) that
+        // show instead. Flat episode modes and Inline Search reconcile no
+        // tree, so there the select finds no matching root and no-ops.
+        if let Some(target) = seed_series_id {
+            self.select_series_target(&target);
+        }
         let season_count = self
             .context
             .series_detail
@@ -561,8 +811,10 @@ impl TvContent {
         });
         let list = if searching {
             ListSlot::Search(&mut self.inline_search)
-        } else {
+        } else if flat_episode_mode {
             ListSlot::Media(&mut self.carrier)
+        } else {
+            ListSlot::Media(&mut self.browser)
         };
         LibraryPanelContent {
             selector,
@@ -619,6 +871,11 @@ impl TvContent {
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
     }
+    #[cfg(test)]
+    pub(crate) fn selected_tree_target(&self) -> Option<&TvTreeTarget> {
+        self.browser.selected_target()
+    }
+
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         let target = self.carrier.selected_target()?;
@@ -634,6 +891,22 @@ impl TvContent {
     /// stable target; the next content push preserves it.
     pub(in crate::app) fn select_series_target(&mut self, target: &str) {
         self.carrier.select_target(&target.to_string());
+
+        let mut target_by_id = std::collections::HashMap::new();
+        for (show_target, show) in Self::show_targets(&self.context.list.items) {
+            target_by_id.entry(show.id.as_str()).or_insert(show_target);
+        }
+        if let Some(tree_target) = self.browser.roots().into_iter().find_map(|tree_target| {
+            let TvTreeTarget::Show(show_target) = tree_target else {
+                return None;
+            };
+            (target_by_id
+                .get(target)
+                .is_some_and(|candidate| candidate.as_str() == show_target.as_str()))
+            .then_some(TvTreeTarget::Show(show_target.clone()))
+        }) {
+            self.browser.apply(TreeOperation::Select(tree_target));
+        }
     }
     /// Enter episode selection (the wide second-Enter move; the same
     /// "workspace is active" state the Hero overlay's focused Workspace
@@ -773,6 +1046,11 @@ impl LibraryContentOwner for TvContent {
 
     fn hero_overlay_target_available(&mut self) -> bool {
         !self.flat_episode_mode() && self.selected_item().is_some()
+    }
+
+    fn hero_overlay_enter_available(&mut self) -> bool {
+        !self.flat_episode_mode()
+            && matches!(self.browser.selected_target(), Some(TvTreeTarget::Show(_)))
     }
 
     fn mini_view_hero_available(&mut self) -> bool {

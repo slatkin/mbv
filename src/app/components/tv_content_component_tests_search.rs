@@ -31,7 +31,9 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
     };
     assert!(matches!(
         owner.on_key(&key(Key::Down)),
-        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(ref id)
+        })) if id == "series-b"
     ));
     assert!(matches!(
         owner.on_key(&key(Key::Char('['))),

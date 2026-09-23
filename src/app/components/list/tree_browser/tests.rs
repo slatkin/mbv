@@ -1,4 +1,6 @@
-use super::{TreeBrowser, TreeMarkPolicy, TreeNode, TreeReconciliationError};
+use super::{
+    TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation, TreeReconciliationError,
+};
 use crate::app::components::media_list::MediaSemanticState;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -13,6 +15,7 @@ enum Target {
     Branch,
     Leaf,
     Other,
+    Missing,
 }
 
 fn node(target: Target, parent: Option<Target>) -> TreeNode<Target> {
@@ -38,6 +41,37 @@ fn paint(browser: &mut TreeBrowser<Target>) {
 #[test]
 fn generic_tree_browser_implements_tuirealm_component() {
     component_bound::<TreeBrowser<Target>>();
+}
+
+#[test]
+fn right_expands_nodes_then_activates_only_an_expanded_root() {
+    let mut browser = TreeBrowser::new();
+    let root = node(Target::Root, None).with_expandable(true);
+    browser
+        .reconcile([
+            root,
+            node(Target::Branch, Some(Target::Root)).with_expandable(true),
+            node(Target::Leaf, Some(Target::Branch)),
+        ])
+        .unwrap();
+
+    let collapsed_root = browser.apply(TreeOperation::Right);
+    assert_eq!(collapsed_root.external_intent, None);
+    assert!(browser.is_expanded(&Target::Root));
+
+    let expanded_root = browser.apply(TreeOperation::Right);
+    assert_eq!(
+        expanded_root.external_intent,
+        Some(super::TreeExternalIntent::Activate(Target::Root))
+    );
+    assert!(browser.is_expanded(&Target::Root));
+
+    browser.apply(TreeOperation::Select(Target::Branch));
+    browser.apply(TreeOperation::Right);
+    assert!(browser.is_expanded(&Target::Branch));
+    let expanded_branch = browser.apply(TreeOperation::Right);
+    assert_eq!(expanded_branch.external_intent, None);
+    assert!(browser.is_expanded(&Target::Branch));
 }
 
 #[test]
@@ -130,6 +164,29 @@ fn changed_projection_bumps_revision_and_invalidates_retained_geometry() {
     assert_eq!(browser.resolve_current_point(Position::new(2, 0)), None);
 }
 
+#[test]
+fn changing_heading_content_invalidates_retained_geometry() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            TreeEntry::Heading("Old heading".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+        ])
+        .unwrap();
+    paint(&mut browser);
+    let revision = browser.model_revision();
+
+    browser
+        .reconcile([
+            TreeEntry::Heading("New heading".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+        ])
+        .unwrap();
+
+    assert_eq!(browser.model_revision(), revision + 1);
+    assert!(!browser.has_completed_paint());
+}
+
 #[rstest]
 #[case::duplicate(
     vec![node(Target::Root, None), node(Target::Root, None)],
@@ -152,7 +209,12 @@ fn invalid_projection_returns_typed_error_without_mutating_owner(
     #[case] expected: TreeReconciliationError<Target>,
 ) {
     let mut browser = TreeBrowser::new();
-    browser.reconcile([node(Target::Root, None)]).unwrap();
+    browser
+        .reconcile([
+            TreeEntry::Heading("Retained group".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+        ])
+        .unwrap();
     browser.expanded.insert(Target::Root);
     browser.marks.add(Target::Root);
     browser.viewport_offset = 7;
@@ -167,7 +229,7 @@ fn invalid_projection_returns_typed_error_without_mutating_owner(
     let marks = browser.marks.clone();
     let viewport_offset = browser.viewport_offset;
     assert_eq!(
-        browser.resolve_current_point(Position::new(2, 0)),
+        browser.resolve_current_point(Position::new(2, 1)),
         Some(&Target::Root)
     );
 
@@ -183,9 +245,212 @@ fn invalid_projection_returns_typed_error_without_mutating_owner(
         roots
     );
     assert_eq!(
-        browser.resolve_current_point(Position::new(2, 0)),
+        browser.resolve_current_point(Position::new(2, 1)),
         Some(&Target::Root)
     );
+}
+
+#[test]
+fn structural_rows_share_the_flow_but_are_never_selectable_or_actionable() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            TreeEntry::Heading("First group".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Spacer,
+            TreeEntry::Heading("Second group".into()),
+            TreeEntry::Node(node(Target::Branch, None)),
+            TreeEntry::Node(node(Target::Other, None)),
+        ])
+        .unwrap();
+    browser.set_geometry(Rect::new(0, 0, 18, 2), Rect::new(0, 0, 18, 2));
+
+    assert_eq!(browser.visible_len(), 6);
+    assert_eq!(
+        browser.visible_targets(),
+        vec![Target::Root, Target::Branch, Target::Other]
+    );
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    paint(&mut browser);
+    assert_eq!(browser.resolve_current_point(Position::new(2, 0)), None);
+    assert_eq!(
+        browser
+            .apply(TreeOperation::PointerSelect(Position::new(2, 0)))
+            .disposition,
+        super::TreeConsumed::Unhandled
+    );
+    assert_eq!(
+        browser
+            .apply(TreeOperation::PointerToggleMark(Position::new(2, 0)))
+            .disposition,
+        super::TreeConsumed::Unhandled
+    );
+
+    browser.apply(TreeOperation::Move(1));
+    assert_eq!(browser.selected_target(), Some(&Target::Branch));
+    browser.apply(TreeOperation::Page(1));
+    assert_eq!(browser.selected_target(), Some(&Target::Other));
+    browser.apply(TreeOperation::First);
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    for operation in [
+        TreeOperation::ToggleExpansionTarget(Target::Missing),
+        TreeOperation::ToggleMarkTarget(Target::Missing),
+        TreeOperation::ActivateTarget(Target::Missing),
+        TreeOperation::ContextTarget(Target::Missing),
+    ] {
+        let transition = browser.apply(operation);
+        assert_eq!(transition.disposition, super::TreeConsumed::Unhandled);
+        assert_eq!(transition.external_intent, None);
+    }
+    assert_eq!(browser.marked_targets(), &[]);
+}
+
+#[test]
+fn structural_refresh_preserves_stable_selection_and_clamps_viewport() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            TreeEntry::Heading("Group".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Spacer,
+            TreeEntry::Node(node(Target::Branch, None)),
+            TreeEntry::Node(node(Target::Other, None)),
+        ])
+        .unwrap();
+    browser.set_geometry(Rect::new(0, 0, 18, 2), Rect::new(0, 0, 18, 2));
+    browser.apply(TreeOperation::Last);
+    assert_eq!(browser.selected_target(), Some(&Target::Other));
+    assert!(browser.viewport_offset() > 0);
+
+    paint(&mut browser);
+    browser
+        .reconcile([
+            TreeEntry::Node(node(Target::Branch, None)),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Node(node(Target::Other, None)),
+        ])
+        .unwrap();
+
+    assert_eq!(browser.selected_target(), Some(&Target::Other));
+    assert!(browser.viewport_offset() <= browser.visible_len().saturating_sub(2));
+    assert!(!browser.has_completed_paint());
+
+    browser
+        .reconcile([
+            TreeEntry::Heading("New group".into()),
+            TreeEntry::Node(node(Target::Branch, None)),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Node(node(Target::Other, None)),
+        ])
+        .unwrap();
+    assert_eq!(browser.selected_target(), Some(&Target::Other));
+    assert!(browser.viewport_offset() <= browser.visible_len().saturating_sub(2));
+}
+
+#[rstest]
+#[case::selected(TreeOperation::ToggleExpansion)]
+#[case::target(TreeOperation::ToggleExpansionTarget(Target::Root))]
+fn declared_expandability_retains_pending_expansion_and_reveals_children(
+    #[case] operation: TreeOperation<Target>,
+) {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([node(Target::Root, None).with_expandable(true)])
+        .unwrap();
+    browser.viewport_offset = 1;
+
+    let transition = browser.apply(operation);
+    assert_eq!(transition.disposition, super::TreeConsumed::Consumed);
+    assert!(browser.is_expanded(&Target::Root));
+    assert_eq!(browser.visible_len(), 1);
+    assert_eq!(browser.visible_targets(), vec![Target::Root]);
+
+    browser
+        .reconcile([
+            node(Target::Root, None).with_expandable(true),
+            node(Target::Branch, Some(Target::Root)),
+        ])
+        .unwrap();
+
+    assert!(browser.is_expanded(&Target::Root));
+    assert_eq!(
+        browser.visible_targets(),
+        vec![Target::Root, Target::Branch]
+    );
+    assert_eq!(browser.selected_target(), Some(&Target::Root));
+    assert_eq!(browser.viewport_offset(), 1);
+}
+
+#[rstest]
+#[case::declaration_retained(true, false, true)]
+#[case::children_arrived(false, true, true)]
+#[case::empty_completion(false, false, false)]
+fn reconciliation_keeps_pending_expansion_only_while_expandable_or_populated(
+    #[case] declared_expandable: bool,
+    #[case] has_child: bool,
+    #[case] expected_expanded: bool,
+) {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([node(Target::Root, None).with_expandable(true)])
+        .unwrap();
+    browser.apply(TreeOperation::ToggleExpansion);
+    assert!(browser.is_expanded(&Target::Root));
+
+    let mut projection = vec![node(Target::Root, None).with_expandable(declared_expandable)];
+    if has_child {
+        projection.push(node(Target::Branch, Some(Target::Root)));
+    }
+    browser.reconcile(projection).unwrap();
+
+    assert_eq!(browser.is_expanded(&Target::Root), expected_expanded);
+    assert_eq!(
+        browser.visible_targets(),
+        if expected_expanded && has_child {
+            vec![Target::Root, Target::Branch]
+        } else {
+            vec![Target::Root]
+        }
+    );
+}
+
+#[rstest]
+#[case::selected(TreeOperation::ToggleExpansion)]
+#[case::target(TreeOperation::ToggleExpansionTarget(Target::Root))]
+fn undeclared_childless_music_node_remains_unhandled(#[case] operation: TreeOperation<Target>) {
+    let mut browser = TreeBrowser::new();
+    browser.reconcile([node(Target::Root, None)]).unwrap();
+
+    assert_eq!(
+        browser.apply(operation).disposition,
+        super::TreeConsumed::Unhandled
+    );
+    assert!(!browser.is_expanded(&Target::Root));
+}
+
+#[test]
+fn heading_free_tree_keeps_music_row_flow_navigation_and_marks() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            node(Target::Root, None),
+            node(Target::Branch, None),
+            node(Target::Other, None),
+        ])
+        .unwrap();
+
+    assert_eq!(browser.visible_len(), 3);
+    assert_eq!(
+        browser.visible_targets(),
+        vec![Target::Root, Target::Branch, Target::Other]
+    );
+    browser.apply(TreeOperation::Move(1));
+    browser.apply(TreeOperation::ToggleMark);
+    assert_eq!(browser.selected_target(), Some(&Target::Branch));
+    assert_eq!(browser.marked_targets(), &[Target::Branch]);
+    browser.apply(TreeOperation::Last);
+    assert_eq!(browser.selected_target(), Some(&Target::Other));
+    assert_eq!(browser.visible_len(), 3);
 }
 
 fn named_node(
@@ -551,6 +816,81 @@ fn shared_view_paints_depth_metadata_bars_and_scrollbar_without_state_glyphs() {
         .resolve_current_point(Position::new(2, selected.y))
         .is_some());
     assert!(browser.resolve_current_point(Position::new(2, 2)).is_none());
+}
+
+#[test]
+fn grouped_tree_stripes_items_only_and_reset_at_each_heading() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            TreeEntry::Heading("First group".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Node(node(Target::Branch, None)),
+            TreeEntry::Spacer,
+            TreeEntry::Heading("Second group".into()),
+            TreeEntry::Node(node(Target::Other, None)),
+            TreeEntry::Node(node(Target::Missing, None)),
+        ])
+        .unwrap();
+    browser.focused = false;
+
+    let mut terminal = Terminal::new(TestBackend::new(20, 8)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 8)))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let zebra =
+        crate::app::palette::surface_colors(crate::app::palette::Surface::QueueColumn, false).fill;
+    let base =
+        crate::app::palette::surface_colors(crate::app::palette::Surface::QueuePanel, false).fill;
+
+    for (row, expected) in [
+        (0, base), // heading
+        (1, zebra),
+        (2, base),
+        (3, base),  // spacers use the base fill and do not affect item parity
+        (4, base),  // heading
+        (5, zebra), // parity resets at the heading
+        (6, base),
+    ] {
+        assert_eq!(buffer[(2, row)].bg, expected, "row {row}");
+    }
+
+    browser.viewport_offset = 5;
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 2)))
+        .unwrap();
+    assert_eq!(terminal.backend().buffer()[(2, 0)].bg, zebra);
+}
+
+#[test]
+fn grouped_tree_zebra_parity_survives_scrolling_past_its_heading() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            TreeEntry::Heading("First group".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Spacer,
+            TreeEntry::Heading("Second group".into()),
+            TreeEntry::Node(node(Target::Branch, None)),
+        ])
+        .unwrap();
+    browser.apply(TreeOperation::Select(Target::Branch));
+    browser.focused = false;
+
+    let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 5)))
+        .unwrap();
+    let zebra =
+        crate::app::palette::surface_colors(crate::app::palette::Surface::QueueColumn, false).fill;
+    assert_eq!(terminal.backend().buffer()[(0, 4)].bg, zebra);
+
+    browser.viewport_offset = 4;
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 1)))
+        .unwrap();
+    assert_eq!(terminal.backend().buffer()[(0, 0)].bg, zebra);
 }
 
 #[test]

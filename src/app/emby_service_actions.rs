@@ -93,6 +93,7 @@ impl App {
         self.series_detail_cache.clear();
         self.series_detail_loading.clear();
         self.series_season_loading.clear();
+        self.pending_series_season_expansions.clear();
         self.card_image_states.clear();
         self.card_image_loading.clear();
         self.image_lru.clear();

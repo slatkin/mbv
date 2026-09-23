@@ -19,8 +19,8 @@ use crate::app::components::media_list::MediaSemanticState;
 
 #[allow(unused_imports)]
 pub use types::{
-    TreeConsumed, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary, TreeNode, TreeOperation,
-    TreeSelectionChange, TreeTitleRole, TreeTrailing, TreeTransition,
+    TreeConsumed, TreeEntry, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary, TreeNode,
+    TreeOperation, TreeSelectionChange, TreeTitleRole, TreeTrailing, TreeTransition,
 };
 
 /// A typed failure from an attempted tree projection replacement.
@@ -58,17 +58,39 @@ pub(crate) enum TreeAggregateMark {
 }
 
 /// A row prepared for the destination-neutral render component.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TreePaintRowKind {
+    Node,
+    Heading,
+    Spacer,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TreePaintRow {
+    pub(crate) kind: TreePaintRowKind,
     pub(crate) title: String,
     pub(crate) title_role: TreeTitleRole,
     pub(crate) trailing: Option<String>,
     pub(crate) depth: usize,
     pub(crate) root_index: usize,
+    pub(crate) group_root_index: usize,
+    pub(crate) zebra_striped: bool,
     pub(crate) selected: bool,
     pub(crate) marked: bool,
     pub(crate) aggregate_mark: TreeAggregateMark,
     pub(crate) semantic_state: MediaSemanticState,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum StructuralRow {
+    Heading(String),
+    Spacer,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum VisibleRow {
+    Node(usize),
+    Structural(usize, usize),
 }
 
 #[derive(Clone)]
@@ -88,6 +110,7 @@ pub struct TreeBrowser<Target> {
     pub(super) target_to_node: HashMap<Target, usize>,
     pub(super) ordered_nodes: Vec<usize>,
     pub(super) roots: Vec<usize>,
+    pub(super) root_structures: HashMap<Target, Vec<StructuralRow>>,
     pub(super) next_node_id: usize,
     pub(super) model_revision: u64,
     pub(super) selected: Option<Target>,
@@ -121,6 +144,7 @@ impl<Target> TreeBrowser<Target> {
             target_to_node: HashMap::new(),
             ordered_nodes: Vec::new(),
             roots: Vec::new(),
+            root_structures: HashMap::new(),
             next_node_id: 0,
             model_revision: 0,
             selected: None,
@@ -146,10 +170,18 @@ impl<Target> TreeBrowser<Target> {
     /// rejected projection leaves even retained paint geometry untouched.
     pub fn reconcile<I>(&mut self, projection: I) -> Result<(), TreeReconciliationError<Target>>
     where
-        I: IntoIterator<Item = TreeNode<Target>>,
+        I: IntoIterator,
+        I::Item: Into<TreeEntry<Target>>,
         Target: Clone + Eq + Hash,
     {
-        let nodes: Vec<TreeNode<Target>> = projection.into_iter().collect();
+        let entries: Vec<TreeEntry<Target>> = projection.into_iter().map(Into::into).collect();
+        let nodes: Vec<TreeNode<Target>> = entries
+            .iter()
+            .filter_map(|entry| match entry {
+                TreeEntry::Node(node) => Some(node.clone()),
+                TreeEntry::Heading(_) | TreeEntry::Spacer => None,
+            })
+            .collect();
         let mut target_to_index = HashMap::with_capacity(nodes.len());
         for (index, node) in nodes.iter().enumerate() {
             if target_to_index.insert(node.target.clone(), index).is_some() {
@@ -190,7 +222,26 @@ impl<Target> TreeBrowser<Target> {
             }
         }
 
+        let mut root_structures = HashMap::new();
+        let mut pending_structure = Vec::new();
+        for entry in &entries {
+            match entry {
+                TreeEntry::Heading(title) => {
+                    pending_structure.push(StructuralRow::Heading(title.clone()));
+                }
+                TreeEntry::Spacer => pending_structure.push(StructuralRow::Spacer),
+                TreeEntry::Node(node) if node.parent.is_none() => {
+                    if !pending_structure.is_empty() {
+                        root_structures
+                            .insert(node.target.clone(), std::mem::take(&mut pending_structure));
+                    }
+                }
+                TreeEntry::Node(_) => {}
+            }
+        }
+
         let content_changed = self.ordered_nodes.len() != nodes.len()
+            || self.root_structures != root_structures
             || self
                 .ordered_nodes
                 .iter()
@@ -269,8 +320,11 @@ impl<Target> TreeBrowser<Target> {
         let expanded = self
             .expanded
             .iter()
-            .filter(|target| new_target_to_node.contains_key(*target))
-            .cloned()
+            .filter_map(|target| {
+                let id = *new_target_to_node.get(target)?;
+                let node = &arena[&id];
+                (node.node.expandable || !node.children.is_empty()).then(|| target.clone())
+            })
             .collect();
         let marks: Vec<Target> = self
             .marks
@@ -288,13 +342,14 @@ impl<Target> TreeBrowser<Target> {
         self.target_to_node = new_target_to_node;
         self.ordered_nodes = ordered_nodes;
         self.roots = roots;
+        self.root_structures = root_structures;
         self.model_revision = self.model_revision.saturating_add(1);
         self.selected = selected;
         self.expanded = expanded;
         self.marks.set_targets(marks);
         self.viewport_offset = self
             .viewport_offset
-            .min(self.ordered_nodes.len().saturating_sub(1));
+            .min(self.visible_len().saturating_sub(1));
         self.filter_matches.clear();
         self.filter_matches.extend(
             self.filter_matches_for_query()
@@ -414,28 +469,37 @@ impl<Target> TreeBrowser<Target> {
         true
     }
 
-    /// The visible row of the first node at or after a persisted
-    /// fully-expanded flow offset. The walk follows the complete settled tree,
-    /// independent of expansion state.
+    /// The visible row at or after a persisted fully-expanded flow offset.
+    /// The walk follows the complete settled tree, independent of expansion.
     fn visible_row_for_flow_offset(&self, offset: usize) -> Option<usize>
     where
         Target: Clone + Eq + Hash,
     {
-        let visible = self.visible_node_ids();
-        let mut position = 0;
-        let mut stack = self.roots.iter().rev().copied().collect::<Vec<_>>();
-        while let Some(id) = stack.pop() {
-            if position >= offset {
-                if let Some(row) = visible.iter().position(|&visible_id| visible_id == id) {
-                    return Some(row);
+        let visible = self.visible_flow_rows();
+        let mut settled = Vec::new();
+        for &root in &self.roots {
+            if let Some(entry) = self.arena.get(&root) {
+                if let Some(structures) = self.root_structures.get(&entry.node.target) {
+                    settled.extend(
+                        structures
+                            .iter()
+                            .enumerate()
+                            .map(|(index, _)| VisibleRow::Structural(root, index)),
+                    );
                 }
             }
-            position += 1;
-            if let Some(entry) = self.arena.get(&id) {
-                stack.extend(entry.children.iter().rev().copied());
+            let mut stack = vec![root];
+            while let Some(id) = stack.pop() {
+                settled.push(VisibleRow::Node(id));
+                if let Some(entry) = self.arena.get(&id) {
+                    stack.extend(entry.children.iter().rev().copied());
+                }
             }
         }
-        None
+        settled
+            .into_iter()
+            .skip(offset)
+            .find_map(|row| visible.iter().position(|visible_row| *visible_row == row))
     }
 
     pub fn filter_active(&self) -> bool {

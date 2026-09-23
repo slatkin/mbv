@@ -494,6 +494,8 @@ pub struct App {
     pub(super) series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
     pub(super) series_detail_loading: std::collections::HashSet<String>,
     pub(super) series_season_loading: std::collections::HashSet<(String, String)>,
+    /// Season expansions received before their show's detail has arrived.
+    pub(super) pending_series_season_expansions: std::collections::HashSet<(String, String)>,
     pub(super) image_protocol: Option<String>,
     pub(super) image_protocol_enabled: bool,
     pub(super) library_position_state: crate::config::LibraryPositionState,

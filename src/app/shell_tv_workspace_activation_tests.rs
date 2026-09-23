@@ -115,6 +115,53 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert!(!model.app.activate_selected_series(0));
 }
 
+/// A tree-selected show opens its Hero even when the old flat carrier still
+/// points at another show.
+#[test]
+fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
+    let mut model = mounted_tv_model();
+    model.app.terminal_width = 80;
+    model.app.terminal_height = 24;
+    model.push_tv_workspace_content();
+    model.sync_library_panel();
+
+    // Move only the tree selection. Until the shell handles the row-selection
+    // request, the legacy flat carrier still points at the first show.
+    let moved = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(matches!(
+        moved,
+        Some(Msg::Shell(
+            crate::app::components::ShellRequest::TvHitClick { .. }
+        ))
+    ));
+    assert_eq!(
+        model.test_tv_owner().selected_item().map(|item| item.id),
+        Some("movie-focused".into()),
+        "the flat carrier is intentionally stale"
+    );
+    let selected_show = model
+        .test_tv_owner()
+        .selected_tree_show()
+        .expect("tree selects the second show");
+    assert_eq!(selected_show.id, "movie-second");
+
+    model.handle_tv_request(crate::app::components::ShellRequest::TvActivate {
+        item: selected_show,
+    });
+
+    let panel = model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("Library panel");
+    assert!(panel.test_hero_overlay_open());
+}
+
 /// Regression for the replace-wide-paint-inference review finding (#643):
 /// `activate_selected_series_item` must gate wide/narrow on the *caller's*
 /// `lib_idx`, not a hardcoded 0. Movies sits at library index 0 (never wide

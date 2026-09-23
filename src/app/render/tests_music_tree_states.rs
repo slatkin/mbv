@@ -11,7 +11,7 @@ use crate::app::components::media_list::MediaSemanticState;
 use crate::app::components::music_tree_target::MusicTreeTarget;
 
 #[test]
-fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
+fn music_tree_ordinary_rows_keep_depth_roles_and_live_playback_emphasis() {
     let root = artist("semantic-artist");
     let mut browser = tree_browser(vec![
         TreeNode::new(
@@ -27,7 +27,7 @@ fn music_tree_ignores_played_rows_but_keeps_live_playback_emphasis() {
             "played-album",
             "Played Album",
             None,
-            MediaSemanticState::Played,
+            MediaSemanticState::Ordinary,
         ),
         album_leaf(
             &root,

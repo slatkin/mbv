@@ -14,8 +14,8 @@ use crate::app::components::list::{
 use crate::app::render::tree_row_is_full_width;
 
 use super::{
-    TreeAggregateMark, TreeBrowser, TreeConsumed, TreeExternalIntent, TreeMarkPolicy,
-    TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition,
+    StructuralRow, TreeAggregateMark, TreeBrowser, TreeConsumed, TreeExternalIntent,
+    TreeMarkPolicy, TreeMarkSummary, TreePaintRow, TreeSelectionChange, TreeTransition, VisibleRow,
 };
 
 /// The shared list traits are implemented only for this private adapter.
@@ -104,6 +104,13 @@ impl<Target: Clone + Eq + Hash> Expandable<Target> for TreeState<'_, Target> {
 }
 
 impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
+    fn is_expandable(&self, target: &Target) -> bool {
+        self.target_to_node
+            .get(target)
+            .and_then(|id| self.arena.get(id))
+            .is_some_and(|entry| entry.node.expandable || !entry.children.is_empty())
+    }
+
     fn with_state<R>(&mut self, action: impl FnOnce(&mut TreeState<'_, Target>) -> R) -> R {
         action(&mut TreeState { browser: self })
     }
@@ -166,18 +173,44 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         visible
     }
 
+    pub(super) fn visible_flow_rows(&self) -> Vec<VisibleRow> {
+        let mut output = Vec::new();
+        for &root in &self.roots {
+            let mut nodes = Vec::new();
+            self.push_visible(root, &mut nodes);
+            if nodes.is_empty() {
+                continue;
+            }
+            if let Some(entry) = self.arena.get(&root) {
+                if let Some(structures) = self.root_structures.get(&entry.node.target) {
+                    output.extend(
+                        structures
+                            .iter()
+                            .enumerate()
+                            .map(|(index, _)| VisibleRow::Structural(root, index)),
+                    );
+                }
+            }
+            output.extend(nodes.into_iter().map(VisibleRow::Node));
+        }
+        output
+    }
+
     pub(super) fn visible_len(&self) -> usize {
-        self.visible_node_ids().len()
+        self.visible_flow_rows().len()
     }
 
     pub(super) fn current_flow(&self) -> RowFlow<Target> {
         RowFlow::new(
-            self.visible_node_ids()
+            self.visible_flow_rows()
                 .into_iter()
-                .filter_map(|id| {
-                    self.arena
+                .map(|row| match row {
+                    VisibleRow::Node(id) => self
+                        .arena
                         .get(&id)
                         .map(|entry| Row::selectable(entry.node.target.clone()))
+                        .unwrap_or_else(Row::structural),
+                    VisibleRow::Structural(_, _) => Row::structural(),
                 })
                 .collect(),
         )
@@ -353,12 +386,32 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.with_state(|state| Expandable::select_first_child(state, &flow));
                 self.reconcile_selection();
             }
+            super::TreeOperation::Right => {
+                if let Some(target) = self.selected.clone() {
+                    if self.is_expandable(&target) {
+                        if self.expanded.contains(&target) {
+                            if self
+                                .target_to_node
+                                .get(&target)
+                                .and_then(|id| self.arena.get(id))
+                                .is_some_and(|entry| entry.node.parent.is_none())
+                            {
+                                external_intent = Some(TreeExternalIntent::Activate(target));
+                            }
+                        } else {
+                            self.with_state(|state| Expandable::toggle_expanded(state, &target));
+                            self.reconcile_selection();
+                        }
+                    } else {
+                        disposition = TreeConsumed::Unhandled;
+                    }
+                } else {
+                    disposition = TreeConsumed::Unhandled;
+                }
+            }
             super::TreeOperation::ToggleExpansion => {
                 if let Some(target) = self.selected.clone() {
-                    if self
-                        .children_of(&target)
-                        .is_some_and(|children| !children.is_empty())
-                    {
+                    if self.is_expandable(&target) {
                         self.with_state(|state| Expandable::toggle_expanded(state, &target));
                         self.reconcile_selection();
                     } else {
@@ -369,10 +422,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 }
             }
             super::TreeOperation::ToggleExpansionTarget(target) => {
-                if self
-                    .children_of(&target)
-                    .is_some_and(|children| !children.is_empty())
-                {
+                if self.is_expandable(&target) {
                     self.with_state(|state| Expandable::toggle_expanded(state, &target));
                     self.reconcile_selection();
                 } else {
@@ -550,13 +600,71 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .collect()
     }
 
-    pub(super) fn visible_rows(&self, visible_ids: &[usize]) -> Vec<TreePaintRow> {
+    pub(super) fn visible_rows(&self, visible_rows: &[VisibleRow]) -> Vec<TreePaintRow> {
         let mut rows = Vec::new();
-        for &id in visible_ids.iter().skip(self.viewport_offset) {
+        let mut group_root_index = 0;
+        let grouped = self.root_structures.values().any(|structures| {
+            structures
+                .iter()
+                .any(|structure| matches!(structure, StructuralRow::Heading(_)))
+        });
+        let mut group_item_index = 0;
+        for (flow_index, &visible) in visible_rows.iter().enumerate() {
+            if let VisibleRow::Structural(root, index) = visible {
+                let Some(entry) = self.arena.get(&root) else {
+                    continue;
+                };
+                let Some(structure) = self
+                    .root_structures
+                    .get(&entry.node.target)
+                    .and_then(|structures| structures.get(index))
+                else {
+                    continue;
+                };
+                let (kind, title) = match structure {
+                    StructuralRow::Heading(title) => {
+                        group_root_index = entry.root_index;
+                        group_item_index = 0;
+                        (super::TreePaintRowKind::Heading, title.clone())
+                    }
+                    StructuralRow::Spacer => (super::TreePaintRowKind::Spacer, String::new()),
+                };
+                if flow_index >= self.viewport_offset {
+                    rows.push(TreePaintRow {
+                        kind,
+                        title,
+                        title_role: super::TreeTitleRole::Standard,
+                        trailing: None,
+                        depth: 0,
+                        root_index: entry.root_index,
+                        group_root_index,
+                        zebra_striped: false,
+                        selected: false,
+                        marked: false,
+                        aggregate_mark: TreeAggregateMark::None,
+                        semantic_state:
+                            crate::app::components::media_list::MediaSemanticState::Ordinary,
+                    });
+                }
+                continue;
+            }
+            let VisibleRow::Node(id) = visible else {
+                continue;
+            };
             let Some(entry) = self.arena.get(&id) else {
                 continue;
             };
             let target = &entry.node.target;
+            let zebra_striped = if grouped {
+                let striped = group_item_index % 2 == 0;
+                group_item_index += 1;
+                striped
+            } else {
+                entry.root_index.saturating_sub(group_root_index) % 2 == 0
+            };
+            if flow_index < self.viewport_offset {
+                continue;
+            }
             let marked = self.marks.contains(target);
             let aggregate_mark = if entry.node.mark_policy == TreeMarkPolicy::Aggregate {
                 match self.aggregate_mark_state_for(target) {
@@ -568,6 +676,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 TreeAggregateMark::None
             };
             rows.push(TreePaintRow {
+                kind: super::TreePaintRowKind::Node,
                 title: entry.node.title.clone(),
                 title_role: entry.node.title_role,
                 trailing: entry
@@ -577,6 +686,8 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     .map(|trailing| trailing.text.clone()),
                 depth: entry.depth,
                 root_index: entry.root_index,
+                group_root_index,
+                zebra_striped,
                 selected: self.selected.as_ref() == Some(target),
                 marked,
                 aggregate_mark,
@@ -588,16 +699,19 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
 
     pub(super) fn retained_rows(
         &self,
-        visible_ids: &[usize],
+        visible_rows: &[VisibleRow],
         claim_rect: Rect,
         content_rect: Rect,
     ) -> Vec<(Rect, Target)> {
-        visible_ids
+        visible_rows
             .iter()
             .copied()
             .skip(self.viewport_offset)
             .enumerate()
-            .filter_map(|(index, id)| {
+            .filter_map(|(index, row)| {
+                let VisibleRow::Node(id) = row else {
+                    return None;
+                };
                 let y = content_rect.y.checked_add(index as u16)?;
                 (y < content_rect.bottom()).then(|| {
                     self.arena.get(&id).map(|entry| {

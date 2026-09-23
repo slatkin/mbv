@@ -28,6 +28,19 @@ impl Model {
             return;
         };
         match request {
+            ShellRequest::TvTreeExpand { target } => {
+                let source = self
+                    .tv_owner()
+                    .and_then(|owner| owner.tree_expansion_source(&target));
+                if let Some((series_id, season_id)) = source {
+                    if let Some(season_id) = season_id {
+                        self.app.fetch_series_season_episodes(series_id, season_id);
+                    } else {
+                        self.app.fetch_series_detail(series_id);
+                    }
+                    self.push_tv_workspace_content();
+                }
+            }
             // The owner resolved the episode from its own season detail and
             // carried the stable item (design.md D4); the shell plays it
             // directly without reading any owner cursor. An id-less
@@ -64,8 +77,10 @@ impl Model {
                         } else {
                             let owner_has_target = self
                                 .tv_owner()
-                                .and_then(TvContent::selected_item)
-                                .is_some_and(|selected| selected.id == item.id);
+                                .and_then(TvContent::selected_tree_show)
+                                .is_some_and(|selected| {
+                                    selected.id == item.id && selected.name == item.name
+                                });
                             if self.app.wide_tv_library_area(lib_idx).is_some() {
                                 self.app.activate_selected_series_item(lib_idx, &item);
                             } else if owner_has_target {
@@ -96,7 +111,7 @@ impl Model {
                 }
             }
             // unreachable: shell_messages.rs routes only the Tv* group
-            // (MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
+            // (TreeExpand/MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
             // CycleLetterPill/EpisodeMove/SeasonMove) into handle_tv_request;
             // every one has an arm above.
             _ => {}
@@ -425,7 +440,13 @@ impl Model {
         // App-derived item.
         let selected_series = self
             .tv_owner()
-            .and_then(TvContent::selected_item)
+            .and_then(TvContent::selected_tree_show)
+            .filter(|selected| {
+                list.items
+                    .iter()
+                    .any(|item| item.id == selected.id && item.name == selected.name)
+            })
+            .or_else(|| self.tv_owner().and_then(TvContent::selected_item))
             .filter(|item| item.item_type == "Series")
             .or_else(|| {
                 list.selected_item()
@@ -450,6 +471,18 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
+        // Loaded details for every listed show: the tree projects children
+        // per show so an expanded show keeps them while another is selected.
+        let series_details = list
+            .items
+            .iter()
+            .filter_map(|item| {
+                self.app
+                    .series_detail_cache
+                    .get(&item.id)
+                    .map(|detail| (item.id.clone(), detail.clone()))
+            })
+            .collect();
         // The hero image is NOT projected here: task 5.10's central projection
         // (`sync_library_hero_images`, design D9) is the one projector for
         // every migrated owner, and TV is one since task 8.4. Pushing a second
@@ -464,6 +497,7 @@ impl Model {
             self.app.should_show_letter_pills(index),
         );
         context.set_tv_content_mode(tv_content_mode);
+        context.set_series_details(series_details);
         let latest_source = super::types_playback::HomeLatestSource::Emby(library_id);
         let latest_has_new_content = self
             .home_content

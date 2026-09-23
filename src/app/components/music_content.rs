@@ -505,25 +505,16 @@ impl MusicContent {
                 self.browser.apply(TreeOperation::Parent);
                 self.album_selection_request(AlbumCursorKind::Move)
             }
-            Key::Right if self.selected_is_artist() => {
-                let root = self.browser.selected_target().cloned()?;
-                if !self.browser.is_expanded(&root) {
-                    self.browser
-                        .apply(TreeOperation::ToggleExpansionTarget(root));
-                    None
-                } else {
-                    self.artist_detail_target()
-                        .map(|target| Msg::Shell(ShellRequest::MusicArtistActivate { target }))
-                }
-            }
             Key::Right => {
-                if let Some(target) = self.browser.selected_target().cloned() {
-                    if !self.browser.is_expanded(&target) {
-                        self.browser
-                            .apply(TreeOperation::ToggleExpansionTarget(target));
-                    }
+                let intent = self.browser.apply(TreeOperation::Right).external_intent;
+                match intent {
+                    Some(
+                        crate::app::components::list::tree_browser::TreeExternalIntent::Activate(_),
+                    ) if self.selected_is_artist() => self
+                        .artist_detail_target()
+                        .map(|target| Msg::Shell(ShellRequest::MusicArtistActivate { target })),
+                    _ => None,
                 }
-                None
             }
             Key::Enter if self.selected_is_artist() => {
                 if let Some(root) = self.browser.selected_target().cloned() {
