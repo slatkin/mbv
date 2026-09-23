@@ -409,6 +409,55 @@ fn attached_session_append_stays_local_without_rollback_or_owner_command() {
 }
 
 #[test]
+fn enqueue_on_disconnected_remote_rolls_back_and_shows_connection_lost_error() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, _) = make_remote_app_stub_with_cmd_rx(make_items(2), make_items(3));
+    app.set_queue_scope(QueueScope::Remote);
+    app.player
+        .disconnected_flag()
+        .unwrap()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    assert!(!app.submit_queue_item(
+        QueueItem::Emby(Box::new(make_item("new", "Movie"))),
+        false,
+    ));
+
+    assert_eq!(
+        app.remote_player_tab
+            .as_ref()
+            .unwrap()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["id0", "id1", "id2"]
+    );
+    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Error);
+}
+
+#[test]
+fn playback_submission_on_disconnected_remote_keeps_queue_and_warns() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, _) = make_remote_app_stub_with_cmd_rx(make_items(2), make_items(3));
+    app.set_queue_scope(QueueScope::Remote);
+    app.player
+        .disconnected_flag()
+        .unwrap()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    assert!(!app.submit_queue_item(
+        QueueItem::Emby(Box::new(make_item("new", "Movie"))),
+        true,
+    ));
+
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().emby_items().len(), 3);
+    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+}
+
+#[test]
 fn removing_from_remote_queue_dispatches_slot_addressed_command() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(2), make_items(3));

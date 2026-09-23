@@ -123,6 +123,13 @@ impl App {
             return true;
         }
         let sent = self.player.queue_append(items);
+        if !sent && self.player.is_remote_disconnected() {
+            self.flash(
+                super::actions::CONNECTION_LOST_MESSAGE.to_string(),
+                ToastSeverity::Error,
+            );
+            return false;
+        }
         if !sent && self.player.is_remote() && !self.player.supports_queue_append() {
             self.flash(
                 "Remote append is not supported by this direct mbv peer".to_string(),
@@ -132,7 +139,12 @@ impl App {
         }
         if !sent {
             self.flash(
-                "Playback owner rejected the queue append".to_string(),
+                if self.player.is_remote_disconnected() {
+                    super::actions::CONNECTION_LOST_MESSAGE
+                } else {
+                    "Playback owner rejected the queue append"
+                }
+                .to_string(),
                 ToastSeverity::Error,
             );
             return false;

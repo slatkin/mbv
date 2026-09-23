@@ -142,14 +142,31 @@ impl App {
     /// `UnifiedQueuePlaySlot`; when this process is the owner, send the local
     /// `JumpTo` to the Playback run. Returns `false` when the request could
     /// not be sent.
+    fn reject_disconnected_remote_jump(&mut self) -> bool {
+        if !self.player.is_remote_disconnected() {
+            return false;
+        }
+        self.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
+            super::actions::CONNECTION_LOST_MESSAGE.to_string(),
+        ));
+        true
+    }
+
     pub(super) fn dispatch_jump(
         &mut self,
         transition: mbv_core::playback_transition::Transition,
     ) -> bool {
         if self.player.is_remote() {
-            return self
+            if self.reject_disconnected_remote_jump() {
+                return false;
+            }
+            let sent = self
                 .player
                 .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(transition.target));
+            if !sent {
+                self.reject_disconnected_remote_jump();
+            }
+            return sent;
         }
         let resume_ticks = mbv_core::player::resume_ticks_for_slot(
             &self.playback_queue().queue,
@@ -167,9 +184,16 @@ impl App {
     /// owner accepted now (or queue it behind an in-flight one).
     pub(super) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
         if self.player.is_remote() {
-            return self
+            if self.reject_disconnected_remote_jump() {
+                return false;
+            }
+            let sent = self
                 .player
                 .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
+            if !sent {
+                self.reject_disconnected_remote_jump();
+            }
+            return sent;
         }
         self.bare_owner
             .sync_canonical_queue(self.playback_queue().queue.clone());
@@ -264,6 +288,33 @@ impl App {
                     );
                     return false;
                 }
+                if self.player.is_remote_disconnected() {
+                    let status = self.player.status.lock().unwrap();
+                    let active = status.active;
+                    let current_idx = status.current_idx;
+                    drop(status);
+                    let queue = self.displayed_queue();
+                    let is_jump = active
+                        && self.viewed_queue_scope() == self.playing_queue_scope()
+                        && t != current_idx;
+                    if is_jump {
+                        if let Some(slot_id) = queue.slot_id_at(t) {
+                            let _ = self.request_slot_jump(slot_id);
+                        } else {
+                            self.handle_player_event(
+                                mbv_core::player::PlayerEvent::CommandRejected(
+                                    super::actions::CONNECTION_LOST_MESSAGE.to_string(),
+                                ),
+                            );
+                        }
+                    } else {
+                        self.flash(
+                            super::actions::CONNECTION_LOST_MESSAGE.into(),
+                            ToastSeverity::Warning,
+                        );
+                    }
+                    return false;
+                }
                 // Validate source for Feed entries early.
                 if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
                     if entry.primary_source().is_none() {
@@ -347,10 +398,12 @@ impl App {
                         // One owner-kind seam for every fresh jump, so
                         // explicit play and the Next-Up accept cannot diverge.
                         if !self.request_slot_jump(slot_id) {
-                            self.flash(
-                                "Playback owner rejected the queue selection".into(),
-                                ToastSeverity::Error,
-                            );
+                            if !self.player.is_remote_disconnected() {
+                                self.flash(
+                                    "Playback owner rejected the queue selection".into(),
+                                    ToastSeverity::Error,
+                                );
+                            }
                         }
                     }
                 } else {
@@ -389,14 +442,22 @@ impl App {
                                 .min(eligible.len().saturating_sub(1))
                         });
                     let headless = eligible.iter().all(|slot| slot.item.is_audio());
-                    self.player.submit_queue_slots(
+                    let submitted = self.player.submit_queue_slots(
                         eligible,
                         start_idx,
                         self.emby_snapshot().map(Arc::new),
                         headless,
                         self.ui_volume,
                     );
-                    self.stamp_queue_generation(scope);
+                    if !submitted && self.player.is_remote_disconnected() {
+                        self.flash(
+                            super::actions::CONNECTION_LOST_MESSAGE.into(),
+                            ToastSeverity::Warning,
+                        );
+                    }
+                    if submitted {
+                        self.stamp_queue_generation(scope);
+                    }
                 }
             }
 

@@ -118,6 +118,42 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
 }
 
 #[test]
+fn disconnected_remote_rejects_tab_queue_submission_with_warning() {
+    let mut app = make_remote_app_stub(make_items(1), make_items(2));
+    app.player
+        .disconnected_flag()
+        .unwrap()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    assert!(!app.submit_tab_queue(QueueScope::Remote, 0));
+
+    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+}
+
+#[test]
+fn deferred_play_on_disconnected_remote_does_not_replace_queue_or_acknowledge() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_remote_app_stub(make_items(1), make_items(2));
+    let before = app.remote_player_tab.as_ref().unwrap().emby_items();
+    app.player
+        .disconnected_flag()
+        .unwrap()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(3),
+        start_idx: 1,
+        source: crate::config::QueueSource::Shuffle,
+        autostart: true,
+    });
+
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().emby_items(), before);
+    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+}
+
+#[test]
 fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (remote, player_rx, cmd_rx) =
