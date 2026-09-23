@@ -7,8 +7,8 @@
 
 ## 2. Flag
 
-- [ ] 2.1 Parse `--log-level <error|warn|info|debug>` in `mbvd` (`crates/mbvd/src/main.rs`) and pass it to init; bad value prints usage and exits non-zero; add it to the usage string. Verify with a parse unit test covering valid and invalid values.
-- [ ] 2.2 Same flag in `mbv` (`src/main.rs`) and usage text; when spawning `--__local-daemon`, forward `--log-level <level>`; `run_local_daemon_main` reads it and passes it to init. Verify with a parse unit test and a test on the spawn argv builder.
+- [x] 2.1 Parse `--log-level <error|warn|info|debug>` in `mbvd` (`crates/mbvd/src/main.rs`) and pass it to init; bad value prints usage and exits non-zero; add it to the usage string. Verify with a parse unit test covering valid and invalid values.
+- [x] 2.2 Same flag in `mbv` (`src/main.rs`) and usage text; when spawning `--__local-daemon`, forward `--log-level <level>`; `run_local_daemon_main` reads it and passes it to init. Verify with a parse unit test and a test on the spawn argv builder.
 
 ## 3. Sinks and call sites
 
