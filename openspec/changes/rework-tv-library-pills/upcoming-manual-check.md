@@ -33,3 +33,19 @@ mbv's exact header form (`Authorization: Emby Client=... Token=...` +
 
 Note: the endpoint is slow on this server (~23 s for the scoped query); a
 smaller `Limit` did not change the latency materially.
+
+## Re-verification 2026-09-23 (§9 close-out)
+
+Observed via the orchestrator's live probe, exact mbv request
+`GET /Shows/Upcoming?ParentId=9&Limit=30`: `TotalRecordCount` 52, 30 rows
+returned, and **every row still `LocationType: Virtual` with no `Id`** —
+unchanged from the 2026-09-22 finding. Fields observed per row: `Name`,
+`SeriesName`, `Type=Episode`, `PremiereDate`, `ParentIndexNumber`,
+`IndexNumber`.
+
+That is exactly the data §9's Upcoming rendering consumes — date-grouped
+headings, series + `Sxx:Eyy` rows, and synthesized series-keyed targets for
+id-less rows — and it is present, so the rendering path is supported. The
+upstream slate remains entirely Virtual/id-less (still zero playable rows
+client-side), so the series-workspace navigation path remains the correct
+activation for this server's response.
