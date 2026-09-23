@@ -444,6 +444,13 @@ impl App {
                 source,
                 autostart,
             } => {
+                if autostart && self.player.is_remote_disconnected() {
+                    self.flash(
+                        super::actions::CONNECTION_LOST_MESSAGE.into(),
+                        ToastSeverity::Warning,
+                    );
+                    return;
+                }
                 let direct_remote = self.has_direct_remote_queue();
                 if self.local_queue_metadata_applies(self.playing_queue_scope()) {
                     self.queue_source = source;

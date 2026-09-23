@@ -352,6 +352,7 @@ fn connect_stream(
     let unified_queue = Arc::new(Mutex::new(None));
     let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
     let disconnected = Arc::new(AtomicBool::new(false));
+    let disconnect_notified = Arc::new(AtomicBool::new(false));
     let shutdown_announced = Arc::new(AtomicBool::new(false));
     let next_playback_id = Arc::new(std::sync::atomic::AtomicU64::new(1));
     let pending_playback = Arc::new(Mutex::new(HashMap::new()));
@@ -395,9 +396,10 @@ fn connect_stream(
     let queue_source_r = queue_source.clone();
     let pending_playback_r = pending_playback.clone();
     let disconnected_r = disconnected.clone();
+    let disconnect_notified_r = disconnect_notified.clone();
     let shutdown_announced_r = shutdown_announced.clone();
     let shutdown_request_r = shutdown_request_tx.clone();
-    let event_tx_r = event_tx;
+    let event_tx_r = event_tx.clone();
     std::thread::spawn(move || {
         let mut expected_disconnect = false;
         for line in reader.lines() {
@@ -462,14 +464,11 @@ fn connect_stream(
 
         log::info!(target: "remote", "daemon disconnected");
         if !expected_disconnect {
-            let _ = event_tx_r.send(PlayerEvent::Stopped {
-                slot_id: None,
-                position_ticks: 0,
-                played: false,
-                consume: false,
-                progress_report_accepted: false,
-                error: None,
-            });
+            if !disconnect_notified_r.swap(true, Ordering::SeqCst) {
+                let _ = event_tx_r.send(PlayerEvent::RemoteDisconnected(
+                    crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+                ));
+            }
         } else {
             // An "expected"/structured disconnect (e.g. an Emby Remote
             // takeover, or a deliberate daemon shutdown) never sends a
@@ -494,12 +493,22 @@ fn connect_stream(
 
     // Writer thread: serializes CtrlCmd to daemon
     let mut stream_w = stream;
+    let disconnected_w = disconnected.clone();
+    let disconnect_notified_w = disconnect_notified;
+    let event_tx_w = event_tx;
     std::thread::spawn(move || {
         while let Ok(cmd) = cmd_rx.recv() {
             let Ok(json) = serde_json::to_string(&cmd) else {
                 continue;
             };
-            if writeln!(stream_w, "{json}").is_err() {
+            if let Err(error) = writeln!(stream_w, "{json}") {
+                log::warn!(target: "remote", "failed to write command to daemon: {error}");
+                disconnected_w.store(true, Ordering::SeqCst);
+                if !disconnect_notified_w.swap(true, Ordering::SeqCst) {
+                    let _ = event_tx_w.send(PlayerEvent::RemoteDisconnected(
+                        crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+                    ));
+                }
                 break;
             }
         }

@@ -1,8 +1,12 @@
 # daemon-disconnect-handling Modifications
 
-## MODIFIED Requirements
+## REMOVED Requirements
 
 ### Requirement: Remote-daemon disconnects are unaffected
+
+## ADDED Requirements
+
+### Requirement: Remote-daemon connection loss is detected and surfaced
 
 A client of a daemon on another machine SHALL detect connection loss from
 either direction: the reader thread observing a closed stream (as today) and
@@ -44,12 +48,6 @@ which is the only daemon a client is able to restart.
 - **THEN** the client SHALL show a connection-lost warning
 - **THEN** the client SHALL NOT show the ordinary "Requesting playback…"
   acknowledgement
-
-#### Scenario: A remote daemon connection is lost
-
-- **WHEN** a client of a daemon on another machine loses its connection
-- **THEN** the existing disconnect behavior for remote daemons SHALL apply
-- **THEN** the client SHALL NOT offer to restart that daemon
 
 #### Scenario: Emby remote takes authority
 

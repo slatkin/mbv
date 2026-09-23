@@ -11,9 +11,14 @@ disconnected remote.
 ### Requirement: Disconnecting from a remote mbvd returns to the local unified queue
 
 When a client that is attached to a local daemon (`home_is_local_daemon`) disconnects from a
-remote mbvd, it SHALL return to the plain local-daemon presentation: a single unified queue owned
+remote mbvd — by user action, by unannounced connection loss, or by an announced daemon
+shutdown — it SHALL return to the plain local-daemon presentation: a single unified queue owned
 by the daemon, no separate remote queue tab, no remote queue control, and no queue-scope pill.
 Disconnecting SHALL NOT empty the queue — the daemon's current queue SHALL remain displayed.
+The return-to-local behavior SHALL be driven by the disconnect itself, not only by the user's
+disconnect key: a reader- or writer-detected connection loss SHALL trigger the same
+presentation restore, and the client SHALL NOT remain presenting (or accepting commands for)
+the stale adopted remote queue snapshot.
 
 #### Scenario: Stay-alive client disconnects from a remote device
 
@@ -37,6 +42,15 @@ Disconnecting SHALL NOT empty the queue — the daemon's current queue SHALL rem
   unannounced daemon loss or an announced daemon shutdown
 - **THEN** the client SHALL present the local daemon's unified queue
 - **THEN** the queue-scope pill SHALL NOT be shown
+
+#### Scenario: Write-side loss with no reader event
+
+- **WHEN** the client detects the loss from a failed command write (no reader
+  event has been processed)
+- **THEN** the client SHALL perform the same return-to-local presentation as
+  a reader-detected loss
+- **THEN** the client SHALL NOT leave the adopted remote queue snapshot on
+  screen
 
 ### Requirement: Reconnect does not create a remote queue for the local daemon
 

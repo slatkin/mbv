@@ -90,7 +90,7 @@ impl RemotePlayer {
     }
 
     pub fn send_ctrl_cmd(&self, cmd: CtrlCmd) -> bool {
-        self.cmd_tx.send(cmd).is_ok()
+        !self.is_disconnected() && self.cmd_tx.send(cmd).is_ok()
     }
 
     /// Bounded lifecycle shutdown request.

@@ -6,6 +6,7 @@ use super::{
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
 use mbv_core::player::PlayerCommand;
+pub(super) use mbv_core::player::CONNECTION_LOST_MESSAGE;
 use mbv_core::ItemId;
 use std::sync::Arc;
 
@@ -181,6 +182,10 @@ impl App {
     /// direct-remote owners; fresh `play_queue` projections would diverge
     /// from monotonic tab ids after a replacement.
     pub(super) fn submit_tab_queue(&mut self, scope: super::QueueScope, start_idx: usize) -> bool {
+        if self.player.is_remote_disconnected() {
+            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
+            return false;
+        }
         let slots = self.queue_for_scope(scope).all_queue_slots();
         if slots.is_empty() {
             return false;
@@ -193,6 +198,9 @@ impl App {
             headless,
             self.ui_volume,
         );
+        if !sent && self.player.is_remote_disconnected() {
+            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
+        }
         if sent {
             self.player.set_queue_source(self.queue_source.clone());
         }
@@ -295,6 +303,10 @@ impl App {
         start_idx: usize,
         queue_source: crate::config::QueueSource,
     ) {
+        if self.player.is_remote_disconnected() {
+            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
+            return;
+        }
         let mixed_unplayable = match self.playback_eligibility(&items) {
             PlaybackEligibility::WhollyUnplayable { .. } => {
                 self.defer_local_play(items, start_idx, queue_source.clone());
@@ -358,6 +370,10 @@ impl App {
     }
 
     pub(super) fn play_item(&mut self, item: EmbyItem) {
+        if self.player.is_remote_disconnected() {
+            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
+            return;
+        }
         log::info!(target: "library_route", "user action=play item_id={:?} item_name={:?}", item.id, item.name);
         if matches!(
             self.playback_eligibility(std::slice::from_ref(&item)),
@@ -514,6 +530,10 @@ impl App {
             *self.queue_for_scope_mut(scope) = previous_queue;
             return false;
         }
+        if !self.is_cast_attached() && self.player.is_remote_disconnected() {
+            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
+            return false;
+        }
         let previous_queue = self.queue_for_scope(scope).clone();
         let existing_index = self
             .queue_for_scope(scope)
@@ -548,6 +568,11 @@ impl App {
             }
             return true;
         }
+        if self.player.is_remote_disconnected() {
+            *self.queue_for_scope_mut(scope) = previous_queue;
+            self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
+            return false;
+        }
         let audio_only = all_slots.iter().all(|slot| slot.item.is_audio());
         let submitted = self.player.submit_queue_slots(
             all_slots,
@@ -559,8 +584,17 @@ impl App {
         if !submitted {
             *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(
-                "Playback owner rejected this item".into(),
-                ToastSeverity::Error,
+                if self.player.is_remote_disconnected() {
+                    CONNECTION_LOST_MESSAGE
+                } else {
+                    "Playback owner rejected this item"
+                }
+                .into(),
+                if self.player.is_remote_disconnected() {
+                    ToastSeverity::Warning
+                } else {
+                    ToastSeverity::Error
+                },
             );
             return false;
         }

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::{make_app_stub, make_remote_app_stub};
+use crate::app::tests::{make_app_stub, make_audio_items, make_remote_app_stub};
 use crate::app::{LibEvent, QueueScope};
 use crossterm::event::{KeyCode, KeyModifiers};
 
@@ -261,6 +261,40 @@ fn queue_play_cursor_without_direct_remote_stays_on_local_scope() {
         QueueScope::Local,
         "queue scope should remain Local when there is no Direct remote control"
     );
+}
+
+#[test]
+fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {
+    let mut app = make_remote_app_stub(make_items(1), make_items(1));
+    app.player
+        .disconnected_flag()
+        .unwrap()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    app.play_item(make_item("Track", "Audio"));
+
+    assert_eq!(app.status, crate::app::actions::CONNECTION_LOST_MESSAGE);
+    assert!(!app.status.contains("Requesting playback"));
+    assert_eq!(app.status_severity, ToastSeverity::Warning);
+}
+
+#[test]
+fn queue_play_cursor_on_disconnected_remote_reports_jump_rejection() {
+    let mut app = make_remote_app_stub(make_items(1), make_audio_items(2));
+    app.set_queue_scope(QueueScope::Remote);
+    app.player.status.lock().unwrap().active = true;
+    app.player.status.lock().unwrap().current_idx = 0;
+    app.pending_remote_move_cursor = Some(1);
+    app.player
+        .disconnected_flag()
+        .unwrap()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    app.dispatch(Command::QueuePlayCursor(1));
+
+    assert_eq!(app.status, crate::app::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(app.pending_remote_move_cursor, None);
 }
 
 #[test]
