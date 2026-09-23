@@ -36,6 +36,17 @@ fn browser_owner(harness: &TickHarness) -> &BrowserOwner {
         .expect("browser owner installed")
 }
 
+fn library_panel(harness: &TickHarness) -> &LibraryPanel {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type")
+}
+
 fn dispatch_messages(harness: &mut TickHarness, messages: Vec<Msg>) {
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in messages {
@@ -84,6 +95,11 @@ fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBack
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     terminal
+}
+
+fn draw_mounted(harness: &mut TickHarness, width: u16, height: u16) {
+    let _ = draw(harness, width, height);
+    let _ = draw(harness, width, height);
 }
 
 #[rstest::rstest]
@@ -170,6 +186,128 @@ fn mounted_flat_latest_populates_from_destination_fetch(
             id: "destination-latest".into(),
         })
     );
+}
+
+#[rstest::rstest]
+#[case::movies("movies", false, "Movies")]
+#[case::home_videos("homevideos", true, "Home Videos")]
+#[case::generic("other", false, "Other")]
+fn mounted_flat_latest_marker_acknowledges_through_async_snapshot_replacement(
+    #[case] collection_type: &str,
+    #[case] feed_view: bool,
+    #[case] title: &str,
+) {
+    let mut app = make_movie_app();
+    app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.libs[0].library.collection_type = collection_type.into();
+    app.libs[0].library.name = if feed_view { "Movies" } else { title }.into();
+    app.libs[0].library_total = Some(100);
+    if feed_view {
+        use crate::app::types_feed::{FeedHomeVideoGroup, FeedHomeVideoState};
+
+        app.config.lock().unwrap().feed_view_libraries = vec!["movies".into()];
+        let mut folder = crate::app::tests::make_item("Group One", "Folder");
+        folder.id = "group-one".into();
+        folder.is_folder = true;
+        app.libs[0].nav_stack[0].items = vec![folder.clone()];
+        app.libs[0].feed_home_video = Some(FeedHomeVideoState {
+            all_items: Vec::new(),
+            groups: vec![FeedHomeVideoGroup {
+                folder,
+                items: Vec::new(),
+            }],
+            selected_group: 1,
+            video_cursor: 0,
+            video_scroll: 0,
+            loading: false,
+        });
+    }
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::home_latest::HomeLatestLaunchWindow {
+            previous: Some(100),
+            current: 200,
+        };
+    let mut item = crate::app::tests::make_item("New movie", "Movie");
+    item.id = "new-movie".into();
+    item.date_added = "1970-01-01T00:02:00Z".into();
+    let replacement_item = || {
+        mbv_core::playback_queue::QueueItem::Emby(Box::new(item.clone()))
+    };
+    harness.model_mut().update_emby_latest_snapshot(
+        "lib-movies".into(),
+        title.into(),
+        vec![replacement_item()],
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    draw_mounted(&mut harness, 100, 30);
+
+    assert!(harness.model().tv_latest_snapshots["lib-movies"].has_new_content);
+    assert!(
+        library_panel(&harness).test_selector_markers()[0],
+        "unvisited Latest receives the shell-projected launch-window marker"
+    );
+    assert!(!browser_owner(&harness).latest_mode());
+
+    let outcome = click_selector(&mut harness, 0);
+    dispatch_messages(&mut harness, outcome.messages);
+    draw_mounted(&mut harness, 100, 30);
+    assert!(browser_owner(&harness).latest_mode());
+    assert!(!library_panel(&harness).test_selector_markers()[0]);
+    assert!(harness.model().acknowledged_home_latest_sources.contains(
+        &crate::app::types_playback::DestinationLatestSource::Emby("lib-movies".into())
+    ));
+
+    // Model an asynchronous refresh completing with another launch-window item.
+    harness.model_mut().update_emby_latest_snapshot(
+        "lib-movies".into(),
+        title.into(),
+        vec![replacement_item()],
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    draw_mounted(&mut harness, 100, 30);
+    assert_eq!(
+        harness.model().tv_latest_snapshots["lib-movies"].items[0]
+            .as_emby()
+            .unwrap()
+            .id,
+        "new-movie"
+    );
+    assert!(
+        !library_panel(&harness).test_selector_markers()[0],
+        "a replacement snapshot cannot restore an acknowledged marker"
+    );
+}
+
+#[test]
+fn mounted_flat_latest_first_launch_has_no_new_content_marker() {
+    let mut app = make_movie_app();
+    app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.libs[0].library_total = Some(100);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::home_latest::HomeLatestLaunchWindow {
+            previous: None,
+            current: 200,
+        };
+    let mut item = crate::app::tests::make_item("New movie", "Movie");
+    item.id = "new-movie".into();
+    item.date_added = "1970-01-01T00:02:00Z".into();
+    harness.model_mut().update_emby_latest_snapshot(
+        "lib-movies".into(),
+        "Movies".into(),
+        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(item))],
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    draw_mounted(&mut harness, 100, 30);
+
+    assert!(!library_panel(&harness).test_selector_markers()[0]);
 }
 
 #[rstest::rstest]
