@@ -314,9 +314,29 @@ impl TvContent {
                             hit: TvHit::SeriesRow(item.id),
                         })
                     }),
-                    TvTreeTarget::Season { .. } | TvTreeTarget::Episode { .. } => {
-                        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-                    }
+                    TvTreeTarget::Season { .. } | TvTreeTarget::Episode { .. } => self
+                        .show_for_tree_target(&target)
+                        .map(|item| Msg::Shell(ShellRequest::TvHitClick {
+                            hit: TvHit::SeriesRow(item.id),
+                        }))
+                }
+            }
+            MediaListSurfaceInput::DoubleClick(at) => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                let target = self.browser.resolve_current_point(at)?.clone();
+                self.browser.apply(TreeOperation::Select(target.clone()));
+                match target {
+                    TvTreeTarget::Show(_) => self.show_item_for_tree_target(&target).map(|item| {
+                        Msg::Shell(ShellRequest::TvHitDoubleClick {
+                            hit: TvHit::SeriesRow(item.id),
+                        })
+                    }),
+                    TvTreeTarget::Season { .. } => self.toggle_tree_expansion(target),
+                    TvTreeTarget::Episode { .. } => self
+                        .show_item_for_tree_target(&target)
+                        .map(|episode| Msg::Shell(ShellRequest::TvEpisodeActivate { episode })),
                 }
             }
             MediaListSurfaceInput::ContextClick(at) => {
@@ -335,9 +355,39 @@ impl TvContent {
         }
     }
 
-    fn show_item_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
-        let TvTreeTarget::Show(show_target) = target else {
+    fn show_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
+        let show_target = match target {
+            TvTreeTarget::Show(show) | TvTreeTarget::Season { show, .. }
+            | TvTreeTarget::Episode { show, .. } => show,
+        };
+        self.show_item_for_tree_target(&TvTreeTarget::Show(show_target.clone()))
+    }
+
+    pub(in crate::app) fn selected_tree_show(&self) -> Option<EmbyItem> {
+        if self.flat_episode_mode() || self.inline_search.is_active() {
             return None;
+        }
+        self.browser
+            .selected_target()
+            .and_then(|target| self.show_for_tree_target(target))
+    }
+
+    pub(super) fn tree_selection_request(&self, target: &TvTreeTarget) -> Option<Msg> {
+        let show = self.show_for_tree_target(target)?;
+        let already_selected = self
+            .context
+            .selected_series
+            .as_ref()
+            .is_some_and(|selected| selected.id == show.id && selected.name == show.name);
+        (!already_selected).then_some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(show.id),
+        }))
+    }
+
+    fn show_item_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
+        let show_target = match target {
+            TvTreeTarget::Show(show) | TvTreeTarget::Season { show, .. }
+            | TvTreeTarget::Episode { show, .. } => show,
         };
         let mut shows: Vec<_> = self.context.list.items.iter().collect();
         shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
@@ -346,7 +396,7 @@ impl TvContent {
             *counts.entry(show.id.as_str()).or_insert(0usize) += 1;
         }
         let mut occurrences = std::collections::HashMap::new();
-        shows.into_iter().find_map(|show| {
+        let show = shows.into_iter().find_map(|show| {
             let duplicate_id = counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
             let base = TvContent::stable_show_target(show, duplicate_id, 0);
             let occurrence = occurrences.entry(base.clone()).or_insert(0usize);
@@ -354,7 +404,57 @@ impl TvContent {
                 == *show_target;
             *occurrence += 1;
             matches.then(|| show.clone())
-        })
+        })?;
+        match target {
+            TvTreeTarget::Show(_) => Some(show),
+            TvTreeTarget::Season {
+                show: target_show,
+                season,
+                occurrence,
+            } => {
+                let selected = self.context.selected_series.as_ref()?;
+                if target_show != show_target || selected.id != show.id || selected.name != show.name {
+                    return None;
+                }
+                self.context
+                    .series_detail
+                    .as_ref()?
+                    .seasons
+                    .iter()
+                    .filter(|item| item.id == *season)
+                    .nth(*occurrence)
+                    .cloned()
+            }
+            TvTreeTarget::Episode {
+                show: target_show,
+                season,
+                season_occurrence,
+                episode,
+                occurrence,
+            } => {
+                let selected = self.context.selected_series.as_ref()?;
+                if target_show != show_target || selected.id != show.id || selected.name != show.name {
+                    return None;
+                }
+                let detail = self.context.series_detail.as_ref()?;
+                detail
+                    .seasons
+                    .iter()
+                    .filter(|item| item.id == *season)
+                    .nth(*season_occurrence)?;
+                detail.episodes.get(season)?.iter()
+                    .filter(|item| {
+                        let id = if item.id.is_empty() {
+                            upcoming_episode_target(item)
+                        } else {
+                            item.id.clone()
+                        };
+                        id == *episode
+                    })
+                    .nth(*occurrence)
+                    .cloned()
+            }
+        }
     }
 
     /// Resolve a click in the flat Browser list slot to the row it landed on

@@ -77,8 +77,10 @@ impl Model {
                         } else {
                             let owner_has_target = self
                                 .tv_owner()
-                                .and_then(TvContent::selected_item)
-                                .is_some_and(|selected| selected.id == item.id);
+                                .and_then(TvContent::selected_tree_show)
+                                .is_some_and(|selected| {
+                                    selected.id == item.id && selected.name == item.name
+                                });
                             if self.app.wide_tv_library_area(lib_idx).is_some() {
                                 self.app.activate_selected_series_item(lib_idx, &item);
                             } else if owner_has_target {
@@ -438,7 +440,13 @@ impl Model {
         // App-derived item.
         let selected_series = self
             .tv_owner()
-            .and_then(TvContent::selected_item)
+            .and_then(TvContent::selected_tree_show)
+            .filter(|selected| {
+                list.items
+                    .iter()
+                    .any(|item| item.id == selected.id && item.name == selected.name)
+            })
+            .or_else(|| self.tv_owner().and_then(TvContent::selected_item))
             .filter(|item| item.item_type == "Series")
             .or_else(|| {
                 list.selected_item()

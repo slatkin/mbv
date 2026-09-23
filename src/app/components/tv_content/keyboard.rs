@@ -2,7 +2,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::inline_search::InlineSearchAction;
 use super::super::list::tree_browser::TreeOperation;
-use super::{Msg, Pane, ShellRequest, TerminalObserverEvent, TvContent};
+use super::{Msg, Pane, ShellRequest, TerminalObserverEvent, TvContent, TvTreeTarget};
 use crate::app::components::media_list::MediaListSurfaceInput;
 
 impl TvContent {
@@ -52,7 +52,7 @@ impl TvContent {
                 None => self.inline_search_result_action(key),
             };
         }
-        if self.carrier.handle_visual_key(key).is_some() {
+        if self.flat_episode_mode() && self.carrier.handle_visual_key(key).is_some() {
             return Some(Msg::Shell(ShellRequest::SelectionProjection(
                 self.carrier.selection_summary(),
             )));
@@ -73,6 +73,9 @@ impl TvContent {
             && !self.flat_episode_mode()
         {
             return self.handle_key_overlay_workspace(key);
+        }
+        if !self.flat_episode_mode() && self.pane == Pane::Series {
+            return self.handle_show_tree_key(key);
         }
         if self.is_wide {
             self.handle_key_wide(key)
@@ -125,29 +128,141 @@ impl TvContent {
     /// Show-mode navigation changes the tree's selected stable target. Moving
     /// between show roots also projects the resolved show position to the
     /// shell so its existing series-detail request remains synchronized.
-    fn handle_show_tree_navigation(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let operation = match key.code {
-            Key::Up | Key::Char('k') => TreeOperation::Move(-1),
-            Key::Down | Key::Char('j') => TreeOperation::Move(1),
-            Key::PageUp => TreeOperation::Page(-1),
-            Key::PageDown => TreeOperation::Page(1),
-            Key::Home => TreeOperation::First,
-            Key::End => TreeOperation::Last,
-            _ => return None,
+    fn handle_show_tree_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let selected = self.browser.selected_target().cloned();
+        let transition = match key.code {
+            Key::Up | Key::Char('k') => Some(self.browser.apply(TreeOperation::Move(-1))),
+            Key::Down | Key::Char('j') => Some(self.browser.apply(TreeOperation::Move(1))),
+            Key::PageUp => Some(self.browser.apply(TreeOperation::Page(-1))),
+            Key::PageDown => Some(self.browser.apply(TreeOperation::Page(1))),
+            Key::Home => Some(self.browser.apply(TreeOperation::First)),
+            Key::End => Some(self.browser.apply(TreeOperation::Last)),
+            _ => None,
         };
-        let transition = self.browser.apply(operation);
-        let request = transition.selected_target.and_then(|target| {
-            self.show_item_for_tree_target(&target).and_then(|item| {
-                self.carrier.select_target(&item.id);
-                self.context
-                    .list
-                    .items
+        if let Some(transition) = transition {
+            let changed = transition.selected_target != selected;
+            let selected = transition.selected_target;
+            return Some(if changed {
+                selected
+                    .as_ref()
+                    .and_then(|target| self.tree_selection_request(target))
+                    .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+            } else {
+                Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+            });
+        }
+
+        if matches!(key.code, Key::Esc | Key::Backspace) {
+            return Some(Msg::Shell(ShellRequest::TvBack));
+        }
+
+        let target = self.browser.selected_target().cloned();
+        let item = target
+            .as_ref()
+            .and_then(|target| self.show_item_for_tree_target(target));
+        let request = match key.code {
+            Key::Enter => {
+                let activated = match self.browser.apply(TreeOperation::Activate).external_intent {
+                    Some(
+                        crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
+                            target,
+                        ),
+                    ) => Some(target),
+                    _ => None,
+                };
+                match activated {
+                    Some(TvTreeTarget::Show(_)) => item.map(|item| {
+                        if self.is_wide {
+                            self.episodes.select_first();
+                            self.pane = Pane::Episodes;
+                        }
+                        ShellRequest::TvActivate { item }
+                    }),
+                    Some(target @ TvTreeTarget::Season { .. }) => {
+                        let expansion = self.toggle_tree_expansion(target);
+                        return Some(
+                            expansion
+                                .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+                        );
+                    }
+                    Some(TvTreeTarget::Episode { .. }) => {
+                        item.map(|episode| ShellRequest::TvEpisodeActivate { episode })
+                    }
+                    None => None,
+                }
+            }
+            Key::Right => {
+                let expansion = target.and_then(|target| self.toggle_tree_expansion(target));
+                return Some(
+                    expansion.unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+                );
+            }
+            Key::Left => {
+                if let Some(target) = target {
+                    if self.browser.is_expanded(&target) {
+                        self.browser
+                            .apply(TreeOperation::ToggleExpansionTarget(target));
+                        return Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed));
+                    }
+                    self.browser.apply(TreeOperation::Parent);
+                    return Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed));
+                }
+                None
+            }
+            Key::Char('.') => {
+                let intent = self.browser.apply(TreeOperation::Context).external_intent;
+                let targets = match intent {
+                    Some(crate::app::components::list::tree_browser::TreeExternalIntent::Context(target)) => vec![target],
+                    Some(crate::app::components::list::tree_browser::TreeExternalIntent::ContextSelection(targets)) => targets,
+                    _ => Vec::new(),
+                };
+                let items: Vec<_> = targets
                     .iter()
-                    .position(|candidate| candidate.id == item.id)
-                    .map(|index| Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index }))
-            })
-        });
-        Some(request.unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
+                    .filter_map(|target| self.show_item_for_tree_target(target))
+                    .collect();
+                (!items.is_empty()).then_some(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                    None,
+                ))
+            }
+            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryPlay { item })
+            }
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryEnqueue { item })
+            }
+            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
+            }
+            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryShuffle { item })
+            }
+            Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                Some(ShellRequest::EmbyLibraryRescan)
+            }
+            Key::Char('r')
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                Some(ShellRequest::EmbyLibraryRefresh)
+            }
+            Key::Char('/') => {
+                self.inline_search.open();
+                return Some(Msg::Shell(ShellRequest::OpenInlineSearch));
+            }
+            Key::Char(c @ ('[' | ']'))
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                return Some(Msg::Shell(ShellRequest::TvCycleLetterPill {
+                    delta: if c == '[' { -1 } else { 1 },
+                }));
+            }
+            _ => None,
+        };
+        request.map(Msg::Shell)
     }
 
     /// Wide pane-based keyboard handling (unchanged from before the merge).
@@ -272,12 +387,6 @@ impl TvContent {
     /// effects, refresh/rescan, context menu, search and letter-pill cycling
     /// reuse the same requests Wide already emits.
     fn handle_key_narrow(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if !self.flat_episode_mode() && !self.inline_search.is_active() && self.pane == Pane::Series
-        {
-            if let Some(message) = self.handle_show_tree_navigation(key) {
-                return Some(message);
-            }
-        }
         if key.modifiers.contains(KeyModifiers::ALT)
             && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
         {

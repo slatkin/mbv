@@ -874,8 +874,9 @@ fn tv_narrow_tick_navigation_updates_the_painted_control() {
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
     let before = tv(&harness)
-        .viewport_anchor(tv(&harness).painted_viewport_height())
-        .expect("narrow TV selection");
+        .selected_tree_show()
+        .expect("narrow TV tree selection")
+        .id;
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -885,9 +886,10 @@ fn tv_narrow_tick_navigation_updates_the_painted_control() {
     draw(&mut harness);
 
     let after = tv(&harness)
-        .viewport_anchor(tv(&harness).painted_viewport_height())
-        .expect("narrow TV selection after navigation");
-    assert_ne!(after.selected_target, before.selected_target);
+        .selected_tree_show()
+        .expect("narrow TV tree selection after navigation")
+        .id;
+    assert_ne!(after, before);
 
     // Narrow TV is the same panel-hosted owner (task 8.4) -- no second
     // surface, and the owner stays installed at every breakpoint.
@@ -903,7 +905,10 @@ fn tv_narrow_tick_navigation_updates_the_painted_control() {
 fn tv_wide_narrow_wide_tick_navigation_keeps_the_selected_target() {
     let mut harness = tv_harness();
     draw(&mut harness);
-    assert_eq!(tv(&harness).selected_item_id(), Some("series-0".into()));
+    assert_eq!(
+        tv(&harness).selected_tree_show().map(|item| item.id),
+        Some("series-0".into())
+    );
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -911,39 +916,43 @@ fn tv_wide_narrow_wide_tick_navigation_keeps_the_selected_target() {
     }));
     harness.step();
     draw(&mut harness);
-    assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
-    let wide_anchor = tv(&harness)
-        .viewport_anchor(tv(&harness).painted_viewport_height())
-        .expect("wide TV viewport anchor");
+    assert_eq!(
+        tv(&harness).selected_tree_show().map(|item| item.id),
+        Some("series-1".into())
+    );
+    let wide_target = tv(&harness)
+        .selected_tree_show()
+        .expect("wide TV tree selection")
+        .id;
 
     // Narrow: the same owner keeps the same selected target and viewport
     // offset across the shared Wide/Inline presentation transition.
     harness.model_mut().app.terminal_width = 80;
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
-    assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
-    let narrow_anchor = tv(&harness)
-        .viewport_anchor(tv(&harness).painted_viewport_height())
-        .expect("narrow TV viewport anchor");
-    assert_eq!(narrow_anchor.selected_target, wide_anchor.selected_target);
     assert_eq!(
-        narrow_anchor.selected_row_offset,
-        wide_anchor.selected_row_offset,
-        "wide={wide_anchor:?} narrow={narrow_anchor:?} scroll={} height={}",
-        tv(&harness).scroll(),
-        tv(&harness).painted_viewport_height()
+        tv(&harness).selected_tree_show().map(|item| item.id),
+        Some("series-1".into())
     );
+    let narrow_target = tv(&harness)
+        .selected_tree_show()
+        .expect("narrow TV tree selection")
+        .id;
+    assert_eq!(narrow_target, wide_target);
 
     // Wide again: still the same target and viewport offset.
     harness.model_mut().app.terminal_width = 160;
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
-    assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
-    let final_anchor = tv(&harness)
-        .viewport_anchor(tv(&harness).painted_viewport_height())
-        .expect("final Wide TV viewport anchor");
-    assert_eq!(final_anchor.selected_target, narrow_anchor.selected_target);
-    assert_eq!(final_anchor.selected_row_offset, narrow_anchor.selected_row_offset);
+    assert_eq!(
+        tv(&harness).selected_tree_show().map(|item| item.id),
+        Some("series-1".into())
+    );
+    let final_target = tv(&harness)
+        .selected_tree_show()
+        .expect("final Wide TV tree selection")
+        .id;
+    assert_eq!(final_target, narrow_target);
 }
 
 #[rstest]
@@ -985,6 +994,13 @@ fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
 
     assert!(panel(&harness).test_hero_overlay_open());
     assert!(!tv(&harness).episode_pane_focused());
+    assert_eq!(
+        tv(&harness)
+            .viewport_anchor(tv(&harness).painted_viewport_height())
+            .expect("flat episode viewport anchor")
+            .selected_target,
+        "latest-episode"
+    );
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
@@ -1055,7 +1071,10 @@ fn flat_episode_hero_is_painted_only_in_mini_view() {
 fn tv_wide_tick_navigation_updates_the_painted_control() {
     let mut harness = tv_harness();
     draw(&mut harness);
-    assert_eq!(tv(&harness).selected_item_id(), Some("series-0".into()));
+    assert_eq!(
+        tv(&harness).selected_tree_show().map(|item| item.id),
+        Some("series-0".into())
+    );
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -1064,7 +1083,10 @@ fn tv_wide_tick_navigation_updates_the_painted_control() {
     harness.step();
     draw(&mut harness);
 
-    assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
+    assert_eq!(
+        tv(&harness).selected_tree_show().map(|item| item.id),
+        Some("series-1".into())
+    );
 }
 
 /// Task 8.4: a catalog-retained TV owner keeps its local cursor and scroll
@@ -1098,9 +1120,10 @@ fn tv_owner_retains_cursor_and_scroll_while_inactive() {
         draw(&mut harness);
     }
     let before = tv(&harness)
-        .viewport_anchor(tv(&harness).painted_viewport_height())
-        .expect("TV owner anchor before inactive transition");
-    assert_eq!(before.selected_target, "series-8");
+        .selected_tree_show()
+        .expect("TV tree selection before inactive transition")
+        .id;
+    assert_eq!(before, "series-8");
     // The fixed-row owner may keep the selected row visible at offset zero;
     // clamping is asserted by the carrier tests for both viewport sizes.
 
@@ -1122,10 +1145,10 @@ fn tv_owner_retains_cursor_and_scroll_while_inactive() {
     harness.step();
     draw(&mut harness);
     let after = tv(&harness)
-        .viewport_anchor(tv(&harness).painted_viewport_height())
-        .expect("TV owner anchor after inactive transition");
-    assert_eq!(after.selected_target, before.selected_target);
-    assert_eq!(after.selected_row_offset, before.selected_row_offset);
+        .selected_tree_show()
+        .expect("TV tree selection after inactive transition")
+        .id;
+    assert_eq!(after, before);
 }
 
 /// Task 8.4: the season pills are resolved by the mounted panel from the

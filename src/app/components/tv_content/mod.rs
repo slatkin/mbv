@@ -852,6 +852,16 @@ impl TvContent {
     /// stable target; the next content push preserves it.
     pub(in crate::app) fn select_series_target(&mut self, target: &str) {
         self.carrier.select_target(&target.to_string());
+        if let Some(tree_target) = self.browser.roots().into_iter().find(|tree_target| {
+            let TvTreeTarget::Show(show_target) = tree_target else {
+                return false;
+            };
+            self.show_item_for_tree_target(&TvTreeTarget::Show(show_target.clone()))
+                .is_some_and(|show| show.id == target)
+        }) {
+            self.browser
+                .apply(TreeOperation::Select(tree_target.clone()));
+        }
     }
     /// Enter episode selection (the wide second-Enter move; the same
     /// "workspace is active" state the Hero overlay's focused Workspace

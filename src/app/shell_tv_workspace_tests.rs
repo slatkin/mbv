@@ -273,17 +273,29 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     let mut model = mounted_tv_model();
     assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
 
-    // Move the component cursor to row 1 (movie-second) and Enter to the
-    // Episodes pane: both are non-default state that a remount would reset.
+    // Move the tree selection to movie-second and translate the stable show
+    // target through the existing shell row-selection request.
     let move_request = model.test_tv_owner_mut().test_key(&KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     });
     assert!(matches!(
         move_request,
-        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: crate::app::components::msg::TvHit::SeriesRow(ref target)
+        })) if target == "movie-second"
     ));
-    let selected_id = |model: &mut Model| model.test_tv_owner().selected_item_id();
+    model.app.handle_mouse_single_click_tv(
+        0,
+        crate::app::components::msg::TvHit::SeriesRow("movie-second".into()),
+    );
+    model.push_tv_workspace_content();
+    let selected_id = |model: &mut Model| {
+        model
+            .test_tv_owner()
+            .selected_tree_show()
+            .map(|item| item.id)
+    };
     assert_eq!(selected_id(&mut model), Some("movie-second".into()));
 
     // Seed detail for the selected series (movie-second, the row the
@@ -393,11 +405,15 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     });
     assert!(matches!(
         &moved,
-        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: crate::app::components::msg::TvHit::SeriesRow(target)
+        })) if target == "movie-second"
     ));
-    if let Some(Msg::Shell(request)) = moved {
-        model.handle_tv_request(request);
-    }
+    model.app.handle_mouse_single_click_tv(
+        0,
+        crate::app::components::msg::TvHit::SeriesRow("movie-second".into()),
+    );
+    model.push_tv_workspace_content();
     model.sync_active_destination();
     let mut initial_wide_terminal = Terminal::new(TestBackend::new(160, 40)).unwrap();
     initial_wide_terminal
@@ -407,8 +423,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
 
     let wide_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("wide TV workspace has a selected series");
+        .selected_tree_show()
+        .expect("wide TV tree has a selected show")
+        .id;
     assert_eq!(wide_target, "movie-second");
 
     // Flip to narrow: the same owner stays mounted and focused, and its
@@ -423,8 +440,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
         .unwrap();
     let narrow_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("narrow TV workspace has a selected series");
+        .selected_tree_show()
+        .expect("narrow TV tree has a selected show")
+        .id;
     assert_eq!(
         narrow_target, wide_target,
         "wide→narrow flip must preserve the selected series target"
@@ -438,11 +456,22 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     let Some(Msg::Shell(request)) = up else {
         panic!("narrow Up must emit a typed shell request");
     };
-    model.handle_emby_library_request(request);
+    assert!(matches!(
+        request,
+        ShellRequest::TvHitClick {
+            hit: crate::app::components::msg::TvHit::SeriesRow(ref target)
+        } if target == "movie-focused"
+    ));
+    model.app.handle_mouse_single_click_tv(
+        0,
+        crate::app::components::msg::TvHit::SeriesRow("movie-focused".into()),
+    );
+    model.push_tv_workspace_content();
     let narrow_return_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("narrow TV workspace has a selected series after move");
+        .selected_tree_show()
+        .expect("narrow TV tree has a selected show after move")
+        .id;
     assert_eq!(narrow_return_target, "movie-focused");
 
     // Flip back to wide: the same owner keeps the series selected while
@@ -452,8 +481,9 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     let final_wide_target = model
         .test_tv_owner()
-        .selected_item_id()
-        .expect("wide TV workspace has a selected series after return");
+        .selected_tree_show()
+        .expect("wide TV tree has a selected show after return")
+        .id;
     assert_eq!(
         final_wide_target, narrow_return_target,
         "narrow→wide flip must preserve the selected series target"

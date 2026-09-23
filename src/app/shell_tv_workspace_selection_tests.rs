@@ -90,43 +90,49 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         (model, request)
     }
 
-    // TvMoveRows (Down): the component cursor moves 0 -> 1 (movie-second)
-    // and the emitted request carries rows: 1; App's browse cursor stays 0
-    // — the removed mirror's former effect would have written 1 here.
+    // Tree navigation resolves the selected stable target. Moving from the
+    // current show to movie-second updates the existing shell-owned browse
+    // selection through its typed row-click request; it never copies a flat
+    // carrier cursor or numeric index.
     let (mut model, request) = drive(Key::Down);
-    assert!(matches!(request, ShellRequest::TvMoveRows { rows: 1 }));
-    model.handle_tv_request(request);
+    assert!(matches!(
+        request,
+        ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(ref target)
+        } if target == "movie-second"
+    ));
+    model
+        .app
+        .handle_mouse_single_click_tv(0, TvHit::SeriesRow("movie-second".into()));
+    model.push_tv_workspace_content();
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
     assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().cursor(),
-        0,
-        "TvMoveRows must not write the component cursor into App's browse level"
-    );
-    let selected_id = model.test_tv_owner().selected_item_id();
-    assert_eq!(
-        selected_id,
-        Some("movie-second".into()),
-        "the component cursor must have moved while App's cursor stayed put"
+        model
+            .test_tv_owner()
+            .selected_tree_show()
+            .map(|item| item.id),
+        Some("movie-second".into())
     );
 
-    // TvJumpCursor (End): fresh mount again — the component jumps to the
-    // last row; the request carries to_end: true (distinct from Home's
-    // to_end: false); App's browse cursor still stays 0.
+    // End also resolves through the tree's stable target and sends the
+    // selected show, not a cursor delta.
     let (mut model, request) = drive(Key::End);
     assert!(matches!(
         request,
-        ShellRequest::TvJumpCursor { to_end: true }
+        ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(ref target)
+        } if target == "movie-second"
     ));
-    model.handle_tv_request(request);
+    model
+        .app
+        .handle_mouse_single_click_tv(0, TvHit::SeriesRow("movie-second".into()));
+    model.push_tv_workspace_content();
     assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().cursor(),
-        0,
-        "TvJumpCursor must not write the component cursor into App's browse level"
-    );
-    let selected_id = model.test_tv_owner().selected_item_id();
-    assert_eq!(
-        selected_id,
-        Some("movie-second".into()),
-        "the component cursor must have jumped while App's cursor stayed put"
+        model
+            .test_tv_owner()
+            .selected_tree_show()
+            .map(|item| item.id),
+        Some("movie-second".into())
     );
 
     // TvCycleLetterPill (']' in the Series pane): fresh mount with a
@@ -145,20 +151,21 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         "TvCycleLetterPill must not write the component cursor into App's browse level"
     );
 
-    // Right: arrows never move focus between wide-library panes — no
-    // request, no pane change, and App's browse cursor stays put.
+    // Right expands the selected show through the existing lazy-load request;
+    // it does not move focus to the Wide Workspace.
     let mut model = mounted_tv_model();
     model.app.libs[0].library_total = Some(1000);
     let request = model.test_tv_owner_mut().test_key(&KeyEvent {
         code: Key::Right,
         modifiers: KeyModifiers::NONE,
     });
-    assert!(request.is_none(), "Right must not move focus between panes");
-    assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().cursor(),
-        0,
-        "Right must not write the component cursor into App's browse level"
-    );
+    assert!(matches!(
+        request,
+        Some(Msg::Shell(ShellRequest::TvTreeExpand {
+            target: crate::app::components::tv_tree_target::TvTreeTarget::Show(_)
+        }))
+    ));
+    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 }
 
 #[test]
@@ -206,16 +213,16 @@ fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
     });
     assert!(matches!(
         moved,
-        Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(ref target)
+        })) if target == "movie-second"
     ));
-    assert_eq!(
-        model.app.libs[0].nav_stack[0].resting().cursor(),
-        0,
-        "App browse cursor must stay stale (no mirror)"
-    );
+    model
+        .app
+        .handle_mouse_single_click_tv(0, TvHit::SeriesRow("movie-second".into()));
 
-    // The push must derive the Series snapshot from the component's
-    // authoritative selection, not the stale App cursor.
+    // The stable tree selection is translated through the existing shell
+    // request, so the pushed detail follows the selected show.
     model.push_tv_workspace_content();
     let pushed = model
         .test_tv_owner()
