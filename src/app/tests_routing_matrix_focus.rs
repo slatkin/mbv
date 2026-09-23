@@ -19,9 +19,7 @@ fn queue_focus_routes_queue_chord_to_queue_owner() {
 }
 #[test]
 fn library_focus_routes_bracket_to_library_leaf() {
-    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryCycleLetterPill {
-        delta: -1,
-    }));
+    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected));
     let out = fold_tick(
         leaf,
         key(KeyCode::Char('[')),
@@ -31,7 +29,7 @@ fn library_focus_routes_bracket_to_library_leaf() {
     assert_eq!(out.len(), 1);
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::EmbyLibraryCycleLetterPill { delta: -1 })
+        Msg::Shell(ShellRequest::EmbyLibraryLatestSelected)
     ));
 }
 #[test]

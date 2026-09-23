@@ -397,16 +397,6 @@ impl App {
         self.log_feed_home_video_state(lib_idx, "select_group");
     }
 
-    pub(super) fn switch_feed_folder_group(&mut self, lib_idx: usize, delta: i64) {
-        let n = self.feed_home_video_visible_group_count(lib_idx) + 1;
-        if n == 0 {
-            return;
-        }
-        let cur = self.feed_home_video_selected_group_index(lib_idx);
-        let next = (cur as i64 + delta).rem_euclid(n as i64) as usize;
-        self.select_feed_folder_group(lib_idx, next);
-    }
-
     pub(super) fn maybe_aggregate_feed_after_loaded(&self, lib_idx: usize) {
         let should_aggregate_feed = self.should_aggregate_feed(lib_idx, |root| {
             root.item_types.is_none() && !root.unplayed_only

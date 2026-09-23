@@ -156,8 +156,20 @@ impl Model {
             .unwrap_or_default();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
         let poster_window = items.clone();
+        let latest_items = self
+            .tv_latest_snapshots
+            .get(&self.app.libs[index].library.id)
+            .map(|snapshot| {
+                snapshot
+                    .items
+                    .iter()
+                    .filter_map(|item| item.as_emby().cloned())
+                    .collect()
+            })
+            .unwrap_or_default();
         let push = BrowserOwnerPush {
             items,
+            latest_items,
             total_count,
             library_total,
             letter_filter,
@@ -185,5 +197,21 @@ impl Model {
         if let Some((index, key, kind)) = self.active_emby_library_owner() {
             self.push_emby_library_owner_content(index, &key, kind);
         }
+    }
+
+    pub(super) fn active_emby_library_owner_is_latest(&self) -> bool {
+        let Some((_, key, _)) = self.active_emby_library_owner() else {
+            return false;
+        };
+        self.application
+            .get_component(&super::components::ComponentId::Library)
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<super::components::library_panel::LibraryPanel>()
+            })
+            .and_then(|panel| panel.owner(&key))
+            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+            .is_some_and(EmbyLibraryContent::latest_mode)
     }
 }

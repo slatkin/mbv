@@ -471,9 +471,7 @@ impl Model {
                     | ShellRequest::EmbyLibraryShuffle { .. }
                     | ShellRequest::EmbyLibraryRefresh
                     | ShellRequest::EmbyLibraryRescan
-                    | ShellRequest::EmbyLibraryBack
-                    | ShellRequest::EmbyLibraryCycleLetterPill { .. }
-                    | ShellRequest::EmbyLibraryCycleGroup { .. }) => {
+                    | ShellRequest::EmbyLibraryBack) => {
                         self.handle_emby_library_request(request);
                         // Library navigation/effects change content; re-project all
                         // destination owners. Inactive owners are no-ops.
@@ -542,6 +540,21 @@ impl Model {
                         // A music-group pill switch replaces the album level;
                         // re-anchor the workspace cursor at this nav event.
                         self.music_workspace_reanchor = true;
+                        self.push_active_emby_library_owner_content();
+                    }
+                    ShellRequest::EmbyLibraryLatestSelected => {
+                        self.push_active_emby_library_owner_content();
+                    }
+                    ShellRequest::EmbyLibraryLatestExit { target } => {
+                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                            let returning_to_selected_home_video_group = self
+                                .app
+                                .is_feed_home_video_group_view(lib_idx)
+                                && self.app.feed_home_video_selected_group_index(lib_idx) == target;
+                            if !returning_to_selected_home_video_group {
+                                self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                            }
+                        }
                         self.push_active_emby_library_owner_content();
                     }
                     ShellRequest::EmbyLibraryRowClick { target } => {

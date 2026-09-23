@@ -26,6 +26,7 @@ fn owner_push(items: Vec<mbv_core::api::EmbyItem>) -> BrowserOwnerPush {
     let total_count = items.len();
     BrowserOwnerPush {
         items,
+        latest_items: Vec::new(),
         total_count,
         library_total: None,
         letter_filter: None,
@@ -278,6 +279,160 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
 // item identity is the shared carrier's stable target. No pill index, group
 // display name, or row position crosses; a shown unfiltered scope has an
 // explicit identity, while pill-less and empty views report absence.
+#[test]
+fn browser_owner_latest_pill_switches_rows_and_restores_home_video_group_position() {
+    use crate::app::components::library_panel::content::ListSlot;
+    use crate::app::components::library_panel::LibraryContentOwner;
+    use mbv_core::config::{EmbySelectorKey, SelectorIdentity};
+
+    let mut push = owner_push(vec![
+        {
+            let mut item = make_item("Group One First", "Movie");
+            item.id = "group-first".into();
+            item
+        },
+        {
+            let mut item = make_item("Group One Selected", "Movie");
+            item.id = "group-selected".into();
+            item
+        },
+    ]);
+    push.latest_items = vec![{
+        let mut item = make_item("Latest Movie", "Movie");
+        item.id = "latest-movie".into();
+        item
+    }];
+    push.group_pills = true;
+    push.feed_groups = vec!["Group One".into()];
+    push.feed_group_ids = vec!["group-one".into()];
+    push.feed_group_cursor = 1;
+    let mut owner = BrowserOwner::new(LibraryKind::HomeVideos);
+    owner.set_content(push);
+    owner.apply_position(1, 0);
+
+    let selector = owner.content().selector.expect("selector row");
+    assert_eq!(selector.pills, vec!["Latest", "All", "Group One"]);
+    assert_eq!(selector.active, Some(2));
+    let launch_state = mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Latest,
+        }),
+        item: None,
+    };
+    assert_eq!(
+        owner.launch_selector(&launch_state),
+        Some(crate::app::components::library_panel::owner::LaunchSelector::EmbyLatest)
+    );
+    let selected = owner.on_slot_event(LibrarySlotEvent::SelectorPicked(0));
+    assert_eq!(
+        selected,
+        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))
+    );
+    assert!(owner.latest_mode());
+    assert_eq!(
+        owner.launch_snapshot().0,
+        Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Latest,
+        })
+    );
+    assert_eq!(owner.cursor(), 0);
+    assert!(matches!(owner.content().list, ListSlot::Media(_)));
+
+    let selected = owner.on_slot_event(LibrarySlotEvent::SelectorPicked(2));
+    assert_eq!(
+        selected,
+        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestExit {
+            target: 1
+        }))
+    );
+    assert!(!owner.latest_mode());
+    owner.set_content({
+        let mut push = owner_push(vec![
+            {
+                let mut item = make_item("Group One First", "Movie");
+                item.id = "group-first".into();
+                item
+            },
+            {
+                let mut item = make_item("Group One Selected", "Movie");
+                item.id = "group-selected".into();
+                item
+            },
+        ]);
+        push.latest_items = vec![make_item("Latest Movie", "Movie")];
+        push.group_pills = true;
+        push.feed_groups = vec!["Group One".into()];
+        push.feed_group_ids = vec!["group-one".into()];
+        push.feed_group_cursor = 1;
+        push
+    });
+    assert_eq!(
+        owner.cursor(),
+        1,
+        "the previous group's selected row is restored"
+    );
+    assert_eq!(
+        owner.launch_snapshot().0,
+        Some(SelectorIdentity::Emby {
+            key: EmbySelectorKey::Group("group-one".into()),
+        })
+    );
+}
+
+#[test]
+fn browser_owner_latest_participates_in_letter_and_group_cycle() {
+    let mut push = owner_push(make_items(2));
+    push.show_letter_pills = true;
+    let mut owner = BrowserOwner::new(LibraryKind::Movies);
+    owner.set_content(push);
+    assert_eq!(
+        owner.on_key(&TuiKeyEvent {
+            code: Key::Char('['),
+            modifiers: KeyModifiers::NONE,
+        }),
+        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))
+    );
+    assert!(owner.latest_mode());
+    assert_eq!(
+        owner.on_key(&TuiKeyEvent {
+            code: Key::Char(']'),
+            modifiers: KeyModifiers::NONE,
+        }),
+        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestExit {
+            target: 0
+        }))
+    );
+    assert!(!owner.latest_mode());
+
+    let mut push = owner_push(make_items(2));
+    push.group_pills = true;
+    push.feed_groups = vec!["Group".into()];
+    push.feed_group_ids = vec!["group-id".into()];
+    push.feed_group_cursor = 0;
+    owner.set_content(push);
+    assert_eq!(
+        owner.on_key(&TuiKeyEvent {
+            code: Key::Char('['),
+            modifiers: KeyModifiers::NONE,
+        }),
+        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))
+    );
+    assert!(owner.latest_mode());
+    assert_eq!(
+        owner.on_key(&TuiKeyEvent {
+            code: Key::Char(']'),
+            modifiers: KeyModifiers::NONE,
+        }),
+        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestExit {
+            target: 0
+        }))
+    );
+    assert!(!owner.latest_mode());
+}
+
 #[test]
 fn browser_owner_launch_snapshot_reports_letter_pill_and_item_identities() {
     use mbv_core::config::{

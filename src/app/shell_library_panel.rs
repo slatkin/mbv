@@ -95,14 +95,33 @@ impl Model {
         })
     }
 
+    fn set_emby_owner_latest_mode(&mut self, key: &LibraryKey, latest: bool) {
+        if let Some(owner) = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(|panel| panel.owner_mut(key))
+            .and_then(|owner| {
+                owner
+                    .as_any_mut()
+                    .downcast_mut::<super::components::emby_library_content::EmbyLibraryContent>()
+            })
+        {
+            owner.set_latest_mode(latest);
+        }
+    }
+
     fn apply_launch_selector(&mut self, key: &LibraryKey, selector: LaunchSelector) {
         match selector {
+            LaunchSelector::EmbyLatest => self.set_emby_owner_latest_mode(key, true),
             LaunchSelector::Emby { index } => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     if index == usize::MAX {
                         self.clear_emby_letter_filter_for_launch(lib_idx);
+                        self.set_emby_owner_latest_mode(key, false);
                     } else {
                         self.app.handle_mouse_selector_click_emby(lib_idx, index);
+                        self.set_emby_owner_latest_mode(key, false);
                     }
                 }
             }

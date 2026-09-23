@@ -504,7 +504,7 @@ impl LibraryContentOwner for PodcastContent {
         let desired = match &target {
             LaunchSelector::AudiobookshelfShow(id) => Some(id.as_str()),
             LaunchSelector::AudiobookshelfState => None,
-            LaunchSelector::Emby { .. } => None,
+            LaunchSelector::Emby { .. } | LaunchSelector::EmbyLatest => None,
         };
         (current != desired).then_some(target)
     }

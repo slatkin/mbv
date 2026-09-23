@@ -93,6 +93,7 @@ impl Model {
             &self.acknowledged_home_latest_sources,
         );
         self.project_tv_latest_snapshots_to_libraries();
+        self.push_active_emby_library_owner_content();
         self.push_home_content();
     }
 

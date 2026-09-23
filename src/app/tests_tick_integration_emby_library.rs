@@ -35,6 +35,45 @@ fn browser_owner(harness: &TickHarness) -> &BrowserOwner {
         .expect("browser owner installed")
 }
 
+fn dispatch_messages(harness: &mut TickHarness, messages: Vec<Msg>) {
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+}
+
+fn selector_click_point(harness: &TickHarness, target: usize) -> Position {
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type");
+    let (rect, _) = panel
+        .test_selector_hits()
+        .regions()
+        .iter()
+        .find(|(_, candidate)| *candidate == target)
+        .expect("selector target was painted");
+    Position::new(rect.x, rect.y)
+}
+
+fn click_selector(harness: &mut TickHarness, target: usize) -> crate::app::tests_tick_harness::StepOutcome {
+    let at = selector_click_point(harness, target);
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: at.x,
+        row: at.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step()
+}
+
 fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBackend> {
     harness.model_mut().app.terminal_width = width;
     harness.model_mut().app.terminal_height = height;
@@ -44,6 +83,149 @@ fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBack
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     terminal
+}
+
+#[rstest::rstest]
+#[case::wide(100)]
+#[case::narrow(60)]
+fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16) {
+    use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+    use mbv_core::playback_queue::QueueItem;
+
+    let mut app = make_movie_app();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.libs[0].library_total = Some(100);
+    let mut latest = crate::app::tests::make_item("Latest Movie", "Movie");
+    latest.id = "latest-movie".into();
+    let snapshot = HomeLatestSection::new(
+        "Movies".into(),
+        HomeLatestSource::Emby("lib-movies".into()),
+        vec![QueueItem::Emby(Box::new(latest))],
+    );
+    let mut harness = TickHarness::new(app);
+    harness
+        .model_mut()
+        .tv_latest_snapshots
+        .insert("lib-movies".into(), snapshot);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, width, 30);
+
+    let outcome = click_selector(&mut harness, 0);
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::EmbyLibraryLatestSelected)
+    )));
+    dispatch_messages(&mut harness, outcome.messages);
+    assert!(browser_owner(&harness).latest_mode());
+    assert!(
+        harness.model().app.libs[0].nav_stack[0]
+            .letter_filter
+            .is_none(),
+        "Latest selection leaves the original letter scope untouched"
+    );
+    assert_eq!(
+        browser_owner(&harness).launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "latest-movie".into(),
+        })
+    );
+
+    for (key, expected_play) in [(Key::Char('p'), true), (Key::Char('a'), false)] {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: key,
+            modifiers: KeyModifiers::CONTROL,
+        }));
+        let outcome = harness.step();
+        assert!(outcome.raw_messages.iter().any(|message| match (message, expected_play) {
+            (Msg::Shell(ShellRequest::EmbyLibraryPlay { item }), true)
+            | (Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }), false) => {
+                item.id == "latest-movie"
+            }
+            _ => false,
+        }));
+    }
+}
+
+#[rstest::rstest]
+#[case::wide(100)]
+#[case::narrow(60)]
+fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16) {
+    use crate::app::types_feed::{FeedHomeVideoGroup, FeedHomeVideoState};
+    use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+    use mbv_core::playback_queue::QueueItem;
+
+    let mut app = make_movie_app();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.libs[0].library.collection_type = "homevideos".into();
+    app.config.lock().unwrap().feed_view_libraries = vec!["movies".into()];
+    let mut folder = crate::app::tests::make_item("Group One", "Folder");
+    folder.id = "group-one".into();
+    folder.is_folder = true;
+    let mut first = crate::app::tests::make_item("First video", "Movie");
+    first.id = "video-first".into();
+    let mut selected = crate::app::tests::make_item("Selected video", "Movie");
+    selected.id = "video-selected".into();
+    app.libs[0].nav_stack[0].items = vec![folder.clone()];
+    app.libs[0].nav_stack[0].total_count = 1;
+    app.libs[0].feed_home_video = Some(FeedHomeVideoState {
+        all_items: vec![first.clone(), selected.clone()],
+        groups: vec![FeedHomeVideoGroup {
+            folder,
+            items: vec![first, selected],
+        }],
+        selected_group: 1,
+        video_cursor: 1,
+        video_scroll: 1,
+        loading: false,
+    });
+    let mut latest = crate::app::tests::make_item("Latest video", "Movie");
+    latest.id = "latest-video".into();
+    let snapshot = HomeLatestSection::new(
+        "Home Videos".into(),
+        HomeLatestSource::Emby("lib-movies".into()),
+        vec![QueueItem::Emby(Box::new(latest))],
+    );
+
+    let mut harness = TickHarness::new(app);
+    harness
+        .model_mut()
+        .tv_latest_snapshots
+        .insert("lib-movies".into(), snapshot);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, width, 30);
+    assert_eq!(browser_owner(&harness).cursor(), 1, "initial group row selected");
+
+    let outcome = click_selector(&mut harness, 0);
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::EmbyLibraryLatestSelected)
+    )));
+    dispatch_messages(&mut harness, outcome.messages);
+    let state = harness.model().app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .expect("group state retained");
+    assert_eq!((state.selected_group, state.video_cursor, state.video_scroll), (1, 1, 1));
+    assert!(browser_owner(&harness).latest_mode());
+
+    let _ = draw(&mut harness, width, 30);
+    let outcome = click_selector(&mut harness, 2);
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::EmbyLibraryLatestExit { target: 1 })
+    )));
+    dispatch_messages(&mut harness, outcome.messages);
+    let state = harness.model().app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .expect("group state retained after return");
+    assert_eq!((state.selected_group, state.video_cursor, state.video_scroll), (1, 1, 1));
+    assert!(!browser_owner(&harness).latest_mode());
+    assert_eq!(browser_owner(&harness).cursor(), 1);
 }
 
 #[test]
