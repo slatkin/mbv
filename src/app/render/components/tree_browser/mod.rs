@@ -180,23 +180,20 @@ fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
     match row.aggregate_mark {
         TreeAggregateMark::Partial => palette::TEXT_ACCENT_MUTED,
         TreeAggregateMark::Full => palette::STATUS_AVAILABLE,
-        TreeAggregateMark::None => {
-            if matches!(
-                row.semantic_state,
-                MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
-            ) {
+        TreeAggregateMark::None => match row.semantic_state {
+            MediaSemanticState::Played => palette::TEXT_MUTED,
+            MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. } => {
                 palette::TEXT_EMPHASIS
-            } else {
-                match row.title_role {
-                    TreeTitleRole::Heading => palette::TEXT_EMPHASIS,
-                    TreeTitleRole::Secondary => palette::TEXT_FOCUS_ACCENT,
-                    TreeTitleRole::Standard => match row.depth {
-                        0 => palette::TEXT_EMPHASIS,
-                        1 => palette::TEXT_FOCUS_ACCENT,
-                        _ => palette::ACCENT,
-                    },
-                }
             }
-        }
+            MediaSemanticState::Ordinary => match row.title_role {
+                TreeTitleRole::Heading => palette::TEXT_EMPHASIS,
+                TreeTitleRole::Secondary => palette::TEXT_FOCUS_ACCENT,
+                TreeTitleRole::Standard => match row.depth {
+                    0 => palette::TEXT_EMPHASIS,
+                    1 => palette::TEXT_FOCUS_ACCENT,
+                    _ => palette::ACCENT,
+                },
+            },
+        },
     }
 }

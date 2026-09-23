@@ -17,6 +17,9 @@ enum Target {
     Alpha,
     Beta,
     Gamma,
+    Delta,
+    Epsilon,
+    Zeta,
 }
 
 fn node(target: Target, title: &str) -> TreeNode<Target> {
@@ -78,24 +81,55 @@ fn tree_browser_paints_heading_and_spacer_rows_with_shared_group_semantics() {
 }
 
 #[test]
-fn grouped_tree_uses_shared_depth_colours_for_default_node_roles() {
+fn grouped_tree_played_rows_use_muted_semantics_before_depth_roles() {
     let mut tree = TreeBrowser::new();
     tree.reconcile([
         TreeEntry::Heading("Shows".into()),
-        TreeEntry::Node(node(Target::Alpha, "Show")),
+        TreeEntry::Node(TreeNode::new(
+            Target::Alpha,
+            None,
+            "Played show",
+            "Played show",
+            MediaSemanticState::Played,
+            TreeMarkPolicy::Direct,
+        )),
         TreeEntry::Node(TreeNode::new(
             Target::Beta,
             Some(Target::Alpha),
-            "Season",
-            "Season",
-            MediaSemanticState::Ordinary,
+            "Played season",
+            "Played season",
+            MediaSemanticState::Played,
             TreeMarkPolicy::Direct,
         )),
         TreeEntry::Node(TreeNode::new(
             Target::Gamma,
+            None,
+            "Unplayed show",
+            "Unplayed show",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Direct,
+        )),
+        TreeEntry::Node(TreeNode::new(
+            Target::Delta,
+            Some(Target::Alpha),
+            "Unplayed season",
+            "Unplayed season",
+            MediaSemanticState::Ordinary,
+            TreeMarkPolicy::Direct,
+        )),
+        TreeEntry::Node(TreeNode::new(
+            Target::Epsilon,
             Some(Target::Beta),
-            "Episode",
-            "Episode",
+            "Played episode",
+            "Played episode",
+            MediaSemanticState::Played,
+            TreeMarkPolicy::Direct,
+        )),
+        TreeEntry::Node(TreeNode::new(
+            Target::Zeta,
+            Some(Target::Delta),
+            "Unplayed episode",
+            "Unplayed episode",
             MediaSemanticState::Ordinary,
             TreeMarkPolicy::Direct,
         )),
@@ -103,14 +137,28 @@ fn grouped_tree_uses_shared_depth_colours_for_default_node_roles() {
     .unwrap();
     tree.apply(TreeOperation::ToggleExpansionTarget(Target::Alpha));
     tree.apply(TreeOperation::ToggleExpansionTarget(Target::Beta));
-    tree.set_geometry(Rect::new(0, 0, 42, 4), Rect::new(2, 0, 40, 4));
+    tree.apply(TreeOperation::ToggleExpansionTarget(Target::Delta));
+    tree.apply(TreeOperation::ToggleExpansionTarget(Target::Gamma));
+    tree.set_geometry(Rect::new(0, 0, 42, 7), Rect::new(2, 0, 40, 7));
     tree.set_focused(false);
 
-    let terminal = draw(&mut tree, 42, 4);
+    let terminal = draw(&mut tree, 42, 7);
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(2, 1)].fg, palette::TEXT_EMPHASIS);
-    assert_eq!(buffer[(4, 2)].fg, palette::TEXT_FOCUS_ACCENT);
-    assert_eq!(buffer[(6, 3)].fg, palette::ACCENT);
+    assert_eq!(buffer[(2, 1)].fg, palette::TEXT_MUTED);
+    assert_eq!(buffer[(4, 2)].fg, palette::TEXT_MUTED);
+    assert_eq!(buffer[(6, 3)].fg, palette::TEXT_MUTED);
+    assert_eq!(buffer[(4, 4)].fg, palette::TEXT_FOCUS_ACCENT);
+    assert_eq!(buffer[(6, 5)].fg, palette::ACCENT);
+    assert_eq!(buffer[(2, 6)].fg, palette::TEXT_EMPHASIS);
+
+    tree.apply(TreeOperation::Select(Target::Epsilon));
+    tree.set_focused(true);
+    let terminal = draw(&mut tree, 42, 7);
+    assert_eq!(
+        terminal.backend().buffer()[(6, 3)].fg,
+        palette::SELECTED_ROW_FG,
+        "the selected-row foreground takes precedence over played semantics"
+    );
 }
 
 #[test]
