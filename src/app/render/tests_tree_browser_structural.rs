@@ -1,7 +1,8 @@
 use super::test_helpers::buffer_to_string;
 use super::*;
 use crate::app::components::list::tree_browser::{
-    TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation,
+    TreeAggregateMark, TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation,
+    TreePaintRow, TreePaintRowKind, TreeTitleRole,
 };
 use crate::app::components::media_list::MediaSemanticState;
 use ratatui::backend::TestBackend;
@@ -10,6 +11,7 @@ use ratatui::style::Modifier;
 use ratatui::Terminal;
 use rstest::rstest;
 use std::hash::Hash;
+use std::time::Instant;
 use tuirealm::component::Component;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -75,9 +77,52 @@ fn tree_browser_paints_heading_and_spacer_rows_with_shared_group_semantics() {
 
     assert_eq!(buffer[(2, 0)].fg, palette::TEXT_METADATA);
     assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buffer[(10, 0)].bg, buffer[(10, 1)].bg);
+    assert_eq!(buffer[(10, 0)].bg, buffer[(10, 2)].bg);
+    assert_eq!(buffer[(10, 2)].bg, buffer[(10, 3)].bg);
     assert_eq!(buffer[(10, 1)].bg, buffer[(10, 4)].bg);
     assert_ne!(buffer[(10, 2)].bg, buffer[(10, 4)].bg);
+}
+
+#[test]
+fn tree_spacers_keep_the_surface_fill_in_both_group_parity_contexts() {
+    let spacer = |root_index| TreePaintRow {
+        kind: TreePaintRowKind::Spacer,
+        title: String::new(),
+        title_role: TreeTitleRole::Standard,
+        trailing: None,
+        depth: 0,
+        root_index,
+        group_root_index: 0,
+        zebra_striped: false,
+        selected: false,
+        marked: false,
+        aggregate_mark: TreeAggregateMark::None,
+        semantic_state: MediaSemanticState::Ordinary,
+    };
+    let rows = [spacer(0), spacer(1)];
+    let mut terminal = Terminal::new(TestBackend::new(12, 2)).unwrap();
+    let mut marquee_text = String::new();
+    let mut marquee_started_at = Instant::now();
+    terminal
+        .draw(|frame| {
+            render_tree_browser(
+                frame,
+                Rect::new(0, 0, 12, 2),
+                Rect::new(0, 0, 12, 2),
+                &rows,
+                rows.len(),
+                0,
+                false,
+                &mut marquee_text,
+                &mut marquee_started_at,
+            );
+        })
+        .unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let base = palette::surface_colors(palette::Surface::QueuePanel, false).fill;
+    assert_eq!(buffer[(0, 0)].bg, base, "even group parity spacer");
+    assert_eq!(buffer[(0, 1)].bg, base, "odd group parity spacer");
 }
 
 #[test]

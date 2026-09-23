@@ -85,11 +85,6 @@ pub(in crate::app) fn render_tree_browser(
             match row.kind {
                 TreePaintRowKind::Heading => base,
                 TreePaintRowKind::Node if row.zebra_striped => zebra,
-                TreePaintRowKind::Spacer
-                    if row.root_index.saturating_sub(row.group_root_index) % 2 == 0 =>
-                {
-                    zebra
-                }
                 TreePaintRowKind::Node | TreePaintRowKind::Spacer => base,
             }
         };
