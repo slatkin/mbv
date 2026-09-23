@@ -4,7 +4,7 @@
 
 - [x] 1.1 Add optional structural heading/spacer entries to TreeBrowser's atomic reconciliation and settled row flow; verify focused component tests show skipped structural rows, stable selection, refresh, and unchanged heading-free Music behavior.
 - [x] 1.2 Paint headings and between-group spacers through the shared TreeBrowser Render Component and retain accurate pointer/scroll geometry; verify focused buffer and completed-frame pointer tests at grouped and ungrouped widths.
-- [ ] 1.3 Extend the plain tree-node input with declared child expandability and allow `ToggleExpansion`/`ToggleExpansionTarget` on a declared-expandable node with no loaded children, retaining expansion through reconciliation without fake selectable nodes; verify focused shared-tree tests for pending expansion, empty completed children, and unchanged Music child-derived behavior.
+- [x] 1.3 Extend the plain tree-node input with declared child expandability and allow `ToggleExpansion`/`ToggleExpansionTarget` on a declared-expandable node with no loaded children, retaining expansion through reconciliation without fake selectable nodes; verify focused shared-tree tests for pending expansion, empty completed children, and unchanged Music child-derived behavior.
 
 ## 2. TV Show Projection
 
