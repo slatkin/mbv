@@ -187,6 +187,36 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
 }
 
 #[test]
+fn pending_season_expansion_survives_missing_emby_snapshot() {
+    let mut model = mounted_tv_model();
+    model
+        .app
+        .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
+
+    let seasons = ["season-1", "season-2"]
+        .into_iter()
+        .map(|id| {
+            let mut season = crate::app::tests::make_item(id, "Season");
+            season.id = id.into();
+            season
+        })
+        .collect();
+    model.app.handle_series_detail_fetched(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons,
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    assert!(model
+        .app
+        .pending_series_season_expansions
+        .contains(&("movie-focused".into(), "season-2".into())));
+    assert!(model.app.series_season_loading.is_empty());
+}
+
+#[test]
 fn expanding_an_uncached_season_starts_only_its_episode_fetch() {
     let http = MockHttp::new();
     http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);

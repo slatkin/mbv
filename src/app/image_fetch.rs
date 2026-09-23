@@ -83,11 +83,14 @@ impl App {
             || detail.episodes.contains_key(&season_id)
             || self.series_season_loading.contains(&key)
         {
+            self.pending_series_season_expansions.remove(&key);
             return;
         }
         let Some(client) = self.emby_snapshot() else {
+            self.pending_series_season_expansions.insert(key);
             return;
         };
+        self.pending_series_season_expansions.remove(&key);
         self.series_detail_loading.insert(series_id.clone());
         self.series_season_loading.insert(key);
         let tx = self.lib_tx.clone();
