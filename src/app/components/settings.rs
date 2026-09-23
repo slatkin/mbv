@@ -173,7 +173,7 @@ impl SettingsComponent {
         // indexed by action ordinal.
         self.keys_cursor = self
             .keys_cursor
-            .min(self.keys_action_count().saturating_sub(1));
+            .min(Self::action_count(&self.keys).saturating_sub(1));
         self.area = snapshot.area;
         self.initialized = true;
     }
@@ -276,19 +276,13 @@ impl SettingsComponent {
         }
     }
 
-    /// Keys rows: the count of cursor-numbered action rows (group headers
-    /// are not addressable). The Keys cursor is an ordinal over actions so
-    /// it stays aligned with the painter's highlight and the render
-    /// geometry's `cursor_lines`.
-    fn keys_action_count(&self) -> usize {
-        self.keys.iter().filter(|row| row.cursor.is_some()).count()
-    }
-
-    /// Main-list rows: the count of cursor-numbered action rows (section
-    /// headers are not addressable), mirroring `keys_action_count` so the
-    /// Down clamp cannot park the cursor past the last action.
-    fn main_action_count(&self) -> usize {
-        self.rows.iter().filter(|row| row.cursor.is_some()).count()
+    /// Cursor-numbered action rows in one list (group/section headers carry
+    /// no cursor and are not addressable). The cursor is an ordinal over
+    /// actions so it stays aligned with the painter's highlight and the
+    /// render geometry's `cursor_lines`; the Down clamp counts the same rows
+    /// so it cannot park past the last action.
+    fn action_count(rows: &[SettingsRow]) -> usize {
+        rows.iter().filter(|row| row.cursor.is_some()).count()
     }
 
     /// Largest valid scroll offset: the last geometry line fully in view.
@@ -364,8 +358,8 @@ impl SettingsComponent {
                     None
                 }
                 Key::Down => {
-                    self.keys_cursor =
-                        (self.keys_cursor + 1).min(self.keys_action_count().saturating_sub(1));
+                    self.keys_cursor = (self.keys_cursor + 1)
+                        .min(Self::action_count(&self.keys).saturating_sub(1));
                     self.scroll_cursor_into_view(self.keys_cursor);
                     None
                 }
@@ -448,7 +442,8 @@ impl SettingsComponent {
                 None
             }
             Key::Down => {
-                self.cursor = (self.cursor + 1).min(self.main_action_count().saturating_sub(1));
+                self.cursor =
+                    (self.cursor + 1).min(Self::action_count(&self.rows).saturating_sub(1));
                 self.scroll_cursor_into_view(self.cursor);
                 None
             }

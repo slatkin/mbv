@@ -55,12 +55,8 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
                 // borrow (sidebar fills move independently); the focused
                 // selection paints the Iris bar.
                 self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::for_library_workspace(focused).with_zebra(
-                        ZebraStripe {
-                            focused: palette::SURFACE_RESTING,
-                            unfocused: palette::SURFACE_RESTING,
-                        },
-                    ),
+                    WideMediaListPaintPolicy::for_library_workspace(focused)
+                        .with_zebra(ZebraStripe::fixed(palette::SURFACE_RESTING)),
                 );
             }
         }
