@@ -425,6 +425,18 @@ impl Model {
                         self.handle_audiobookshelf_podcast_episode_intent(intent);
                         self.push_audiobookshelf_podcast_content();
                     }
+                    ShellRequest::AudiobookshelfPodcastLatestSelected => {
+                        if let Some(index) = self.app.tab.audiobookshelf_index() {
+                            if let Some(library) = self.app.audiobookshelf_libraries.get(index) {
+                                self.record_home_latest_acknowledgement(
+                                    crate::app::HomeLatestSource::Audiobookshelf(
+                                        library.id.clone(),
+                                    ),
+                                );
+                            }
+                        }
+                        self.push_audiobookshelf_podcast_content();
+                    }
                     ShellRequest::AudiobookshelfPodcastShowMove { library_item_id } => {
                         // Resolved podcast show-list cursor
                         // (split-audiobookshelf-cursor-ownership D1). The

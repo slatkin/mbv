@@ -202,6 +202,7 @@ pub(in crate::app) enum LaunchSelector {
     EmbyLatest,
     AudiobookshelfShow(String),
     AudiobookshelfState,
+    AudiobookshelfLatest,
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot

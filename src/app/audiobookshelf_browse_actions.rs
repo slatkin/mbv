@@ -408,6 +408,16 @@ impl App {
         audiobookshelf_library_index: usize,
         target: &crate::app::components::msg::PodcastEpisodeTarget,
     ) -> Option<QueueItem> {
+        if target.library_item_id().trim().is_empty() || target.episode_id().trim().is_empty() {
+            return None;
+        }
+        let library_id = &self
+            .audiobookshelf_libraries
+            .get(audiobookshelf_library_index)?
+            .id;
+        if let Some(item) = self.audiobookshelf_shelf_cache.get(library_id).and_then(|items| items.iter().find(|item| matches!(item, QueueItem::Audiobookshelf(episode) if episode.library_item_id == target.library_item_id() && episode.episode_id == target.episode_id()))).cloned() {
+            return Some(item);
+        }
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;

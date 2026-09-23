@@ -146,6 +146,14 @@ impl Model {
             LaunchSelector::AudiobookshelfState => {
                 self.app.commit_audiobookshelf_podcast_state_scope();
             }
+            LaunchSelector::AudiobookshelfLatest => {
+                self.record_home_latest_acknowledgement(HomeLatestSource::Audiobookshelf(
+                    match key {
+                        LibraryKey::Service { library_id, .. } => library_id.clone(),
+                        _ => unreachable!(),
+                    },
+                ));
+            }
         }
         match key {
             LibraryKey::Service {

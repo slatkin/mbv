@@ -56,6 +56,8 @@ impl AudiobookshelfEpisodeFilter {
 /// active view. The remembered pill across tab switches is the same value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::app) enum PillSelection {
+    /// The library's cached Newest Episodes shelf, independent of show and state.
+    Latest,
     /// A state pill: every fetched show's episodes, filtered by play state.
     State(AudiobookshelfEpisodeFilter),
     /// A show pill: that show's episodes regardless of play state, by the

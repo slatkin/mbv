@@ -14,7 +14,7 @@ use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_core::config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
 };
-use mbv_core::playback_queue::AudiobookshelfQueueItem;
+use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
 
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
@@ -41,9 +41,8 @@ use crate::app::ui_util::{fmt_publish_date_short, trunc_str};
 /// Feeds tab's group labels (design D1: same selector contract).
 const MAX_GROUP_LABEL: usize = super::feeds_content::MAX_GROUP_LABEL;
 
-/// The number of state pills that precede the show pills in the painted
-/// bar (design D3: `SelectorPicked` branches on exactly this count, as
-/// Feeds branches on `WatchedFilter::COUNT`).
+/// The number of state pills between Latest and the show pills in the painted
+/// bar (selector indices account for the leading Latest pill).
 const STATE_PILL_COUNT: usize = AudiobookshelfEpisodeFilter::ALL.len();
 
 /// Plain owner for one Audiobookshelf podcast library. Content is projected
@@ -51,6 +50,9 @@ const STATE_PILL_COUNT: usize = AudiobookshelfEpisodeFilter::ALL.len();
 /// interaction state.
 pub(in crate::app) struct PodcastContent {
     pub(in crate::app) state: AudiobookshelfBrowseState,
+    latest_items: Vec<AudiobookshelfQueueItem>,
+    latest_has_new_content: bool,
+    latest_acknowledged: bool,
     /// The active pill, stored by value and remembered across tab switches
     /// (design D3); reset to `All` on construction. The painted active
     /// index is derived from this value every frame — never stored.
@@ -88,6 +90,9 @@ impl PodcastContent {
                     media_type: "podcast".into(),
                 },
             ),
+            latest_items: Vec::new(),
+            latest_has_new_content: false,
+            latest_acknowledged: false,
             // The remembered pill starts at `All` and survives tab switches
             // for the session (design D3; mbv restart resets it because the
             // owner is reconstructed).
@@ -124,7 +129,7 @@ impl PodcastContent {
         // exists, and exactly one pill must stay active (design D3).
         let pill_reset = match &self.pill {
             PillSelection::Show(id) => !self.show_exists(id),
-            PillSelection::State(_) => false,
+            PillSelection::State(_) | PillSelection::Latest => false,
         };
         if pill_reset {
             self.pill = PillSelection::State(AudiobookshelfEpisodeFilter::All);
@@ -139,6 +144,26 @@ impl PodcastContent {
         self.sync_hero_scroll();
     }
 
+    pub(in crate::app) fn latest_selected(&self) -> bool {
+        self.pill == PillSelection::Latest
+    }
+
+    pub(in crate::app) fn set_latest_marker(&mut self, has_new: bool, acknowledged: bool) {
+        self.latest_has_new_content = has_new;
+        self.latest_acknowledged = acknowledged;
+    }
+
+    pub(in crate::app) fn set_latest_items(&mut self, latest: &[QueueItem]) {
+        self.latest_items = latest
+            .iter()
+            .filter_map(|item| match item {
+                QueueItem::Audiobookshelf(item) => Some(item.clone()),
+                _ => None,
+            })
+            .collect();
+        self.rebuild_rows();
+    }
+
     fn show_exists(&self, id: &str) -> bool {
         self.state
             .shows
@@ -151,6 +176,20 @@ impl PodcastContent {
     /// state and show selections never combine).
     fn active_episodes(&self) -> Vec<AudiobookshelfDownloadedEpisode> {
         match &self.pill {
+            PillSelection::Latest => self
+                .latest_items
+                .iter()
+                .map(|item| AudiobookshelfDownloadedEpisode {
+                    library_item_id: item.library_item_id.clone(),
+                    episode_id: item.episode_id.clone(),
+                    title: item.title.clone(),
+                    description: item.description.clone(),
+                    published_at: item.pub_date_secs,
+                    duration_seconds: item
+                        .duration_ticks
+                        .map(|ticks| ticks as f64 / TICKS_PER_SECOND as f64),
+                })
+                .collect(),
             PillSelection::State(filter) => self
                 .state
                 .visible_episodes(*filter)
@@ -165,6 +204,7 @@ impl PodcastContent {
     /// fetch policy itself is row 3.3; this projects the in-flight marks.
     fn pill_fetch_in_flight(&self) -> bool {
         match &self.pill {
+            PillSelection::Latest => false,
             PillSelection::State(_) => !self.state.detail_loading_ids.is_empty(),
             PillSelection::Show(id) => self.state.detail_loading_ids.contains_key(id),
         }
@@ -200,6 +240,12 @@ impl PodcastContent {
                             .iter()
                             .find(|show| show.library_item_id == episode.library_item_id)
                             .map(|show| show.title.clone())
+                            .or_else(|| {
+                                self.latest_items
+                                    .iter()
+                                    .find(|item| item.library_item_id == episode.library_item_id)
+                                    .and_then(|item| item.show_title.clone())
+                            })
                             .unwrap_or_default(),
                         secondary: Some(episode.title.clone()),
                         // The episode's publish date in the row's fixed
@@ -246,12 +292,10 @@ impl PodcastContent {
     /// frame (design D3: never a stored position — the show list grows and
     /// re-sorts as pages land, so an index would silently rebind the view).
     fn active_pill_index(&self) -> Option<usize> {
-        if self.state.shows.is_empty() {
-            return None;
-        }
         match &self.pill {
+            PillSelection::Latest => Some(0),
             PillSelection::State(filter) => Some(
-                AudiobookshelfEpisodeFilter::ALL
+                1 + AudiobookshelfEpisodeFilter::ALL
                     .iter()
                     .position(|candidate| candidate == filter)
                     .unwrap_or(0),
@@ -261,7 +305,7 @@ impl PodcastContent {
                 .shows
                 .iter()
                 .position(|show| &show.library_item_id == id)
-                .map(|position| STATE_PILL_COUNT + position),
+                .map(|position| 1 + STATE_PILL_COUNT + position),
         }
     }
 
@@ -302,14 +346,16 @@ impl PodcastContent {
     /// step resolves the value and sends the same effect the pointer pick
     /// sends (one path, both inputs).
     fn cycle_pill(&mut self, delta: i64) -> Option<Msg> {
-        let count = STATE_PILL_COUNT + self.state.shows.len();
+        let count = 1 + STATE_PILL_COUNT + self.state.shows.len();
         let next = (self.active_pill_index().unwrap_or(0) as i64 + delta).rem_euclid(count as i64)
             as usize;
-        let pill = if next < STATE_PILL_COUNT {
-            PillSelection::State(AudiobookshelfEpisodeFilter::ALL[next])
+        let pill = if next == 0 {
+            PillSelection::Latest
+        } else if next <= STATE_PILL_COUNT {
+            PillSelection::State(AudiobookshelfEpisodeFilter::ALL[next - 1])
         } else {
             PillSelection::Show(
-                self.state.shows[next - STATE_PILL_COUNT]
+                self.state.shows[next - 1 - STATE_PILL_COUNT]
                     .library_item_id
                     .clone(),
             )
@@ -327,12 +373,18 @@ impl PodcastContent {
     /// no show identity — and the shell's handler scopes the fan-out to
     /// every listed show.
     fn pill_effect_msg(&self, changed: bool) -> Option<Msg> {
+        if matches!(self.pill, PillSelection::Latest) {
+            return Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastLatestSelected,
+            ));
+        }
         if !changed {
             return None;
         }
         let library_item_id = match &self.pill {
             PillSelection::Show(library_item_id) => Some(library_item_id.clone()),
             PillSelection::State(_) => None,
+            PillSelection::Latest => unreachable!(),
         };
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
             library_item_id,
@@ -345,10 +397,14 @@ impl PodcastContent {
     /// a show pill's identity rides along so the shell keeps its fan-out
     /// scope (design D5).
     fn move_effect(&self) -> Option<Msg> {
+        if matches!(self.pill, PillSelection::Latest) {
+            return None;
+        }
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
             library_item_id: match &self.pill {
                 PillSelection::Show(id) => Some(id.clone()),
                 PillSelection::State(_) => None,
+                PillSelection::Latest => unreachable!(),
             },
         }))
     }
@@ -389,6 +445,16 @@ impl PodcastContent {
     /// cover). The hero facts themselves are corrected by row 3.5.
     fn selected_episode_item(&self) -> Option<AudiobookshelfQueueItem> {
         let target = self.episodes.selected_target()?;
+        if matches!(self.pill, PillSelection::Latest) {
+            return self
+                .latest_items
+                .iter()
+                .find(|item| {
+                    item.library_item_id == target.library_item_id()
+                        && item.episode_id == target.episode_id()
+                })
+                .cloned();
+        }
         let episode = self
             .state
             .episode_by_identity(target.library_item_id(), target.episode_id())?;
@@ -442,12 +508,15 @@ impl PodcastContent {
             }
         });
         let has_shows = !self.state.shows.is_empty();
-        // One Selector bar carries the state pills first, then one pill per
+        // One Selector bar carries Latest, state pills, then one pill per
         // show in show order (design D3). Both selections are owner-local.
-        let selector = has_shows.then(|| SelectorRow {
-            pills: AudiobookshelfEpisodeFilter::ALL
-                .iter()
-                .map(|filter| filter.label().to_string())
+        let selector = Some(SelectorRow {
+            pills: std::iter::once("Latest".to_string())
+                .chain(
+                    AudiobookshelfEpisodeFilter::ALL
+                        .iter()
+                        .map(|filter| filter.label().to_string()),
+                )
                 .chain(
                     self.state
                         .shows
@@ -455,10 +524,17 @@ impl PodcastContent {
                         .map(|show| trunc_str(&show.title, MAX_GROUP_LABEL)),
                 )
                 .collect(),
-            markers: vec![],
+            markers: std::iter::once(self.latest_has_new_content && !self.latest_acknowledged)
+                .chain(std::iter::repeat_n(
+                    false,
+                    STATE_PILL_COUNT + self.state.shows.len(),
+                ))
+                .collect(),
             active: self.active_pill_index(),
         });
-        let list = if !has_shows {
+        let list = if !has_shows
+            && !(matches!(self.pill, PillSelection::Latest) && !self.latest_items.is_empty())
+        {
             ListSlot::Empty {
                 loading: !self.state.loading_pages.is_empty(),
                 text: self
@@ -493,20 +569,22 @@ impl LibraryContentOwner for PodcastContent {
     fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
         let target = match state.selector.as_ref() {
             Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::Latest,
+            }) => LaunchSelector::AudiobookshelfLatest,
+            Some(SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::PodcastShow(id),
             }) if self.show_exists(id) => LaunchSelector::AudiobookshelfShow(id.clone()),
             _ => LaunchSelector::AudiobookshelfState,
         };
-        let current = match &self.pill {
-            PillSelection::Show(id) => Some(id.as_str()),
-            PillSelection::State(_) => None,
+        let same = match (&self.pill, &target) {
+            (PillSelection::Latest, LaunchSelector::AudiobookshelfLatest) => true,
+            (PillSelection::Show(current), LaunchSelector::AudiobookshelfShow(target)) => {
+                current == target
+            }
+            (PillSelection::State(_), LaunchSelector::AudiobookshelfState) => true,
+            _ => false,
         };
-        let desired = match &target {
-            LaunchSelector::AudiobookshelfShow(id) => Some(id.as_str()),
-            LaunchSelector::AudiobookshelfState => None,
-            LaunchSelector::Emby { .. } | LaunchSelector::EmbyLatest => None,
-        };
-        (current != desired).then_some(target)
+        (!same).then_some(target)
     }
 
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
@@ -514,6 +592,9 @@ impl LibraryContentOwner for PodcastContent {
         // re-anchor. Restore the saved pill here so the component scopes its
         // rows before selecting the saved item.
         match state.selector.as_ref() {
+            Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::Latest,
+            }) => self.set_pill(PillSelection::Latest),
             Some(SelectorIdentity::Audiobookshelf {
                 key: AudiobookshelfSelectorKey::PodcastFilter(filter),
             }) => {
@@ -557,10 +638,9 @@ impl LibraryContentOwner for PodcastContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        let selector = if self.state.shows.is_empty() {
-            None
-        } else {
+        let selector = {
             let key = match &self.pill {
+                PillSelection::Latest => AudiobookshelfSelectorKey::Latest,
                 PillSelection::State(filter) => {
                     AudiobookshelfSelectorKey::PodcastFilter(match filter {
                         AudiobookshelfEpisodeFilter::All => AudiobookshelfPodcastFilter::All,
@@ -624,15 +704,17 @@ impl LibraryContentOwner for PodcastContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
-                // One selector resolved in the owner (design D3): state
-                // pills first, then the show pills in painted order.
-                let pill = if let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(index) {
+                // One selector resolved in the owner (design D3): Latest,
+                // then state pills, then show pills in painted order.
+                let pill = if index == 0 {
+                    PillSelection::Latest
+                } else if let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(index - 1) {
                     PillSelection::State(*filter)
                 } else {
                     PillSelection::Show(
                         self.state
                             .shows
-                            .get(index - STATE_PILL_COUNT)?
+                            .get(index - 1 - STATE_PILL_COUNT)?
                             .library_item_id
                             .clone(),
                     )
@@ -971,7 +1053,15 @@ mod tests {
     fn launch_snapshot_is_empty_without_shows_or_selected_episode() {
         let mut owner = PodcastContent::new();
         owner.set_content(&AudiobookshelfBrowseState::new(library()), false);
-        assert_eq!(owner.launch_snapshot(), (None, None));
+        assert_eq!(
+            owner.launch_snapshot(),
+            (
+                Some(SelectorIdentity::Audiobookshelf {
+                    key: AudiobookshelfSelectorKey::PodcastFilter(AudiobookshelfPodcastFilter::All),
+                }),
+                None
+            )
+        );
     }
 
     fn item_rows(owner: &PodcastContent) -> Vec<(&str, &str)> {
@@ -1010,9 +1100,16 @@ mod tests {
         let content = owner.content();
         assert_eq!(
             pills(&content),
-            ["All", "Unplayed", "Played", "Alpha Show", "Beta Show"]
+            [
+                "Latest",
+                "All",
+                "Unplayed",
+                "Played",
+                "Alpha Show",
+                "Beta Show"
+            ]
         );
-        assert_eq!(content.selector.unwrap().active, Some(0));
+        assert_eq!(content.selector.unwrap().active, Some(1));
         // Secondary-row absence is owned by the shared panel skeleton test;
         // this owner test covers the combined state/show selector only.
 
@@ -1020,7 +1117,7 @@ mod tests {
         owner.set_focused(true);
         owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
         let content = owner.content();
-        assert_eq!(content.selector.unwrap().active, Some(1));
+        assert_eq!(content.selector.unwrap().active, Some(2));
         assert_eq!(
             owner.pill,
             PillSelection::State(AudiobookshelfEpisodeFilter::Unplayed)
@@ -1040,7 +1137,7 @@ mod tests {
         owner.set_now_secs(NOW);
         owner.set_content(&state, false);
         assert_eq!(
-            pills(&owner.content())[3],
+            pills(&owner.content())[4],
             trunc_str(
                 "A Very Long Podcast Show Name Indeed Indeed",
                 MAX_GROUP_LABEL
@@ -1065,22 +1162,20 @@ mod tests {
         state.append_page(1, 20, 3, vec![show("aardvark", "Aardvark Show")]);
         owner.set_content(&state, false);
         assert_eq!(owner.pill, PillSelection::Show("beta".into()));
-        assert_eq!(owner.content().selector.unwrap().active, Some(5));
+        assert_eq!(owner.content().selector.unwrap().active, Some(6));
     }
 
     #[test]
     fn keyboard_pill_walk_wraps_at_both_ends() {
         let mut owner = owner();
         owner.set_focused(true);
-        // `[` from `All` wraps to the last show pill.
+        // Two `[` steps from `All` wrap through Latest to the last show.
+        owner.on_key(&KeyEvent::new(Key::Char('['), KeyModifiers::NONE));
         owner.on_key(&KeyEvent::new(Key::Char('['), KeyModifiers::NONE));
         assert_eq!(owner.pill, PillSelection::Show("beta".into()));
-        // `]` wraps back to the first state pill.
+        // `]` advances back to the Latest pill.
         owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
-        assert_eq!(
-            owner.pill,
-            PillSelection::State(AudiobookshelfEpisodeFilter::All)
-        );
+        assert_eq!(owner.pill, PillSelection::Latest);
     }
 
     #[test]
@@ -1111,7 +1206,7 @@ mod tests {
             owner.pill,
             PillSelection::State(AudiobookshelfEpisodeFilter::All)
         );
-        assert_eq!(owner.content().selector.unwrap().active, Some(0));
+        assert_eq!(owner.content().selector.unwrap().active, Some(1));
     }
 
     #[test]
@@ -1206,7 +1301,7 @@ mod tests {
     #[test]
     fn show_pill_scopes_the_view_to_that_show() {
         let mut owner = owner();
-        owner.on_slot_event(LibrarySlotEvent::SelectorPicked(4));
+        owner.on_slot_event(LibrarySlotEvent::SelectorPicked(5));
         assert_eq!(
             item_rows(&owner),
             [("beta-one", "beta-one")],
@@ -1510,7 +1605,7 @@ mod tests {
     fn show_pill_pick_resolves_the_show_identity_for_the_shell() {
         let mut owner = owner();
         assert!(matches!(
-            owner.on_slot_event(LibrarySlotEvent::SelectorPicked(3)),
+            owner.on_slot_event(LibrarySlotEvent::SelectorPicked(4)),
             Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
                 library_item_id: Some(ref id)
             })) if id == "alpha"
@@ -1519,7 +1614,7 @@ mod tests {
         // request shape a plain row click sends (no show identity); the
         // shell scopes the fan-out to every listed show (row 3.3).
         assert!(matches!(
-            owner.on_slot_event(LibrarySlotEvent::SelectorPicked(1)),
+            owner.on_slot_event(LibrarySlotEvent::SelectorPicked(2)),
             Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
                 library_item_id: None
             }))
