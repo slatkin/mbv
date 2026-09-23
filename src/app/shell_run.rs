@@ -204,6 +204,38 @@ impl Model {
         drained
     }
 
+    pub(in crate::app) fn handle_restored_library_position_event(
+        &mut self,
+        ev: super::super::LibEvent,
+    ) {
+        let lib_idx = match &ev {
+            super::super::LibEvent::RestoreLibraryPosition { lib_idx, .. } => *lib_idx,
+            _ => unreachable!("restore handler called with a different library event"),
+        };
+        self.app.handle_lib_event(ev);
+        let latest = self.app.libs.get(lib_idx).and_then(|lib| {
+            let level = lib.nav_stack.last()?;
+            (lib.library.collection_type == "tvshows"
+                && lib.nav_stack.len() == 1
+                && lib.tv_content_mode == Some(mbv_core::config::TvContentMode::Latest))
+            .then(|| {
+                (
+                    lib.library.id.clone(),
+                    lib.library.name.clone(),
+                    level
+                        .items
+                        .iter()
+                        .cloned()
+                        .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                        .collect(),
+                )
+            })
+        });
+        if let Some((library_id, title, items)) = latest {
+            self.update_tv_latest_snapshot(library_id, title, items);
+        }
+    }
+
     /// The run loop — the moved body of the former `App::run`.
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mouse_support = self.app.config.lock().unwrap().mouse_support;
@@ -408,39 +440,8 @@ impl Model {
                     // Position restore used to clear the deleted track-focus
                     // field; route the same reset to the component at the
                     // next sync.
-                    super::super::LibEvent::RestoreLibraryPosition { lib_idx, .. } => {
-                        let latest = self.app.libs.get(lib_idx).and_then(|lib| {
-                            let super::super::LibEvent::RestoreLibraryPosition {
-                                nav_stack, ..
-                            } = &ev
-                            else {
-                                unreachable!()
-                            };
-                            let level = nav_stack.last()?;
-                            (lib.library.collection_type == "tvshows"
-                                && level.tv_content_mode
-                                    == Some(mbv_core::config::TvContentMode::Latest))
-                            .then(|| {
-                                (
-                                    lib.library.id.clone(),
-                                    lib.library.name.clone(),
-                                    level
-                                        .items
-                                        .iter()
-                                        .cloned()
-                                        .map(|item| {
-                                            mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                                                item,
-                                            ))
-                                        })
-                                        .collect(),
-                                )
-                            })
-                        });
-                        self.app.handle_lib_event(ev);
-                        if let Some((library_id, title, items)) = latest {
-                            self.update_tv_latest_snapshot(library_id, title, items);
-                        }
+                    super::super::LibEvent::RestoreLibraryPosition { .. } => {
+                        self.handle_restored_library_position_event(ev);
                         self.music_track_focus_request = Some(MusicTrackFocusRequest::Clear);
                         // Saved position restored into the nav stack; re-anchor
                         // the workspace cursor to it at this event rather than

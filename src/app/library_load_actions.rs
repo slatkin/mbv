@@ -26,6 +26,7 @@ impl App {
         }
         self.log_feed_home_video_state(lib_idx, "refresh_lib_before_spawn");
         if self.libs[lib_idx].library.collection_type == "tvshows"
+            && self.libs[lib_idx].nav_stack.len() == 1
             && (self.libs[lib_idx].tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
                 || self.libs[lib_idx]
                     .nav_stack

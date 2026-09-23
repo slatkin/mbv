@@ -92,6 +92,9 @@ impl App {
             .as_ref()
             .and_then(|position| position.levels.first())
             .is_some_and(|root| match root.tv_content_mode.as_ref() {
+                Some(mbv_core::config::TvContentMode::Latest) => root
+                    .library_total
+                    .is_some_and(|total| total <= super::render::LIBRARY_PILL_THRESHOLD),
                 Some(mbv_core::config::TvContentMode::All) => root
                     .library_total
                     .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD),
