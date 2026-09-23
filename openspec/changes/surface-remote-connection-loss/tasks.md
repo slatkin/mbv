@@ -11,7 +11,7 @@
   `enqueue-feedback` suppression rules where they apply); play flashes
   connection-lost instead of "Requesting playback…"; slot jumps report
   rejection through the existing `CommandRejected` event path.
-- [ ] 2.2 An unexpected remote disconnect (reader-side drop without an
+- [x] 2.2 An unexpected remote disconnect (reader-side drop without an
   announced reason) flashes a connection-lost toast and performs the
   `remote-queue-disconnect` return-to-local presentation (local daemon
   re-adopt per that spec's reconnect requirement); daemon-announced shutdown
