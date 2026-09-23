@@ -41,6 +41,33 @@ Every Composed or Bound queue SHALL be represented by one ordered collection of 
 - **THEN** the Client SHALL send the replacement to that owner at load time
 - **AND** its displayed queue and source SHALL follow the owner's accepted snapshot, not a private staged queue
 
+### Requirement: Canonical-queue edits follow the playback target
+
+A Client SHALL dispatch canonical-queue edit commands (slot removal, slot move, item append) to the Player owner that holds the queue being edited: the in-process bare player, the Stay-alive process the Client is attached to, or the directly controlled remote Player owner for Remote scope. A Client attached to the Stay-alive process has no separate canonical queue: its displayed Local queue is that owner's Bound queue in every state, including while an attached Emby session or a cast receiver is the playback target, so its canonical-queue edits SHALL reach that owner. A Client that owns its canonical queue and directs playback at an attached Emby session or a cast receiver SHALL apply the edit to its own canonical queue only and SHALL NOT transmit a queue command to a Player owner, because that owner does not hold the queue the user is editing. Direct-remote queue management (editing a directly controlled remote Player owner over ctrl) is unchanged: edits addressed to that owner's scope continue to reach it.
+
+#### Scenario: Queue edit while an attached session plays
+
+- **WHEN** a Client that owns its canonical queue has an attached Emby session as its playback target and the user removes, moves, or appends an item in that queue
+- **THEN** the Client SHALL mutate its own canonical queue
+- **AND** SHALL NOT send a queue command to a Player owner
+
+#### Scenario: Visible queue survives a stale owner
+
+- **WHEN** a Player owner holds a Bound queue that differs from a Client's own canonical queue while that Client has an attached session as the playback target
+- **THEN** a canonical-queue edit SHALL NOT cause the Client to replace its visible queue with the owner's snapshot
+- **AND** the user's loaded playlist source and contents SHALL remain unchanged
+
+#### Scenario: Direct-remote edits still reach the owner
+
+- **WHEN** the user edits a directly controlled remote Player owner's queue in Remote scope
+- **THEN** the edit SHALL still be dispatched to that owner as a slot-addressed command
+
+#### Scenario: Stay-alive edit while a session or cast is the target
+
+- **WHEN** a Client attached to the Stay-alive process is watching an attached Emby session or casting to a receiver and edits the queue
+- **THEN** the edit SHALL be dispatched to that Stay-alive owner
+- **AND** SHALL NOT be applied only to a private Client copy
+
 ## ADDED Requirements
 
 ### Requirement: Stay-alive replacement stops playback before publishing the new queue
@@ -74,3 +101,25 @@ When a Client loads a playlist into the Stay-alive process's queue without reque
 - **WHEN** a requested idle replacement is rejected before acceptance
 - **THEN** the existing owner queue and playback SHALL remain authoritative
 - **AND** the Client SHALL display an error rather than claiming the playlist was loaded
+
+### Requirement: The Stay-alive process holds the queue source
+
+The Stay-alive process SHALL hold the queue source as part of its queue state. Every whole-queue replacement it accepts, every clear, and every source-only update SHALL set its source; a clear SHALL reset it to Unknown. A source-only update SHALL apply only to the queue lineage the owner held when the update was requested; a delayed update from an earlier queue SHALL NOT rename a later queue. A Client attached to that owner SHALL display the owner's source and SHALL NOT maintain an independent authoritative source for it.
+
+#### Scenario: Playing a different source updates the owner
+
+- **WHEN** a Client replaces the Stay-alive queue with items from a new album, playlist, or other source and starts playback
+- **THEN** the owner's queue source SHALL become that new source
+- **AND** every attached Client SHALL display the new source
+
+#### Scenario: Clearing resets the source
+
+- **WHEN** the Stay-alive queue is cleared
+- **THEN** the owner's queue source SHALL reset to Unknown
+- **AND** attached Clients SHALL display an empty queue with no source label
+
+#### Scenario: A delayed Save As cannot rename a later queue
+
+- **WHEN** a source-only update from an earlier queue arrives after another Client replaced the queue
+- **THEN** the owner SHALL reject it
+- **AND** the later queue's source SHALL remain unchanged
