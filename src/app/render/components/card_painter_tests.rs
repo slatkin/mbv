@@ -7,7 +7,9 @@ use ratatui::Terminal;
 #[test]
 fn initial_reservation_matches_square_artwork_in_a_width_limited_slot() {
     let area = Rect::new(0, 0, 36, 30);
-    let reserved = queue_card_reserved_rect((0, 0), 40, area, false);
+    // 50 rows of terminal height puts the cap (24) above the slot, so the
+    // width-limited measurement below is what shapes the reservation.
+    let reserved = queue_card_reserved_rect((0, 0), 50, area, false);
     let image = image::DynamicImage::new_rgb8(400, 400);
     let measured = ratatui_image::Resize::Scale(Some(RENDER_FILTER)).size_for(
         &image,

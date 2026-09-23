@@ -60,13 +60,13 @@ fn card_cache_key_for_id(item_id: &str) -> String {
 /// height) before anything has rendered. Used by both the blank reservations
 /// and the visualizer so `v` never moves the queue list.
 /// The now-playing image's height cap: 12 rows under 40 rows of terminal
-/// height, 18 under 50, 24 otherwise. Kept small enough that the queue
+/// height, 16 under 50, 24 otherwise. Kept small enough that the queue
 /// list below keeps the title separator and a few rows.
 pub(in crate::app) fn queue_card_height_cap(height: u16) -> u16 {
     if height < 40 {
         12
     } else if height < 50 {
-        18
+        16
     } else {
         24
     }

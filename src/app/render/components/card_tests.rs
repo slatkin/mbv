@@ -537,13 +537,13 @@ fn active_foreign_remote_session_fetches_the_playing_items_artwork() {
 }
 
 /// The now-playing image's height cap tiers: 12 under 40 rows of terminal
-/// height, 18 under 50, 24 at full height.
+/// height, 16 under 50, 24 at full height.
 #[test]
 fn card_height_cap_tiers_follow_terminal_height() {
     assert_eq!(queue_card_height_cap(30), 12);
     assert_eq!(queue_card_height_cap(39), 12);
-    assert_eq!(queue_card_height_cap(40), 18);
-    assert_eq!(queue_card_height_cap(49), 18);
+    assert_eq!(queue_card_height_cap(40), 16);
+    assert_eq!(queue_card_height_cap(49), 16);
     assert_eq!(queue_card_height_cap(50), 24);
     assert_eq!(queue_card_height_cap(80), 24);
 }
