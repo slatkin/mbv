@@ -175,11 +175,11 @@ Expansion state SHALL survive content replacement by stable identity. A list sha
 
 Every destination that presents a nested row flow SHALL use one shared `TreeBrowser<Target>` as the complete nesting counterpart to the complete flat-list component. `TreeBrowser<Target>` SHALL implement TuiRealm `Component`; it SHALL remain embedded rather than independently mounted, focused, subscribed, or assigned a `ComponentId`. The shared Interactive Component SHALL own tree model reconciliation, expansion state, filtering state, cursor and viewport behavior, keyboard tree operations, ordered multi-selection and aggregate mark presentation, retained point geometry, marquee state, and all presentation state. Its `Component::view` SHALL be the only interactive view entry point and SHALL delegate indentation, zebra striping, selected-row treatment, optional trailing metadata, marquee, and scrollbar painting to one shared destination-neutral Render Component.
 
-A destination SHALL supply only plain `TreeNode<Target>` values containing typed stable targets, parent-child relationships, row content, searchable text, semantic state, and the closed per-node `TreeMarkPolicy`, then translate emitted stable-target intents. A destination SHALL supply no trait implementation, callback, closure, model/query/state object, renderer, painter, navigation rule, filter matcher, aggregation algorithm, or action-order policy. It SHALL NOT define another tree browser, tree state machine, tree painter, tree navigation implementation, inherent or destination-owned alternative view entry point, or wrapper that reproduces those responsibilities. Internal tree-library identifiers and types SHALL remain private to the shared Interactive and Render Components in both production and tests.
+A destination SHALL supply only plain `TreeNode<Target>` values containing typed stable targets, parent-child relationships, row content, searchable text, semantic state, a declaration of whether the node can have children even while they are not yet loaded, and the closed per-node `TreeMarkPolicy`, plus optional plain structural heading and spacer entries placed among root groups. Structural entries SHALL carry no target, tree-library handle, parent-child edge, or behavior. The shared TreeBrowser SHALL permit expansion of a node declared to have children even when none are currently projected, retain that expansion across reconciliation, and reveal children when they arrive; heading-free Music nodes SHALL retain their existing child-derived expansion behavior. The destination SHALL translate emitted stable-target intents. It SHALL supply no trait implementation, callback, closure, model/query/state object, renderer, painter, navigation rule, filter matcher, aggregation algorithm, or action-order policy. It SHALL NOT define another tree browser, tree state machine, tree painter, tree navigation implementation, inherent or destination-owned alternative view entry point, or wrapper that reproduces those responsibilities. Internal tree-library identifiers and types SHALL remain private to the shared Interactive and Render Components in both production and tests.
 
 #### Scenario: A destination adopts tree browsing through typed data
 - **WHEN** a destination needs to present a nested row flow
-- **THEN** it supplies only plain `TreeNode<Target>` values and translates emitted stable-target intents
+- **THEN** it supplies only plain `TreeNode<Target>` values and optional plain structural headings/spacers, and translates emitted stable-target intents
 - **AND** it supplies no behavior implementation, callback, mutable state object, renderer, painter, or policy beyond the closed per-node `TreeMarkPolicy`
 
 #### Scenario: A tree behavior changes centrally
@@ -222,3 +222,19 @@ This adoption SHALL preserve Grouped Music's existing observable tree behavior a
 - **WHEN** an Album row carries a year while an Artist or yearless row does not
 - **THEN** Music supplies the optional trailing metadata through the shared row-content contract
 - **AND** the shared `TreeBrowser` owns its reservation, alignment, clipping, and painting
+
+### Requirement: TreeBrowser supports optional structural group headings
+A nested browser SHALL support optional group headings and between-group spacers among its root rows. Each structural row SHALL occupy a painted row and participate in scrolling and grouping, but SHALL carry no selectable media target and SHALL never receive cursor focus, expansion, marks, activation, context intent, or pointer selection. Movement and paging SHALL skip structural rows; their presence SHALL not make a destination without structural rows display any. A heading SHALL remain associated with its following group when the browser's content is refreshed or its geometry changes. A spacer SHALL separate consecutive groups without becoming a tree node.
+
+#### Scenario: Grouping is visible but not interactive
+- **WHEN** a destination supplies a heading followed by show nodes
+- **THEN** the heading paints before those shows and occupies one row in the scrollable flow
+- **AND** keyboard movement and pointer gestures can select the shows but cannot select, expand, mark, activate, or open a menu on the heading or spacer
+
+#### Scenario: Ungrouped tree is unchanged
+- **WHEN** a destination supplies no headings
+- **THEN** its tree has no additional rows and retains its existing navigation, marks, painting, and hit behavior
+
+#### Scenario: Refresh preserves stable selection across headings
+- **WHEN** grouped content is refreshed or reordered while the selected media target remains present
+- **THEN** that target remains selected and its viewport remains valid even if a heading appears or disappears
