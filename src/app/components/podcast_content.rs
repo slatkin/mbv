@@ -144,8 +144,12 @@ impl PodcastContent {
         self.sync_hero_scroll();
     }
 
-    pub(in crate::app) fn latest_selected(&self) -> bool {
+    fn on_latest(&self) -> bool {
         self.pill == PillSelection::Latest
+    }
+
+    pub(in crate::app) fn latest_selected(&self) -> bool {
+        self.on_latest()
     }
 
     pub(in crate::app) fn set_latest_marker(&mut self, has_new: bool, acknowledged: bool) {
@@ -175,8 +179,8 @@ impl PodcastContent {
     /// state; a state pill filters every fetched show's episodes (spec:
     /// state and show selections never combine).
     fn active_episodes(&self) -> Vec<AudiobookshelfDownloadedEpisode> {
-        match &self.pill {
-            PillSelection::Latest => self
+        if self.on_latest() {
+            return self
                 .latest_items
                 .iter()
                 .map(|item| AudiobookshelfDownloadedEpisode {
@@ -189,7 +193,10 @@ impl PodcastContent {
                         .duration_ticks
                         .map(|ticks| ticks as f64 / TICKS_PER_SECOND as f64),
                 })
-                .collect(),
+                .collect();
+        }
+        match &self.pill {
+            PillSelection::Latest => unreachable!(),
             PillSelection::State(filter) => self
                 .state
                 .visible_episodes(*filter)
@@ -373,7 +380,7 @@ impl PodcastContent {
     /// no show identity — and the shell's handler scopes the fan-out to
     /// every listed show.
     fn pill_effect_msg(&self, changed: bool) -> Option<Msg> {
-        if matches!(self.pill, PillSelection::Latest) {
+        if self.on_latest() {
             return Some(Msg::Shell(
                 ShellRequest::AudiobookshelfPodcastLatestSelected,
             ));
@@ -397,7 +404,7 @@ impl PodcastContent {
     /// a show pill's identity rides along so the shell keeps its fan-out
     /// scope (design D5).
     fn move_effect(&self) -> Option<Msg> {
-        if matches!(self.pill, PillSelection::Latest) {
+        if self.on_latest() {
             // Latest movement is entirely component-local: the shelf row
             // target is captured by `launch_snapshot`, while cursor/hero
             // updates need no show-scope fetch, saved browse position, or
@@ -449,7 +456,7 @@ impl PodcastContent {
     /// cover).
     fn selected_episode_item(&self) -> Option<AudiobookshelfQueueItem> {
         let target = self.episodes.selected_target()?;
-        if matches!(self.pill, PillSelection::Latest) {
+        if self.on_latest() {
             return self
                 .latest_items
                 .iter()
@@ -528,17 +535,13 @@ impl PodcastContent {
                         .map(|show| trunc_str(&show.title, MAX_GROUP_LABEL)),
                 )
                 .collect(),
-            markers: std::iter::once(self.latest_has_new_content && !self.latest_acknowledged)
-                .chain(std::iter::repeat_n(
-                    false,
-                    STATE_PILL_COUNT + self.state.shows.len(),
-                ))
-                .collect(),
+            markers: super::selector_markers(
+                1 + STATE_PILL_COUNT + self.state.shows.len(),
+                self.latest_has_new_content && !self.latest_acknowledged,
+            ),
             active: self.active_pill_index(),
         });
-        let list = if !has_shows
-            && !(matches!(self.pill, PillSelection::Latest) && !self.latest_items.is_empty())
-        {
+        let list = if !has_shows && !(self.on_latest() && !self.latest_items.is_empty()) {
             ListSlot::Empty {
                 loading: !self.state.loading_pages.is_empty(),
                 text: self

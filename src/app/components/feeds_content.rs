@@ -621,12 +621,10 @@ impl LibraryContentOwner for FeedsContent {
                         .map(|subscription| trunc_str(&subscription.name, MAX_GROUP_LABEL)),
                 )
                 .collect(),
-            markers: std::iter::once(self.latest_has_new_content && !self.latest_acknowledged)
-                .chain(std::iter::repeat_n(
-                    false,
-                    WatchedFilter::COUNT + 1 + self.subscriptions.len(),
-                ))
-                .collect(),
+            markers: super::selector_markers(
+                1 + WatchedFilter::COUNT + 1 + self.subscriptions.len(),
+                self.latest_has_new_content && !self.latest_acknowledged,
+            ),
             // `[`/`]` move the feed-group selection, so the active pill and
             // overflow window follow that group within the combined row.
             active: Some(if self.latest_selected {

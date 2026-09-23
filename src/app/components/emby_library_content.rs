@@ -51,7 +51,27 @@ pub(in crate::app) struct EmbyLibraryIdentity {
     pub(in crate::app) feed_group: Option<usize>,
 }
 
-fn row_for(item: &EmbyItem, latest: bool) -> MediaListRow<String> {
+#[derive(Clone, Copy)]
+enum EmbyRowMode {
+    Browse,
+    Latest,
+}
+
+fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<MediaListTrailing>) {
+    let item = QueueItem::Emby(Box::new(item.clone()));
+    let parts = item.playback_title_parts(None);
+    let (primary, secondary) = match parts.context {
+        Some(context) => (context.text, Some(parts.title.text)),
+        None => (parts.title.text, None),
+    };
+    let trailing = crate::app::home_latest::provider_timestamp_secs(&item)
+        .map(crate::app::ui_util::fmt_publish_date_short)
+        .filter(|date| !date.is_empty())
+        .map(MediaListTrailing::Gutter);
+    (primary, secondary, trailing)
+}
+
+fn row_for(item: &EmbyItem, mode: EmbyRowMode) -> MediaListRow<String> {
     let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
         format!("{} \u{b7} {} items", item.display_name(), item.total_count)
     } else if item.is_folder && item.unplayed_item_count > 0 && item.item_type != "Series" {
@@ -59,25 +79,14 @@ fn row_for(item: &EmbyItem, latest: bool) -> MediaListRow<String> {
     } else {
         item.display_name()
     };
-    let latest_item = latest.then(|| QueueItem::Emby(Box::new(item.clone())));
-    let (primary, secondary) = latest_item
-        .as_ref()
-        .map(|item| {
-            let parts = item.playback_title_parts(None);
-            match parts.context {
-                Some(context) => (context.text, Some(parts.title.text)),
-                None => (parts.title.text, None),
-            }
-        })
-        .unwrap_or((primary, None));
-    let trailing = if let Some(latest_item) = latest_item.as_ref() {
-        crate::app::home_latest::provider_timestamp_secs(latest_item)
-            .map(crate::app::ui_util::fmt_publish_date_short)
-            .filter(|date| !date.is_empty())
-            .map(MediaListTrailing::Gutter)
-    } else {
-        (!item.is_folder && item.production_year > 0)
-            .then(|| MediaListTrailing::Gutter(item.production_year.to_string()))
+    let (primary, secondary, trailing) = match mode {
+        EmbyRowMode::Latest => latest_row_projection(item),
+        EmbyRowMode::Browse => (
+            primary,
+            None,
+            (!item.is_folder && item.production_year > 0)
+                .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
+        ),
     };
     MediaListRow::Item {
         target: item.id.clone(),
@@ -304,14 +313,21 @@ impl EmbyLibraryContent {
             let pairs: Vec<(String, MediaListRow<String>)> = self
                 .items
                 .iter()
-                .map(|item| (effective_sort_str(item).to_string(), row_for(item, false)))
+                .map(|item| {
+                    (
+                        effective_sort_str(item).to_string(),
+                        row_for(item, EmbyRowMode::Browse),
+                    )
+                })
                 .collect();
             letter_grouped_rows(pairs, self.true_total(), self.letter_filter.is_some())
         } else {
-            self.items
-                .iter()
-                .map(|item| row_for(item, self.latest_mode))
-                .collect()
+            let mode = if self.latest_mode {
+                EmbyRowMode::Latest
+            } else {
+                EmbyRowMode::Browse
+            };
+            self.items.iter().map(|item| row_for(item, mode)).collect()
         };
         // Ordinary refresh (design D3): an unchanged projection preserves
         // the shared owner's painted frame instead of re-issuing it.
@@ -701,9 +717,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
                         .map(|s| crate::app::ui_util::trunc_str(s, 12)),
                 )
                 .collect();
-            let mut markers: Vec<bool> =
-                vec![self.latest_has_new_content && !self.latest_acknowledged];
-            markers.resize(pills.len(), false);
+            let markers = super::selector_markers(
+                pills.len(),
+                self.latest_has_new_content && !self.latest_acknowledged,
+            );
             Some(SelectorRow {
                 pills,
                 markers,
@@ -717,9 +734,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
             let pills: Vec<String> = std::iter::once("Latest".to_string())
                 .chain(LetterFilter::labels())
                 .collect();
-            let mut markers: Vec<bool> =
-                vec![self.latest_has_new_content && !self.latest_acknowledged];
-            markers.resize(pills.len(), false);
+            let markers = super::selector_markers(
+                pills.len(),
+                self.latest_has_new_content && !self.latest_acknowledged,
+            );
             Some(SelectorRow {
                 pills,
                 markers,
