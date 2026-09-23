@@ -53,7 +53,7 @@ fn tv_harness() -> TickHarness {
 }
 
 #[test]
-fn home_latest_load_projects_shared_snapshot_into_tv_library_through_tick() {
+fn home_latest_snapshot_merge_updates_the_tv_destination_through_tick() {
     let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
     let mut fresh = crate::app::tests::make_item("Home episode", "Episode");
     fresh.id = "home-episode".into();
@@ -75,14 +75,88 @@ fn home_latest_load_projects_shared_snapshot_into_tv_library_through_tick() {
     step_and_drain(&mut harness);
     draw(&mut harness);
 
+    let snapshot = &harness.model().tv_latest_snapshots["lib-movies"];
     assert_eq!(
-        harness.model().home_content.latest[0].items[0]
-            .as_emby()
-            .unwrap()
-            .id,
+        snapshot.items[0].as_emby().unwrap().id,
         harness.model().app.libs[0].nav_stack[0].items[0].id
     );
-    assert!(!harness.model().home_content.latest[0].has_new_content);
+    assert!(!snapshot.has_new_content);
+}
+
+#[test]
+fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_window() {
+    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Upcoming);
+    let source = "lib-movies".to_owned();
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::home_latest::HomeLatestLaunchWindow {
+            previous: None,
+            current: 200,
+        };
+    let mut at_launch = crate::app::tests::make_item("At launch", "Episode");
+    at_launch.date_added = "1970-01-01T00:03:20Z".into();
+    harness.model_mut().update_tv_latest_snapshot(
+        source.clone(),
+        "TV".into(),
+        vec![QueueItem::Emby(Box::new(at_launch))],
+    );
+    assert!(!harness.model().tv_latest_snapshots[&source].has_new_content);
+
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::home_latest::HomeLatestLaunchWindow {
+            previous: Some(100),
+            current: 200,
+        };
+    let mut at_cutoff = crate::app::tests::make_item("At cutoff", "Episode");
+    at_cutoff.date_added = "1970-01-01T00:01:40Z".into();
+    let mut at_current = crate::app::tests::make_item("At current launch", "Episode");
+    at_current.date_added = "1970-01-01T00:03:20Z".into();
+    let mut after_current = crate::app::tests::make_item("After current launch", "Episode");
+    after_current.date_added = "1970-01-01T00:03:21Z".into();
+    harness.model_mut().update_tv_latest_snapshot(
+        source.clone(),
+        "TV".into(),
+        vec![
+            QueueItem::Emby(Box::new(at_cutoff)),
+            QueueItem::Emby(Box::new(at_current)),
+            QueueItem::Emby(Box::new(after_current)),
+        ],
+    );
+    assert!(harness.model().tv_latest_snapshots[&source].has_new_content);
+
+    let mut only_future = crate::app::tests::make_item("Future", "Episode");
+    only_future.date_added = "1970-01-01T00:03:21Z".into();
+    harness.model_mut().update_tv_latest_snapshot(
+        source.clone(),
+        "TV".into(),
+        vec![QueueItem::Emby(Box::new(only_future))],
+    );
+    assert!(!harness.model().tv_latest_snapshots[&source].has_new_content);
+}
+
+#[test]
+fn preselected_latest_acknowledges_snapshot_that_arrives_later() {
+    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::home_latest::HomeLatestLaunchWindow {
+            previous: Some(100),
+            current: 200,
+        };
+    let source = HomeLatestSource::Emby("lib-movies".into());
+    assert!(harness
+        .model()
+        .acknowledged_home_latest_sources
+        .contains(&source));
+
+    let mut arriving = crate::app::tests::make_item("Arriving episode", "Episode");
+    arriving.date_added = "1970-01-01T00:02:00Z".into();
+    harness.model_mut().update_tv_latest_snapshot(
+        "lib-movies".into(),
+        "TV".into(),
+        vec![QueueItem::Emby(Box::new(arriving))],
+    );
+    assert!(!harness.model().tv_latest_snapshots["lib-movies"].has_new_content);
+    draw(&mut harness);
+    assert!(!panel(&harness).test_selector_markers()[0]);
 }
 
 #[test]
@@ -160,13 +234,13 @@ fn shrunken_tv_restore_does_not_replace_latest_snapshot_with_stale_items_through
     assert_eq!(lib.tv_content_mode, Some(mbv_core::config::TvContentMode::Latest));
     assert_eq!(lib.nav_stack[0].items[0].id, "current-latest");
     assert_ne!(lib.nav_stack[0].items[0].id, "stale-latest");
-    let latest = &harness.model().home_content.latest[0].items;
+    let latest = &harness.model().tv_latest_snapshots["lib-movies"].items;
     assert_eq!(latest[0].as_emby().unwrap().id, "current-latest");
     assert_ne!(latest[0].as_emby().unwrap().id, "stale-latest");
 }
 
 #[test]
-fn tv_latest_refresh_updates_home_snapshot_with_one_fetch_through_tick() {
+fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     http.respond(
@@ -196,6 +270,11 @@ fn tv_latest_refresh_updates_home_snapshot_with_one_fetch_through_tick() {
     harness.model_mut().app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(
         std::sync::Arc::new(std::sync::Mutex::new(client)),
     );
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::home_latest::HomeLatestLaunchWindow {
+            previous: Some(100),
+            current: 200,
+        };
     harness.model_mut().app.libs[0].library.collection_type = "tvshows".into();
     harness.model_mut().app.libs[0].tv_content_mode =
         Some(mbv_core::config::TvContentMode::Latest);
@@ -228,12 +307,15 @@ fn tv_latest_refresh_updates_home_snapshot_with_one_fetch_through_tick() {
         }
         panic!("expected Latest level load; requests: {:?}", http.requests());
     };
-    let items: Vec<_> = level
+    let mut items: Vec<_> = level
         .items
         .iter()
         .cloned()
         .map(|item| QueueItem::Emby(Box::new(item)))
         .collect();
+    if let Some(QueueItem::Emby(item)) = items.first_mut() {
+        item.date_added = "1970-01-01T00:02:00Z".into();
+    }
     harness.model_mut().app.handle_lib_event(event);
     harness.model_mut().update_tv_latest_snapshot(
         "lib-movies".into(),
@@ -248,13 +330,16 @@ fn tv_latest_refresh_updates_home_snapshot_with_one_fetch_through_tick() {
     step_and_drain(&mut harness);
     draw(&mut harness);
 
-    let home = &harness.model().home_content.latest[0].items;
-    assert_eq!(home[0].as_emby().unwrap().id, "fresh-episode");
+    let latest = &harness.model().tv_latest_snapshots["lib-movies"];
+    assert_eq!(latest.items[0].as_emby().unwrap().id, "fresh-episode");
     assert_eq!(
         harness.model().app.libs[0].nav_stack[0].items[0].id,
         "fresh-episode"
     );
-    assert!(harness.model().home_content.latest[0].has_new_content);
+    assert!(
+        !latest.has_new_content,
+        "refresh must not restore a marker after Latest was selected"
+    );
     let latest_fetches = http
         .requests()
         .iter()
@@ -356,7 +441,7 @@ fn deep_latest_library_refreshes_its_level_without_touching_shared_snapshot_thro
     assert_eq!(lib.nav_stack[1].parent_id, "series-0");
     assert_eq!(lib.nav_stack[1].items[0].id, "deep-fresh");
     assert_eq!(
-        harness.model().home_content.latest[0].items[0]
+        harness.model().tv_latest_snapshots["lib-movies"].items[0]
             .as_emby()
             .unwrap()
             .id,
@@ -371,18 +456,21 @@ fn deep_latest_library_refreshes_its_level_without_touching_shared_snapshot_thro
 }
 
 #[test]
-fn tv_latest_selection_acknowledges_the_matching_home_marker_through_tick() {
-    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
-    let source = HomeLatestSource::Emby("lib-movies".into());
+fn tv_latest_selection_acknowledges_the_destination_marker_through_tick() {
+    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Upcoming);
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::home_latest::HomeLatestLaunchWindow {
+            previous: Some(100),
+            current: 200,
+        };
     let mut item = crate::app::tests::make_item("New episode", "Episode");
     item.id = "new-episode".into();
-    harness.model_mut().home_content.latest = vec![HomeLatestSection {
-        title: "Latest TV".into(),
-        source,
-        items: vec![QueueItem::Emby(Box::new(item))],
-        has_new_content: true,
-    }];
-    harness.model_mut().push_home_content();
+    item.date_added = "1970-01-01T00:02:00Z".into();
+    harness.model_mut().update_tv_latest_snapshot(
+        "lib-movies".into(),
+        "Latest TV".into(),
+        vec![QueueItem::Emby(Box::new(item))],
+    );
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
     assert!(panel(&harness).test_selector_markers()[0]);
@@ -408,10 +496,6 @@ fn tv_latest_selection_acknowledges_the_matching_home_marker_through_tick() {
         .acknowledged_home_latest_sources
         .contains(&HomeLatestSource::Emby("lib-movies".into())));
 
-    harness.model_mut().app.tab = TabSelection::Home;
-    harness.model_mut().sync_mounted_surfaces();
-    draw(&mut harness);
-    assert_eq!(panel(&harness).test_selector_markers(), &[false, false]);
 }
 
 #[test]

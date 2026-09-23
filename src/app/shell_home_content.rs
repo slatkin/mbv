@@ -51,6 +51,11 @@ impl Model {
                 .or_insert_with(|| section.clone());
             snapshot.title.clone_from(&section.title);
             snapshot.items.clone_from(&section.items);
+            recompute_destination_latest_marker(
+                snapshot,
+                self.app.home_latest_launch_window,
+                &self.acknowledged_home_latest_sources,
+            );
             section.has_new_content = snapshot.has_new_content;
         }
     }
@@ -83,6 +88,11 @@ impl Model {
             });
         snapshot.title = title;
         snapshot.items = items;
+        recompute_destination_latest_marker(
+            snapshot,
+            self.app.home_latest_launch_window,
+            &self.acknowledged_home_latest_sources,
+        );
         if let Some(section) = self
             .home_content
             .latest
@@ -331,10 +341,19 @@ impl Model {
     /// owner directly instead of pushing its content: a direct shell request
     /// may precede the component's local selection projection.
     pub(super) fn acknowledge_home_latest(&mut self, source: HomeLatestSource) {
-        self.acknowledged_home_latest_sources.insert(source);
+        self.record_home_latest_acknowledgement(source);
+        self.push_tv_workspace_content();
+    }
+
+    pub(super) fn record_home_latest_acknowledgement(&mut self, source: HomeLatestSource) {
+        self.acknowledged_home_latest_sources.insert(source.clone());
+        if let HomeLatestSource::Emby(library_id) = source {
+            if let Some(snapshot) = self.tv_latest_snapshots.get_mut(&library_id) {
+                snapshot.has_new_content = false;
+            }
+        }
         let acknowledged = self.acknowledged_home_latest_sources.clone();
         self.update_home_owner(|home| home.set_acknowledged_latest_sources(acknowledged));
-        self.push_tv_workspace_content();
     }
 
     /// Test-only accessor for the retained semantic source. Gated to avoid a
@@ -355,5 +374,16 @@ fn recompute_home_latest_markers(
 ) {
     for section in &mut content.latest {
         section.recompute_new_content(launch_window);
+    }
+}
+
+fn recompute_destination_latest_marker(
+    snapshot: &mut HomeLatestSection,
+    launch_window: super::home_latest::HomeLatestLaunchWindow,
+    acknowledged: &std::collections::HashSet<HomeLatestSource>,
+) {
+    snapshot.recompute_new_content(launch_window);
+    if acknowledged.contains(&snapshot.source) {
+        snapshot.has_new_content = false;
     }
 }
