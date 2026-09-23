@@ -526,7 +526,6 @@ impl Component for SettingsComponent {
             SettingsRenderModel {
                 destination: self.destination,
                 rows,
-                keys: &self.keys,
                 services: &self.services,
                 setup: self.setup.as_ref(),
                 cursor,

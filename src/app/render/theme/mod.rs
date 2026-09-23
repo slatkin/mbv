@@ -130,6 +130,10 @@ pub const PLAYLIST_LOADED_FG: Color = Palette::Orange.color();
 /// over the backdrop slate it shares today (`SURFACE_BACKDROP`): equal today
 /// and independently editable, so a backdrop edit moves the backdrop alone.
 pub const PLAYLIST_STRIPE_BG: Color = Palette::Slate.color();
+/// The settings list's secondary zebra fill (`#272e33`). Its own role over
+/// the playlist stripe it shares today (`PLAYLIST_STRIPE_BG`): equal today
+/// and independently editable, so a playlist-stripe edit moves that alone.
+pub const SETTINGS_STRIPE_BG: Color = Palette::Slate.color();
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the
