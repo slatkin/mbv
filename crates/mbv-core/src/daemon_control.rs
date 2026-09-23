@@ -65,6 +65,92 @@ fn play_resolved_items(
     }
 }
 
+fn install_idle_queue_load(
+    request_id: crate::ctrl::QueueLoadRequestId,
+    slots: Vec<(QueueSlotId, QueueItem)>,
+    cursor: usize,
+    source: crate::config::QueueSource,
+    reply_tx: &CtrlSender,
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    ctrl_clients: &ClientRegistry,
+) {
+    let active_slot = slots.get(cursor).map(|(slot_id, _)| *slot_id);
+    player.advance_sequence_generation();
+    player.set_initial_queue(
+        &slots.iter().map(|(_, item)| item.clone()).collect::<Vec<_>>(),
+        cursor,
+    );
+    reset_slot_jumps(
+        &mut owner.core.transitions,
+        &mut owner.queued_transition_origin,
+    );
+    owner.core.queue = PlaybackQueue::from_slot_items(
+        slots,
+        active_slot,
+        crate::playback_queue::QueueRevision::default(),
+    );
+    owner.core.source = source;
+    owner.core.note_observed_active_slot(None);
+    *shared_queue.observed_active_slot.lock().unwrap() = None;
+    broadcast_queue_state(
+        ctrl_clients,
+        player,
+        shared_queue,
+        &owner.core.queue,
+        &owner.core.source,
+        &owner.core.transitions,
+    );
+    send_to(
+        reply_tx,
+        &CtrlEvent::UnifiedQueueLoadResult {
+            request_id,
+            result: crate::ctrl::QueueLoadResult::Accepted,
+        },
+    );
+}
+
+pub(super) fn complete_pending_idle_queue_load(
+    run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+    failure: Option<String>,
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    ctrl_clients: &ClientRegistry,
+) -> bool {
+    if !owner
+        .pending_idle_load
+        .as_ref()
+        .is_some_and(|pending| pending.stopped_run == run_identity)
+    {
+        return false;
+    }
+    let pending = owner.pending_idle_load.take().expect("checked above");
+    if let Some(reason) = failure {
+        send_to(
+            &pending.reply_tx,
+            &CtrlEvent::UnifiedQueueLoadResult {
+                request_id: pending.request_id,
+                result: crate::ctrl::QueueLoadResult::Rejected { reason },
+            },
+        );
+        return true;
+    }
+    install_idle_queue_load(
+        pending.request_id,
+        pending.slots,
+        pending.cursor,
+        pending.source,
+        &pending.reply_tx,
+        owner,
+        player,
+        shared_queue,
+        ctrl_clients,
+    );
+    true
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_ctrl_for_role(
     cmd: CtrlCmd,
@@ -81,10 +167,30 @@ fn handle_ctrl_for_role(
     stay_alive: bool,
     role: crate::daemon::DaemonRole,
 ) {
+    if owner.pending_idle_load.is_some() {
+        if let CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } = cmd {
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::UnifiedQueueLoadResult {
+                    request_id,
+                    result: crate::ctrl::QueueLoadResult::Rejected {
+                        reason: "another idle queue load is pending".to_string(),
+                    },
+                },
+            );
+        } else {
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::CommandRejected("owner is finalizing an idle queue load".to_string()),
+            );
+        }
+        return;
+    }
     let DaemonPlayerOwner {
         core: PlayerOwnerState { queue, source, transitions, .. },
         intents: playback_intents,
         queued_transition_origin,
+        ..
     } = &mut *owner;
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
@@ -375,29 +481,92 @@ fn handle_ctrl_for_role(
         CtrlCmd::ApplyServiceSetup { .. } => {}
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id,
-            slots: _,
-            cursor: _,
-            source: _,
+            slots,
+            cursor,
+            source: new_source,
         } => {
-            let supports_operation = ctrl_clients
-                .lock()
-                .unwrap()
-                .supports_owner_queue_load(client_id);
-            let reason = if role != crate::daemon::DaemonRole::Local {
-                "idle queue loads are supported only by the Stay-alive owner".to_string()
-            } else if !supports_operation {
-                "peer did not negotiate owner queue-load capability".to_string()
-            } else {
-                // Stop/finalize-before-replace is implemented by the following
-                // owner-lifecycle change; never stage or partially apply it here.
-                "idle queue-load lifecycle is not available".to_string()
+            let (supports_operation, supports_abs_queue, supports_abs_book_queue) = {
+                let clients = ctrl_clients.lock().unwrap();
+                (
+                    clients.supports_owner_queue_load(client_id),
+                    clients.supports_abs_queue(client_id),
+                    clients.supports_abs_book_queue(client_id),
+                )
             };
-            send_to(
-                request.reply_tx,
-                &CtrlEvent::UnifiedQueueLoadResult {
+            let reason = if role != crate::daemon::DaemonRole::Local {
+                Some("idle queue loads are supported only by the Stay-alive owner".to_string())
+            } else if !supports_operation {
+                Some("peer did not negotiate owner queue-load capability".to_string())
+            } else {
+                abs_queue_transport_rejection(
+                    &slots.iter().map(|slot| slot.item.clone()).collect::<Vec<_>>(),
+                    supports_abs_queue,
+                    supports_abs_book_queue,
+                )
+            };
+            if let Some(reason) = reason {
+                send_to(
+                    request.reply_tx,
+                    &CtrlEvent::UnifiedQueueLoadResult {
+                        request_id,
+                        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+                    },
+                );
+                return;
+            }
+            let submitted: Vec<_> = slots
+                .into_iter()
+                .map(|slot| (QueueSlotId::from_raw(slot.slot_id), slot.item))
+                .collect();
+            let was_nonempty = !submitted.is_empty();
+            let (admitted, next_cursor) = admit_queue_slots(
+                submitted,
+                Some(cursor),
+                audio_only,
+                has_emby,
+                has_audiobookshelf,
+            );
+            let admitted_items: Vec<_> = admitted.iter().map(|(_, item)| item.clone()).collect();
+            let admission_error = if was_nonempty && admitted.is_empty() {
+                Some("Playback owner rejected the queue load".to_string())
+            } else {
+                audio_only_rejection(audio_only, &admitted_items)
+            };
+            if let Some(reason) = admission_error {
+                send_to(
+                    request.reply_tx,
+                    &CtrlEvent::UnifiedQueueLoadResult {
+                        request_id,
+                        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+                    },
+                );
+                return;
+            }
+
+            let stopped_run = (0, player.status.lock().unwrap().sequence_generation);
+            if player.status.lock().unwrap().active {
+                owner.pending_idle_load = Some(PendingIdleQueueLoad {
                     request_id,
-                    result: crate::ctrl::QueueLoadResult::Rejected { reason },
-                },
+                    slots: admitted,
+                    cursor: next_cursor,
+                    source: new_source,
+                    reply_tx: request.reply_tx.clone(),
+                    stopped_run,
+                });
+                player.stop();
+                return;
+            }
+
+            install_idle_queue_load(
+                request_id,
+                admitted,
+                next_cursor,
+                new_source,
+                request.reply_tx,
+                owner,
+                player,
+                shared_queue,
+                ctrl_clients,
             );
         }
         CtrlCmd::UnifiedQueueSourceUpdate { .. } => {

@@ -1,4 +1,4 @@
-fn playback_run_identity_is_current(
+pub(super) fn playback_run_identity_is_current(
     run_identity: (PlaybackRequestId, PlaybackGeneration),
     player: &Player,
 ) -> bool {
@@ -39,7 +39,7 @@ fn apply_track_completed_observation(
     true
 }
 
-fn apply_stopped_observation(
+pub(super) fn apply_stopped_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     run_identity: (PlaybackRequestId, PlaybackGeneration),
@@ -553,6 +553,13 @@ pub fn run_with_options(
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Player(pe) => {
+                let pending_idle_load_matches = match &pe {
+                    PlayerEvent::Stopped { run_identity, .. } => owner
+                        .pending_idle_load
+                        .as_ref()
+                        .is_some_and(|pending| pending.stopped_run == *run_identity),
+                    _ => false,
+                };
                 let stopped_queue_updated = if let PlayerEvent::Stopped {
                     slot_id,
                     run_identity,
@@ -575,10 +582,31 @@ pub fn run_with_options(
                 } else {
                     false
                 };
-                if stopped_queue_updated {
+                let replacement_committed = if pending_idle_load_matches {
+                    let failure = match &pe {
+                        PlayerEvent::Stopped { error, .. } => error.clone(),
+                        _ => None,
+                    };
+                    complete_pending_idle_queue_load(
+                        match &pe {
+                            PlayerEvent::Stopped { run_identity, .. } => *run_identity,
+                            _ => unreachable!(),
+                        },
+                        failure.clone(),
+                        &mut owner,
+                        &player,
+                        &shared_queue,
+                        &ctrl_clients,
+                    ) && failure.is_none()
+                } else {
+                    false
+                };
+                if stopped_queue_updated && !replacement_committed {
                     // Unlike TrackCompleted (which broadcasts unconditionally
                     // below via the raw player event too), a full Stopped has
-                    // no other broadcast carrying the corrected queue.
+                    // no other broadcast carrying the corrected queue. The
+                    // successful pending-load commit publishes the new stopped
+                    // queue once instead of first publishing this old queue.
                     broadcast_queue_state(
                         &ctrl_clients,
                         &player,

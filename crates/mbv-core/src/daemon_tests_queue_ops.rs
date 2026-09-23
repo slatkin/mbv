@@ -607,6 +607,7 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
 #[test]
 fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
     let player = cold_player();
+    player.status.lock().unwrap().active = true;
     let commands = player.spy_on_commands();
     let client = queue_op_client("test-token");
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -647,11 +648,249 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
 
     assert_eq!(owner.core.queue.slots()[0].slot_id, original_slot);
     assert_eq!(owner.core.source, QueueSource::Unknown);
+    assert!(player.status.lock().unwrap().active, "rejection leaves the old run active");
     assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 21,
         result: crate::ctrl::QueueLoadResult::Rejected { reason },
     } if reason.contains("did not negotiate")));
+}
+
+#[test]
+fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts_empty() {
+    let player = cold_player();
+    let commands = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+    let original_generation = player.status.lock().unwrap().sequence_generation;
+
+    handle_ctrl(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 51,
+            slots: vec![],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue,
+        &registry,
+        false,
+        &merged_tx,
+        true,
+    );
+
+    assert!(owner.core.queue.is_empty());
+    assert_eq!(owner.core.source, QueueSource::Album);
+    assert_eq!(player.status.lock().unwrap().sequence_generation, original_generation + 1);
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
+        if state.slots.is_empty() && state.active_slot.is_none() && !state.status.active));
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 51,
+        result: crate::ctrl::QueueLoadResult::Accepted,
+    }));
+}
+
+#[test]
+fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidates_old_run() {
+    let player = cold_player();
+    let commands = player.spy_on_commands();
+    player.status.lock().unwrap().active = true;
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+    let old_slot = owner.core.queue.slots()[0].slot_id;
+    let old_run = (0, player.status.lock().unwrap().sequence_generation);
+
+    handle_ctrl(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 52,
+            slots: vec![crate::ctrl::UnifiedQueueSlot {
+                slot_id: 900,
+                item: emby_qi("new", "Video", "Movie"),
+            }],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue,
+        &registry,
+        false,
+        &merged_tx,
+        true,
+    );
+
+    assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot);
+    assert!(owner.pending_idle_load.is_some());
+    assert!(matches!(reply_rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+
+    assert!(crate::daemon::complete_pending_idle_queue_load(
+        old_run,
+        None,
+        &mut owner,
+        &player,
+        &shared_queue,
+        &registry,
+    ));
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
+    assert_eq!(owner.core.source, QueueSource::Album);
+    assert!(owner.core.observed_active_slot().is_none());
+    assert!(!player.status.lock().unwrap().active);
+    assert!(!crate::daemon::playback_run_identity_is_current(old_run, &player));
+    assert_eq!(
+        crate::daemon::apply_stopped_observation(
+            &mut owner,
+            &player,
+            old_run,
+            Some(old_slot),
+            99_000_000,
+            false,
+        ),
+        None,
+        "late old-run observations are ignored after replacement",
+    );
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
+    assert!(matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
+        if state.slots.len() == 1 && state.slots[0].item.id() == "new"
+            && state.active_slot.is_none() && !state.status.active));
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 52,
+        result: crate::ctrl::QueueLoadResult::Accepted,
+    }));
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+}
+
+#[test]
+fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
+    let player = cold_player();
+    player.status.lock().unwrap().active = true;
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+    let slots = |id: &str| vec![crate::ctrl::UnifiedQueueSlot {
+        slot_id: 901,
+        item: emby_qi(id, "Video", "Movie"),
+    }];
+
+    for (request_id, id) in [(53, "first"), (54, "second")] {
+        handle_ctrl(
+            CtrlCmd::UnifiedQueueLoadIdle {
+                request_id,
+                slots: slots(id),
+                cursor: 0,
+                source: QueueSource::Album,
+            },
+            client_id,
+            CtrlRequest { reply_tx: &reply_tx },
+            &client,
+            &player,
+            false,
+            &mut owner,
+            &shared_queue,
+            &registry,
+            false,
+            &merged_tx,
+            true,
+        );
+    }
+
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
+    assert_eq!(owner.pending_idle_load.as_ref().unwrap().slots[0].1.id(), "first");
+    handle_ctrl(
+        CtrlCmd::UnifiedQueueClear,
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue,
+        &registry,
+        false,
+        &merged_tx,
+        true,
+    );
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 54,
+        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+    } if reason.contains("another idle queue load is pending")));
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("finalizing an idle queue load")));
+}
+
+#[test]
+fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
+    let player = cold_player();
+    player.status.lock().unwrap().active = true;
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+    let old_slot = owner.core.queue.slots()[0].slot_id;
+
+    handle_ctrl(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 55,
+            slots: vec![crate::ctrl::UnifiedQueueSlot { slot_id: 902, item: emby_qi("new", "Video", "Movie") }],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue,
+        &registry,
+        false,
+        &merged_tx,
+        true,
+    );
+    let old_run = owner.pending_idle_load.as_ref().unwrap().stopped_run;
+
+    assert!(crate::daemon::complete_pending_idle_queue_load(
+        old_run,
+        Some("stop finalization failed".to_string()),
+        &mut owner,
+        &player,
+        &shared_queue,
+        &registry,
+    ));
+    assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot);
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 55,
+        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+    } if reason == "stop finalization failed"));
 }
 
 #[test]
