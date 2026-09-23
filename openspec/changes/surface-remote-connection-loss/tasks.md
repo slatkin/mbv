@@ -19,8 +19,8 @@
 - [x] 3.1 Tick-integration coverage (`tests_tick_integration*`) for the
   disconnect event path through the shell sync pass: adopted remote queue
   visible before, local presentation after, toast shown once.
-- [ ] 4.1 Spec sync: fold the deltas into `openspec/specs/`, resolve the
+- [x] 4.1 Spec sync: fold the deltas into `openspec/specs/`, resolve the
   stale "Remote-daemon disconnects are unaffected" wording in
   `daemon-disconnect-handling`, `openspec validate --strict`.
-- [ ] 4.2 fmt / check / nextest / clippy gate; commit planning + code
+- [x] 4.2 fmt / check / nextest / clippy gate; commit planning + code
   together.
