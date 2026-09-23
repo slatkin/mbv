@@ -1,6 +1,6 @@
 /// `Fields` for `get_latest`. Must include every field its parser
-/// (`parse_item`) reads — in particular `DateCreated`, which Home Latest's
-/// new-content marker and date gutter depend on (mbv/#756).
+/// (`parse_item`) reads — in particular `DateCreated`, which destination
+/// Latest markers and date gutters depend on (mbv/#756).
 const LATEST_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId,Overview,PremiereDate,DateCreated";
 
 /// `Fields` for `get_latest_episodes`. Same `DateCreated` dependency as
@@ -82,13 +82,6 @@ impl EmbyClient {
         }
 
         Ok(items)
-    }
-
-    pub fn get_user_views(&self) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(
-            &format!("/Users/{}/Views", crate::encode_path_segment(&self.user_id)),
-            &[],
-        )
     }
 
     pub fn get_items_sorted(

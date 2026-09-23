@@ -464,24 +464,32 @@ from the pill row.
 _Avoid_: author group (the bucket is a range, not one author)
 
 **Home view**:
-The Home tab content: Continue Watching across libraries and per-library Latest
-additions. Each section maintains its own cursor and scroll.
-_Avoid_: home screen, dashboard, landing
+The Home destination's content (tab labelled `Continue`): Continue Watching across libraries. Home has no Latest
+pills or rows and no Selector row or pill bar; Latest lives at each eligible
+destination. The section maintains its own cursor and scroll.
+_Avoid_: home screen, dashboard, landing, Home tab label (the tab reads `Continue`)
+
+**Destination Latest mode**:
+The `Latest` pill/content mode at an eligible destination (every visible Emby
+library except Music libraries, each Audiobookshelf podcast library, and the
+Feeds tab) showing that destination's newest additions from its own source,
+without Home duplicates. Governed by `destination-latest-modes`.
+_Avoid_: Home Latest, Latest section (for the destination mode)
 
 **Launch cutoff / launch window**:
 The pair of client-launch timestamps bounding what counts as new content: the
 previous client-launch timestamp (the launch cutoff, read and atomically
 replaced at startup) and the current launch timestamp. An item is new in a
-Home Latest section only when its provider timestamp falls strictly after the
-previous launch and no later than the current launch. The first launch
-establishes the baseline and marks nothing.
+destination's Latest mode only when its provider timestamp falls strictly
+after the previous launch and no later than the current launch. The first
+launch establishes the baseline and marks nothing.
 _Avoid_: session start, boot time, last-seen timestamp
 
 **New-content marker**:
-The Iris `•` shown after a Home Latest pill label when its section contains an
-item new in the launch window. Continue is never marked; selecting (or already
-having selected) the pill acknowledges the section and clears the marker for
-the remainder of the client run.
+The Iris `•` shown after a destination Latest pill label when its source
+contains an item new in the launch window. Selecting (or already having
+selected) the pill acknowledges that destination's source and clears the
+marker for the remainder of the client run.
 _Avoid_: unread dot, badge, unread count
 
 **Library position**:

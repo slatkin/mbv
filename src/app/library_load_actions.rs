@@ -1,7 +1,7 @@
-use super::types_playback::{HomeContent, HomeLatestSection};
+use super::types_playback::HomeContent;
 use super::{
-    notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, HomeLatestSource,
-    LibEvent, PanelFocus, PendingQueueAction, TabSelection,
+    notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
+    PendingQueueAction, TabSelection,
 };
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
@@ -25,6 +25,14 @@ impl App {
             }
         }
         self.log_feed_home_video_state(lib_idx, "refresh_lib_before_spawn");
+        if self.libs[lib_idx].library.collection_type != "tvshows"
+            && self.libs[lib_idx].library.collection_type != "playlists"
+        {
+            self.spawn_emby_latest_snapshot(
+                self.libs[lib_idx].library.id.clone(),
+                self.libs[lib_idx].library.name.clone(),
+            );
+        }
         if self.libs[lib_idx].library.collection_type == "tvshows"
             && self.libs[lib_idx].nav_stack.len() == 1
             && (self.libs[lib_idx].tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
@@ -369,9 +377,8 @@ impl App {
         self.emby_catalog_ready = true;
     }
 
-    /// Compute the full Home content snapshot (task 5.3d): the Emby-derived
-    /// portion (Continue Watching, library tabs rebuild, Emby `latest` pills)
-    /// is built only when an Emby Service is configured and connected.
+    /// Compute the Home Continue Watching snapshot. Continue Watching and
+    /// the library catalog are fetched only when Emby is configured and connected.
     /// Without one it is skipped -- not an error -- so Home still populates
     /// from whatever local Sources exist (#543 Part 1). Returns the
     /// computed `HomeContent` instead of writing deleted `App.home`; the
@@ -380,7 +387,7 @@ impl App {
     /// and preserves the Continue Watching column cursor at the assignment.
     pub(super) fn fetch_home(&mut self) -> Result<HomeContent, String> {
         let mut emby_fetched = false;
-        let (continue_items, all_views, user_views) = if let Some(client) = self.emby_client() {
+        let (continue_items, all_views) = if let Some(client) = self.emby_client() {
             emby_fetched = true;
             let client = client.lock().unwrap();
             let views = match client.get_views_classified() {
@@ -391,13 +398,9 @@ impl App {
                     return Err(error.to_string());
                 }
             };
-            (
-                client.get_continue_watching(20).unwrap_or_default(),
-                views,
-                client.get_user_views().unwrap_or_default(),
-            )
+            (client.get_continue_watching(20).unwrap_or_default(), views)
         } else {
-            (Vec::new(), Vec::new(), Vec::new())
+            (Vec::new(), Vec::new())
         };
 
         // Library tabs are Emby-modeled state; only rebuild them from the
@@ -410,119 +413,10 @@ impl App {
             }
         }
 
-        // Merge, not replace: the Emby `latest` pills are removed and
-        // reinserted at their previous positions, leaving any entries from
-        // other providers untouched. This is what lets `fetch_home()` run
-        // unconditionally (even before Emby connects) without clearing other
-        // providers' Home data whenever Emby is the writer. All three
-        // provider portions (Emby, Audiobookshelf shelf cache, Feeds tab)
-        // are rebuilt into the local `latest` here.
-        let mut latest: Vec<HomeLatestSection> = Vec::new();
-        let mut emby_sections: Vec<HomeLatestSection> = Vec::new();
-        if let Some(client) = self.emby_client() {
-            let client = client.lock().unwrap();
-            for v in user_views.iter().filter(|v| {
-                let lower = v.name.to_lowercase();
-                v.collection_type != "playlists"
-                    && !self.hidden_latest.contains(&lower)
-                    && !self.hidden_libraries.contains(&lower)
-            }) {
-                let items = if v.collection_type == "tvshows" {
-                    client.get_latest_episodes(&v.id, 30).unwrap_or_default()
-                } else {
-                    client.get_latest(&v.id, 30).unwrap_or_default()
-                };
-                emby_sections.push(HomeLatestSection::new_with_launch_window(
-                    v.name.clone(),
-                    HomeLatestSource::Emby(v.id.clone()),
-                    items
-                        .into_iter()
-                        .map(|item| QueueItem::Emby(Box::new(item)))
-                        .collect(),
-                    self.home_latest_launch_window,
-                ));
-            }
-        }
-        merge_home_sections(&mut latest, emby_sections, |source| {
-            matches!(source, HomeLatestSource::Emby(_))
-        });
-        // The Audiobookshelf portion is rebuilt from the async shelf cache
-        // (never a network fetch here), re-applying `hidden_latest`.
-        merge_home_sections(
-            &mut latest,
-            self.audiobookshelf_latest_sections(),
-            |source| matches!(source, HomeLatestSource::Audiobookshelf(_)),
-        );
-        // The Feeds portion is rebuilt from the Feeds tab's combined entries
-        // (never a network fetch here), re-applying `hidden_latest`.
-        if let Some(feed_section) = self.feeds_latest_section() {
-            merge_home_sections(&mut latest, vec![feed_section], |source| {
-                matches!(source, HomeLatestSource::Feeds)
-            });
-        }
-
         Ok(HomeContent {
             continue_items,
-            latest,
             loading: false,
-            feed_names: HashMap::new(),
         })
-    }
-
-    /// The Audiobookshelf Latest-pill sections rebuildable from
-    /// `audiobookshelf_shelf_cache`, one per cached **podcast** library in
-    /// `audiobookshelf_libraries` order (book libraries get no pill in this
-    /// change, per the spec), honoring `hidden_latest`/`hidden_libraries` by
-    /// library name. A library with no cached entries still yields a pill
-    /// (empty pills are not selectable and render nothing), matching an empty
-    /// Emby Latest section.
-    pub(super) fn audiobookshelf_latest_sections(&self) -> Vec<HomeLatestSection> {
-        self.audiobookshelf_libraries
-            .iter()
-            .filter(|library| library.media_type != "book")
-            .filter(|library| {
-                let lower = library.name.to_lowercase();
-                !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
-            })
-            .map(|library| {
-                HomeLatestSection::new_with_launch_window(
-                    library.name.clone(),
-                    HomeLatestSource::Audiobookshelf(library.id.clone()),
-                    self.audiobookshelf_shelf_cache
-                        .get(&library.id)
-                        .cloned()
-                        .unwrap_or_default(),
-                    self.home_latest_launch_window,
-                )
-            })
-            .collect()
-    }
-
-    /// The single Feeds Latest-pill section, built from the Feeds tab's
-    /// combined `all_entries` (newest-first "All" group). The pill exists
-    /// only when feed subscriptions are configured (mirroring the
-    /// Audiobookshelf pill, which exists only per library), and honors
-    /// `hidden_latest` via the literal `"feeds"` pseudo-name. Consumed by
-    /// `fetch_home()` and by the shell's feed-drain seam, which merges the
-    /// freshly computed section into Model-owned `latest` (task 5.3d).
-    pub(super) fn feeds_latest_section(&self) -> Option<HomeLatestSection> {
-        if !self.has_feeds_subscriptions() {
-            return None;
-        }
-        if self
-            .hidden_latest
-            .iter()
-            .any(|hidden| hidden.eq_ignore_ascii_case("feeds"))
-        {
-            return None;
-        }
-        let items = self.feed_latest_items();
-        Some(HomeLatestSection::new_with_launch_window(
-            "Feeds".into(),
-            HomeLatestSource::Feeds,
-            items,
-            self.home_latest_launch_window,
-        ))
     }
 
     /// The `Newest Episodes` shelf's entries as queue-able items, or an empty
@@ -546,53 +440,5 @@ impl App {
                     .collect()
             })
             .unwrap_or_default()
-    }
-}
-
-/// Position- and cursor-preserving splice for `HomeContent.latest`: drops every
-/// section whose source matches `kind`, then reinserts `sections` at the
-/// previous positions, restoring each section's prior cursor clamped to its
-/// item count. Each Home writer (Emby in `fetch_home`, the Audiobookshelf
-/// shelf cache) calls this with its own kind, so it only ever touches its own
-/// entries and leaves other providers' pills untouched.
-pub(super) fn merge_home_sections(
-    latest: &mut Vec<HomeLatestSection>,
-    sections: Vec<HomeLatestSection>,
-    kind: impl Fn(&HomeLatestSource) -> bool,
-) {
-    let old_positions: Vec<usize> = latest
-        .iter()
-        .enumerate()
-        .filter(|(_, section)| kind(&section.source))
-        .map(|(index, _)| index)
-        .collect();
-    let mut merged: Vec<HomeLatestSection> = std::mem::take(latest)
-        .into_iter()
-        .filter(|section| !kind(&section.source))
-        .collect();
-    for (inserted, section) in sections.into_iter().enumerate() {
-        let insert_at = old_positions
-            .get(inserted)
-            .copied()
-            .unwrap_or(merged.len())
-            .min(merged.len());
-        merged.insert(insert_at, section);
-    }
-    // Canonical pill order across providers regardless of arrival order:
-    // Emby views, then Audiobookshelf podcast libraries, then Feeds. The
-    // merge above preserves cursor positions, but async completion order
-    // (Feeds loading before an ABS shelf fetch, Emby bootstrapping last)
-    // would otherwise let sections observe arrival order instead. Stable so
-    // same-source sections keep their existing relative order.
-    merged.sort_by_key(|section| home_latest_source_rank(&section.source));
-    *latest = merged;
-}
-
-/// Pill ordering rank: Emby (0) before Audiobookshelf (1) before Feeds (2).
-pub(super) fn home_latest_source_rank(source: &HomeLatestSource) -> u8 {
-    match source {
-        HomeLatestSource::Emby(_) => 0,
-        HomeLatestSource::Audiobookshelf(_) => 1,
-        HomeLatestSource::Feeds => 2,
     }
 }

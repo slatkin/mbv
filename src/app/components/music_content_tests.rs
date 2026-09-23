@@ -71,7 +71,7 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
 }
 
 #[test]
-fn grouped_music_reanchor_launch_state_falls_back_to_first_album() {
+fn saved_music_latest_selector_falls_back_to_normal_default() {
     let mut album = make_item("Album", "Folder");
     album.id = "album-stable".into();
     let mut group = make_item("Artist", "MusicArtist");
@@ -95,17 +95,47 @@ fn grouped_music_reanchor_launch_state_falls_back_to_first_album() {
         tab: mbv_core::config::TabIdentity::Home,
         panel_focus: mbv_core::config::LaunchPanelFocus::Library,
         selector: Some(mbv_core::config::SelectorIdentity::Emby {
-            key: mbv_core::config::EmbySelectorKey::Group("gone".into()),
+            key: mbv_core::config::EmbySelectorKey::Latest,
         }),
-        item: Some(mbv_core::config::LibraryItemIdentity::Emby { id: "gone".into() }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "stale-latest-item".into(),
+        }),
     };
     assert!(owner.reanchor_launch_state(&state));
     assert_eq!(
-        owner.launch_snapshot().1,
-        Some(mbv_core::config::LibraryItemIdentity::Emby {
-            id: "album-stable".into()
-        })
+        owner.launch_snapshot(),
+        (
+            Some(mbv_core::config::SelectorIdentity::Emby {
+                key: mbv_core::config::EmbySelectorKey::Group("group-stable".into()),
+            }),
+            Some(mbv_core::config::LibraryItemIdentity::Emby {
+                id: "album-stable".into()
+            }),
+        )
     );
+    assert!(owner.launch_selector(&state).is_none());
+}
+
+#[test]
+fn music_selector_contains_only_groups_and_switches_by_group_index() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0"]), ("Beta", &["b-0"])]);
+    let mut alpha = make_item("Alpha", "MusicArtist");
+    alpha.id = "alpha-group".into();
+    let mut beta = make_item("Beta", "MusicArtist");
+    beta.id = "beta-group".into();
+    owner.context.groups = vec![alpha, beta];
+    let content = owner.panel_content();
+    let selector = content.selector.as_ref().expect("group selector");
+    assert_eq!(selector.pills, vec!["Alpha", "Beta"]);
+    assert_eq!(selector.markers, vec![false, false]);
+    assert_eq!(selector.active, Some(0));
+    assert!(matches!(content.list, ListSlot::Media(_)));
+    drop(content);
+
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::SelectorPicked(1)),
+        Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }))
+    ));
 }
 
 #[test]

@@ -1,6 +1,6 @@
 use super::types_browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
 use super::types_feed::FeedHomeVideoGroup;
-use super::types_playback::{HomeContent, HomeLatestSection};
+use super::types_playback::HomeContent;
 use mbv_core::api::EmbyItem;
 use mbv_core::service_runtime::SetupGeneration;
 
@@ -80,6 +80,11 @@ pub(super) enum LibEvent {
         lib_idx: usize,
         parent_id: String,
         level: Box<BrowseLevel>,
+    },
+    EmbyLatestSnapshotFetched {
+        library_id: String,
+        title: String,
+        items: Vec<EmbyItem>,
     },
     PageAppended {
         lib_idx: usize,
@@ -266,30 +271,15 @@ pub(super) enum LibEvent {
     /// See `spawn_enrich_queue_state`.
     #[rustfmt::skip]
     QueueEnriched { items: Vec<EmbyItem> },
-    /// A freshly computed Home content snapshot delivered by an App-internal
-    /// Home writer (task 5.3d): the fetch call itself is never deferred (its
-    /// App-side side effects — `rebuild_library_tabs_from_views` +
-    /// `start_album_index`, and `refresh_after_stop`'s feed-home-video loop —
-    /// are synchronous and order-sensitive), but App-internal callers cannot
-    /// touch Model-owned `home_content`, so the computed result travels here
-    /// and the shell assigns it at the lib_rx drain, then re-projects.
+    /// A freshly computed Continue Watching snapshot delivered by an
+    /// App-internal writer. App-internal callers cannot touch Model-owned
+    /// `home_content`, so the result travels here for shell assignment.
     HomeContentRefreshed(Box<HomeContent>),
     /// The Emby service has been cleared (removed/replaced); the shell
-    /// resets the Model-owned Continue Watching data (items, cursor, latest)
-    /// and re-projects. The `loading` flag is intentionally untouched,
+    /// resets the Model-owned Continue Watching items and re-projects. The
+    /// `loading` flag is intentionally untouched,
     /// matching the legacy `clear_emby_memory` which never reset it.
     HomeContentCleared,
-    /// The Audiobookshelf Latest pill sections rebuilt from the shelf cache
-    /// after a shelf fetch (task 5.3d). Cross-provider pill state lives in
-    /// the Model, so the shell merges these into `home_content.latest` (the
-    /// shared `merge_home_sections` splice) and re-projects.
-    AudiobookshelfLatestRebuilt(Vec<HomeLatestSection>),
-    /// The Feeds Latest pill section (at most one) rebuilt from the Feeds
-    /// tab after a refresh (task 5.3d). Like `AudiobookshelfLatestRebuilt`,
-    /// the shell merges it into Model-owned `latest` — the feed drain runs
-    /// after the lib_rx drain, so this lands on the next loop pass (a
-    /// bounded one-iteration latency on the Feeds pill).
-    FeedsLatestRebuilt(Vec<HomeLatestSection>),
     Error(String),
 }
 

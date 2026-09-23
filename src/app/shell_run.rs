@@ -237,7 +237,7 @@ impl Model {
                 .get(&library_id)
                 .map(|snapshot| snapshot.items.clone())
                 .unwrap_or(items);
-            self.update_tv_latest_snapshot(library_id, title, items);
+            self.update_emby_latest_snapshot(library_id, title, items);
         }
     }
 
@@ -394,6 +394,22 @@ impl Model {
             while let Ok(ev) = self.app.lib_rx.try_recv() {
                 had_events = true;
                 match ev {
+                    super::super::LibEvent::EmbyLatestSnapshotFetched {
+                        library_id,
+                        title,
+                        items,
+                    } => {
+                        self.update_emby_latest_snapshot(
+                            library_id,
+                            title,
+                            items
+                                .into_iter()
+                                .map(|item| {
+                                    mbv_core::playback_queue::QueueItem::Emby(Box::new(item))
+                                })
+                                .collect(),
+                        );
+                    }
                     super::super::LibEvent::Loaded {
                         lib_idx,
                         parent_id,
@@ -428,7 +444,7 @@ impl Model {
                             level,
                         });
                         if let Some((library_id, title, items)) = latest {
-                            self.update_tv_latest_snapshot(library_id, title, items);
+                            self.update_emby_latest_snapshot(library_id, title, items);
                         }
                     }
                     // Recursive album activation used to write `Some(0)` on
@@ -454,8 +470,6 @@ impl Model {
                         self.music_workspace_reanchor = true;
                         self.push_inline_search_content();
                     }
-                    // App-internal Home writers deliver content/section deltas
-                    // to assign/merge into Model-owned `home_content` (5.3d).
                     super::super::LibEvent::HomeContentRefreshed(content) => {
                         self.assign_home_content(*content)
                     }
@@ -472,19 +486,8 @@ impl Model {
                         self.app.handle_lib_event(ev);
                     }
                     super::super::LibEvent::HomeContentCleared => self.clear_home_content(),
-                    super::super::LibEvent::AudiobookshelfLatestRebuilt(sections) => {
-                        self.merge_home_abs_sections(sections)
-                    }
-                    super::super::LibEvent::FeedsLatestRebuilt(sections) => {
-                        self.merge_home_feeds_sections(sections)
-                    }
                     ev => self.handle_inline_search_lib_event(ev),
                 }
-                // Every lib event re-projects Home and the podcast browser
-                // (idempotent; 5.3d.11 U6): lib events deliver ShowsFetched /
-                // DetailFetched async completions, RestoreLibraryPosition
-                // saved-position restore, and audio progress reconciles.
-                self.push_home_content();
                 self.push_audiobookshelf_podcast_content();
                 // Emby browser content may have changed (5.3d.15/M2).
                 self.push_active_emby_library_owner_content();
@@ -526,11 +529,9 @@ impl Model {
 
             had_events |= self.app.drain_cast_events();
 
-            // Feed results rebuild Home's Feeds pill via `FeedsLatestRebuilt`,
-            // drained next loop pass; re-project for the other inputs (5.3d).
+            // Feed results update their embedded destination owner.
             if self.app.drain_feed_tab_results() {
                 had_events = true;
-                self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
                 self.push_active_emby_library_owner_content();
             }
@@ -563,7 +564,7 @@ impl Model {
             while let Ok(ev) = self.app.ws_rx.try_recv() {
                 had_events = true;
                 self.app.handle_ws_event(ev);
-                // `UserDataChanged` refetches Home inside the handler; re-project (5.3d).
+                // `UserDataChanged` refetches Continue Watching inside the handler.
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
                 self.push_active_emby_library_owner_content();

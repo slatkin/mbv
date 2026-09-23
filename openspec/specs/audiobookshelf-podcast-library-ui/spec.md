@@ -6,15 +6,16 @@ Provides an Audiobookshelf podcast browsing experience: one flat, age-grouped ep
 
 ## Requirements
 
-### Requirement: Personalized shelves are absent from the podcast tab
+### Requirement: Personalized shelves appear only as podcast Latest
 
-The Audiobookshelf podcast tab SHALL NOT render or navigate personalized shelf data, and shelf data SHALL
+The Audiobookshelf podcast tab SHALL NOT render or navigate personalized shelf data except the `Newest Episodes` shelf, which SHALL be used only by that library's `Latest` pill. Other shelf data SHALL
 NOT affect show order, selection, scrolling, hit testing, or pagination.
 
 #### Scenario: Catalog includes personalized shelves
 
 - **WHEN** Audiobookshelf returns personalized shelf data
-- **THEN** the podcast tab's pill row, episode list and hero SHALL remain unaffected
+- **THEN** the podcast tab's state and show pills, episode list and hero SHALL remain unaffected
+- **AND** only the `Latest` pill consumes the `Newest Episodes` shelf
 
 ### Requirement: The episode hero uses the parent show's cover artwork
 
@@ -57,7 +58,7 @@ without moving the image or changing the shared hero's structural rules.
 ### Requirement: Podcast libraries render a flat episode browser
 
 An Audiobookshelf podcast library SHALL render through the Library panel as a flat episode browser. The
-Selector row SHALL carry the podcast tab's pill selector (the `All` / `Unplayed` / `Played` state pills
+Selector row SHALL carry the podcast tab's pill selector (`Latest`, then `All` / `Unplayed` / `Played`,
 followed by one pill per subscribed podcast). The list SHALL render one selectable episode row per matching
 episode, grouped under the five Feeds age-group headings, with every row naming its parent podcast. At Wide
 geometry, the selected episode's hero (facts, cover, no Workspace) SHALL occupy the Hero pane while the
@@ -113,22 +114,23 @@ declaration.
 
 ### Requirement: Podcast tab uses one state-and-show pill selector
 
-The podcast tab's Selector row SHALL present one mutually exclusive pill selection: the state pills `All`,
-`Unplayed`, and `Played`, followed by one pill per subscribed podcast. A state pill SHALL show matching
-episodes across all shows; a show pill SHALL show that show's episodes regardless of play state. Exactly one
+The podcast tab's Selector row SHALL present one mutually exclusive pill selection: `Latest`, the state pills `All`, `Unplayed`, and `Played`, followed by one pill per subscribed podcast. `Latest` SHALL show the library's Newest Episodes shelf independently of the selected show or state filter. A state pill SHALL show matching episodes across all shows; a show pill SHALL show that show's episodes regardless of play state. Exactly one
 pill SHALL be active, identified by value rather than by position, and state and show selections SHALL NOT
 combine in one view. `Unplayed` SHALL include episodes with missing or incomplete (in-progress) progress;
 `Played` SHALL include only completed progress. Pills SHALL use the shared `render_pill_bar` widget, follow
 its label truncation and overflow contract, and SHALL write `layout.selector_tabs`. `[` and `]` SHALL move
 through the pill bar as one uniform gesture — there is one pill kind, with no per-kind key, ordering, or
-behaviour. The last active pill SHALL be remembered in session memory across tab switches and SHALL reset
-to `All` when mbv restarts.
+behaviour. The last active pill SHALL be remembered in session memory across tab switches. On restart, a podcast library not selected at orderly exit SHALL start on `All`; if it was the selected destination at exit, the saved main Selector pill (including `Latest`) SHALL restore through the TUI launch snapshot.
 
 #### Scenario: Podcast tab renders state-and-show pills
-
 - **WHEN** the Audiobookshelf podcast tab is displayed with shows available
-- **THEN** the Selector row renders `All`, `Unplayed`, and `Played` followed by one pill per subscribed podcast
+- **THEN** the Selector row renders `Latest`, `All`, `Unplayed`, and `Played` followed by one pill per subscribed podcast
 - **AND** no alphabetical range bucket, `#` bucket, or empty-range pill renders
+
+#### Scenario: Latest is independent of other pills
+- **WHEN** the user selects `Latest` while a show or state pill was active
+- **THEN** the list shows the library's newest episodes from its Newest Episodes shelf
+- **AND** no show or played-state filter excludes those episodes
 
 #### Scenario: State filter semantics
 
@@ -153,18 +155,19 @@ to `All` when mbv restarts.
 
 - **WHEN** the user presses `]` or `[` on the podcast tab
 - **THEN** the active pill moves to the next or previous pill in the bar, wrapping at either end
-- **AND** the movement is identical whether the pill is a state pill or a show pill
+- **AND** the movement is identical whether the pill is Latest, a state pill, or a show pill
 
 #### Scenario: Last pill remembered in session
-
 - **WHEN** the user leaves the podcast tab and returns without restarting mbv
 - **THEN** the remembered pill is active again
-- **WHEN** mbv restarts
+- **WHEN** mbv restarts after exiting from a different tab
 - **THEN** the `All` pill is active
+- **WHEN** mbv restarts after exiting with this podcast library's `Latest` pill selected
+- **THEN** the saved `Latest` pill is restored
 
 #### Scenario: Pills use the shared widget
 
-- **WHEN** the state-and-show pills are rendered
+- **WHEN** the selector pills are rendered
 - **THEN** they use the same `render_pill_bar` widget and overflow behavior as every other library tab
 - **AND** they follow the shared label truncation contract (show-name pills truncated like feed-group labels)
 - **AND** they write `layout.selector_tabs` for mouse hit-testing

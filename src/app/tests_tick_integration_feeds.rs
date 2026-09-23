@@ -298,7 +298,7 @@ fn feeds_tick_watched_pill_click_changes_the_filter_through_the_panel() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == WatchedFilter::Watched.position())
+        .find(|(_, id)| *id == 1 + WatchedFilter::Watched.position())
         .map(|(rect, _)| *rect)
         .expect("the Watched pill is painted");
     harness.inject(Event::Mouse(MouseEvent {
@@ -317,6 +317,76 @@ fn feeds_tick_watched_pill_click_changes_the_filter_through_the_panel() {
 
 /// A single row click resolves the painted row through the panel and emits
 /// the owner's `FeedsRowClick` request; the row's stable target is selected.
+#[test]
+fn feeds_tick_latest_selection_uses_loaded_snapshot_without_fetch_and_refreshes_in_place() {
+    let mut harness = harness(240);
+    harness.model_mut().app.home_latest_launch_window =
+        super::home_latest::HomeLatestLaunchWindow {
+            previous: Some(10),
+            current: 20,
+        };
+    harness.model_mut().app.feed_tab.entries[0][0].pub_date_secs = Some(15);
+    harness.model_mut().app.feed_tab.rebuild_all_entries();
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness, 240);
+    assert!(panel(&harness).test_selector_markers()[0]);
+    let latest = panel(&harness)
+        .test_selector_hits()
+        .regions()
+        .iter()
+        .find(|(_, id)| *id == 0)
+        .map(|(rect, _)| *rect)
+        .expect("Latest pill is painted");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: latest.x + 1,
+        row: latest.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let selected = harness.step();
+    assert!(selected.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::FeedsLatestSelected)
+    )));
+    assert!(!selected.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::RefreshFeeds)
+    )));
+    assert!(feeds_owner(&harness).latest_selected());
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(ShellRequest::FeedsLatestSelected),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    draw(&mut harness, 240);
+    assert!(
+        !panel(&harness).test_selector_markers()[0],
+        "selecting Latest acknowledges the launch-window marker"
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('r'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let refresh = harness.step();
+    assert!(refresh.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::RefreshFeeds)
+    )));
+
+    harness.model_mut().app.feed_tab.entries = vec![vec![
+        entry("one", "One"),
+        entry("two", "Two"),
+        entry("three", "Three"),
+    ]];
+    harness.model_mut().app.feed_tab.rebuild_all_entries();
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(feeds_owner(&harness).latest_selected());
+    assert!(feeds_owner(&harness).visible_titles().contains(&"Three"));
+}
+
 #[test]
 fn feeds_tick_row_click_through_the_panel_emits_feeds_row_click() {
     let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);

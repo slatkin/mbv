@@ -38,6 +38,14 @@ pub mod tv_content;
 pub(crate) mod tv_tree_target;
 pub mod user_event;
 
+pub(in crate::app) fn selector_markers(len: usize, latest_marker: bool) -> Vec<bool> {
+    let mut markers = vec![false; len];
+    if let Some(first) = markers.first_mut() {
+        *first = latest_marker;
+    }
+    markers
+}
+
 pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;

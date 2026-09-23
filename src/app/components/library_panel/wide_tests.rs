@@ -11,7 +11,9 @@ use crate::app::components::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, PanelList, SelectorRow, Workspace,
     WorkspaceHeader,
 };
-use crate::app::render::arrangements::library::wide_library_panes;
+use crate::app::render::arrangements::library::{
+    wide_library_panes, wide_library_panes_with_selector,
+};
 use ratatui::backend::TestBackend;
 use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
@@ -139,8 +141,8 @@ fn tv_flat_modes_reclaim_the_wide_hero_pane(#[case] mode: mbv_core::config::TvCo
         .unwrap();
 
     let geometry = panel.test_wide_geometry().expect("Wide panel geometry");
-    let panes =
-        wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None, false).expect("Wide arrangement");
+    let panes = wide_library_panes_with_selector(AREA, PANE_PAD_X, PANE_PAD_Y, None, false, false)
+        .expect("Wide arrangement without Selector row");
     assert_eq!(geometry.browser, panes.content_area);
     assert_eq!(geometry.hero.width, 0);
     assert_eq!(geometry.list_panel.right(), AREA.right());
@@ -232,6 +234,40 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
 /// Task 1.3 (D2): the Wide skeleton hands the band-reduced content area to the
 /// hero painter, so the hero pane's fill starts below the full-width Selector
 /// band instead of at the raw panel top.
+#[test]
+fn no_selector_reclaims_the_gap_row_for_the_browser_and_hero() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut content = LibraryPanelContent {
+        selector: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Dune"),
+            overview: None,
+            credits: None,
+            workspace: None,
+        }),
+    };
+    let (buf, geometry, _hits) = draw_skeleton(&mut content, false);
+    let panes = wide_library_panes_with_selector(AREA, PANE_PAD_X, PANE_PAD_Y, None, true, false)
+        .expect("wide area");
+
+    assert_eq!(panes.spacer_area.height, 0);
+    assert_eq!(geometry.browser.y, AREA.y);
+    assert_eq!(geometry.hero.y, AREA.y);
+    assert_eq!(geometry.browser.height, AREA.height);
+    assert_eq!(geometry.hero.height, AREA.height);
+    assert_eq!(list.painted, Some(geometry.list_area));
+    assert!(text_in(&buf, geometry.list_area, "Alpha"));
+    assert_eq!(
+        buf[(geometry.browser.x, geometry.browser.y)].bg,
+        palette::surface_colors(palette::Surface::LibraryPanel, false).fill
+    );
+    assert_eq!(
+        buf[(geometry.hero.x, geometry.hero.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
+}
+
 #[test]
 fn hero_pane_starts_below_the_full_width_selector_band() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
@@ -518,21 +554,18 @@ fn browser_focused_list_carries_the_focus_green() {
             }),
         }),
     };
-    let (buf, geometry, _hits) = draw_skeleton(&mut content, true);
+    let (buf, geometry, hits) = draw_skeleton(&mut content, true);
     // The browser list holds focus: green list box, resting hero pane and
     // resting workspace box.
     assert_eq!(
         buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
         palette::surface_colors(palette::Surface::LibraryPanel, true).fill
     );
-    // The Selector row's spacer is the panel showing through, so the focused
-    // panel paints it with the column body's focused fill (the reserved row
-    // and its spacer paint even with no `SelectorRow`).
     assert_eq!(
-        buf[(geometry.selector_bar.x, geometry.selector_bar.y + 1)].bg,
-        palette::surface_colors(palette::Surface::PillRowGap, true).fill,
-        "the focused panel's spacer band carries the focused column body"
+        geometry.selector_bar.height, 0,
+        "a destination without a Selector row reserves no band"
     );
+    assert!(hits.selector.regions().is_empty());
     assert_eq!(
         buf[(geometry.hero.x, geometry.hero.y)].bg,
         palette::surface_colors(palette::Surface::HeroPane, false).fill

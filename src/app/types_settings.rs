@@ -38,7 +38,6 @@ pub(crate) enum SettingKey {
     AlwaysSkipIntro,
     ImageProtocol,
     HiddenLibraries,
-    HiddenLatest,
     ShowAudioWindow,
     UseMpvConfig,
     NoScripts,
@@ -127,7 +126,6 @@ pub(super) static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         "Library",
         &[
             SettingKey::HiddenLibraries,
-            SettingKey::HiddenLatest,
             SettingKey::FeedViewLibraries,
             SettingKey::LibraryRoutes,
         ],

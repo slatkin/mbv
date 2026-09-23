@@ -252,6 +252,21 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     );
 }
 
+#[test]
+fn launch_snapshot_preserves_album_target_when_list_content_is_stale() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));
+
+    // Simulate the list snapshot becoming stale before orderly exit while the
+    // tree still retains its stable album selection.
+    owner.context.list.items.clear();
+    assert!(owner.selected_item().is_none());
+    assert_eq!(
+        owner.launch_snapshot().1,
+        Some(LibraryItemIdentity::Emby { id: "a-0".into() })
+    );
+}
+
 /// An album-leaf Enter focuses the Wide inline track pane, but moving the tree
 /// selection onto an artist root must not let stale pane focus swallow the
 /// root's Hero entry. The root keeps its expansion unchanged.

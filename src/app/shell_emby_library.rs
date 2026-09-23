@@ -81,32 +81,18 @@ impl Model {
             ShellRequest::EmbyLibraryBack => {
                 self.app.go_back(lib_idx);
             }
-            // `[`/`]` cycle the letter-range pill row (task 5.3d, Emby
-            // browser selector cycling): the shell derives the active Emby
-            // library index from its own tab state and runs
-            // `App::cycle_letter_pill` on it, the same call the legacy
-            // `handle_key_emby_library` arm made — preserving the
-            // `should_show_letter_pills` no-op guard and the existing
-            // wrap/select behavior (the component's mount gate has already
-            // excluded the Music and feed-home-video group branches).
-            ShellRequest::EmbyLibraryCycleLetterPill { delta } => {
-                self.app.cycle_letter_pill(lib_idx, delta)
-            }
-            // `[`/`]` on a feed/home-video group-picker library
-            // (`is_feed_home_video_group_view`, migrate-narrow-browse task
-            // 2.2): the component's projected content carries the
-            // group-pill flag, so its bracket keys mean group cycling; the
-            // shell derives the active library index from its own tab state
-            // and runs `App::switch_feed_folder_group` (rem_euclid wrap over
-            // "All" + every visible group).
-            ShellRequest::EmbyLibraryCycleGroup { delta } => {
-                self.app.switch_feed_folder_group(lib_idx, delta)
-            }
+
+            // `[`/`]` group cycling is resolved locally by the mounted
+            // Emby library component from its projected group-picker state.
+
             // Every local browser cursor key (arrows/hjkl, Page keys,
             // Home/End) resolves to an item index inside the component and
             // arrives here already resolved. Keep the resting-position write
             // and its navigation effects in this shell arm.
             ShellRequest::EmbyLibraryCursorIndex { index } => {
+                if self.active_emby_library_owner_is_latest() {
+                    return;
+                }
                 if lib_idx >= self.app.libs.len() {
                     return;
                 }

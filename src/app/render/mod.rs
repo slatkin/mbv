@@ -32,8 +32,8 @@ pub(in crate::app) use components::queue::{render_queue_body, QueuePresentation}
 pub(in crate::app) use components::queue_playback::render_playback_header;
 
 pub(in crate::app) use arrangements::wide_hero::{
-    paint_wide_hero_text, place_media_list_below, wide_hero_browser_pane, wide_hero_fits,
-    wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
+    paint_wide_hero_text, place_media_list_below, wide_hero_fits, wide_hero_hero_pane,
+    WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
 pub(in crate::app) use components::hero::render_search_box;
 pub(in crate::app) use components::library_routes::{

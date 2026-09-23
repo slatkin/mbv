@@ -12,7 +12,7 @@ use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    fn music_owner_key(&self) -> Option<LibraryKey> {
+    pub(super) fn music_owner_key(&self) -> Option<LibraryKey> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
@@ -31,7 +31,10 @@ impl Model {
         self.library_owner(&key)
     }
 
-    fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
+    pub(super) fn update_music_owner<R>(
+        &mut self,
+        f: impl FnOnce(&mut MusicContent) -> R,
+    ) -> Option<R> {
         let key = self.music_owner_key()?;
         self.update_library_owner(key, || Box::new(MusicContent::new()), f)
     }

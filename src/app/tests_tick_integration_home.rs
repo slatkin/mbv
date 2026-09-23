@@ -1,20 +1,16 @@
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::home_content::HomeContent;
-use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use crate::app::components::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 use crate::app::components::msg::HomeRowTarget;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::palette;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::home_latest::HomeLatestLaunchWindow;
-use crate::app::types_playback::{HomeContent as ModelHomeContent, HomeLatestSection, HomeLatestSource};
 use crate::app::{PanelFocus, PanelMode, TabSelection};
-use mbv_core::playback_queue::QueueItem;
 
 fn home_harness(width: u16, height: u16, count: usize) -> TickHarness {
     let mut app = make_app_stub();
@@ -52,37 +48,6 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
         .owner(&crate::app::components::library_panel::LibraryKey::Home)
         .and_then(|owner| owner.as_any().downcast_ref::<HomeContent>())
         .expect("Home owner installed")
-}
-
-/// The mounted panel's retained region for one selector pill.
-fn pill_region(harness: &TickHarness, id: usize) -> Rect {
-    harness
-        .model()
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("Library panel mounted")
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .expect("Library panel type")
-        .test_selector_hits()
-        .regions()
-        .iter()
-        .find(|(_, target)| *target == id)
-        .map(|(rect, _)| *rect)
-        .unwrap_or_else(|| panic!("selector pill {id} painted"))
-}
-
-/// The mounted panel's selector state from its last content projection.
-fn selector_markers(harness: &TickHarness) -> &[bool] {
-    harness
-        .model()
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("Library panel mounted")
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .expect("Library panel type")
-        .test_selector_markers()
 }
 
 /// The mounted Queue component, for seeding/reading its local selection.
@@ -166,135 +131,6 @@ fn tick_frame_is_nonempty_in_library_only_mode() {
 #[test]
 fn tick_frame_is_nonempty_in_mini_view() {
     assert_tick_frame_nonempty(PanelMode::QueueOnly, 60);
-}
-
-/// Section content can arrive after the Home owner is mounted. The marker is
-/// projected through the mounted Library panel, and visiting its pill records
-/// a shell-owned acknowledgement when the shell pushes the same snapshot
-/// again (the shell snapshot deliberately stays marked).
-#[test]
-fn home_latest_marker_arrival_and_pill_acknowledgement_flow_through_tick() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut harness = home_harness(160, 30, 0);
-    let _ = draw(&mut harness, 160, 30);
-
-    let marked_source = HomeLatestSource::Emby("marked-library".into());
-    let mut item = make_item("New movie", "Movie");
-    item.id = "new-movie".into();
-    harness.model_mut().home_content.latest = vec![HomeLatestSection {
-        title: "Latest Movies".into(),
-        source: marked_source.clone(),
-        items: vec![QueueItem::Emby(Box::new(item))],
-        has_new_content: true,
-    }];
-    // This is the shell's content-push seam used by asynchronous provider
-    // delivery; the following Application::tick drives the mounted tree.
-    harness.model_mut().push_home_content();
-    harness.inject(key(Key::Char('x')));
-    let outcome = harness.step();
-    handle_tick_messages(&mut harness, outcome.messages);
-
-    let _ = draw(&mut harness, 160, 30);
-    let marked_region = pill_region(&harness, 1);
-    assert_eq!(selector_markers(&harness), &[false, true]);
-    assert!(
-        harness.model().home_content.latest[0].has_new_content,
-        "the shell snapshot remains marked; acknowledgement is not mirrored"
-    );
-
-    harness.inject(Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: marked_region.x,
-        row: marked_region.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let outcome = harness.step();
-    assert!(outcome.messages.contains(&Msg::Shell(ShellRequest::HomePillClick {
-        target: 1,
-    })));
-    handle_tick_messages(&mut harness, outcome.messages);
-    let _ = draw(&mut harness, 160, 30);
-    assert_eq!(selector_markers(&harness), &[false, false]);
-    assert!(harness
-        .model()
-        .acknowledged_home_latest_sources
-        .contains(&marked_source));
-
-    let other_source = HomeLatestSource::Audiobookshelf("other-library".into());
-    harness.model_mut().home_content.latest = vec![
-        HomeLatestSection {
-            title: "Other Latest".into(),
-            source: other_source,
-            items: Vec::new(),
-            has_new_content: true,
-        },
-        HomeLatestSection {
-            title: "Latest Movies".into(),
-            source: marked_source,
-            items: Vec::new(),
-            has_new_content: true,
-        },
-    ];
-    harness.model_mut().push_home_content();
-    harness.inject(key(Key::Char('x')));
-    let outcome = harness.step();
-    handle_tick_messages(&mut harness, outcome.messages);
-    let _ = draw(&mut harness, 160, 30);
-
-    // Reorder the asynchronously refreshed sections. The selected source is
-    // re-anchored by identity, and its marker remains absent in the mounted
-    // projection; the other source is still marked before it is selected.
-    assert_eq!(selector_markers(&harness), &[false, true, false]);
-
-    // Select Other so the acknowledged source is unselected. Its missing marker
-    // then proves source-based acknowledgement rather than selected-pill
-    // suppression.
-    let other_region = pill_region(&harness, 1);
-    harness.inject(Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: other_region.x,
-        row: other_region.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let outcome = harness.step();
-    assert!(outcome.messages.contains(&Msg::Shell(ShellRequest::HomePillClick {
-        target: 1,
-    })));
-    handle_tick_messages(&mut harness, outcome.messages);
-    let _ = draw(&mut harness, 160, 30);
-    assert_eq!(selector_markers(&harness), &[false, false, false]);
-    assert_eq!(home_owner(&harness).section(), 1);
-    assert!(harness.model().home_content.latest[1].has_new_content);
-}
-
-#[test]
-fn home_latest_fetch_after_launch_does_not_add_a_marker() {
-    let mut app = make_app_stub();
-    app.home_latest_launch_window = HomeLatestLaunchWindow {
-        previous: Some(100),
-        current: 200,
-    };
-    app.tab = TabSelection::Home;
-    app.panel_focus = PanelFocus::Library;
-    let mut harness = TickHarness::new(app);
-    let mut item = make_item("Fetched after launch", "Movie");
-    // The item is dated a full hour after the launch cutoff (`current: 200`
-    // = epoch 200): content fetched after launch sits outside the closed
-    // window, so the recomputed marker must be absent.
-    item.date_added = "1970-01-01T01:00:00Z".into();
-    harness.model_mut().assign_home_content(ModelHomeContent {
-        continue_items: Vec::new(),
-        latest: vec![HomeLatestSection {
-            title: "Latest".into(),
-            source: HomeLatestSource::Emby("library".into()),
-            items: vec![QueueItem::Emby(Box::new(item))],
-            has_new_content: true,
-        }],
-        loading: false,
-        feed_names: std::collections::HashMap::new(),
-    });
-
-    assert!(!harness.model().home_content.latest[0].has_new_content);
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {
@@ -634,6 +470,48 @@ fn visual_mode_escape_clears_without_firing_playback_stop() {
         Msg::Playback(crate::app::components::PlaybackRequest::Stop)
     )));
     assert!(!outcome.deferred_fired);
+}
+
+#[test]
+fn mounted_home_latest_restore_falls_back_to_continue_only_content() {
+    let mut harness = home_harness(160, 30, 2);
+    harness.model_mut().app.pending_launch_tab_resolved = true;
+    harness.model_mut().app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Home {
+            key: mbv_core::config::HomeSelectorKey::Section("emby:latest".into()),
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Home {
+            id: "removed-latest-item".into(),
+        }),
+    });
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, 160, 30);
+    harness.inject(key(Key::Down));
+    harness.step();
+
+    let home = home_owner(&harness);
+    assert_eq!(home.launch_snapshot().0, Some(mbv_core::config::SelectorIdentity::Home {
+        key: mbv_core::config::HomeSelectorKey::Continue,
+    }));
+    assert_eq!(home.test_active_rows().len(), 2, "Home exposes only Continue Watching rows");
+    assert_eq!(
+        home.launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Home { id: "home-1".into() })
+    );
+    assert!(
+        harness.model().application.get_component(&ComponentId::Library)
+            .expect("Library panel mounted")
+            .as_any()
+            .downcast_ref::<LibraryPanel>()
+            .expect("Library panel type")
+            .test_selector_hits()
+            .regions()
+            .is_empty(),
+        "Home paints no Latest selector pill"
+    );
 }
 
 #[test]

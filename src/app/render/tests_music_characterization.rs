@@ -8,14 +8,13 @@ use super::test_helpers::{
     music_tree_row_text,
 };
 use super::*;
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
-use rstest::rstest;
-
 use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::music_content::MusicContent;
 use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::music_grouping::ArtistKey;
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+use rstest::rstest;
 
 /// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
 /// now (task 3.8), so route the narrow characterization renders through the

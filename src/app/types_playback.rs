@@ -3,7 +3,7 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::mpsc;
 
 /// Shared local-vs-remote playback seam for the TUI action layer.
@@ -120,57 +120,31 @@ pub(super) enum RemoteSlotState {
     LocalDaemon,
 }
 
-/// Which destination a Home "Latest" pill belongs to: an Emby library (view)
-/// id, an Audiobookshelf podcast library id, or the single flattened Feeds
-/// pill. This is the merge key — each provider/library only ever touches its
-/// own entries when populating `HomeContent.latest`.
-/// `Audiobookshelf`/`Feeds` variants are constructed by Parts 2 and 3 of
-/// #543; matching on them here already keeps the merge keyed per provider.
+/// Identity of a destination Latest surface for its independent marker state.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) enum HomeLatestSource {
+pub(super) enum DestinationLatestSource {
     Emby(String),
     Audiobookshelf(String),
     Feeds,
 }
 
-impl HomeLatestSource {
-    /// Solid string identity for persistence: `"emby:<id>"`, `"abs:<id>"`,
-    /// or `"feeds"`. Restoring by identity (not section index) lets Home
-    /// leave the pill unselected until a section matching it actually arrives
-    /// asynchronously.
-    pub(super) fn pref_key(&self) -> String {
-        match self {
-            HomeLatestSource::Emby(id) => format!("emby:{id}"),
-            HomeLatestSource::Audiobookshelf(id) => format!("abs:{id}"),
-            HomeLatestSource::Feeds => "feeds".into(),
-        }
-    }
-
-    pub(super) fn from_pref_key(key: &str) -> Option<Self> {
-        let (prefix, id) = key.split_once(':').unwrap_or((key, ""));
-        match prefix {
-            "emby" => Some(HomeLatestSource::Emby(id.to_string())),
-            "abs" => Some(HomeLatestSource::Audiobookshelf(id.to_string())),
-            "feeds" => Some(HomeLatestSource::Feeds),
-            _ => None,
-        }
-    }
-}
-
-/// The shell-owned snapshot of one Home Latest section. `has_new_content`
-/// is evaluated against the frozen launch window whenever the shell assigns
-/// or merges a Home snapshot; it is never inferred by the component.
+/// The shell-owned snapshot of one destination's Latest items. Its new-content
+/// marker is evaluated against the frozen launch window, never by the component.
 #[derive(Clone, Debug)]
-pub(super) struct HomeLatestSection {
+pub(super) struct DestinationLatestSnapshot {
     pub(super) title: String,
-    pub(super) source: HomeLatestSource,
+    pub(super) source: DestinationLatestSource,
     pub(super) items: Vec<QueueItem>,
     pub(super) has_new_content: bool,
 }
 
-impl HomeLatestSection {
+impl DestinationLatestSnapshot {
     #[cfg(test)]
-    pub(super) fn new(title: String, source: HomeLatestSource, items: Vec<QueueItem>) -> Self {
+    pub(super) fn new(
+        title: String,
+        source: DestinationLatestSource,
+        items: Vec<QueueItem>,
+    ) -> Self {
         Self::new_with_launch_window(
             title,
             source,
@@ -184,7 +158,7 @@ impl HomeLatestSection {
 
     pub(super) fn new_with_launch_window(
         title: String,
-        source: HomeLatestSource,
+        source: DestinationLatestSource,
         items: Vec<QueueItem>,
         window: HomeLatestLaunchWindow,
     ) -> Self {
@@ -214,24 +188,17 @@ impl HomeLatestSection {
 /// then set false synchronously after every content computation). The
 pub(super) struct HomeContent {
     pub(super) continue_items: Vec<EmbyItem>,
-    pub(super) latest: Vec<HomeLatestSection>,
     pub(super) loading: bool,
-    /// Shell-resolved feed-id → display-name lookup (design D2): `Config`
-    /// never enters components, so the shell resolves at assignment and the
-    /// projection reads by `feed_id`. Same staleness window as the strip.
-    pub(super) feed_names: HashMap<String, String>,
 }
 
 impl HomeContent {
-    /// Default Home state at shell construction: no items/pills and `loading`
+    /// Default Home state at shell construction: no items and `loading`
     /// true — the startup skeleton, mirroring the deleted
     /// `App.home_loading`/`construct` state.
     pub(super) fn new() -> Self {
         Self {
             continue_items: Vec::new(),
-            latest: Vec::new(),
             loading: true,
-            feed_names: HashMap::new(),
         }
     }
 }

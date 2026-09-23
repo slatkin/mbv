@@ -12,26 +12,19 @@
 //! its content type (Emby, ABS or Feeds), and its image state is the shell
 //! projection's (task 5.10): this owner never fetches.
 
-use std::collections::{HashMap, HashSet};
-
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-use super::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
-};
+use super::library_panel::content::{HeroContent, HeroImageState, LibraryPanelContent, ListSlot};
 use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTrailing, MediaListTransition, MediaSemanticState, RowIntent,
+    MediaListTransition, MediaSemanticState, RowIntent,
 };
-use crate::app::home_latest::provider_timestamp_secs;
 use crate::app::types_context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
-use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
-use crate::app::ui_util::{fmt_publish_date_short, trunc_str};
 use mbv_core::config::{LibraryItemIdentity, SelectorIdentity};
 use mbv_core::playback_queue::QueueItem;
 
@@ -41,17 +34,9 @@ mod launch_state;
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
 pub(in crate::app) struct HomeContent {
     continue_items: Vec<QueueItem>,
-    latest: Vec<HomeLatestSection>,
-    /// The one shared canonical owner of the active section's rows; the panel
-    /// drives its Wide/Inline presentation from its own breakpoint.
+    /// The shared canonical owner of Continue Watching rows.
     carrier: MediaListCarrier<String>,
     loading: bool,
-    /// Shell-resolved feed-id → display-name lookup (design D2): `Config`
-    /// never enters components, so the shell resolves at assignment and the
-    /// projection reads entries up by `feed_id`.
-    feed_names: HashMap<String, String>,
-    acknowledged_latest_sources: HashSet<HomeLatestSource>,
-    section: usize,
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
     hero_image: HeroImageState,
@@ -61,106 +46,27 @@ impl HomeContent {
     pub(in crate::app) fn new() -> Self {
         Self {
             continue_items: Vec::new(),
-            latest: Vec::new(),
             carrier: MediaListCarrier::new(),
             loading: false,
-            feed_names: HashMap::new(),
-            acknowledged_latest_sources: HashSet::new(),
-            section: 0,
             hero_image: HeroImageState::None,
         }
     }
 
-    /// Replace the shell-owned content snapshot (task 5.3d's projection
-    /// shape, now addressed by `LibraryKey`): section/cursor clamp to the new
-    /// content; an ordinary refresh preserves the selected target through
-    /// `MediaList::set_content`, and a target absent from the new content
-    /// resolves to its first selectable row.
-    pub(in crate::app) fn set_content(
-        &mut self,
-        continue_items: Vec<QueueItem>,
-        latest: Vec<HomeLatestSection>,
-        loading: bool,
-        feed_names: HashMap<String, String>,
-    ) {
-        let selected_source = self.source_for_section(self.section);
+    /// Replace the shell-owned Continue Watching snapshot. Refresh preserves
+    /// the selected target when it remains in the content.
+    pub(in crate::app) fn set_content(&mut self, continue_items: Vec<QueueItem>, loading: bool) {
         self.continue_items = continue_items;
-        self.latest = latest;
         self.loading = loading;
-        self.feed_names = feed_names;
-        if let Some(source) = selected_source {
-            if let Some(index) = self
-                .latest
-                .iter()
-                .position(|section| section.source == source)
-            {
-                self.section = index + 1;
-            }
-        }
-        self.clamp_section();
-        self.project_active_section();
+        self.project_continue_rows();
     }
 
-    pub(in crate::app) fn set_acknowledged_latest_sources(
-        &mut self,
-        sources: HashSet<HomeLatestSource>,
-    ) {
-        self.acknowledged_latest_sources = sources;
-    }
-
-    /// The flat cursor (Continue Watching + every latest section) the shell's
-    /// `home_stable_target` resolves. Derived from the shared owner's
-    /// selectable index over the active section's rows; no cursor mirror.
     pub(in crate::app) fn cursor(&self) -> usize {
-        let index = self.carrier.cursor();
-        self.visible_indices().get(index).copied().unwrap_or(0)
-    }
-
-    pub(in crate::app) fn section(&self) -> usize {
-        self.section
-    }
-
-    /// The semantic `HomeLatestSource` of a numeric section index: `None` for
-    /// Continue Watching (section 0, the empty-string persistence sentinel),
-    /// otherwise the selected latest section's source. Resolving by section
-    /// here keeps the off-by-one rule in the owner; the shell persists this
-    /// identity, never the index (task 5.3d).
-    pub(in crate::app) fn source_for_section(&self, section: usize) -> Option<HomeLatestSource> {
-        if section == 0 {
-            return None;
-        }
-        self.latest
-            .get(section - 1)
-            .map(|section| section.source.clone())
-    }
-
-    /// Restore a persisted pill selection once a section matching `source`
-    /// exists (the shell applies `home_section_pending` on
-    /// `push_home_content`). Returns `true` once restored (the shell clears
-    /// the pending marker afterward).
-    pub(in crate::app) fn restore_section(&mut self, source: &HomeLatestSource) -> bool {
-        if let Some(idx) = self
-            .latest
-            .iter()
-            .position(|section| section.source == *source)
-        {
-            self.section = idx + 1;
-            self.clamp_section();
-            self.project_active_section();
-            self.delegate_row_local_input(MediaListSurfaceInput::First, None);
-            true
-        } else {
-            false
-        }
+        self.carrier.cursor()
     }
 
     /// The flat cursor's `QueueItem`, the hero's item.
     fn current_item(&self) -> Option<QueueItem> {
-        self.continue_items
-            .iter()
-            .chain(self.latest.iter().flat_map(|section| section.items.iter()))
-            .nth(self.cursor())
-            .cloned()
+        self.continue_items.get(self.cursor()).cloned()
     }
 
     /// The hero item's content from the shared producer for its content type
@@ -170,74 +76,13 @@ impl HomeContent {
         self.current_item().as_ref().map(hero_content_queue)
     }
 
-    // ── Section state (numeric section owned here, task 5.3d) ────────────
-
-    fn new_sections(&self) -> Vec<usize> {
-        (0..self.latest.len()).map(|idx| idx + 1).collect()
-    }
-
-    fn section_is_valid(&self, section_idx: usize) -> bool {
-        section_idx == 0 || self.new_sections().contains(&section_idx)
-    }
-
-    fn section_range(&self, section_idx: usize) -> Option<(usize, usize)> {
-        if section_idx == 0 {
-            return Some((0, self.continue_items.len()));
-        }
-        let mut pos = self.continue_items.len();
-        for (idx, section) in self.latest.iter().enumerate() {
-            let items = &section.items;
-            if idx + 1 == section_idx {
-                return Some((pos, items.len()));
-            }
-            pos += items.len();
-        }
-        None
-    }
-
-    fn visible_indices(&self) -> Vec<usize> {
-        let selected = if self.section_is_valid(self.section) {
-            self.section
-        } else {
-            self.new_sections().first().copied().unwrap_or(0)
-        };
-        self.section_range(selected)
-            .map(|(start, len)| (start..start + len).collect())
-            .unwrap_or_default()
-    }
-
-    fn clamp_section(&mut self) {
-        if !self.section_is_valid(self.section) {
-            self.section = self.new_sections().first().copied().unwrap_or(0);
-        }
-    }
-
-    /// Project only the active Home section's items as canonical `Item` rows
-    /// (Home has no `Heading`/`Spacer` vocabulary, so structural-row index
-    /// equals selectable index). Feeds the shared owner; an ordinary refresh
-    /// preserves the selected target through `MediaList::set_content`.
-    fn project_active_section(&mut self) {
-        let items = if self.section == 0 {
-            &self.continue_items
-        } else {
-            self.latest
-                .get(self.section - 1)
-                .map(|section| &section.items)
-                .unwrap_or(&self.continue_items)
-        };
+    /// Project Continue Watching items as canonical `Item` rows.
+    fn project_continue_rows(&mut self) {
+        let items = &self.continue_items;
         let rows: Vec<MediaListRow<String>> = items
             .iter()
             .map(|item| {
-                // Split rows share the now-playing mapping (design D2/D4):
-                // primary is the container/context, secondary the item's own
-                // name; feed names come from the shell-resolved `feed_id`
-                // lookup (`Config` never enters components).
-                let feed_name = item
-                    .as_feed()
-                    .and_then(|entry| entry.feed_id.as_deref())
-                    .and_then(|feed_id| self.feed_names.get(feed_id))
-                    .map(String::as_str);
-                let parts = item.playback_title_parts(feed_name);
+                let parts = item.playback_title_parts(None);
                 let (primary, secondary) = match parts.context {
                     Some(context) => (context.text, Some(parts.title.text)),
                     None => (parts.title.text, None),
@@ -245,22 +90,9 @@ impl HomeContent {
                 MediaListRow::Item {
                     primary,
                     secondary,
-                    // Stable per-item identity (Emby id / feed guid / ABS
-                    // episode id) — the same id the queue/shell treat as
-                    // canonical — so an ordinary refresh retains the selection
-                    // by identity, not by a title that can collide across
-                    // episodes.
+                    // Stable item identity preserves selection across refreshes.
                     target: item.id().to_owned(),
-                    // Continue keeps its playback-oriented row presentation;
-                    // dated Latest rows use the canonical right-aligned gutter.
-                    trailing: if self.section != 0 {
-                        provider_timestamp_secs(item)
-                            .map(fmt_publish_date_short)
-                            .filter(|date| !date.is_empty())
-                            .map(MediaListTrailing::Gutter)
-                    } else {
-                        None
-                    },
+                    trailing: None,
                     // Library lists carry no time column (only the Queue list
                     // and the sessions modal show one).
                     duration: None,
@@ -291,11 +123,8 @@ impl HomeContent {
     fn home_row_target(&self, item_id: Option<String>) -> super::msg::HomeRowTarget {
         super::msg::HomeRowTarget {
             item_id,
-            source: self
-                .latest
-                .get(self.section.saturating_sub(1))
-                .map(|section| section.source.pref_key()),
-            from_continue_watching: self.section == 0,
+            source: None,
+            from_continue_watching: true,
         }
     }
 
@@ -303,47 +132,6 @@ impl HomeContent {
     /// owner's stable target, never a cursor-minus-section-index lookup).
     fn row_target(&self) -> super::msg::HomeRowTarget {
         self.home_row_target(self.carrier.selected_target().cloned())
-    }
-
-    /// Select `section_idx` (clamped to the nearest valid section). Returns
-    /// `true` when the selection actually changed, so the caller emits the
-    /// persist `Msg` only on a real change.
-    fn select_section(&mut self, section_idx: usize) -> bool {
-        let resolved = if self.section_is_valid(section_idx) {
-            section_idx
-        } else if let Some(first) = self.new_sections().first() {
-            *first
-        } else {
-            self.section = 0;
-            return false;
-        };
-        if resolved == self.section {
-            return false;
-        }
-        self.section = resolved;
-        // A discrete section change re-projects the active section and parks
-        // the shared owner at its first row (no per-section cursor cache).
-        self.project_active_section();
-        self.delegate_row_local_input(MediaListSurfaceInput::First, None);
-        true
-    }
-
-    fn move_section(&mut self, dir: i64) -> bool {
-        let mut sections = vec![0];
-        sections.extend(self.new_sections());
-        let pos = sections.iter().position(|&s| s == self.section);
-        let next_pos = match pos {
-            Some(p) => {
-                let n = sections.len() as i64;
-                (((p as i64 + dir) % n + n) % n) as usize
-            }
-            None => 0,
-        };
-        self.select_section(sections[next_pos])
-    }
-
-    fn section_msg(&self, changed: bool) -> Option<Msg> {
-        changed.then_some(Msg::Shell(ShellRequest::HomeSectionSelected(self.section)))
     }
 
     /// Home's local key interpretation, forwarded by the focused panel (the
@@ -370,14 +158,6 @@ impl HomeContent {
                 self.delegate_row_local_input(MediaListSurfaceInput::Move(1), None);
                 None
             }
-            Key::Char('[') if !ctrl => {
-                let changed = self.move_section(-1);
-                self.section_msg(changed)
-            }
-            Key::Char(']') if !ctrl => {
-                let changed = self.move_section(1);
-                self.section_msg(changed)
-            }
             Key::PageUp => {
                 self.delegate_row_local_input(MediaListSurfaceInput::Page(-1), None);
                 None
@@ -394,7 +174,7 @@ impl HomeContent {
                 self.delegate_row_local_input(MediaListSurfaceInput::Last, None);
                 None
             }
-            Key::Char('.') if self.section == 0 => {
+            Key::Char('.') => {
                 let targets = match self
                     .delegate_row_local_input(MediaListSurfaceInput::Context, None)
                     .external_intent
@@ -413,7 +193,6 @@ impl HomeContent {
                     None,
                 )))
             }
-            Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
             Key::Enter => match self
                 .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
@@ -427,10 +206,9 @@ impl HomeContent {
             Key::Char('a') if ctrl => {
                 Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target())))
             }
-            Key::Char('w') if ctrl && self.section == 0 => Some(Msg::Shell(
-                ShellRequest::HomeToggleWatched(self.row_target()),
-            )),
-            Key::Char('w') if ctrl => None,
+            Key::Char('w') if ctrl => Some(Msg::Shell(ShellRequest::HomeToggleWatched(
+                self.row_target(),
+            ))),
             Key::Delete => Some(Msg::Shell(ShellRequest::HomeDelete(self.row_target()))),
             _ => None,
         }
@@ -447,7 +225,7 @@ impl HomeContent {
         self.carrier.multi_selection().len()
     }
 
-    /// Active section rows for projection tests (untruncated by design).
+    /// Continue Watching rows for projection tests.
     #[cfg(test)]
     pub(in crate::app) fn test_active_rows(&self) -> &[MediaListRow<String>] {
         self.carrier.rows()
@@ -470,11 +248,7 @@ impl LibraryContentOwner for HomeContent {
         Some(self.carrier.selection_summary())
     }
 
-    /// This frame's panel content (design D3): the section pills as the
-    /// Selector row, the shared carrier in the list slot, and the selected
-    /// item's hero from the shared producer with the projected image state.
-    /// An empty section renders the list placeholder; an absent item renders
-    /// no hero.
+    /// This frame's Home panel content. An empty list renders its placeholder.
     fn content(&mut self) -> LibraryPanelContent<'_> {
         // Hero first: it only reads shell-owned snapshots, while the list
         // slot borrows the shared carrier mutably for the rest of the frame.
@@ -488,43 +262,11 @@ impl LibraryContentOwner for HomeContent {
                 workspace: None,
             }
         });
-        let selector = if self.latest.is_empty() {
-            // No latest sections: the Continue pill alone still paints the
-            // one Selector row (an empty section renders as a real,
-            // discoverable pill).
-            Some(SelectorRow {
-                pills: vec!["Continue".into()],
-                markers: vec![false],
-                active: Some(0),
-            })
-        } else {
-            Some(SelectorRow {
-                pills: std::iter::once("Continue".to_string())
-                    .chain(
-                        self.latest
-                            .iter()
-                            .map(|section| trunc_str(&section.title, 18).to_string()),
-                    )
-                    .collect(),
-                markers: std::iter::once(false)
-                    .chain(self.latest.iter().map(|section| {
-                        section.has_new_content
-                            && !self.acknowledged_latest_sources.contains(&section.source)
-                    }))
-                    .collect(),
-                active: Some(self.section),
-            })
-        };
-        let empty = if self.section == 0 {
-            self.continue_items.is_empty()
-        } else {
-            self.latest
-                .get(self.section - 1)
-                .is_none_or(|section| section.items.is_empty())
-        };
+        let selector = None;
+        let empty = self.continue_items.is_empty();
         let list = if empty {
             ListSlot::Empty {
-                loading: false,
+                loading: self.loading,
                 text: " (empty)".into(),
             }
         } else {
@@ -537,18 +279,10 @@ impl LibraryContentOwner for HomeContent {
         }
     }
 
-    /// Translate one resolved slot event into Home's existing typed `Msg`s
-    /// (design D2): pills select sections, pointer gestures resolve their
-    /// typed target through the shared carrier exactly as the mounted
-    /// component's own gesture path did.
+    /// Translate resolved list gestures into Home's typed requests.
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(section_idx) => {
-                self.select_section(section_idx);
-                Some(Msg::Shell(ShellRequest::HomePillClick {
-                    target: section_idx,
-                }))
-            }
+            LibrarySlotEvent::SelectorPicked(_) => None,
             LibrarySlotEvent::List(input) => {
                 let at = match input {
                     MediaListSurfaceInput::Click(at)
@@ -658,11 +392,7 @@ impl LibraryContentOwner for HomeContent {
         }
     }
 
-    /// Bounded read-only launch-state identities (task 2.1): the current
-    /// section pill as a stable source key — Continue Watching as the fixed
-    /// scope, a latest section as its persisted `pref_key` — plus the
-    /// shared carrier's stable item target. No pill index or title crosses;
-    /// an empty section reports no item.
+    /// Bounded read-only Continue Watching launch state.
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
         self.reanchor_launch_state_impl(state)
     }
@@ -700,59 +430,11 @@ impl LibraryContentOwner for HomeContent {
 mod tests {
     use super::*;
     use crate::app::tests::make_item;
-    use mbv_core::playback_queue::{
-        AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry,
-    };
+    use mbv_core::playback_queue::QueueItem;
 
-    const SUBSCRIPTION_URL: &str = "https://example.com/feed.xml";
-
-    fn feed_entry(title: &str, feed_id: Option<&str>) -> QueueItem {
-        QueueItem::Feed(FeedEntry {
-            guid: format!("guid-{title}"),
-            title: title.into(),
-            enclosure_url: None,
-            link: None,
-            mime_type: None,
-            duration_ticks: None,
-            pub_date_secs: None,
-            feed_kind: None,
-            feed_id: feed_id.map(Into::into),
-            position_ticks: 0,
-            played: false,
-        })
-    }
-
-    fn section(
-        title: &str,
-        source: HomeLatestSource,
-        items: Vec<QueueItem>,
-        has_new_content: bool,
-    ) -> HomeLatestSection {
-        let mut section = HomeLatestSection::new(title.into(), source, items);
-        section.has_new_content = has_new_content;
-        section
-    }
-
-    fn owner_with_section(
-        source: HomeLatestSource,
-        items: Vec<QueueItem>,
-        feed_names: &[(&str, &str)],
-    ) -> HomeContent {
+    fn owner_with_items(items: Vec<QueueItem>) -> HomeContent {
         let mut owner = HomeContent::new();
-        let names = feed_names
-            .iter()
-            .map(|(id, name)| (id.to_string(), name.to_string()))
-            .collect();
-        owner.set_content(
-            Vec::new(),
-            vec![section("Latest", source.clone(), items, false)],
-            false,
-            names,
-        );
-        assert!(
-            owner.restore_section(&source),
-            "the pushed section must exist"
-        );
+        owner.set_content(items, false);
         owner
     }
 
@@ -765,301 +447,22 @@ mod tests {
         }
     }
 
-    fn row_trailing(owner: &HomeContent, index: usize) -> Option<MediaListTrailing> {
-        match &owner.test_active_rows()[index] {
-            MediaListRow::Item { trailing, .. } => trailing.clone(),
-            other => panic!("expected an item row, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn selector_markers_skip_continue_selected_and_visited_latest_sources() {
-        let first = HomeLatestSource::Emby("first".into());
-        let second = HomeLatestSource::Audiobookshelf("second".into());
-        let mut owner = HomeContent::new();
-        owner.set_content(
-            Vec::new(),
-            vec![
-                section("First", first.clone(), Vec::new(), true),
-                section("Second", second.clone(), Vec::new(), true),
-            ],
-            false,
-            HashMap::new(),
-        );
-
-        let markers = owner.content().selector.expect("selector row").markers;
-        assert_eq!(markers, vec![false, true, true]);
-
-        assert!(owner.select_section(1));
-        owner.set_acknowledged_latest_sources(HashSet::from([first.clone()]));
-        let markers = owner.content().selector.expect("selector row").markers;
-        assert_eq!(markers, vec![false, false, true]);
-
-        assert!(owner.select_section(2));
-        owner.set_acknowledged_latest_sources(HashSet::from([first.clone(), second.clone()]));
-        let markers = owner.content().selector.expect("selector row").markers;
-        assert_eq!(markers, vec![false, false, false]);
-    }
-
-    #[test]
-    fn selected_latest_sources_stay_visited_across_async_refresh_and_reorder() {
-        let first = HomeLatestSource::Emby("first".into());
-        let second = HomeLatestSource::Audiobookshelf("second".into());
-        let mut owner = HomeContent::new();
-        owner.set_content(
-            Vec::new(),
-            vec![
-                section("First", first.clone(), Vec::new(), true),
-                section("Second", second.clone(), Vec::new(), true),
-            ],
-            false,
-            HashMap::new(),
-        );
-
-        assert!(owner.select_section(1));
-        owner.set_acknowledged_latest_sources(HashSet::from([first.clone()]));
-        assert!(owner.acknowledged_latest_sources.contains(&first));
-
-        // The selected source receives content after selection; identity, not
-        // its new index, keeps the acknowledgement in force.
-        owner.set_content(
-            Vec::new(),
-            vec![
-                section("Second", second.clone(), Vec::new(), true),
-                section("First", first.clone(), Vec::new(), true),
-            ],
-            false,
-            HashMap::new(),
-        );
-        let active_source = owner
-            .source_for_section(owner.section())
-            .expect("selected latest source");
-        assert_eq!(active_source, first);
-        assert!(owner.acknowledged_latest_sources.contains(&active_source));
-
-        assert!(owner.restore_section(&second));
-        owner.set_acknowledged_latest_sources(HashSet::from([first, second.clone()]));
-        assert!(owner.acknowledged_latest_sources.contains(&second));
-        owner.set_content(
-            Vec::new(),
-            vec![section("Second", second.clone(), Vec::new(), true)],
-            false,
-            HashMap::new(),
-        );
-        assert!(owner.acknowledged_latest_sources.contains(&second));
-    }
-
-    #[test]
-    fn latest_rows_project_provider_dates_but_continue_and_invalid_rows_do_not() {
-        let mut emby = make_item("Emby movie", "Movie");
-        emby.date_added = "2026-09-17T00:00:00Z".into();
-        let abs = QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
-            library_item_id: "show".into(),
-            episode_id: "abs-episode".into(),
-            title: "ABS episode".into(),
-            pub_date_secs: Some(1_789_603_200 - 14 * 86_400),
-            ..abs_episode_defaults()
-        });
-        let feed = QueueItem::Feed(FeedEntry {
-            pub_date_secs: Some(1_789_603_200),
-            ..match feed_entry("Feed entry", None) {
-                QueueItem::Feed(entry) => entry,
-                _ => unreachable!(),
-            }
-        });
-        let mut invalid = make_item("Invalid date", "Movie");
-        invalid.date_added = "not-a-date".into();
-        let owner = owner_with_section(
-            HomeLatestSource::Emby("emby".into()),
-            vec![
-                QueueItem::Emby(Box::new(emby)),
-                abs,
-                feed,
-                QueueItem::Emby(Box::new(invalid)),
-            ],
-            &[],
-        );
-        assert_eq!(
-            row_trailing(&owner, 0),
-            Some(MediaListTrailing::Gutter("17 Sep".into()))
-        );
-        assert_eq!(
-            row_trailing(&owner, 1),
-            Some(MediaListTrailing::Gutter("3 Sep".into()))
-        );
-        assert_eq!(
-            row_trailing(&owner, 2),
-            Some(MediaListTrailing::Gutter("17 Sep".into()))
-        );
-        assert_eq!(row_trailing(&owner, 3), None);
-
-        let mut continue_item = make_item("Continue movie", "Movie");
-        continue_item.date_added = "2026-09-17T00:00:00Z".into();
-        let mut continue_owner = HomeContent::new();
-        continue_owner.set_content(
-            vec![QueueItem::Emby(Box::new(continue_item))],
-            Vec::new(),
-            false,
-            HashMap::new(),
-        );
-        assert_eq!(row_trailing(&continue_owner, 0), None);
-    }
-
-    #[test]
-    fn tv_latest_episode_rows_match_home_latest_text() {
-        let mut dated = make_item("Pilot", "Episode");
-        dated.id = "episode-1".into();
-        dated.series_name = "Example Show".into();
-        dated.index_number = 3;
-        dated.parent_index_number = 1;
-        dated.date_added = "2026-09-17T00:00:00Z".into();
-
-        let mut undated = make_item("Finale", "Episode");
-        undated.id = "episode-2".into();
-        undated.series_name = "Another Show".into();
-
-        let episodes = vec![dated, undated];
-        let home = owner_with_section(
-            HomeLatestSource::Emby("emby".into()),
-            episodes
-                .iter()
-                .cloned()
-                .map(|episode| QueueItem::Emby(Box::new(episode)))
-                .collect(),
-            &[],
-        );
-        let tv = super::super::tv_content::build_latest_episode_rows(&episodes);
-        let row_text = |rows: &[MediaListRow<String>]| {
-            rows.iter()
-                .map(|row| match row {
-                    MediaListRow::Item {
-                        primary,
-                        secondary,
-                        trailing,
-                        ..
-                    } => (primary.clone(), secondary.clone(), trailing.clone()),
-                    other => panic!("expected an item row, got {other:?}"),
-                })
-                .collect::<Vec<_>>()
-        };
-
-        let home_text = row_text(home.test_active_rows());
-        let tv_text = row_text(&tv);
-        assert_eq!(tv_text, home_text);
-        assert_eq!(
-            home_text,
-            [
-                (
-                    "Example Show".into(),
-                    Some("Pilot".into()),
-                    Some(MediaListTrailing::Gutter("17 Sep".into())),
-                ),
-                ("Another Show".into(), Some("Finale".into()), None,),
-            ]
-        );
-    }
-
     #[test]
     fn episode_rows_project_the_series_as_context_and_the_episode_title() {
         let mut episode = make_item("Pilot", "Episode");
         episode.id = "ep1".into();
         episode.series_name = "Series Name".into();
-        let owner = owner_with_section(
-            HomeLatestSource::Emby("emby".into()),
-            vec![QueueItem::Emby(Box::new(episode))],
-            &[],
-        );
+        let owner = owner_with_items(vec![QueueItem::Emby(Box::new(episode))]);
         assert_eq!(
             row_parts(&owner, 0),
             ("Series Name".into(), Some("Pilot".into()))
         );
     }
 
-    #[test]
-    fn audio_track_rows_project_the_artist_as_context() {
-        let mut track = make_item("Track Name", "Audio");
-        track.id = "a1".into();
-        track.media_type = "Audio".into();
-        track.artist = "Artist Name".into();
-        let owner = owner_with_section(
-            HomeLatestSource::Emby("emby".into()),
-            vec![QueueItem::Emby(Box::new(track))],
-            &[],
-        );
-        assert_eq!(
-            row_parts(&owner, 0),
-            ("Artist Name".into(), Some("Track Name".into()))
-        );
-    }
-
-    #[test]
-    fn feed_rows_project_the_resolved_subscription_as_context() {
-        let owner = owner_with_section(
-            HomeLatestSource::Feeds,
-            vec![feed_entry("Entry Title", Some(SUBSCRIPTION_URL))],
-            &[(SUBSCRIPTION_URL, "Example Daily")],
-        );
-        assert_eq!(
-            row_parts(&owner, 0),
-            ("Example Daily".into(), Some("Entry Title".into()))
-        );
-    }
-
-    #[test]
-    fn feed_rows_without_a_resolved_subscription_stay_single_part() {
-        let owner = owner_with_section(
-            HomeLatestSource::Feeds,
-            vec![feed_entry("Entry Title", Some(SUBSCRIPTION_URL))],
-            &[],
-        );
-        assert_eq!(row_parts(&owner, 0), ("Entry Title".into(), None));
-    }
-
-    #[test]
-    fn abs_podcast_rows_project_the_show_as_context() {
-        let owner = owner_with_section(
-            HomeLatestSource::Audiobookshelf("lib".into()),
-            vec![QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
-                library_item_id: "show".into(),
-                episode_id: "ep1".into(),
-                title: "Episode Five".into(),
-                show_title: Some("Show Title".into()),
-                ..abs_episode_defaults()
-            })],
-            &[],
-        );
-        assert_eq!(
-            row_parts(&owner, 0),
-            ("Show Title".into(), Some("Episode Five".into()))
-        );
-    }
-
-    #[test]
-    fn movie_and_book_rows_stay_single_part() {
-        let mut movie = make_item("The Film", "Movie");
-        movie.id = "m1".into();
-        let book = QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
-            library_item_id: "book".into(),
-            title: "The Book".into(),
-            author: None,
-            duration_ticks: None,
-            position_ticks: 0,
-            played: false,
-            is_finished: false,
-            cover_path: None,
-        });
-        let owner = owner_with_section(
-            HomeLatestSource::Emby("emby".into()),
-            vec![QueueItem::Emby(Box::new(movie)), book],
-            &[],
-        );
-        assert_eq!(row_parts(&owner, 0), ("The Film".into(), None));
-        assert_eq!(row_parts(&owner, 1), ("The Book".into(), None));
-    }
-
     /// Home rows use the one canonical state derivation: a finished item is
     /// `Played`, an in-progress item is `Active` with its resume percentage,
     /// and a music row is always `Ordinary`.
+
     #[test]
     fn home_rows_use_the_canonical_state_derivation() {
         let mut played = make_item("Finished Film", "Movie");
@@ -1074,15 +477,11 @@ mod tests {
         track.played = true;
         track.runtime_ticks = 1000;
         track.playback_position_ticks = 500;
-        let owner = owner_with_section(
-            HomeLatestSource::Emby("emby".into()),
-            vec![
-                QueueItem::Emby(Box::new(played)),
-                QueueItem::Emby(Box::new(in_progress)),
-                QueueItem::Emby(Box::new(track)),
-            ],
-            &[],
-        );
+        let owner = owner_with_items(vec![
+            QueueItem::Emby(Box::new(played)),
+            QueueItem::Emby(Box::new(in_progress)),
+            QueueItem::Emby(Box::new(track)),
+        ]);
         let states: Vec<MediaSemanticState> = owner
             .test_active_rows()
             .iter()
@@ -1099,16 +498,13 @@ mod tests {
     /// Truncation is the canonical painter's contract (a split row is cut
     /// as one string, context first); the projection's side of it is to hand
     /// over both parts untruncated so the painter can decide.
+
     #[test]
     fn split_rows_carry_their_full_parts_for_the_painters_truncation_priority() {
         let mut episode = make_item("A Very Long Episode Title That Must Survive", "Episode");
         episode.id = "ep1".into();
         episode.series_name = "A Very Long Series Name That May Ellipsise First".into();
-        let owner = owner_with_section(
-            HomeLatestSource::Emby("emby".into()),
-            vec![QueueItem::Emby(Box::new(episode))],
-            &[],
-        );
+        let owner = owner_with_items(vec![QueueItem::Emby(Box::new(episode))]);
         assert_eq!(
             row_parts(&owner, 0),
             (
@@ -1116,22 +512,5 @@ mod tests {
                 Some("A Very Long Episode Title That Must Survive".into())
             )
         );
-    }
-
-    fn abs_episode_defaults() -> AudiobookshelfQueueItem {
-        AudiobookshelfQueueItem {
-            library_item_id: String::new(),
-            episode_id: String::new(),
-            title: String::new(),
-            show_title: None,
-            author: None,
-            description: None,
-            duration_ticks: None,
-            position_ticks: 0,
-            played: false,
-            pub_date_secs: None,
-            is_finished: false,
-            cover_path: None,
-        }
     }
 }

@@ -223,6 +223,69 @@ fn down_moves_the_component_cursor_without_app_state() {
 }
 
 #[test]
+fn latest_uses_all_loaded_entries_and_restores_group_and_filter_on_selector_exit() {
+    use super::library_panel::owner::LibrarySlotEvent;
+
+    let mut newest_a = entry("A-new", false);
+    newest_a.pub_date_secs = Some(300);
+    let mut played_a = entry("A-played", true);
+    played_a.pub_date_secs = Some(200);
+    let mut newest_b = entry("B-new", false);
+    newest_b.pub_date_secs = Some(400);
+    let mut played_b = entry("B-played", true);
+    played_b.pub_date_secs = Some(100);
+    let mut owner = owner_with(
+        vec![subscription("A"), subscription("B")],
+        vec![
+            vec![newest_a.clone(), played_a.clone()],
+            vec![newest_b.clone(), played_b.clone()],
+        ],
+        vec![newest_b, newest_a, played_a, played_b],
+    );
+    down(&mut owner, Key::Char(']'));
+    down(&mut owner, Key::Char('w'));
+    down(&mut owner, Key::Char('w'));
+    assert_eq!(owner.selected_group(), 1);
+    assert_eq!(owner.watched_filter(), WatchedFilter::Unwatched);
+
+    let selected = owner.on_slot_event(LibrarySlotEvent::SelectorPicked(0));
+    assert_eq!(
+        selected,
+        Some(Msg::Shell(ShellRequest::FeedsLatestSelected))
+    );
+    assert!(owner.latest_selected());
+    assert_eq!(
+        owner.visible_titles(),
+        ["B-new", "A-new", "A-played", "B-played"]
+    );
+    assert_eq!(owner.content().selector.unwrap().active, Some(0));
+
+    owner.on_slot_event(LibrarySlotEvent::SelectorPicked(
+        1 + WatchedFilter::COUNT + 1,
+    ));
+    assert!(!owner.latest_selected());
+    assert_eq!(owner.selected_group(), 1);
+    assert_eq!(owner.watched_filter(), WatchedFilter::Unwatched);
+    assert_eq!(owner.visible_titles(), ["A-new"]);
+}
+
+#[test]
+fn watched_filter_shortcut_leaves_latest_and_cycles_restored_filter_once() {
+    let mut owner = grouped_component();
+    down(&mut owner, Key::Char(']'));
+    down(&mut owner, Key::Char('w'));
+    down(&mut owner, Key::Char('w'));
+    owner.on_slot_event(super::library_panel::owner::LibrarySlotEvent::SelectorPicked(0));
+
+    down(&mut owner, Key::Char('w'));
+
+    assert!(!owner.latest_selected());
+    assert_eq!(owner.selected_group(), 1);
+    assert_eq!(owner.watched_filter(), WatchedFilter::All);
+    assert_eq!(owner.visible_titles(), ["A-unplayed", "A-played"]);
+}
+
+#[test]
 fn watched_filter_rebuilds_the_component_visible_list() {
     let mut owner = component();
     down(&mut owner, Key::Char('w'));
@@ -330,7 +393,7 @@ fn unfocused_component_handles_mouse_input() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == WatchedFilter::COUNT + 1)
+        .find(|(_, id)| *id == 1 + WatchedFilter::COUNT + 1)
         .map(|(rect, _)| *rect)
         .expect("the second feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {
@@ -364,7 +427,7 @@ fn mouse_owns_feed_selector_and_row_geometry() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == WatchedFilter::COUNT + 1)
+        .find(|(_, id)| *id == 1 + WatchedFilter::COUNT + 1)
         .map(|(rect, _)| *rect)
         .expect("the second feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {

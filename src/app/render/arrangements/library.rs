@@ -3,14 +3,12 @@ use ratatui::layout::Rect;
 
 /// The shared padded panes used by wide library presentations.
 pub(in crate::app) struct WideLibraryPanes {
-    /// The full-width Selector band reserved above both panes (D1/D3/D5):
-    /// the pill row and its one-row parent-background spacer, spanning the
-    /// whole panel width, pill row flush to the panel's left edge.
+    /// The full-width Selector band above both panes when one is present;
+    /// otherwise both rects have zero height.
     pub pills_area: Rect,
     pub spacer_area: Rect,
-    /// The band-reduced area the Hero/Browser split was computed over; both
-    /// panes tile it. The Wide skeleton feeds it to the hero painter (D2) so
-    /// the hero pane starts below the band.
+    /// The area the Hero/Browser split was computed over; both panes tile it.
+    /// It starts below the Selector band when one is present.
     pub content_area: Rect,
     pub hero_panel: Rect,
     pub browser_panel: Rect,
@@ -24,6 +22,17 @@ pub(in crate::app) fn wide_library_panes(
     override_width: Option<u16>,
     show_hero: bool,
 ) -> Option<WideLibraryPanes> {
+    wide_library_panes_with_selector(area, pad_x, pad_y, override_width, show_hero, true)
+}
+
+pub(in crate::app) fn wide_library_panes_with_selector(
+    area: Rect,
+    pad_x: u16,
+    pad_y: u16,
+    override_width: Option<u16>,
+    show_hero: bool,
+    has_selector: bool,
+) -> Option<WideLibraryPanes> {
     // Fit-first-then-carve (D1): the breakpoint is decided on the uncarved
     // `area`, so carving the Selector band cannot shift the Wide/Narrow choice
     // (nor strand a stale frame at the boundary heights).
@@ -34,7 +43,11 @@ pub(in crate::app) fn wide_library_panes(
         pills_area,
         spacer_area,
         content_area,
-    } = wide_hero::pill_bar_areas(area);
+    } = if has_selector {
+        wide_hero::pill_bar_areas(area)
+    } else {
+        wide_hero::no_selector_areas(area)
+    };
     let (hero_panel, browser_panel) = if show_hero {
         let wide_hero::WideHeroPanes { hero, browser } =
             wide_hero::wide_hero_presentation(content_area, override_width);
@@ -114,6 +127,20 @@ mod tests {
             true,
         )
         .is_none());
+    }
+
+    #[test]
+    fn absent_selector_gives_all_rows_to_both_wide_panes() {
+        let area = Rect::new(2, 3, crate::app::TWO_COLUMN_THRESHOLD + 20, 30);
+        let panes =
+            wide_library_panes_with_selector(area, 2, 1, None, true, false).expect("wide area");
+        assert_eq!(panes.pills_area.height, 0);
+        assert_eq!(panes.spacer_area.height, 0);
+        assert_eq!(panes.content_area, area);
+        assert_eq!(panes.hero_panel.y, area.y);
+        assert_eq!(panes.browser_panel.y, area.y);
+        assert_eq!(panes.hero_panel.bottom(), area.bottom());
+        assert_eq!(panes.browser_panel.bottom(), area.bottom());
     }
 
     #[test]

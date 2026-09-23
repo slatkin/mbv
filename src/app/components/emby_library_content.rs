@@ -21,6 +21,7 @@
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 
 use super::inline_search::{InlineSearch, InlineSearchAction, InlineSearchHost};
 use super::library_panel::content::{
@@ -50,7 +51,21 @@ pub(in crate::app) struct EmbyLibraryIdentity {
     pub(in crate::app) feed_group: Option<usize>,
 }
 
-fn row_for(item: &EmbyItem) -> MediaListRow<String> {
+fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<MediaListTrailing>) {
+    let item = QueueItem::Emby(Box::new(item.clone()));
+    let parts = item.playback_title_parts(None);
+    let (primary, secondary) = match parts.context {
+        Some(context) => (context.text, Some(parts.title.text)),
+        None => (parts.title.text, None),
+    };
+    let trailing = crate::app::home_latest::provider_timestamp_secs(&item)
+        .map(crate::app::ui_util::fmt_publish_date_short)
+        .filter(|date| !date.is_empty())
+        .map(MediaListTrailing::Gutter);
+    (primary, secondary, trailing)
+}
+
+fn row_for(item: &EmbyItem, latest: bool) -> MediaListRow<String> {
     let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
         format!("{} \u{b7} {} items", item.display_name(), item.total_count)
     } else if item.is_folder && item.unplayed_item_count > 0 && item.item_type != "Series" {
@@ -58,12 +73,21 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
     } else {
         item.display_name()
     };
+    let (primary, secondary, trailing) = if latest {
+        latest_row_projection(item)
+    } else {
+        (
+            primary,
+            None,
+            (!item.is_folder && item.production_year > 0)
+                .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
+        )
+    };
     MediaListRow::Item {
         target: item.id.clone(),
         primary,
-        secondary: None,
-        trailing: (!item.is_folder && item.production_year > 0)
-            .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
+        secondary,
+        trailing,
         duration: None,
         kind: MediaKind::Collection,
         semantic_state: MediaSemanticState::from_emby(item),
@@ -76,6 +100,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
 /// design D8).
 pub(in crate::app) struct BrowserOwnerPush {
     pub items: Vec<EmbyItem>,
+    pub latest_items: Vec<EmbyItem>,
     pub total_count: usize,
     pub library_total: Option<usize>,
     pub letter_filter: Option<LetterFilter>,
@@ -98,7 +123,11 @@ pub(in crate::app) struct BrowserOwnerPush {
 /// borrows it for content and slot events.
 pub(in crate::app) struct EmbyLibraryContent {
     kind: LibraryKind,
-    items: Vec<EmbyItem>,
+    browse_items: Vec<EmbyItem>,
+    latest_items: Vec<EmbyItem>,
+    latest_mode: bool,
+    latest_marker: bool,
+    saved_browse_position: Option<(String, usize)>,
     total_count: usize,
     library_total: Option<usize>,
     letter_filter: Option<LetterFilter>,
@@ -134,7 +163,11 @@ impl EmbyLibraryContent {
     pub(in crate::app) fn new(kind: LibraryKind) -> Self {
         Self {
             kind,
-            items: Vec::new(),
+            browse_items: Vec::new(),
+            latest_items: Vec::new(),
+            latest_mode: false,
+            latest_marker: false,
+            saved_browse_position: None,
             total_count: 0,
             library_total: None,
             letter_filter: None,
@@ -153,12 +186,21 @@ impl EmbyLibraryContent {
         }
     }
 
+    fn items(&self) -> &[EmbyItem] {
+        if self.latest_mode {
+            &self.latest_items
+        } else {
+            &self.browse_items
+        }
+    }
+
     /// Replace the shell-owned position-free content snapshot: the shared
     /// owner's `set_content` preserves the selected target and locally
     /// clamps otherwise (design D3); position re-seeds only through the
     /// separately identity-gated `apply_position`.
     pub(in crate::app) fn set_content(&mut self, push: BrowserOwnerPush) {
-        self.items = push.items;
+        self.browse_items = push.items;
+        self.latest_items = push.latest_items;
         self.total_count = push.total_count;
         self.library_total = push.library_total;
         self.letter_filter = push.letter_filter;
@@ -168,6 +210,38 @@ impl EmbyLibraryContent {
         self.feed_groups = push.feed_groups;
         self.feed_group_ids = push.feed_group_ids;
         self.feed_group_cursor = push.feed_group_cursor;
+        let restore_browse_position = if self.latest_mode {
+            None
+        } else {
+            self.saved_browse_position.take()
+        };
+        self.feed_owner();
+        if let Some((target, scroll)) = restore_browse_position {
+            self.carrier.select_target(&target);
+            self.carrier.set_scroll(scroll);
+        }
+    }
+
+    pub(in crate::app) fn latest_mode(&self) -> bool {
+        self.latest_mode
+    }
+
+    pub(in crate::app) fn set_latest_marker(&mut self, marker: bool) {
+        self.latest_marker = marker;
+    }
+
+    pub(in crate::app) fn set_latest_mode(&mut self, latest: bool) {
+        if self.latest_mode == latest {
+            return;
+        }
+        if latest {
+            self.saved_browse_position = self
+                .carrier
+                .selected_target()
+                .cloned()
+                .map(|target| (target, self.carrier.scroll()));
+        }
+        self.latest_mode = latest;
         self.feed_owner();
     }
 
@@ -178,8 +252,8 @@ impl EmbyLibraryContent {
     /// switch). Within one identity no position crosses the boundary.
     pub(in crate::app) fn apply_position(&mut self, cursor: usize, scroll: usize) {
         let target = self
-            .items
-            .get(cursor.min(self.items.len().saturating_sub(1)))
+            .items()
+            .get(cursor.min(self.items().len().saturating_sub(1)))
             .map(|item| item.id.clone());
         if let Some(target) = target.as_ref() {
             self.carrier.select_target(target);
@@ -204,7 +278,7 @@ impl EmbyLibraryContent {
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier
             .selected_target()
-            .and_then(|target| self.items.iter().position(|item| item.id == *target))
+            .and_then(|target| self.items().iter().position(|item| item.id == *target))
             .unwrap_or(0)
     }
 
@@ -221,16 +295,20 @@ impl EmbyLibraryContent {
     /// letter pill), natural-sorted plain rows otherwise (mirrors
     /// the former BrowserComponent's row projection).
     fn feed_owner(&mut self) {
-        let grouped = self.true_total() >= 50 || self.letter_filter.is_some();
+        let grouped =
+            !self.latest_mode && (self.true_total() >= 50 || self.letter_filter.is_some());
         let rows: Vec<MediaListRow<String>> = if grouped {
             let pairs: Vec<(String, MediaListRow<String>)> = self
-                .items
+                .items()
                 .iter()
-                .map(|item| (effective_sort_str(item).to_string(), row_for(item)))
+                .map(|item| (effective_sort_str(item).to_string(), row_for(item, false)))
                 .collect();
             letter_grouped_rows(pairs, self.true_total(), self.letter_filter.is_some())
         } else {
-            self.items.iter().map(row_for).collect()
+            self.items()
+                .iter()
+                .map(|item| row_for(item, self.latest_mode))
+                .collect()
         };
         // Ordinary refresh (design D3): an unchanged projection preserves
         // the shared owner's painted frame instead of re-issuing it.
@@ -244,13 +322,37 @@ impl EmbyLibraryContent {
     /// (no hero for a folder; Movies libraries additionally require the
     /// selected item to actually be a `Movie`, not e.g. a BoxSet folder).
     fn hero_item(&self) -> Option<&EmbyItem> {
-        let item = self.items.get(self.cursor())?;
+        let item = self.items().get(self.cursor())?;
         (!item.is_folder && (self.kind != LibraryKind::Movies || item.item_type == "Movie"))
             .then_some(item)
     }
 
     fn selected_effect_item(&self) -> Option<EmbyItem> {
-        self.items.get(self.cursor()).cloned()
+        self.items().get(self.cursor()).cloned()
+    }
+
+    fn pick_selector(&mut self, index: usize) -> Option<Msg> {
+        if index == 0 {
+            self.set_latest_mode(true);
+            return Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected));
+        }
+        let was_latest = self.latest_mode;
+        self.set_latest_mode(false);
+        let target = if was_latest
+            && self.show_letter_pills
+            && !self.group_pills
+            && index == 1
+            && self.letter_filter.is_none()
+        {
+            usize::MAX
+        } else {
+            index - 1
+        };
+        Some(Msg::Shell(if was_latest {
+            ShellRequest::EmbyLibraryLatestExit { target }
+        } else {
+            ShellRequest::EmbyLibraryPillClick { target: index - 1 }
+        }))
     }
 
     /// Test-only cursor seed, mirroring the embedded owner's test cursor seed:
@@ -258,7 +360,7 @@ impl EmbyLibraryContent {
     /// exercising navigation.
     #[cfg(test)]
     pub(in crate::app) fn set_cursor_for_test(&mut self, cursor: usize) {
-        if let Some(item) = self.items.get(cursor) {
+        if let Some(item) = self.items().get(cursor) {
             let target = item.id.clone();
             self.carrier.select_target(&target);
         }
@@ -484,12 +586,33 @@ impl EmbyLibraryContent {
             Key::Char('r') => Some(ShellRequest::EmbyLibraryRefresh),
             Key::Esc | Key::Backspace => Some(ShellRequest::EmbyLibraryBack),
             Key::Char(c @ ('[' | ']')) if !ctrl && !alt => {
-                let delta = if c == '[' { -1 } else { 1 };
-                Some(if self.group_pills {
-                    ShellRequest::EmbyLibraryCycleGroup { delta }
+                let (current, count) = if self.group_pills {
+                    (
+                        if self.latest_mode {
+                            0
+                        } else {
+                            self.feed_group_cursor + 1
+                        },
+                        self.feed_groups.len() + 2,
+                    )
+                } else if self.show_letter_pills {
+                    (
+                        if self.latest_mode {
+                            0
+                        } else {
+                            self.letter_filter
+                                .as_ref()
+                                .map(|filter| filter.index + 1)
+                                .unwrap_or(1)
+                        },
+                        LetterFilter::labels().len() + 1,
+                    )
                 } else {
-                    ShellRequest::EmbyLibraryCycleLetterPill { delta }
-                })
+                    return None;
+                };
+                let delta = if c == '[' { -1 } else { 1 };
+                let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+                return self.pick_selector(next);
             }
             _ => None,
         };
@@ -567,30 +690,47 @@ impl LibraryContentOwner for EmbyLibraryContent {
             }
         });
         let selector = if self.group_pills {
-            let pills: Vec<String> = std::iter::once("All".to_string())
+            let pills: Vec<String> = std::iter::once("Latest".to_string())
+                .chain(std::iter::once("All".to_string()))
                 .chain(
                     self.feed_groups
                         .iter()
                         .map(|s| crate::app::ui_util::trunc_str(s, 12)),
                 )
                 .collect();
+            let markers = super::selector_markers(pills.len(), self.latest_marker);
             Some(SelectorRow {
                 pills,
-                markers: vec![],
-                active: Some(self.feed_group_cursor),
+                markers,
+                active: Some(if self.latest_mode {
+                    0
+                } else {
+                    self.feed_group_cursor + 1
+                }),
             })
         } else if self.show_letter_pills {
+            let pills: Vec<String> = std::iter::once("Latest".to_string())
+                .chain(LetterFilter::labels())
+                .collect();
+            let markers = super::selector_markers(pills.len(), self.latest_marker);
             Some(SelectorRow {
-                pills: LetterFilter::labels(),
-                markers: vec![],
-                active: Some(self.letter_filter.as_ref().map(|f| f.index).unwrap_or(0)),
+                pills,
+                markers,
+                active: Some(if self.latest_mode {
+                    0
+                } else {
+                    self.letter_filter
+                        .as_ref()
+                        .map(|f| f.index + 1)
+                        .unwrap_or(1)
+                }),
             })
         } else {
             None
         };
         let list = if self.inline_search.is_active() {
             ListSlot::Search(&mut self.inline_search)
-        } else if self.items.is_empty() {
+        } else if self.items().is_empty() {
             ListSlot::Empty {
                 loading: self.loading,
                 text: " (empty)".into(),
@@ -607,11 +747,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
 
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(index) => {
-                Some(Msg::Shell(ShellRequest::EmbyLibraryPillClick {
-                    target: index,
-                }))
-            }
+            LibrarySlotEvent::SelectorPicked(index) => self.pick_selector(index),
             LibrarySlotEvent::List(input) => {
                 if self.inline_search.is_active() {
                     return self.handle_search_pointer(input);
@@ -729,6 +865,14 @@ impl LibraryContentOwner for EmbyLibraryContent {
     /// a destination with no pills, or an empty list, reports absence. No
     /// pill index, group display name, or row position crosses.
     fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
+        if matches!(
+            state.selector.as_ref(),
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest
+            })
+        ) {
+            return (!self.latest_mode).then_some(LaunchSelector::EmbyLatest);
+        }
         if self.group_pills {
             let target = match state.selector.as_ref() {
                 Some(SelectorIdentity::Emby {
@@ -741,7 +885,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                     .unwrap_or(0),
                 _ => 0,
             };
-            return (self.feed_group_cursor != target)
+            return (self.latest_mode || self.feed_group_cursor != target)
                 .then_some(LaunchSelector::Emby { index: target });
         }
         if self.show_letter_pills {
@@ -751,11 +895,14 @@ impl LibraryContentOwner for EmbyLibraryContent {
                     key: EmbySelectorKey::Letter(bucket),
                 }) => {
                     let target = bucket.to_index();
-                    (current != Some(target)).then_some(LaunchSelector::Emby { index: target })
+                    (self.latest_mode || current != Some(target))
+                        .then_some(LaunchSelector::Emby { index: target })
                 }
                 // No letter pill is represented by an index. The shell uses
                 // this out-of-band value for the distinct clear intent.
-                _ if current.is_some() => Some(LaunchSelector::Emby { index: usize::MAX }),
+                _ if current.is_some() || self.latest_mode => {
+                    Some(LaunchSelector::Emby { index: usize::MAX })
+                }
                 _ => None,
             };
         }
@@ -763,7 +910,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
     }
 
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
-        if self.loading && self.items.is_empty() {
+        if self.loading && self.items().is_empty() {
             return false;
         }
         // The shell applies the selector through App and pushes the resulting
@@ -781,7 +928,11 @@ impl LibraryContentOwner for EmbyLibraryContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        let selector = if self.group_pills {
+        let selector = if self.latest_mode {
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            })
+        } else if self.group_pills {
             if self.feed_group_cursor == 0 {
                 Some(SelectorIdentity::Emby {
                     key: EmbySelectorKey::Unfiltered,

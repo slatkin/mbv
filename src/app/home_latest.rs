@@ -1,7 +1,7 @@
 use mbv_core::playback_queue::QueueItem;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// The launch-relative interval used by Home Latest for one TUI run.
+/// The launch-relative interval used by destination Latest markers.
 /// `previous` is intentionally immutable and separate from exit-only UI state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct HomeLatestLaunchWindow {
@@ -36,7 +36,7 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
     HomeLatestLaunchWindow { previous, current }
 }
 
-/// Normalize the provider timestamp carried by a Home Latest queue item.
+/// Normalize the provider timestamp carried by a destination Latest item.
 pub(super) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     match item {
         QueueItem::Emby(item) => super::feed_parse_date::parse_pub_date_secs(&item.date_added),

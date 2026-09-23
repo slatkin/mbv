@@ -1,8 +1,7 @@
 use mbv_core::api::EmbyClient;
-use mbv_core::playback_queue::QueueItem;
 use std::sync::{mpsc, Arc, Mutex};
 
-use super::types_playback::{HomeContent, HomeLatestSection, HomeLatestSource};
+use super::types_playback::HomeContent;
 use super::App;
 
 impl App {
@@ -18,12 +17,10 @@ impl App {
     pub(super) fn apply_emby_completion(
         &mut self,
         completion: super::service_startup::Completion,
-        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
         self.transition_emby_failure(
             Some(completion.generation),
             completion.result,
-            prior_latest,
             mbv_core::config::clear_service_secret_result,
         )
     }
@@ -32,22 +29,15 @@ impl App {
     pub(super) fn apply_emby_completion_with_secret_deleter(
         &mut self,
         completion: super::service_startup::Completion,
-        prior_latest: &[HomeLatestSection],
         delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
-        self.transition_emby_failure(
-            Some(completion.generation),
-            completion.result,
-            prior_latest,
-            delete,
-        )
+        self.transition_emby_failure(Some(completion.generation), completion.result, delete)
     }
 
     fn transition_emby_failure(
         &mut self,
         generation: Option<mbv_core::service_runtime::SetupGeneration>,
         result: Result<super::service_startup::Startup, mbv_core::service_runtime::EmbyFailure>,
-        prior_latest: &[HomeLatestSection],
         delete_secret: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         use super::notify_actions::ToastSeverity;
@@ -75,7 +65,7 @@ impl App {
                     );
                 }
                 self.emby_runtime.client = Some(client);
-                let content = self.apply_emby_bootstrap(startup.bootstrap, prior_latest);
+                let content = self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
                 // The bootstrap is the live Emby catalog boundary. Launch-tab
                 // restoration is allowed to resolve stable identities only after it.
@@ -130,7 +120,7 @@ impl App {
         &mut self,
         error: mbv_core::service_runtime::EmbyFailure,
     ) {
-        self.transition_emby_failure(None, Err(error), &[], |kind| {
+        self.transition_emby_failure(None, Err(error), |kind| {
             mbv_core::config::clear_service_secret_result(kind)
         });
     }
@@ -141,7 +131,7 @@ impl App {
         error: mbv_core::service_runtime::EmbyFailure,
         delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) {
-        self.transition_emby_failure(None, Err(error), &[], delete);
+        self.transition_emby_failure(None, Err(error), delete);
     }
 
     pub(super) fn handle_emby_startup_worker_disconnect(
@@ -170,25 +160,22 @@ impl App {
     pub(super) fn apply_emby_setup_completion(
         &mut self,
         completion: super::service_startup::SetupCompletion,
-        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
-        self.apply_emby_setup_completion_inner(completion, true, prior_latest)
+        self.apply_emby_setup_completion_inner(completion, true)
     }
 
     #[cfg(test)]
     pub(super) fn apply_emby_setup_completion_without_network(
         &mut self,
         completion: super::service_startup::SetupCompletion,
-        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
-        self.apply_emby_setup_completion_inner(completion, false, prior_latest)
+        self.apply_emby_setup_completion_inner(completion, false)
     }
 
     fn apply_emby_setup_completion_inner(
         &mut self,
         completion: super::service_startup::SetupCompletion,
         start_network: bool,
-        prior_latest: &[HomeLatestSection],
     ) -> Option<HomeContent> {
         use super::notify_actions::ToastSeverity;
         if !self.emby_runtime.accepts(completion.generation) {
@@ -247,7 +234,7 @@ impl App {
                 };
                 self.player.update_emby_credentials(server_url, token);
                 self.emby_runtime.client = Some(client);
-                let content = self.apply_emby_bootstrap(startup.bootstrap, prior_latest);
+                let content = self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
                 // Setup completion also carries a fresh live Emby catalog.
                 self.emby_catalog_ready = true;
@@ -285,19 +272,10 @@ impl App {
         }
     }
 
-    /// Compute the full Home content from an Emby bootstrap, merging only
-    /// the Emby `latest` entries into `prior_latest` (the current
-    /// Model-owned pill state the shell passes in; empty on App-internal
-    /// paths that just cleared) so other providers' entries — and their
-    /// preserved cursors — survive exactly as the legacy merge did (task
-    /// 5.3d). Returns the computed `HomeContent`; the caller (the shell, or
-    /// an App-internal path delivering through lib_tx) assigns it to
-    /// Model-owned `home_content`, which preserves the Continue Watching
-    /// column cursor.
+    /// Compute Continue Watching content from an Emby bootstrap.
     pub(super) fn apply_emby_bootstrap(
         &mut self,
         bootstrap: mbv_core::service_runtime::EmbyBootstrap,
-        prior_latest: &[HomeLatestSection],
     ) -> HomeContent {
         let continue_items = bootstrap.continue_items;
         self.rebuild_library_tabs_from_views(&bootstrap.views);
@@ -305,38 +283,9 @@ impl App {
             self.start_album_index(lib_idx, false);
         }
 
-        // Merge, not replace: drop only the Emby entries and splice the fresh
-        // Emby entries back at their previous positions, leaving entries from
-        // other providers (Audiobookshelf/Feeds) untouched (#543 Part 1).
-        let emby_sections: Vec<HomeLatestSection> = bootstrap
-            .latest
-            .into_iter()
-            .filter(|section| {
-                let lower = section.title.to_lowercase();
-                !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
-            })
-            .map(|section| {
-                HomeLatestSection::new_with_launch_window(
-                    section.title,
-                    HomeLatestSource::Emby(section.view_id),
-                    section
-                        .items
-                        .into_iter()
-                        .map(|item| QueueItem::Emby(Box::new(item)))
-                        .collect(),
-                    self.home_latest_launch_window,
-                )
-            })
-            .collect();
-        let mut latest = prior_latest.to_vec();
-        super::library_load_actions::merge_home_sections(&mut latest, emby_sections, |source| {
-            matches!(source, HomeLatestSource::Emby(_))
-        });
         HomeContent {
             continue_items,
-            latest,
             loading: false,
-            feed_names: std::collections::HashMap::new(),
         }
     }
 }

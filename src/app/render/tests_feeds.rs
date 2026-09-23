@@ -116,13 +116,53 @@ fn feeds_paints_one_pill_bar_and_the_policy_header() {
         "the policy hero header must paint the selected entry title"
     );
     assert!(
-        output.contains("Played") && output.contains("Unplayed"),
-        "missing leading Watched filter pills: {output:?}"
+        output.contains("Latest") && output.contains("Played") && output.contains("Unplayed"),
+        "missing Latest and Watched filter pills: {output:?}"
     );
 }
 
 /// Clicking the painted Watched pill changes the filter through the panel's
 /// Selector slot-event resolution.
+#[test]
+fn feeds_latest_paints_provider_date_subscription_title_marker_and_wide_hero() {
+    for (width, height, wide) in [(240, 30, true), (80, 30, false)] {
+        let mut owner =
+            feed_owner_with_entries(vec![feed_entry("latest", "Latest Episode", false)]);
+        owner.set_latest_marker(true);
+        let mut panel = panel_with(owner, true);
+        let _ = terminal_for(&mut panel, width, height);
+        let (latest, _) = panel
+            .test_selector_hits()
+            .regions()
+            .iter()
+            .find(|(_, id)| *id == 0)
+            .expect("Latest pill is painted");
+        let click = Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: latest.x,
+            row: latest.y,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert!(panel.on(&click).is_some());
+        let terminal = terminal_for(&mut panel, width, height);
+        let output = buffer_to_string(&terminal);
+        assert!(output.contains("14 Nov"), "Latest date gutter: {output:?}");
+        assert!(
+            output.contains("Test Feed") && output.contains("Latest Episode"),
+            "{output:?}"
+        );
+        assert!(output.contains('•'), "Latest selector marker: {output:?}");
+        if wide {
+            let geometry = panel.test_wide_geometry().expect("Wide panel");
+            assert!(area_contains(
+                terminal.backend().buffer(),
+                geometry.hero_area,
+                "Latest Episode"
+            ));
+        }
+    }
+}
+
 #[test]
 fn watched_pill_click_changes_the_filter() {
     let mut panel = panel_with(feed_owner(), true);
@@ -130,7 +170,7 @@ fn watched_pill_click_changes_the_filter() {
     let selector = panel.test_selector_hits().regions();
     let (watched, _) = selector
         .iter()
-        .find(|(_, id)| *id == WatchedFilter::Watched.position())
+        .find(|(_, id)| *id == 1 + WatchedFilter::Watched.position())
         .expect("the Watched pill is painted");
     let watched_x = watched.x;
     let filter = |panel: &LibraryPanel| {

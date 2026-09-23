@@ -225,10 +225,6 @@ pub enum ShellRequest {
     /// Toggle watched state for the component-resolved Continue Watching row.
     /// The shell resolves this stable identity and never consults a cursor.
     HomeToggleWatched(super::intents::HomeRowTarget),
-    /// Persist the newly selected Home pill (section index) as the restored
-    /// preference, resolved via the mounted component's `source_for_section`
-    /// at the Model boundary (task 5.3d, numeric Home section deletion).
-    HomeSectionSelected(usize),
     /// A row the user single-clicked in the Home list or Library Hero overlay. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).
@@ -249,12 +245,6 @@ pub enum ShellRequest {
     TvTreeExpand {
         target: super::super::tv_tree_target::TvTreeTarget,
     },
-    /// A Home section pill the user clicked; `target` is the section index the
-    /// component resolved from its `HitRegions` and already applied locally
-    /// (design.md D4/D6). The shell persists the selected source.
-    HomePillClick {
-        target: usize,
-    },
     /// The podcast tab's committed pill or pill-scoped list interaction
     /// (reorganize-podcast-pill-navigation D3/D5): `Some(id)` carries a show
     /// pill's resolved identity — the shell applies it via
@@ -266,6 +256,12 @@ pub enum ShellRequest {
     AudiobookshelfPodcastShowMove {
         library_item_id: Option<String>,
     },
+    /// Acknowledge this podcast library's Latest marker without requesting
+    /// any per-show episode details.
+    AudiobookshelfPodcastLatestSelected,
+    /// Acknowledge the Feeds Latest marker; the rows remain the already-loaded
+    /// combined Feeds snapshot and no fetch is started.
+    FeedsLatestSelected,
     /// Typed podcast episode action intent (task 5.3d.7). Emitted by the
     /// component for Space/Enter/Ctrl+A; the shell resolves the episode-
     /// selection and wide/narrow conditions from current App state/layout and
@@ -395,6 +391,12 @@ pub enum ShellRequest {
     EmbyLibraryPillClick {
         target: usize,
     },
+    /// The embedded Movies/HomeVideos/Generic owner selected its Latest pill.
+    EmbyLibraryLatestSelected,
+    /// The owner left Latest for one of its original letter/group choices.
+    EmbyLibraryLatestExit {
+        target: usize,
+    },
     /// Ctrl+P/A/W/S/R and bare `r` requests from an Emby library workspace or
     /// the generic/Movies/home-video library owner. These requests carry the
     /// component-resolved target while the shell owns the corresponding App
@@ -487,32 +489,6 @@ pub enum ShellRequest {
     /// stale-index behavior. No item is carried: back targets the browse
     /// history, not a selected row.
     EmbyLibraryBack,
-    /// `[`/`]` on the focused generic/Movies/home-video library component
-    /// (task 5.3d, Emby browser selector cycling): the component reports the
-    /// letter-range-pill cycle delta (-1 for `[`, +1 for `]`) with neither
-    /// CONTROL nor ALT — exactly the legacy `handle_key_emby_library` guard —
-    /// and the shell derives the active Emby library index from its own tab
-    /// state and runs `App::cycle_letter_pill` on it. The component's mount
-    /// gate already excludes Music and feed-home-video group views, so its
-    /// bracket keys can only mean letter-pill cycling; `cycle_letter_pill`
-    /// keeps its `should_show_letter_pills` no-op guard and wrap/select
-    /// behavior. No item is carried: the pill row is a whole-library control,
-    /// not a selected row.
-    EmbyLibraryCycleLetterPill {
-        delta: i64,
-    },
-    /// `[`/`]` on a focused library component whose projected content is a
-    /// feed/home-video group picker (`is_feed_home_video_group_view`;
-    /// migrate-narrow-browse task 2.2). The component reports the cycle delta
-    /// (-1 for `[`, +1 for `]`) with neither CONTROL nor ALT — the same guard
-    /// as `EmbyLibraryCycleLetterPill`, which the two are mutually exclusive with
-    /// (the projected `group_pills` flag selects one or the other). The shell
-    /// derives the active Emby library index from its own tab state and runs
-    /// `App::switch_feed_folder_group`. No item is carried: the pill row is a
-    /// whole-surface control.
-    EmbyLibraryCycleGroup {
-        delta: i64,
-    },
     /// Open a provider URL resolved from the painted Library hero link label.
     OpenUrl(String),
     /// A library list wheel movement resolved by the embedded owner. The

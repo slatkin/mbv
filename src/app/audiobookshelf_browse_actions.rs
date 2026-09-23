@@ -408,9 +408,28 @@ impl App {
         audiobookshelf_library_index: usize,
         target: &crate::app::components::msg::PodcastEpisodeTarget,
     ) -> Option<QueueItem> {
+        if target.library_item_id().trim().is_empty() || target.episode_id().trim().is_empty() {
+            return None;
+        }
+        let library_id = &self
+            .audiobookshelf_libraries
+            .get(audiobookshelf_library_index)?
+            .id;
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;
+        let progress = state.progress.get(&(
+            target.library_item_id().to_owned(),
+            target.episode_id().to_owned(),
+        ));
+        if let Some(mut item) = self.audiobookshelf_shelf_cache.get(library_id).and_then(|items| items.iter().find(|item| matches!(item, QueueItem::Audiobookshelf(episode) if episode.library_item_id == target.library_item_id() && episode.episode_id == target.episode_id()))).cloned() {
+            if let (QueueItem::Audiobookshelf(episode), Some(progress)) = (&mut item, progress) {
+                episode.position_ticks = seconds_to_ticks(progress.current_time_seconds);
+                episode.played = progress.is_finished;
+                episode.is_finished = progress.is_finished;
+            }
+            return Some(item);
+        }
         // The episode is resolved by its own `(library_item_id, episode_id)`
         // identity from the per-show cache, never from the tab's current
         // selection: selection is pill/episode identity now, and the queue
@@ -423,9 +442,6 @@ impl App {
             .shows
             .iter()
             .find(|show| show.library_item_id == episode.library_item_id);
-        let progress = state
-            .progress
-            .get(&(episode.library_item_id.clone(), episode.episode_id.clone()));
         let position_ticks = progress
             .map(|progress| seconds_to_ticks(progress.current_time_seconds))
             .unwrap_or(0);

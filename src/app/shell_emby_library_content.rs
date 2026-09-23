@@ -156,8 +156,35 @@ impl Model {
             .unwrap_or_default();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
         let poster_window = items.clone();
+        let library_id = self.app.libs[index].library.id.clone();
+        let (latest_items, latest_has_new_content) = self
+            .tv_latest_snapshots
+            .get(&library_id)
+            .map(|snapshot| {
+                (
+                    snapshot
+                        .items
+                        .iter()
+                        .filter_map(|item| item.as_emby().cloned())
+                        .collect(),
+                    snapshot.has_new_content,
+                )
+            })
+            .unwrap_or_default();
+        let latest_source = super::DestinationLatestSource::Emby(library_id);
+        if self.active_emby_library_owner_is_latest()
+            && !self
+                .acknowledged_home_latest_sources
+                .contains(&latest_source)
+        {
+            self.record_home_latest_acknowledgement(latest_source.clone());
+        }
+        let latest_acknowledged = self
+            .acknowledged_home_latest_sources
+            .contains(&latest_source);
         let push = BrowserOwnerPush {
             items,
+            latest_items,
             total_count,
             library_total,
             letter_filter,
@@ -170,6 +197,7 @@ impl Model {
         };
         let identity = self.emby_library_owner_identity(index);
         let landed_cursor = self.update_emby_library_owner(key, kind, |owner| {
+            owner.set_latest_marker(latest_has_new_content && !latest_acknowledged);
             owner.set_content(push);
             if owner.note_browse_identity(identity) {
                 owner.apply_position(cursor, scroll);
@@ -185,5 +213,21 @@ impl Model {
         if let Some((index, key, kind)) = self.active_emby_library_owner() {
             self.push_emby_library_owner_content(index, &key, kind);
         }
+    }
+
+    pub(super) fn active_emby_library_owner_is_latest(&self) -> bool {
+        let Some((_, key, _)) = self.active_emby_library_owner() else {
+            return false;
+        };
+        self.application
+            .get_component(&super::components::ComponentId::Library)
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<super::components::library_panel::LibraryPanel>()
+            })
+            .and_then(|panel| panel.owner(&key))
+            .and_then(|owner| owner.as_any().downcast_ref::<EmbyLibraryContent>())
+            .is_some_and(EmbyLibraryContent::latest_mode)
     }
 }

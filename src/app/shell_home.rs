@@ -1,8 +1,4 @@
-//! Home sync/effect methods for the shell `Model` (design D2/D9, tasks
-//! 5.10–5.11). Home's content owner (`HomeContent`) lives inside the mounted
-//! `LibraryPanel` — addressed by `LibraryKey::Home`, never by a destination
-//! component — and the shell projects Model-owned snapshots into it at the
-//! content writers, then routes its typed effects to the App handlers.
+//! Home Continue Watching sync and typed effects for the shell `Model`.
 
 use super::components::home_content::HomeContent;
 use super::components::library_panel::LibraryKey;
@@ -11,9 +7,6 @@ use super::shell::Model;
 use mbv_core::playback_queue::QueueItem;
 
 impl Model {
-    /// Route Home's typed effects and context-menu target request to the App
-    /// handlers. The owner resolves the Continue Watching section/target
-    /// snapshot; App acts only on supplied targets or Model-owned effects.
     pub(super) fn handle_home_request(&mut self, request: ShellRequest) {
         match request {
             ShellRequest::HomePlay(target) => {
@@ -30,9 +23,6 @@ impl Model {
                 crate::app::types_context_menu::ContextMenuTargets::Home(targets),
                 anchor,
             ) => {
-                // Capture the origin at menu-open (design D6): a bulk action
-                // that follows clears the Home list, even though the Home
-                // route never reaches the shell's generic RowContextMenu arm.
                 let origin = crate::app::components::media_list::SelectionOrigin::Library(
                     crate::app::components::media_list::LibrarySelectionOrigin::Home,
                 );
@@ -44,19 +34,19 @@ impl Model {
                             targets.clone(),
                         )],
                     });
-                if targets.len() > 1 {
-                    let mut items = Vec::new();
-                    let mut removes = Vec::new();
-                    for target in &targets {
-                        if let Some((QueueItem::Emby(item), from_cw)) =
-                            self.home_stable_target(target)
-                        {
-                            if from_cw {
-                                removes.push(crate::app::types_context_menu::BulkRemoveTarget::ContinueWatching(item.clone()));
-                            }
-                            items.push(*item);
-                        }
+                let mut items = Vec::new();
+                let mut removes = Vec::new();
+                for target in &targets {
+                    if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(target) {
+                        removes.push(
+                            crate::app::types_context_menu::BulkRemoveTarget::ContinueWatching(
+                                item.clone(),
+                            ),
+                        );
+                        items.push(*item);
                     }
+                }
+                if targets.len() > 1 {
                     let capabilities = items
                         .iter()
                         .map(crate::app::context_menu_capabilities::emby_item_capabilities)
@@ -71,64 +61,35 @@ impl Model {
                     return;
                 }
                 let target = targets.into_iter().next();
-                let cw_selected = target.as_ref().is_some_and(|t| t.from_continue_watching);
-                let cw_item = target
+                let item = target
                     .as_ref()
                     .and_then(|target| self.home_stable_target(target))
-                    .and_then(|(item, from_cw)| from_cw.then_some(item))
-                    .and_then(|item| match item {
+                    .and_then(|(item, _)| match item {
                         QueueItem::Emby(item) => Some(*item),
                         _ => None,
                     });
-                self.home_context_item = cw_item.clone();
+                self.home_context_item = item.clone();
+                let cw_selected = target.is_some();
                 if let Some((x, y)) = anchor {
-                    self.app.open_context_menu_at(x, y, cw_selected, cw_item);
+                    self.app.open_context_menu_at(x, y, cw_selected, item);
                 } else {
-                    self.app.open_context_menu(cw_selected, cw_item);
+                    self.app.open_context_menu(cw_selected, item);
                 }
             }
-            // Delete / watched-toggle refetch Home: re-project (5.3d).
             ShellRequest::HomeDelete(target) => {
-                if target.from_continue_watching {
-                    if let Some(item) = self
-                        .home_content
-                        .continue_items
-                        .iter()
-                        .find(|item| Some(item.id.as_str()) == target.item_id.as_deref())
-                        .cloned()
-                    {
-                        self.app.remove_from_continue_watching(item);
-                    }
+                if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
+                    self.app.remove_from_continue_watching(*item);
                 }
-                self.push_home_content();
             }
             ShellRequest::HomeToggleWatched(target) => {
-                if let Some((QueueItem::Emby(item), _)) = self.home_stable_target(&target) {
+                if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
                     self.app.cw_toggle_watched(*item);
                 }
-                self.push_home_content();
             }
-            ShellRequest::HomeSectionSelected(section) => self.acknowledge_home_section(section),
-            // unreachable: shell_messages.rs routes only the Home* group (Play/
-            // Enqueue/ContextMenu/Delete/ToggleWatched/SectionSelected) here.
             _ => {}
         }
     }
 
-    pub(super) fn acknowledge_home_section(&mut self, section: usize) {
-        self.select_home_section_from_component(section);
-        let source = self
-            .home_owner_shared()
-            .and_then(|home| home.source_for_section(section));
-        if let Some(source) = source {
-            self.acknowledge_home_latest(source);
-        }
-    }
-
-    /// Mutate the Home owner inside the mounted `LibraryPanel` (design D2:
-    /// the shell pushes content addressed by `LibraryKey`), creating it on
-    /// first push. The owner is retained across pushes, so its section and
-    /// the shared list owner's cursor/scroll survive a refresh.
     pub(super) fn update_home_owner<R>(
         &mut self,
         f: impl FnOnce(&mut HomeContent) -> R,
@@ -136,70 +97,16 @@ impl Model {
         self.update_library_owner(LibraryKey::Home, || Box::new(HomeContent::new()), f)
     }
 
-    /// Event-scoped projection at the writers of Home's inputs (task 5.3d,
-    /// now into the panel's owner): content snapshots push into the owner;
-    /// deterministic in `App` state, so duplicate pushes are idempotent.
-    /// Applies the one-time persisted-pill restore (`home_section_pending`
-    /// via `restore_section` once a matching section exists), then reconciles
-    /// `home_section_pref_semantic` post-clamp (`[`/`]`/pill selection
-    /// already reaches the shell as typed `HomeSectionSelected`).
     pub(super) fn push_home_content(&mut self) {
-        let continue_items: Vec<QueueItem> = self
+        let continue_items = self
             .home_content
             .continue_items
             .iter()
             .cloned()
             .map(|item| QueueItem::Emby(Box::new(item)))
             .collect();
-        let latest = self.home_content.latest.to_vec();
         let loading = self.home_content.loading;
-        // Feed names ride the snapshot (design D2) so the projection reads
-        // them from the same assignment as the items.
-        let feed_names = self.home_content.feed_names.clone();
-        // Snapshot the pending persisted-pill restore before the owner borrow
-        // so the source identity is stable; arriving sources are applied by
-        // `restore_section` only once a matching section exists.
-        let pending = self.home_section_pending.clone();
-        let acknowledged = self.acknowledged_home_latest_sources.clone();
-        let restored = self.update_home_owner(|home| {
-            home.set_acknowledged_latest_sources(acknowledged);
-            home.set_content(continue_items, latest, loading, feed_names);
-            pending
-                .as_ref()
-                .and_then(|source| home.restore_section(source).then(|| source.clone()))
-        });
-        // A successful restore retains the pending source and clears the
-        // marker; the semantic preference is then reconciled from the owner
-        // below.
-        if let Some(source) = restored.flatten() {
-            self.home_section_pending = None;
-            // Restoring the saved Home pill preserves the previous behavior:
-            // the launch location is already acknowledged, and the same
-            // shell-owned acknowledgement must reach TV's matching Latest.
-            self.acknowledged_home_latest_sources.insert(source);
-            let acknowledged = self.acknowledged_home_latest_sources.clone();
-            self.update_home_owner(|home| home.set_acknowledged_latest_sources(acknowledged));
-            self.push_tv_workspace_content();
-        }
-        // Reconcile the shell-owned semantic persistence identity from the
-        // owner only while no one-time restore remains pending: with the
-        // numeric section owned by the owner, this keeps
-        // `home_section_pref_semantic` tracking the clamped selection across
-        // async content rebuilds — but never while a pending absent source
-        // must be retained (that would clear it to Continue Watching before
-        // restoration). A successful restore above clears pending first, so
-        // the reconcile then records the restored source.
-        if self.home_section_pending.is_none() {
-            // The outer `Option` is "no Home owner"; the inner one is the
-            // resolved source (None for the Continue Watching sentinel) —
-            // both fall back to the retained semantic preference.
-            let source = self
-                .update_home_owner(|home| home.source_for_section(home.section()))
-                .unwrap_or_else(|| self.home_section_pref_semantic.clone());
-            if self.home_section_pref_semantic != source {
-                self.home_section_pref_semantic = source;
-            }
-        }
+        self.update_home_owner(|home| home.set_content(continue_items, loading));
     }
 }
 
@@ -207,485 +114,49 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::msg::HomeRowTarget;
-    use crate::app::components::Msg;
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::PanelFocus;
 
-    /// Route a `ShellRequest` through the Model's terminal-message dispatch,
-    /// the same path `handle_terminal_message` takes for a folded mouse `Msg`.
-    fn route(model: &mut Model, request: ShellRequest) {
-        model.handle_terminal_message(Msg::Shell(request), &mut false, &mut false);
-    }
-
-    fn home_target(item_id: &str, from_continue_watching: bool) -> HomeRowTarget {
+    fn target(id: &str) -> HomeRowTarget {
         HomeRowTarget {
-            item_id: Some(item_id.into()),
-            source: (!from_continue_watching).then(|| "emby:lib".into()),
-            from_continue_watching,
+            item_id: Some(id.into()),
+            source: None,
+            from_continue_watching: true,
         }
     }
 
-    /// Task 5.3d, Home legacy underpaint removal + numeric section deletion:
-    /// the one-time persisted-pill restore that used to run in the deleted
-    /// legacy `App::render_home_list` now runs on the shell's `push_home_content`
-    /// path. It restores the section via `HomeContent::restore_section` only
-    /// once a section with the pending source identity exists (sections
-    /// arrive asynchronously), keeps the preference pending until then (an
-    /// unrelated save must retain it), clears the pending when applied, and
-    /// reconciles the shell-owned semantic preference from the owner. No
-    /// numeric section is mirrored back into App.
     #[test]
-    fn shell_push_home_restores_persisted_home_section_and_clears_pending() {
+    fn continue_watching_effects_use_the_resolved_item_target() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut model = Model::new(make_app_stub());
-        // Simulate real startup: both the semantic preference and the pending
-        // marker carry the saved source identity.
-        model.home_section_pref_semantic =
-            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
-        model.home_section_pending =
-            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
-
-        // No matching source yet: the preference stays pending, the semantic
-        // identity is retained (not clobbered to Continue Watching), and the
-        // owner section stays at its default (Continue Watching).
-        model.push_home_content();
-        assert_eq!(
-            home_section(&mut model),
-            0,
-            "pending must not apply before the section exists"
-        );
-        assert_eq!(
-            model.home_section_pending,
-            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into())),
-            "preference must stay pending while the matching section is absent"
-        );
-        assert_eq!(
-            model.home_section_pref(),
-            "abs:books",
-            "an absent pending source must be retained for an unrelated save"
-        );
-
-        // The "books" section arrives; the next sync restores it into the
-        // owner (section 1), clears the pending, and the reconcile records
-        // the restored source in the semantic preference.
-        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
-            "Books".into(),
-            crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
-            vec![],
-        )];
-        model.push_home_content();
-        assert_eq!(
-            home_section(&mut model),
-            1,
-            "restored section must land in the owner"
-        );
-        assert_eq!(
-            model.home_section_pref(),
-            "abs:books",
-            "restored identity must be reflected in the persisted semantic preference"
-        );
-        assert_eq!(
-            model.home_section_pending, None,
-            "pending must be cleared once restored"
-        );
-    }
-
-    fn home_section(model: &mut Model) -> usize {
-        model
-            .update_home_owner(|home| home.section())
-            .expect("Home owner installed")
-    }
-
-    /// Task 5.3d, Home typed-effect prep + cursor deletion: the shell routes
-    /// each typed Home effect to its `App` handler with the owner's
-    /// target, and the effect acts on that supplied target even when App's
-    /// remaining state (`continue_cursor`) points elsewhere. Enqueue is
-    /// proven by the queued item's id; the section preference by the semantic
-    /// preference persisted at the Model boundary. The emby-gated
-    /// effects prove their target by acting at all: absent a live Emby
-    /// service they flash "Emby is unavailable", while a non-CW flat target
-    /// (play on the folder, delete past the CW range) would skip silently.
-    #[test]
-    fn shell_home_effects_honor_component_target() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut model = Model::new(make_app_stub());
-        // Three Continue Watching rows (ids id0..id2) plus one latest pill
-        // holding a folder, so a flat target past the CW range makes
-        // `home_play` return early via the folder guard — a clean "wrong
-        // target" signal.
         model.home_content.continue_items = make_items(3);
-        let mut folder = make_item("folder", "CollectionFolder");
-        folder.is_folder = true;
-        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
-            "Folder".into(),
-            crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
-            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
-        )];
-        model.push_home_content();
 
-        // HomeEnqueue: the requested CW row (id2) is queued, not row 0.
-        model.handle_home_request(ShellRequest::HomeEnqueue(home_target("id2", true)));
-        let queued = model.app.player_tab.emby_items();
-        assert_eq!(queued.len(), 1);
-        assert_eq!(queued[0].id, "id2");
+        model.handle_home_request(ShellRequest::HomeEnqueue(target("id2")));
+        assert_eq!(model.app.player_tab.emby_items()[0].id, "id2");
 
-        // HomePlay: the requested CW row (id0) is resumed — the emby-gated
-        // resume flashes "Emby is unavailable" — while a folder-flat target
-        // would return early (folder guard).
         model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomePlay(home_target("id0", true)));
-        assert_eq!(
-            model.app.status, "Emby is unavailable",
-            "play must act on the supplied CW target, not skip on the parked section state"
-        );
-
-        // HomeDelete: the requested CW row (0, in range) is removed — again
-        // the emby-gated removal flashes — while an out-of-range flat target
-        // would be skipped by the delete guard.
-        model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomeDelete(home_target("id0", true)));
-        assert_eq!(
-            model.app.status, "Emby is unavailable",
-            "delete must act on the supplied CW target, not skip on an out-of-range target"
-        );
-
-        // HomeToggleWatched: carries no index; it targets the Continue
-        // Watching column's own cursor. The emby-gated effect still acts
-        // (flashes unavailable) rather than skipping.
-        model.app.status.clear();
-        model.handle_home_request(ShellRequest::HomeToggleWatched(home_target("id1", true)));
-        assert_eq!(
-            model.app.status, "Emby is unavailable",
-            "toggle must act on the continue_cursor target, not skip on parked state"
-        );
-
-        // HomeSectionSelected: the requested pill index is mapped to its
-        // semantic source in the owner and persisted, even though it is
-        // supplied explicitly (App holds no numeric section to read).
-        model.handle_home_request(ShellRequest::HomeSectionSelected(1));
-        assert_eq!(
-            model.home_section_pref(),
-            "emby:lib",
-            "section preference must be the requested pill's source"
-        );
-    }
-
-    /// Task 5.3d, numeric Home section deletion: explicit pill selection at
-    /// the Model boundary retains the selected section's semantic
-    /// `HomeLatestSource` (or `None`/empty for Continue Watching section 0),
-    /// never a numeric index — resolved through the owner's
-    /// `source_for_section`, driven via `HomeSectionSelected`, while keeping
-    /// the semantic identity in memory only.
-    #[test]
-    fn shell_home_section_selection_updates_semantic_source_in_memory() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut model = Model::new(make_app_stub());
-        model.home_content.latest = vec![
-            crate::app::types_playback::HomeLatestSection::new(
-                "Movies".into(),
-                crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
-                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                    make_item("Movie one", "Movie"),
-                ))],
-            ),
-            crate::app::types_playback::HomeLatestSection::new(
-                "Podcasts".into(),
-                crate::app::types_playback::HomeLatestSource::Audiobookshelf("abs-pod".into()),
-                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                    make_item("Episode one", "Episode"),
-                ))],
-            ),
-        ];
-        model.push_home_content();
-
-        // Continue Watching (section 0) remains the empty sentinel, never
-        // as a `latest` pill's key.
-        model.handle_home_request(ShellRequest::HomeSectionSelected(0));
-        assert!(
-            model.home_section_pref().is_empty(),
-            "Continue Watching retains no section key"
-        );
-
-        // Real pills retain their own keys (off-by-one: section 1 == latest[0]).
-        model.handle_home_request(ShellRequest::HomeSectionSelected(1));
-        assert_eq!(model.home_section_pref(), "emby:lib-movies");
-        model.handle_home_request(ShellRequest::HomeSectionSelected(2));
-        assert_eq!(model.home_section_pref(), "abs:abs-pod");
-    }
-
-    /// Home selection is retained in memory while an unrelated preference
-    /// save leaves the legacy launch key unchanged for migration.
-    #[test]
-    fn shell_home_unrelated_save_does_not_write_selected_source() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        std::fs::write(
-            crate::config::prefs_path(),
-            serde_json::json!({ "home_section": "emby:legacy" }).to_string(),
-        )
-        .expect("write legacy preference");
-        let mut model = Model::new(make_app_stub());
-        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
-            "Movies".into(),
-            crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
-            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                make_item("Movie one", "Movie"),
-            ))],
-        )];
-        model.push_home_content();
-        model.handle_home_request(ShellRequest::HomeSectionSelected(1));
-
-        // An unrelated preference save does not persist the current source.
-        model.app.save_prefs();
-        let saved = crate::config::prefs_path();
-        let parsed: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
-        assert_eq!(
-            parsed["home_section"], "emby:legacy",
-            "unrelated save must leave the legacy Home source unchanged"
-        );
-    }
-
-    /// Task 5.3d, Home mouse-click handoff: the shell routes each typed
-    /// `HomeRow*`/`HomePillClick` request at the Model boundary. A pill updates
-    /// the in-memory section identity; a single row click
-    /// focuses the Library panel but does **not** mutate App's independent
-    /// Continue Watching `continue_cursor` or the per-latest pill cursors
-    /// (the owner owns the flat cursor); a double click additionally
-    /// activates the owner-provided flat target; a right-click focuses
-    /// Library and opens a Pointer-anchored context menu whose target stays
-    /// the Continue Watching `continue_cursor` item — not the clicked row.
-    #[test]
-    fn shell_home_click_family_routes_at_model_boundary() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let mut model = Model::new(make_app_stub());
-        // Two Continue Watching rows (movies, ids id0/id1) plus one latest
-        // folder so a double-click on a CW row provably differs from the
-        // non-CW folder target (play on the folder skips silently via the
-        // folder guard).
-        model.home_content.continue_items = make_items(2);
-        let mut folder = make_item("folder", "CollectionFolder");
-        folder.is_folder = true;
-        model.home_content.latest = vec![crate::app::types_playback::HomeLatestSection::new(
-            "Folder".into(),
-            crate::app::types_playback::HomeLatestSource::Emby("lib".into()),
-            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(folder))],
-        )];
-        model.push_home_content();
-
-        // Single click on CW row 0: focuses the Library panel, but does not
-        // mutate App's independent Continue Watching column cursor or the
-        // per-latest pill cursor, and does not activate.
-        model.app.status.clear();
-        route(
-            &mut model,
-            ShellRequest::HomeRowClick {
-                target: home_target("id0", true),
-            },
-        );
-        assert_eq!(
-            model.app.effective_panel_focus(),
-            PanelFocus::Library,
-            "single click must focus the Library panel"
-        );
-        assert!(
-            model.app.status.is_empty(),
-            "single click must not activate"
-        );
-
-        // Double click on CW row 0: the owner recognized the double-click
-        // and emits `HomeRowActivate` with the resolved flat target; the
-        // shell activates it via home_play, which flashes on the missing Emby
-        // service — proving it acted on the clicked CW target, not the non-CW
-        // folder.
-        route(
-            &mut model,
-            ShellRequest::HomeRowActivate {
-                target: home_target("id0", true),
-            },
-        );
-        assert_eq!(
-            model.app.status, "Emby is unavailable",
-            "double click must activate the clicked flat target"
-        );
-
-        // Pill click: the clicked pill's semantic source is retained by the
-        // Model-boundary selection (`select_home_section_from_component`).
-        route(&mut model, ShellRequest::HomePillClick { target: 1 });
-        assert_eq!(
-            model.home_section_pref(),
-            "emby:lib",
-            "pill click must retain the clicked pill's source"
-        );
-
-        // Right-click: focuses Library and opens a Pointer-anchored context
-        // menu whose entries resolve from the Continue Watching item supplied
-        // by Home — a CW movie, not the folder.
-        route(
-            &mut model,
-            ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Home(vec![home_target(
-                    "id0", true,
-                )]),
-                Some((70, 20)),
-            ),
-        );
-        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
-            model.app.pending_overlay
-        else {
-            panic!("right-click must open a context menu");
-        };
-        assert_eq!(
-            menu.anchor,
-            crate::app::types_context_menu::ContextMenuAnchor::Pointer { x: 70, y: 20 },
-            "right-click must keep the pointer anchor"
-        );
-        assert!(
-            menu.entries
-                .iter()
-                .any(|e| e.label == "Remove from Continue Watching"),
-            "menu target must be the Continue Watching item, not the clicked folder"
-        );
-        assert_eq!(
-            model
-                .home_context_item
-                .as_ref()
-                .map(|item| item.id.as_str()),
-            Some("id0"),
-            "unified Home handler must retain the Continue Watching item"
-        );
-
-        // Task 5.3d, Home context-menu section decoupling: the authoritative
-        // "is Continue Watching selected?" fact comes from the Home owner at
-        // the Model boundary (`home_continue_watching_selected`), and it is
-        // load-bearing in the odd Queue-focus coupling — the queue
-        // context menu shows "Remove from Continue Watching" iff the Home
-        // owner has Continue Watching selected. There is no App numeric
-        // section to fall back on, so the menu follows the owner.
-        model.push_home_content();
-        assert!(
-            model
-                .update_home_owner(|home| home.restore_section(
-                    &crate::app::types_playback::HomeLatestSource::Emby("lib".into())
-                ))
-                .expect("Home owner installed"),
-            "restore to the Folder section must succeed"
-        );
-        assert!(
-            !model.home_continue_watching_selected(),
-            "resolver must report the owner's non-CW section"
-        );
-
-        // Keyboard '.' path under Queue panel focus while Home is the active
-        // Tab selection: the typed `RowContextMenu` request the central
-        // router dispatches reaches `handle_home_request` at the Model
-        // boundary, and the odd coupling entry is present iff the Home owner
-        // has Continue Watching selected. With the owner on a non-CW section
-        // the entry must be absent — the menu follows the owner.
-        model.app.player_tab.set_queue_items(
-            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                make_item("Queued", "Movie"),
-            ))],
-            0,
-        );
-        model.app.panel_focus = PanelFocus::Queue;
-        model.app.pending_overlay = None;
-        route(
-            &mut model,
-            ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
-                    item_id: None,
-                    source: None,
-                    from_continue_watching: false,
-                }]),
-                None,
-            ),
-        );
-        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_non_cw)) =
-            model.app.pending_overlay
-        else {
-            panic!("keyboard '.' must open a context menu under Queue focus");
-        };
-        assert!(
-            !menu_non_cw
-                .entries
-                .iter()
-                .any(|e| e.label == "Remove from Continue Watching"),
-            "owner on a non-CW section must drop the keyboard-menu CW entry"
-        );
-        assert!(
-            model.home_context_item.is_none(),
-            "unified Home handler must not attach a non-Continue-Watching row"
-        );
-        assert!(
-            matches!(model.app.effective_panel_focus(), PanelFocus::Queue),
-            "keyboard '.' must not change the Queue panel focus"
-        );
-
-        // Put the owner back on Continue Watching (empty latest clamps the
-        // owner section back to section 0): the same keyboard '.' path
-        // shows the entry again.
-        model
-            .update_home_owner(|home| home.set_content(vec![], vec![], false, Default::default()))
-            .expect("Home owner installed");
-        assert!(
-            model.home_continue_watching_selected(),
-            "resolver must report CW when the owner is back on section 0"
-        );
-        model.app.pending_overlay = None;
-        route(
-            &mut model,
-            ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
-                    item_id: Some("id0".into()),
-                    source: None,
-                    from_continue_watching: true,
-                }]),
-                None,
-            ),
-        );
-        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_cw)) =
-            model.app.pending_overlay
-        else {
-            panic!("keyboard '.' must open a context menu under Queue focus");
-        };
-        assert!(
-            menu_cw
-                .entries
-                .iter()
-                .any(|e| e.label == "Remove from Continue Watching"),
-            "owner back on CW must show the keyboard-menu CW entry"
-        );
+        model.handle_home_request(ShellRequest::HomePlay(target("id0")));
+        assert_eq!(model.app.status, "Emby is unavailable");
     }
 
     #[test]
-    fn shell_home_context_menu_request_uses_explicit_target() {
+    fn continue_watching_context_menu_uses_explicit_target() {
         let mut model = Model::new(make_app_stub());
-        let target = make_item("cw-target", "Movie");
-        model.home_content.continue_items = vec![target.clone()];
-        route(
-            &mut model,
-            ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
-                    item_id: Some(target.id.clone()),
-                    source: None,
-                    from_continue_watching: true,
-                }]),
-                None,
-            ),
-        );
+        let item = make_item("cw-target", "Movie");
+        model.home_content.continue_items = vec![item.clone()];
+        model.handle_home_request(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Home(vec![target(&item.id)]),
+            None,
+        ));
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {
             panic!("Home context-menu request must open a menu");
         };
-        assert!(
-            menu.entries.iter().any(|entry| {
-                entry
-                    .action
-                    .as_ref()
-                    .is_some_and(|action| matches!(action, crate::app::ContextAction::Play))
-            }),
-            "Home context-menu request must use its explicit item target"
-        );
+        assert!(menu.entries.iter().any(|entry| {
+            entry
+                .action
+                .as_ref()
+                .is_some_and(|action| matches!(action, crate::app::ContextAction::Play))
+        }));
     }
 }

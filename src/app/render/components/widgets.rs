@@ -672,7 +672,7 @@ impl App {
             TabSelection::Home => {
                 // Home content is painted by the mounted `HomeComponent`.
                 // The legacy frame only reserves the full Home destination
-                // area here — it paints no Home rows, pills, hero, or image
+                // area here — it paints no Home rows, hero, or image
                 // (task 5.3d, Home legacy underpaint removal); nothing reads
                 // the reservation back (task 12.4), so it is a no-op.
             }

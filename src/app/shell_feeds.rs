@@ -12,14 +12,49 @@ impl Model {
         if !matches!(self.app.tab, super::TabSelection::Feeds) {
             return;
         }
+        let selected_latest = self
+            .application
+            .get_component(&super::components::ComponentId::Library)
+            .and_then(|component| {
+                component
+                    .as_any()
+                    .downcast_ref::<super::components::library_panel::LibraryPanel>()
+            })
+            .and_then(|panel| panel.owner(&LibraryKey::Feeds))
+            .and_then(|owner| owner.as_any().downcast_ref::<FeedsContent>())
+            .is_some_and(FeedsContent::latest_selected);
+        if selected_latest
+            && !self
+                .acknowledged_home_latest_sources
+                .contains(&super::DestinationLatestSource::Feeds)
+        {
+            self.record_home_latest_acknowledgement(super::DestinationLatestSource::Feeds);
+        }
         let state = &self.app.feed_tab;
+        let has_new = state.all_entries.iter().any(|entry| {
+            self.app
+                .home_latest_launch_window
+                .previous
+                .is_some_and(|previous| {
+                    entry.pub_date_secs.is_some_and(|timestamp| {
+                        previous < timestamp
+                            && timestamp <= self.app.home_latest_launch_window.current
+                    })
+                })
+        });
+        let acknowledged = self
+            .acknowledged_home_latest_sources
+            .contains(&super::DestinationLatestSource::Feeds);
         let push = FeedsOwnerPush {
             subscriptions: state.subscriptions.clone(),
             entries: state.entries.clone(),
             all_entries: state.all_entries.clone(),
             loading: state.loading,
         };
-        self.update_feeds_owner(|feeds| feeds.set_content(push));
+        self.update_feeds_owner(|feeds| {
+            feeds.set_content(push);
+            feeds.set_latest_marker(has_new && !acknowledged);
+        });
     }
 
     /// Mutate the Feeds owner inside the mounted `LibraryPanel` (design D2:

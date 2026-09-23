@@ -17,6 +17,7 @@ use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::shell::Model;
+use super::types_playback::DestinationLatestSource;
 use super::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
@@ -95,14 +96,58 @@ impl Model {
         })
     }
 
+    fn set_emby_owner_latest_mode(&mut self, key: &LibraryKey, latest: bool) {
+        if let Some(owner) = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(|panel| panel.owner_mut(key))
+            .and_then(|owner| {
+                owner
+                    .as_any_mut()
+                    .downcast_mut::<super::components::emby_library_content::EmbyLibraryContent>()
+            })
+        {
+            owner.set_latest_mode(latest);
+        }
+    }
+
     fn apply_launch_selector(&mut self, key: &LibraryKey, selector: LaunchSelector) {
         match selector {
+            LaunchSelector::EmbyLatest => {
+                if !matches!(
+                    key,
+                    LibraryKey::Service {
+                        kind: LibraryKind::Music,
+                        ..
+                    }
+                ) {
+                    self.set_emby_owner_latest_mode(key, true);
+                    if let LibraryKey::Service {
+                        service: ServiceKind::Emby,
+                        library_id,
+                        ..
+                    } = key
+                    {
+                        if let Some(lib_idx) = self
+                            .app
+                            .libs
+                            .iter()
+                            .position(|library| library.library.id == *library_id)
+                        {
+                            self.app.spawn_destination_latest_snapshot(lib_idx);
+                        }
+                    }
+                }
+            }
             LaunchSelector::Emby { index } => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     if index == usize::MAX {
-                        self.clear_emby_letter_filter_for_launch(lib_idx);
+                        self.clear_emby_letter_filter(lib_idx);
+                        self.set_emby_owner_latest_mode(key, false);
                     } else {
                         self.app.handle_mouse_selector_click_emby(lib_idx, index);
+                        self.set_emby_owner_latest_mode(key, false);
                     }
                 }
             }
@@ -111,6 +156,14 @@ impl Model {
             }
             LaunchSelector::AudiobookshelfState => {
                 self.app.commit_audiobookshelf_podcast_state_scope();
+            }
+            LaunchSelector::AudiobookshelfLatest => {
+                self.record_home_latest_acknowledgement(DestinationLatestSource::Audiobookshelf(
+                    match key {
+                        LibraryKey::Service { library_id, .. } => library_id.clone(),
+                        _ => unreachable!(),
+                    },
+                ));
             }
         }
         match key {
@@ -130,11 +183,10 @@ impl Model {
         }
     }
 
-    /// Return an Emby letter-pilled library to its unfiltered top-level scope
-    /// while restoring launch state. This is the clear counterpart to the
-    /// ordinary pill click: it refreshes the full range instead of treating
-    /// index zero as an A–C pill.
-    fn clear_emby_letter_filter_for_launch(&mut self, lib_idx: usize) {
+    /// Return an Emby letter-pilled library to its unfiltered scope. This is
+    /// the clear counterpart to an ordinary pill click: it refreshes the full
+    /// range instead of treating index zero as an A–C pill.
+    pub(super) fn clear_emby_letter_filter(&mut self, lib_idx: usize) {
         if !self.app.should_show_letter_pills(lib_idx) {
             return;
         }

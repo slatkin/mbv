@@ -199,8 +199,10 @@ pub(in crate::app) enum LibrarySlotEvent {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) enum LaunchSelector {
     Emby { index: usize },
+    EmbyLatest,
     AudiobookshelfShow(String),
     AudiobookshelfState,
+    AudiobookshelfLatest,
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot

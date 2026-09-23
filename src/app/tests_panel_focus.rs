@@ -2,7 +2,6 @@ use super::*;
 use crate::app::components::{Msg, TerminalObserverEvent};
 use crate::app::tests::*;
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::types_playback::HomeLatestSource;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::Event;
@@ -173,24 +172,6 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
     assert!(app.tab.is_home());
     assert_eq!(app.library_tab_pending, 0);
     assert!(app.player_tab.emby_items().is_empty());
-}
-
-#[test]
-fn build_restores_home_section_pending_from_prefs() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    std::fs::write(
-        crate::config::prefs_path(),
-        serde_json::json!({ "home_section": "abs:lib-1" }).to_string(),
-    )
-    .expect("write prefs");
-
-    let model = Model::new(make_built_app());
-
-    assert_eq!(
-        model.home_section_pending,
-        Some(HomeLatestSource::Audiobookshelf("lib-1".into())),
-        "the saved pill identity is loaded, to be applied once the section exists"
-    );
 }
 
 #[test]

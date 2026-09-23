@@ -259,7 +259,7 @@ impl Model {
         if library.library.collection_type == "tvshows"
             && library.tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
         {
-            self.acknowledge_home_latest(super::types_playback::HomeLatestSource::Emby(
+            self.acknowledge_home_latest(super::types_playback::DestinationLatestSource::Emby(
                 library.library.id.clone(),
             ));
         }
@@ -496,15 +496,23 @@ impl Model {
             None,
             self.app.should_show_letter_pills(index),
         );
-        context.set_tv_content_mode(tv_content_mode);
+        context.set_tv_content_mode(tv_content_mode.clone());
         context.set_series_details(series_details);
-        let latest_source = super::types_playback::HomeLatestSource::Emby(library_id);
+        let latest_source =
+            super::types_playback::DestinationLatestSource::Emby(library_id.clone());
+        if tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
+            && !self
+                .acknowledged_home_latest_sources
+                .contains(&latest_source)
+        {
+            // Selection is an acknowledgement even when Latest was already
+            // selected before its asynchronous snapshot arrived.
+            self.record_home_latest_acknowledgement(latest_source.clone());
+        }
         let latest_has_new_content = self
-            .home_content
-            .latest
-            .iter()
-            .find(|section| section.source == latest_source)
-            .is_some_and(|section| section.has_new_content);
+            .tv_latest_snapshots
+            .get(&library_id)
+            .is_some_and(|snapshot| snapshot.has_new_content);
         let latest_acknowledged = self
             .acknowledged_home_latest_sources
             .contains(&latest_source);
@@ -516,7 +524,7 @@ impl Model {
         self.update_tv_owner(|owner| {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);
-            owner.set_latest_marker(latest_has_new_content, latest_acknowledged);
+            owner.set_latest_marker(latest_has_new_content && !latest_acknowledged);
             owner.set_content(context);
             owner.set_focused(library_focused);
         });

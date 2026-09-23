@@ -37,7 +37,7 @@ fn multiselect_buffer_characterization_covers_default_focused_narrow_and_selecte
     for (width, height, cursor, kind) in [
         (70, 16, 0, MultiSelectKind::HiddenLibraries),
         (70, 16, 1, MultiSelectKind::HiddenLibraries),
-        (24, 10, 1, MultiSelectKind::HiddenLatest),
+        (24, 10, 1, MultiSelectKind::HiddenLibraries),
         (40, 12, 0, MultiSelectKind::FeedViewLibraries),
     ] {
         let output = render_multiselect(width, height, cursor, kind);

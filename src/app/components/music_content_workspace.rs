@@ -559,35 +559,31 @@ impl MusicContent {
         // list mutably for the returned slots.
         let focused = self.context.focused;
         let track_focused = self.track_focused;
-        let hero = self.resolved_hero_data().map(|data| {
-            HeroContent {
-                facts: data.facts,
-                // Music has no separate overview box when the album does not
-                // provide an overview; the panel's generic producer already
-                // represents that as `None`.
-                overview: data.overview,
-                credits: data.credits,
-                workspace: Some(Workspace {
-                    header: Some(WorkspaceHeader::Tracklist),
-                    selector: None,
-                    list: &mut self.track_list,
-                    focused: focused && track_focused,
-                }),
-            }
+        let hero = self.resolved_hero_data().map(|data| HeroContent {
+            facts: data.facts,
+            // Music has no separate overview box when the album does not
+            // provide an overview; the panel's generic producer already
+            // represents that as `None`.
+            overview: data.overview,
+            credits: data.credits,
+            workspace: Some(Workspace {
+                header: Some(WorkspaceHeader::Tracklist),
+                selector: None,
+                list: &mut self.track_list,
+                focused: focused && track_focused,
+            }),
         });
-        let selector = (!self.context.groups.is_empty()).then(|| SelectorRow {
-            pills: self
-                .context
-                .groups
-                .iter()
-                .map(|group| trunc_str(&group.name, 12).to_string())
-                .collect(),
-            markers: vec![],
-            active: Some(self.context.group_cursor),
+        let pills: Vec<_> = self
+            .context
+            .groups
+            .iter()
+            .map(|group| trunc_str(&group.name, 12).to_string())
+            .collect();
+        let selector = Some(SelectorRow {
+            markers: vec![false; pills.len()],
+            active: (!pills.is_empty()).then_some(self.context.group_cursor),
+            pills,
         });
-        // Grouped Music keeps the tree as the browser owner while the shared
-        // Inline Search control supplies only the query editor/debounce and
-        // the panel's one-row search-bar projection.
         let list = ListSlot::Media(&mut self.browser);
         LibraryPanelContent {
             selector,

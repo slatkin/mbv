@@ -96,6 +96,7 @@ pub enum SelectorIdentity {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FeedsSelectorKey {
+    Latest,
     Filter(FeedsFilter),
     Group(FeedGroupKey),
 }
@@ -121,6 +122,7 @@ pub enum FeedGroupKey {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AudiobookshelfSelectorKey {
+    Latest,
     PodcastFilter(AudiobookshelfPodcastFilter),
     PodcastShow(String),
     BookBucket(AudiobookshelfBookBucket),
@@ -242,6 +244,7 @@ impl EmbyLetterBucket {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EmbySelectorKey {
+    Latest,
     Letter(EmbyLetterBucket),
     Unfiltered,
     Group(String),

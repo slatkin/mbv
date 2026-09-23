@@ -15,7 +15,9 @@ use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
-use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
+use crate::app::render::arrangements::library::{
+    wide_library_panes_with_selector, WideLibraryPanes,
+};
 use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
 use crate::app::render::{
     render_placeholder, render_search_box, wide_hero_hero_pane, PillBarWindow, PANE_PAD_X,
@@ -24,9 +26,16 @@ use crate::app::render::{
 
 use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
 use super::hero_composition::{full_width_claim, paint_library_hero_content};
-use super::slots::{
-    paint_pill_bar_row, paint_pill_row_gap, paint_selector_row, SELECTOR_ROW_PREFIX,
-};
+use super::slots::{paint_pill_row_gap, paint_selector_row};
+
+pub(in crate::app) fn selector_row_visible(content: &LibraryPanelContent<'_>) -> bool {
+    content.selector.is_some()
+        || match &content.list {
+            ListSlot::Search(_) => true,
+            ListSlot::Media(list) => list.search_bar().is_some(),
+            ListSlot::Empty { .. } => false,
+        }
+}
 
 /// The skeleton's retained irregular-chrome hit registries, one per painted
 /// pill row (ADR 0024: the mounted panel owns gesture state and resolves the
@@ -62,8 +71,8 @@ pub(in crate::app) struct WideSkeletonGeometry {
     pub browser: Rect,
     /// The Hero pane.
     pub hero: Rect,
-    /// The Selector row's pill-bar rect, reserved even when the destination
-    /// supplies no `SelectorRow` (the Inline Search box takes it).
+    /// The Selector row's pill-bar rect, or a zero-height rect when neither
+    /// a selector nor Inline Search is present.
     #[cfg_attr(not(test), allow(dead_code))]
     pub selector_bar: Rect,
     /// The list box's full panel rect (fill + border).
@@ -92,8 +101,8 @@ pub(in crate::app) struct WideSkeletonGeometry {
 /// Both skeletons consume it: the non-Wide panel delegates to
 /// [`paint_browser_pane`] and folds the rects into its own geometry.
 pub(in crate::app) struct BrowserPaneGeometry {
-    /// The Selector row's pill-bar rect, reserved even when the destination
-    /// supplies no `SelectorRow` (the Inline Search box takes it).
+    /// The Selector row's pill-bar rect, or a zero-height rect when neither
+    /// a selector nor Inline Search is present.
     pub(in crate::app) selector_bar: Rect,
     /// The list box's full panel rect (fill + border).
     pub(in crate::app) list_panel: Rect,
@@ -123,10 +132,9 @@ pub(in crate::app) fn paint_browser_pane(
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
 ) -> BrowserPaneGeometry {
-    // Selector row: one pill bar + the panel's spacer, reserved even without
-    // a SelectorRow — while a search is active the box takes the bar's rect
-    // (spec: the Selector row's place is reserved for the search box) and
-    // the spacer keeps the reserved gap.
+    // Selector row: one pill bar + the panel's spacer. When neither a
+    // SelectorRow nor search is present, the arrangement gives the content
+    // area directly to the list; while searching, the box takes the bar's rect.
     let searching = match &content.list {
         ListSlot::Search(_) => true,
         ListSlot::Media(list) => list.search_bar().is_some(),
@@ -148,30 +156,7 @@ pub(in crate::app) fn paint_browser_pane(
                 panel_focused,
             );
         }
-        (None, false) => {
-            // No `SelectorRow`: still repaint the reserved pills row's own
-            // background (task 12.2) through the shared pill-row painter,
-            // the same one `paint_selector_row` calls for an empty pill
-            // list, so the row never keeps whatever was painted underneath
-            // it before this panel owned the placement.
-            paint_pill_bar_row(
-                f,
-                pane.pills_area,
-                &[],
-                &[],
-                None,
-                None,
-                Some(SELECTOR_ROW_PREFIX),
-                &mut hits.selector,
-                &mut windows.selector,
-            );
-            paint_pill_row_gap(
-                f,
-                pane.spacer_area,
-                palette::Surface::PillRowGap,
-                panel_focused,
-            );
-        }
+        (None, false) => {}
         (_, true) => paint_pill_row_gap(
             f,
             pane.spacer_area,
@@ -315,7 +300,14 @@ pub(in crate::app) fn render_wide_skeleton(
         hero_panel,
         browser_panel,
         ..
-    } = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, override_width, show_hero_pane)?;
+    } = wide_library_panes_with_selector(
+        area,
+        PANE_PAD_X,
+        PANE_PAD_Y,
+        override_width,
+        show_hero_pane,
+        selector_row_visible(content),
+    )?;
     let pane = WideHeroBrowserPane {
         pills_area,
         spacer_area,

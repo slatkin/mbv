@@ -10,7 +10,7 @@ use super::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
-use super::types_playback::{HomeContent, HomeLatestSection, HomeLatestSource};
+use super::types_playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
@@ -118,13 +118,10 @@ pub struct Model {
     /// `HomeComponent`; App-internal writers deliver computed snapshots via
     /// lib_tx; `loading` mirrors the deleted `App.home_loading`.
     pub(super) home_content: HomeContent,
-    /// Shell-owned semantic Home section preference and one-time restore marker.
-    pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
-    pub(super) home_section_pending: Option<HomeLatestSource>,
     /// Shell-owned acknowledgement shared by Home and TV Latest surfaces.
-    pub(super) acknowledged_home_latest_sources: std::collections::HashSet<HomeLatestSource>,
+    pub(super) acknowledged_home_latest_sources: std::collections::HashSet<DestinationLatestSource>,
     /// One authoritative TV Latest section snapshot per Emby library view.
-    pub(super) tv_latest_snapshots: std::collections::HashMap<String, HomeLatestSection>,
+    pub(super) tv_latest_snapshots: std::collections::HashMap<String, DestinationLatestSnapshot>,
     pub(super) home_context_item: Option<mbv_core::api::EmbyItem>,
     /// The last terminal size the sync pass applied resize side effects for
     /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
@@ -595,9 +592,8 @@ impl Model {
     ) -> Self {
         let application = Application::init(listener_cfg);
         app.home_latest_launch_window = home_latest_launch_window;
-        let home_section = App::load_prefs()["home_section"]
-            .as_str()
-            .and_then(HomeLatestSource::from_pref_key);
+        // Legacy Home Latest selector snapshots are reanchored to Continue
+        // Watching by the Home owner's launch-state restoration.
         let initial_terminal_size = (app.terminal_width, app.terminal_height);
         // The compiled `[keys]` configuration is read once, here, from the
         // config the App was built with; later config saves never rewrite it
@@ -613,8 +609,6 @@ impl Model {
             music_workspace_reanchor: false,
             feeds_manage: None,
             home_content: HomeContent::new(),
-            home_section_pref_semantic: home_section.clone(),
-            home_section_pending: home_section,
             acknowledged_home_latest_sources: std::collections::HashSet::new(),
             tv_latest_snapshots: std::collections::HashMap::new(),
             home_context_item: None,

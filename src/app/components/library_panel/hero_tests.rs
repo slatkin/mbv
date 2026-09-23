@@ -461,6 +461,7 @@ fn movie_credits_reach_library_panel_content_through_browser_owner() {
     let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
     owner.set_content(BrowserOwnerPush {
         items: vec![movie],
+        latest_items: Vec::new(),
         total_count: 1,
         library_total: None,
         letter_filter: None,

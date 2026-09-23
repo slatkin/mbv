@@ -45,17 +45,13 @@ fn auth_rejection_clears_player_even_when_secret_deletion_fails() {
     let generation = app.emby_runtime.generation();
     // No content snapshot is delivered on the failure path, so the
     // Model-owned Home content (task 5.3d) is untouched.
-    let content = app.apply_emby_completion_with_secret_deleter(
-        super::service_startup::Completion {
-            generation,
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-                message: "HTTP 401".into(),
-            }),
-        },
-        &[],
-        |_| Err("secret store unavailable".into()),
-    );
+    let content = app.apply_emby_completion_with_secret_deleter(super::service_startup::Completion {
+        generation,
+        result: Err(mbv_core::service_runtime::EmbyFailure {
+            class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+            message: "HTTP 401".into(),
+        }),
+    }, |_| Err("secret store unavailable".into()));
     assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
     assert_eq!(app.player.emby_credentials(), None);
     assert!(app.status.contains("could not remove"));
@@ -98,16 +94,13 @@ fn auth_rejection_isolated_cleanup_preserves_setup_owned_content_and_other_secre
     let generation = app.emby_runtime.generation();
     // No content snapshot is delivered on the failure path, so the
     // Model-owned Home content (task 5.3d) is untouched.
-    let content = app.apply_emby_completion(
-        super::service_startup::Completion {
-            generation,
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-                message: "HTTP 403".into(),
-            }),
-        },
-        &[],
-    );
+    let content = app.apply_emby_completion(super::service_startup::Completion {
+        generation,
+        result: Err(mbv_core::service_runtime::EmbyFailure {
+            class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+            message: "HTTP 403".into(),
+        }),
+    });
     assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
     assert_eq!(app.config.lock().unwrap().emby_setup, config.emby_setup);
     assert!(content.is_none());
@@ -232,15 +225,12 @@ fn retry_failure_completion_preserves_existing_runtime_and_advances_generation()
     app.emby_startup_rx = None;
     // No content snapshot is delivered on the failure path, so the
     // Model-owned Home content (task 5.3d) is untouched.
-    let content = app.apply_emby_completion(
-        super::service_startup::Completion {
-            generation,
-            result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
-                "connection refused",
-            )),
-        },
-        &[],
-    );
+    let content = app.apply_emby_completion(super::service_startup::Completion {
+        generation,
+        result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
+            "connection refused",
+        )),
+    });
     assert_eq!(app.emby_runtime.state, ServiceState::Unavailable);
     assert!(std::sync::Arc::ptr_eq(
         app.emby_runtime.client.as_ref().unwrap(),
@@ -280,16 +270,13 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
     app.emby_runtime.state = ServiceState::Ready;
     // No content snapshot is delivered on the stale/failure path, so the
     // Model-owned Home content (task 5.3d) is untouched.
-    let content = app.apply_emby_completion(
-        super::service_startup::Completion {
-            generation: stale,
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-                message: "HTTP 401".into(),
-            }),
-        },
-        &[],
-    );
+    let content = app.apply_emby_completion(super::service_startup::Completion {
+        generation: stale,
+        result: Err(mbv_core::service_runtime::EmbyFailure {
+            class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+            message: "HTTP 401".into(),
+        }),
+    });
     assert_eq!(app.emby_runtime.generation(), newer);
     assert_eq!(app.emby_runtime.state, ServiceState::Ready);
     assert_eq!(
@@ -319,14 +306,11 @@ fn transient_setup_rejection_preserves_persisted_secret_setup_and_content() {
     app.emby_setup_form.as_mut().unwrap().busy = true;
     // No content snapshot is delivered on the rejection path, so the
     // Model-owned Home content (task 5.3d) is untouched.
-    let content = app.apply_emby_setup_completion_without_network(
-        super::service_startup::SetupCompletion {
-            generation,
-            previous_state: ServiceState::NeedsAuthentication,
-            result: Err("candidate credential rejected".into()),
-        },
-        &[],
-    );
+    let content = app.apply_emby_setup_completion_without_network(super::service_startup::SetupCompletion {
+        generation,
+        previous_state: ServiceState::NeedsAuthentication,
+        result: Err("candidate credential rejected".into()),
+    });
     assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
     assert_eq!(app.config.lock().unwrap().emby_setup, Some(setup));
     assert!(content.is_none());
@@ -375,18 +359,15 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     });
     // A rejected identity lands in `pending_emby_replacement` (no Home
     // content snapshot is computed on this early-return path, task 5.3d).
-    let content = app.apply_emby_setup_completion_without_network(
-        super::service_startup::SetupCompletion {
-            generation,
-            previous_state: ServiceState::Ready,
-            result: Ok(super::service_startup::Startup {
-                client: candidate,
-                bootstrap: Default::default(),
-                setup: EmbySetup::new("https://new.example/", "new-user"),
-            }),
-        },
-        &[],
-    );
+    let content = app.apply_emby_setup_completion_without_network(super::service_startup::SetupCompletion {
+        generation,
+        previous_state: ServiceState::Ready,
+        result: Ok(super::service_startup::Startup {
+            client: candidate,
+            bootstrap: Default::default(),
+            setup: EmbySetup::new("https://new.example/", "new-user"),
+        }),
+    });
     assert!(content.is_none());
     assert!(app.pending_emby_replacement.is_some());
     assert!(matches!(

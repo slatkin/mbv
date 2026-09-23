@@ -95,15 +95,7 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
                 .collect(),
         ),
     );
-    library.insert(
-        "hidden_latest".to_string(),
-        toml::Value::Array(
-            cfg.hidden_latest
-                .iter()
-                .map(|s| toml::Value::String(s.clone()))
-                .collect(),
-        ),
-    );
+    library.remove("hidden_latest");
     library.insert(
         "feed_view_libraries".to_string(),
         toml::Value::Array(

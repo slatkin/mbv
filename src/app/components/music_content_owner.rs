@@ -115,10 +115,21 @@ impl LibraryContentOwner for MusicContent {
         if self.context.list.loading && self.context.list.items.is_empty() {
             return false;
         }
+        let saved_latest = matches!(
+            state.selector.as_ref(),
+            Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            })
+        );
         if !self.context.groups.is_empty() {
             self.context.group_cursor = self.group_cursor_for_launch_state(state);
         }
-        let selected = match state.item.as_ref() {
+        // Latest is not a Music selector. A legacy saved Latest selector
+        // falls back to the first normal group and its default item.
+        let selected = if saved_latest {
+            false
+        } else {
+            match state.item.as_ref() {
             Some(LibraryItemIdentity::Emby { id }) => {
                 self.browser
                     .apply(TreeOperation::AnchorSelection {
@@ -128,7 +139,8 @@ impl LibraryContentOwner for MusicContent {
                     .disposition
                     == TreeConsumed::Consumed
             }
-            _ => false,
+                _ => false,
+            }
         };
         if !selected {
             if let Some(target) = self.context.album_targets.first().cloned() {
@@ -144,9 +156,6 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
-        // Group pills are Music's main Selector. The artist/album/track tree
-        // is Workspace content, so it contributes no selector identity; its
-        // selected album target is the stable library-item identity.
         let selector = self
             .context
             .groups
@@ -398,11 +407,15 @@ impl LibraryContentOwner for MusicContent {
             {
                 Some(Msg::Shell(ShellRequest::EmbyLibraryRefresh))
             }
-            Key::Char('[') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }))
-            }
-            Key::Char(']') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }))
+            Key::Char('[' | ']')
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !self.context.groups.is_empty() =>
+            {
+                let count = self.context.groups.len();
+                let current = self.context.group_cursor;
+                let delta = if key.code == Key::Char('[') { -1 } else { 1 };
+                let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+                self.on_slot_event(LibrarySlotEvent::SelectorPicked(next))
             }
             // Album-level navigation (unfocused track pane): the earlier
             // `self.track_focused` arms above take precedence while the

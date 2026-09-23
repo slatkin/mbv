@@ -45,7 +45,6 @@ pub(super) struct AppInit {
     pub(super) image_protocol_enabled: bool,
     pub(super) hidden_libraries: Vec<String>,
     pub(super) library_routes: std::collections::HashMap<String, String>,
-    pub(super) hidden_latest: Vec<String>,
     pub(super) music_levels: Vec<String>,
     pub(super) use_nerd_fonts: bool,
     pub(super) indicator_style: super::render::indicators::IndicatorStyle,

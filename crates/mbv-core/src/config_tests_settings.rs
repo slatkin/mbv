@@ -55,6 +55,13 @@ fn parse_video_cache_settings_and_save_round_trip() {
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
     std::env::set_var("XDG_CONFIG_HOME", &dir);
     std::env::remove_var("MBV_SYSTEM");
+    std::fs::write(
+        config_path(),
+        "[library]\nhidden_libraries = [\"Live TV\"]\nhidden_latest = [\"Movies\"]\n",
+    )
+    .unwrap();
+    let legacy = parse_config(&std::fs::read_to_string(config_path()).unwrap()).unwrap();
+    assert_eq!(legacy.hidden_libraries, vec!["live tv"]);
     let cfg = Config {
         video_cache_forward_mb: 75,
         video_cache_back_mb: 125,
@@ -62,6 +69,7 @@ fn parse_video_cache_settings_and_save_round_trip() {
     };
     save_config_settings(&cfg).unwrap();
     let saved = std::fs::read_to_string(config_path()).unwrap();
+    assert!(!saved.contains("hidden_latest"));
     let reparsed = parse_config(&saved).unwrap();
     assert_eq!(reparsed.video_cache_forward_mb, 75);
     assert_eq!(reparsed.video_cache_back_mb, 125);
@@ -312,25 +320,6 @@ fn parse_default_hidden_libraries_when_absent() {
     let toml = "[server]\nurl = \"http://host\"";
     let cfg = parse_config(toml).unwrap();
     assert_eq!(cfg.hidden_libraries, vec!["live tv"]);
-}
-
-#[test]
-fn parse_hidden_latest_lowercased() {
-    let toml = r#"
-[server]
-url = "http://host"
-[library]
-hidden_latest = ["Movies", "TV SHOWS"]
-"#;
-    let cfg = parse_config(toml).unwrap();
-    assert_eq!(cfg.hidden_latest, vec!["movies", "tv shows"]);
-}
-
-#[test]
-fn parse_default_hidden_latest_when_absent() {
-    let toml = "[server]\nurl = \"http://host\"";
-    let cfg = parse_config(toml).unwrap();
-    assert!(cfg.hidden_latest.is_empty());
 }
 
 #[test]

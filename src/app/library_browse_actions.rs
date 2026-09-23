@@ -809,6 +809,41 @@ impl App {
         );
     }
 
+    pub(super) fn spawn_destination_latest_snapshot(&self, lib_idx: usize) {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        if matches!(
+            lib.library.collection_type.as_str(),
+            "tvshows" | "playlists" | "music"
+        ) {
+            return;
+        }
+        self.spawn_emby_latest_snapshot(lib.library.id.clone(), lib.library.name.clone());
+    }
+
+    pub(super) fn spawn_emby_latest_snapshot(&self, library_id: String, title: String) {
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let items = client.get_latest(&library_id, 30);
+            match items {
+                Ok(items) => {
+                    let _ = tx.send(LibEvent::EmbyLatestSnapshotFetched {
+                        library_id,
+                        title,
+                        items,
+                    });
+                }
+                Err(error) => {
+                    let _ = tx.send(LibEvent::Error(error));
+                }
+            }
+        });
+    }
+
     pub(super) fn spawn_tv_upcoming(&self, lib_idx: usize, parent_id: String, title: String) {
         self.spawn_tv_content(
             lib_idx,
@@ -1195,13 +1230,12 @@ mod tv_latest_tests {
             ..LibraryTab::new(crate::app::tests::make_item("unused", "CollectionFolder"))
         });
 
-        // fetch_home: virtual folders, user views, continue watching, and
-        // user views; the fifth response is the selected TV mode's request.
+        // fetch_home makes three requests; the fourth response is the selected
+        // TV mode's request.
         http.respond(
             200,
             r#"[{"ItemId":"tv-library","Name":"Shows","CollectionType":"tvshows"}]"#,
         );
-        http.respond(200, r#"{"Items":[]}"#);
         http.respond(200, r#"{"Items":[]}"#);
         http.respond(200, r#"{"Items":[]}"#);
         http.respond(
