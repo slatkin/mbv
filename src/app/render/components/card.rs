@@ -59,6 +59,19 @@ fn card_cache_key_for_id(item_id: &str) -> String {
 /// image/visualizer size, or the full reserved slot (capped like the artwork
 /// height) before anything has rendered. Used by both the blank reservations
 /// and the visualizer so `v` never moves the queue list.
+/// The now-playing image's height cap: 12 rows under 40 rows of terminal
+/// height, 18 under 50, 24 otherwise. Kept small enough that the queue
+/// list below keeps the title separator and a few rows.
+pub(in crate::app) fn queue_card_height_cap(height: u16) -> u16 {
+    if height < 40 {
+        12
+    } else if height < 50 {
+        18
+    } else {
+        24
+    }
+}
+
 pub(in crate::app) fn queue_card_reserved_rect(
     last_card: (u16, u16),
     terminal_height: u16,
@@ -66,7 +79,7 @@ pub(in crate::app) fn queue_card_reserved_rect(
     left_align: bool,
 ) -> Rect {
     let (last_height, last_width) = last_card;
-    let max_h = area.height.min(if terminal_height <= 30 { 12 } else { 24 });
+    let max_h = area.height.min(queue_card_height_cap(terminal_height));
     let height = if last_height == 0 {
         // The fallback slot is two terminal cells wide per row, matching
         // square artwork at the terminal's cell aspect. Constrain both axes:
@@ -131,10 +144,11 @@ pub(in crate::app) fn render_card_painting(
         let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
         return (rect.height, rect.width, false);
     }
-    // The bundled placeholder slot caps its height at 24 rows like the
-    // compact banner's poster placeholder.
+    // The bundled placeholder slot caps its height at the same tier cap as
+    // the real image (24 rows at full height), like the compact banner's
+    // poster placeholder.
     let placeholder_slot = projection.cache_key.is_none();
-    let cap = if terminal_height <= 30 { 12 } else { 24 };
+    let cap = queue_card_height_cap(terminal_height);
     let max_h = if placeholder_slot {
         area.height.min(24)
     } else {
