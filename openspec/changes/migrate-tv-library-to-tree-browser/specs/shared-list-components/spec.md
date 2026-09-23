@@ -36,7 +36,7 @@ The shared TreeBrowser SHALL implement one `Right` operation over the selected r
 ## MODIFIED Requirements
 
 ### Requirement: Tree rows share one visual hierarchy
-The shared Render Component SHALL paint nested rows with one destination-neutral visual hierarchy. An ordinary node title's resting foreground role SHALL fall back by nesting depth: the cream emphasis role at depth zero, the yellow focus-accent role at depth one, and the aqua accent role at deeper depths; semantic-state and selected-row roles SHALL still take precedence when they apply. A heading SHALL paint bold in the metadata role with its title sitting on the same baseline as a depth-zero node title, taking the shared content inset as its effective two-column inset. A heading itself SHALL paint unstriped. Zebra striping SHALL reset at each heading: a row's stripe SHALL derive from its position within the group that heading introduces, not from its absolute position in the flow or viewport, and SHALL remain stable under clipping as well as scrolling, so stripes stay stable across scroll and clip and no stripe runs continuously across group boundaries. A played row's resting foreground SHALL use the existing muted/played palette role above the generic depth colours, while selected-row and other semantic-state roles still take precedence when they apply.
+The shared Render Component SHALL paint nested rows with one destination-neutral visual hierarchy. An ordinary node title's resting foreground role SHALL fall back by nesting depth: the cream emphasis role at depth zero, the yellow focus-accent role at depth one, and the aqua accent role at deeper depths; semantic-state and selected-row roles SHALL still take precedence when they apply. A heading SHALL paint bold in the metadata role with its title sitting on the same baseline as a depth-zero node title, taking the shared content inset as its effective two-column inset. A heading and a spacer SHALL each paint the unstriped base; only item rows SHALL participate in zebra striping. Zebra striping SHALL reset at each heading: a row's stripe SHALL derive from its position within the group that heading introduces, not from its absolute position in the flow or viewport, and SHALL remain stable under clipping as well as scrolling, so stripes stay stable across scroll and clip and no stripe runs continuously across group boundaries. A played row's resting foreground SHALL use the existing muted/played palette role above the generic depth colours, while selected-row and other semantic-state roles still take precedence when they apply.
 
 #### Scenario: Depth colours fall back cream, yellow, aqua
 - **WHEN** an ordinary unselected node title paints at depth zero, depth one, or depth two and deeper
@@ -50,7 +50,7 @@ The shared Render Component SHALL paint nested rows with one destination-neutral
 #### Scenario: Stripes reset per heading and hold across scroll and clip
 - **WHEN** the viewport scrolls a grouped tree or clips a group at the viewport edge
 - **THEN** each row's stripe still matches its position within its heading's group
-- **AND** the heading itself paints unstriped and no stripe claim runs continuously from one group across a heading into the next
+- **AND** the heading and spacer paint unstriped and no stripe claim runs continuously from one group across a heading into the next
 
 #### Scenario: A played row reads muted before depth colours
 - **WHEN** an unselected row with the played semantic state paints at any depth
