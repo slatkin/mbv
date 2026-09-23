@@ -46,11 +46,7 @@ pub(in crate::app) fn wide_library_panes_with_selector(
     } = if has_selector {
         wide_hero::pill_bar_areas(area)
     } else {
-        wide_hero::PillBarAreas {
-            pills_area: Rect::new(area.x, area.y, area.width, 0),
-            spacer_area: Rect::new(area.x, area.y, area.width, 0),
-            content_area: area,
-        }
+        wide_hero::spacer_only_areas(area)
     };
     let (hero_panel, browser_panel) = if show_hero {
         let wide_hero::WideHeroPanes { hero, browser } =

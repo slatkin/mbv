@@ -503,7 +503,7 @@ fn non_wide_column_body_follows_the_panel_focus_bit() {
             crate::app::render::components::widgets::right_panel_content_area(placement, true);
         let spacer =
             crate::app::render::arrangements::wide_hero::wide_hero_browser_pane_with_selector(
-                content, content, true,
+                content, content, false,
             )
             .spacer_area;
         let band = model
