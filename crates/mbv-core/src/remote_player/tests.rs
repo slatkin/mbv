@@ -50,6 +50,40 @@ fn status_with_idx_and_len(current_idx: usize, queue_len: usize) -> PlayerStatus
     RemotePlayer::stub_status(current_idx, queue_len)
 }
 
+fn connected_pair_for_disconnect_test() -> (
+    RemotePlayer,
+    mpsc::Receiver<PlayerEvent>,
+    UnixStream,
+) {
+    use std::io::{BufRead, BufReader, Write};
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let (daemon_tx, daemon_rx) = mpsc::channel();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
+        writeln!(writer, "{hello}").unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            status: PlayerStatus::default(),
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
+            source: QueueSource::Unknown,
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        });
+        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
+        daemon_tx.send(writer).unwrap();
+    });
+    let (remote, events) = connect_stream(SocketStream::Unix(client)).unwrap();
+    let daemon = daemon_rx.recv().unwrap();
+    peer.join().unwrap();
+    (remote, events, daemon)
+}
+
 #[test]
 fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
     use std::io::{BufRead, BufReader, Write};
@@ -104,6 +138,84 @@ fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
     drop(remote);
     drop(release_tx);
     peer.join().unwrap();
+}
+
+#[test]
+fn failed_writer_write_emits_connection_lost_once() {
+    use std::net::Shutdown;
+    use std::time::Duration;
+
+    let (remote, events, daemon) = connected_pair_for_disconnect_test();
+    daemon.shutdown(Shutdown::Read).unwrap();
+    assert!(remote.send_ctrl_cmd(CtrlCmd::Stop));
+
+    assert!(matches!(
+        events.recv_timeout(Duration::from_secs(2)).unwrap(),
+        PlayerEvent::RemoteDisconnected(message)
+            if message == crate::player::CONNECTION_LOST_MESSAGE
+    ));
+    assert!(remote.is_disconnected());
+    assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
+}
+
+#[test]
+fn reader_eof_emits_connection_lost_instead_of_stopped() {
+    use std::net::Shutdown;
+    use std::time::Duration;
+
+    let (remote, events, daemon) = connected_pair_for_disconnect_test();
+    daemon.shutdown(Shutdown::Write).unwrap();
+
+    assert!(matches!(
+        events.recv_timeout(Duration::from_secs(2)).unwrap(),
+        PlayerEvent::RemoteDisconnected(message)
+            if message == crate::player::CONNECTION_LOST_MESSAGE
+    ));
+    assert!(remote.is_disconnected());
+    assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
+}
+
+#[test]
+fn writer_and_reader_loss_emit_only_one_disconnect_event() {
+    use std::net::Shutdown;
+    use std::time::Duration;
+
+    let (remote, events, daemon) = connected_pair_for_disconnect_test();
+    daemon.shutdown(Shutdown::Read).unwrap();
+    assert!(remote.send_ctrl_cmd(CtrlCmd::Stop));
+    daemon.shutdown(Shutdown::Write).unwrap();
+
+    assert!(matches!(
+        events.recv_timeout(Duration::from_secs(2)).unwrap(),
+        PlayerEvent::RemoteDisconnected(message)
+            if message == crate::player::CONNECTION_LOST_MESSAGE
+    ));
+    assert!(remote.is_disconnected());
+    assert!(matches!(
+        events.recv_timeout(Duration::from_secs(2)),
+        Err(mpsc::RecvTimeoutError::Disconnected)
+    ));
+}
+
+#[test]
+fn announced_shutdown_emits_only_its_dedicated_event() {
+    use std::io::Write;
+    use std::net::Shutdown;
+    use std::time::Duration;
+
+    let (remote, events, mut daemon) = connected_pair_for_disconnect_test();
+    let shutdown = CtrlEvent::Disconnected {
+        reason: DisconnectReason::DaemonShutdown,
+    };
+    writeln!(daemon, "{}", serde_json::to_string(&shutdown).unwrap()).unwrap();
+    daemon.shutdown(Shutdown::Write).unwrap();
+
+    assert!(matches!(
+        events.recv_timeout(Duration::from_secs(2)).unwrap(),
+        PlayerEvent::DaemonShutdownAnnounced
+    ));
+    assert!(matches!(events.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(remote.is_shutdown_announced());
 }
 
 #[test]

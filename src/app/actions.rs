@@ -6,10 +6,9 @@ use super::{
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
 use mbv_core::player::PlayerCommand;
+pub(super) use mbv_core::player::CONNECTION_LOST_MESSAGE;
 use mbv_core::ItemId;
 use std::sync::Arc;
-
-pub(super) const CONNECTION_LOST_MESSAGE: &str = "Lost connection to the daemon's device";
 
 /// Classification for an explicit Emby play against the attached owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

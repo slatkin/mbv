@@ -533,6 +533,11 @@ impl App {
                 }
             }
             PlayerEvent::RemoteDisconnected(reason) => {
+                if self.is_local_daemon() {
+                    self.raise_daemon_lost_modal();
+                    self.refresh_after_stop();
+                    return true;
+                }
                 if self.try_reattach_remote_daemon() {
                     return true;
                 }

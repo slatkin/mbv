@@ -4,6 +4,74 @@ use crate::app::tests::*;
 use rstest::rstest;
 
 #[test]
+fn remote_disconnect_restores_local_presentation_and_shows_connection_lost_toast() {
+    let mut app = make_app_stub();
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(2), 0);
+    app.switch_to_direct_remote(
+        &make_session("remote-a", "mbv"),
+        remote,
+        remote_rx,
+        &stub_endpoint(),
+    );
+
+    assert!(app.player.is_remote());
+    assert!(app.remote_player_tab.is_some());
+    app.handle_player_event(PlayerEvent::RemoteDisconnected(
+        mbv_core::player::CONNECTION_LOST_MESSAGE.to_string(),
+    ));
+
+    assert!(!app.player.is_remote());
+    assert!(app.remote_player_tab.is_none());
+    assert_eq!(app.queue_scope, QueueScope::Local);
+    assert_eq!(app.status, mbv_core::player::CONNECTION_LOST_MESSAGE);
+}
+
+#[test]
+fn local_daemon_remote_disconnect_raises_recovery_modal_without_restoring() {
+    let mut app = make_local_daemon_app_stub(make_items(1));
+
+    app.handle_player_event(PlayerEvent::RemoteDisconnected(
+        mbv_core::player::CONNECTION_LOST_MESSAGE.to_string(),
+    ));
+
+    assert!(app.is_local_daemon());
+    assert!(app.player.is_remote());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::DaemonLost(_))
+    ));
+}
+
+#[test]
+fn failed_local_daemon_queue_adoption_at_construction_raises_recovery_modal() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    crate::config::save_queue_state(&crate::config::QueueState::from_emby_items(
+        make_items(1),
+        0,
+        crate::config::QueueSource::Unknown,
+    ))
+    .unwrap();
+    let config = crate::config::Config {
+        stay_alive: true,
+        ..Default::default()
+    };
+    let (remote, events) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+    let app = App::new_remote_with_config(
+        mbv_core::api::EmbyClient::new(config.clone()),
+        remote,
+        events,
+        mbv_core::remote_player::DaemonEndpoint::Local,
+        config,
+    );
+
+    assert!(app.is_local_daemon());
+    assert!(matches!(
+        app.pending_overlay,
+        Some(super::types_overlay::OverlayRequest::DaemonLost(_))
+    ));
+}
+
+#[test]
 fn remote_slot_state_is_local_daemon_for_thin_client_mode() {
     let app = make_local_daemon_app_stub(make_items(3));
 

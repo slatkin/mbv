@@ -181,6 +181,8 @@ impl Default for PlayerStatus {
     }
 }
 
+pub const CONNECTION_LOST_MESSAGE: &str = "Lost connection to the daemon's device";
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
     Stopped {
