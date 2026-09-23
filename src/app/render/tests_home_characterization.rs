@@ -82,18 +82,22 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
             panel.test_selector_hits().regions().is_empty(),
             "Continue publishes no Selector-row pill targets at {width}x{height}"
         );
-        let selector_bar = panel
+        let (selector_bar, list_panel) = panel
             .test_narrow_geometry()
-            .map(|geometry| geometry.selector_bar)
+            .map(|geometry| (geometry.selector_bar, geometry.list_panel))
             .or_else(|| {
                 panel
                     .test_wide_geometry()
-                    .map(|geometry| geometry.selector_bar)
+                    .map(|geometry| (geometry.selector_bar, geometry.list_panel))
             })
             .expect("the Library panel paints a Home skeleton");
         assert_eq!(
             selector_bar.height, 0,
             "Continue places no Selector-row band at {width}x{height}"
+        );
+        assert_eq!(
+            list_panel.y, selector_bar.y,
+            "Continue's list starts in the former Selector band at {width}x{height}"
         );
     }
 }

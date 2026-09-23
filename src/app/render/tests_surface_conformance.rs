@@ -472,22 +472,22 @@ fn drawn_non_wide_library(
 /// `unify-narrow-library-with-wide-browser-pane` 4.4 (design D2/D5): the
 /// non-Wide library column's body is the Wide column's surface, resolved with
 /// the panel focus bit. A focused Narrow frame paints the column's focused
-/// fill for the always-painted regions — the panel placement, the Selector
-/// row's spacer row, and the status band's padding rows — while an unfocused
-/// one paints the column's resting backdrop; the status row keeps the status
+/// fill for the always-painted regions — the panel placement and the reclaimed
+/// Selector-gap row now occupied by the LibraryPanel, plus status-band padding —
+/// while an unfocused one paints the column's resting backdrop; the status row keeps the status
 /// bar's own surface either way. Mini is the non-Wide presentation (there is
 /// no Mini-specific paint bit) and follows the same bit.
 #[test]
 fn non_wide_column_body_follows_the_panel_focus_bit() {
     let status_fill = palette::surface_colors(palette::Surface::StatusBar, false).fill;
-    // The status row keeps the status bar's own surface; every other probed
-    // region is the column's fill for that frame's focus bit.
-    let expected_fill = |label: &str, focused: bool| {
-        if label == "status row" {
-            status_fill
-        } else {
-            palette::surface_colors(palette::Surface::LibraryColumn, focused).fill
+    // The status row keeps its own surface, the reclaimed row carries the
+    // ListPanel fill, and the remaining regions use the column's fill.
+    let expected_fill = |label: &str, focused: bool| match label {
+        "status row" => status_fill,
+        "reclaimed selector gap row" => {
+            palette::surface_colors(palette::Surface::LibraryPanel, focused).fill
         }
+        _ => palette::surface_colors(palette::Surface::LibraryColumn, focused).fill,
     };
 
     let region_colors = |width: u16, focus: PanelFocus| {
@@ -501,11 +501,12 @@ fn non_wide_column_body_follows_the_panel_focus_bit() {
             .expect("the non-Wide frame places the library panel");
         let content =
             crate::app::render::components::widgets::right_panel_content_area(placement, true);
-        let spacer =
+        let browser_pane =
             crate::app::render::arrangements::wide_hero::wide_hero_browser_pane_with_selector(
                 content, content, false,
-            )
-            .spacer_area;
+            );
+        assert_eq!(browser_pane.spacer_area.height, 0);
+        assert_eq!(browser_pane.list_panel.y, content.y);
         let band = model
             .app
             .compute_chrome_geometry(Rect::new(0, 0, width, 30))
@@ -513,7 +514,10 @@ fn non_wide_column_body_follows_the_panel_focus_bit() {
         let row = super::arrangements::chrome::status_bar_row(band);
         [
             ("panel placement", buffer[(placement.x, placement.y)].bg),
-            ("selector spacer row", buffer[(spacer.x, spacer.y)].bg),
+            (
+                "reclaimed selector gap row",
+                buffer[(browser_pane.list_panel.x, browser_pane.list_panel.y)].bg,
+            ),
             (
                 "status band padding row",
                 buffer[(band.x, band.bottom() - 1)].bg,

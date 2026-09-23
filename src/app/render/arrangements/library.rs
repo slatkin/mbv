@@ -46,7 +46,7 @@ pub(in crate::app) fn wide_library_panes_with_selector(
     } = if has_selector {
         wide_hero::pill_bar_areas(area)
     } else {
-        wide_hero::spacer_only_areas(area)
+        wide_hero::no_selector_areas(area)
     };
     let (hero_panel, browser_panel) = if show_hero {
         let wide_hero::WideHeroPanes { hero, browser } =
@@ -127,6 +127,20 @@ mod tests {
             true,
         )
         .is_none());
+    }
+
+    #[test]
+    fn absent_selector_gives_all_rows_to_both_wide_panes() {
+        let area = Rect::new(2, 3, crate::app::TWO_COLUMN_THRESHOLD + 20, 30);
+        let panes =
+            wide_library_panes_with_selector(area, 2, 1, None, true, false).expect("wide area");
+        assert_eq!(panes.pills_area.height, 0);
+        assert_eq!(panes.spacer_area.height, 0);
+        assert_eq!(panes.content_area, area);
+        assert_eq!(panes.hero_panel.y, area.y);
+        assert_eq!(panes.browser_panel.y, area.y);
+        assert_eq!(panes.hero_panel.bottom(), area.bottom());
+        assert_eq!(panes.browser_panel.bottom(), area.bottom());
     }
 
     #[test]

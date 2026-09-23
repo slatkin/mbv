@@ -256,20 +256,12 @@ pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
     }
 }
 
-/// Keeps the parent-background spacer while omitting the Selector pill row.
-pub(in crate::app) fn spacer_only_areas(area: Rect) -> PillBarAreas {
-    let spacer_height = WIDE_HERO_PILLS_GAP_ROWS.min(area.height);
+/// Omits both the Selector row and its gap, giving all of the area to content.
+pub(in crate::app) fn no_selector_areas(area: Rect) -> PillBarAreas {
     PillBarAreas {
         pills_area: Rect::new(area.x, area.y, area.width, 0),
-        spacer_area: Rect {
-            height: spacer_height,
-            ..area
-        },
-        content_area: Rect {
-            y: area.y.saturating_add(spacer_height),
-            height: area.height.saturating_sub(spacer_height),
-            ..area
-        },
+        spacer_area: Rect::new(area.x, area.y, area.width, 0),
+        content_area: area,
     }
 }
 
@@ -287,7 +279,7 @@ pub(in crate::app) fn wide_hero_browser_pane_with_selector(
     let areas = if has_selector {
         pill_bar_areas(area)
     } else {
-        spacer_only_areas(area)
+        no_selector_areas(area)
     };
     WideHeroBrowserPane {
         pills_area: areas.pills_area,

@@ -132,9 +132,9 @@ pub(in crate::app) fn paint_browser_pane(
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
 ) -> BrowserPaneGeometry {
-    // Selector row: one pill bar + the panel's spacer. Without a SelectorRow
-    // or search, the pill bar is omitted but its parent-background spacer
-    // remains; while searching, the box takes the bar's rect.
+    // Selector row: one pill bar + the panel's spacer. When neither a
+    // SelectorRow nor search is present, the arrangement gives the content
+    // area directly to the list; while searching, the box takes the bar's rect.
     let searching = match &content.list {
         ListSlot::Search(_) => true,
         ListSlot::Media(list) => list.search_bar().is_some(),
@@ -156,12 +156,7 @@ pub(in crate::app) fn paint_browser_pane(
                 panel_focused,
             );
         }
-        (None, false) => paint_pill_row_gap(
-            f,
-            pane.spacer_area,
-            palette::Surface::PillRowGap,
-            panel_focused,
-        ),
+        (None, false) => {}
         (_, true) => paint_pill_row_gap(
             f,
             pane.spacer_area,

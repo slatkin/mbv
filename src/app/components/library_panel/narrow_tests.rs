@@ -83,19 +83,37 @@ fn fixed_row_owner_clamps_when_narrow_viewport_shrinks_and_restores() {
     let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
     let mut hits = super::super::wide::SkeletonHits::default();
     let mut windows = super::super::wide::SkeletonPillWindows::default();
+    let area = Rect::new(0, 0, 60, 20);
+    let mut geometry = None;
     terminal
         .draw(|f| {
-            render_narrow_skeleton(
+            geometry = Some(render_narrow_skeleton(
                 f,
-                Rect::new(0, 0, 60, 20),
+                area,
                 &mut content,
                 false,
                 None,
                 &mut hits,
                 &mut windows,
-            );
+            ));
         })
         .unwrap();
+    let geometry = geometry.expect("narrow skeleton painted");
+    assert_eq!(geometry.list_panel.y, area.y);
+    assert_eq!(geometry.list_panel.height, area.height);
+    assert_eq!(
+        geometry.list_area.y,
+        area.y + crate::app::render::PANE_PAD_Y
+    );
+    assert_eq!(
+        geometry.list_area.height,
+        area.height - crate::app::render::PANE_PAD_Y * 2
+    );
+    let selected = carrier
+        .current_selected_row_rect()
+        .expect("selected hit geometry");
+    assert!(selected.y >= geometry.list_area.y);
+    assert!(selected.bottom() <= geometry.list_area.bottom());
     assert_eq!(carrier.selected_target(), Some(&"9".to_string()));
     assert!(carrier.wide().current_flow_offset().unwrap() <= 9);
 }
