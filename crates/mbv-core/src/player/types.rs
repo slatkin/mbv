@@ -250,6 +250,11 @@ pub enum PlayerEvent {
     /// sync the full canonical queue (tagged QueueItems, slot identity, active
     /// slot, revision) without decomposing into legacy Emby-only shapes.
     UnifiedQueueUpdated(Box<crate::ctrl::UnifiedQueueStateData>),
+    /// Correlated result of an owner-authoritative idle queue load.
+    UnifiedQueueLoadResult {
+        request_id: crate::ctrl::QueueLoadRequestId,
+        result: crate::ctrl::QueueLoadResult,
+    },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
         intro_end_ticks: i64,

@@ -100,6 +100,7 @@ fn replace_queue_succeeds_unconditionally() {
                 item: QueueItem::Emby(Box::new(item("replacement", "Video", "Movie"))),
             }],
             start_idx: Some(0),
+            source: QueueSource::Album,
         },
         sender_id,
         CtrlRequest {

@@ -66,7 +66,7 @@ fn play_resolved_items(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn handle_ctrl(
+fn handle_ctrl_for_role(
     cmd: CtrlCmd,
     client_id: CtrlClientId,
     request: CtrlRequest<'_>,
@@ -79,6 +79,7 @@ fn handle_ctrl(
     has_audiobookshelf: bool,
     merged_tx: &mpsc::Sender<DaemonEvent>,
     stay_alive: bool,
+    role: crate::daemon::DaemonRole,
 ) {
     let DaemonPlayerOwner {
         core: PlayerOwnerState { queue, source, transitions, .. },
@@ -372,8 +373,63 @@ fn handle_ctrl(
             let _ = merged_tx.send(DaemonEvent::Shutdown);
         }
         CtrlCmd::ApplyServiceSetup { .. } => {}
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id,
+            slots: _,
+            cursor: _,
+            source: _,
+        } => {
+            let supports_operation = ctrl_clients
+                .lock()
+                .unwrap()
+                .supports_owner_queue_load(client_id);
+            let reason = if role != crate::daemon::DaemonRole::Local {
+                "idle queue loads are supported only by the Stay-alive owner".to_string()
+            } else if !supports_operation {
+                "peer did not negotiate owner queue-load capability".to_string()
+            } else {
+                // Stop/finalize-before-replace is implemented by the following
+                // owner-lifecycle change; never stage or partially apply it here.
+                "idle queue-load lifecycle is not available".to_string()
+            };
+            send_to(
+                request.reply_tx,
+                &CtrlEvent::UnifiedQueueLoadResult {
+                    request_id,
+                    result: crate::ctrl::QueueLoadResult::Rejected { reason },
+                },
+            );
+        }
+        CtrlCmd::UnifiedQueueSourceUpdate { .. } => {
+            let supports_operation = ctrl_clients
+                .lock()
+                .unwrap()
+                .supports_owner_queue_load(client_id);
+            if role != crate::daemon::DaemonRole::Local {
+                send_to(
+                    request.reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "queue source updates are supported only by the Stay-alive owner".to_string(),
+                    ),
+                );
+            } else if !supports_operation {
+                send_to(
+                    request.reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "peer did not negotiate owner queue-load capability".to_string(),
+                    ),
+                );
+            } else {
+                send_to(
+                    request.reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "queue source lineage updates are not available yet".to_string(),
+                    ),
+                );
+            }
+        }
         // ── Unified queue commands ──────────────────────────────────────
-        CtrlCmd::UnifiedQueueReplace { items, slots, start_idx } => {
+        CtrlCmd::UnifiedQueueReplace { items, slots, start_idx, source: new_source } => {
             let submitted_slots: Vec<(crate::playback_queue::QueueSlotId, QueueItem)> = if slots.is_empty() {
                 items
                     .into_iter()
@@ -449,6 +505,7 @@ fn handle_ctrl(
                 active_slot,
                 crate::playback_queue::QueueRevision::default(),
             );
+            *source = new_source;
             reset_slot_jumps(transitions, queued_transition_origin);
             // A new queue invalidates the previous playback observation (design
             // D2): clear it on both the shared snapshot and the owner core so
@@ -692,6 +749,7 @@ fn handle_ctrl(
         }
         CtrlCmd::UnifiedQueueClear => {
             queue.clear();
+            *source = crate::config::QueueSource::Unknown;
             player.send_command(PlayerCommand::SubmitQueue {
                 items: Vec::new(),
                 start_idx: 0,
@@ -701,6 +759,39 @@ fn handle_ctrl(
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
     }
+}
+
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+fn handle_ctrl(
+    cmd: CtrlCmd,
+    client_id: CtrlClientId,
+    request: CtrlRequest<'_>,
+    client: &Arc<Mutex<EmbyClient>>,
+    player: &Player,
+    audio_only: bool,
+    owner: &mut DaemonPlayerOwner,
+    shared_queue: &SharedQueueState,
+    ctrl_clients: &ClientRegistry,
+    has_audiobookshelf: bool,
+    merged_tx: &mpsc::Sender<DaemonEvent>,
+    stay_alive: bool,
+) {
+    handle_ctrl_for_role(
+        cmd,
+        client_id,
+        request,
+        client,
+        player,
+        audio_only,
+        owner,
+        shared_queue,
+        ctrl_clients,
+        has_audiobookshelf,
+        merged_tx,
+        stay_alive,
+        crate::daemon::DaemonRole::Local,
+    );
 }
 
 fn owner_admin_transport_allowed(

@@ -530,6 +530,7 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
     );
 
     assert!(owner.core.queue.is_empty());
+    assert_eq!(owner.core.source, QueueSource::Unknown);
     match cmd_rx.recv().unwrap() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert!(items.is_empty());
@@ -537,6 +538,120 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
         }
         _ => panic!("expected empty SubmitQueue"),
     }
+}
+
+#[test]
+fn packaged_role_rejects_idle_queue_load_without_staging_it() {
+    let player = cold_player();
+    let commands = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("kept", "Video", "Movie")], 0);
+    let original_slot = owner.core.queue.slots()[0].slot_id;
+
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 19,
+            slots: vec![],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &merged_tx,
+        true,
+        crate::daemon::DaemonRole::Packaged,
+    );
+
+    assert_eq!(owner.core.queue.slots()[0].slot_id, original_slot);
+    assert_eq!(owner.core.source, QueueSource::Unknown);
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 19,
+        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+    } if reason.contains("only by the Stay-alive owner")));
+
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueSourceUpdate {
+            source: QueueSource::Album,
+            lineage: crate::ctrl::QueueLineage(3),
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &merged_tx,
+        true,
+        crate::daemon::DaemonRole::Packaged,
+    );
+    assert_eq!(owner.core.source, QueueSource::Unknown);
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("only by the Stay-alive owner")));
+}
+
+#[test]
+fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
+    let player = cold_player();
+    let commands = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let client_id = registry.lock().unwrap().connect(
+        reply_tx.clone(),
+        CtrlTransport::Local,
+        true,
+        true,
+        true,
+        true,
+        false,
+    );
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("kept", "Video", "Movie")], 0);
+    let original_slot = owner.core.queue.slots()[0].slot_id;
+
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 21,
+            slots: vec![],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &merged_tx,
+        true,
+        crate::daemon::DaemonRole::Local,
+    );
+
+    assert_eq!(owner.core.queue.slots()[0].slot_id, original_slot);
+    assert_eq!(owner.core.source, QueueSource::Unknown);
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 21,
+        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+    } if reason.contains("did not negotiate")));
 }
 
 #[test]
@@ -564,6 +679,7 @@ fn unified_queue_replace_publishes_the_start_slot_as_active() {
                 },
             ],
             start_idx: Some(1),
+            source: QueueSource::Album,
         },
         client_id,
         &reply_tx,
@@ -573,6 +689,7 @@ fn unified_queue_replace_publishes_the_start_slot_as_active() {
         &shared_queue,
         &registry,
     );
+    assert_eq!(owner.core.source, QueueSource::Album);
 
     // The publish the client receives must already name the new queue's start
     // slot: publishing before the submit handed a cold daemon's client a queue
@@ -622,6 +739,7 @@ fn unified_queue_replace_clears_observed_active_slot() {
                 item: emby_qi("c", "Video", "Movie"),
             }],
             start_idx: Some(0),
+            source: QueueSource::Unknown,
         },
         client_id,
         &reply_tx,

@@ -60,8 +60,16 @@ pub const CTRL_CAP_ABS_BOOK_PROGRESS: &str = "abs-book-progress";
 /// Peer owner is configured audio-only and cannot play video. Additive — no
 /// protocol-version bump.
 pub const CTRL_CAP_AUDIO_ONLY: &str = "audio-only";
+/// Peer supports owner-authoritative idle queue loads and source updates.
+/// Additive — no protocol-version bump.
+pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
 
 pub type PlaybackRequestId = u64;
+pub type QueueLoadRequestId = u64;
+/// Opaque owner queue lineage carried by source-only updates. Minting and
+/// validation are implemented at the owner boundary in a later change.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueueLineage(pub u64);
 pub type PlaybackGeneration = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +98,7 @@ impl CtrlHello {
                 CTRL_CAP_ABS_PROGRESS.to_string(),
                 CTRL_CAP_ABS_BOOK_QUEUE.to_string(),
                 CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
+                CTRL_CAP_OWNER_QUEUE_LOAD.to_string(),
             ],
             control_token: None,
         }
@@ -167,6 +176,12 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_ABS_BOOK_PROGRESS)
     }
 
+    pub fn supports_owner_queue_load(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_LOAD)
+    }
+
     pub fn validate_control_credential(&self, expected: &str) -> Result<(), String> {
         let Some(presented) = self.control_token.as_deref() else {
             return Err("invalid Control credential".to_string());
@@ -200,6 +215,7 @@ pub struct CtrlCompatibility {
     pub supports_abs_progress: bool,
     pub supports_abs_book_queue: bool,
     pub supports_abs_book_progress: bool,
+    pub supports_owner_queue_load: bool,
 }
 
 impl CtrlCompatibility {
@@ -216,6 +232,7 @@ impl CtrlCompatibility {
                 supports_abs_progress: true,
                 supports_abs_book_queue: true,
                 supports_abs_book_progress: true,
+                supports_owner_queue_load: false,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -309,6 +326,23 @@ pub enum CtrlCmd {
         #[serde(default)]
         slots: Vec<UnifiedQueueSlot>,
         start_idx: Option<usize>,
+        #[serde(default)]
+        source: QueueSource,
+    },
+    /// Replace the owner's queue without starting playback. Requires the
+    /// `owner-queue-load` capability and is correlated by request identity.
+    #[serde(rename = "UnifiedQueueLoadIdle")]
+    UnifiedQueueLoadIdle {
+        request_id: QueueLoadRequestId,
+        slots: Vec<UnifiedQueueSlot>,
+        cursor: usize,
+        source: QueueSource,
+    },
+    /// Update only the source of the owner queue if its lineage still matches.
+    #[serde(rename = "UnifiedQueueSourceUpdate")]
+    UnifiedQueueSourceUpdate {
+        source: QueueSource,
+        lineage: QueueLineage,
     },
     /// Append item-generic values to the tail of the queue.
     UnifiedQueueAppend {
@@ -348,11 +382,16 @@ pub enum CtrlCmd {
 impl CtrlCmd {
     /// Builds `UnifiedQueueReplace`, deriving the legacy `items` payload from
     /// `slots` so callers don't each re-project the same list.
-    pub fn unified_queue_replace(slots: Vec<UnifiedQueueSlot>, start_idx: Option<usize>) -> Self {
+    pub fn unified_queue_replace(
+        slots: Vec<UnifiedQueueSlot>,
+        start_idx: Option<usize>,
+        source: QueueSource,
+    ) -> Self {
         CtrlCmd::UnifiedQueueReplace {
             items: slots.iter().map(|slot| slot.item.clone()).collect(),
             slots,
             start_idx,
+            source,
         }
     }
 }
@@ -554,6 +593,12 @@ pub enum CtrlEvent {
     /// Full item-generic queue state.  Sent on initial connection and
     /// after every queue mutation.
     UnifiedQueueState(UnifiedQueueStateData),
+    /// Result of an idle whole-queue load, correlated with its request.
+    #[serde(rename = "UnifiedQueueLoadResult")]
+    UnifiedQueueLoadResult {
+        request_id: QueueLoadRequestId,
+        result: QueueLoadResult,
+    },
 
     /// Redacted, provider-qualified Audiobookshelf progress. Sent only to
     /// peers advertising `abs-progress`. See `AudiobookshelfProgressEvent`
@@ -596,6 +641,12 @@ pub struct AudiobookshelfBookProgressEvent {
     /// Setup generation the acknowledged progress was produced under;
     /// receivers discard progress from a stale generation.
     pub setup_generation: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QueueLoadResult {
+    Accepted,
+    Rejected { reason: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

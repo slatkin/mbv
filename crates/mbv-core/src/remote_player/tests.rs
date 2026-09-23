@@ -85,6 +85,41 @@ fn connected_pair_for_disconnect_test() -> (
 }
 
 #[test]
+fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
+    let (remote, _events, commands) = RemotePlayer::stub_with_command_rx(
+        vec![make_media_item("confirmed")],
+        0,
+    );
+    let result = remote.load_queue_idle(
+        9,
+        vec![],
+        0,
+        QueueSource::Album,
+    );
+    assert!(result.is_err());
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
+    assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
+    assert_eq!(remote.status.lock().unwrap().queue_len, 1);
+}
+
+#[test]
+fn supported_idle_queue_load_sends_correlated_request_without_staging_queue() {
+    let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(
+        vec![make_media_item("confirmed")],
+        0,
+    );
+    remote.ctrl_compatibility.supports_owner_queue_load = true;
+    remote
+        .load_queue_idle(31, vec![], 0, QueueSource::Album)
+        .unwrap();
+    assert!(matches!(commands.try_recv(), Ok(CtrlCmd::UnifiedQueueLoadIdle { request_id: 31, .. })));
+    assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
+    assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
+    assert_eq!(remote.status.lock().unwrap().queue_len, 1);
+}
+
+#[test]
 fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
     use std::net::Shutdown;
     use std::time::Duration;

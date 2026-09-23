@@ -56,6 +56,7 @@ fn spawn_ctrl_client(
             supports_abs_progress,
             supports_abs_book_queue,
             supports_abs_book_progress,
+            supports_owner_queue_load,
         ) = match serde_json::from_str::<CtrlCmd>(&line) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
@@ -77,6 +78,7 @@ fn spawn_ctrl_client(
                     info.supports_abs_progress(),
                     info.supports_abs_book_queue(),
                     info.supports_abs_book_progress(),
+                    info.supports_owner_queue_load(),
                 )
             }
             Ok(_) => {
@@ -114,6 +116,7 @@ fn spawn_ctrl_client(
             supports_abs_progress,
             supports_abs_book_queue,
             supports_abs_book_progress,
+            supports_owner_queue_load,
         );
 
         for line in lines {

@@ -1,5 +1,6 @@
 use super::{
-    all_audio, apply_queue_enriched, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
+    all_audio, apply_queue_enriched, audio_only_rejection, broadcast, handle_ctrl,
+    handle_ctrl_for_role, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
     CtrlRequest, CtrlTransport, DaemonEvent, DaemonPlayerOwner, PlaybackIntentState,
     PlayerOwnerState,
@@ -82,7 +83,7 @@ fn video_feed_qi(guid: &str) -> QueueItem {
 /// Connects a client the same way the accept thread does.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true);
+    let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true, true);
     (id, rx)
 }
 

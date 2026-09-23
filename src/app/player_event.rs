@@ -585,6 +585,10 @@ impl App {
                     self.refresh_after_stop();
                 }
             }
+            // The idle-load result is carried over ctrl for the later Client
+            // dispatch work; until that boundary is implemented, do not stage
+            // a local queue or claim acceptance here.
+            PlayerEvent::UnifiedQueueLoadResult { .. } => {}
             PlayerEvent::AudiobookshelfProgress(ev) => {
                 // No client-side generation gate: the daemon already drops
                 // stale-generation updates before emitting, and the daemon's

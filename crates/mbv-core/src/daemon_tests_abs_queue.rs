@@ -30,7 +30,7 @@ fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
 fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
     // abs_queue=false, abs_progress=false, abs_book_*=false
-    let id = clients.connect(tx, CtrlTransport::Local, false, false, false, false);
+    let id = clients.connect(tx, CtrlTransport::Local, false, false, false, false, false);
     (id, rx)
 }
 

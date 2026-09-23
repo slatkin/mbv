@@ -220,6 +220,7 @@ impl PlayerProxy {
                 r.send_ctrl_cmd(crate::ctrl::CtrlCmd::unified_queue_replace(
                     slots,
                     Some(start_idx),
+                    r.queue_source.lock().unwrap().clone(),
                 ))
             }
         }

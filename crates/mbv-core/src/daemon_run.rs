@@ -701,7 +701,7 @@ pub fn run_with_options(
                     }
                     continue;
                 }
-                handle_ctrl(
+                handle_ctrl_for_role(
                     cmd,
                     client_id,
                     CtrlRequest {
@@ -716,6 +716,7 @@ pub fn run_with_options(
                     audiobookshelf_runtime.is_some(),
                     &merged_tx,
                     config.stay_alive,
+                    role,
                 );
             }
             DaemonEvent::PlaybackResolved {
