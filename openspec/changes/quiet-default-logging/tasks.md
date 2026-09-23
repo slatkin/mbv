@@ -12,8 +12,8 @@
 
 ## 3. Sinks and call sites
 
-- [ ] 3.1 System-instance `mbvd` passes `None` as the log path (keep `log_path()` for other instances). Verify by reading the diff; `cargo check -p mbvd`.
-- [ ] 3.2 Demote `ws.rs` per-message inbound log (already debug — confirm) and the Capabilities request/reply logs in `api_client_reporting.rs` from info to debug; leave failure paths at warn/error. Verify with `cargo check -p mbv-core`.
+- [x] 3.1 System-instance `mbvd` passes `None` as the log path (keep `log_path()` for other instances). Verify by reading the diff; `cargo check -p mbvd`.
+- [x] 3.2 Demote `ws.rs` per-message inbound log (already debug — confirm) and the Capabilities request/reply logs in `api_client_reporting.rs` from info to debug; leave failure paths at warn/error. Verify with `cargo check -p mbv-core`.
 
 ## 4. Gate
 
