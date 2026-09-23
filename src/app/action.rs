@@ -397,13 +397,12 @@ impl App {
                         };
                         // One owner-kind seam for every fresh jump, so
                         // explicit play and the Next-Up accept cannot diverge.
-                        if !self.request_slot_jump(slot_id) {
-                            if !self.player.is_remote_disconnected() {
-                                self.flash(
-                                    "Playback owner rejected the queue selection".into(),
-                                    ToastSeverity::Error,
-                                );
-                            }
+                        if !self.request_slot_jump(slot_id) && !self.player.is_remote_disconnected()
+                        {
+                            self.flash(
+                                "Playback owner rejected the queue selection".into(),
+                                ToastSeverity::Error,
+                            );
                         }
                     }
                 } else {
