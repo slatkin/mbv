@@ -19,8 +19,8 @@
 - [x] 3.1c Restore show-mode Esc/Backspace navigation to `TvBack` in both geometries; verify one focused keyboard regression.
 - [x] 3.1d Resolve show activation's Hero gate from the tree-selected show rather than the stale flat carrier; verify one focused shell regression.
 - [x] 3.1e Stabilize and accept 3.1a–d: fix WIP whitespace, verify focused tree actions and Narrow visual-key handling, run compile/targeted tests, commit scoped code, and obtain focused review before checking these rows.
-- [ ] 3.2a Keep Latest/Upcoming on the flat episode control with their current pill and Hero rules; verify mode switches and direct episode activation without opening a show Workspace.
-- [ ] 3.2b Keep Inline Search on its separate flat result control without changing the show tree's settled selection or expansion; verify dismissal and selector restore across mode changes.
+- [x] 3.2a Keep Latest/Upcoming on the flat episode control with their current pill and Hero rules; verify mode switches and direct episode activation without opening a show Workspace.
+- [x] 3.2b Keep Inline Search on its separate flat result control without changing the show tree's settled selection or expansion; verify dismissal and selector restore across mode changes.
 - [ ] 3.3a Exercise mounted `Application::tick()` through the shell sync pass for TV tree keyboard navigation and activation in Wide, Narrow, and Mini; verify resolved targets.
 - [ ] 3.3b Exercise latest-frame mouse delivery through the Library Panel in Wide, Narrow, and Mini; verify the correct tree target and no second painter or underpaint.
 
