@@ -36,6 +36,22 @@ pub enum TreeMarkPolicy {
     Excluded,
 }
 
+/// Plain destination input for one tree projection. Structural rows are
+/// positioned among root groups and are never tree nodes.
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TreeEntry<Target> {
+    Node(TreeNode<Target>),
+    Heading(String),
+    Spacer,
+}
+
+impl<Target> From<TreeNode<Target>> for TreeEntry<Target> {
+    fn from(node: TreeNode<Target>) -> Self {
+        Self::Node(node)
+    }
+}
+
 /// Plain destination data for one tree row.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TreeNode<Target> {
