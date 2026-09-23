@@ -605,6 +605,119 @@ fn flat_episode_modes_keep_the_flat_list_at_every_panel_geometry(#[case] width: 
     }
 }
 
+#[test]
+fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
+    use crate::app::components::library_panel::ListSlot;
+    use crate::app::components::list::tree_browser::TreeOperation;
+    use crate::app::components::tv_tree_target::TvTreeTarget;
+    use mbv_core::config::TvContentMode;
+
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-1".into();
+    let show = TvTreeTarget::Show("tv-id:6:show-a".into());
+    let season_target = TvTreeTarget::Season {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+        occurrence: 0,
+    };
+    let episode_target = TvTreeTarget::Episode {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+        season_occurrence: 0,
+        episode: "episode-1".into(),
+        occurrence: 0,
+    };
+    let show_context = || {
+        tv_tree_context(
+            vec![tv_show("Alpha", "show-a")],
+            Some("show-a"),
+            Some(crate::app::SeriesDetail {
+                seasons: vec![season.clone()],
+                episodes: [("season-1".into(), vec![episode.clone()])]
+                    .into_iter()
+                    .collect(),
+            }),
+            true,
+        )
+    };
+    let mut component = TvContent::new();
+    let mut context = show_context();
+    context.set_tv_content_mode(Some(TvContentMode::All));
+    component.set_content(context);
+    component
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(show.clone()));
+    component
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(season_target.clone()));
+    component
+        .browser
+        .apply(TreeOperation::Select(episode_target.clone()));
+
+    for (mode, active_pill) in [(TvContentMode::Latest, 0), (TvContentMode::Upcoming, 1)] {
+        let mut context = TvWideRenderCtx::new(
+            LibraryListRenderCtx::from_items(vec![episode.clone()], 0),
+            None,
+            None,
+            0,
+            None,
+            true,
+        );
+        context.set_tv_content_mode(Some(mode));
+        component.set_content(context);
+        assert!(component.flat_episode_mode());
+        assert_eq!(component.browser.selected_target(), Some(&episode_target));
+        assert!(component.browser.is_expanded(&show));
+        assert!(component.browser.is_expanded(&season_target));
+        assert_eq!(
+            component.panel_content().selector.unwrap().active,
+            Some(active_pill)
+        );
+        assert!(!matches!(
+            component.panel_content().list,
+            ListSlot::Search(_)
+        ));
+    }
+
+    let mut context = show_context();
+    context.set_tv_content_mode(Some(TvContentMode::All));
+    component.set_content(context);
+    assert_eq!(component.browser.selected_target(), Some(&episode_target));
+    assert!(component.browser.is_expanded(&show));
+    assert!(component.browser.is_expanded(&season_target));
+
+    assert!(component
+        .test_key(&KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE,
+        })
+        .is_some());
+    let mut context = show_context();
+    context.set_tv_content_mode(Some(TvContentMode::All));
+    component.set_content(context);
+    assert!(matches!(
+        component.panel_content().list,
+        ListSlot::Search(_)
+    ));
+    assert_eq!(component.browser.selected_target(), Some(&episode_target));
+    assert!(component.browser.is_expanded(&show));
+    assert!(component.browser.is_expanded(&season_target));
+
+    component.test_key(&KeyEvent {
+        code: Key::Esc,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(!component.inline_search_active());
+    let content = component.panel_content();
+    assert!(content.selector.is_some());
+    assert!(!matches!(content.list, ListSlot::Search(_)));
+    assert_eq!(component.browser.selected_target(), Some(&episode_target));
+    assert!(component.browser.is_expanded(&show));
+    assert!(component.browser.is_expanded(&season_target));
+}
+
 #[rstest]
 #[case::wide(120)]
 #[case::narrow(80)]

@@ -213,6 +213,34 @@ fn tv_latest_mode_projects_feed_episodes_without_series_workspace() {
 }
 
 #[test]
+fn tv_latest_and_upcoming_enter_play_the_selected_episode_directly() {
+    for (mode, id) in [
+        (TvContentMode::Latest, "latest-episode"),
+        (TvContentMode::Upcoming, "upcoming-episode"),
+    ] {
+        let mut episode = make_item("Episode", "Episode");
+        episode.id = id.into();
+        let mut list = LibraryListRenderCtx::from_items(vec![episode], 0);
+        list.library_total = Some(301);
+        let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+        context.set_tv_content_mode(Some(mode));
+        let mut owner = TvContent::new();
+        owner.set_content(context);
+
+        let activation = owner.test_key(&KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        });
+        assert!(matches!(
+            activation,
+            Some(Msg::Shell(ShellRequest::TvEpisodeActivate { episode })) if episode.id == id
+        ));
+        assert!(owner.selected_series_snapshot().is_none());
+        assert!(owner.content().hero.is_none());
+    }
+}
+
+#[test]
 fn tv_flat_episode_click_moves_the_browser_carrier_without_entering_workspace() {
     let mut first = make_item("Episode A", "Episode");
     first.id = "episode-a".into();
