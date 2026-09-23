@@ -201,6 +201,9 @@ mod settings_tests;
 #[path = "test_helpers.rs"]
 mod test_helpers;
 #[cfg(test)]
+#[path = "tests_tree_browser_structural.rs"]
+mod tree_browser_structural_tests;
+#[cfg(test)]
 pub(crate) use test_helpers::{
     make_movie_app, make_music_group_app, make_music_group_app_with_second_album, make_queue_app,
 };

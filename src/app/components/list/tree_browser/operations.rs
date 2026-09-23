@@ -591,11 +591,14 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     else {
                         continue;
                     };
-                    let title = match structure {
-                        StructuralRow::Heading(title) => title.clone(),
-                        StructuralRow::Spacer => String::new(),
+                    let (kind, title) = match structure {
+                        StructuralRow::Heading(title) => {
+                            (super::TreePaintRowKind::Heading, title.clone())
+                        }
+                        StructuralRow::Spacer => (super::TreePaintRowKind::Spacer, String::new()),
                     };
                     rows.push(TreePaintRow {
+                        kind,
                         title,
                         title_role: super::TreeTitleRole::Standard,
                         trailing: None,
@@ -625,6 +628,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 TreeAggregateMark::None
             };
             rows.push(TreePaintRow {
+                kind: super::TreePaintRowKind::Node,
                 title: entry.node.title.clone(),
                 title_role: entry.node.title_role,
                 trailing: entry

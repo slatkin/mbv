@@ -13,7 +13,9 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::list::tree_browser::{TreeAggregateMark, TreePaintRow, TreeTitleRole};
+use crate::app::components::list::tree_browser::{
+    TreeAggregateMark, TreePaintRow, TreePaintRowKind, TreeTitleRole,
+};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
@@ -84,7 +86,11 @@ pub(in crate::app) fn render_tree_browser(
         } else {
             base
         };
-        let prefix = " ".repeat(row.depth.saturating_mul(2));
+        let (prefix, title) = match row.kind {
+            TreePaintRowKind::Node => (" ".repeat(row.depth.saturating_mul(2)), row.title.clone()),
+            TreePaintRowKind::Heading => ("  ".to_owned(), row.title.to_uppercase()),
+            TreePaintRowKind::Spacer => ("  ".to_owned(), String::new()),
+        };
         let gutter = row
             .trailing
             .as_deref()
@@ -92,6 +98,8 @@ pub(in crate::app) fn render_tree_browser(
         let budget = content_width.saturating_sub(prefix.width() + gutter);
         let title_color = if full_width {
             palette::SELECTED_ROW_FG
+        } else if row.kind == TreePaintRowKind::Heading {
+            palette::TEXT_METADATA
         } else {
             title_color(row)
         };
@@ -103,17 +111,21 @@ pub(in crate::app) fn render_tree_browser(
         spans.push(Span::raw(prefix));
         if focused && row.selected {
             spans.extend(marquee_spans(
-                &row.title,
-                &[(row.title.as_str(), title_color)],
+                &title,
+                &[(title.as_str(), title_color)],
                 budget,
                 marquee_text,
                 marquee_started_at,
                 false,
             ));
-        } else {
+        } else if row.kind != TreePaintRowKind::Spacer {
+            let mut title_style = Style::default().fg(title_color);
+            if row.kind == TreePaintRowKind::Heading {
+                title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
+            }
             spans.push(Span::styled(
-                crate::app::ui_util::trunc_str(&row.title, budget),
-                Style::default().fg(title_color),
+                crate::app::ui_util::trunc_str(&title, budget),
+                title_style,
             ));
         }
         let painted = spans.iter().map(|span| span.content.width()).sum::<usize>();

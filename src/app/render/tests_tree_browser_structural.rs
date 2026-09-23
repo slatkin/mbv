@@ -1,0 +1,161 @@
+use super::test_helpers::buffer_to_string;
+use super::*;
+use crate::app::components::list::tree_browser::{
+    TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation,
+};
+use crate::app::components::media_list::MediaSemanticState;
+use ratatui::backend::TestBackend;
+use ratatui::layout::{Position, Rect};
+use ratatui::style::Modifier;
+use ratatui::Terminal;
+use rstest::rstest;
+use std::hash::Hash;
+use tuirealm::component::Component;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+enum Target {
+    Alpha,
+    Beta,
+    Gamma,
+}
+
+fn node(target: Target, title: &str) -> TreeNode<Target> {
+    TreeNode::new(
+        target,
+        None,
+        title,
+        title,
+        MediaSemanticState::Ordinary,
+        TreeMarkPolicy::Direct,
+    )
+}
+
+fn grouped_tree() -> TreeBrowser<Target> {
+    let mut tree = TreeBrowser::new();
+    tree.reconcile([
+        TreeEntry::Heading("Alpha group".into()),
+        TreeEntry::Node(node(Target::Alpha, "Alpha show")),
+        TreeEntry::Spacer,
+        TreeEntry::Heading("Beta group".into()),
+        TreeEntry::Node(node(Target::Beta, "Beta show")),
+        TreeEntry::Node(node(Target::Gamma, "Gamma show")),
+    ])
+    .unwrap();
+    tree
+}
+
+fn draw<Target: Clone + Eq + Hash>(
+    tree: &mut TreeBrowser<Target>,
+    width: u16,
+    height: u16,
+) -> Terminal<TestBackend> {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| Component::view(tree, frame, Rect::new(0, 0, width, height)))
+        .unwrap();
+    terminal
+}
+
+#[test]
+fn tree_browser_paints_heading_and_spacer_rows_with_shared_group_semantics() {
+    let mut tree = grouped_tree();
+    tree.set_focused(false);
+    let terminal = draw(&mut tree, 42, 6);
+    let buffer = terminal.backend().buffer();
+    let output = buffer_to_string(&terminal);
+
+    assert!(output.lines().next().unwrap().starts_with("  ALPHA GROUP"));
+    assert!(output.lines().nth(2).unwrap().trim().is_empty());
+    assert!(output.lines().nth(3).unwrap().starts_with("  BETA GROUP"));
+    assert!(output.lines().nth(4).unwrap().contains("Beta show"));
+
+    assert_eq!(buffer[(2, 0)].fg, palette::TEXT_METADATA);
+    assert!(buffer[(2, 0)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buffer[(10, 0)].bg, buffer[(10, 1)].bg);
+    assert_eq!(buffer[(10, 2)].bg, buffer[(10, 4)].bg);
+}
+
+#[test]
+fn heading_free_tree_keeps_its_existing_row_flow_and_pixels() {
+    let mut tree = TreeBrowser::new();
+    tree.reconcile([
+        node(Target::Alpha, "Alpha show"),
+        node(Target::Beta, "Beta show"),
+    ])
+    .unwrap();
+    let terminal = draw(&mut tree, 42, 2);
+    let output = buffer_to_string(&terminal);
+
+    assert!(output.lines().next().unwrap().contains("Alpha show"));
+    assert!(output.lines().nth(1).unwrap().contains("Beta show"));
+    assert_eq!(tree.visible_targets().len(), 2);
+}
+
+#[test]
+fn scrolled_completed_paint_counts_structural_rows_in_the_viewport_offset() {
+    let mut tree = grouped_tree();
+    tree.set_geometry(Rect::new(0, 0, 42, 2), Rect::new(0, 0, 42, 2));
+    tree.apply(TreeOperation::Select(Target::Beta));
+    assert_eq!(tree.viewport_offset(), 3);
+    let _terminal = draw(&mut tree, 42, 2);
+
+    assert_eq!(tree.resolve_current_point(Position::new(20, 0)), None);
+    assert_eq!(
+        tree.resolve_current_point(Position::new(20, 1)),
+        Some(&Target::Beta)
+    );
+}
+
+#[rstest]
+#[case::wide_grouped(42, true)]
+#[case::narrow_grouped(12, true)]
+#[case::wide_ungrouped(42, false)]
+#[case::narrow_ungrouped(12, false)]
+fn completed_paint_resolves_rows_around_structures_at_each_width(
+    #[case] width: u16,
+    #[case] grouped: bool,
+) {
+    let mut tree = if grouped {
+        grouped_tree()
+    } else {
+        let mut tree = TreeBrowser::new();
+        tree.reconcile([
+            node(Target::Alpha, "Alpha show"),
+            node(Target::Beta, "Beta show"),
+            node(Target::Gamma, "Gamma show"),
+        ])
+        .unwrap();
+        tree
+    };
+    let height = if grouped { 6 } else { 3 };
+    let _terminal = draw(&mut tree, width, height);
+
+    if grouped {
+        for (row, expected) in [(1, Target::Alpha), (4, Target::Beta), (5, Target::Gamma)] {
+            let point = Position::new(width / 2, row);
+            assert_eq!(tree.resolve_current_point(point), Some(&expected));
+            tree.apply(TreeOperation::PointerSelect(point));
+            assert_eq!(tree.selected_target(), Some(&expected));
+            let _terminal = draw(&mut tree, width, height);
+        }
+        for row in [0, 2, 3] {
+            let point = Position::new(width / 2, row);
+            assert_eq!(tree.resolve_current_point(point), None);
+            let selected = tree.selected_target().cloned();
+            let transition = tree.apply(TreeOperation::PointerSelect(point));
+            assert_eq!(
+                transition.disposition,
+                crate::app::components::list::tree_browser::TreeConsumed::Unhandled
+            );
+            assert_eq!(tree.selected_target().cloned(), selected);
+        }
+    } else {
+        for (row, expected) in [(0, Target::Alpha), (1, Target::Beta), (2, Target::Gamma)] {
+            let point = Position::new(width / 2, row);
+            assert_eq!(tree.resolve_current_point(point), Some(&expected));
+            tree.apply(TreeOperation::PointerSelect(point));
+            assert_eq!(tree.selected_target(), Some(&expected));
+            let _terminal = draw(&mut tree, width, height);
+        }
+    }
+}

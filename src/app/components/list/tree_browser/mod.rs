@@ -58,8 +58,16 @@ pub(crate) enum TreeAggregateMark {
 }
 
 /// A row prepared for the destination-neutral render component.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TreePaintRowKind {
+    Node,
+    Heading,
+    Spacer,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TreePaintRow {
+    pub(crate) kind: TreePaintRowKind,
     pub(crate) title: String,
     pub(crate) title_role: TreeTitleRole,
     pub(crate) trailing: Option<String>,
