@@ -7,6 +7,7 @@ use tuirealm::event::{
 };
 
 use crate::app::components::msg::TvHit;
+use crate::app::components::tv_tree_target::TvTreeTarget;
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
@@ -1506,4 +1507,145 @@ fn mouse_double_click_on_a_playable_episode_still_plays_through_tick(
         "latest-episode"
     );
     assert!(harness.model().app.pending_series_landing.is_none());
+}
+
+fn tv_tree_geometry(width: u16, mini: bool) -> TickHarness {
+    let mut harness = tv_harness();
+    harness.model_mut().app.terminal_width = width;
+    if mini {
+        harness.model_mut().app.mini_view_focus = PanelFocus::Library;
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+    harness
+}
+
+fn tick_tv_key(harness: &mut TickHarness, code: Key) -> Vec<Msg> {
+    harness.inject(Event::Keyboard(KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    let messages = outcome.messages.clone();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    messages
+}
+
+#[rstest]
+#[case::wide(160, false)]
+#[case::narrow(80, false)]
+#[case::mini(crate::app::MINI_VIEW_THRESHOLD - 1, true)]
+fn tv_tree_keyboard_navigation_resolves_show_target_through_shell_sync(
+    #[case] width: u16,
+    #[case] mini: bool,
+) {
+    let mut harness = tv_tree_geometry(width, mini);
+    assert_eq!(
+        tv(&harness).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:8:series-0".into()))
+    );
+
+    let messages = tick_tv_key(&mut harness, Key::Down);
+    assert!(messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(target)
+        }) if target == "series-1"
+    )), "tick must resolve the selected tree target before shell dispatch: {messages:?}");
+    assert_eq!(
+        tv(&harness).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:8:series-1".into())),
+        "the shell sync pass must preserve the resolved stable tree target"
+    );
+    assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 1);
+}
+
+#[rstest]
+#[case::wide(160, false)]
+#[case::narrow(80, false)]
+#[case::mini(crate::app::MINI_VIEW_THRESHOLD - 1, true)]
+fn tv_tree_show_activation_uses_the_selected_target_in_every_geometry(
+    #[case] width: u16,
+    #[case] mini: bool,
+) {
+    let mut harness = tv_tree_geometry(width, mini);
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    if width == 160 {
+        assert!(outcome.messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
+        )), "Wide Enter must carry the selected show's stable identity: {:?}", outcome.messages);
+    } else {
+        assert!(
+            !outcome.messages.iter().any(|message| matches!(
+                message,
+                Msg::Shell(ShellRequest::TvActivate { .. })
+            )),
+            "non-Wide show activation opens the Library Hero overlay"
+        );
+    }
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(tv(&harness).selected_tree_target(), Some(&TvTreeTarget::Show("tv-id:8:series-0".into())));
+    if width == 160 {
+        assert!(tv(&harness).episode_pane_focused());
+    } else {
+        assert!(panel(&harness).test_hero_overlay_open());
+    }
+}
+
+#[rstest]
+#[case::wide(160, false)]
+#[case::narrow(80, false)]
+#[case::mini(crate::app::MINI_VIEW_THRESHOLD - 1, true)]
+fn tv_tree_episode_activation_plays_the_resolved_episode_in_every_geometry(
+    #[case] width: u16,
+    #[case] mini: bool,
+) {
+    let mut harness = tv_tree_geometry(width, mini);
+    tick_tv_key(&mut harness, Key::Right); // Expand the cached show detail.
+    assert_eq!(
+        tv(&harness).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:8:series-0".into()))
+    );
+    tick_tv_key(&mut harness, Key::Down); // Select Season 1.
+    assert!(matches!(
+        tv(&harness).selected_tree_target(),
+        Some(TvTreeTarget::Season { show, season, .. })
+            if show == "tv-id:8:series-0" && season == "season-1"
+    ));
+    tick_tv_key(&mut harness, Key::Enter); // Expand Season 1.
+    tick_tv_key(&mut harness, Key::Down); // Select Episode 1.
+    assert!(matches!(
+        tv(&harness).selected_tree_target(),
+        Some(TvTreeTarget::Episode { show, season, episode, .. })
+            if show == "tv-id:8:series-0" && season == "season-1" && episode == "episode-1"
+    ));
+
+    let messages = tick_tv_key(&mut harness, Key::Enter);
+    assert!(messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::TvEpisodeActivate { episode }) if episode.id == "episode-1"
+    )), "Enter must resolve the selected episode identity: {messages:?}");
+    assert_eq!(
+        harness.model().app.playback_queue().emby_items()[0].id,
+        "episode-1",
+        "shell dispatch must play the episode carried by the selected tree target"
+    );
 }

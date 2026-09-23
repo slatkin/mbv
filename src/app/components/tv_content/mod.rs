@@ -1021,6 +1021,11 @@ impl LibraryContentOwner for TvContent {
         !self.flat_episode_mode() && self.selected_item().is_some()
     }
 
+    fn hero_overlay_enter_available(&mut self) -> bool {
+        !self.flat_episode_mode()
+            && matches!(self.browser.selected_target(), Some(TvTreeTarget::Show(_)))
+    }
+
     fn mini_view_hero_available(&mut self) -> bool {
         !self.is_wide && self.flat_episode_mode() && self.selected_episode_item().is_some()
     }
