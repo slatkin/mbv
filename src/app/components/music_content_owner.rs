@@ -183,10 +183,11 @@ impl LibraryContentOwner for MusicContent {
         };
         let item = if self.latest_mode {
             self.latest_selected_item()
+                .map(|item| LibraryItemIdentity::Emby { id: item.id })
         } else {
-            self.selected_item()
-        }
-        .map(|item| LibraryItemIdentity::Emby { id: item.id });
+            self.selected_album_target()
+                .map(|id| LibraryItemIdentity::Emby { id })
+        };
         (selector, item)
     }
 
