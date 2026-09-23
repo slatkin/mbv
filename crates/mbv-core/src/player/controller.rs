@@ -247,6 +247,12 @@ impl Player {
         }
     }
 
+    pub(crate) fn advance_sequence_generation(&self) -> u64 {
+        let mut status = self.status.lock().unwrap();
+        status.sequence_generation = status.sequence_generation.saturating_add(1);
+        status.sequence_generation
+    }
+
     /// Returns `true` if the command was sent, `false` if the player thread is gone.
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         let sent = if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {

@@ -75,11 +75,7 @@ impl Player {
         // Every accepted submission establishes a new queue identity. The
         // generation is serialized in PlayerStatus so clients can fence
         // slot-addressed commands against a locally replaced queue.
-        let run_identity = {
-            let mut st = self.status.lock().unwrap();
-            st.sequence_generation = st.sequence_generation.saturating_add(1);
-            (0, st.sequence_generation)
-        };
+        let run_identity = (0, self.advance_sequence_generation());
 
         // Fast path: reuse existing mpv window when headless state matches.
         if self.status.lock().unwrap().active

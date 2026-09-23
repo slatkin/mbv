@@ -258,7 +258,9 @@ impl PlaybackRun {
                 cancel_stop = true;
             }
             PlayerCommand::SubmitQueue { items, start_idx } => {
-                self.run_identity = (0, self.status.lock().unwrap().sequence_generation);
+                if !items.is_empty() {
+                    self.run_identity = (0, self.status.lock().unwrap().sequence_generation);
+                }
                 self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;
             }

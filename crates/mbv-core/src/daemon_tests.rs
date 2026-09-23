@@ -1,5 +1,6 @@
 use super::{
-    all_audio, apply_queue_enriched, audio_only_rejection, broadcast, handle_ctrl,
+    all_audio, apply_queue_enriched, apply_stopped_observation,
+    apply_track_completed_observation, audio_only_rejection, broadcast, handle_ctrl,
     handle_ctrl_for_role, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
     CtrlRequest, CtrlTransport, DaemonEvent, DaemonPlayerOwner, PlaybackIntentState,
@@ -683,52 +684,127 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
 fn stale_stopped_and_completed_run_observations_are_rejected() {
     let player = cold_player();
     player.status.lock().unwrap().sequence_generation = 5;
+    let current_run = (0, 5);
+    let old_run = (0, 4);
+    let shared_queue = shared_queue_state();
+
     let queue = queue_from_items(
-        &[item("a", "Video", "Movie"), item("b", "Video", "Movie")],
+        &[item("stopped-a", "Video", "Movie"), item("stopped-b", "Video", "Movie")],
         0,
     );
-    let owner = PlayerOwnerState::new(queue, QueueSource::Remote);
-    let original_len = owner.queue.len();
-    let original_active = owner.queue.active_slot_id();
-    let original_position = owner.queue.slots()[0].item.playback_position_ticks();
-    let old_run = (0, 4);
-    let stale_events = [
-        PlayerEvent::Stopped {
-            slot_id: Some(crate::playback_queue::QueueSlotId::from_raw(1)),
-            run_identity: old_run,
-            position_ticks: 900,
-            played: true,
-            consume: true,
-            progress_report_accepted: true,
-            error: None,
-        },
-        PlayerEvent::TrackCompleted {
-            slot_id: crate::playback_queue::QueueSlotId::from_raw(1),
-            run_identity: old_run,
-            position_ticks: 900,
-            played: true,
-            consume: true,
-            progress_report_accepted: true,
-        },
-    ];
+    let mut stopped_owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+    let stopped_slot = stopped_owner.core.queue.slots()[0].slot_id;
+    stopped_owner.core.note_observed_active_slot(Some(stopped_slot));
+    *shared_queue.observed_active_slot.lock().unwrap() = Some(stopped_slot);
+    let original_position = stopped_owner.core.queue.slot(stopped_slot).unwrap().item.playback_position_ticks();
 
-    for event in stale_events {
-        let identity = match event {
-            PlayerEvent::Stopped { run_identity, .. }
-            | PlayerEvent::TrackCompleted { run_identity, .. } => run_identity,
-            _ => unreachable!(),
-        };
-        if crate::daemon::playback_run_identity_is_current(identity, &player) {
-            panic!("old-run observation must not reach owner queue application");
-        }
-    }
-    assert_eq!(owner.queue.len(), original_len);
-    assert_eq!(owner.queue.active_slot_id(), original_active);
     assert_eq!(
-        owner.queue.slots()[0].item.playback_position_ticks(),
+        apply_stopped_observation(
+            &mut stopped_owner,
+            &player,
+            old_run,
+            Some(stopped_slot),
+            900,
+            true,
+        ),
+        None
+    );
+    assert!(!stopped_owner.core.queue.slot(stopped_slot).unwrap().item.played());
+    assert_eq!(
+        apply_stopped_observation(
+            &mut stopped_owner,
+            &player,
+            current_run,
+            Some(stopped_slot),
+            900,
+            false,
+        ),
+        Some(true)
+    );
+    assert_eq!(
+        stopped_owner.core.queue.slot(stopped_slot).unwrap().item.playback_position_ticks(),
+        900
+    );
+    assert_eq!(stopped_owner.core.observed_active_slot(), Some(stopped_slot));
+    assert_eq!(
+        *shared_queue.observed_active_slot.lock().unwrap(),
+        Some(stopped_slot)
+    );
+    assert_ne!(
+        stopped_owner.core.queue.slot(stopped_slot).unwrap().item.playback_position_ticks(),
         original_position
     );
-    assert!(crate::daemon::playback_run_identity_is_current((0, 5), &player));
+
+    let queue = queue_from_items(
+        &[item("completed-a", "Video", "Movie"), item("completed-b", "Video", "Movie")],
+        0,
+    );
+    let mut completed_owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+    let completed_slot = completed_owner.core.queue.slots()[0].slot_id;
+    completed_owner.core.note_observed_active_slot(Some(completed_slot));
+    *shared_queue.observed_active_slot.lock().unwrap() = Some(completed_slot);
+    let original_len = completed_owner.core.queue.len();
+    let original_position = completed_owner.core.queue.slot(completed_slot).unwrap().item.playback_position_ticks();
+
+    assert!(!apply_track_completed_observation(
+        &mut completed_owner,
+        &player,
+        &shared_queue,
+        old_run,
+        completed_slot,
+        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        true,
+        true,
+        true,
+        false,
+    ));
+    assert_eq!(completed_owner.core.queue.len(), original_len);
+    assert_eq!(completed_owner.core.observed_active_slot(), Some(completed_slot));
+    assert_eq!(
+        *shared_queue.observed_active_slot.lock().unwrap(),
+        Some(completed_slot)
+    );
+    assert_eq!(
+        completed_owner.core.queue.slot(completed_slot).unwrap().item.playback_position_ticks(),
+        original_position
+    );
+    assert!(!completed_owner.core.queue.slot(completed_slot).unwrap().item.played());
+
+    assert!(apply_track_completed_observation(
+        &mut completed_owner,
+        &player,
+        &shared_queue,
+        current_run,
+        completed_slot,
+        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        false,
+        false,
+        true,
+        false,
+    ));
+    assert_eq!(
+        completed_owner.core.queue.slot(completed_slot).unwrap().item.playback_position_ticks(),
+        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1
+    );
+    assert!(apply_track_completed_observation(
+        &mut completed_owner,
+        &player,
+        &shared_queue,
+        current_run,
+        completed_slot,
+        0,
+        true,
+        true,
+        true,
+        false,
+    ));
+    assert_eq!(completed_owner.core.queue.len(), original_len - 1);
 }
 
 #[test]

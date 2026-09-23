@@ -630,6 +630,7 @@ fn handle_ctrl_for_role(
                 broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
                 if queue.is_empty() {
                     // Clear the player's queue and stop.
+                    player.advance_sequence_generation();
                     player.send_command(PlayerCommand::SubmitQueue {
                         items: Vec::new(),
                         start_idx: 0,
@@ -680,6 +681,7 @@ fn handle_ctrl_for_role(
                 reset_slot_jumps(transitions, queued_transition_origin);
             }
             if queue.is_empty() {
+                player.advance_sequence_generation();
                 player.send_command(PlayerCommand::SubmitQueue {
                     items: Vec::new(),
                     start_idx: 0,
@@ -750,6 +752,7 @@ fn handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueClear => {
             queue.clear();
             *source = crate::config::QueueSource::Unknown;
+            player.advance_sequence_generation();
             player.send_command(PlayerCommand::SubmitQueue {
                 items: Vec::new(),
                 start_idx: 0,

@@ -5,6 +5,68 @@ fn playback_run_identity_is_current(
     run_identity == (0, player.status.lock().unwrap().sequence_generation)
 }
 
+fn apply_track_completed_observation(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    run_identity: (PlaybackRequestId, PlaybackGeneration),
+    slot_id: QueueSlotId,
+    position_ticks: i64,
+    played: bool,
+    consume: bool,
+    consume_videos: bool,
+    consume_audio: bool,
+) -> bool {
+    if !playback_run_identity_is_current(run_identity, player) {
+        return false;
+    }
+    if let Some(slot) = owner.core.queue.slot(slot_id) {
+        let position = if played {
+            0
+        } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
+            && !slot.item.is_audio()
+        {
+            position_ticks
+        } else {
+            slot.item.playback_position_ticks()
+        };
+        owner.core.apply_completion_progress(slot_id, position, played);
+    }
+    if owner.core.consume_completed_slot(slot_id, consume, consume_videos, consume_audio) {
+        log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
+    }
+    *shared_queue.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
+    true
+}
+
+fn apply_stopped_observation(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    run_identity: (PlaybackRequestId, PlaybackGeneration),
+    slot_id: Option<QueueSlotId>,
+    position_ticks: i64,
+    played: bool,
+) -> Option<bool> {
+    if !playback_run_identity_is_current(run_identity, player) {
+        return None;
+    }
+    let Some(slot_id) = slot_id else {
+        return Some(false);
+    };
+    let Some(slot) = owner.core.queue.slot(slot_id) else {
+        return Some(false);
+    };
+    let position = if played {
+        0
+    } else if position_ticks > 0 && !slot.item.is_audio() {
+        position_ticks
+    } else {
+        slot.item.playback_position_ticks()
+    };
+    owner.core.apply_completion_progress(slot_id, position, played);
+    Some(true)
+}
+
 fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
     owner: &mut DaemonPlayerOwner,
@@ -462,42 +524,24 @@ pub fn run_with_options(
                 consume,
                 ..
             }) => {
-                if !playback_run_identity_is_current(run_identity, &player) {
-                    continue;
-                }
-                // The canonical queue must record this occurrence's real
-                // position before it is consumed/broadcast — otherwise every
-                // client resync (including the very next TrackChanged) rebuilds
-                // from the slot's stale submission-time position, silently
-                // reverting whatever progress the just-finished play recorded.
-                if let Some(slot) = owner.core.queue.slot(slot_id) {
-                    // Only record meaningful progress for video; audio and
-                    // startup noise keep the prior stored value.
-                    let position = if played {
-                        0
-                    } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
-                        && !slot.item.is_audio()
-                    {
-                        position_ticks
-                    } else {
-                        slot.item.playback_position_ticks()
-                    };
-                    owner.core.apply_completion_progress(slot_id, position, played);
-                }
                 let (consume_videos, consume_audio) = {
                     let cfg = client.lock().unwrap();
                     (cfg.config.consume_videos, cfg.config.consume_audio)
                 };
-                if owner.core.consume_completed_slot(
+                if !apply_track_completed_observation(
+                    &mut owner,
+                    &player,
+                    &shared_queue,
+                    run_identity,
                     slot_id,
+                    position_ticks,
+                    played,
                     consume,
                     consume_videos,
                     consume_audio,
                 ) {
-                    log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
+                    continue;
                 }
-                *shared_queue.observed_active_slot.lock().unwrap() =
-                    owner.core.observed_active_slot();
                 broadcast_queue_state(
                     &ctrl_clients,
                     &player,
@@ -509,52 +553,40 @@ pub fn run_with_options(
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Player(pe) => {
-                if let PlayerEvent::Stopped { run_identity, .. } = &pe {
-                    if !playback_run_identity_is_current(*run_identity, &player) {
-                        continue;
-                    }
-                }
-                if let PlayerEvent::Stopped {
-                    slot_id: Some(slot_id),
+                let stopped_queue_updated = if let PlayerEvent::Stopped {
+                    slot_id,
+                    run_identity,
                     position_ticks,
                     played,
                     ..
                 } = &pe
                 {
-                    // Record real progress on the canonical queue before it is
-                    // broadcast, or the next resync reverts a fully-stopped
-                    // item to 0. Unlike TrackCompleted's gate above, a real
-                    // Stopped carries no minimum-progress floor — mirrors the
-                    // shell's own pre-existing Stopped handling
-                    // (`src/app/player_event.rs`), on the reasoning that an
-                    // explicit stop is a deliberate action worth recording at
-                    // whatever position it happened, not a mid-queue
-                    // transition noisy enough to need a floor.
-                    if let Some(slot) = owner.core.queue.slot(*slot_id) {
-                        let position = if *played {
-                            0
-                        } else if *position_ticks > 0 && !slot.item.is_audio() {
-                            *position_ticks
-                        } else {
-                            slot.item.playback_position_ticks()
-                        };
-                        owner.core.apply_completion_progress(*slot_id, position, *played);
-                        // Unlike TrackCompleted (which broadcasts unconditionally
-                        // below via the raw player event too), a full Stopped has
-                        // no other broadcast carrying the corrected queue —
-                        // without this, only this event's own client sees the
-                        // right value (via its own local apply), and any other
-                        // client or later resync stays stale until an unrelated
-                        // queue-affecting event happens to broadcast next.
-                        broadcast_queue_state(
-                            &ctrl_clients,
-                            &player,
-                            &shared_queue,
-                            &owner.core.queue,
-                            &owner.core.source,
-                            &owner.core.transitions,
-                        );
-                    }
+                    let Some(updated) = apply_stopped_observation(
+                        &mut owner,
+                        &player,
+                        *run_identity,
+                        *slot_id,
+                        *position_ticks,
+                        *played,
+                    ) else {
+                        continue;
+                    };
+                    updated
+                } else {
+                    false
+                };
+                if stopped_queue_updated {
+                    // Unlike TrackCompleted (which broadcasts unconditionally
+                    // below via the raw player event too), a full Stopped has
+                    // no other broadcast carrying the corrected queue.
+                    broadcast_queue_state(
+                        &ctrl_clients,
+                        &player,
+                        &shared_queue,
+                        &owner.core.queue,
+                        &owner.core.source,
+                        &owner.core.transitions,
+                    );
                 }
                 if let PlayerEvent::PausedChanged(paused) = &pe {
                     if let Some((connection_id, request_id, generation)) = owner.intents
