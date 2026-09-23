@@ -13,18 +13,9 @@ impl HomeContent {
         if self.loading && self.carrier.rows().is_empty() {
             return false;
         }
-        let section = match state.selector.as_ref() {
-            // Home's former Latest sections remain decodable in old launch
-            // snapshots, but now resolve explicitly to Continue Watching.
-            Some(SelectorIdentity::Home {
-                key: HomeSelectorKey::Section(_),
-            }) => 0,
-            Some(SelectorIdentity::Home {
-                key: HomeSelectorKey::Continue,
-            })
-            | None => 0,
-            _ => 0,
-        };
+        // Home's former Latest sections remain decodable in old launch
+        // snapshots, but now resolve explicitly to Continue Watching.
+        let section = 0;
         self.section = section;
         self.clamp_section();
         self.project_active_section();
