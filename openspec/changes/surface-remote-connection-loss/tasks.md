@@ -6,7 +6,7 @@
   send flip `is_disconnected()` (hermetic in-memory socket pair).
 - [x] 1.2 `send_ctrl_cmd` on a disconnected remote returns `false` instead of
   queueing into the dead writer; covered by the same test family.
-- [ ] 2.1 Queue/play submission paths surface the dead connection: enqueue
+- [x] 2.1 Queue/play submission paths surface the dead connection: enqueue
   rolls back and flashes a connection-lost toast (respecting
   `enqueue-feedback` suppression rules where they apply); play flashes
   connection-lost instead of "Requesting playback…"; slot jumps report
