@@ -1,4 +1,24 @@
 #[test]
+fn log_level_flag_accepts_supported_values_and_rejects_invalid_values() {
+    for (value, expected) in [
+        ("error", applog::Level::Error),
+        ("warn", applog::Level::Warn),
+        ("info", applog::Level::Info),
+        ("debug", applog::Level::Debug),
+    ] {
+        assert_eq!(
+            parse_action(&["--log-level".into(), value.into()]),
+            Ok(Action::Serve {
+                audio_only: false,
+                log_level: expected,
+            })
+        );
+    }
+    assert!(parse_action(&["--log-level".into(), "trace".into()]).is_err());
+    assert!(parse_action(&["--log-level".into()]).is_err());
+}
+
+#[test]
 fn service_administration_selectors_are_parsed_and_validated() {
     assert_eq!(
         parse_action(&["--connect".into(), "emby".into()]),
