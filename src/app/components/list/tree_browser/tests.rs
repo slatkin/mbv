@@ -848,7 +848,7 @@ fn grouped_tree_stripes_items_only_and_reset_at_each_heading() {
         (0, base), // heading
         (1, zebra),
         (2, base),
-        (3, zebra), // spacer retains its existing fill behavior
+        (3, base),  // spacers use the base fill and do not affect item parity
         (4, base),  // heading
         (5, zebra), // parity resets at the heading
         (6, base),

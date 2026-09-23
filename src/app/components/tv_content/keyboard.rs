@@ -192,6 +192,13 @@ impl TvContent {
                 }
             }
             Key::Right => {
+                if let Some(target) = target.clone() {
+                    if !self.browser.is_expanded(&target) {
+                        if let Some(message) = self.toggle_tree_expansion(target) {
+                            return Some(message);
+                        }
+                    }
+                }
                 let intent = self.browser.apply(TreeOperation::Right).external_intent;
                 let activation = match intent {
                     Some(
