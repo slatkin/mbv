@@ -494,12 +494,15 @@ fn connect_stream(
 
     // Writer thread: serializes CtrlCmd to daemon
     let mut stream_w = stream;
+    let disconnected_w = disconnected.clone();
     std::thread::spawn(move || {
         while let Ok(cmd) = cmd_rx.recv() {
             let Ok(json) = serde_json::to_string(&cmd) else {
                 continue;
             };
-            if writeln!(stream_w, "{json}").is_err() {
+            if let Err(error) = writeln!(stream_w, "{json}") {
+                log::warn!(target: "remote", "failed to write command to daemon: {error}");
+                disconnected_w.store(true, Ordering::SeqCst);
                 break;
             }
         }
