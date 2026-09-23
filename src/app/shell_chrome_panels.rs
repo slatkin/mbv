@@ -161,20 +161,22 @@ impl Model {
         let placement = self.sync_chrome_root().tab;
         self.mount_to_placement(ChromePanel::Tab, placement);
         let id = ChromePanel::Tab.id();
-        let titles: Vec<String> = std::iter::once("Continue".to_string())
-            .chain(self.app.libs.iter().map(|l| l.library.name.clone()))
-            .chain(
-                self.app
-                    .audiobookshelf_libraries
-                    .iter()
-                    .map(|l| l.name.clone()),
-            )
-            .chain(
-                self.app
-                    .has_feeds_subscriptions()
-                    .then(|| "Feeds".to_string()),
-            )
-            .collect();
+        let titles: Vec<String> = std::iter::once(
+            crate::app::ui_util::continue_tab_title(self.app.use_nerd_fonts).to_string(),
+        )
+        .chain(self.app.libs.iter().map(|l| l.library.name.clone()))
+        .chain(
+            self.app
+                .audiobookshelf_libraries
+                .iter()
+                .map(|l| l.name.clone()),
+        )
+        .chain(
+            self.app
+                .has_feeds_subscriptions()
+                .then(|| "Feeds".to_string()),
+        )
+        .collect();
         let selected = self
             .app
             .tab

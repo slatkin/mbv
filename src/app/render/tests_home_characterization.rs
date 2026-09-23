@@ -54,8 +54,8 @@ fn startup_frame_paints_loading_affordances_not_blank_panes() {
         "startup frame must not be an empty buffer"
     );
     assert!(
-        output.contains("CONTINUE"),
-        "startup frame must paint the Continue tab label: {output:?}"
+        output.contains('⌂'),
+        "startup frame must paint the Continue tab house glyph: {output:?}"
     );
     assert!(
         panel(&model).test_selector_hits().regions().is_empty(),

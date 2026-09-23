@@ -82,7 +82,12 @@ impl App {
     /// Tab-bar title widths: Continue + one per library + Feeds when present.
     pub(super) fn tab_title_widths(&self) -> Vec<u16> {
         let pad: u16 = 2;
-        let mut w = vec!["Continue".chars().count() as u16 + pad];
+        let mut w = vec![
+            crate::app::ui_util::continue_tab_title(self.use_nerd_fonts)
+                .chars()
+                .count() as u16
+                + pad,
+        ];
         for l in &self.libs {
             w.push(l.library.name.chars().count() as u16 + pad);
         }

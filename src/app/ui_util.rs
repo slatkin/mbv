@@ -1,6 +1,16 @@
 use mbv_core::api::EmbyItem;
 use unicode_width::UnicodeWidthStr;
 
+/// Tab-bar label for the Continue tab: Nerd Font's house glyph (\u{f015})
+/// when Nerd Fonts are enabled, otherwise the Unicode house character.
+pub fn continue_tab_title(use_nerd_fonts: bool) -> &'static str {
+    if use_nerd_fonts {
+        "\u{f015}"
+    } else {
+        "⌂"
+    }
+}
+
 /// Three-letter month names, indexed 0 = January (the same abbreviation
 /// style `render::components::home_video::format_release_date` renders).
 const MONTH_ABBREVIATIONS: [&str; 12] = [
