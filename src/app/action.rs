@@ -152,21 +152,25 @@ impl App {
         true
     }
 
+    fn request_remote_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
+        if self.reject_disconnected_remote_jump() {
+            return false;
+        }
+        let sent = self
+            .player
+            .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
+        if !sent {
+            self.reject_disconnected_remote_jump();
+        }
+        sent
+    }
+
     pub(super) fn dispatch_jump(
         &mut self,
         transition: mbv_core::playback_transition::Transition,
     ) -> bool {
         if self.player.is_remote() {
-            if self.reject_disconnected_remote_jump() {
-                return false;
-            }
-            let sent = self
-                .player
-                .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(transition.target));
-            if !sent {
-                self.reject_disconnected_remote_jump();
-            }
-            return sent;
+            return self.request_remote_slot_jump(transition.target);
         }
         let resume_ticks = mbv_core::player::resume_ticks_for_slot(
             &self.playback_queue().queue,
@@ -184,16 +188,7 @@ impl App {
     /// owner accepted now (or queue it behind an in-flight one).
     pub(super) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
         if self.player.is_remote() {
-            if self.reject_disconnected_remote_jump() {
-                return false;
-            }
-            let sent = self
-                .player
-                .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(slot_id));
-            if !sent {
-                self.reject_disconnected_remote_jump();
-            }
-            return sent;
+            return self.request_remote_slot_jump(slot_id);
         }
         self.bare_owner
             .sync_canonical_queue(self.playback_queue().queue.clone());

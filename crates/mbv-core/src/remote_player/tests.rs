@@ -86,58 +86,20 @@ fn connected_pair_for_disconnect_test() -> (
 
 #[test]
 fn failed_ctrl_write_marks_remote_disconnected_and_rejects_later_commands() {
-    use std::io::{BufRead, BufReader, Write};
     use std::net::Shutdown;
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
-    let (client, daemon) = UnixStream::pair().unwrap();
-    let (ready_tx, ready_rx) = mpsc::channel();
-    let (release_tx, release_rx) = mpsc::channel::<()>();
-    let peer = std::thread::spawn(move || {
-        let mut writer = daemon.try_clone().unwrap();
-        let mut reader = BufReader::new(daemon);
-        let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
-        writeln!(writer, "{hello}").unwrap();
-        let mut client_hello = String::new();
-        reader.read_line(&mut client_hello).unwrap();
-        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
-            status: PlayerStatus::default(),
-            slots: Vec::new(),
-            active_slot: None,
-            revision: 0,
-            source: QueueSource::Unknown,
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        });
-        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
-        writer.shutdown(Shutdown::Read).unwrap();
-        ready_tx.send(()).unwrap();
-        let _ = release_rx.recv();
-    });
-
-    let (remote, _events) = connect_stream(SocketStream::Unix(client)).unwrap();
-    ready_rx.recv().unwrap();
+    let (remote, events, daemon) = connected_pair_for_disconnect_test();
+    daemon.shutdown(Shutdown::Read).unwrap();
     assert!(!remote.is_disconnected());
     assert!(remote.send_ctrl_cmd(CtrlCmd::Stop));
-
-    // The writer runs asynchronously. Observe its terminal state without
-    // sleeping; the deadline only prevents a regression from hanging the suite.
-    let disconnected = remote.disconnected_flag();
-    let (observed_tx, observed_rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while !disconnected.load(Ordering::SeqCst) && Instant::now() < deadline {
-            std::thread::yield_now();
-        }
-        let _ = observed_tx.send(disconnected.load(Ordering::SeqCst));
-    });
-    assert!(observed_rx.recv_timeout(Duration::from_secs(2)).unwrap());
+    assert!(matches!(
+        events.recv_timeout(Duration::from_secs(2)).unwrap(),
+        PlayerEvent::RemoteDisconnected(message)
+            if message == crate::player::CONNECTION_LOST_MESSAGE
+    ));
     assert!(remote.is_disconnected());
     assert!(!remote.send_ctrl_cmd(CtrlCmd::Stop));
-
-    drop(remote);
-    drop(release_tx);
-    peer.join().unwrap();
 }
 
 #[test]
