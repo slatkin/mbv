@@ -38,10 +38,11 @@ pub const SURFACE_CHROME: Color = Palette::Ink.color();
 /// task 4.2).
 pub const SURFACE_FOCUSED: Color = Palette::Green1.color();
 pub const SURFACE_RESTING: Color = Palette::Storm.color(); // resting-content / unfocused half
-/// Expanded (F1-F4) sidebar body and header/footer band fill (the chrome
-/// panel shell). Its own role over the scrollbar's `Palette::Green2` value
-/// it shares today (`SCROLLBAR`): the two are equal today and independently
-/// editable, so a scrollbar edit moves the scrollbar alone.
+/// Expanded (F1-F4) sidebar body fill (the chrome panel shell's content
+/// area; the header/footer band keeps its own ink). Its own role over the
+/// scrollbar's `Palette::Green2` value it shares today (`SCROLLBAR`): the
+/// two are equal today and independently editable, so a scrollbar edit
+/// moves the scrollbar alone.
 pub const SURFACE_SIDEBAR: Color = Palette::Green2.color();
 // Transitional: retired from production by task 4.2 (`SURFACE_PLAYBACK` was
 // `SURFACE_RESTING`'s value alias); the name stays reachable only because the

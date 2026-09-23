@@ -128,7 +128,7 @@ mod tests {
             Surface::PillChipSelected => (PILL_SELECTED_BG, PILL_SELECTED_BG),
             Surface::QueueScopePillSelected => (ACCENT, ACCENT),
             Surface::PillRowGap => (SURFACE_FOCUSED, SURFACE_BACKDROP),
-            Surface::SidebarBand => (SURFACE_SIDEBAR, SURFACE_SIDEBAR),
+            Surface::SidebarBand => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::TabBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::PopupFrame => (SURFACE_FOCUSED, SURFACE_FOCUSED),
             Surface::PopupDimBackdrop => (Color::Black, Color::Black),

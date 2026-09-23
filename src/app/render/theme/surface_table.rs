@@ -325,7 +325,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: SURFACE_SIDEBAR,
+            resting: SURFACE_CHROME,
         },
         Surface::TabBar => Row {
             level: Level::ChromeBand,
