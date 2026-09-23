@@ -7,12 +7,16 @@ Defines a Latest content mode at each eligible media destination so new addition
 ## ADDED Requirements
 
 ### Requirement: Every eligible destination offers Latest beside its existing selector choices
-Every visible Emby library, regardless of collection kind or size, every Audiobookshelf podcast library, and the Feeds tab SHALL offer a `Latest` pill alongside its existing selector choices. Audiobookshelf book libraries SHALL NOT gain a Latest pill. Adding Latest SHALL NOT change the initial selection or saved selection of an existing non-TV destination; TV SHALL retain its existing count-dependent default and saved-mode behavior. The selector SHALL support keyboard cycling and mouse selection over the displayed choices.
+Every visible Emby library except Music libraries, regardless of collection kind or size, every Audiobookshelf podcast library, and the Feeds tab SHALL offer a `Latest` pill alongside its existing selector choices. Audiobookshelf book libraries and Emby Music libraries SHALL NOT gain a Latest pill. Adding Latest SHALL NOT change the initial selection or saved selection of an existing non-TV destination; TV SHALL retain its existing count-dependent default and saved-mode behavior. The selector SHALL support keyboard cycling and mouse selection over the displayed choices.
 
 #### Scenario: Emby libraries retain their choices
-- **WHEN** a user opens a Movie, Music, Home Videos, or other visible Emby library
+- **WHEN** a user opens a Movie, Home Videos, or other visible Emby library
 - **THEN** its selector contains Latest as well as its pre-existing choices
 - **THEN** the existing entry selection and existing choices remain available
+
+#### Scenario: Music library has no Latest pill
+- **WHEN** a user opens a visible Emby Music library
+- **THEN** its selector contains no Latest choice
 
 #### Scenario: Podcast and Feeds retain their choices
 - **WHEN** a user opens an Audiobookshelf podcast library or Feeds
@@ -27,7 +31,7 @@ Every visible Emby library, regardless of collection kind or size, every Audiobo
 Emby TV Latest SHALL present the library's newest episodes; other Emby libraries SHALL present their newest additions using the same library-scoped Latest source previously used on Home. Audiobookshelf podcast Latest SHALL use that library's Newest Episodes shelf; Feeds Latest SHALL use its loaded combined entries newest-first, independent of the current watched filter or subscription selection. The modes SHALL work without visiting Home, without requiring an unrelated Service, and without reading or changing another destination's selection. Empty sources SHALL show an empty Latest mode.
 
 #### Scenario: Non-TV Emby library loads Latest without Home
-- **WHEN** a user selects Latest on a Movie, Music, Home Videos, or other Emby library before visiting Home
+- **WHEN** a user selects Latest on a Movie, Home Videos, or other Emby library before visiting Home
 - **THEN** the library shows its own newest additions, not another library's rows
 
 #### Scenario: Independent Audiobookshelf and Feeds sources
@@ -43,7 +47,7 @@ Emby TV Latest SHALL present the library's newest episodes; other Emby libraries
 Each Latest row SHALL retain the media identity, title and container context, provider date in the canonical right gutter when valid, and direct play/enqueue behavior of its former Home Latest row. Audiobookshelf episodes SHALL retain their parent show and description in selected detail; Feed entries SHALL retain the configured subscription display name when available. No Latest activation SHALL change an unrelated destination's cursor or filter. TV Latest SHALL continue to play playable episodes directly and retain its existing geometry-specific hero behavior.
 
 #### Scenario: Playing from Latest
-- **WHEN** a user plays or enqueues a Latest episode, movie, track, or Feed entry
+- **WHEN** a user plays or enqueues a Latest episode, movie, or Feed entry
 - **THEN** the action addresses that displayed item by its own Service identity
 - **THEN** other destinations' selections remain unchanged
 
@@ -58,7 +62,7 @@ The launch window SHALL remain the interval strictly after the previous client l
 
 #### Scenario: New content is visible at its destination
 - **WHEN** a library or Feeds receives Latest items dated inside the launch window and its Latest mode has not been visited
-- **THEN** the destination's Latest pill shows the marker and Home shows no corresponding pill
+- **THEN** the destination's Latest pill shows the marker and the Continue destination has no corresponding pill
 
 #### Scenario: Visiting clears marker across refresh
 - **WHEN** a user selects a marked Latest pill, or its selected mode receives items asynchronously

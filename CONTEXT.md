@@ -464,16 +464,16 @@ from the pill row.
 _Avoid_: author group (the bucket is a range, not one author)
 
 **Home view**:
-The Home tab content: Continue Watching across libraries. Home has no Latest
-pills or rows; Latest lives at each eligible destination. The section
-maintains its own cursor and scroll.
-_Avoid_: home screen, dashboard, landing
+The Home destination's content (tab labelled `Continue`): Continue Watching across libraries. Home has no Latest
+pills or rows and no Selector row or pill bar; Latest lives at each eligible
+destination. The section maintains its own cursor and scroll.
+_Avoid_: home screen, dashboard, landing, Home tab label (the tab reads `Continue`)
 
 **Destination Latest mode**:
 The `Latest` pill/content mode at an eligible destination (every visible Emby
-library, each Audiobookshelf podcast library, and the Feeds tab) showing that
-destination's newest additions from its own source, without Home duplicates.
-Governed by `destination-latest-modes`.
+library except Music libraries, each Audiobookshelf podcast library, and the
+Feeds tab) showing that destination's newest additions from its own source,
+without Home duplicates. Governed by `destination-latest-modes`.
 _Avoid_: Home Latest, Latest section (for the destination mode)
 
 **Launch cutoff / launch window**:
