@@ -118,8 +118,11 @@ fn wide_home_stripes_its_browser_list_with_the_selected_bar() {
         let mut second = cw_item.clone();
         second.id = "cw-second".into();
         second.name = "Second Continue".into();
+        let mut third = cw_item.clone();
+        third.id = "cw-third".into();
+        third.name = "Third Continue".into();
         let (model, terminal) = render_home_shell_with(app, 160, 40, |m| {
-            m.home_content.continue_items = vec![cw_item, second];
+            m.home_content.continue_items = vec![cw_item, second, third];
         });
         let (_, selected) = panel(&model)
             .menu_geometry()
@@ -128,12 +131,15 @@ fn wide_home_stripes_its_browser_list_with_the_selected_bar() {
         let buffer = terminal.backend().buffer();
         (
             buffer[(selected.x, selected.y)].style().bg,
-            buffer[(selected.x, selected.y + 1)].style().bg,
+            // Grouped under the Keep Watching heading, members alternate from
+            // the striped secondary fill: member 0 is the selected row (bar),
+            // member 1 is plain, member 2 carries the stripe again.
+            buffer[(selected.x, selected.y + 2)].style().bg,
         )
     };
 
-    // The browser list stripes: the row below the selected one carries the
-    // library column's focused fill; the selected first row paints the bar.
+    // The browser list stripes: the selected first member paints the bar and
+    // the next striped member carries the library column's fill.
     let (selected, plain) = bgs(true);
     assert_eq!(
         selected,
@@ -143,18 +149,18 @@ fn wide_home_stripes_its_browser_list_with_the_selected_bar() {
     assert_eq!(
         plain,
         Some(palette::surface_colors(palette::Surface::LibraryColumn, true).fill),
-        "the row below the selected one carries the stripe"
+        "the next striped member below the selected one carries the stripe"
     );
 
     let (selected, plain) = bgs(false);
     assert_eq!(
         selected,
-        Some(palette::surface_colors(palette::Surface::LibraryPanel, false).fill),
-        "an unfocused list paints no bar and keeps the pane fill"
+        Some(palette::surface_colors(palette::Surface::LibraryColumn, false).fill),
+        "an unfocused list paints no bar; the first striped member keeps its stripe"
     );
     assert_eq!(
         plain,
         Some(palette::surface_colors(palette::Surface::LibraryColumn, false).fill),
-        "the unfocused row below carries the stripe"
+        "the unfocused striped member below carries the stripe"
     );
 }

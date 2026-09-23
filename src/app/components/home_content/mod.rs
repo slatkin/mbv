@@ -79,7 +79,7 @@ impl HomeContent {
     /// Project Continue Watching items as canonical `Item` rows.
     fn project_continue_rows(&mut self) {
         let items = &self.continue_items;
-        let rows: Vec<MediaListRow<String>> = items
+        let mut rows: Vec<MediaListRow<String>> = items
             .iter()
             .map(|item| {
                 let parts = item.playback_title_parts(None);
@@ -101,6 +101,16 @@ impl HomeContent {
                 }
             })
             .collect();
+        // One group header over the flat Continue list; non-selectable, so it
+        // leaves the carrier's selectable-index cursor mapping untouched.
+        if !rows.is_empty() {
+            rows.insert(
+                0,
+                MediaListRow::Heading {
+                    text: "Keep Watching".into(),
+                },
+            );
+        }
         self.carrier.set_content(rows);
     }
 
@@ -439,12 +449,38 @@ mod tests {
     }
 
     fn row_parts(owner: &HomeContent, index: usize) -> (String, Option<String>) {
-        match &owner.test_active_rows()[index] {
+        // Item rows only: the projection's leading group heading is
+        // non-selectable and outside these assertions' concern.
+        let row = owner
+            .test_active_rows()
+            .iter()
+            .filter(|r| matches!(r, MediaListRow::Item { .. }))
+            .nth(index)
+            .unwrap_or_else(|| panic!("expected item row {index}, got none"));
+        match row {
             MediaListRow::Item {
                 primary, secondary, ..
             } => (primary.clone(), secondary.clone()),
             other => panic!("expected an item row, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn the_continue_list_opens_with_a_keep_watching_group_heading() {
+        let owner = owner_with_items(vec![QueueItem::Emby(Box::new(make_item("Film", "Movie")))]);
+        let rows = owner.test_active_rows();
+        assert_eq!(rows.len(), 2);
+        assert!(
+            matches!(&rows[0], MediaListRow::Heading { text } if text == "Keep Watching"),
+            "the first row is the Keep Watching group heading: {:?}",
+            rows[0]
+        );
+    }
+
+    #[test]
+    fn an_empty_continue_list_paints_no_group_heading() {
+        let owner = owner_with_items(vec![]);
+        assert!(owner.test_active_rows().is_empty());
     }
 
     #[test]
