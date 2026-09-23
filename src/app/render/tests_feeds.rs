@@ -128,7 +128,7 @@ fn feeds_latest_paints_provider_date_subscription_title_marker_and_wide_hero() {
     for (width, height, wide) in [(240, 30, true), (80, 30, false)] {
         let mut owner =
             feed_owner_with_entries(vec![feed_entry("latest", "Latest Episode", false)]);
-        owner.set_latest_marker(true, false);
+        owner.set_latest_marker(true);
         let mut panel = panel_with(owner, true);
         let _ = terminal_for(&mut panel, width, height);
         let (latest, _) = panel

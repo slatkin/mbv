@@ -53,7 +53,7 @@ impl Model {
         };
         self.update_feeds_owner(|feeds| {
             feeds.set_content(push);
-            feeds.set_latest_marker(has_new, acknowledged);
+            feeds.set_latest_marker(has_new && !acknowledged);
         });
     }
 

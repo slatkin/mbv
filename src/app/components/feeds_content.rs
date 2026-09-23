@@ -73,8 +73,7 @@ pub(in crate::app) struct FeedsContent {
     watched_filter: WatchedFilter,
     selected_group: usize,
     latest_selected: bool,
-    latest_has_new_content: bool,
-    latest_acknowledged: bool,
+    latest_marker: bool,
     loading: bool,
     last_subscription_urls: Vec<String>,
     /// The rows last handed to the carrier (the 6.1 `last_projected_rows`
@@ -98,8 +97,7 @@ impl FeedsContent {
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
             latest_selected: false,
-            latest_has_new_content: false,
-            latest_acknowledged: false,
+            latest_marker: false,
             loading: false,
             last_subscription_urls: Vec::new(),
             last_projected_rows: None,
@@ -162,9 +160,8 @@ impl FeedsContent {
         self.latest_selected
     }
 
-    pub(in crate::app) fn set_latest_marker(&mut self, has_new: bool, acknowledged: bool) {
-        self.latest_has_new_content = has_new;
-        self.latest_acknowledged = acknowledged;
+    pub(in crate::app) fn set_latest_marker(&mut self, marker: bool) {
+        self.latest_marker = marker;
     }
 
     pub(in crate::app) fn group_count(&self) -> usize {
@@ -623,7 +620,7 @@ impl LibraryContentOwner for FeedsContent {
                 .collect(),
             markers: super::selector_markers(
                 1 + WatchedFilter::COUNT + 1 + self.subscriptions.len(),
-                self.latest_has_new_content && !self.latest_acknowledged,
+                self.latest_marker,
             ),
             // `[`/`]` move the feed-group selection, so the active pill and
             // overflow window follow that group within the combined row.

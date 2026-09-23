@@ -51,8 +51,7 @@ const STATE_PILL_COUNT: usize = AudiobookshelfEpisodeFilter::ALL.len();
 pub(in crate::app) struct PodcastContent {
     pub(in crate::app) state: AudiobookshelfBrowseState,
     latest_items: Vec<AudiobookshelfQueueItem>,
-    latest_has_new_content: bool,
-    latest_acknowledged: bool,
+    latest_marker: bool,
     /// The active pill, stored by value and remembered across tab switches
     /// (design D3); reset to `All` on construction. The painted active
     /// index is derived from this value every frame — never stored.
@@ -91,8 +90,7 @@ impl PodcastContent {
                 },
             ),
             latest_items: Vec::new(),
-            latest_has_new_content: false,
-            latest_acknowledged: false,
+            latest_marker: false,
             // The remembered pill starts at `All` and survives tab switches
             // for the session (design D3; mbv restart resets it because the
             // owner is reconstructed).
@@ -152,9 +150,8 @@ impl PodcastContent {
         self.on_latest()
     }
 
-    pub(in crate::app) fn set_latest_marker(&mut self, has_new: bool, acknowledged: bool) {
-        self.latest_has_new_content = has_new;
-        self.latest_acknowledged = acknowledged;
+    pub(in crate::app) fn set_latest_marker(&mut self, marker: bool) {
+        self.latest_marker = marker;
     }
 
     pub(in crate::app) fn set_latest_items(&mut self, latest: &[QueueItem]) {
@@ -537,7 +534,7 @@ impl PodcastContent {
                 .collect(),
             markers: super::selector_markers(
                 1 + STATE_PILL_COUNT + self.state.shows.len(),
-                self.latest_has_new_content && !self.latest_acknowledged,
+                self.latest_marker,
             ),
             active: self.active_pill_index(),
         });

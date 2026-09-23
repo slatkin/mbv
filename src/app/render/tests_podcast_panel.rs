@@ -223,7 +223,7 @@ fn podcast_latest_paints_date_marker_and_selected_hero_at_wide_and_narrow() {
             is_finished: false,
             cover_path: None,
         })]);
-        owner.set_latest_marker(true, false);
+        owner.set_latest_marker(true);
         let mut panel = panel_with(owner, true);
         let _ = terminal_for(&mut panel, width, height);
         let (latest, _) = panel

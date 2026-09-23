@@ -179,11 +179,11 @@ fn tv_latest_marker_reads_shell_projection_and_acknowledgement() {
     let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
     context.set_tv_content_mode(Some(TvContentMode::Latest));
     let mut owner = TvContent::new();
-    owner.set_latest_marker(true, false);
+    owner.set_latest_marker(true);
     owner.set_content(context.clone());
     assert!(owner.content().selector.expect("TV mode selector").markers[0]);
 
-    owner.set_latest_marker(true, true);
+    owner.set_latest_marker(false);
     owner.set_content(context);
     assert!(!owner.content().selector.expect("TV mode selector").markers[0]);
 }

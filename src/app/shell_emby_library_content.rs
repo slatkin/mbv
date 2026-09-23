@@ -197,7 +197,7 @@ impl Model {
         };
         let identity = self.emby_library_owner_identity(index);
         let landed_cursor = self.update_emby_library_owner(key, kind, |owner| {
-            owner.set_latest_marker(latest_has_new_content, latest_acknowledged);
+            owner.set_latest_marker(latest_has_new_content && !latest_acknowledged);
             owner.set_content(push);
             if owner.note_browse_identity(identity) {
                 owner.apply_position(cursor, scroll);

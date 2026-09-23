@@ -101,7 +101,7 @@ fn emby_latest_rows_marker_and_wide_hero_use_shared_panel_painters() {
                 feed_group_cursor: 0,
             });
             owner.set_latest_mode(true);
-            owner.set_latest_marker(true, false);
+            owner.set_latest_marker(true);
             let key = LibraryKey::Service {
                 service: mbv_core::config::ServiceKind::Emby,
                 library_id: format!("{kind:?}"),

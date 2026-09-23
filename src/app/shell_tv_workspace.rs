@@ -524,7 +524,7 @@ impl Model {
         self.update_tv_owner(|owner| {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);
-            owner.set_latest_marker(latest_has_new_content, latest_acknowledged);
+            owner.set_latest_marker(latest_has_new_content && !latest_acknowledged);
             owner.set_content(context);
             owner.set_focused(library_focused);
         });

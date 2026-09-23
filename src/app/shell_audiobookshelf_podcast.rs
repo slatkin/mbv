@@ -84,7 +84,7 @@ impl Model {
         self.update_abs_podcast_owner(|owner| {
             owner.set_content(&snapshot, images_enabled);
             owner.set_latest_items(&latest);
-            owner.set_latest_marker(has_new, acknowledged);
+            owner.set_latest_marker(has_new && !acknowledged);
             owner.set_focused(focused);
         });
     }
