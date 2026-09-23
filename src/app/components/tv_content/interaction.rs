@@ -355,12 +355,16 @@ impl TvContent {
         }
     }
 
-    fn show_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
-        let show_target = match target {
+    fn show_target_str(target: &TvTreeTarget) -> &str {
+        match target {
             TvTreeTarget::Show(show) | TvTreeTarget::Season { show, .. }
             | TvTreeTarget::Episode { show, .. } => show,
-        };
-        self.show_item_for_tree_target(&TvTreeTarget::Show(show_target.clone()))
+        }
+    }
+
+    fn show_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
+        let show_target = Self::show_target_str(target).to_string();
+        self.show_item_for_tree_target(&TvTreeTarget::Show(show_target))
     }
 
     pub(in crate::app) fn selected_tree_show(&self) -> Option<EmbyItem> {
@@ -385,26 +389,8 @@ impl TvContent {
     }
 
     fn show_item_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
-        let show_target = match target {
-            TvTreeTarget::Show(show) | TvTreeTarget::Season { show, .. }
-            | TvTreeTarget::Episode { show, .. } => show,
-        };
-        let mut shows: Vec<_> = self.context.list.items.iter().collect();
-        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        let mut counts = std::collections::HashMap::new();
-        for show in &shows {
-            *counts.entry(show.id.as_str()).or_insert(0usize) += 1;
-        }
-        let mut occurrences = std::collections::HashMap::new();
-        let show = shows.into_iter().find_map(|show| {
-            let duplicate_id = counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
-            let base = TvContent::stable_show_target(show, duplicate_id, 0);
-            let occurrence = occurrences.entry(base.clone()).or_insert(0usize);
-            let matches = TvContent::stable_show_target(show, duplicate_id, *occurrence)
-                == *show_target;
-            *occurrence += 1;
-            matches.then(|| show.clone())
-        })?;
+        let show_target = Self::show_target_str(target);
+        let show = TvContent::resolve_show_target(&self.context.list.items, show_target)?.clone();
         match target {
             TvTreeTarget::Show(_) => Some(show),
             TvTreeTarget::Season {

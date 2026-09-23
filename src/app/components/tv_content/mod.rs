@@ -321,6 +321,40 @@ impl TvContent {
         }
     }
 
+    /// Sorted natural-order shows paired with their stable tree target,
+    /// disambiguating duplicate Emby ids the same way `stable_show_target`
+    /// does. The single source of the show-id-collision resolution that
+    /// every show-target lookup (projection, expansion, selection) shares.
+    fn show_targets(items: &[EmbyItem]) -> Vec<(String, &EmbyItem)> {
+        let mut shows: Vec<&EmbyItem> = items.iter().collect();
+        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+        let mut id_counts = std::collections::HashMap::new();
+        for show in &shows {
+            *id_counts.entry(show.id.as_str()).or_insert(0usize) += 1;
+        }
+        let mut occurrences = std::collections::HashMap::new();
+        shows
+            .into_iter()
+            .map(|show| {
+                let duplicate_id = id_counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
+                let base = Self::stable_show_target(show, duplicate_id, 0);
+                let occurrence = occurrences.entry(base).or_insert(0usize);
+                let target = Self::stable_show_target(show, duplicate_id, *occurrence);
+                *occurrence += 1;
+                (target, show)
+            })
+            .collect()
+    }
+
+    /// The show matching a stable tree target string, resolved through the
+    /// same collision-disambiguated ordering [`Self::show_targets`] builds.
+    fn resolve_show_target<'a>(items: &'a [EmbyItem], show_target: &str) -> Option<&'a EmbyItem> {
+        Self::show_targets(items)
+            .into_iter()
+            .find(|(target, _)| target == show_target)
+            .map(|(_, show)| show)
+    }
+
     fn tree_projection(context: &TvWideRenderCtx) -> Vec<TreeEntry<TvTreeTarget>> {
         let grouped = context.show_letter_pills
             || context.list.has_letter_filter()
@@ -330,23 +364,11 @@ impl TvContent {
         } else {
             context.list.true_total()
         };
-        let mut shows: Vec<&EmbyItem> = context.list.items.iter().collect();
-        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-
-        let mut id_counts = std::collections::HashMap::new();
-        for show in &shows {
-            *id_counts.entry(show.id.as_str()).or_insert(0usize) += 1;
-        }
-        let mut target_occurrences = std::collections::HashMap::new();
+        let shows = Self::show_targets(&context.list.items);
         let mut entries = Vec::with_capacity(shows.len() + 8);
         let mut previous_bucket: Option<String> = None;
         let mut detail_projected = false;
-        for show in shows {
-            let duplicate_id = id_counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
-            let base_target = Self::stable_show_target(show, duplicate_id, 0);
-            let occurrence = target_occurrences.entry(base_target).or_insert(0usize);
-            let show_id = Self::stable_show_target(show, duplicate_id, *occurrence);
-            *occurrence += 1;
+        for (show_id, show) in shows {
             let target = TvTreeTarget::Show(show_id.clone());
             if grouped {
                 let bucket = letter_bucket(show, bucket_total);
@@ -459,21 +481,7 @@ impl TvContent {
             TvTreeTarget::Episode { .. } => return None,
         };
         self.browser.node(target)?;
-        let mut counts = std::collections::HashMap::new();
-        for item in &self.context.list.items {
-            *counts.entry(item.id.as_str()).or_insert(0usize) += 1;
-        }
-        let mut occurrences = std::collections::HashMap::new();
-        let mut shows: Vec<_> = self.context.list.items.iter().collect();
-        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        let show = shows.into_iter().find(|item| {
-            let duplicate_id = counts.get(item.id.as_str()).copied().unwrap_or_default() > 1;
-            let base = Self::stable_show_target(item, duplicate_id, 0);
-            let occurrence = occurrences.entry(base.clone()).or_insert(0usize);
-            let matches = Self::stable_show_target(item, duplicate_id, *occurrence) == *show_target;
-            *occurrence += 1;
-            matches
-        })?;
+        let show = Self::resolve_show_target(&self.context.list.items, show_target)?;
         (!show.id.is_empty()).then(|| (show.id.clone(), season_id))
     }
 
@@ -853,20 +861,8 @@ impl TvContent {
     pub(in crate::app) fn select_series_target(&mut self, target: &str) {
         self.carrier.select_target(&target.to_string());
 
-        let mut shows: Vec<_> = self.context.list.items.iter().collect();
-        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        let mut id_counts = std::collections::HashMap::new();
-        for show in &shows {
-            *id_counts.entry(show.id.as_str()).or_insert(0usize) += 1;
-        }
-        let mut occurrences = std::collections::HashMap::new();
         let mut target_by_id = std::collections::HashMap::new();
-        for show in shows {
-            let duplicate_id = id_counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
-            let base = Self::stable_show_target(show, duplicate_id, 0);
-            let occurrence = occurrences.entry(base.clone()).or_insert(0usize);
-            let show_target = Self::stable_show_target(show, duplicate_id, *occurrence);
-            *occurrence += 1;
+        for (show_target, show) in Self::show_targets(&self.context.list.items) {
             target_by_id.entry(show.id.as_str()).or_insert(show_target);
         }
         if let Some(tree_target) = self.browser.roots().into_iter().find_map(|tree_target| {
