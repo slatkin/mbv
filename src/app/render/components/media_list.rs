@@ -650,8 +650,12 @@ mod wide_row_regression_tests {
             item("four", "Four", None),
         ]);
         // The unified Workspace stripe: the fixed resting-content Storm, the
-        // same fill in both focus states (SidebarBody's fixed row).
-        let pair = stripe(palette::Surface::SidebarBody);
+        // same fill in both focus states (the role itself — the stripe no
+        // longer borrows a sidebar fill).
+        let pair = ZebraStripe {
+            focused: palette::SURFACE_RESTING,
+            unfocused: palette::SURFACE_RESTING,
+        };
         let other = stripe(palette::Surface::MainContentBox);
         assert_ne!(pair.focused, other.focused);
         assert_ne!(pair.unfocused, other.unfocused);

@@ -208,13 +208,13 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_CHROME,
         },
-        // The expanded (F1-F4) sidebar body paints the resting content value
+        // The expanded (F1-F4) sidebar body paints the sidebar fill
         // (`render/components/chrome.rs:166-170`).
         Surface::SidebarBody => Row {
             level: Level::ContentBody,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: SURFACE_RESTING,
+            resting: SURFACE_SIDEBAR,
         },
         // --- recess ---
         // The now-playing panel's own content rows follow the panel's fill
@@ -325,7 +325,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: SURFACE_CHROME,
+            resting: SURFACE_SIDEBAR,
         },
         Surface::TabBar => Row {
             level: Level::ChromeBand,
@@ -405,6 +405,11 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     (
         Surface::MainContentBox,
         "the pane content box's resting half has always painted the app backdrop",
+    ),
+    (
+        Surface::SidebarBody,
+        "the expanded sidebars paint the sidebar fill (`SURFACE_SIDEBAR`) \
+         rather than the content-body level's resting value",
     ),
 ];
 

@@ -50,11 +50,17 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
                 );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
-                // Fixed Storm stripes in both focus states; the focused
+                // Fixed Storm stripes in both focus states: the
+                // resting-content fill, not the sidebar body it used to
+                // borrow (sidebar fills move independently); the focused
                 // selection paints the Iris bar.
                 self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::for_library_workspace(focused)
-                        .with_zebra(zebra_stripe(Surface::SidebarBody)),
+                    WideMediaListPaintPolicy::for_library_workspace(focused).with_zebra(
+                        ZebraStripe {
+                            focused: palette::SURFACE_RESTING,
+                            unfocused: palette::SURFACE_RESTING,
+                        },
+                    ),
                 );
             }
         }
