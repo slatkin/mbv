@@ -3,6 +3,7 @@ use crate::app::render::LibraryListRenderCtx;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use rstest::rstest;
 use tuirealm::event::{KeyEvent, KeyModifiers};
 
 /// Task 4.2d: the embedded episode `WideMediaList` field replaces the
@@ -457,4 +458,188 @@ fn idless_upcoming_rows_have_stable_distinct_targets_and_resolve_selection() {
             .map(|item| item.name.as_str()),
         Some("Second episode")
     );
+}
+
+fn tv_tree_context(
+    items: Vec<EmbyItem>,
+    selected_id: Option<&str>,
+    detail: Option<crate::app::SeriesDetail>,
+    show_letter_pills: bool,
+) -> TvWideRenderCtx {
+    let selected = selected_id.and_then(|id| items.iter().find(|item| item.id == id).cloned());
+    TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(items, 0),
+        selected,
+        detail,
+        0,
+        None,
+        show_letter_pills,
+    )
+}
+
+fn tv_show(name: &str, id: &str) -> EmbyItem {
+    let mut item = make_item(name, "Series");
+    item.id = id.into();
+    item
+}
+
+#[test]
+fn show_tree_projects_sorted_roots_with_loaded_seasons_and_episodes_in_order() {
+    use crate::app::components::tv_tree_target::TvTreeTarget;
+
+    let alpha = tv_show("Alpha", "show-a");
+    let beta = tv_show("Beta", "show-b");
+    let zulu = tv_show("Zulu", "show-z");
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let mut episode = make_item("Pilot", "Episode");
+    episode.id = "episode-1".into();
+    episode.index_number = 1;
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season],
+        episodes: [("season-1".into(), vec![episode])].into_iter().collect(),
+    };
+    let context = tv_tree_context(vec![zulu, beta, alpha], Some("show-a"), Some(detail), false);
+    let mut component = TvContent::new();
+    component.set_content(context);
+
+    let show = TvTreeTarget::Show("tv-id:6:show-a".into());
+    let season = TvTreeTarget::Season {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+    };
+    let episode = TvTreeTarget::Episode {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+        episode: "episode-1".into(),
+    };
+    assert_eq!(
+        component.browser.roots(),
+        vec![
+            &show,
+            &TvTreeTarget::Show("tv-id:6:show-b".into()),
+            &TvTreeTarget::Show("tv-id:6:show-z".into())
+        ]
+    );
+    assert_eq!(component.browser.children_of(&show), Some(vec![&season]));
+    assert_eq!(component.browser.children_of(&season), Some(vec![&episode]));
+    assert!(component.browser.node(&show).unwrap().expandable);
+    assert!(component.browser.node(&season).unwrap().expandable);
+
+    component.browser.apply(
+        crate::app::components::list::tree_browser::TreeOperation::ToggleExpansionTarget(
+            show.clone(),
+        ),
+    );
+    component.browser.apply(
+        crate::app::components::list::tree_browser::TreeOperation::ToggleExpansionTarget(
+            season.clone(),
+        ),
+    );
+    assert_eq!(
+        component.browser.visible_targets(),
+        vec![
+            show,
+            season,
+            episode,
+            TvTreeTarget::Show("tv-id:6:show-b".into()),
+            TvTreeTarget::Show("tv-id:6:show-z".into()),
+        ]
+    );
+}
+
+#[rstest]
+#[case::three_letter_ranges(vec![("Alpha", "a"), ("Delta", "d"), ("Zulu", "z")], vec!["A–C", "D–F", "V–Z"])]
+fn show_tree_keeps_each_heading_and_spacer_at_its_group_boundary(
+    #[case] shows: Vec<(&str, &str)>,
+    #[case] expected_headings: Vec<&str>,
+) {
+    let items = shows
+        .iter()
+        .map(|(name, id)| tv_show(name, id))
+        .collect::<Vec<_>>();
+    let context = tv_tree_context(items, None, None, true);
+    let projection = TvContent::tree_projection(&context);
+    let shape = projection
+        .iter()
+        .map(|entry| match entry {
+            TreeEntry::Heading(text) => format!("H:{text}"),
+            TreeEntry::Spacer => "S".to_string(),
+            TreeEntry::Node(node) => match &node.target {
+                TvTreeTarget::Show(_) => format!("I:{}", node.title),
+                _ => panic!("fixture has no child rows"),
+            },
+        })
+        .collect::<Vec<_>>();
+    let expected = vec![
+        format!("H:{}", expected_headings[0]),
+        "I:Alpha".into(),
+        "S".into(),
+        format!("H:{}", expected_headings[1]),
+        "I:Delta".into(),
+        "S".into(),
+        format!("H:{}", expected_headings[2]),
+        "I:Zulu".into(),
+    ];
+    assert_eq!(shape, expected);
+}
+
+#[test]
+fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() {
+    use crate::app::components::list::tree_browser::TreeOperation;
+    use crate::app::components::tv_tree_target::TvTreeTarget;
+
+    let show = tv_show("Alpha", "show-a");
+    let mut season_item = make_item("Season 1", "Season");
+    season_item.id = "season-1".into();
+    let mut episode_item = make_item("Pilot", "Episode");
+    episode_item.id = "episode-1".into();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season_item],
+        episodes: [("season-1".into(), vec![episode_item])]
+            .into_iter()
+            .collect(),
+    };
+    let context = || {
+        tv_tree_context(
+            vec![show.clone()],
+            Some("show-a"),
+            Some(detail.clone()),
+            false,
+        )
+    };
+    let show_target = TvTreeTarget::Show("tv-id:6:show-a".into());
+    let season_target = TvTreeTarget::Season {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+    };
+    let episode_target = TvTreeTarget::Episode {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+        episode: "episode-1".into(),
+    };
+    let mut component = TvContent::new();
+    component.set_content(context());
+    component.browser.set_geometry(
+        ratatui::layout::Rect::new(0, 0, 20, 1),
+        ratatui::layout::Rect::new(0, 0, 20, 1),
+    );
+    component
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(show_target.clone()));
+    component
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(season_target.clone()));
+    component
+        .browser
+        .apply(TreeOperation::Select(episode_target.clone()));
+    assert!(component.browser.viewport_offset() > 0);
+
+    component.set_content(context());
+    component.browser.clamp_viewport_to(1);
+
+    assert_eq!(component.browser.selected_target(), Some(&episode_target));
+    assert!(component.browser.is_expanded(&show_target));
+    assert!(component.browser.is_expanded(&season_target));
+    assert!(component.browser.viewport_offset() < component.browser.visible_targets().len());
 }
