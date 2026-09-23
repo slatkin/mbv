@@ -68,6 +68,12 @@ impl TickHarness {
     }
 
     pub(in crate::app) fn step(&mut self) -> StepOutcome {
+        // The run loop drains one Player event before Application::tick();
+        // process it here too so integration tests exercise the same event →
+        // mounted-surface sync path.
+        if let Ok(event) = self.model.app.player_rx.try_recv() {
+            self.model.app.handle_player_event(event);
+        }
         self.model.sync_mounted_surfaces();
         if let Some(Msg::Service(request)) = self.model.tick_search_clock(Instant::now()) {
             self.model.handle_service_request(request);

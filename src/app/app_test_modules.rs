@@ -244,6 +244,10 @@ mod tests_tick_integration_mouse_sidebar;
 mod tests_tick_integration_queue_playback; // Queue playback panel ownership tick coverage (task 3.7)
 
 #[cfg(test)]
+#[path = "tests_tick_integration_disconnect.rs"]
+mod tests_tick_integration_disconnect; // Remote disconnect event through the tick sync pass (task 3.1)
+
+#[cfg(test)]
 #[path = "tests_tick_integration_playback_title_parts.rs"]
 mod tests_tick_integration_playback_title_parts; // Now-playing title-parts projection tick coverage (task 5.2)
 
