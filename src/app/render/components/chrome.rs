@@ -160,7 +160,11 @@ pub(in crate::app) fn render_panel_shell_at(
 
 /// Overlay a thin scroll indicator on a sidebar's right border column when
 /// its content doesn't fit `content.height`. Reuses the existing border
-/// column instead of reserving a dedicated width for a scrollbar.
+/// column instead of reserving a dedicated width for a scrollbar. Thumb-only
+/// (`minimal()`): a box-drawing track line sits half a cell off the block
+/// thumb and reads as a disjoint column, so the track stays invisible and
+/// the grey thumb alone marks position — the same treatment as the main
+/// lists' `render_right_scrollbar`.
 pub(in crate::app) fn render_sidebar_scrollbar(
     f: &mut Frame,
     content: Rect,
@@ -174,7 +178,7 @@ pub(in crate::app) fn render_sidebar_scrollbar(
         content.height as usize,
         scroll,
         content.x.saturating_add(content.width),
-        thin_vertical_thumb(GlyphSet::box_drawing()),
+        thin_vertical_thumb(GlyphSet::minimal()),
         palette::SIDEBAR_SCROLLBAR,
     );
 }

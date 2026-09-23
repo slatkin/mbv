@@ -191,7 +191,9 @@ fn settings_overflow_paints_a_visible_scrollbar() {
     let painted = (geometry.content_area.y..geometry.content_area.y + geometry.content_area.height)
         .any(|y| {
             let cell = &buffer[(scrollbar_x, y)];
-            cell.fg == palette::SIDEBAR_SCROLLBAR || cell.bg == palette::SIDEBAR_SCROLLBAR
+            // Track cells are blank by design (thumb-only bar); only the
+            // thumb may mark the column.
+            cell.fg == palette::SIDEBAR_SCROLLBAR && cell.symbol() != " "
         });
-    assert!(painted, "overflow must paint the scrollbar column");
+    assert!(painted, "overflow must paint the scrollbar thumb");
 }
