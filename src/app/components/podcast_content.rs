@@ -398,6 +398,10 @@ impl PodcastContent {
     /// scope (design D5).
     fn move_effect(&self) -> Option<Msg> {
         if matches!(self.pill, PillSelection::Latest) {
+            // Latest movement is entirely component-local: the shelf row
+            // target is captured by `launch_snapshot`, while cursor/hero
+            // updates need no show-scope fetch, saved browse position, or
+            // shell re-projection.
             return None;
         }
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
@@ -1463,6 +1467,38 @@ mod tests {
                 "{key:?} movement persists like a row click"
             );
         }
+    }
+
+    #[test]
+    fn latest_list_movement_is_component_local() {
+        let mut owner = owner();
+        let item = |episode_id: &str| {
+            QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+                library_item_id: "alpha".into(),
+                episode_id: episode_id.into(),
+                title: episode_id.into(),
+                show_title: Some("Alpha Show".into()),
+                author: None,
+                description: None,
+                duration_ticks: None,
+                position_ticks: 0,
+                played: false,
+                pub_date_secs: None,
+                is_finished: false,
+                cover_path: None,
+            })
+        };
+        owner.pill = PillSelection::Latest;
+        owner.set_latest_items(&[item("one"), item("two")]);
+        owner.set_focused(true);
+        let first = owner.episodes.selected_target().cloned();
+
+        assert_eq!(
+            owner.on_key(&KeyEvent::new(Key::Down, KeyModifiers::NONE)),
+            None,
+            "Latest cursor movement has no shell-side show-scope effect"
+        );
+        assert_ne!(owner.episodes.selected_target().cloned(), first);
     }
 
     #[test]
