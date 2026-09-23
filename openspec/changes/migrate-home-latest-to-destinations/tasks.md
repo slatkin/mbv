@@ -21,8 +21,8 @@
 
 ## 4. Retire Home duplicates and settings
 
-- [ ] 4.1 Remove Home Latest population, provider merge events, pills, and actions while preserving Continue Watching and fallback from saved Home Latest; verify Home tests and mounted-tick navigation (`cargo nextest run -p mbv`).
-- [ ] 4.2 Remove `hidden_latest` parsing, serialization, config state and Settings control; verify legacy TOML is accepted but ignored and subsequent save omits the key, while `hidden_libraries` still works (`cargo nextest run -p mbv-core` and `cargo nextest run -p mbv`).
+- [x] 4.1 Remove Home Latest population, provider merge events, pills, and actions while preserving Continue Watching and fallback from saved Home Latest; verify Home tests and mounted-tick navigation (`cargo nextest run -p mbv`).
+- [x] 4.2 Remove `hidden_latest` parsing, serialization, config state and Settings control; verify legacy TOML is accepted but ignored and subsequent save omits the key, while `hidden_libraries` still works (`cargo nextest run -p mbv-core` and `cargo nextest run -p mbv`).
 
 ## 5. Integration and close-out
 
