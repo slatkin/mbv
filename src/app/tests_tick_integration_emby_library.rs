@@ -7,6 +7,7 @@ use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserO
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use crate::app::components::{ComponentId, Msg, ShellRequest};
+use crate::app::LibEvent;
 use crate::app::render::make_movie_app;
 
 use crate::app::tests::{install_test_emby, make_session};
@@ -83,6 +84,73 @@ fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBack
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     terminal
+}
+
+#[rstest::rstest]
+#[case::movies("movies", false, "Movies")]
+#[case::home_videos("homevideos", true, "Home Videos")]
+fn mounted_flat_latest_populates_from_destination_fetch(
+    #[case] collection_type: &str,
+    #[case] feed_view: bool,
+    #[case] title: &str,
+) {
+    let mut app = make_movie_app();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.libs[0].library.collection_type = collection_type.into();
+    app.libs[0].library.name = title.into();
+    app.libs[0].library_total = Some(100);
+    app.libs[0].nav_stack.clear();
+    if feed_view {
+        app.config.lock().unwrap().feed_view_libraries = vec![title.to_lowercase()];
+    }
+
+    let http = mbv_core::mock_http::MockHttp::new();
+    let response = r#"[{"Id":"destination-latest","Name":"Destination Latest","Type":"Movie","MediaType":"Video"}]"#;
+    for _ in 0..8 {
+        http.respond(200, response);
+    }
+    let config = crate::config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..crate::config::Config::default()
+    };
+    let client = mbv_core::api::EmbyClient::new(config).with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    app.ensure_lib_loaded_for(0);
+    let mut harness = TickHarness::new(app);
+    let (library_id, items, snapshot_title) = loop {
+        match harness.model().app.lib_rx.recv().expect("destination fetch completes") {
+            LibEvent::EmbyLatestSnapshotFetched { library_id, title, items } => {
+                break (library_id, items, title);
+            }
+            event @ LibEvent::Loaded { .. } => harness.model_mut().app.handle_lib_event(event),
+            _ => continue,
+        }
+    };
+    assert_eq!(snapshot_title, title);
+    assert!(http.requests().iter().any(|request| {
+        request.contains("/Items/Latest") && request.contains("ParentId=lib-movies")
+    }));
+    harness.model_mut().update_emby_latest_snapshot(
+        library_id,
+        snapshot_title,
+        items.into_iter().map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item))).collect(),
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, 100, 30);
+    let outcome = click_selector(&mut harness, 0);
+    dispatch_messages(&mut harness, outcome.messages);
+    assert!(browser_owner(&harness).latest_mode());
+    assert_eq!(
+        browser_owner(&harness).launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "destination-latest".into(),
+        })
+    );
 }
 
 #[rstest::rstest]

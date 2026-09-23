@@ -365,6 +365,7 @@ impl App {
             "SortName".into(),
             "Ascending".into(),
         );
+        self.spawn_destination_latest_snapshot(lib_idx);
         self.log_feed_home_video_state(lib_idx, "root_reload");
     }
 
