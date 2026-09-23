@@ -474,7 +474,6 @@ impl Model {
         let latest_acknowledged = self
             .acknowledged_home_latest_sources
             .contains(&latest_source);
-        let latest_marker = (latest_has_new_content, latest_acknowledged);
         let list_pane_width = self.app.list_pane_width;
         // Panel focus is the library area's focus bit; the owner paints its
         // focused pane and claims local chords from it (task 8.4).
@@ -483,7 +482,7 @@ impl Model {
         self.update_tv_owner(|owner| {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);
-            owner.set_latest_marker(latest_marker.0, latest_marker.1);
+            owner.set_latest_marker(latest_has_new_content, latest_acknowledged);
             owner.set_content(context);
             owner.set_focused(library_focused);
         });

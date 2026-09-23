@@ -51,7 +51,6 @@ impl Model {
                 .or_insert_with(|| section.clone());
             snapshot.title.clone_from(&section.title);
             snapshot.items.clone_from(&section.items);
-            section.items.clone_from(&snapshot.items);
             section.has_new_content = snapshot.has_new_content;
         }
     }
@@ -334,7 +333,7 @@ impl Model {
     pub(super) fn acknowledge_home_latest(&mut self, source: HomeLatestSource) {
         self.acknowledged_home_latest_sources.insert(source);
         let acknowledged = self.acknowledged_home_latest_sources.clone();
-        self.update_home_owner(|home| home.set_acknowledged_latest_sources(&acknowledged));
+        self.update_home_owner(|home| home.set_acknowledged_latest_sources(acknowledged));
         self.push_tv_workspace_content();
     }
 

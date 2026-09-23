@@ -173,20 +173,8 @@ impl LetterFilter {
     }
 
     /// Number of movie pill buckets (`A–C` … `V–Z`, `#`).
-    #[allow(dead_code)]
-    pub(crate) fn count() -> usize {
-        Self::count_for_kind(LetterFilterKind::Movie)
-    }
-
     pub(crate) fn count_for_kind(kind: LetterFilterKind) -> usize {
         Self::buckets(kind).len()
-    }
-
-    /// Builds the movie `LetterFilter` for bucket `index`, or `None` if out
-    /// of range. Existing movie callers intentionally keep this API.
-    #[allow(dead_code)]
-    pub(crate) fn for_index(index: usize) -> Option<Self> {
-        Self::for_index_for_kind(index, LetterFilterKind::Movie)
     }
 
     pub(crate) fn for_index_for_kind(index: usize, kind: LetterFilterKind) -> Option<Self> {
@@ -200,22 +188,10 @@ impl LetterFilter {
             })
     }
 
-    /// The default movie pill selected when a large library is first opened:
+    /// The default pill selected when a large library is first opened:
     /// the first range, `A–C`.
-    #[allow(dead_code)]
-    pub(crate) fn default_filter() -> Self {
-        Self::default_filter_for_kind(LetterFilterKind::Movie)
-    }
-
     pub(crate) fn default_filter_for_kind(kind: LetterFilterKind) -> Self {
         Self::for_index_for_kind(0, kind).expect("letter filter bucket table is non-empty")
-    }
-
-    /// The movie bucket whose fetch bounds contain `key` (an effective sort
-    /// string). Existing callers retain the movie table by default.
-    #[allow(dead_code)]
-    pub(crate) fn for_sort_key(key: &str) -> Option<Self> {
-        Self::for_sort_key_for_kind(key, LetterFilterKind::Movie)
     }
 
     pub(crate) fn for_sort_key_for_kind(key: &str, kind: LetterFilterKind) -> Option<Self> {

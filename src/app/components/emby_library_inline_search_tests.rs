@@ -284,7 +284,8 @@ fn browser_owner_launch_snapshot_reports_letter_pill_and_item_identities() {
         EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity,
     };
 
-    let bucket = LetterFilter::for_index(2).expect("letter buckets exist");
+    let bucket = LetterFilter::for_index_for_kind(2, crate::app::render::LetterFilterKind::Movie)
+        .expect("letter buckets exist");
     let mut push = owner_push(make_items(3));
     push.show_letter_pills = true;
     push.letter_filter = Some(bucket);
@@ -317,7 +318,8 @@ fn browser_owner_reanchors_selector_before_item_and_falls_back_when_item_is_miss
     let mut owner = BrowserOwner::new(LibraryKind::Movies);
     let mut push = owner_push(make_items(3));
     push.show_letter_pills = true;
-    push.letter_filter = LetterFilter::for_index(2);
+    push.letter_filter =
+        LetterFilter::for_index_for_kind(2, crate::app::render::LetterFilterKind::Movie);
     owner.set_content(push);
     let state = TuiLaunchState {
         version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,

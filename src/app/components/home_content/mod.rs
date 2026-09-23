@@ -103,9 +103,9 @@ impl HomeContent {
 
     pub(in crate::app) fn set_acknowledged_latest_sources(
         &mut self,
-        sources: &HashSet<HomeLatestSource>,
+        sources: HashSet<HomeLatestSource>,
     ) {
-        self.acknowledged_latest_sources = sources.clone();
+        self.acknowledged_latest_sources = sources;
     }
 
     /// The flat cursor (Continue Watching + every latest section) the shell's
@@ -791,12 +791,12 @@ mod tests {
         assert_eq!(markers, vec![false, true, true]);
 
         assert!(owner.select_section(1));
-        owner.set_acknowledged_latest_sources(&HashSet::from([first.clone()]));
+        owner.set_acknowledged_latest_sources(HashSet::from([first.clone()]));
         let markers = owner.content().selector.expect("selector row").markers;
         assert_eq!(markers, vec![false, false, true]);
 
         assert!(owner.select_section(2));
-        owner.set_acknowledged_latest_sources(&HashSet::from([first.clone(), second.clone()]));
+        owner.set_acknowledged_latest_sources(HashSet::from([first.clone(), second.clone()]));
         let markers = owner.content().selector.expect("selector row").markers;
         assert_eq!(markers, vec![false, false, false]);
     }
@@ -817,7 +817,7 @@ mod tests {
         );
 
         assert!(owner.select_section(1));
-        owner.set_acknowledged_latest_sources(&HashSet::from([first.clone()]));
+        owner.set_acknowledged_latest_sources(HashSet::from([first.clone()]));
         assert!(owner.acknowledged_latest_sources.contains(&first));
 
         // The selected source receives content after selection; identity, not
@@ -838,7 +838,7 @@ mod tests {
         assert!(owner.acknowledged_latest_sources.contains(&active_source));
 
         assert!(owner.restore_section(&second));
-        owner.set_acknowledged_latest_sources(&HashSet::from([first, second.clone()]));
+        owner.set_acknowledged_latest_sources(HashSet::from([first, second.clone()]));
         assert!(owner.acknowledged_latest_sources.contains(&second));
         owner.set_content(
             Vec::new(),

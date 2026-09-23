@@ -226,7 +226,10 @@ fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
     {
         let lvl = lib.nav_stack.last_mut().unwrap();
         lvl.total_count = 40; // what get_items_sorted_ranged reported for M–O
-        lvl.letter_filter = crate::app::render::LetterFilter::for_index(4);
+        lvl.letter_filter = crate::app::render::LetterFilter::for_index_for_kind(
+            4,
+            crate::app::render::LetterFilterKind::Movie,
+        );
     }
     let lvl = lib.nav_stack.last().unwrap();
 
