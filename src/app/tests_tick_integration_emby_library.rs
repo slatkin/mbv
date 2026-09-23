@@ -120,8 +120,24 @@ fn mounted_flat_latest_populates_from_destination_fetch(
         std::sync::Mutex::new(client),
     ));
 
-    app.ensure_lib_loaded_for(0);
+    app.pending_launch_tab_resolved = true;
+    app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::ServiceLibrary {
+            kind: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-movies".into(),
+        },
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Emby {
+            key: mbv_core::config::EmbySelectorKey::Latest,
+        }),
+        item: None,
+    });
     let mut harness = TickHarness::new(app);
+    harness.inject(Event::WindowResize(100, 30));
+    let _ = harness.step();
+    assert!(browser_owner(&harness).latest_mode());
+
     let (library_id, items, snapshot_title) = loop {
         match harness.model().app.lib_rx.recv().expect("destination fetch completes") {
             LibEvent::EmbyLatestSnapshotFetched { library_id, title, items } => {
@@ -132,19 +148,22 @@ fn mounted_flat_latest_populates_from_destination_fetch(
         }
     };
     assert_eq!(snapshot_title, title);
-    assert!(http.requests().iter().any(|request| {
-        request.contains("/Items/Latest") && request.contains("ParentId=lib-movies")
-    }));
+    assert_eq!(
+        http.requests()
+            .iter()
+            .filter(|request| {
+                request.contains("/Items/Latest") && request.contains("ParentId=lib-movies")
+            })
+            .count(),
+        1,
+        "launching into Latest starts one destination snapshot fetch"
+    );
     harness.model_mut().update_emby_latest_snapshot(
         library_id,
         snapshot_title,
         items.into_iter().map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item))).collect(),
     );
     harness.model_mut().sync_mounted_surfaces();
-    let _ = draw(&mut harness, 100, 30);
-    let outcome = click_selector(&mut harness, 0);
-    dispatch_messages(&mut harness, outcome.messages);
-    assert!(browser_owner(&harness).latest_mode());
     assert_eq!(
         browser_owner(&harness).launch_snapshot().1,
         Some(mbv_core::config::LibraryItemIdentity::Emby {

@@ -558,6 +558,9 @@ impl Model {
                         self.push_active_emby_library_owner_content();
                     }
                     ShellRequest::EmbyLibraryLatestSelected => {
+                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                            self.app.spawn_destination_latest_snapshot(lib_idx);
+                        }
                         if let (Some(_), Some(lib_idx)) =
                             (self.music_owner_key(), self.app.tab.emby_library_index())
                         {

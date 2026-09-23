@@ -127,6 +127,21 @@ impl Model {
                     ));
                 } else {
                     self.set_emby_owner_latest_mode(key, true);
+                    if let LibraryKey::Service {
+                        service: ServiceKind::Emby,
+                        library_id,
+                        ..
+                    } = key
+                    {
+                        if let Some(lib_idx) = self
+                            .app
+                            .libs
+                            .iter()
+                            .position(|library| library.library.id == *library_id)
+                        {
+                            self.app.spawn_destination_latest_snapshot(lib_idx);
+                        }
+                    }
                 }
             }
             LaunchSelector::Emby { index } => {

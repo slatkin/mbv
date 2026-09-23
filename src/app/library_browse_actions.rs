@@ -542,7 +542,6 @@ impl App {
                         music_grouping: None,
                     });
                     self.spawn_restore_library_position(idx, saved);
-                    self.spawn_destination_latest_snapshot(idx);
                     return;
                 }
             }
@@ -588,7 +587,6 @@ impl App {
                 sort_by.into(),
                 sort_order.into(),
             );
-            self.spawn_destination_latest_snapshot(idx);
         }
     }
 
