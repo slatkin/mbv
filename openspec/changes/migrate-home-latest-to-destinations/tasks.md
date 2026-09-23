@@ -11,7 +11,7 @@
 - [x] 2.1 Preserve TV's current Latest/Upcoming mode behavior while removing TV→Home snapshot synchronization; verify TV mode and flat-row tests (`cargo nextest run -p mbv`).
 - [x] 2.2 Add Latest alongside Movies/Generic letter pills, with their original default, search, sort, and folder navigation intact; verify list identity, cycling, click and direct play/enqueue in focused owner and mounted-tick tests (`cargo nextest run -p mbv`).
 - [x] 2.3 Add Latest alongside Home Videos group pills without altering existing group state on return; verify Home Videos selector and action tests at Wide and Narrow (`cargo nextest run -p mbv`).
-- [ ] 2.4 Add flat Latest to Music's selector/list-slot path while preserving its existing tree/group state and activation when returning; verify group↔Latest round-trip and one-painter Wide/Narrow tests (`cargo nextest run -p mbv`).
+- [x] 2.4 Add flat Latest to Music's selector/list-slot path while preserving its existing tree/group state and activation when returning; verify group↔Latest round-trip and one-painter Wide/Narrow tests (`cargo nextest run -p mbv`).
 
 ## 3. Other destinations
 
