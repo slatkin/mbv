@@ -26,6 +26,6 @@
 
 ## 4. Completion
 
-- [ ] 4.1a Create the required `canonical-media-lists` delta replacing TV show-mode flat-browser obligations while preserving Latest/Upcoming and Hero Workspace flat rows; verify the delta against current behavior.
-- [ ] 4.1b Sync affected main specs, including the already-landed TV pills deltas, add TV tree terminology to `CONTEXT.md`, and verify OpenSpec strict validation and cross-references.
+- [x] 4.1a Create the required `canonical-media-lists` delta replacing TV show-mode flat-browser obligations while preserving Latest/Upcoming and Hero Workspace flat rows; verify the delta against current behavior.
+- [x] 4.1b Sync affected main specs, including the already-landed TV pills deltas, add TV tree terminology to `CONTEXT.md`, and verify OpenSpec strict validation and cross-references.
 - [ ] 4.2 Run `cargo fmt`, `cargo check -p mbv`, `cargo nextest run -p mbv`, and `cargo clippy --workspace --all-targets -- -D warnings`; fix failures and verify a clean checkout after committing planning and implementation together.
