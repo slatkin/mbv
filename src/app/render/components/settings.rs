@@ -31,12 +31,6 @@ impl App {
                 ));
                 return;
             }
-            SettingKey::HiddenLatest => {
-                self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
-                    MultiSelectKind::HiddenLatest,
-                ));
-                return;
-            }
             SettingKey::MyLanguages => {
                 self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
                     MultiSelectKind::MyLanguages,

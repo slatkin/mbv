@@ -285,8 +285,8 @@ pub struct EmbyItem {
     pub end_year: u32,
     pub overview: String,
     pub premiere_date: String,
-    /// Full ISO 8601 (not truncated to a date), so Home Latest can compare it
-    /// against the launch window at second precision.
+    /// Full ISO 8601 (not truncated to a date), so destination Latest markers
+    /// can compare it against the launch window at second precision.
     pub date_added: String,
     pub total_count: u32,
     pub container: String,

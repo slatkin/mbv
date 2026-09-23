@@ -561,12 +561,6 @@ impl App {
             if let Ok(shelves) = result {
                 let items = App::newest_episodes_items(shelves);
                 self.audiobookshelf_shelf_cache.insert(library_id, items);
-                // The App owns the shelf cache; the cross-provider pill splice
-                // runs in the shell against Model-owned `latest` (task 5.3d).
-                // The lib_rx while-drain picks this up in the same drain pass.
-                let _ = self.lib_tx.send(LibEvent::AudiobookshelfLatestRebuilt(
-                    self.audiobookshelf_latest_sections(),
-                ));
             }
             return;
         }
@@ -1001,9 +995,7 @@ impl App {
             // here; the arms keep the exhaustive match total.
             LibEvent::EmbyLatestSnapshotFetched { .. }
             | LibEvent::HomeContentRefreshed(_)
-            | LibEvent::HomeContentCleared
-            | LibEvent::AudiobookshelfLatestRebuilt(_)
-            | LibEvent::FeedsLatestRebuilt(_) => {}
+            | LibEvent::HomeContentCleared => {}
             LibEvent::Error(e) => {
                 // A failed per-kind activation reports through here; drop the
                 // deferred tab switch and the pending Series landing so

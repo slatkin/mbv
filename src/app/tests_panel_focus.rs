@@ -175,25 +175,6 @@ fn build_always_starts_on_home_without_affecting_saved_queue_state() {
 }
 
 #[test]
-fn legacy_home_latest_pref_falls_back_to_continue_watching() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    std::fs::write(
-        crate::config::prefs_path(),
-        serde_json::json!({ "home_section": "abs:lib-1" }).to_string(),
-    )
-    .expect("write prefs");
-
-    let model = Model::new(make_built_app());
-
-    assert_eq!(
-        model.home_section_pending,
-        None,
-        "a saved Home Latest section explicitly falls back to Continue Watching"
-    );
-    assert_eq!(model.home_section_pref_semantic, None);
-}
-
-#[test]
 fn panel_focus_changes_do_not_write_legacy_launch_prefs() {
     let _guard = crate::config::TestStateDirGuard::new();
     std::fs::write(

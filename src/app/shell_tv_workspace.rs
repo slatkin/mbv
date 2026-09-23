@@ -259,7 +259,7 @@ impl Model {
         if library.library.collection_type == "tvshows"
             && library.tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
         {
-            self.acknowledge_home_latest(super::types_playback::HomeLatestSource::Emby(
+            self.acknowledge_home_latest(super::types_playback::DestinationLatestSource::Emby(
                 library.library.id.clone(),
             ));
         }
@@ -498,7 +498,8 @@ impl Model {
         );
         context.set_tv_content_mode(tv_content_mode.clone());
         context.set_series_details(series_details);
-        let latest_source = super::types_playback::HomeLatestSource::Emby(library_id.clone());
+        let latest_source =
+            super::types_playback::DestinationLatestSource::Emby(library_id.clone());
         if tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
             && !self
                 .acknowledged_home_latest_sources

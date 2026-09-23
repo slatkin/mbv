@@ -404,9 +404,8 @@ impl Model {
                     }
                     ShellRequest::MultiselectCommit { .. } => {
                         self.handle_multiselect_commit();
-                        // Hiding libraries/pills refetches Home inside the commit; re-project (5.3d).
-                        self.push_home_content();
-                        // Emby browser content may have changed (5.3d.15/M2).
+                        // The committed visibility settings may change Emby browser content.
+                        // Re-project that destination owner.
                         self.push_active_emby_library_owner_content();
                     }
                     request @ ShellRequest::LibraryRoutesEnter
@@ -426,14 +425,14 @@ impl Model {
                         self.push_audiobookshelf_podcast_content();
                     }
                     ShellRequest::FeedsLatestSelected => {
-                        self.record_home_latest_acknowledgement(HomeLatestSource::Feeds);
+                        self.record_home_latest_acknowledgement(DestinationLatestSource::Feeds);
                         self.sync_feeds();
                     }
                     ShellRequest::AudiobookshelfPodcastLatestSelected => {
                         if let Some(index) = self.app.tab.audiobookshelf_index() {
                             if let Some(library) = self.app.audiobookshelf_libraries.get(index) {
                                 self.record_home_latest_acknowledgement(
-                                    crate::app::HomeLatestSource::Audiobookshelf(
+                                    crate::app::DestinationLatestSource::Audiobookshelf(
                                         library.id.clone(),
                                     ),
                                 );
@@ -563,9 +562,9 @@ impl Model {
                             (self.music_owner_key(), self.app.tab.emby_library_index())
                         {
                             if let Some(library) = self.app.libs.get(lib_idx) {
-                                self.record_home_latest_acknowledgement(HomeLatestSource::Emby(
-                                    library.library.id.clone(),
-                                ));
+                                self.record_home_latest_acknowledgement(
+                                    DestinationLatestSource::Emby(library.library.id.clone()),
+                                );
                             }
                             self.push_music_workspace_content();
                         } else {
@@ -606,17 +605,12 @@ impl Model {
                     }
                     ShellRequest::HomeRowClick { .. } => {
                         self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                        self.push_home_content();
                     }
                     ShellRequest::HomeRowActivate { target } => {
                         self.app.set_panel_focus(crate::app::PanelFocus::Library);
                         if let Some((item, from_cw)) = self.home_stable_target(&target) {
                             self.app.home_play_target(item, from_cw);
                         }
-                        self.push_home_content();
-                    }
-                    ShellRequest::HomePillClick { target } => {
-                        self.acknowledge_home_section(target);
                     }
                     // Home typed effects (task 5.3d, Home typed-effect
                     // prep): `HomeComponent` owns the cursor and reports the
@@ -630,8 +624,7 @@ impl Model {
                         _,
                     )
                     | ShellRequest::HomeDelete(_)
-                    | ShellRequest::HomeToggleWatched(_)
-                    | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),
+                    | ShellRequest::HomeToggleWatched(_)) => self.handle_home_request(request),
                     ShellRequest::QueueScopeClick { scope } => {
                         self.app.handle_mouse_selector_click_queue(scope);
                         self.queue_click_reproject();
@@ -929,11 +922,8 @@ impl Model {
         self.handle_terminal_message(deferred, music_resize, tv_resize)
     }
 
-    /// Re-project after a Queue click: the click moves panel focus to the
-    /// Queue panel (re-project the Home focus flag) and may mutate Emby
-    /// browser content (5.3d.15/M2).
+    /// Re-project the Emby browser after queue actions that may mutate it.
     fn queue_click_reproject(&mut self) {
-        self.push_home_content();
         self.push_active_emby_library_owner_content();
     }
 

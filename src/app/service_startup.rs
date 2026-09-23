@@ -170,8 +170,8 @@ pub(super) fn start_audiobookshelf_books(
 }
 
 /// Fetches one podcast library's `/personalized` shelves and reports
-/// `LibEvent::AudiobookshelfShelfFetched`. Home's Latest pill for the library
-/// is built from the `Newest Episodes` shelf in the result.
+/// `LibEvent::AudiobookshelfShelfFetched`. The Podcasts destination's Latest
+/// snapshot is built from the `Newest Episodes` shelf in the result.
 pub(super) fn start_audiobookshelf_shelves(
     config: crate::config::Config,
     generation: SetupGeneration,

@@ -72,7 +72,8 @@ impl Model {
             .and_then(|panel| panel.owner(&key))
             .and_then(|owner| owner.as_any().downcast_ref::<PodcastContent>())
             .is_some_and(PodcastContent::latest_selected);
-        let source = super::types_playback::HomeLatestSource::Audiobookshelf(library_id.clone());
+        let source =
+            super::types_playback::DestinationLatestSource::Audiobookshelf(library_id.clone());
         if selected_latest && !self.acknowledged_home_latest_sources.contains(&source) {
             self.record_home_latest_acknowledgement(source.clone());
         }

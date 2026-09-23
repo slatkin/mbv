@@ -100,7 +100,6 @@ pub(crate) type MultiSelectItem = (String, String, bool);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MultiSelectKind {
     HiddenLibraries,
-    HiddenLatest,
     MyLanguages,
     FeedViewLibraries,
 }

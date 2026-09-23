@@ -302,14 +302,12 @@ impl Model {
             let mut c = self.app.config.lock().unwrap();
             match kind {
                 MultiSelectKind::HiddenLibraries => c.hidden_libraries = hidden.clone(),
-                MultiSelectKind::HiddenLatest => c.hidden_latest = hidden.clone(),
                 MultiSelectKind::FeedViewLibraries => c.feed_view_libraries = hidden.clone(),
                 MultiSelectKind::MyLanguages => unreachable!(),
             }
         }
         match kind {
             MultiSelectKind::HiddenLibraries => self.app.hidden_libraries = hidden,
-            MultiSelectKind::HiddenLatest => self.app.hidden_latest = hidden,
             MultiSelectKind::FeedViewLibraries => {
                 for lib in &mut self.app.libs {
                     lib.nav_stack.clear();
@@ -368,14 +366,12 @@ impl Model {
             let client = client.lock().unwrap();
             let all = match kind {
                 MultiSelectKind::HiddenLibraries => client.get_views().unwrap_or_default(),
-                MultiSelectKind::HiddenLatest => client.get_user_views().unwrap_or_default(),
                 MultiSelectKind::FeedViewLibraries => client.get_views().unwrap_or_default(),
                 MultiSelectKind::MyLanguages => unreachable!(),
             };
             let config = self.app.config.lock().unwrap();
             let selected_list = match kind {
                 MultiSelectKind::HiddenLibraries => &config.hidden_libraries,
-                MultiSelectKind::HiddenLatest => &config.hidden_latest,
                 MultiSelectKind::FeedViewLibraries => &config.feed_view_libraries,
                 MultiSelectKind::MyLanguages => unreachable!(),
             };

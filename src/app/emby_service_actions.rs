@@ -183,7 +183,7 @@ impl App {
         // `HomeContentCleared`, so the drain sees the wipe first, then this
         // full snapshot). The merge input is empty because the clear just
         // wiped the pills (task 5.3d).
-        let content = self.apply_emby_bootstrap(candidate.bootstrap, &[]);
+        let content = self.apply_emby_bootstrap(candidate.bootstrap);
         let _ = self
             .lib_tx
             .send(LibEvent::HomeContentRefreshed(Box::new(content)));

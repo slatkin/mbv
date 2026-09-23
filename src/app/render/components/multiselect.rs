@@ -29,7 +29,6 @@ pub(in crate::app) fn render_multiselect_content(
 ) -> MultiSelectRenderGeometry {
     let title = match model.kind {
         MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
-        MultiSelectKind::HiddenLatest => " Hidden Latest ",
         MultiSelectKind::FeedViewLibraries => " Feed View ",
         MultiSelectKind::MyLanguages => " My Languages ",
     };

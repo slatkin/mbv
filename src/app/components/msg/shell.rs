@@ -225,10 +225,6 @@ pub enum ShellRequest {
     /// Toggle watched state for the component-resolved Continue Watching row.
     /// The shell resolves this stable identity and never consults a cursor.
     HomeToggleWatched(super::intents::HomeRowTarget),
-    /// Persist the newly selected Home pill (section index) as the restored
-    /// preference, resolved via the mounted component's `source_for_section`
-    /// at the Model boundary (task 5.3d, numeric Home section deletion).
-    HomeSectionSelected(usize),
     /// A row the user single-clicked in the Home list or Library Hero overlay. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).
@@ -248,12 +244,6 @@ pub enum ShellRequest {
     #[allow(dead_code)]
     TvTreeExpand {
         target: super::super::tv_tree_target::TvTreeTarget,
-    },
-    /// A Home section pill the user clicked; `target` is the section index the
-    /// component resolved from its `HitRegions` and already applied locally
-    /// (design.md D4/D6). The shell persists the selected source.
-    HomePillClick {
-        target: usize,
     },
     /// The podcast tab's committed pill or pill-scoped list interaction
     /// (reorganize-podcast-pill-navigation D3/D5): `Some(id)` carries a show

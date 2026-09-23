@@ -26,9 +26,9 @@ impl Model {
         if selected_latest
             && !self
                 .acknowledged_home_latest_sources
-                .contains(&super::HomeLatestSource::Feeds)
+                .contains(&super::DestinationLatestSource::Feeds)
         {
-            self.record_home_latest_acknowledgement(super::HomeLatestSource::Feeds);
+            self.record_home_latest_acknowledgement(super::DestinationLatestSource::Feeds);
         }
         let state = &self.app.feed_tab;
         let has_new = state.all_entries.iter().any(|entry| {
@@ -44,7 +44,7 @@ impl Model {
         });
         let acknowledged = self
             .acknowledged_home_latest_sources
-            .contains(&super::HomeLatestSource::Feeds);
+            .contains(&super::DestinationLatestSource::Feeds);
         let push = FeedsOwnerPush {
             subscriptions: state.subscriptions.clone(),
             entries: state.entries.clone(),

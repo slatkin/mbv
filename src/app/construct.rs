@@ -130,7 +130,6 @@ impl App {
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
-            hidden_latest: init.hidden_latest,
             home_latest_launch_window: super::home_latest::HomeLatestLaunchWindow {
                 previous: None,
                 current: 0,
@@ -401,7 +400,6 @@ impl App {
             image_protocol_enabled: ui_config.image_protocol.is_some(),
             hidden_libraries: app_config.hidden_libraries.clone(),
             library_routes: app_config.library_routes.clone(),
-            hidden_latest: app_config.hidden_latest.clone(),
             music_levels: app_config.music_levels.clone(),
             use_nerd_fonts: ui_config.use_nerd_fonts,
             indicator_style,
@@ -477,7 +475,6 @@ impl App {
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = app_config.hidden_libraries.clone();
         let library_routes = app_config.library_routes.clone();
-        let hidden_latest = app_config.hidden_latest.clone();
         let music_levels = app_config.music_levels.clone();
         let always_play_next = app_config.always_play_next;
         let image_protocol = ui_config.image_protocol.clone();
@@ -632,7 +629,6 @@ impl App {
             image_protocol_enabled,
             hidden_libraries,
             library_routes,
-            hidden_latest,
             music_levels,
             use_nerd_fonts,
             indicator_style,

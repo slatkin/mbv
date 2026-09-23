@@ -171,7 +171,7 @@ impl Model {
                 )
             })
             .unwrap_or_default();
-        let latest_source = super::HomeLatestSource::Emby(library_id);
+        let latest_source = super::DestinationLatestSource::Emby(library_id);
         if self.active_emby_library_owner_is_latest()
             && !self
                 .acknowledged_home_latest_sources

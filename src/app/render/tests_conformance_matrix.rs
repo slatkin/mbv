@@ -1,6 +1,4 @@
-use super::test_helpers::{
-    buffer_to_string, make_movie_app, make_music_group_app, render_home_shell_with,
-};
+use super::test_helpers::{buffer_to_string, make_movie_app, make_music_group_app};
 use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
@@ -300,59 +298,6 @@ fn render_podcast_panel(
     (terminal, layout)
 }
 
-fn mixed_home_app() -> App {
-    let mut app = crate::app::tests::make_app_stub();
-    app.tab = TabSelection::Home;
-    app.panel_focus = PanelFocus::Library;
-    app.mini_view_focus = PanelFocus::Library;
-    // Select the Books pill (section 1) through the real pending-source
-    // boundary so `render_home_shell_with`'s `push_home_content` restores it
-    // (task 5.3d, numeric Home section deletion). The pill data itself is
-    // Model-owned `home_content.latest` (task 5.3d), seeded by
-    // `mixed_home_latest()` at the render call.
-    app
-}
-
-/// The mixed Books+Feeds pill data the Home-characterization seeds into
-/// Model-owned `home_content.latest` (task 5.3d).
-fn mixed_home_latest() -> Vec<crate::app::types_playback::HomeLatestSection> {
-    vec![
-        crate::app::types_playback::HomeLatestSection::new(
-            "Books".into(),
-            crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()),
-            vec![QueueItem::AudiobookshelfBook(
-                mbv_core::playback_queue::AudiobookshelfBookQueueItem {
-                    library_item_id: "book-1".into(),
-                    title: "Home Book".into(),
-                    author: Some("Author".into()),
-                    duration_ticks: None,
-                    position_ticks: 0,
-                    played: false,
-                    is_finished: false,
-                    cover_path: None,
-                },
-            )],
-        ),
-        crate::app::types_playback::HomeLatestSection::new(
-            "Feeds".into(),
-            crate::app::types_playback::HomeLatestSource::Feeds,
-            vec![QueueItem::Feed(FeedEntry {
-                guid: "home-feed".into(),
-                title: "Home Feed".into(),
-                enclosure_url: None,
-                link: None,
-                mime_type: None,
-                duration_ticks: None,
-                pub_date_secs: None,
-                feed_kind: Some(FeedKind::Audio),
-                feed_id: None,
-                position_ticks: 0,
-                played: false,
-            })],
-        ),
-    ]
-}
-
 fn assert_one_pill_row_and_spacer(
     surface: &str,
     terminal: &Terminal<TestBackend>,
@@ -406,58 +351,6 @@ fn assert_one_pill_row_and_spacer(
 /// mirror `assert_one_pill_row_and_spacer` exactly for that surface: targets
 /// share one row, exactly one pill bar is painted, and the pill spacer stays
 /// consistent below it.
-fn assert_home_one_pill_row_and_spacer(
-    model: &crate::app::shell::Model,
-    terminal: &Terminal<TestBackend>,
-) {
-    let targets = model
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("Library panel mounted")
-        .as_any()
-        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
-        .expect("Library panel type")
-        .test_selector_hits()
-        .regions()
-        .to_vec();
-    let first = targets
-        .first()
-        .unwrap_or_else(|| panic!("Home should publish pill targets"))
-        .0;
-    assert!(
-        targets
-            .iter()
-            .all(|(rect, _)| rect.y == first.y && rect.height == 1),
-        "pill targets must share one row: {:?}",
-        targets
-    );
-
-    let buffer = terminal.backend().buffer();
-    let painted_rows = (0..buffer.area().height)
-        .filter(|y| {
-            targets.iter().all(|(rect, _)| {
-                buffer[(rect.x, *y)].symbol() == "◢"
-                    && buffer[(rect.right() - 1, *y)].symbol() == "◤"
-            })
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        painted_rows,
-        vec![first.y],
-        "Home should paint exactly one pill bar"
-    );
-
-    let last = targets.last().unwrap().0;
-    assert!(first.bottom() < buffer.area().height);
-    let spacer_bg = buffer[(first.x, first.y + 1)].style().bg;
-    for x in first.x..last.right() {
-        assert_eq!(
-            buffer[(x, first.y + 1)].style().bg,
-            spacer_bg,
-            "pill spacer spilled at x={x}"
-        );
-    }
-}
 
 #[test]
 fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
@@ -479,20 +372,6 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
             "{surface} did not paint a buffer"
         );
     }
-
-    // Home (task 5.3d, legacy underpaint removal) renders through the
-    // mounted component; assert its pill bar from the component's own painted
-    // targets. The pill data is Model-owned `home_content.latest` (5.3d).
-    let (model, terminal) = render_home_shell_with(mixed_home_app(), 60, 30, |m| {
-        m.home_section_pending =
-            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
-        m.home_content.latest = mixed_home_latest();
-    });
-    assert_home_one_pill_row_and_spacer(&model, &terminal);
-    assert!(
-        !buffer_to_string(&terminal).is_empty(),
-        "Home did not paint a buffer"
-    );
 
     let (terminal, layout) = render_feeds_panel(feed_owner(), 60, 30);
     assert_one_pill_row_and_spacer("Feeds", &terminal, &layout);

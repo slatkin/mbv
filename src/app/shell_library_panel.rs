@@ -17,7 +17,7 @@ use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::shell::Model;
-use super::types_playback::HomeLatestSource;
+use super::types_playback::DestinationLatestSource;
 use super::{PanelFocus, PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
@@ -122,7 +122,7 @@ impl Model {
                 } = key
                 {
                     self.update_music_owner(|owner| owner.set_latest_mode(true));
-                    self.record_home_latest_acknowledgement(HomeLatestSource::Emby(
+                    self.record_home_latest_acknowledgement(DestinationLatestSource::Emby(
                         library_id.clone(),
                     ));
                 } else {
@@ -147,7 +147,7 @@ impl Model {
                 self.app.commit_audiobookshelf_podcast_state_scope();
             }
             LaunchSelector::AudiobookshelfLatest => {
-                self.record_home_latest_acknowledgement(HomeLatestSource::Audiobookshelf(
+                self.record_home_latest_acknowledgement(DestinationLatestSource::Audiobookshelf(
                     match key {
                         LibraryKey::Service { library_id, .. } => library_id.clone(),
                         _ => unreachable!(),

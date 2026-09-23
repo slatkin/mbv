@@ -44,17 +44,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         })
         .unwrap_or_else(|| vec!["live tv".into()]);
 
-    let hidden_latest: Vec<String> = library
-        .and_then(|m| m.get("hidden_latest"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.to_lowercase())
-                .collect()
-        })
-        .unwrap_or_default();
-
     let show_audio_window = misc
         .and_then(|m| m.get("show_audio_window"))
         .and_then(|v| v.as_bool())
@@ -349,7 +338,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         password: String::new(),
         api_key: String::new(),
         hidden_libraries,
-        hidden_latest,
         show_audio_window,
         use_mpv_config,
         video_cache_forward_mb,

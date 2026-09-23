@@ -343,15 +343,10 @@ fn tick_restores_queue_panel_focus_after_destination_ready_without_queue_target(
         item: None,
     });
     harness.model_mut().update_home_owner(|home| {
-        home.set_content(
-            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
-                "Home item",
-                "Movie",
-            )))],
-            Vec::new(),
-            false,
-            std::collections::HashMap::new(),
-        );
+        home.set_content(vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
+            "Home item",
+            "Movie",
+        )))], false);
     });
 
     // This is the production Application::tick path: the sync pass before
@@ -405,12 +400,7 @@ fn destination_reanchor_consumes_pending_state_before_a_later_refresh() {
     harness.model_mut().update_home_owner(|home| {
         let mut first = make_item("First", "Movie");
         first.id = "first".into();
-        home.set_content(
-            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(first))],
-            Vec::new(),
-            false,
-            std::collections::HashMap::new(),
-        );
+        home.set_content(vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(first))], false);
     });
 
     // The real Application::tick path runs the shell sync pass before the
@@ -441,12 +431,7 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
         LibraryKey::Home,
         || Box::new(HomeContent::new()),
         |owner| {
-            owner.set_content(
-                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(selected))],
-                Vec::new(),
-                false,
-                std::collections::HashMap::new(),
-            );
+            owner.set_content(vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(selected))], false);
         },
     );
 
@@ -520,12 +505,7 @@ fn two_apps_diverge_in_memory_and_last_orderly_exit_replaces_whole_snapshot() {
         LibraryKey::Home,
         || Box::new(HomeContent::new()),
         |owner| {
-            owner.set_content(
-                vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(first_item))],
-                Vec::new(),
-                false,
-                std::collections::HashMap::new(),
-            );
+            owner.set_content(vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(first_item))], false);
         },
     );
     first.sync_library_panel();
@@ -623,23 +603,10 @@ fn mounted_tick_navigation_does_not_write_launch_snapshot() {
 
     let mut harness = TickHarness::new(crate::app::render::make_movie_app());
     harness.model_mut().update_home_owner(|home| {
-        home.set_content(
-            Vec::new(),
-            vec![crate::app::types_playback::HomeLatestSection::new(
-                "Movies".into(),
-                crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
-                vec![
-                    mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
-                        "Movie one", "Movie",
-                    ))),
-                    mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
-                        "Movie two", "Movie",
-                    ))),
-                ],
-            )],
-            false,
-            std::collections::HashMap::new(),
-        );
+        home.set_content(vec![
+            mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("Movie one", "Movie"))),
+            mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("Movie two", "Movie"))),
+        ], false);
     });
     harness.model_mut().sync_mounted_surfaces();
     harness.inject(Event::Keyboard(KeyEvent {
@@ -649,12 +616,11 @@ fn mounted_tick_navigation_does_not_write_launch_snapshot() {
     let _ = harness.step();
 
     let requests = [
-        ShellRequest::HomePillClick { target: 1 },
         ShellRequest::HomeRowClick {
             target: HomeRowTarget {
                 item_id: Some("id1".into()),
-                source: Some("emby:lib-movies".into()),
-                from_continue_watching: false,
+                source: None,
+                from_continue_watching: true,
             },
         },
         ShellRequest::QueueRowClick { slot_id: None },

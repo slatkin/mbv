@@ -308,27 +308,9 @@ impl EmbyClient {
             move || {
                 let continue_items = client.get_continue_watching(20).unwrap_or_default();
                 let views = client.get_views_classified()?;
-                let user_views = client.get_user_views().unwrap_or_default();
-                let latest = user_views
-                    .into_iter()
-                    .filter(|view| view.collection_type != "playlists")
-                    .map(|view| {
-                        let items = if view.collection_type == "tvshows" {
-                            client.get_latest_episodes(&view.id, 30).unwrap_or_default()
-                        } else {
-                            client.get_latest(&view.id, 30).unwrap_or_default()
-                        };
-                        crate::service_runtime::EmbyLatestSection {
-                            title: view.name,
-                            view_id: view.id,
-                            items,
-                        }
-                    })
-                    .collect();
                 Ok(crate::service_runtime::EmbyBootstrap {
                     continue_items,
                     views,
-                    latest,
                 })
             },
             hard_bound,

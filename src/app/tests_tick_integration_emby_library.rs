@@ -89,7 +89,7 @@ fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBack
 #[case::wide(100)]
 #[case::narrow(60)]
 fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16) {
-    use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+    use crate::app::types_playback::{DestinationLatestSnapshot, DestinationLatestSource};
     use mbv_core::playback_queue::QueueItem;
 
     let mut app = make_movie_app();
@@ -99,9 +99,9 @@ fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16)
     app.libs[0].library_total = Some(100);
     let mut latest = crate::app::tests::make_item("Latest Movie", "Movie");
     latest.id = "latest-movie".into();
-    let snapshot = HomeLatestSection::new(
+    let snapshot = DestinationLatestSnapshot::new(
         "Movies".into(),
-        HomeLatestSource::Emby("lib-movies".into()),
+        DestinationLatestSource::Emby("lib-movies".into()),
         vec![QueueItem::Emby(Box::new(latest))],
     );
     let mut harness = TickHarness::new(app);
@@ -165,9 +165,9 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
 
     let mut latest = crate::app::tests::make_item("Latest Movie", "Movie");
     latest.id = "latest-movie".into();
-    let snapshot = crate::app::types_playback::HomeLatestSection::new(
+    let snapshot = crate::app::types_playback::DestinationLatestSnapshot::new(
         "Movies".into(),
-        crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
+        crate::app::types_playback::DestinationLatestSource::Emby("lib-movies".into()),
         vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(latest))],
     );
     let mut harness = TickHarness::new(app);
@@ -225,9 +225,9 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
     let mut bucket_harness = TickHarness::new(bucket_app);
     bucket_harness.model_mut().tv_latest_snapshots.insert(
         "lib-movies".into(),
-        crate::app::types_playback::HomeLatestSection::new(
+        crate::app::types_playback::DestinationLatestSnapshot::new(
             "Movies".into(),
-            crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
+            crate::app::types_playback::DestinationLatestSource::Emby("lib-movies".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(bucket_latest))],
         ),
     );
@@ -256,7 +256,7 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
 #[case::narrow(60)]
 fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16) {
     use crate::app::types_feed::{FeedHomeVideoGroup, FeedHomeVideoState};
-    use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+    use crate::app::types_playback::{DestinationLatestSnapshot, DestinationLatestSource};
     use mbv_core::playback_queue::QueueItem;
 
     let mut app = make_movie_app();
@@ -287,9 +287,9 @@ fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16
     });
     let mut latest = crate::app::tests::make_item("Latest video", "Movie");
     latest.id = "latest-video".into();
-    let snapshot = HomeLatestSection::new(
+    let snapshot = DestinationLatestSnapshot::new(
         "Home Videos".into(),
-        HomeLatestSource::Emby("lib-movies".into()),
+        DestinationLatestSource::Emby("lib-movies".into()),
         vec![QueueItem::Emby(Box::new(latest))],
     );
 

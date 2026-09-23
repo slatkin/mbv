@@ -210,10 +210,9 @@ fn newest_episodes_shelf_wire_carries_the_embedded_payload() {
 
 #[test]
 fn non_newest_episodes_shelves_parse_and_stay_unused() {
-    // Home's Latest pill reads only the `Newest Episodes` shelf (Task 6.3);
-    // every other shelf the live server returns must still parse cleanly and
-    // simply never feed Home. The fixture's `Continue Listening` shelf pins
-    // both the show shape and the bare (no embedded media) episode shape.
+    // The Podcasts destination's Latest owner reads only the `Newest Episodes`
+    // shelf (Task 6.3); every other shelf must still parse cleanly. The fixture's
+    // `Continue Listening` shelf pins show and bare-episode shapes.
     let shelves: Vec<ShelfWire> = serde_json::from_str(&fixture("shelves")).unwrap();
     let continue_listening = shelves
         .iter()
