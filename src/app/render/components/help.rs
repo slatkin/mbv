@@ -280,7 +280,7 @@ fn build_help_sections(
         help_blank(),
     ];
     let sec_home = vec![
-        help_section_line("Home"),
+        help_section_line("Continue"),
         help_line(key_w, "[ / ]", "Switch sections"),
         help_line(key_w, "Ctrl+W", "Toggle watched"),
         help_line(key_w, "Ctrl+A", "Add to Queue"),
@@ -532,6 +532,7 @@ mod tests {
             .find(|(name, _)| *name == HelpSection::Home)
             .unwrap();
         let text = lines_to_text(home);
+        assert!(text.iter().any(|line| line == "Continue"));
         assert!(text.iter().any(|line| line.contains("[ / ]")));
         assert!(text.iter().any(|line| line.contains("Ctrl+W")));
         assert!(text.iter().any(|line| line.contains("Ctrl+A")));

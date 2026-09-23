@@ -65,6 +65,16 @@ impl TabPanel {
         &self.hits
     }
 
+    #[cfg(test)]
+    pub(in crate::app) fn test_selected(&self) -> usize {
+        self.selected
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_hovered(&self) -> Option<usize> {
+        self.hovered
+    }
+
     fn resolve_click(&self, at: Position) -> Option<usize> {
         self.hits
             .iter()
@@ -140,7 +150,7 @@ mod tests {
     use crate::app::palette;
 
     fn titles() -> Vec<String> {
-        ["Home", "Movies", "TV Shows", "Music", "Feeds"]
+        ["Continue", "Movies", "TV Shows", "Music", "Feeds"]
             .into_iter()
             .map(String::from)
             .collect()
@@ -167,7 +177,7 @@ mod tests {
         let (_, buffer) = drawn_panel(80, 1, 0);
         let row: String = (0..80).map(|x| buffer[(x, 1)].symbol()).collect();
         assert!(row.contains("▐ MOVIES"), "selected tab row: {row:?}");
-        assert!(row.contains("  HOME  "), "muted home tab row: {row:?}");
+        assert!(row.contains("CONTINUE"), "muted Continue tab row: {row:?}");
     }
 
     /// Overflow arrows: with all tabs fitting, neither arrow paints; a narrow

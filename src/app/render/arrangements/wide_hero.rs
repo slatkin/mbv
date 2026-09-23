@@ -124,7 +124,7 @@ mod tests {
         assert_eq!(areas.spacer_area.height, 0);
         assert_eq!(areas.content_area.height, 0);
 
-        let right = wide_hero_browser_pane(
+        let right = wide_hero_browser_pane_with_selector(
             Rect {
                 x: 20,
                 y: 3,
@@ -137,6 +137,7 @@ mod tests {
                 width: 10,
                 height: 1,
             },
+            true,
         );
         assert_eq!(right.list_panel.height, 0);
     }
@@ -255,16 +256,26 @@ pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
     }
 }
 
-pub(in crate::app) fn wide_hero_browser_pane(
+pub(in crate::app) fn wide_hero_browser_pane_with_selector(
     right_panel: Rect,
     right_area: Rect,
+    has_selector: bool,
 ) -> WideHeroBrowserPane {
-    let areas = pill_bar_areas(Rect {
+    let area = Rect {
         x: right_area.x,
         y: right_panel.y,
         width: right_area.width,
         height: right_panel.height,
-    });
+    };
+    let areas = if has_selector {
+        pill_bar_areas(area)
+    } else {
+        PillBarAreas {
+            pills_area: Rect::new(area.x, area.y, area.width, 0),
+            spacer_area: Rect::new(area.x, area.y, area.width, 0),
+            content_area: area,
+        }
+    };
     WideHeroBrowserPane {
         pills_area: areas.pills_area,
         spacer_area: areas.spacer_area,

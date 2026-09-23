@@ -30,11 +30,8 @@ fn panel(model: &crate::app::shell::Model) -> &LibraryPanel {
         .expect("Library panel type")
 }
 
-/// Task 5.3d + 5.11: the startup frame shows the Home owner's loading
-/// affordances (its Selector row's pill bar and the empty-state placeholder
-/// while home_content.loading is still set and no content has arrived)
-/// rather than blank panes. The owner lives inside the mounted `LibraryPanel`
-/// (task 5.11), painted through `draw_frame` exactly as `Model::run` does.
+/// The startup frame shows Continue's empty-state placeholder while
+/// `home_content.loading` is still set, without a Selector row or pill bar.
 #[test]
 fn startup_frame_paints_loading_affordances_not_blank_panes() {
     let mut app = home_app();
@@ -57,67 +54,48 @@ fn startup_frame_paints_loading_affordances_not_blank_panes() {
         "startup frame must not be an empty buffer"
     );
     assert!(
-        output.contains("Continue"),
-        "startup frame must paint the Home owner's Selector row pill bar, not \
-         just legacy chrome: {output:?}"
+        output.contains("CONTINUE"),
+        "startup frame must paint the Continue tab label: {output:?}"
     );
     assert!(
-        output.contains("(empty)"),
-        "startup Home pane must paint its empty-state placeholder, not a \
-         blank pane: {output:?}"
+        panel(&model).test_selector_hits().regions().is_empty(),
+        "Continue has no Selector-row pill targets"
+    );
+    assert!(
+        output.contains("Loading"),
+        "startup Home pane must paint its loading affordance, not a blank pane: {output:?}"
     );
 }
 
-/// Task 5.3d + 5.11: the Selector row's hit targets are characterized from
-/// the single painter — the mounted `LibraryPanel`'s own retained
-/// `SkeletonHits.selector` — rather than the deleted `HomeComponent`'s
-/// `pill_targets`. The assertions are preserved: one Continue-Watching pill
-/// (id 0), the targets share one painted row, the selected pill is
-/// highlighted, and exactly one pill bar row is painted.
+/// The mounted Library panel places no Selector-row geometry or pill targets
+/// for Continue at either breakpoint.
 #[test]
 fn home_pill_row_and_targets_are_characterized_end_to_end() {
-    let cw_item = emby_cw_item();
-    let (model, terminal) = render_home_shell_with(home_app(), 60, 20, |m| {
-        m.home_content.continue_items = vec![cw_item];
-    });
+    for (width, height) in [(60, 20), (200, 30)] {
+        let cw_item = emby_cw_item();
+        let (model, _) = render_home_shell_with(home_app(), width, height, |m| {
+            m.home_content.continue_items = vec![cw_item];
+        });
 
-    let targets = panel(&model).test_selector_hits().regions().to_vec();
-    assert_eq!(
-        targets.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
-        vec![0],
-        "Home pill targets"
-    );
-    let first = targets.first().expect("Home should publish pill targets").0;
-    assert!(
-        targets
-            .iter()
-            .all(|(rect, _)| rect.y == first.y && rect.height == 1),
-        "pill hitboxes must occupy one shared row: {targets:?}"
-    );
-
-    let buffer = terminal.backend().buffer();
-    let selected = targets
-        .iter()
-        .find(|(_, id)| *id == 0)
-        .expect("selected pill id should have a hitbox")
-        .0;
-    assert_eq!(
-        buffer[(selected.x + 1, selected.y)].style().bg,
-        Some(palette::PILL_SELECTED_BG),
-        "selected pill appearance"
-    );
-    let row_text = (0..buffer.area().width)
-        .map(|x| buffer[(x, first.y)].symbol())
-        .collect::<String>();
-    assert!(
-        row_text.contains("Continue"),
-        "pill row missing label: {row_text:?}"
-    );
-    assert_eq!(
-        buffer[(first.x, first.y)].symbol(),
-        "◢",
-        "the selector painter owns the pill-bar start glyph"
-    );
+        let panel = panel(&model);
+        assert!(
+            panel.test_selector_hits().regions().is_empty(),
+            "Continue publishes no Selector-row pill targets at {width}x{height}"
+        );
+        let selector_bar = panel
+            .test_narrow_geometry()
+            .map(|geometry| geometry.selector_bar)
+            .or_else(|| {
+                panel
+                    .test_wide_geometry()
+                    .map(|geometry| geometry.selector_bar)
+            })
+            .expect("the Library panel paints a Home skeleton");
+        assert_eq!(
+            selector_bar.height, 0,
+            "Continue places no Selector-row band at {width}x{height}"
+        );
+    }
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task

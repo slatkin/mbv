@@ -161,7 +161,7 @@ impl Model {
         let placement = self.sync_chrome_root().tab;
         self.mount_to_placement(ChromePanel::Tab, placement);
         let id = ChromePanel::Tab.id();
-        let titles: Vec<String> = std::iter::once("Home".to_string())
+        let titles: Vec<String> = std::iter::once("Continue".to_string())
             .chain(self.app.libs.iter().map(|l| l.library.name.clone()))
             .chain(
                 self.app

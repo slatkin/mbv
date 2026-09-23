@@ -501,7 +501,11 @@ fn non_wide_column_body_follows_the_panel_focus_bit() {
             .expect("the non-Wide frame places the library panel");
         let content =
             crate::app::render::components::widgets::right_panel_content_area(placement, true);
-        let spacer = crate::app::render::wide_hero_browser_pane(content, content).spacer_area;
+        let spacer =
+            crate::app::render::arrangements::wide_hero::wide_hero_browser_pane_with_selector(
+                content, content, true,
+            )
+            .spacer_area;
         let band = model
             .app
             .compute_chrome_geometry(Rect::new(0, 0, width, 30))
@@ -569,7 +573,9 @@ fn focused_overflowing_narrow_scrollbar_column_shows_the_column_body_surface() {
         .expect("the non-Wide frame places the library panel");
     let content =
         crate::app::render::components::widgets::right_panel_content_area(placement, true);
-    let pane = crate::app::render::wide_hero_browser_pane(content, content);
+    let pane = crate::app::render::arrangements::wide_hero::wide_hero_browser_pane_with_selector(
+        content, content, true,
+    );
     assert!(
         pane.list_panel.height > 8,
         "setup: the list must have visible rows, got {:?}",

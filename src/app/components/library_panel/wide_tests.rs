@@ -11,7 +11,9 @@ use crate::app::components::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, PanelList, SelectorRow, Workspace,
     WorkspaceHeader,
 };
-use crate::app::render::arrangements::library::wide_library_panes;
+use crate::app::render::arrangements::library::{
+    wide_library_panes, wide_library_panes_with_selector,
+};
 use ratatui::backend::TestBackend;
 use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
@@ -139,8 +141,8 @@ fn tv_flat_modes_reclaim_the_wide_hero_pane(#[case] mode: mbv_core::config::TvCo
         .unwrap();
 
     let geometry = panel.test_wide_geometry().expect("Wide panel geometry");
-    let panes =
-        wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None, false).expect("Wide arrangement");
+    let panes = wide_library_panes_with_selector(AREA, PANE_PAD_X, PANE_PAD_Y, None, false, false)
+        .expect("Wide arrangement without Selector row");
     assert_eq!(geometry.browser, panes.content_area);
     assert_eq!(geometry.hero.width, 0);
     assert_eq!(geometry.list_panel.right(), AREA.right());
@@ -518,21 +520,18 @@ fn browser_focused_list_carries_the_focus_green() {
             }),
         }),
     };
-    let (buf, geometry, _hits) = draw_skeleton(&mut content, true);
+    let (buf, geometry, hits) = draw_skeleton(&mut content, true);
     // The browser list holds focus: green list box, resting hero pane and
     // resting workspace box.
     assert_eq!(
         buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
         palette::surface_colors(palette::Surface::LibraryPanel, true).fill
     );
-    // The Selector row's spacer is the panel showing through, so the focused
-    // panel paints it with the column body's focused fill (the reserved row
-    // and its spacer paint even with no `SelectorRow`).
     assert_eq!(
-        buf[(geometry.selector_bar.x, geometry.selector_bar.y + 1)].bg,
-        palette::surface_colors(palette::Surface::PillRowGap, true).fill,
-        "the focused panel's spacer band carries the focused column body"
+        geometry.selector_bar.height, 0,
+        "a destination without a Selector row reserves no band"
     );
+    assert!(hits.selector.regions().is_empty());
     assert_eq!(
         buf[(geometry.hero.x, geometry.hero.y)].bg,
         palette::surface_colors(palette::Surface::HeroPane, false).fill
