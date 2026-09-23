@@ -117,7 +117,7 @@ impl Model {
             LaunchSelector::Emby { index } => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     if index == usize::MAX {
-                        self.clear_emby_letter_filter_for_launch(lib_idx);
+                        self.clear_emby_letter_filter(lib_idx);
                         self.set_emby_owner_latest_mode(key, false);
                     } else {
                         self.app.handle_mouse_selector_click_emby(lib_idx, index);
@@ -149,11 +149,10 @@ impl Model {
         }
     }
 
-    /// Return an Emby letter-pilled library to its unfiltered top-level scope
-    /// while restoring launch state. This is the clear counterpart to the
-    /// ordinary pill click: it refreshes the full range instead of treating
-    /// index zero as an A–C pill.
-    fn clear_emby_letter_filter_for_launch(&mut self, lib_idx: usize) {
+    /// Return an Emby letter-pilled library to its unfiltered scope. This is
+    /// the clear counterpart to an ordinary pill click: it refreshes the full
+    /// range instead of treating index zero as an A–C pill.
+    pub(super) fn clear_emby_letter_filter(&mut self, lib_idx: usize) {
         if !self.app.should_show_letter_pills(lib_idx) {
             return;
         }

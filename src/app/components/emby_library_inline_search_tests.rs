@@ -402,7 +402,7 @@ fn browser_owner_latest_participates_in_letter_and_group_cycle() {
             modifiers: KeyModifiers::NONE,
         }),
         Some(Msg::Shell(ShellRequest::EmbyLibraryLatestExit {
-            target: 0
+            target: usize::MAX
         }))
     );
     assert!(!owner.latest_mode());

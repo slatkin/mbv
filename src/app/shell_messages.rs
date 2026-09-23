@@ -547,12 +547,16 @@ impl Model {
                     }
                     ShellRequest::EmbyLibraryLatestExit { target } => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                            let returning_to_selected_home_video_group = self
-                                .app
-                                .is_feed_home_video_group_view(lib_idx)
-                                && self.app.feed_home_video_selected_group_index(lib_idx) == target;
-                            if !returning_to_selected_home_video_group {
-                                self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                            if target == usize::MAX {
+                                self.clear_emby_letter_filter(lib_idx);
+                            } else {
+                                let returning_to_selected_home_video_group =
+                                    self.app.is_feed_home_video_group_view(lib_idx)
+                                        && self.app.feed_home_video_selected_group_index(lib_idx)
+                                            == target;
+                                if !returning_to_selected_home_video_group {
+                                    self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                                }
                             }
                         }
                         self.push_active_emby_library_owner_content();

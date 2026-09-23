@@ -148,6 +148,109 @@ fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16)
     }
 }
 
+#[test]
+fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
+    let mut app = make_movie_app();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.libs[0].library_total = Some(100);
+    let mut first = crate::app::tests::make_item("Movie A", "Movie");
+    first.id = "movie-a".into();
+    let mut second = crate::app::tests::make_item("Movie Z", "Movie");
+    second.id = "movie-z".into();
+    app.libs[0].nav_stack[0].items = vec![first.clone(), second.clone()];
+    app.libs[0].nav_stack[0].total_count = 2;
+    app.libs[0].nav_stack[0].loading = false;
+
+    let mut latest = crate::app::tests::make_item("Latest Movie", "Movie");
+    latest.id = "latest-movie".into();
+    let snapshot = crate::app::types_playback::HomeLatestSection::new(
+        "Movies".into(),
+        crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
+        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(latest))],
+    );
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().tv_latest_snapshots.insert("lib-movies".into(), snapshot);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, 100, 30);
+
+    let outcome = click_selector(&mut harness, 0);
+    dispatch_messages(&mut harness, outcome.messages);
+    let _ = draw(&mut harness, 100, 30);
+    let outcome = click_selector(&mut harness, 1);
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::EmbyLibraryLatestExit { target: usize::MAX })
+    )));
+    dispatch_messages(&mut harness, outcome.messages);
+    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+
+    // Complete the refresh requested by the clear intent with the full
+    // unfiltered result set, then verify the mounted owner navigates that set.
+    let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
+    level.items = vec![first, second];
+    level.total_count = 2;
+    level.loading = false;
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+    assert_eq!(browser_owner(&harness).cursor(), 1);
+    assert_eq!(
+        browser_owner(&harness).launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Emby { id: "movie-z".into() })
+    );
+
+    // Returning to the previously active bucket still selects that bucket.
+    let mut bucket_app = make_movie_app();
+    bucket_app.panel_focus = crate::app::PanelFocus::Library;
+    bucket_app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    bucket_app.mini_view_focus = crate::app::PanelFocus::Library;
+    bucket_app.libs[0].library_total = Some(100);
+    let mut bucket_movie = crate::app::tests::make_item("Movie G", "Movie");
+    bucket_movie.id = "movie-g".into();
+    let level = &mut bucket_app.libs[0].nav_stack[0];
+    level.letter_filter = crate::app::render::LetterFilter::for_index_for_kind(
+        2,
+        crate::app::render::LetterFilterKind::Movie,
+    );
+    level.items = vec![bucket_movie];
+    level.total_count = 1;
+    level.loading = false;
+    let mut bucket_latest = crate::app::tests::make_item("Latest Movie", "Movie");
+    bucket_latest.id = "latest-movie".into();
+    let mut bucket_harness = TickHarness::new(bucket_app);
+    bucket_harness.model_mut().tv_latest_snapshots.insert(
+        "lib-movies".into(),
+        crate::app::types_playback::HomeLatestSection::new(
+            "Movies".into(),
+            crate::app::types_playback::HomeLatestSource::Emby("lib-movies".into()),
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(bucket_latest))],
+        ),
+    );
+    bucket_harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut bucket_harness, 100, 30);
+    let outcome = click_selector(&mut bucket_harness, 0);
+    dispatch_messages(&mut bucket_harness, outcome.messages);
+    let _ = draw(&mut bucket_harness, 100, 30);
+    let outcome = click_selector(&mut bucket_harness, 3);
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::EmbyLibraryLatestExit { target: 2 })
+    )));
+    dispatch_messages(&mut bucket_harness, outcome.messages);
+    assert_eq!(
+        bucket_harness.model().app.libs[0].nav_stack[0]
+            .letter_filter
+            .as_ref()
+            .map(|filter| filter.index),
+        Some(2)
+    );
+}
+
 #[rstest::rstest]
 #[case::wide(100)]
 #[case::narrow(60)]

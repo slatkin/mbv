@@ -82,13 +82,8 @@ impl Model {
                 self.app.go_back(lib_idx);
             }
 
-            // `[`/`]` on a feed/home-video group-picker library
-            // (`is_feed_home_video_group_view`, migrate-narrow-browse task
-            // 2.2): the component's projected content carries the
-            // group-pill flag, so its bracket keys mean group cycling; the
-            // shell derives the active library index from its own tab state
-            // and runs `App::switch_feed_folder_group` (rem_euclid wrap over
-            // "All" + every visible group).
+            // `[`/`]` group cycling is resolved locally by the mounted
+            // Emby library component from its projected group-picker state.
 
             // Every local browser cursor key (arrows/hjkl, Page keys,
             // Home/End) resolves to an item index inside the component and

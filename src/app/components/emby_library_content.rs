@@ -309,8 +309,18 @@ impl EmbyLibraryContent {
         }
         let was_latest = self.latest_mode;
         self.set_latest_mode(false);
+        let target = if was_latest
+            && self.show_letter_pills
+            && !self.group_pills
+            && index == 1
+            && self.letter_filter.is_none()
+        {
+            usize::MAX
+        } else {
+            index - 1
+        };
         Some(Msg::Shell(if was_latest {
-            ShellRequest::EmbyLibraryLatestExit { target: index - 1 }
+            ShellRequest::EmbyLibraryLatestExit { target }
         } else {
             ShellRequest::EmbyLibraryPillClick { target: index - 1 }
         }))
