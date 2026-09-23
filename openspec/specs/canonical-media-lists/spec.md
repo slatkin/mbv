@@ -110,17 +110,20 @@ The policy's owning-surface identity SHALL NOT move the selected row's fill: eve
 It SHALL support Wide Hero browser rails, non-Wide Library browser lists, provider Workspace rows, and Queue fixed rows for destinations whose flow is flat, but SHALL NOT implement selected-row replacement or Grid placement. A destination whose flow nests uses the tree list shape over the same seam instead; for TV, the show-browsing modes are such a nested flow, while `Latest`, `Upcoming`, and the Hero's episode Workspace remain flat flows of this presentation. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use this presentation in every Panel mode.
 
 #### Scenario: A selected row paints the selected-row bar
+
 - **WHEN** a fixed-row list renders its selected row while focused
 - **THEN** the row paints the bar fill across its full width, overriding its zebra stripe and its two-column gutters
 - **AND** every span keeps the ordinary unselected foreground role, with no bold title
 - **AND** no icon or marker glyph appears in or beside the row
 
 #### Scenario: An unfocused list paints no bar for its cursor row
+
 - **WHEN** a fixed-row list renders while unfocused
 - **THEN** no selectable cursor row carries the bar fill
 - **AND** striped positions still show the unfocused secondary background when striping applies
 
 #### Scenario: A multi-selected row paints the bar
+
 - **WHEN** a fixed-row list renders rows that are part of a multi-selection while the list is unfocused
 - **THEN** each multi-selected row paints the bar with its ordinary foreground
 - **AND** the bar overrides its zebra stripe
@@ -133,12 +136,14 @@ It SHALL support Wide Hero browser rails, non-Wide Library browser lists, provid
 - **AND** TV show-browsing modes instead paint through the tree list shape, not this presentation
 
 #### Scenario: Queue paints and resolves one current row flow
+
 - **WHEN** Queue paints a non-empty fixed-row list in any Panel mode
 - **THEN** its presentation receives equal established claim and row-flow rectangles through one component view and paints ordinary rows once
 - **AND** Queue resolves a later row point to the `QueueSlotId` from the seam's retained result
 - **AND** Queue does not rebuild row rectangles or a selectable row map
 
 #### Scenario: Grouped Music paints both Wide row flows
+
 - **WHEN** Grouped Music paints its album-track or artist-track Workspace
 - **THEN** the flow uses the fixed-row presentation over the shared seam
 - **AND** Grouped Music resolves later row points from the seam's retained result without a cursor mirror or row map
@@ -151,6 +156,7 @@ It SHALL support Wide Hero browser rails, non-Wide Library browser lists, provid
 - **AND** the destination resolves later row points from the seam's retained result without a cursor mirror or row map
 
 #### Scenario: A Wide result expires before another view
+
 - **WHEN** a fixed-row presentation is configured for a new frame or receives an empty or zero-area view
 - **THEN** the seam's retained geometry is invalidated, so its prior point claim and selected-row geometry are unavailable
 - **AND** a parent treats the presentation as having no list target until the current view finishes
@@ -269,6 +275,7 @@ TV show-browsing modes (`All` and the alphabet ranges) SHALL present their shows
 When grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide width and minimum-height predicate, it SHALL follow the TV/Movies composition: its provider-owned detail/workspace SHALL occupy the right pane, and its parent-owned browser-level pills followed by its one-column browser SHALL occupy the left rail. Grouped Music SHALL place its shallow artist/album tree in that browser slot, TV show-browsing modes SHALL place the shared show/season/episode tree there, and the other destinations SHALL place ordinary canonical rows there. The arrangement SHALL use the same shared predicate, pane framing, content spacing, and short-height fallback as TV/Movies. The Wide presentation SHALL NOT use an Inline hero or selected-row replacement in the left rail; when the shared predicate is not met, the destination SHALL use the shared Inline fallback (or suppress detail when the shared minimum cannot fit), not a bespoke arrangement. The arrangement mechanics of this precedent — shared predicate, pane framing, content spacing, and short-height fallback — are specified by the `right-panel-arrangements` spec; this requirement governs only how the browser control composes into that arrangement.
 
 #### Scenario: Wide provider workspace and ordinary rail
+
 - **WHEN** grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide geometry conditions
 - **THEN** its provider-owned detail/workspace is on the right
 - **AND** its browser-level pills and one-column browser are on the left
@@ -276,6 +283,7 @@ When grouped Music or an Audiobookshelf Podcast or Book destination meets the sh
 - **AND** no Wide Inline hero or selected-row replacement is painted in the left rail
 
 #### Scenario: Shared predicate and fallback apply
+
 - **WHEN** the destination crosses the shared width or minimum-height guard
 - **THEN** it uses the same predicate, pane framing, content spacing, and short-height fallback as TV/Movies
 - **AND** it does not introduce a destination-specific arrangement or breakpoint
