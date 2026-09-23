@@ -87,7 +87,6 @@ impl App {
             return;
         }
         let Some(client) = self.emby_snapshot() else {
-            self.pending_series_season_expansions.insert(key);
             return;
         };
         self.pending_series_season_expansions.remove(&key);

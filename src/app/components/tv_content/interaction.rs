@@ -398,9 +398,7 @@ impl TvContent {
                 occurrence,
                 ..
             } => self
-                .context
-                .series_detail
-                .as_ref()?
+                .detail_for_show(&show)?
                 .seasons
                 .iter()
                 .filter(|item| item.id == *season)
@@ -413,7 +411,7 @@ impl TvContent {
                 occurrence,
                 ..
             } => {
-                let detail = self.context.series_detail.as_ref()?;
+                let detail = self.detail_for_show(&show)?;
                 detail
                     .seasons
                     .iter()

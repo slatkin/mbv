@@ -187,7 +187,7 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
 }
 
 #[test]
-fn pending_season_expansion_survives_missing_emby_snapshot() {
+fn pending_season_expansion_does_not_strand_without_emby_snapshot() {
     let mut model = mounted_tv_model();
     model
         .app
@@ -209,10 +209,10 @@ fn pending_season_expansion_survives_missing_emby_snapshot() {
         },
     );
 
-    assert!(model
-        .app
-        .pending_series_season_expansions
-        .contains(&("movie-focused".into(), "season-2".into())));
+    // Without an Emby client no season fetch can start, and the request must
+    // not strand a pending key no drain can ever consume: the detail drain is
+    // unreachable on a cache hit, so the no-client arm stays a silent no-op.
+    assert!(model.app.pending_series_season_expansions.is_empty());
     assert!(model.app.series_season_loading.is_empty());
 }
 

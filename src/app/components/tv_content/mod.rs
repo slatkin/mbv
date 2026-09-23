@@ -355,6 +355,36 @@ impl TvContent {
             .map(|(_, show)| show)
     }
 
+    /// The loaded detail to project beneath `show`: the shell's per-show map
+    /// entry when present, else the selected show's detail for contexts built
+    /// without the map (existing unit tests).
+    fn detail_for_projection<'a>(
+        context: &'a TvWideRenderCtx,
+        show: &EmbyItem,
+    ) -> Option<&'a crate::app::SeriesDetail> {
+        context.series_details.get(&show.id).or_else(|| {
+            context
+                .selected_series
+                .as_ref()
+                .filter(|selected| selected.id == show.id && selected.name == show.name)
+                .and(context.series_detail.as_ref())
+        })
+    }
+
+    /// The loaded detail holding `show`'s seasons/episodes for target
+    /// resolution: the shell's per-show map entry when present, else the
+    /// pushed selected detail (existing single-detail contexts).
+    fn detail_for_show(&self, show: &EmbyItem) -> Option<&crate::app::SeriesDetail> {
+        self.context
+            .series_details
+            .get(&show.id)
+            .or(self.context.series_detail.as_ref())
+    }
+
+    /// Project the settled show-mode catalog into the shared tree vocabulary.
+    /// Loaded details for every listed show project per show, so an expanded
+    /// show keeps its children while another show is selected. Contexts built
+    /// without the shell's detail map fall back to the selected show's detail.
     fn tree_projection(context: &TvWideRenderCtx) -> Vec<TreeEntry<TvTreeTarget>> {
         let grouped = context.show_letter_pills
             || context.list.has_letter_filter()
@@ -367,7 +397,6 @@ impl TvContent {
         let shows = Self::show_targets(&context.list.items);
         let mut entries = Vec::with_capacity(shows.len() + 8);
         let mut previous_bucket: Option<String> = None;
-        let mut detail_projected = false;
         for (show_id, show) in shows {
             let target = TvTreeTarget::Show(show_id.clone());
             if grouped {
@@ -393,17 +422,9 @@ impl TvContent {
                 .with_expandable(true),
             ));
 
-            let Some(detail) = context
-                .selected_series
-                .as_ref()
-                .filter(|selected| {
-                    !detail_projected && selected.id == show.id && selected.name == show.name
-                })
-                .and(context.series_detail.as_ref())
-            else {
+            let Some(detail) = Self::detail_for_projection(context, show) else {
                 continue;
             };
-            detail_projected = true;
             // An empty completed detail has no pending children to load.
             if let TreeEntry::Node(root) = &mut entries[root_index] {
                 root.expandable = !detail.seasons.is_empty();

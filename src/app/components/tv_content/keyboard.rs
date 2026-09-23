@@ -4,6 +4,7 @@ use super::super::inline_search::InlineSearchAction;
 use super::super::list::tree_browser::TreeOperation;
 use super::{Msg, Pane, ShellRequest, TerminalObserverEvent, TvContent, TvTreeTarget};
 use crate::app::components::media_list::MediaListSurfaceInput;
+use mbv_core::api::EmbyItem;
 
 impl TvContent {
     /// Ctrl+P/S/A on the selected Inline Search result reuse the ordinary
@@ -128,6 +129,55 @@ impl TvContent {
     /// Show-mode navigation changes the tree's selected stable target. Moving
     /// between show roots also projects the resolved show position to the
     /// shell so its existing series-detail request remains synchronized.
+    ///
+    /// The shared library effects (play/enqueue/watch/shuffle, rescan/
+    /// refresh, search, letter-pill cycle) live in
+    /// [`Self::shared_library_effect`]; this entry point resolves the tree's
+    /// item and delegates those chords before its own navigation/activation/
+    /// context arms. `.` stays caller-specific: show-tree resolves TreeBrowser
+    /// context targets while Wide uses `context_menu_request`.
+    fn shared_library_effect(&mut self, key: &KeyEvent, item: Option<EmbyItem>) -> Option<Msg> {
+        let request = match key.code {
+            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryPlay { item })?
+            }
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryEnqueue { item })?
+            }
+            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })?
+            }
+            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                item.map(|item| ShellRequest::EmbyLibraryShuffle { item })?
+            }
+            Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                ShellRequest::EmbyLibraryRescan
+            }
+            Key::Char('r')
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                ShellRequest::EmbyLibraryRefresh
+            }
+            Key::Char('/') => {
+                self.inline_search.open();
+                ShellRequest::OpenInlineSearch
+            }
+            Key::Char(c @ ('[' | ']'))
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                ShellRequest::TvCycleLetterPill {
+                    delta: if c == '[' { -1 } else { 1 },
+                }
+            }
+            _ => return None,
+        };
+        Some(Msg::Shell(request))
+    }
+
     fn handle_show_tree_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let selected = self.browser.selected_target().cloned();
         let transition = match key.code {
@@ -160,6 +210,11 @@ impl TvContent {
         let item = target
             .as_ref()
             .and_then(|target| self.show_item_for_tree_target(target));
+        // Shared library effects resolve against the tree's item; the match
+        // below keeps only branch-specific navigation/activation/context.
+        if let Some(message) = self.shared_library_effect(key, item.clone()) {
+            return Some(message);
+        }
         let request = match key.code {
             Key::Enter => {
                 let activated = match self.browser.apply(TreeOperation::Activate).external_intent {
@@ -248,47 +303,18 @@ impl TvContent {
                     None,
                 ))
             }
-            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryPlay { item })
-            }
-            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryEnqueue { item })
-            }
-            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
-            }
-            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryShuffle { item })
-            }
-            Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                Some(ShellRequest::EmbyLibraryRescan)
-            }
-            Key::Char('r')
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                Some(ShellRequest::EmbyLibraryRefresh)
-            }
-            Key::Char('/') => {
-                self.inline_search.open();
-                return Some(Msg::Shell(ShellRequest::OpenInlineSearch));
-            }
-            Key::Char(c @ ('[' | ']'))
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                return Some(Msg::Shell(ShellRequest::TvCycleLetterPill {
-                    delta: if c == '[' { -1 } else { 1 },
-                }));
-            }
             _ => None,
         };
         request.map(Msg::Shell)
     }
 
     /// Wide pane-based keyboard handling (unchanged from before the merge).
+    ///
+    /// Shared library effects resolve against the component's selected item
+    /// via [`Self::shared_library_effect`]; the match below keeps only
+    /// branch-specific navigation/activation/context. The Episodes-pane
+    /// season-pill `[`/`]` arms stay here so they shadow the shared
+    /// letter-pill cycle, and `.` stays caller-specific like show-tree.
     fn handle_key_wide(&mut self, key: &KeyEvent) -> Option<Msg> {
         let request = match key.code {
             Key::Enter if self.pane == Pane::Series && self.flat_episode_mode() => self
@@ -360,47 +386,16 @@ impl TvContent {
                 self.jump_cursor(true);
                 Some(ShellRequest::TvJumpCursor { to_end: true })
             }
-            // Library effects use the component's selected item. TV keeps
-            // the series-list selection authoritative even while the local
-            // Episodes pane is focused, matching the legacy stack target.
-            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryPlay { item }),
-            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryEnqueue { item }),
-            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryToggleWatched { item }),
-            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryShuffle { item }),
-            Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                Some(ShellRequest::EmbyLibraryRescan)
-            }
-            Key::Char('r')
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                Some(ShellRequest::EmbyLibraryRefresh)
-            }
             Key::Char('.') => self.context_menu_request(),
-            Key::Char('/') => {
-                self.inline_search.open();
-                Some(ShellRequest::OpenInlineSearch)
-            }
-            Key::Char(c @ ('[' | ']'))
-                if !key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                Some(ShellRequest::TvCycleLetterPill {
-                    delta: if c == '[' { -1 } else { 1 },
-                })
-            }
             _ => None,
         };
-        request.map(Msg::Shell)
+        if let Some(request) = request {
+            return Some(Msg::Shell(request));
+        }
+        // Library effects use the component's selected item. TV keeps
+        // the series-list selection authoritative even while the local
+        // Episodes pane is focused, matching the legacy stack target.
+        self.shared_library_effect(key, self.selected_item())
     }
 
     /// Narrow flat-list keyboard handling (mirrors the prior TV browse

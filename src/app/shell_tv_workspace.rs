@@ -471,6 +471,18 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
+        // Loaded details for every listed show: the tree projects children
+        // per show so an expanded show keeps them while another is selected.
+        let series_details = list
+            .items
+            .iter()
+            .filter_map(|item| {
+                self.app
+                    .series_detail_cache
+                    .get(&item.id)
+                    .map(|detail| (item.id.clone(), detail.clone()))
+            })
+            .collect();
         // The hero image is NOT projected here: task 5.10's central projection
         // (`sync_library_hero_images`, design D9) is the one projector for
         // every migrated owner, and TV is one since task 8.4. Pushing a second
@@ -485,6 +497,7 @@ impl Model {
             self.app.should_show_letter_pills(index),
         );
         context.set_tv_content_mode(tv_content_mode);
+        context.set_series_details(series_details);
         let latest_source = super::types_playback::HomeLatestSource::Emby(library_id);
         let latest_has_new_content = self
             .home_content

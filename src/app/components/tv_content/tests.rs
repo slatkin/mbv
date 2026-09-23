@@ -1141,6 +1141,75 @@ fn expanded_show_and_selected_target_survive_detail_completion() {
 }
 
 #[test]
+fn expanded_show_keeps_loaded_children_when_selection_moves_to_another_show() {
+    use crate::app::components::list::tree_browser::TreeOperation;
+    use crate::app::components::tv_tree_target::TvTreeTarget;
+
+    let mut season_a = make_item("Season 1", "Season");
+    season_a.id = "season-a1".into();
+    let mut season_b = make_item("Season 1", "Season");
+    season_b.id = "season-b1".into();
+    let detail_a = crate::app::SeriesDetail {
+        seasons: vec![season_a],
+        episodes: std::collections::HashMap::new(),
+    };
+    let detail_b = crate::app::SeriesDetail {
+        seasons: vec![season_b],
+        episodes: std::collections::HashMap::new(),
+    };
+    let shows = || vec![tv_show("Alpha", "show-a"), tv_show("Beta", "show-b")];
+    let mut context = tv_tree_context(shows(), Some("show-a"), Some(detail_a.clone()), false);
+    context.series_details = [
+        ("show-a".to_string(), detail_a.clone()),
+        ("show-b".to_string(), detail_b.clone()),
+    ]
+    .into_iter()
+    .collect();
+    let mut component = TvContent::new();
+    component.set_content(context);
+    let show_a = TvTreeTarget::Show("tv-id:6:show-a".into());
+    component
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(show_a.clone()));
+    assert!(component.browser.is_expanded(&show_a));
+
+    // The shell moves its selected-series projection to B while both details
+    // stay cached; A's expanded branch must keep its loaded children.
+    let mut context = tv_tree_context(shows(), Some("show-b"), Some(detail_b.clone()), false);
+    context.series_details = [
+        ("show-a".to_string(), detail_a),
+        ("show-b".to_string(), detail_b),
+    ]
+    .into_iter()
+    .collect();
+    component.set_content(context);
+
+    assert!(component.browser.is_expanded(&show_a));
+    assert!(
+        component
+            .browser
+            .node(&TvTreeTarget::Season {
+                show: "tv-id:6:show-a".into(),
+                season: "season-a1".into(),
+                occurrence: 0,
+            })
+            .is_some(),
+        "expanded show A keeps its loaded season after selection moves to B"
+    );
+    assert!(
+        component
+            .browser
+            .node(&TvTreeTarget::Season {
+                show: "tv-id:6:show-b".into(),
+                season: "season-b1".into(),
+                occurrence: 0,
+            })
+            .is_some(),
+        "selected show B projects its own loaded season"
+    );
+}
+
+#[test]
 fn completed_empty_details_remove_pending_expandability() {
     use crate::app::components::tv_tree_target::TvTreeTarget;
 
