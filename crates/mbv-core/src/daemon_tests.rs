@@ -680,6 +680,58 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
 }
 
 #[test]
+fn stale_stopped_and_completed_run_observations_are_rejected() {
+    let player = cold_player();
+    player.status.lock().unwrap().sequence_generation = 5;
+    let queue = queue_from_items(
+        &[item("a", "Video", "Movie"), item("b", "Video", "Movie")],
+        0,
+    );
+    let owner = PlayerOwnerState::new(queue, QueueSource::Remote);
+    let original_len = owner.queue.len();
+    let original_active = owner.queue.active_slot_id();
+    let original_position = owner.queue.slots()[0].item.playback_position_ticks();
+    let old_run = (0, 4);
+    let stale_events = [
+        PlayerEvent::Stopped {
+            slot_id: Some(crate::playback_queue::QueueSlotId::from_raw(1)),
+            run_identity: old_run,
+            position_ticks: 900,
+            played: true,
+            consume: true,
+            progress_report_accepted: true,
+            error: None,
+        },
+        PlayerEvent::TrackCompleted {
+            slot_id: crate::playback_queue::QueueSlotId::from_raw(1),
+            run_identity: old_run,
+            position_ticks: 900,
+            played: true,
+            consume: true,
+            progress_report_accepted: true,
+        },
+    ];
+
+    for event in stale_events {
+        let identity = match event {
+            PlayerEvent::Stopped { run_identity, .. }
+            | PlayerEvent::TrackCompleted { run_identity, .. } => run_identity,
+            _ => unreachable!(),
+        };
+        if crate::daemon::playback_run_identity_is_current(identity, &player) {
+            panic!("old-run observation must not reach owner queue application");
+        }
+    }
+    assert_eq!(owner.queue.len(), original_len);
+    assert_eq!(owner.queue.active_slot_id(), original_active);
+    assert_eq!(
+        owner.queue.slots()[0].item.playback_position_ticks(),
+        original_position
+    );
+    assert!(crate::daemon::playback_run_identity_is_current((0, 5), &player));
+}
+
+#[test]
 fn stale_track_changed_report_leaves_queue_and_observed_slot_unchanged() {
     let queue = queue_from_items(
         &[item("a", "Video", "Movie"), item("b", "Video", "Movie")],

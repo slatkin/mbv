@@ -258,6 +258,7 @@ impl PlaybackRun {
                 cancel_stop = true;
             }
             PlayerCommand::SubmitQueue { items, start_idx } => {
+                self.run_identity = (0, self.status.lock().unwrap().sequence_generation);
                 self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;
             }
@@ -698,6 +699,7 @@ impl PlaybackRun {
 
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: self.active_slot_id(),
+            run_identity: self.run_identity,
             position_ticks,
             played: false,
             consume: false,

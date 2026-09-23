@@ -336,6 +336,7 @@ impl PlaybackRun {
         self.status.lock().unwrap().active = false;
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: stopped_slot,
+            run_identity: self.run_identity,
             position_ticks: 0,
             played: false,
             consume: false,
@@ -390,6 +391,7 @@ impl PlaybackRun {
         if !self.stopped_event_sent {
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: 0,
                 played: natural_end && !completed_is_audio && self.reporter.has_session(),
                 consume: false,
@@ -435,6 +437,7 @@ impl PlaybackRun {
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -498,6 +501,7 @@ impl PlaybackRun {
                 StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: self.last_valid_pos,
                 played: false,
                 consume: false,
@@ -614,6 +618,7 @@ impl PlaybackRun {
             }
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: completed_pos,
                 played: played_out,
                 consume: consume_track,
@@ -654,6 +659,7 @@ impl PlaybackRun {
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -717,6 +723,7 @@ impl PlaybackRun {
         if let Some(completed_slot_id) = completed_slot_id {
             let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: completed_pos,
                 played: played_out,
                 consume: consume_track,
@@ -762,6 +769,7 @@ impl PlaybackRun {
             if !self.stopped_event_sent {
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
                     slot_id: stopped_slot,
+                    run_identity: self.run_identity,
                     position_ticks: self.last_valid_pos,
                     played: near_end,
                     consume: false,
@@ -785,6 +793,7 @@ impl PlaybackRun {
         // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: stopped_slot,
+            run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,

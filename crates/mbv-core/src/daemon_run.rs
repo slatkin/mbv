@@ -1,3 +1,10 @@
+fn playback_run_identity_is_current(
+    run_identity: (PlaybackRequestId, PlaybackGeneration),
+    player: &Player,
+) -> bool {
+    run_identity == (0, player.status.lock().unwrap().sequence_generation)
+}
+
 fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
     owner: &mut DaemonPlayerOwner,
@@ -449,11 +456,15 @@ pub fn run_with_options(
             }
             DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted {
                 slot_id,
+                run_identity,
                 position_ticks,
                 played,
                 consume,
                 ..
             }) => {
+                if !playback_run_identity_is_current(run_identity, &player) {
+                    continue;
+                }
                 // The canonical queue must record this occurrence's real
                 // position before it is consumed/broadcast — otherwise every
                 // client resync (including the very next TrackChanged) rebuilds
@@ -498,6 +509,11 @@ pub fn run_with_options(
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Player(pe) => {
+                if let PlayerEvent::Stopped { run_identity, .. } = &pe {
+                    if !playback_run_identity_is_current(*run_identity, &player) {
+                        continue;
+                    }
+                }
                 if let PlayerEvent::Stopped {
                     slot_id: Some(slot_id),
                     position_ticks,

@@ -6,6 +6,7 @@ enum PlaybackOrigin {
 
 struct PlaybackRun {
     origin: PlaybackOrigin,
+    run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
     config: MpvRunConfig,
     reporter: SessionReporter,
     event_tx: mpsc::Sender<PlayerEvent>,

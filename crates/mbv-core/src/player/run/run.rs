@@ -124,6 +124,7 @@ impl PlaybackRun {
                     self.status.lock().unwrap().active = false;
                     let _ = self.event_tx.send(PlayerEvent::Stopped {
                         slot_id: self.stop_slot.or_else(|| self.active_slot_id()),
+                        run_identity: self.run_identity,
                         position_ticks: self.last_valid_pos,
                         played,
                         consume,
@@ -328,6 +329,7 @@ impl PlaybackRun {
                 // Panic teardown: the run's queue is gone with the unwound
                 // stack, so no slot identity can be resolved.
                 slot_id: None,
+                run_identity: self.run_identity,
                 position_ticks: 0,
                 played: false,
                 consume: false,

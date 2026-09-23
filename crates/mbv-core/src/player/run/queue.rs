@@ -228,6 +228,7 @@ impl PlaybackRun {
         if let Some(slot_id) = abandoned_slot {
             let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
                 slot_id,
+                run_identity: self.run_identity,
                 position_ticks: abandoned_pos,
                 played: false,
                 consume: false,
@@ -613,6 +614,7 @@ impl PlaybackRun {
             "playback init origin={origin:?} idx={start_idx} item_pos={}s",
             initial_pos / crate::api::TICKS_PER_SECOND
         );
+        let run_identity = (0, status.lock().unwrap().sequence_generation);
         let active_file = queue.has_audiobookshelf_entries();
         let active_file_starting = active_file && prepared_source.is_some();
         let mut prepared_source = prepared_source;
@@ -624,6 +626,7 @@ impl PlaybackRun {
         );
         PlaybackRun {
             origin,
+            run_identity,
             config,
             reporter,
             event_tx,

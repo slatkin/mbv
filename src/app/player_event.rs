@@ -67,6 +67,7 @@ impl App {
                 consume,
                 progress_report_accepted,
                 error,
+                ..
             } => {
                 log::info!(target: "player", "Stopped event: slot_id={slot_id:?} position_ticks={}s played={played} error={error:?}",
                     position_ticks / mbv_core::api::TICKS_PER_SECOND);
@@ -208,6 +209,7 @@ impl App {
                 played,
                 consume,
                 progress_report_accepted,
+                ..
             } => {
                 if self.playback_queue().queue.slot(slot_id).is_none() {
                     log::warn!(target: "consume", "TrackCompleted: slot_id={slot_id:?} maps to no live slot; dropping");
