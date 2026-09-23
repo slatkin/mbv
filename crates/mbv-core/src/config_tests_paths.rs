@@ -26,6 +26,7 @@ fn library_position_state_round_trips_by_library() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             }],
             feed_selected_group: 0,

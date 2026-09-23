@@ -24,12 +24,20 @@ pub(in crate::app) struct TvWideRenderCtx {
     pub(in crate::app) episode_cursor: Option<usize>,
     pub(in crate::app) focused: bool,
     pub(in crate::app) show_letter_pills: bool,
+    pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
     /// The shell-projected hero image state (design D9/D16): the panel's
     /// shared `EmbyItem` producer reads it; painting never fetches.
     pub(in crate::app) hero_image: HeroImageState,
 }
 
 impl TvWideRenderCtx {
+    pub(in crate::app) fn set_tv_content_mode(
+        &mut self,
+        mode: Option<mbv_core::config::TvContentMode>,
+    ) {
+        self.tv_content_mode = mode;
+    }
+
     pub(in crate::app) fn new(
         list: LibraryListRenderCtx,
         selected_series: Option<EmbyItem>,
@@ -48,6 +56,7 @@ impl TvWideRenderCtx {
             // applied from `Attribute::Focus`; content projection never sets it.
             focused: false,
             show_letter_pills,
+            tv_content_mode: None,
             hero_image: HeroImageState::None,
         }
     }

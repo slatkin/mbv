@@ -43,21 +43,11 @@ depends on the tree, and the tree change will adopt these pills unchanged.
   source Home's `Latest` pill uses for that library. It fetches independently
   of Home, so Home need not have loaded.
 - Add an `Upcoming` mode backed by the Emby `GET /Shows/Upcoming` route scoped
-  to the library. Before the change is called done, a manual check against two
-  TV libraries must observe that returned episodes belong to the requested
-  library and that the returned count does not exceed 30. That check is not a
-  gate before writing the client.
-- `Latest` and `Upcoming` are flat episode lists: Enter plays the episode, and
-  they never open a series detail or workspace. A hero appears for the selected
-  episode only in mini view.
+  to the library.
+- `Latest` and `Upcoming` are flat episode lists: activating a row with a playable episode id plays it; activating an `Upcoming` row with no episode id but a series reference navigates to that series and opens its Workspace (the real server returns Virtual/id-less placeholders — see upcoming-manual-check.md). A hero appears for the selected episode only in mini view. (REVISED 2026-09-22.)
 - The content mode becomes part of the library's sticky navigation position:
-  it is saved and restored on reopen, including after an orderly exit, and the
-  existing keyboard cycling (`[`/`]`) moves across every mode. Cross-process
-  restore is `TuiLaunchState.selector`, not `LibraryPositionLevel` — that
-  document is an in-memory legacy migration source and is never written on
-  exit. `Latest`, `Upcoming`, and the three TV ranges get stable
-  `EmbySelectorKey` identities; `All` stays the existing `Unfiltered` key.
-  Movie letter identities are unchanged.
+  it is saved and restored on reopen, and the existing keyboard cycling
+  (`[`/`]`) moves across every mode.
 - The library's `Latest` mode carries the same new-content dot Home's `Latest`
   pill for that library carries, and acknowledging it on either surface clears
   it on both. This requires the acknowledgement (today owned inside the Home
@@ -66,7 +56,8 @@ depends on the tree, and the tree change will adopt these pills unchanged.
 Non-goals: converting TV to a tree (the following change); changing movie,
 music, feed, or Audiobookshelf pills; changing the `Latest`/`Upcoming` fetch
 semantics beyond reusing Home's existing `Latest` source; adding a hero or
-workspace for episodes in non-mini-view geometry.
+*episode* workspace in non-mini-view geometry (id-less `Upcoming` rows navigate
+to the *series* Workspace per above — that is a goal, added 2026-09-22).
 
 ## Capabilities
 
@@ -101,27 +92,10 @@ Affected code:
 - `src/app/lib_event_actions.rs` — the TV default/auto-scope path
   (`maybe_capture_library_total_and_apply_default_pill`).
 - `src/app/components/emby_library_content.rs` — movie side keeps nine pills.
-- `crates/mbv-core/src/config_types_queue_state.rs` — `LibraryPositionLevel`
-  gains the additive in-memory `tv_content_mode` field (beside
-  `letter_filter_index`/`library_total`). It is the legacy migration source,
-  not the orderly-exit store.
-- `crates/mbv-core/src/config_launch_state.rs` — `EmbySelectorKey` gains
-  `Latest`, `Upcoming`, and `TvRange(TvLetterBucket)` (`AToI` | `JToR` |
-  `SToZ`). Movie `Letter(EmbyLetterBucket)` is untouched. `All` stays
-  `Unfiltered`.
-- `src/app/components/tv_content/mod.rs` — `launch_snapshot` and
-  `launch_selector` read and write those identities whenever the content-mode
-  row is shown, not only when alphabet ranges are shown.
-- `src/app/cw_library_tab_actions.rs` — `migrate_legacy_launch_state` maps a
-  TV position through the TV identities; movie positions stay on
-  `EmbyLetterBucket`.
-- `src/app/types_browse.rs` / `src/app/library_load_actions.rs` — the in-app
-  read/restore side of the persisted browse-level mode.
+- `src/app/types_browse.rs` / `src/app/library_load_actions.rs` — the persisted
+  browse-level mode and its restore.
 - `src/app/components/home_content/mod.rs` and shell-owned state — hoist the
   visited/acknowledged `Latest` sources out of the component.
-- `src/app/lib_cursor_actions.rs` — `activate_searched_series` resolves its pill through the TV bucket table for TV libraries.
-- `src/app/mouse_gestures.rs` — clicked pill positions translate through the painted mode row.
-- `src/app/shell_home.rs` — the `restore_section` writers move with the acknowledgement hoist.
 - `crates/mbv-core/src/api_client_library.rs` — a `get_upcoming` fetch; the
   `Latest` fetch already exists.
 

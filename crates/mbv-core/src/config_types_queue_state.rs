@@ -90,6 +90,16 @@ impl QueueState {
 /// One library position per library (#361 collapsed the old two-scope
 /// `{default, power}` split -- there is only one view now, so there is only
 /// one saved position per library).
+/// The closed set of content modes available at the top level of a TV library.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TvContentMode {
+    Latest,
+    Upcoming,
+    All,
+    Range(usize),
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct LibraryPositionState {
     #[serde(default)]
@@ -128,10 +138,15 @@ pub struct LibraryPositionLevel {
     pub sort_by: String,
     #[serde(default)]
     pub sort_order: String,
-    /// Index of the active letter-range pill (see `app::render::power::LetterFilter`),
-    /// for the top level of a large library. `None` = unfiltered / not applicable.
+    /// Index of the active movie letter-range pill. TV positions use
+    /// `tv_content_mode` instead; this remains for old snapshots and non-TV
+    /// libraries.
     #[serde(default)]
     pub letter_filter_index: Option<usize>,
+    /// The selected top-level TV content mode. Absent means resolve the
+    /// default from `library_total` when restoring an old position.
+    #[serde(default)]
+    pub tv_content_mode: Option<TvContentMode>,
     /// The library's unfiltered item count for restoring the letter pill row.
     #[serde(default)]
     pub library_total: Option<usize>,

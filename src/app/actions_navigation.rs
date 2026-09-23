@@ -46,6 +46,7 @@ impl App {
 
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             });
             self.save_default_library_position(lib_idx);

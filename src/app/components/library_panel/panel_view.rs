@@ -7,6 +7,7 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use crate::app::components::library_panel::LibraryKind;
 use crate::app::components::msg::Msg;
 use crate::app::components::UserEvent;
 
@@ -32,11 +33,22 @@ impl Component for LibraryPanel {
         } else {
             &["ESC:Back"]
         };
+        let flat_tv_list = matches!(
+            self.owners.active_key(),
+            Some(LibraryKey::Service {
+                kind: LibraryKind::TvShows,
+                ..
+            })
+        );
         let Some(owner) = self.owners.active_mut() else {
             self.reset_split_gesture();
             return;
         };
         let overview_scroll = owner.hero_scroll_offset();
+        // Flat Latest/Upcoming TV rows are leaves, not a hero-bearing browser.
+        // The Library panel owns this Wide skeleton policy; other destinations
+        // and TV series/workspace modes retain the shared split.
+        let show_hero_pane = !flat_tv_list || owner.browser_rows_are_hero_bearing();
         let mut content = owner.content();
         #[cfg(test)]
         {
@@ -80,6 +92,7 @@ impl Component for LibraryPanel {
                 &mut hits,
                 &mut windows,
                 self.terminal_height,
+                show_hero_pane,
             ) {
                 // The split gesture owns the gap columns it painted: the
                 // gutter between the hero and browser panes, resolved

@@ -971,3 +971,19 @@ Reported to the user by name and reason rather than substituted or dropped
 silently. Distinct from Unplayable item, which never enters a Player
 owner's queue at all.
 _Avoid_: unplayable (cast), unsupported item, skip reason
+
+**TV content mode**:
+One selectable mode of a TV library's top-level pill row: `Latest`, `Upcoming`,
+an alphabet range (`A-I`, `J-R`, or `S-Z`), or `All` (small libraries only).
+The row appears only at the top browse level while not searching; `Latest`
+and `Upcoming` rows are flat episode lists that play directly, and the selected
+mode is part of the sticky library position. Governed by `tv-library-content-modes`.
+_Avoid_: TV pill (for the mode), TV range (for the whole row), TV tab (for the mode)
+
+**TV letter range**:
+The TV-specific set of alphabet range pills — `A-I` (sort names before `J`,
+including non-letter names under a `#` in-list header), `J-R` (from `J` up to
+but not including `S`), and `S-Z` (from `S` onward) — offered above the pill
+threshold instead of the movie libraries' ranges. Governed by
+`tv-library-content-modes`.
+_Avoid_: TV alphabet (bare), letter pill (for the set), movie range (for TV)

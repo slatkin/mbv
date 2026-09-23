@@ -24,6 +24,7 @@ fn mixed_services_app() -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -210,6 +211,7 @@ fn two_emby_libraries_app() -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         };
         app.libs.push(LibraryTab {

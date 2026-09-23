@@ -48,6 +48,7 @@ fn saved_level(
         sort_by: "SortName".into(),
         sort_order: "Ascending".into(),
         letter_filter_index: None,
+                tv_content_mode: None,
         library_total: None,
     }
 }
@@ -198,6 +199,7 @@ fn tv_shows_app() -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -292,6 +294,7 @@ fn feed_home_video_group_app() -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {

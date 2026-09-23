@@ -275,6 +275,7 @@ fn building_from_panel_focus_prefs_does_not_mutate_saved_library_positions() {
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
                     letter_filter_index: None,
+                tv_content_mode: None,
                     library_total: None,
                 }],
                 ..Default::default()

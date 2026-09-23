@@ -99,6 +99,7 @@ fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
 }
@@ -260,6 +261,7 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
 }
@@ -274,6 +276,48 @@ fn should_show_letter_pills_true_for_tvshows_total(#[case] total: usize) {
     app.libs[0].library_total = Some(total);
 
     assert!(app.should_show_letter_pills(0));
+}
+
+#[test]
+fn tv_first_capture_resolves_all_without_refetch_for_small_library() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 4);
+    app.libs[0].nav_stack[0].total_count = 4;
+
+    app.maybe_capture_library_total_and_apply_default_pill(0);
+
+    assert_eq!(
+        app.libs[0].tv_content_mode,
+        Some(mbv_core::config::TvContentMode::All)
+    );
+    assert_eq!(
+        app.libs[0].nav_stack[0].tv_content_mode,
+        app.libs[0].tv_content_mode
+    );
+    assert_eq!(app.libs[0].nav_stack[0].items.len(), 4);
+    assert!(!app.libs[0].nav_stack[0].loading);
+}
+
+#[test]
+fn tv_first_capture_resolves_latest_and_replaces_large_library_rows() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 301);
+    app.libs[0].nav_stack[0].total_count = 301;
+
+    app.maybe_capture_library_total_and_apply_default_pill(0);
+
+    assert_eq!(
+        app.libs[0].tv_content_mode,
+        Some(mbv_core::config::TvContentMode::Latest)
+    );
+    assert!(app.libs[0].nav_stack[0].items.is_empty());
+    assert_eq!(
+        app.libs[0].nav_stack[0].item_types.as_deref(),
+        Some("Episode")
+    );
+    assert!(app.libs[0].nav_stack[0].loading);
 }
 
 fn series(id: &str, name: &str) -> EmbyItem {
@@ -302,7 +346,7 @@ fn activate_searched_series_marks_the_series_pill_and_cursor() {
 
     let level = app.libs[0].nav_stack.last().unwrap();
     let filter = level.letter_filter.as_ref().expect("pill group marked");
-    assert_eq!(filter.label, "V\u{2013}Z");
+    assert_eq!(filter.label, "S-Z");
     assert_eq!(
         level
             .items
@@ -365,14 +409,14 @@ fn select_letter_pill_scopes_tv_to_series() {
     push_top_level_tv(&mut app.libs[0], 10);
     app.libs[0].library_total = Some(1000);
 
-    app.select_letter_pill(0, 4); // "M–O"
+    app.select_letter_pill(0, 1); // "J-R"
 
     let lvl = app.libs[0].nav_stack.last().unwrap();
     let filter = lvl.letter_filter.as_ref().expect("pill should be set");
-    assert_eq!(filter.index, 4);
-    assert_eq!(filter.label, "M\u{2013}O");
-    assert_eq!(filter.name_ge, Some("M"));
-    assert_eq!(filter.name_lt, Some("P"));
+    assert_eq!(filter.index, 1);
+    assert_eq!(filter.label, "J-R");
+    assert_eq!(filter.name_ge, Some("J"));
+    assert_eq!(filter.name_lt, Some("S"));
     assert_eq!(lvl.item_types, Some("Series".to_string()));
     assert_eq!(lvl.resting().cursor(), 0);
     assert_eq!(lvl.resting().scroll(), 0);
@@ -395,8 +439,8 @@ fn cycle_letter_pill_wraps_on_tvshows_library() {
         .as_ref()
         .unwrap();
     assert_eq!(
-        filter.label, "#",
-        "wrapping back from default should land on #"
+        filter.label, "S-Z",
+        "wrapping back from default should land on S-Z"
     );
 
     app.cycle_letter_pill(0, 1);
@@ -408,8 +452,8 @@ fn cycle_letter_pill_wraps_on_tvshows_library() {
         .as_ref()
         .unwrap();
     assert_eq!(
-        filter.label, "A\u{2013}C",
-        "wrapping forward from # should land on A–C"
+        filter.label, "A-I",
+        "wrapping forward from S-Z should land on A-I"
     );
 }
 

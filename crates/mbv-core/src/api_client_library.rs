@@ -238,6 +238,18 @@ impl EmbyClient {
         ])
     }
 
+    /// Fetches upcoming episodes for a library using Emby's library-scoped
+    /// Upcoming feed. The route returns a flat episode list, so it uses the
+    /// same fields as the library's Latest episode projection.
+    pub fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
+        let limit = limit.to_string();
+        self.fetch_items("/Shows/Upcoming", &[
+            ("ParentId", parent_id),
+            ("Limit", &limit),
+            ("Fields", LATEST_EPISODES_FIELDS),
+        ])
+    }
+
     pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),

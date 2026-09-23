@@ -1,4 +1,4 @@
-use super::render::{effective_sort_str, LetterFilter};
+use super::render::{effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD};
 use super::types_events::{PendingSeriesHandoff, PendingSeriesLanding};
 use super::{App, SeriesDetail};
 use mbv_core::api::EmbyItem;
@@ -145,7 +145,10 @@ impl App {
         // The pill group the series sorts into (pills only exist at the
         // top level of pill-eligible libraries).
         let filter = if self.should_show_letter_pills(lib_idx) {
-            LetterFilter::for_sort_key(effective_sort_str(item))
+            let filter_kind = super::render::LetterFilterKind::from_collection_type(
+                self.libs[lib_idx].library.collection_type.as_str(),
+            );
+            LetterFilter::for_sort_key_for_kind(effective_sort_str(item), filter_kind)
         } else {
             None
         };
@@ -173,6 +176,94 @@ impl App {
         // Ensure the series detail (seasons + episodes) is fetched.
         self.fetch_series_detail(item.id.clone());
         self.save_default_library_position(lib_idx);
+        true
+    }
+
+    /// Navigate a flat TV episode row that carries no playable episode id to
+    /// its owning series' Workspace. Emby's `GET /Shows/Upcoming` returns
+    /// placeholders (`Type: Episode`, no `Id`, `series_id` set) for
+    /// unaired/not-downloaded rows; the flat `Latest`/`Upcoming` level holds
+    /// episodes only, so its corpus can never satisfy a Series landing.
+    /// Switch the library to its series-bearing mode through the existing
+    /// `select_letter_pill` level machinery (the letter range the series
+    /// sorts into, or `All`), then arm the shared ensure-then-land path
+    /// (`PendingSeriesLanding`): the series corpus drain lands the reveal and
+    /// the shell's hand-off opens the Wide Workspace / Narrow Library Hero
+    /// overlay. Returns false when `item` is not such a placeholder, so the
+    /// caller keeps the ordinary play path.
+    pub(super) fn open_series_for_unplayable_episode(
+        &mut self,
+        lib_idx: usize,
+        item: &EmbyItem,
+    ) -> bool {
+        if item.item_type != "Episode" || !item.id.is_empty() || item.series_id.is_empty() {
+            return false;
+        }
+        // The Series reveal carries the placeholder's series back-reference;
+        // the episode-only identity must not leak into the Series item.
+        let mut reveal = item.clone();
+        reveal.item_type = "Series".into();
+        reveal.id = item.series_id.clone();
+        reveal.is_folder = true;
+        reveal.series_id.clear();
+        if !item.series_name.is_empty() {
+            reveal.name = item.series_name.clone();
+        }
+        // The episode's `SortName` (often "Show S01E05") must not decide the
+        // series' letter range; fall back to the article-stripped series name.
+        reveal.sort_name.clear();
+        if self.should_show_letter_pills(lib_idx) {
+            let large = self.libs[lib_idx]
+                .library_total
+                .is_some_and(|total| total > LIBRARY_PILL_THRESHOLD);
+            let filter_kind = LetterFilterKind::from_collection_type(
+                self.libs[lib_idx].library.collection_type.as_str(),
+            );
+            // Range pill indices are offset by the two leading flat-mode
+            // pills (`Latest`, `Upcoming`); the small-library row's `All` is
+            // index 2.
+            let pill_index = if large {
+                LetterFilter::for_sort_key_for_kind(effective_sort_str(&reveal), filter_kind)
+                    .map(|filter| filter.index + 2)
+                    .unwrap_or(2)
+            } else {
+                2
+            };
+            self.select_letter_pill(lib_idx, pill_index);
+        } else {
+            // Unresolved total/mode (e.g. a restored flat position before the
+            // first load): no pill row exists to switch, so force the
+            // unfiltered series fetch the landing needs.
+            let Some(level) = self.libs[lib_idx].nav_stack.last_mut() else {
+                return false;
+            };
+            let parent_id = level.parent_id.clone();
+            let unplayed_only = level.unplayed_only;
+            let sort_by = level.sort_by.clone();
+            let sort_order = level.sort_order.clone();
+            level.tv_content_mode = Some(mbv_core::config::TvContentMode::All);
+            level.letter_filter = None;
+            level.all_items = None;
+            level.items.clear();
+            level.loading = true;
+            level.item_types = Some("Series".into());
+            level.set_resting_cursor(0);
+            level.set_resting_scroll(0);
+            self.libs[lib_idx].tv_content_mode = Some(mbv_core::config::TvContentMode::All);
+            self.spawn_refresh(
+                lib_idx,
+                parent_id,
+                Some("Series".into()),
+                unplayed_only,
+                sort_by,
+                sort_order,
+                0,
+                None,
+            );
+        }
+        // The placeholder never plays: report handled even if the landing is
+        // somehow already unsatisfiable, so no empty-id item reaches playback.
+        let _ = self.arm_pending_series_landing(lib_idx, Box::new(reveal), false, None);
         true
     }
 

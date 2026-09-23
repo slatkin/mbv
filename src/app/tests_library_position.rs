@@ -1,5 +1,83 @@
 use super::*;
 use crate::app::tests::*;
+use rstest::rstest;
+
+#[rstest]
+#[case::latest(mbv_core::config::TvContentMode::Latest, 301)]
+#[case::upcoming(mbv_core::config::TvContentMode::Upcoming, 301)]
+#[case::all(mbv_core::config::TvContentMode::All, 300)]
+#[case::range(mbv_core::config::TvContentMode::Range(1), 301)]
+fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
+    #[case] mode: mbv_core::config::TvContentMode,
+    #[case] library_total: usize,
+) {
+    let mut saved = crate::config::LibraryPositionLevel {
+        parent_id: "lib-tv".into(),
+        title: "TV".into(),
+        item_types: Some("Episode".into()),
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        tv_content_mode: Some(mode.clone()),
+        library_total: Some(library_total),
+        ..Default::default()
+    };
+    let item = make_item("Restored episode", "Episode");
+    let level = BrowseLevel::from_position_level_with_fetched_rows_for_kind(
+        &saved,
+        vec![item.clone()],
+        1,
+        10,
+        Some(1),
+        crate::app::render::LetterFilterKind::Tv,
+    );
+    let snapshot = level.to_position_level();
+    assert_eq!(snapshot.tv_content_mode, Some(mode.clone()));
+    assert_eq!(snapshot.focused_item_id, Some(item.id.clone()));
+
+    saved.focused_item_id = snapshot.focused_item_id;
+    let restored = BrowseLevel::from_position_level_with_fetched_rows_for_kind(
+        &saved,
+        vec![item.clone()],
+        1,
+        10,
+        Some(1),
+        crate::app::render::LetterFilterKind::Tv,
+    );
+    assert_eq!(restored.tv_content_mode, Some(mode));
+    assert_eq!(restored.items[0].id, item.id);
+}
+
+#[test]
+fn restoring_upcoming_position_loads_upcoming_episode_content() {
+    let saved = crate::config::LibraryPosition {
+        levels: vec![crate::config::LibraryPositionLevel {
+            parent_id: "lib-tv".into(),
+            title: "TV".into(),
+            item_types: Some("Episode".into()),
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            tv_content_mode: Some(mbv_core::config::TvContentMode::Upcoming),
+            library_total: Some(301),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let episode = make_item("Upcoming episode", "Episode");
+    let restored = restore_library_position_with_fetched_rows_for_kind(
+        &saved,
+        10,
+        crate::app::render::LetterFilterKind::Tv,
+        |_| Ok((vec![episode.clone()], 1, 1)),
+    )
+    .expect("restore result")
+    .expect("restored position");
+    assert_eq!(
+        restored.1[0].tv_content_mode,
+        Some(mbv_core::config::TvContentMode::Upcoming)
+    );
+    assert_eq!(restored.1[0].items, vec![episode]);
+}
 
 #[test]
 fn library_position_snapshot_captures_path_focus_and_feed_group() {
@@ -18,6 +96,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
             loading: false,
             all_items: Some(make_items(3)),
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         feed_home_video: Some(FeedHomeVideoState {
@@ -55,6 +134,7 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
         sort_by: "SortName".into(),
         sort_order: "Ascending".into(),
         letter_filter_index: None,
+                tv_content_mode: None,
         library_total: None,
     };
 
@@ -84,9 +164,12 @@ fn restored_position_uses_actual_server_rows_over_stale_persisted_count() {
         ..Default::default()
     };
 
-    let restored = restore_library_position_with_fetched_rows(&saved, 3, |_| {
-        Ok((make_items(103), 105, 105))
-    })
+    let restored = restore_library_position_with_fetched_rows_for_kind(
+        &saved,
+        3,
+        crate::app::render::LetterFilterKind::Movie,
+        |_| Ok((make_items(103), 105, 105)),
+    )
     .expect("restore result")
     .expect("restored position");
 
@@ -118,6 +201,7 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: Some(0),
+                tv_content_mode: None,
                 library_total: Some(301),
             },
             crate::config::LibraryPositionLevel {
@@ -131,6 +215,7 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
         ],
@@ -184,6 +269,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
             crate::config::LibraryPositionLevel {
@@ -197,6 +283,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
         ],
@@ -240,6 +327,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
             crate::config::LibraryPositionLevel {
@@ -253,6 +341,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
         ],
@@ -304,6 +393,7 @@ fn applying_library_position_preserves_persisted_feed_group_state() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
     );
@@ -340,6 +430,7 @@ fn save_default_library_position_persists_focused_item() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -375,6 +466,7 @@ fn legacy_library_position_updates_are_memory_only() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -408,6 +500,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -426,6 +519,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             }],
             ..Default::default()
@@ -461,6 +555,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -481,6 +576,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             }],
             ..Default::default()
@@ -515,6 +611,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -534,6 +631,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             }],
             ..Default::default()

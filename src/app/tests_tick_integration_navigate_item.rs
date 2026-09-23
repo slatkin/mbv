@@ -55,6 +55,7 @@ fn tv_saved_position() -> crate::config::LibraryPosition {
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             letter_filter_index: None,
+                tv_content_mode: None,
             library_total: Some(2),
         }],
         ..Default::default()
@@ -272,6 +273,7 @@ fn deep_selection_tv_harness(http: &MockHttp, episodes_for_season_2: &[&str]) ->
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     });
     let mut season1 = make_item("Season 1", "Season");

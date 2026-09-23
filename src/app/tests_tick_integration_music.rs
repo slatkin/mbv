@@ -332,6 +332,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         },
         crate::app::BrowseLevel {
@@ -351,6 +352,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         },
     ];

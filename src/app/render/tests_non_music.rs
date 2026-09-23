@@ -95,3 +95,35 @@ fn letter_filter_default_is_the_first_bucket() {
         LetterFilter::for_index(0).unwrap()
     );
 }
+
+#[test]
+fn tv_letter_filter_buckets_cover_three_ranges_and_sort_keys() {
+    let ai = LetterFilter::for_index_for_kind(0, LetterFilterKind::Tv).unwrap();
+    assert_eq!(ai.label, "A-I");
+    assert_eq!(ai.name_ge, None);
+    assert_eq!(ai.name_lt, Some("J"));
+
+    let jr = LetterFilter::for_index_for_kind(1, LetterFilterKind::Tv).unwrap();
+    assert_eq!(jr.label, "J-R");
+    assert_eq!(jr.name_ge, Some("J"));
+    assert_eq!(jr.name_lt, Some("S"));
+
+    let sz = LetterFilter::for_index_for_kind(2, LetterFilterKind::Tv).unwrap();
+    assert_eq!(sz.label, "S-Z");
+    assert_eq!(sz.name_ge, Some("S"));
+    assert_eq!(sz.name_lt, None);
+
+    assert_eq!(
+        LetterFilter::for_sort_key_for_kind("123 Title", LetterFilterKind::Tv),
+        Some(ai.clone())
+    );
+    assert_eq!(
+        LetterFilter::for_sort_key_for_kind("Zebra", LetterFilterKind::Tv),
+        Some(sz)
+    );
+    assert_eq!(LetterFilter::count_for_kind(LetterFilterKind::Tv), 3);
+    assert_eq!(
+        LetterFilter::labels_for_kind(LetterFilterKind::Tv),
+        vec!["A-I", "J-R", "S-Z"]
+    );
+}

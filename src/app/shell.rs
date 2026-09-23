@@ -121,6 +121,8 @@ pub struct Model {
     /// Shell-owned semantic Home section preference and one-time restore marker.
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     pub(super) home_section_pending: Option<HomeLatestSource>,
+    /// Shell-owned acknowledgement shared by Home and TV Latest surfaces.
+    pub(super) acknowledged_home_latest_sources: std::collections::HashSet<HomeLatestSource>,
     pub(super) home_context_item: Option<mbv_core::api::EmbyItem>,
     /// The last terminal size the sync pass applied resize side effects for
     /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
@@ -611,6 +613,7 @@ impl Model {
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
+            acknowledged_home_latest_sources: std::collections::HashSet::new(),
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,

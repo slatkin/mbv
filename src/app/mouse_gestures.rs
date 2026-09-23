@@ -174,6 +174,35 @@ impl App {
             })
     }
 
+    fn resolve_tv_episode_target(&self, lib_idx: usize, target: &str) -> Option<EmbyItem> {
+        let level = self.libs.get(lib_idx)?.nav_stack.last()?;
+        if matches!(
+            level.tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        ) {
+            return level
+                .items
+                .iter()
+                .find(|item| {
+                    if item.id.is_empty() {
+                        crate::app::components::tv_content::upcoming_episode_target(item) == target
+                    } else {
+                        item.id == target
+                    }
+                })
+                .cloned();
+        }
+
+        self.series_detail_cache
+            .values()
+            .flat_map(|detail| detail.episodes.values())
+            .flatten()
+            .find(|episode| episode.id == target)
+            .cloned()
+    }
+
     pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
@@ -213,8 +242,17 @@ impl App {
             if let Some((_, item)) = self.resolve_tv_series_target(lib_idx, target) {
                 self.activate_selected_series_item(lib_idx, &item);
             }
-        } else if matches!(hit, TvHit::EpisodeRow(_)) {
-            self.activate_selected_series(lib_idx);
+        } else if let TvHit::EpisodeRow(target) = hit {
+            // Resolve an episode row as an episode, never as a series row by
+            // its (possibly empty) item ID. Flat Upcoming placeholders use
+            // their synthesized stable target; Workspace episodes use the
+            // season-detail cache. Both then take the same activation path.
+            let item = self.resolve_tv_episode_target(lib_idx, &target);
+            if let Some(item) = item.filter(|item| item.item_type == "Episode") {
+                if !self.open_series_for_unplayable_episode(lib_idx, &item) {
+                    self.play_item(item);
+                }
+            }
         }
     }
 }

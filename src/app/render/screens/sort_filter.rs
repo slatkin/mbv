@@ -86,6 +86,24 @@ pub(crate) fn letter_bucket(item: &mbv_core::api::EmbyItem, total: usize) -> Str
 /// used by `use_letter_groups` in `list.rs`.
 pub(crate) const LIBRARY_PILL_THRESHOLD: usize = 300;
 
+pub(crate) fn resolve_tv_content_mode(
+    total: usize,
+    restored: Option<&mbv_core::config::TvContentMode>,
+) -> mbv_core::config::TvContentMode {
+    let large = total > LIBRARY_PILL_THRESHOLD;
+    match restored {
+        Some(mbv_core::config::TvContentMode::All) if large => {
+            mbv_core::config::TvContentMode::Latest
+        }
+        Some(mbv_core::config::TvContentMode::Range(_)) if !large => {
+            mbv_core::config::TvContentMode::All
+        }
+        Some(mode) => mode.clone(),
+        None if large => mbv_core::config::TvContentMode::Latest,
+        None => mbv_core::config::TvContentMode::All,
+    }
+}
+
 /// The letter-range pill buckets, in display order. Single source of truth
 /// for both the pill labels and the Emby `NameStartsWithOrGreater` /
 /// `NameLessThan` fetch bounds, so they can't drift apart. Mirrors the range
@@ -108,9 +126,34 @@ const LETTER_FILTER_BUCKETS: &[(&str, Option<&str>, Option<&str>)] = &[
     ("#", None, Some("A")),
 ];
 
+/// The TV library's coarser alphabet ranges. The first range intentionally
+/// has no lower bound so digits and other names sorting before `J` are
+/// reachable; the last range has no upper bound for the same reason.
+const TV_LETTER_FILTER_BUCKETS: &[(&str, Option<&str>, Option<&str>)] = &[
+    ("A-I", None, Some("J")),
+    ("J-R", Some("J"), Some("S")),
+    ("S-Z", Some("S"), None),
+];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LetterFilterKind {
+    Movie,
+    Tv,
+}
+
+impl LetterFilterKind {
+    pub(crate) fn from_collection_type(collection_type: &str) -> Self {
+        if collection_type == "tvshows" {
+            Self::Tv
+        } else {
+            Self::Movie
+        }
+    }
+}
+
 /// A selected letter-range pill: which bucket, its display label, and the
-/// Emby name-range bounds to fetch. Constructed only via `for_index`/`default`
-/// so it always matches a row in `LETTER_FILTER_BUCKETS`.
+/// Emby name-range bounds to fetch. Constructed only via the kind-aware
+/// constructors so it always matches the selected library's table.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct LetterFilter {
     pub index: usize,
@@ -120,14 +163,34 @@ pub(crate) struct LetterFilter {
 }
 
 impl LetterFilter {
-    /// Number of pill buckets (`A–C` … `V–Z`, `#`).
-    pub(crate) fn count() -> usize {
-        LETTER_FILTER_BUCKETS.len()
+    fn buckets(
+        kind: LetterFilterKind,
+    ) -> &'static [(&'static str, Option<&'static str>, Option<&'static str>)] {
+        match kind {
+            LetterFilterKind::Movie => LETTER_FILTER_BUCKETS,
+            LetterFilterKind::Tv => TV_LETTER_FILTER_BUCKETS,
+        }
     }
 
-    /// Builds the `LetterFilter` for bucket `index`, or `None` if out of range.
+    /// Number of movie pill buckets (`A–C` … `V–Z`, `#`).
+    #[allow(dead_code)]
+    pub(crate) fn count() -> usize {
+        Self::count_for_kind(LetterFilterKind::Movie)
+    }
+
+    pub(crate) fn count_for_kind(kind: LetterFilterKind) -> usize {
+        Self::buckets(kind).len()
+    }
+
+    /// Builds the movie `LetterFilter` for bucket `index`, or `None` if out
+    /// of range. Existing movie callers intentionally keep this API.
+    #[allow(dead_code)]
     pub(crate) fn for_index(index: usize) -> Option<Self> {
-        LETTER_FILTER_BUCKETS
+        Self::for_index_for_kind(index, LetterFilterKind::Movie)
+    }
+
+    pub(crate) fn for_index_for_kind(index: usize, kind: LetterFilterKind) -> Option<Self> {
+        Self::buckets(kind)
             .get(index)
             .map(|&(label, name_ge, name_lt)| LetterFilter {
                 index,
@@ -137,29 +200,41 @@ impl LetterFilter {
             })
     }
 
-    /// The default pill selected when a large library is first opened: the
-    /// first range, `A–C`.
+    /// The default movie pill selected when a large library is first opened:
+    /// the first range, `A–C`.
+    #[allow(dead_code)]
     pub(crate) fn default_filter() -> Self {
-        Self::for_index(0).expect("LETTER_FILTER_BUCKETS is non-empty")
+        Self::default_filter_for_kind(LetterFilterKind::Movie)
     }
 
-    /// The bucket whose fetch bounds contain `key` (an effective sort
-    /// string), or `None` when no bucket matches. Mirrors the server's
-    /// `NameStartsWithOrGreater`/`NameLessThan` scoping so a client-side
-    /// filter agrees with the pill's own fetch.
+    pub(crate) fn default_filter_for_kind(kind: LetterFilterKind) -> Self {
+        Self::for_index_for_kind(0, kind).expect("letter filter bucket table is non-empty")
+    }
+
+    /// The movie bucket whose fetch bounds contain `key` (an effective sort
+    /// string). Existing callers retain the movie table by default.
+    #[allow(dead_code)]
     pub(crate) fn for_sort_key(key: &str) -> Option<Self> {
-        LETTER_FILTER_BUCKETS
+        Self::for_sort_key_for_kind(key, LetterFilterKind::Movie)
+    }
+
+    pub(crate) fn for_sort_key_for_kind(key: &str, kind: LetterFilterKind) -> Option<Self> {
+        Self::buckets(kind)
             .iter()
             .enumerate()
             .find(|&(_, &(_, name_ge, name_lt))| {
                 name_ge.is_none_or(|ge| key >= ge) && name_lt.is_none_or(|lt| key < lt)
             })
-            .and_then(|(index, _)| Self::for_index(index))
+            .and_then(|(index, _)| Self::for_index_for_kind(index, kind))
     }
 
-    /// All pill labels in bucket order, for building a `PillBar`.
+    /// All movie pill labels in bucket order, for building a `PillBar`.
     pub(crate) fn labels() -> Vec<String> {
-        LETTER_FILTER_BUCKETS
+        Self::labels_for_kind(LetterFilterKind::Movie)
+    }
+
+    pub(crate) fn labels_for_kind(kind: LetterFilterKind) -> Vec<String> {
+        Self::buckets(kind)
             .iter()
             .map(|&(label, _, _)| label.to_string())
             .collect()

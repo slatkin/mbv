@@ -66,7 +66,11 @@ impl TvContent {
         // geometry, so the actual breakpoint — not the pushed bit alone —
         // gates these arms: a stale bit in Wide must never shadow the Wide
         // workspace's own handling.
-        if !self.is_wide && self.hero_overlay_open && self.pane == Pane::Episodes {
+        if !self.is_wide
+            && self.hero_overlay_open
+            && self.pane == Pane::Episodes
+            && !self.flat_episode_mode()
+        {
             return self.handle_key_overlay_workspace(key);
         }
         if self.is_wide {
@@ -120,6 +124,9 @@ impl TvContent {
     /// Wide pane-based keyboard handling (unchanged from before the merge).
     fn handle_key_wide(&mut self, key: &KeyEvent) -> Option<Msg> {
         let request = match key.code {
+            Key::Enter if self.pane == Pane::Series && self.flat_episode_mode() => self
+                .selected_episode_item()
+                .map(|episode| ShellRequest::TvEpisodeActivate { episode }),
             Key::Enter if self.pane == Pane::Series => {
                 self.episodes.select_first();
                 self.pane = Pane::Episodes;
@@ -268,9 +275,13 @@ impl TvContent {
                 let index = self.jump_cursor_narrow(true);
                 Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
-            Key::Enter => self
-                .selected_item()
-                .map(|item| ShellRequest::TvActivate { item }),
+            Key::Enter => self.selected_item().map(|item| {
+                if self.flat_episode_mode() {
+                    ShellRequest::TvEpisodeActivate { episode: item }
+                } else {
+                    ShellRequest::TvActivate { item }
+                }
+            }),
             Key::Esc | Key::Backspace => Some(ShellRequest::TvBack),
             Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self
                 .selected_item()

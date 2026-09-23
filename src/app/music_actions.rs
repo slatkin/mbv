@@ -139,6 +139,7 @@ impl App {
 
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         });
         self.spawn_browse(
@@ -188,6 +189,7 @@ impl App {
             loading: true,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         });
         self.spawn_browse(
@@ -234,7 +236,159 @@ impl App {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
-        let Some(filter) = super::render::LetterFilter::for_index(pill_index) else {
+        let is_tv = self.libs[lib_idx].library.collection_type == "tvshows";
+        if is_tv {
+            if self.libs[lib_idx].tv_content_mode.is_none() {
+                self.libs[lib_idx].tv_content_mode = self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.tv_content_mode.clone());
+            }
+            // Old saved positions and direct callers can still arrive with no
+            // resolved TV mode. Treat an explicit pill selection as the
+            // legacy range until the first load resolves the size default.
+            if self.libs[lib_idx].tv_content_mode.is_none() {
+                let Some(filter) = super::render::LetterFilter::for_index_for_kind(
+                    pill_index,
+                    super::render::LetterFilterKind::Tv,
+                ) else {
+                    return;
+                };
+                let Some(level) = self.libs[lib_idx].nav_stack.last() else {
+                    return;
+                };
+                let parent_id = level.parent_id.clone();
+                let item_types = level.item_types.clone();
+                let unplayed_only = level.unplayed_only;
+                let sort_by = level.sort_by.clone();
+                let sort_order = level.sort_order.clone();
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    level.letter_filter = Some(filter.clone());
+                    level.set_resting_cursor(0);
+                    level.set_resting_scroll(0);
+                    level.loading = true;
+                    level.items.clear();
+                }
+                self.spawn_refresh(
+                    lib_idx,
+                    parent_id,
+                    item_types,
+                    unplayed_only,
+                    sort_by,
+                    sort_order,
+                    0,
+                    Some(filter),
+                );
+                self.save_default_library_position(lib_idx);
+                return;
+            }
+            let large = self.libs[lib_idx]
+                .library_total
+                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD);
+            let mode = match pill_index {
+                0 => mbv_core::config::TvContentMode::Latest,
+                1 => mbv_core::config::TvContentMode::Upcoming,
+                index if large => mbv_core::config::TvContentMode::Range(index - 2),
+                2 => mbv_core::config::TvContentMode::All,
+                _ => return,
+            };
+            if matches!((&mode, large), (mbv_core::config::TvContentMode::Range(index), true) if *index >= super::render::LetterFilter::count_for_kind(super::render::LetterFilterKind::Tv))
+            {
+                return;
+            }
+            let Some(lvl) = self.libs[lib_idx].nav_stack.last() else {
+                return;
+            };
+            let parent_id = lvl.parent_id.clone();
+            let _item_types = lvl.item_types.clone();
+            let unplayed_only = lvl.unplayed_only;
+            let sort_by = lvl.sort_by.clone();
+            let sort_order = lvl.sort_order.clone();
+            let current = self.libs[lib_idx].tv_content_mode.as_ref();
+            if current == Some(&mode) && !matches!(mode, mbv_core::config::TvContentMode::Upcoming)
+            {
+                return;
+            }
+            self.libs[lib_idx].tv_content_mode = Some(mode.clone());
+            if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                last.tv_content_mode = Some(mode.clone());
+                last.letter_filter = None;
+                last.set_resting_cursor(0);
+                last.set_resting_scroll(0);
+                last.all_items = None;
+                last.items.clear();
+            }
+            match mode {
+                mbv_core::config::TvContentMode::Latest => {
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        last.loading = true;
+                        last.item_types = Some("Episode".into());
+                    }
+                    self.spawn_tv_latest(
+                        lib_idx,
+                        parent_id,
+                        self.libs[lib_idx].library.name.clone(),
+                    );
+                }
+                mbv_core::config::TvContentMode::Upcoming => {
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        last.loading = true;
+                        last.item_types = Some("Episode".into());
+                    }
+                    self.spawn_tv_upcoming(
+                        lib_idx,
+                        parent_id,
+                        self.libs[lib_idx].library.name.clone(),
+                    );
+                }
+                mbv_core::config::TvContentMode::All => {
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        last.loading = true;
+                        last.item_types = Some("Series".into());
+                    }
+                    self.spawn_refresh(
+                        lib_idx,
+                        parent_id,
+                        Some("Series".into()),
+                        unplayed_only,
+                        sort_by,
+                        sort_order,
+                        0,
+                        None,
+                    );
+                }
+                mbv_core::config::TvContentMode::Range(index) => {
+                    let Some(filter) = super::render::LetterFilter::for_index_for_kind(
+                        index,
+                        super::render::LetterFilterKind::Tv,
+                    ) else {
+                        return;
+                    };
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        last.loading = true;
+                        last.item_types = Some("Series".into());
+                        last.letter_filter = Some(filter.clone());
+                    }
+                    self.spawn_refresh(
+                        lib_idx,
+                        parent_id,
+                        Some("Series".into()),
+                        unplayed_only,
+                        sort_by,
+                        sort_order,
+                        0,
+                        Some(filter),
+                    );
+                }
+            }
+            self.save_default_library_position(lib_idx);
+            return;
+        }
+        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+            self.libs[lib_idx].library.collection_type.as_str(),
+        );
+        let Some(filter) = super::render::LetterFilter::for_index_for_kind(pill_index, filter_kind)
+        else {
             return;
         };
         let Some(lvl) = self.libs[lib_idx].nav_stack.last() else {
@@ -276,7 +430,53 @@ impl App {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
-        let n = super::render::LetterFilter::count();
+        if self.libs[lib_idx].library.collection_type == "tvshows" {
+            if self.libs[lib_idx].tv_content_mode.is_none() {
+                self.libs[lib_idx].tv_content_mode = self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.tv_content_mode.clone());
+            }
+            if self.libs[lib_idx].tv_content_mode.is_none() {
+                let count = super::render::LetterFilter::count_for_kind(
+                    super::render::LetterFilterKind::Tv,
+                );
+                let current = self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.letter_filter.as_ref())
+                    .map(|filter| filter.index)
+                    .unwrap_or(0);
+                let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+                self.libs[lib_idx].tv_content_mode = None;
+                self.select_letter_pill(lib_idx, next);
+                return;
+            }
+            let large = self.libs[lib_idx]
+                .library_total
+                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD);
+            let count = if large { 5 } else { 3 };
+            let current = match self.libs[lib_idx].tv_content_mode.as_ref() {
+                Some(mbv_core::config::TvContentMode::Latest) => 0,
+                Some(mbv_core::config::TvContentMode::Upcoming) => 1,
+                Some(mbv_core::config::TvContentMode::All) => 2,
+                Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
+                None => {
+                    if large {
+                        0
+                    } else {
+                        2
+                    }
+                }
+            };
+            let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+            self.select_letter_pill(lib_idx, next);
+            return;
+        }
+        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+            self.libs[lib_idx].library.collection_type.as_str(),
+        );
+        let n = super::render::LetterFilter::count_for_kind(filter_kind);
         if n == 0 {
             return;
         }
@@ -331,6 +531,7 @@ impl App {
             loading: true,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         });
         self.spawn_browse(
@@ -401,6 +602,7 @@ impl App {
                         loading: true,
                         all_items: None,
                         letter_filter: None,
+                        tv_content_mode: None,
                         music_grouping: None,
                     });
                 }

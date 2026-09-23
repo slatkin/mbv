@@ -25,6 +25,11 @@ impl App {
         // level's load for the pending Series landing retry below.
         let loaded_parent_id = parent_id.clone();
         self.handle_loaded_level(lib_idx, parent_id, level);
+        if let Some(mode) = self.libs[lib_idx].tv_content_mode.clone() {
+            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                level.tv_content_mode = Some(mode);
+            }
+        }
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
         self.maybe_auto_push_music_group_level(lib_idx);
@@ -50,12 +55,12 @@ impl App {
     /// `total_count` is the only place that number comes from. If the
     /// library qualifies for the letter-range pill row
     /// (`LIBRARY_PILL_THRESHOLD`) and no pill was already restored from a
-    /// saved session, this applies the default (`A–C`) pill and issues one
-    /// scoped refresh to replace the level's items with that range -- see
+    /// saved session, this applies the library's default first-range pill and
+    /// issues one scoped refresh to replace the level's items with that range -- see
     /// plan §5. A no-op for every subsequent load of the same level
     /// (`library_total` is already `Some`), for music/feed/podcast
     /// libraries, and for non-root levels.
-    fn maybe_capture_library_total_and_apply_default_pill(&mut self, lib_idx: usize) {
+    pub(super) fn maybe_capture_library_total_and_apply_default_pill(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
@@ -77,13 +82,36 @@ impl App {
         let unplayed_only = level.unplayed_only;
         let sort_by = level.sort_by.clone();
         let sort_order = level.sort_order.clone();
+        let is_tv = lib.library.collection_type == "tvshows";
+        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+            lib.library.collection_type.as_str(),
+        );
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
+        }
+        if is_tv {
+            let mode = super::render::resolve_tv_content_mode(total, None);
+            let large = total > super::render::LIBRARY_PILL_THRESHOLD;
+            if let Some(lib) = self.libs.get_mut(lib_idx) {
+                lib.tv_content_mode = Some(mode.clone());
+                if let Some(level) = lib.nav_stack.last_mut() {
+                    level.tv_content_mode = Some(mode);
+                }
+            }
+            if large {
+                if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                    last.loading = true;
+                    last.items.clear();
+                    last.item_types = Some("Episode".into());
+                }
+                self.spawn_tv_latest(lib_idx, parent_id, self.libs[lib_idx].library.name.clone());
+            }
+            return;
         }
         if total <= super::render::LIBRARY_PILL_THRESHOLD {
             return;
         }
-        let filter = super::render::LetterFilter::default_filter();
+        let filter = super::render::LetterFilter::default_filter_for_kind(filter_kind);
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
             last.letter_filter = Some(filter.clone());
@@ -240,6 +268,21 @@ impl App {
             .collect();
         if let Some(root) = position.levels.first_mut() {
             root.library_total = library_total;
+            root.tv_content_mode =
+                (self.libs[lib_idx].library.collection_type == "tvshows").then(|| {
+                    super::render::resolve_tv_content_mode(
+                        library_total.unwrap_or_default(),
+                        requested_position
+                            .levels
+                            .first()
+                            .and_then(|level| level.tv_content_mode.as_ref()),
+                    )
+                });
+            if let Some(mbv_core::config::TvContentMode::Range(index)) = &root.tv_content_mode {
+                root.letter_filter_index = Some(*index);
+            } else if root.tv_content_mode.is_some() {
+                root.letter_filter_index = None;
+            }
         }
         // A restore an armed pending Series landing is waiting on is never
         // stale: the landing spawned it and cannot retry until it applies,

@@ -85,8 +85,8 @@ fn an_override_moves_the_painted_panes() {
         "the override must repaint the split"
     );
 
-    let default = wide_library_panes(area, PAD_X, PAD_Y, None).expect("wide fits");
-    let moved = wide_library_panes(area, PAD_X, PAD_Y, moved_override).expect("wide fits");
+    let default = wide_library_panes(area, PAD_X, PAD_Y, None, true).expect("wide fits");
+    let moved = wide_library_panes(area, PAD_X, PAD_Y, moved_override, true).expect("wide fits");
     assert!(moved.browser_panel.width > default.browser_panel.width);
     assert!(
         moved.hero_panel.width < default.hero_panel.width,
@@ -109,8 +109,8 @@ fn one_session_width_is_clamped_per_surface_without_mutating_it() {
     let wide_area = Rect::new(0, 0, 220, HEIGHT);
     let narrow_area = Rect::new(0, 0, 110, HEIGHT);
 
-    let wide = wide_library_panes(wide_area, PAD_X, PAD_Y, session).expect("wide fits");
-    let narrow = wide_library_panes(narrow_area, PAD_X, PAD_Y, session).expect("narrow fits");
+    let wide = wide_library_panes(wide_area, PAD_X, PAD_Y, session, true).expect("wide fits");
+    let narrow = wide_library_panes(narrow_area, PAD_X, PAD_Y, session, true).expect("narrow fits");
 
     assert_eq!(wide.browser_panel.width, 130);
     assert_eq!(

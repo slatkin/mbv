@@ -251,6 +251,14 @@ pub(in crate::app) trait LibraryContentOwner {
         self.hero_overlay_available() || self.hero_overlay_target_available()
     }
 
+    /// Whether the owner asks the Library panel to show its selected item in
+    /// the compact mini-view hero overlay. This is separate from ordinary
+    /// browser activation: a mini-view episode hero must not turn Enter into
+    /// an overlay request.
+    fn mini_view_hero_available(&mut self) -> bool {
+        false
+    }
+
     /// A typed request the owner resolved from the frame it just painted, or
     /// `None`. The panel delivers it after `view` through its deferred-message
     /// seam (Grouped Music's completed-paint neighbour artwork window, task

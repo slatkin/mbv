@@ -24,11 +24,15 @@ use super::media_list::{
     MediaListTrailing, MediaSemanticState, RowIntent, ViewportAnchor,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
-use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
-use crate::app::ui_util::{fmt_duration_gutter, natural_sort_key};
+use crate::app::render::{
+    effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
+};
+use crate::app::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::Position;
+use time::{Date, Month};
 #[cfg(test)]
 use tuirealm::event::Key;
 use tuirealm::event::KeyEvent;
@@ -80,6 +84,8 @@ pub(in crate::app) struct TvContent {
     /// the panel, design D2). In Narrow geometry only the overlay focuses
     /// the Episodes pane, so this gates the overlay Workspace's key routing.
     hero_overlay_open: bool,
+    latest_has_new_content: bool,
+    latest_acknowledged: bool,
 }
 
 /// Build the embedded episode `WideMediaList`'s rows from a season's
@@ -111,6 +117,118 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
         })
         .collect()
 }
+
+/// TV Latest shares Home's split episode title and provider-date gutter.
+pub(super) fn build_latest_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
+    episodes
+        .iter()
+        .map(|episode| {
+            let item = QueueItem::Emby(Box::new(episode.clone()));
+            let parts = item.playback_title_parts(None);
+            let (primary, secondary) = match parts.context {
+                Some(context) => (context.text, Some(parts.title.text)),
+                None => (parts.title.text, None),
+            };
+            let trailing = crate::app::home_latest::provider_timestamp_secs(&item)
+                .map(fmt_publish_date_short)
+                .filter(|date| !date.is_empty())
+                .map(MediaListTrailing::Gutter);
+            MediaListRow::Item {
+                target: episode.id.clone(),
+                primary,
+                secondary,
+                trailing,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::from_queue_item(&item),
+            }
+        })
+        .collect()
+}
+
+fn parse_premiere_date(value: &str) -> Option<Date> {
+    let date = value.split('T').next()?;
+    let mut parts = date.split('-');
+    let year = parts.next()?.parse().ok()?;
+    let month = Month::try_from(parts.next()?.parse::<u8>().ok()?).ok()?;
+    let day = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Date::from_calendar_date(year, month, day).ok()
+}
+
+fn upcoming_date_heading(date: Date, today: Date) -> String {
+    match (today - date).whole_days() {
+        0 => "Today".into(),
+        1 => "Yesterday".into(),
+        _ => format!("{}, {} {}", date.weekday(), date.month(), date.day()),
+    }
+}
+
+pub(in crate::app) fn upcoming_episode_target(episode: &EmbyItem) -> String {
+    if !episode.id.is_empty() {
+        return episode.id.clone();
+    }
+
+    let series = if episode.series_id.is_empty() {
+        &episode.series_name
+    } else {
+        &episode.series_id
+    };
+    format!(
+        "upcoming:{}:{}:{}:{}:{}:{}",
+        series.len(),
+        series,
+        episode.parent_index_number,
+        episode.index_number,
+        episode.name.len(),
+        episode.name
+    )
+}
+
+fn upcoming_episode_rows(episodes: &[EmbyItem], today: Date) -> Vec<MediaListRow<String>> {
+    let mut groups: Vec<(Option<Date>, Vec<&EmbyItem>)> = Vec::new();
+    for episode in episodes {
+        let date = parse_premiere_date(&episode.premiere_date);
+        if let Some((_, rows)) = groups
+            .iter_mut()
+            .find(|(group_date, _)| *group_date == date)
+        {
+            rows.push(episode);
+        } else {
+            groups.push((date, vec![episode]));
+        }
+    }
+
+    groups
+        .into_iter()
+        .flat_map(|(date, episodes)| {
+            let heading = date.map(|date| MediaListRow::Heading {
+                text: upcoming_date_heading(date, today),
+            });
+            heading
+                .into_iter()
+                .chain(episodes.into_iter().map(|episode| {
+                    let trailing = (episode.runtime_ticks > 0)
+                        .then(|| fmt_duration_gutter(episode.runtime_ticks / TICKS_PER_SECOND))
+                        .map(MediaListTrailing::Gutter);
+                    MediaListRow::Item {
+                        target: upcoming_episode_target(episode),
+                        primary: episode.series_name.clone(),
+                        secondary: Some(format!(
+                            "S{:02}:E{:02} — {}",
+                            episode.parent_index_number, episode.index_number, episode.name
+                        )),
+                        trailing,
+                        duration: None,
+                        kind: MediaKind::Media,
+                        semantic_state: MediaSemanticState::from_emby(episode),
+                    }
+                }))
+        })
+        .collect()
+}
 impl TvContent {
     pub fn new() -> Self {
         let mut context = TvWideRenderCtx::new(
@@ -138,6 +256,8 @@ impl TvContent {
             inline_search: InlineSearch::new(),
             is_wide: true,
             hero_overlay_open: false,
+            latest_has_new_content: false,
+            latest_acknowledged: false,
         }
     }
     /// Records the session-only Wide hero list-pane width override for the
@@ -156,6 +276,11 @@ impl TvContent {
     pub(in crate::app) fn set_hero_overlay_open(&mut self, open: bool) {
         self.hero_overlay_open = open;
     }
+
+    pub(in crate::app) fn set_latest_marker(&mut self, has_new_content: bool, acknowledged: bool) {
+        self.latest_has_new_content = has_new_content;
+        self.latest_acknowledged = acknowledged;
+    }
     /// Keep the shared owner in its fixed-row presentation and clamp its
     /// viewport for the current geometry. No content or cursor state is copied
     /// between adapters.
@@ -165,56 +290,74 @@ impl TvContent {
     }
     #[cfg(test)]
     pub(in crate::app) fn test_set_letter_filter(&mut self, index: usize) {
-        self.context.list.letter_filter = crate::app::render::LetterFilter::for_index(index);
+        self.context.list.letter_filter =
+            LetterFilter::for_index_for_kind(index, LetterFilterKind::Tv);
     }
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
-        let grouped = !self.inline_search.is_active()
-            && (context.show_letter_pills
-                || context.list.has_letter_filter()
-                || context.list.true_total() >= 50);
-        let bucket_total = if context.list.has_letter_filter() {
-            usize::MAX
+        let episode_mode = matches!(
+            context.tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        );
+        let rows = if episode_mode {
+            if context.tv_content_mode == Some(mbv_core::config::TvContentMode::Upcoming) {
+                let today = time::OffsetDateTime::now_utc().date();
+                upcoming_episode_rows(&context.list.items, today)
+            } else {
+                build_latest_episode_rows(&context.list.items)
+            }
         } else {
-            context.list.true_total()
-        };
-        let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
-        sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        let rows = sorted_items.iter().enumerate().flat_map(|(index, item)| {
-            let heading = grouped
-                .then(|| {
-                    let current = letter_bucket(item, bucket_total);
-                    let previous = index
-                        .checked_sub(1)
-                        .map(|i| letter_bucket(sorted_items[i], bucket_total));
-                    (previous.as_deref() != Some(current.as_str())).then(|| {
-                        let heading = MediaListRow::Heading { text: current };
-                        if previous.is_some() {
-                            vec![MediaListRow::Spacer, heading]
-                        } else {
-                            vec![heading]
-                        }
-                    })
+            let grouped = !self.inline_search.is_active()
+                && (context.show_letter_pills
+                    || context.list.has_letter_filter()
+                    || context.list.true_total() >= 50);
+            let bucket_total = if context.list.has_letter_filter() {
+                usize::MAX
+            } else {
+                context.list.true_total()
+            };
+            let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
+            sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+            sorted_items
+                .iter()
+                .enumerate()
+                .flat_map(|(index, item)| {
+                    let heading = grouped
+                        .then(|| {
+                            let current = letter_bucket(item, bucket_total);
+                            let previous = index
+                                .checked_sub(1)
+                                .map(|i| letter_bucket(sorted_items[i], bucket_total));
+                            (previous.as_deref() != Some(current.as_str())).then(|| {
+                                let heading = MediaListRow::Heading { text: current };
+                                if previous.is_some() {
+                                    vec![MediaListRow::Spacer, heading]
+                                } else {
+                                    vec![heading]
+                                }
+                            })
+                        })
+                        .flatten();
+                    heading
+                        .into_iter()
+                        .flatten()
+                        .chain(std::iter::once(MediaListRow::Item {
+                            target: item.id.clone(),
+                            primary: item.display_name(),
+                            secondary: None,
+                            trailing: (item.production_year > 0).then(|| {
+                                MediaListTrailing::Gutter(item.production_year.to_string())
+                            }),
+                            duration: None,
+                            kind: MediaKind::Collection,
+                            semantic_state: MediaSemanticState::from_emby(item),
+                        }))
                 })
-                .flatten();
-            heading
-                .into_iter()
-                .flatten()
-                .chain(std::iter::once(MediaListRow::Item {
-                    target: item.id.clone(),
-                    primary: item.display_name(),
-                    secondary: None,
-                    trailing: (item.production_year > 0)
-                        .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
-                    duration: None,
-                    kind: MediaKind::Collection,
-                    // The one canonical state derivation; the series rail no
-                    // longer diverges by geometry.
-                    semantic_state: MediaSemanticState::from_emby(item),
-                }))
-        });
-        let rows = rows.collect::<Vec<_>>();
+                .collect::<Vec<_>>()
+        };
         // The canonical cursor is in the rendered (natural-sort) order. Seed
         // the local list from that stable target on first mount; thereafter
         // preserve the stable target already owned by the component.
@@ -336,8 +479,21 @@ impl TvContent {
         let searching = self.inline_search.is_active();
         // Hero facts first: reading the projected snapshot and image state
         // ends before the Workspace borrows the episode carrier mutably.
-        let hero_data = self.context.selected_series.as_ref().map(|series| {
-            let mut data = hero_content_emby(series);
+        let flat_episode_mode = self.flat_episode_mode();
+        let hero_item = if flat_episode_mode && !self.is_wide && self.hero_overlay_open {
+            self.selected_episode_item()
+        } else {
+            None
+        };
+        let hero_data = if flat_episode_mode {
+            hero_item.map(|episode| hero_content_emby(&episode))
+        } else {
+            self.context
+                .selected_series
+                .clone()
+                .map(|series| hero_content_emby(&series))
+        };
+        let hero_data = hero_data.map(|mut data| {
             data.facts.artwork.image = self.context.hero_image.clone();
             data
         });
@@ -360,17 +516,37 @@ impl TvContent {
             });
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
         let selector = if !searching && self.context.show_letter_pills {
+            let large = self
+                .context
+                .list
+                .library_total
+                .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+            let mut pills = vec!["Latest".to_string(), "Upcoming".to_string()];
+            let latest_marker = self.latest_has_new_content && !self.latest_acknowledged;
+            if large {
+                pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));
+            } else {
+                pills.push("All".to_string());
+            }
+            let active = match self.context.tv_content_mode.as_ref() {
+                Some(mbv_core::config::TvContentMode::Latest) => 0,
+                Some(mbv_core::config::TvContentMode::Upcoming) => 1,
+                Some(mbv_core::config::TvContentMode::All) => 2,
+                Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
+                None => {
+                    if large {
+                        0
+                    } else {
+                        2
+                    }
+                }
+            };
             Some(SelectorRow {
-                pills: crate::app::render::LetterFilter::labels(),
-                markers: vec![],
-                active: Some(
-                    self.context
-                        .list
-                        .letter_filter
-                        .as_ref()
-                        .map(|filter| filter.index)
-                        .unwrap_or(0),
-                ),
+                markers: std::iter::once(latest_marker)
+                    .chain(std::iter::repeat_n(false, pills.len().saturating_sub(1)))
+                    .collect(),
+                pills,
+                active: Some(active),
             })
         } else {
             None
@@ -379,7 +555,7 @@ impl TvContent {
             facts: data.facts,
             overview: data.overview,
             credits: data.credits,
-            workspace: Some(Workspace {
+            workspace: (!flat_episode_mode).then_some(Workspace {
                 header: None,
                 selector: workspace_selector,
                 list: &mut self.episodes,
@@ -521,9 +697,36 @@ impl TvContent {
     /// from the pushed season detail (design.md D4: the component carries the
     /// stable episode identity; the shell never reads the cursor).
     pub(in crate::app) fn selected_episode_item(&self) -> Option<EmbyItem> {
+        if matches!(
+            self.context.tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        ) {
+            return self
+                .carrier
+                .selected_target()
+                .and_then(|target| {
+                    self.context
+                        .list
+                        .items
+                        .iter()
+                        .find(|item| upcoming_episode_target(item) == *target)
+                })
+                .cloned();
+        }
         self.current_season_episodes()
             .get(self.episodes.cursor())
             .cloned()
+    }
+
+    fn flat_episode_mode(&self) -> bool {
+        matches!(
+            self.context.tv_content_mode,
+            Some(
+                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
+            )
+        )
     }
     /// Test-only: the episode owner's selectable cursor index, used to prove
     /// the cursor survives a loading refresh where no episode item is
@@ -577,7 +780,15 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn hero_overlay_target_available(&mut self) -> bool {
-        self.selected_item().is_some()
+        !self.flat_episode_mode() && self.selected_item().is_some()
+    }
+
+    fn mini_view_hero_available(&mut self) -> bool {
+        !self.is_wide && self.flat_episode_mode() && self.selected_episode_item().is_some()
+    }
+
+    fn browser_rows_are_hero_bearing(&mut self) -> bool {
+        !self.flat_episode_mode()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
@@ -711,6 +922,12 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn focus_hero_workspace(&mut self) -> bool {
+        if self.flat_episode_mode() {
+            // The compact flat-episode hero is passive: its browser carrier
+            // remains focused so movement and mode cycling keep reaching the
+            // visible list rather than the hidden season workspace.
+            return false;
+        }
         self.pane = Pane::Episodes;
         true
     }
@@ -724,7 +941,14 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
-        self.context.selected_series.as_ref().map(hero_content_emby)
+        if self.flat_episode_mode() {
+            (self.hero_overlay_open && !self.is_wide)
+                .then(|| self.selected_episode_item())
+                .flatten()
+                .map(|episode| hero_content_emby(&episode))
+        } else {
+            self.context.selected_series.as_ref().map(hero_content_emby)
+        }
     }
     fn set_hero_image(&mut self, state: HeroImageState) {
         self.context.hero_image = state;

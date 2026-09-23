@@ -120,9 +120,11 @@ pub(super) struct BrowseLevel {
     pub(super) sort_order: String,
     pub(super) loading: bool,
     pub(super) all_items: Option<Vec<EmbyItem>>, // prefetched full list for instant search
-    /// Active letter-range pill scope for a large library's top browse level
-    /// (`None` = unfiltered). See `render::LetterFilter`.
+    /// Active letter-range pill scope for a large non-TV library.
     pub(super) letter_filter: Option<crate::app::render::LetterFilter>,
+    /// Selected top-level TV content mode; absent means resolve the size
+    /// default after the unfiltered capture load.
+    pub(super) tv_content_mode: Option<mbv_core::config::TvContentMode>,
     /// Grouping lifecycle state for a music album level (candidate +
     /// settled catalog). `None` for non-music or non-album levels.
     pub(super) music_grouping: Option<super::music_grouping::MusicGroupingState>,
@@ -141,21 +143,23 @@ impl BrowseLevel {
         total_count: usize,
         visible_rows: usize,
     ) -> Self {
-        Self::from_position_level_with_fetched_rows(
+        Self::from_position_level_with_fetched_rows_for_kind(
             saved,
             items,
             total_count,
             visible_rows,
             saved.fetched_rows,
+            crate::app::render::LetterFilterKind::Movie,
         )
     }
 
-    pub(super) fn from_position_level_with_fetched_rows(
+    pub(super) fn from_position_level_with_fetched_rows_for_kind(
         saved: &crate::config::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
         visible_rows: usize,
         fetched_rows: Option<usize>,
+        filter_kind: crate::app::render::LetterFilterKind,
     ) -> Self {
         let cursor = saved
             .focused_item_id
@@ -176,9 +180,22 @@ impl BrowseLevel {
             sort_order: saved.sort_order.clone(),
             loading: false,
             all_items: None,
-            letter_filter: saved
-                .letter_filter_index
-                .and_then(crate::app::render::LetterFilter::for_index),
+            letter_filter: match (filter_kind, saved.tv_content_mode.as_ref()) {
+                (
+                    crate::app::render::LetterFilterKind::Tv,
+                    Some(mbv_core::config::TvContentMode::Range(index)),
+                ) => crate::app::render::LetterFilter::for_index_for_kind(*index, filter_kind),
+                (crate::app::render::LetterFilterKind::Tv, Some(_)) => None,
+                _ => saved.letter_filter_index.and_then(|index| {
+                    crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                }),
+            },
+            tv_content_mode: (filter_kind == crate::app::render::LetterFilterKind::Tv).then(|| {
+                crate::app::render::resolve_tv_content_mode(
+                    saved.library_total.unwrap_or_default(),
+                    saved.tv_content_mode.as_ref(),
+                )
+            }),
             music_grouping: None,
         }
     }
@@ -209,7 +226,12 @@ impl BrowseLevel {
             unplayed_only: self.unplayed_only,
             sort_by: self.sort_by.clone(),
             sort_order: self.sort_order.clone(),
-            letter_filter_index: self.letter_filter.as_ref().map(|f| f.index),
+            letter_filter_index: self
+                .tv_content_mode
+                .is_none()
+                .then(|| self.letter_filter.as_ref().map(|f| f.index))
+                .flatten(),
+            tv_content_mode: self.tv_content_mode.clone(),
             // Only meaningful for the root level; `library_position_snapshot`
             // (the `LibraryTab` method) fills this in for `levels[0]` from
             // `LibraryTab.library_total` after collecting all levels here.
@@ -235,17 +257,23 @@ pub(super) fn restore_library_position<F>(
 where
     F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize), String>,
 {
-    restore_library_position_with_fetched_rows(saved, visible_rows, |saved_level| {
-        fetch_level(saved_level).map(|(items, total_count)| {
-            let fetched_rows = saved_level.fetched_rows.unwrap_or(items.len());
-            (items, total_count, fetched_rows)
-        })
-    })
+    restore_library_position_with_fetched_rows_for_kind(
+        saved,
+        visible_rows,
+        crate::app::render::LetterFilterKind::Movie,
+        |saved_level| {
+            fetch_level(saved_level).map(|(items, total_count)| {
+                let fetched_rows = saved_level.fetched_rows.unwrap_or(items.len());
+                (items, total_count, fetched_rows)
+            })
+        },
+    )
 }
 
-pub(super) fn restore_library_position_with_fetched_rows<F>(
+pub(super) fn restore_library_position_with_fetched_rows_for_kind<F>(
     saved: &crate::config::LibraryPosition,
     visible_rows: usize,
+    filter_kind: crate::app::render::LetterFilterKind,
     mut fetch_level: F,
 ) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
 where
@@ -265,12 +293,13 @@ where
 
     for (idx, saved_level) in saved.levels.iter().enumerate() {
         let (items, total_count, fetched_rows) = fetch_level(saved_level)?;
-        let level = BrowseLevel::from_position_level_with_fetched_rows(
+        let level = BrowseLevel::from_position_level_with_fetched_rows_for_kind(
             saved_level,
             items,
             total_count,
             visible_rows,
             Some(fetched_rows),
+            filter_kind,
         );
         let can_descend = saved
             .levels
