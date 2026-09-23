@@ -3,7 +3,7 @@
 ## 1. Shared destination contract
 
 - [x] 1.1 Add stable Latest selector identities and fallback for saved Home Latest selections in both TUI launch state and legacy `home_section` preferences; verify config, launch-state, and Home restore tests (`cargo nextest run -p mbv-core` and `cargo nextest run -p mbv`).
-- [ ] 1.2 Move launch-window marker derivation and source-qualified acknowledgement to destination Latest snapshots without Home projection; verify first-launch, timestamp-boundary, preselected-before-load, and refresh tests (`cargo nextest run -p mbv`).
+- [x] 1.2 Move launch-window marker derivation and source-qualified acknowledgement to destination Latest snapshots without Home projection; verify first-launch, timestamp-boundary, preselected-before-load, and refresh tests (`cargo nextest run -p mbv`).
 - [ ] 1.3 Route existing Emby latest requests by library id into destination-owned snapshots so an unopened Home is irrelevant; verify TV still gets episodes, non-TV gets additions, and one destination refresh does not fetch another (`cargo nextest run -p mbv`).
 
 ## 2. Emby destinations
