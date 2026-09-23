@@ -351,10 +351,10 @@ mod wide_row_regression_tests {
         }
     }
 
-    /// Group headings read as foam labels in every grouped list, and date
-    /// metadata paints green in the fixed right-aligned gutter.
+    /// Group headings read as foam labels (not bold) in every grouped list,
+    /// and date metadata paints green in the fixed right-aligned gutter.
     #[test]
-    fn heading_labels_are_foam_and_year_metadata_is_green() {
+    fn heading_labels_are_foam_not_bold_and_year_metadata_is_green() {
         let rect = Rect::new(0, 0, 40, 3);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -390,8 +390,8 @@ mod wide_row_regression_tests {
 
         assert_eq!(buf[(2, 0)].symbol(), "A", "heading label at the indent");
         assert_eq!(buf[(3, 0)].symbol(), "R", "heading label paints all caps");
-        assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA);
-        assert!(buf[(2, 0)].modifier.contains(Modifier::BOLD));
+        assert_eq!(buf[(2, 0)].fg, palette::GROUP_HEADING_FG);
+        assert!(!buf[(2, 0)].modifier.contains(Modifier::BOLD));
 
         assert_eq!(buf[(34, 1)].symbol(), "2");
         assert_eq!(buf[(34, 1)].fg, palette::STATUS_AVAILABLE);

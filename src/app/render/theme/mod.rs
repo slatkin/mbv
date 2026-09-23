@@ -239,6 +239,11 @@ pub const PROGRESS_TRACK: Color = Palette::Grey2.color(); // unplayed seek/progr
 /// today (`INDICATOR_RESOLUTION_FG`): the two are equal today and
 /// independently editable, so an indicator edit moves the indicator alone.
 pub const PROGRESS_PERCENT: Color = Palette::Orange.color();
+/// Group headings (`MediaListRow::Heading`) in every grouped media list. Its
+/// own role over the secondary metadata blue it shares today
+/// (`TEXT_METADATA`): equal today and independently editable, so a
+/// metadata-colour edit moves the metadata alone.
+pub const GROUP_HEADING_FG: Color = Palette::Foam.color();
 
 // Chrome
 /// Library/chrome scrollbar track/thumb; a former value alias of the soft

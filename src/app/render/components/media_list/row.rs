@@ -58,9 +58,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 Span::raw("  "),
                 Span::styled(
                     text.to_uppercase(),
-                    Style::default()
-                        .fg(palette::TEXT_METADATA)
-                        .add_modifier(Modifier::BOLD),
+                    Style::default().fg(palette::GROUP_HEADING_FG),
                 ),
             ],
             alternate_bg,
