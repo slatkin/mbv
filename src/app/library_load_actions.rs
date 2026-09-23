@@ -25,6 +25,27 @@ impl App {
             }
         }
         self.log_feed_home_video_state(lib_idx, "refresh_lib_before_spawn");
+        if self.libs[lib_idx].library.collection_type == "tvshows"
+            && (self.libs[lib_idx].tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
+                || self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.tv_content_mode.as_ref())
+                    == Some(&mbv_core::config::TvContentMode::Latest))
+        {
+            let parent_id = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|level| level.parent_id.clone());
+            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                level.loading = true;
+            }
+            if let Some(parent_id) = parent_id {
+                let title = self.libs[lib_idx].library.name.clone();
+                self.spawn_tv_latest(lib_idx, parent_id, title);
+            }
+            return;
+        }
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.loading = true;
             let parent_id = lvl.parent_id.clone();

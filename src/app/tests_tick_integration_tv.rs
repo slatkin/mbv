@@ -15,7 +15,7 @@ use crate::app::render::make_movie_app;
 use crate::app::tests::install_test_emby;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_events::NavigateLanding;
-use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+use crate::app::types_playback::{HomeContent as ModelHomeContent, HomeLatestSection, HomeLatestSource};
 use mbv_core::mock_http::MockHttp;
 use mbv_core::playback_queue::QueueItem;
 use crate::app::{LibEvent, PanelFocus, PanelMode, TabSelection};
@@ -49,6 +49,137 @@ fn tv_harness() -> TickHarness {
     harness.model_mut().sync_tv_content();
     harness.model_mut().sync_active_destination();
     harness
+}
+
+#[test]
+fn home_latest_load_projects_shared_snapshot_into_tv_library_through_tick() {
+    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
+    let mut fresh = crate::app::tests::make_item("Home episode", "Episode");
+    fresh.id = "home-episode".into();
+    harness.model_mut().assign_home_content(ModelHomeContent {
+        continue_items: Vec::new(),
+        latest: vec![HomeLatestSection {
+            title: "TV".into(),
+            source: HomeLatestSource::Emby("lib-movies".into()),
+            items: vec![QueueItem::Emby(Box::new(fresh))],
+            has_new_content: true,
+        }],
+        loading: false,
+        feed_names: Default::default(),
+    });
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('j'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+    draw(&mut harness);
+
+    assert_eq!(
+        harness.model().home_content.latest[0].items[0]
+            .as_emby()
+            .unwrap()
+            .id,
+        harness.model().app.libs[0].nav_stack[0].items[0].id
+    );
+    assert!(!harness.model().home_content.latest[0].has_new_content);
+}
+
+#[test]
+fn tv_latest_refresh_updates_home_snapshot_with_one_fetch_through_tick() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"fresh-episode","Name":"Fresh episode","Type":"Episode"}],"TotalRecordCount":1}"#,
+    );
+    let mut harness = tv_harness();
+    let mut config = harness.model().app.config.lock().unwrap().clone();
+    config.emby_setup = Some(mbv_core::config::EmbySetup::new(
+        "http://127.0.0.1:1",
+        "user-1",
+    ));
+    install_test_emby(&mut harness.model_mut().app, config);
+    let mut client = harness
+        .model()
+        .app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    client.user_id = "user-1".into();
+    client.config.server_url = "http://127.0.0.1:1".into();
+    harness.model_mut().app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(
+        std::sync::Arc::new(std::sync::Mutex::new(client)),
+    );
+    harness.model_mut().app.libs[0].library.collection_type = "tvshows".into();
+    harness.model_mut().app.libs[0].tv_content_mode =
+        Some(mbv_core::config::TvContentMode::Latest);
+    harness.model_mut().app.libs[0].library_total = Some(301);
+    let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
+    level.tv_content_mode = Some(mbv_core::config::TvContentMode::Latest);
+    level.item_types = Some("Episode".into());
+    level.items = vec![crate::app::tests::make_item("Old episode", "Episode")];
+    level.loading = false;
+    harness.model_mut().home_content.latest = vec![HomeLatestSection {
+        title: "TV".into(),
+        source: HomeLatestSource::Emby("lib-movies".into()),
+        items: vec![QueueItem::Emby(Box::new(crate::app::tests::make_item(
+            "Old episode",
+            "Episode",
+        )))],
+        has_new_content: true,
+    }];
+
+    harness.model_mut().app.refresh_lib(0);
+    let event = harness
+        .model()
+        .app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("Latest refresh completion");
+    let LibEvent::Loaded { level, .. } = &event else {
+        if let LibEvent::Error(error) = &event {
+            panic!("Latest refresh failed: {error}; requests: {:?}", http.requests());
+        }
+        panic!("expected Latest level load; requests: {:?}", http.requests());
+    };
+    let items: Vec<_> = level
+        .items
+        .iter()
+        .cloned()
+        .map(|item| QueueItem::Emby(Box::new(item)))
+        .collect();
+    harness.model_mut().app.handle_lib_event(event);
+    harness.model_mut().update_tv_latest_snapshot(
+        "lib-movies".into(),
+        "TV".into(),
+        items,
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('j'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+    draw(&mut harness);
+
+    let home = &harness.model().home_content.latest[0].items;
+    assert_eq!(home[0].as_emby().unwrap().id, "fresh-episode");
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].items[0].id,
+        "fresh-episode"
+    );
+    assert!(harness.model().home_content.latest[0].has_new_content);
+    let latest_fetches = http
+        .requests()
+        .iter()
+        .filter(|request| request.contains("IncludeItemTypes=Episode"))
+        .count();
+    assert_eq!(latest_fetches, 1, "requests: {:?}", http.requests());
 }
 
 #[test]
