@@ -241,6 +241,14 @@ pub enum ShellRequest {
         target: super::intents::HomeRowTarget,
     },
 
+    /// Request shell-owned data for a newly expanded TV tree branch. The TV
+    /// owner carries its stable target; the shell resolves the Service IDs and
+    /// reuses its existing detail/season fetch guards. The mounted-tree intent
+    /// is connected in task 3.1.
+    #[allow(dead_code)]
+    TvTreeExpand {
+        target: super::super::tv_tree_target::TvTreeTarget,
+    },
     /// A Home section pill the user clicked; `target` is the section index the
     /// component resolved from its `HitRegions` and already applied locally
     /// (design.md D4/D6). The shell persists the selected source.

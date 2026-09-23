@@ -777,7 +777,8 @@ impl Model {
                     | ShellRequest::TvBack
                     | ShellRequest::TvCycleLetterPill { .. }
                     | ShellRequest::TvEpisodeMove { .. }
-                    | ShellRequest::TvSeasonMove { .. }) => self.handle_tv_request(request),
+                    | ShellRequest::TvSeasonMove { .. }
+                    | ShellRequest::TvTreeExpand { .. }) => self.handle_tv_request(request),
                     ShellRequest::TvHitClick { hit } => {
                         let acknowledge_latest =
                             matches!(hit, crate::app::components::msg::TvHit::LetterPill(0));

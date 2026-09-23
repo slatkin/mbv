@@ -277,7 +277,11 @@ impl App {
     }
 
     pub(super) fn handle_series_detail_fetched(&mut self, series_id: String, detail: SeriesDetail) {
-        self.series_detail_cache.insert(series_id.clone(), detail);
+        // A late completion must not replace a newer cached projection (for
+        // example, a refresh that completed while this request was in flight).
+        self.series_detail_cache
+            .entry(series_id.clone())
+            .or_insert(detail);
         self.series_detail_loading.remove(&series_id);
         let first_season_id = self
             .series_detail_cache

@@ -4,15 +4,18 @@
 /// Child identities include their ancestors because Emby child IDs are not
 /// guaranteed to be unique outside their parent scope.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(in crate::app) enum TvTreeTarget {
+pub(crate) enum TvTreeTarget {
     Show(String),
     Season {
         show: String,
         season: String,
+        occurrence: usize,
     },
     Episode {
         show: String,
         season: String,
+        season_occurrence: usize,
         episode: String,
+        occurrence: usize,
     },
 }

@@ -97,6 +97,56 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
 }
 
 #[test]
+fn expanding_a_show_reuses_the_hero_detail_request() {
+    let mut model = mounted_tv_model();
+    model
+        .app
+        .series_detail_loading
+        .insert("movie-focused".into());
+
+    model.handle_tv_request(ShellRequest::TvTreeExpand {
+        target: crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:13:movie-focused".into(),
+        ),
+    });
+
+    assert_eq!(
+        model.app.series_detail_loading,
+        std::collections::HashSet::from(["movie-focused".into()]),
+        "tree expansion must share the in-flight Hero detail request"
+    );
+}
+
+#[test]
+fn late_series_detail_completion_does_not_replace_cached_detail() {
+    let mut app = make_movie_app();
+    let mut cached_season = crate::app::tests::make_item("Current", "Season");
+    cached_season.id = "current-season".into();
+    app.series_detail_cache.insert(
+        "show-id".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![cached_season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    let mut stale_season = crate::app::tests::make_item("Stale", "Season");
+    stale_season.id = "stale-season".into();
+    app.handle_series_detail_fetched(
+        "show-id".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![stale_season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    assert_eq!(
+        app.series_detail_cache["show-id"].seasons[0].id,
+        "current-season"
+    );
+}
+
+#[test]
 fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
     let mut model = mounted_tv_model();
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());

@@ -28,6 +28,19 @@ impl Model {
             return;
         };
         match request {
+            ShellRequest::TvTreeExpand { target } => {
+                let source = self
+                    .tv_owner()
+                    .and_then(|owner| owner.tree_expansion_source(&target));
+                if let Some((series_id, season_id)) = source {
+                    if let Some(season_id) = season_id {
+                        self.app.fetch_series_season_episodes(series_id, season_id);
+                    } else {
+                        self.app.fetch_series_detail(series_id);
+                    }
+                    self.push_tv_workspace_content();
+                }
+            }
             // The owner resolved the episode from its own season detail and
             // carried the stable item (design.md D4); the shell plays it
             // directly without reading any owner cursor. An id-less

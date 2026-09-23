@@ -507,11 +507,14 @@ fn show_tree_projects_sorted_roots_with_loaded_seasons_and_episodes_in_order() {
     let season = TvTreeTarget::Season {
         show: "tv-id:6:show-a".into(),
         season: "season-1".into(),
+        occurrence: 0,
     };
     let episode = TvTreeTarget::Episode {
         show: "tv-id:6:show-a".into(),
         season: "season-1".into(),
+        season_occurrence: 0,
         episode: "episode-1".into(),
+        occurrence: 0,
     };
     assert_eq!(
         component.browser.roots(),
@@ -585,6 +588,193 @@ fn show_tree_keeps_each_heading_and_spacer_at_its_group_boundary(
 }
 
 #[test]
+fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
+    use crate::app::components::list::tree_browser::TreeOperation;
+    use crate::app::components::tv_tree_target::TvTreeTarget;
+
+    let show_target = TvTreeTarget::Show("tv-id:6:show-a".into());
+    let mut component = TvContent::new();
+    component.set_content(tv_tree_context(
+        vec![tv_show("Alpha", "show-a")],
+        None,
+        None,
+        false,
+    ));
+    assert!(matches!(
+        component.toggle_tree_expansion(show_target.clone()),
+        Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == show_target
+    ));
+    assert!(component.browser.is_expanded(&show_target));
+    assert!(component
+        .toggle_tree_expansion(show_target.clone())
+        .is_none());
+    assert!(!component.browser.is_expanded(&show_target));
+
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    component.set_content(tv_tree_context(
+        vec![tv_show("Alpha", "show-a")],
+        Some("show-a"),
+        Some(crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: std::collections::HashMap::new(),
+        }),
+        false,
+    ));
+    component
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(show_target));
+    let season_target = TvTreeTarget::Season {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+        occurrence: 0,
+    };
+    assert!(matches!(
+        component.toggle_tree_expansion(season_target.clone()),
+        Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == season_target
+    ));
+}
+
+#[test]
+fn expanded_show_and_selected_target_survive_detail_completion() {
+    use crate::app::components::list::tree_browser::TreeOperation;
+    use crate::app::components::tv_tree_target::TvTreeTarget;
+
+    let show_target = TvTreeTarget::Show("tv-id:6:show-a".into());
+    let mut component = TvContent::new();
+    component.set_content(tv_tree_context(
+        vec![tv_show("Alpha", "show-a")],
+        Some("show-a"),
+        None,
+        false,
+    ));
+    component
+        .browser
+        .apply(TreeOperation::ToggleExpansionTarget(show_target.clone()));
+    component
+        .browser
+        .apply(TreeOperation::Select(show_target.clone()));
+
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    component.set_content(tv_tree_context(
+        vec![tv_show("Alpha", "show-a")],
+        Some("show-a"),
+        Some(crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: std::collections::HashMap::new(),
+        }),
+        false,
+    ));
+
+    assert_eq!(component.browser.selected_target(), Some(&show_target));
+    assert!(component.browser.is_expanded(&show_target));
+    assert!(matches!(
+        component.browser.visible_targets().as_slice(),
+        [TvTreeTarget::Show(_), TvTreeTarget::Season { .. }]
+    ));
+}
+
+#[test]
+fn completed_empty_details_remove_pending_expandability() {
+    use crate::app::components::tv_tree_target::TvTreeTarget;
+
+    let show_target = TvTreeTarget::Show("tv-id:6:show-a".into());
+    let mut component = TvContent::new();
+    component.set_content(tv_tree_context(
+        vec![tv_show("Alpha", "show-a")],
+        Some("show-a"),
+        Some(crate::app::SeriesDetail {
+            seasons: Vec::new(),
+            episodes: std::collections::HashMap::new(),
+        }),
+        false,
+    ));
+    assert!(!component.browser.node(&show_target).unwrap().expandable);
+
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    component.set_content(tv_tree_context(
+        vec![tv_show("Alpha", "show-a")],
+        Some("show-a"),
+        Some(crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: [("season-1".into(), Vec::new())].into_iter().collect(),
+        }),
+        false,
+    ));
+    let season_target = TvTreeTarget::Season {
+        show: "tv-id:6:show-a".into(),
+        season: "season-1".into(),
+        occurrence: 0,
+    };
+    assert!(!component.browser.node(&season_target).unwrap().expandable);
+}
+
+#[rstest]
+#[case::duplicate_season_ids(vec!["season-1", "season-1"], vec![])]
+#[case::duplicate_episode_ids(vec!["season-1"], vec!["episode-1", "episode-1"])]
+#[case::colliding_idless_virtual_episodes(vec!["season-1"], vec!["", ""])]
+fn duplicate_child_identities_are_scoped_to_their_parent(
+    #[case] season_ids: Vec<&str>,
+    #[case] episode_ids: Vec<&str>,
+) {
+    let show = tv_show("Alpha", "show-a");
+    let seasons = season_ids
+        .iter()
+        .map(|id| {
+            let mut season = make_item("Season", "Season");
+            season.id = (*id).into();
+            season
+        })
+        .collect::<Vec<_>>();
+    let episodes = episode_ids
+        .iter()
+        .map(|id| {
+            let mut episode = make_item("Virtual episode", "Episode");
+            episode.id = (*id).into();
+            episode
+        })
+        .collect::<Vec<_>>();
+    let detail = crate::app::SeriesDetail {
+        seasons,
+        episodes: [("season-1".into(), episodes)].into_iter().collect(),
+    };
+    let mut component = TvContent::new();
+    component.set_content(tv_tree_context(
+        vec![show],
+        Some("show-a"),
+        Some(detail),
+        false,
+    ));
+
+    fn collect<T: Clone + Eq + std::hash::Hash>(
+        browser: &TreeBrowser<T>,
+        target: &T,
+        output: &mut Vec<T>,
+    ) {
+        output.push(target.clone());
+        if let Some(children) = browser.children_of(target) {
+            for child in children {
+                collect(browser, child, output);
+            }
+        }
+    }
+    let mut targets = Vec::new();
+    for root in component.browser.roots() {
+        collect(&component.browser, root, &mut targets);
+    }
+    let target_count = targets.len();
+    targets.sort_by_key(|target| format!("{target:?}"));
+    targets.dedup();
+    assert_eq!(
+        target_count,
+        targets.len(),
+        "every duplicate row stays addressable"
+    );
+}
+
+#[test]
 fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() {
     use crate::app::components::list::tree_browser::TreeOperation;
     use crate::app::components::tv_tree_target::TvTreeTarget;
@@ -612,11 +802,14 @@ fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() 
     let season_target = TvTreeTarget::Season {
         show: "tv-id:6:show-a".into(),
         season: "season-1".into(),
+        occurrence: 0,
     };
     let episode_target = TvTreeTarget::Episode {
         show: "tv-id:6:show-a".into(),
         season: "season-1".into(),
+        season_occurrence: 0,
         episode: "episode-1".into(),
+        occurrence: 0,
     };
     let mut component = TvContent::new();
     component.set_content(context());
