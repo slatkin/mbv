@@ -10,7 +10,7 @@
 
 - [x] 2.1 On a checkout containing `rework-tv-library-pills` code and synced specs, and after the missing `canonical-media-lists` delta is created, add stable Show/Season/Episode TV targets and project sorted show-mode rows, headings, and between-group spacers into one TreeBrowser; verify component tests for order, group boundaries, and stable refresh identities.
 - [x] 2.2 Wire shell-owned show detail and episode loading to declared-expandable branches, deduplicating existing Hero fetches without eager all-season fetches or stale completion overwrites; verify mock-boundary tests for uncached expansion, loading, empty completion, out-of-order results, and selection continuity.
-- [ ] 2.3 Replace only the show-mode flat browser list with the TV tree in the Library Panel for every geometry; preserve the Hero's season pills and episode Workspace and verify focused TV content tests for concurrent inline and Workspace episode rows.
+- [x] 2.3 Replace only the show-mode flat browser list with the TV tree in the Library Panel for every geometry; preserve the Hero's season pills and episode Workspace and verify focused TV content tests for concurrent inline and Workspace episode rows.
 
 ## 3. Input and Mode Boundaries
 
