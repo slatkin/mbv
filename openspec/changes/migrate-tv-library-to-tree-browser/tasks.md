@@ -14,11 +14,18 @@
 
 ## 3. Input and Mode Boundaries
 
-- [ ] 3.1 Translate tree selection, expansion, activation, context, and playback intents by stable TV target through existing typed shell requests where possible; verify component tests for show, season, episode, and non-actionable headings.
-- [ ] 3.2 Keep Latest/Upcoming and Inline Search on their flat controls, with current pill and Hero rules; verify mode-switch, search-dismissal, direct episode activation, and selector restore tests.
-- [ ] 3.3 Exercise mounted `Application::tick()` for tree keyboard and latest-frame mouse delivery through the Library Panel in Wide, Narrow, and Mini; verify correct target and no second painter or underpaint.
+- [ ] 3.1a Translate tree selection and expansion by stable TV target in Narrow and Wide; keep headings non-actionable and the Hero Workspace cursor independent. Verify focused component tests for show and season movement/expansion, including Wide navigation and Narrow visual-key handling.
+- [ ] 3.1b Translate show, season, and episode activation, context, and playback through typed shell requests using the selected tree target, not the flat carrier or Hero Workspace cursor. Verify focused tests for show Hero opening, season toggle, inline episode playback, and heading no-op.
+- [ ] 3.1c Restore show-mode Esc/Backspace navigation to `TvBack` in both geometries; verify one focused keyboard regression.
+- [ ] 3.1d Resolve show activation's Hero gate from the tree-selected show rather than the stale flat carrier; verify one focused shell regression.
+- [ ] 3.1e Stabilize and accept 3.1a–d: fix WIP whitespace, verify focused tree actions and Narrow visual-key handling, run compile/targeted tests, commit scoped code, and obtain focused review before checking these rows.
+- [ ] 3.2a Keep Latest/Upcoming on the flat episode control with their current pill and Hero rules; verify mode switches and direct episode activation without opening a show Workspace.
+- [ ] 3.2b Keep Inline Search on its separate flat result control without changing the show tree's settled selection or expansion; verify dismissal and selector restore across mode changes.
+- [ ] 3.3a Exercise mounted `Application::tick()` through the shell sync pass for TV tree keyboard navigation and activation in Wide, Narrow, and Mini; verify resolved targets.
+- [ ] 3.3b Exercise latest-frame mouse delivery through the Library Panel in Wide, Narrow, and Mini; verify the correct tree target and no second painter or underpaint.
 
 ## 4. Completion
 
-- [ ] 4.1 Sync all affected main specs, including the prerequisite TV pills deltas and the required `canonical-media-lists` delta, add relevant terminology to `CONTEXT.md`, and verify OpenSpec strict validation and cross-references.
+- [ ] 4.1a Create the required `canonical-media-lists` delta replacing TV show-mode flat-browser obligations while preserving Latest/Upcoming and Hero Workspace flat rows; verify the delta against current behavior.
+- [ ] 4.1b Sync affected main specs, including the already-landed TV pills deltas, add TV tree terminology to `CONTEXT.md`, and verify OpenSpec strict validation and cross-references.
 - [ ] 4.2 Run `cargo fmt`, `cargo check -p mbv`, `cargo nextest run -p mbv`, and `cargo clippy --workspace --all-targets -- -D warnings`; fix failures and verify a clean checkout after committing planning and implementation together.
