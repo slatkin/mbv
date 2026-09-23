@@ -234,6 +234,23 @@ fn mini_view_starts_at_queue_only_by_default() {
         crate::app::PanelMode::QueueOnly,
         "fresh narrow app defaults to queue-only mini view"
     );
+
+    // Library-only is reached through the mini-view focus hand-off. Its
+    // sidebar/overlay bounds must reclaim the full terminal width rather than
+    // inheriting the zero-width queue-column rectangle.
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    let geometry = app.compute_chrome_geometry(Rect::new(0, 0, width, 20));
+    assert_eq!(geometry.root.queue, None);
+    assert_eq!(geometry.panel_area.width, width);
+    assert_eq!(
+        crate::app::render::components::chrome::left_panel_content_area(geometry.panel_area).width,
+        width.saturating_sub(4)
+    );
+    assert_eq!(
+        app.effective_panel_mode(),
+        crate::app::PanelMode::LibraryOnly,
+        "the mini-view focus hand-off selects library-only"
+    );
 }
 
 #[test]
