@@ -187,12 +187,32 @@ pub(in crate::app) fn render_playlists_content(
         let index = *playlists_scroll + visible;
         let selected = index == *playlists_cursor;
         let loaded = loaded_id.is_some_and(|id| id == playlist.id);
+        // Canonical selected-row treatment (Iris bar, Ink text) like the
+        // media lists; unselected rows zebra-stripe on absolute parity so the
+        // bands hold still under scroll, opening on the panel fill.
+        let bg = if selected {
+            Some(palette::SELECTED_ROW_BG)
+        } else if index % 2 == 1 {
+            Some(palette::PLAYLIST_STRIPE_BG)
+        } else {
+            None
+        };
         let fg = if selected {
-            palette::ACCENT_ACTIVE
+            palette::SELECTED_ROW_FG
         } else if loaded {
-            palette::TEXT_ACCENT_MUTED
+            palette::PLAYLIST_LOADED_FG
         } else {
             palette::TEXT_PRIMARY
+        };
+        let title_style = if selected {
+            Style::default().fg(fg)
+        } else {
+            Style::default().fg(fg).add_modifier(Modifier::BOLD)
+        };
+        let count_fg = if selected {
+            palette::SELECTED_ROW_FG
+        } else {
+            palette::TEXT_MUTED
         };
         let count = if playlist.total_count > 0 {
             format!(" ({})", playlist.total_count)
@@ -217,10 +237,11 @@ pub(in crate::app) fn render_playlists_content(
                         &playlist.name,
                         chrome::panel_row_text_width(content.width).saturating_sub(count.len()),
                     ),
-                    Style::default().fg(fg).add_modifier(Modifier::BOLD),
+                    title_style,
                 ),
-                Span::styled(count, Style::default().fg(palette::TEXT_MUTED)),
+                Span::styled(count, Style::default().fg(count_fg)),
             ],
+            bg,
         );
         geometry.playlist_rows.push((row, index));
     }
@@ -314,6 +335,7 @@ fn render_open_playlist_content(
                 Span::styled(num, Style::default().fg(palette::TEXT_MUTED)),
                 Span::styled(line1, Style::default().fg(fg)),
             ],
+            None,
         );
         if !line2.is_empty() && y + 1 < content.height as usize {
             frame.render_widget(
@@ -419,12 +441,29 @@ impl App {
             let abs_idx = self.playlists_scroll + vi;
             let selected = abs_idx == self.playlists_cursor;
             let is_loaded = loaded_id.map(|id| id == pl.id.as_str()).unwrap_or(false);
+            let bg = if selected {
+                Some(palette::SELECTED_ROW_BG)
+            } else if abs_idx % 2 == 1 {
+                Some(palette::PLAYLIST_STRIPE_BG)
+            } else {
+                None
+            };
             let fg = if selected {
-                palette::ACCENT_ACTIVE
+                palette::SELECTED_ROW_FG
             } else if is_loaded {
-                palette::TEXT_ACCENT_MUTED
+                palette::PLAYLIST_LOADED_FG
             } else {
                 palette::TEXT_PRIMARY
+            };
+            let title_style = if selected {
+                Style::default().fg(fg)
+            } else {
+                Style::default().fg(fg).add_modifier(Modifier::BOLD)
+            };
+            let count_fg = if selected {
+                palette::SELECTED_ROW_FG
+            } else {
+                palette::TEXT_MUTED
             };
             let count_str = if pl.total_count > 0 {
                 format!(" ({})", pl.total_count)
@@ -441,12 +480,10 @@ impl App {
                 content.width,
                 selected,
                 vec![
-                    Span::styled(
-                        trunc_str(&pl.name, name_max),
-                        Style::default().fg(fg).add_modifier(Modifier::BOLD),
-                    ),
-                    Span::styled(count_str, Style::default().fg(palette::TEXT_MUTED)),
+                    Span::styled(trunc_str(&pl.name, name_max), title_style),
+                    Span::styled(count_str, Style::default().fg(count_fg)),
                 ],
+                bg,
             );
         }
         chrome::render_sidebar_scrollbar(f, content, self.playlists.len(), self.playlists_scroll);
@@ -555,6 +592,7 @@ impl App {
                     Span::styled(num_str, Style::default().fg(palette::TEXT_MUTED)),
                     Span::styled(line1, Style::default().fg(fg)),
                 ],
+                None,
             );
             y += 1;
             if !line2.is_empty() && y < list_h {

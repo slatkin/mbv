@@ -120,6 +120,16 @@ pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playi
                                                               // today and independently editable, so a
                                                               // text-colour edit moves the text alone
                                                               // (unify-surface-colour-neutral task 4.2)
+/// A playlist row whose playlist is currently loaded in the queue (F4 list).
+/// Its own role over the progress orange it shares today
+/// (`PROGRESS_PERCENT`): the loaded marker must read on the slate panel
+/// surface, which `TEXT_ACCENT_MUTED`'s dark green does not — equal today
+/// and independently editable, so a progress-colour edit moves progress alone.
+pub const PLAYLIST_LOADED_FG: Color = Palette::Orange.color();
+/// The F4 playlists list's secondary zebra fill (`#272e33`). Its own role
+/// over the backdrop slate it shares today (`SURFACE_BACKDROP`): equal today
+/// and independently editable, so a backdrop edit moves the backdrop alone.
+pub const PLAYLIST_STRIPE_BG: Color = Palette::Slate.color();
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the

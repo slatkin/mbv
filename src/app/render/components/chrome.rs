@@ -193,15 +193,31 @@ pub(in crate::app) fn render_panel_row(
     width: u16,
     selected: bool,
     spans: Vec<Span>,
+    bg: Option<Color>,
 ) {
-    let indicator = Span::styled(
-        if selected { "\u{258c}" } else { " " },
-        Style::default().fg(palette::ACCENT),
-    );
-    let mut all = vec![indicator];
+    // A caller-painted background (zebra stripe, selected bar) fills the
+    // whole row through the widget style; the selected bar carries no gutter
+    // mark, so its indicator column stays blank to hold the text alignment.
+    let (mark, mark_fg) = if selected && bg.is_some() {
+        (" ", None)
+    } else {
+        (
+            if selected { "\u{258c}" } else { " " },
+            Some(palette::ACCENT),
+        )
+    };
+    let mut mark_style = Style::default();
+    if let Some(fg) = mark_fg {
+        mark_style = mark_style.fg(fg);
+    }
+    let mut all = vec![Span::styled(mark, mark_style)];
     all.extend(spans);
+    let mut row = Paragraph::new(Line::from(all));
+    if let Some(bg) = bg {
+        row = row.style(Style::default().bg(bg));
+    }
     f.render_widget(
-        Paragraph::new(Line::from(all)),
+        row,
         Rect {
             x,
             y,

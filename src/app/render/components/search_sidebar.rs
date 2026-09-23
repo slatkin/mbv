@@ -214,6 +214,7 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec
                     Style::default().fg(fg).add_modifier(Modifier::BOLD),
                 ),
             ],
+            None,
         );
         rows.push((
             Rect {
