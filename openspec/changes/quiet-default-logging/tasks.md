@@ -2,8 +2,8 @@
 
 ## 1. Logger
 
-- [ ] 1.1 Add a level parameter to `applog::init` that sets `log::set_max_level`; update all three callers to pass Info. Verify with a unit test that a debug record is not enabled after init at Info (`cargo nextest run -p mbv-core applog`).
-- [ ] 1.2 Prefix stderr lines with `<3>/<4>/<6>/<7>` by level; file lines unchanged. Verify with an `rstest` `#[case]` table over the four levels on a pure line-formatting function.
+- [x] 1.1 Add a level parameter to `applog::init` that sets `log::set_max_level`; update all three callers to pass Info. Verify with a unit test that a debug record is not enabled after init at Info (`cargo nextest run -p mbv-core applog`).
+- [x] 1.2 Prefix stderr lines with `<3>/<4>/<6>/<7>` by level; file lines unchanged. Verify with an `rstest` `#[case]` table over the four levels on a pure line-formatting function.
 
 ## 2. Flag
 
