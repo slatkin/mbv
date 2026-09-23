@@ -1,10 +1,10 @@
 # Tasks
 
-- [ ] 1.1 Writer-side death detection: on write error the ctrl writer thread
+- [x] 1.1 Writer-side death detection: on write error the ctrl writer thread
   logs a warning and sets the shared `disconnected` flag before exiting.
   Unit test: a peer that closes its read side makes the first post-close
   send flip `is_disconnected()` (hermetic in-memory socket pair).
-- [ ] 1.2 `send_ctrl_cmd` on a disconnected remote returns `false` instead of
+- [x] 1.2 `send_ctrl_cmd` on a disconnected remote returns `false` instead of
   queueing into the dead writer; covered by the same test family.
 - [ ] 2.1 Queue/play submission paths surface the dead connection: enqueue
   rolls back and flashes a connection-lost toast (respecting
