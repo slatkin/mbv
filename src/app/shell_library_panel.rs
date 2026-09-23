@@ -115,17 +115,13 @@ impl Model {
     fn apply_launch_selector(&mut self, key: &LibraryKey, selector: LaunchSelector) {
         match selector {
             LaunchSelector::EmbyLatest => {
-                if let LibraryKey::Service {
-                    kind: LibraryKind::Music,
-                    library_id,
-                    ..
-                } = key
-                {
-                    self.update_music_owner(|owner| owner.set_latest_mode(true));
-                    self.record_home_latest_acknowledgement(DestinationLatestSource::Emby(
-                        library_id.clone(),
-                    ));
-                } else {
+                if !matches!(
+                    key,
+                    LibraryKey::Service {
+                        kind: LibraryKind::Music,
+                        ..
+                    }
+                ) {
                     self.set_emby_owner_latest_mode(key, true);
                     if let LibraryKey::Service {
                         service: ServiceKind::Emby,

@@ -559,59 +559,32 @@ impl MusicContent {
         // list mutably for the returned slots.
         let focused = self.context.focused;
         let track_focused = self.track_focused;
-        let hero = if self.latest_mode {
-            self.latest_selected_item().map(|item| {
-                let data = super::library_panel::hero::hero_content_emby(&item);
-                HeroContent {
-                    facts: data.facts,
-                    overview: data.overview,
-                    credits: data.credits,
-                    workspace: None,
-                }
-            })
-        } else {
-            self.resolved_hero_data().map(|data| {
-                HeroContent {
-                    facts: data.facts,
-                    // Music has no separate overview box when the album does not
-                    // provide an overview; the panel's generic producer already
-                    // represents that as `None`.
-                    overview: data.overview,
-                    credits: data.credits,
-                    workspace: Some(Workspace {
-                        header: Some(WorkspaceHeader::Tracklist),
-                        selector: None,
-                        list: &mut self.track_list,
-                        focused: focused && track_focused,
-                    }),
-                }
-            })
-        };
-        let mut pills = vec!["Latest".to_string()];
-        pills.extend(
-            self.context
-                .groups
-                .iter()
-                .map(|group| trunc_str(&group.name, 12).to_string()),
-        );
-        let mut markers = vec![self.latest_has_new_content];
-        markers.resize(pills.len(), false);
-        let selector = Some(SelectorRow {
-            pills,
-            markers,
-            active: Some(if self.latest_mode || self.context.groups.is_empty() {
-                0
-            } else {
-                self.context.group_cursor + 1
+        let hero = self.resolved_hero_data().map(|data| HeroContent {
+            facts: data.facts,
+            // Music has no separate overview box when the album does not
+            // provide an overview; the panel's generic producer already
+            // represents that as `None`.
+            overview: data.overview,
+            credits: data.credits,
+            workspace: Some(Workspace {
+                header: Some(WorkspaceHeader::Tracklist),
+                selector: None,
+                list: &mut self.track_list,
+                focused: focused && track_focused,
             }),
         });
-        // The tree and flat Latest flow remain embedded in this same owner;
-        // the Library Panel paints exactly one in the canonical list slot.
-        let list = if self.latest_mode {
-            ListSlot::Media(&mut self.latest_list)
-        } else {
-            ListSlot::Media(&mut self.browser)
-        };
+        let pills: Vec<_> = self
+            .context
+            .groups
+            .iter()
+            .map(|group| trunc_str(&group.name, 12).to_string())
+            .collect();
+        let selector = Some(SelectorRow {
+            markers: vec![false; pills.len()],
+            active: (!pills.is_empty()).then_some(self.context.group_cursor),
+            pills,
+        });
+        let list = ListSlot::Media(&mut self.browser);
         LibraryPanelContent {
             selector,
             list,
