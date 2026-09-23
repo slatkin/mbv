@@ -91,7 +91,11 @@ pub fn run_local_daemon_main() -> ! {
     }
 
     let state_dir = crate::state_dir();
-    mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")));
+    mbv_core::applog::init(
+        false,
+        Some(state_dir.join("local-daemon.log")),
+        mbv_core::applog::Level::Info,
+    );
     log::info!(target: "local_daemon", "local daemon starting");
 
     let config = match crate::config::load_config() {

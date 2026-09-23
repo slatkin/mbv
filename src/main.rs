@@ -267,6 +267,7 @@ fn main() {
     applog::init(
         config::is_system_instance(),
         Some(state_dir().join("mbv.log")),
+        applog::Level::Info,
     );
 
     if let Err(e) = config::migrate_legacy_emby_token() {

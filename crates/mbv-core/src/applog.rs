@@ -19,6 +19,15 @@ impl Level {
             Level::Debug => "debug",
         }
     }
+
+    fn max_level_filter(self) -> log::LevelFilter {
+        match self {
+            Level::Error => log::LevelFilter::Error,
+            Level::Warn => log::LevelFilter::Warn,
+            Level::Info => log::LevelFilter::Info,
+            Level::Debug => log::LevelFilter::Debug,
+        }
+    }
 }
 
 impl From<log::Level> for Level {
@@ -93,7 +102,7 @@ impl AppLog {
             entry.msg.replace('\\', "\\\\").replace('"', "\\\"")
         );
         if self.stderr {
-            eprintln!("{line}");
+            eprintln!("{}", format_stderr_line(entry.level, &line));
         }
         if let Ok(mut guard) = self.file.lock() {
             if let Some(f) = guard.as_mut() {
@@ -101,6 +110,16 @@ impl AppLog {
             }
         }
     }
+}
+
+fn format_stderr_line(level: Level, line: &str) -> String {
+    let priority = match level {
+        Level::Error => 3,
+        Level::Warn => 4,
+        Level::Info => 6,
+        Level::Debug => 7,
+    };
+    format!("<{priority}>{line}")
 }
 
 static GLOBAL: OnceLock<AppLog> = OnceLock::new();
@@ -133,24 +152,41 @@ impl log::Log for GlobalLogger {
     fn flush(&self) {}
 }
 
-pub fn init(stderr: bool, log_path: Option<PathBuf>) {
+pub fn init(stderr: bool, log_path: Option<PathBuf>, level: Level) {
     if GLOBAL.get().is_some() {
         return;
     }
     let applog = AppLog::new(stderr, log_path);
     GLOBAL.get_or_init(|| applog);
     let _ = log::set_logger(&LOGGER);
-    log::set_max_level(log::LevelFilter::Debug);
+    log::set_max_level(level.max_level_filter());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     // ── log::Level conversion ─────────────────────────────────────────────────
 
     #[test]
     fn level_from_log_trace_maps_to_debug() {
         assert_eq!(Level::from(log::Level::Trace), Level::Debug);
+    }
+
+    #[test]
+    fn init_at_info_disables_debug_records() {
+        init(false, None, Level::Info);
+
+        assert!(!log::log_enabled!(target: "applog_test", log::Level::Debug));
+    }
+
+    #[rstest]
+    #[case(Level::Error, "<3>line")]
+    #[case(Level::Warn, "<4>line")]
+    #[case(Level::Info, "<6>line")]
+    #[case(Level::Debug, "<7>line")]
+    fn stderr_line_has_systemd_priority_prefix(#[case] level: Level, #[case] expected: &str) {
+        assert_eq!(format_stderr_line(level, "line"), expected);
     }
 }
