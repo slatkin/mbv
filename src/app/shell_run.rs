@@ -232,6 +232,11 @@ impl Model {
             })
         });
         if let Some((library_id, title, items)) = latest {
+            let items = self
+                .tv_latest_snapshots
+                .get(&library_id)
+                .map(|snapshot| snapshot.items.clone())
+                .unwrap_or(items);
             self.update_tv_latest_snapshot(library_id, title, items);
         }
     }

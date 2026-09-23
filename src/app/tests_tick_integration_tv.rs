@@ -156,7 +156,9 @@ fn shrunken_tv_restore_does_not_replace_latest_snapshot_with_stale_items_through
     step_and_drain(&mut harness);
 
     let lib = &harness.model().app.libs[0];
-    assert_eq!(lib.tv_content_mode, Some(mbv_core::config::TvContentMode::All));
+    assert_eq!(lib.tv_content_mode, Some(mbv_core::config::TvContentMode::Latest));
+    assert_eq!(lib.nav_stack[0].items[0].id, "current-latest");
+    assert_ne!(lib.nav_stack[0].items[0].id, "stale-latest");
     let latest = &harness.model().home_content.latest[0].items;
     assert_eq!(latest[0].as_emby().unwrap().id, "current-latest");
     assert_ne!(latest[0].as_emby().unwrap().id, "stale-latest");
@@ -569,8 +571,8 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_tv_pill() {
 #[case::saved_latest_shrunk_small(
     mbv_core::config::TvContentMode::Latest,
     300,
-    mbv_core::config::TvContentMode::All,
-    "IncludeItemTypes=Series",
+    mbv_core::config::TvContentMode::Latest,
+    "IncludeItemTypes=Episode",
 )]
 fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
     #[case] saved_mode: mbv_core::config::TvContentMode,
@@ -608,7 +610,12 @@ fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
         levels: vec![mbv_core::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
             title: "TV".into(),
-            item_types: Some("Series".into()),
+            item_types: Some(match &saved_mode {
+                mbv_core::config::TvContentMode::Latest
+                | mbv_core::config::TvContentMode::Upcoming => "Episode",
+                _ => "Series",
+            }
+            .into()),
             letter_filter_index: match &saved_mode {
                 mbv_core::config::TvContentMode::Range(index) => Some(*index),
                 _ => None,
@@ -639,7 +646,7 @@ fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
             .levels[0]
             .tv_content_mode,
         Some(expected_mode.clone()),
-        "the repaired mode is saved before the restore worker fetches"
+        "the resolved mode is saved before the restore worker fetches"
     );
 
     let mut harness = TickHarness::new(app);
@@ -647,7 +654,7 @@ fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
     assert_eq!(
         harness.model().app.libs[0].nav_stack[0].tv_content_mode,
         Some(expected_mode.clone()),
-        "the pending restore paints the clamped mode before the fetch completes"
+        "the pending restore paints its resolved mode before the fetch completes"
     );
     assert_eq!(
         panel(&harness).test_selector_hits().regions().len(),
@@ -677,7 +684,7 @@ fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
     assert_eq!(
         harness.model().app.libs[0].tv_content_mode,
         Some(expected_mode),
-        "the mounted TV owner receives the clamped mode through the shell sync pass"
+        "the mounted TV owner receives its resolved mode through the shell sync pass"
     );
     assert_eq!(
         panel(&harness).test_selector_hits().regions().len(),

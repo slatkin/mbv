@@ -92,9 +92,6 @@ pub(crate) fn resolve_tv_content_mode(
 ) -> mbv_core::config::TvContentMode {
     let large = total > LIBRARY_PILL_THRESHOLD;
     match restored {
-        Some(mbv_core::config::TvContentMode::Latest) if !large => {
-            mbv_core::config::TvContentMode::All
-        }
         Some(mbv_core::config::TvContentMode::All) if large => {
             mbv_core::config::TvContentMode::Latest
         }
