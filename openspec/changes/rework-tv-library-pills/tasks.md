@@ -42,7 +42,7 @@
 - [x] 8.3 Sync the applied deltas into `openspec/specs/`: apply the modified `tv-letter-filtering` and `home-latest-sections` requirements and add the `tv-library-content-modes` capability. Verify: `openspec validate --all` is clean.
 - [x] 8.4 Record any new domain vocabulary (the content-mode value and the TV range set) in `CONTEXT.md` without renaming existing terms. Verify: the terms appear with definitions.
 - [x] 8.5 Commit the implementation and the synced main specs. Verify: `git status --short` is empty after the commit.
-- [ ] 8.6 Archive the change with `openspec archive rework-tv-library-pills`. Verify: `openspec list --json` no longer reports the change as active and `openspec validate --all` stays clean. (UNARCHIVED 2026-09-22 — the archive was premature; re-archive only after §9 is complete.)
+- [x] 8.6 Archive the change with `openspec archive rework-tv-library-pills`. Verify: `openspec list --json` no longer reports the change as active and `openspec validate --all` stays clean. (UNARCHIVED 2026-09-22 — the archive was premature; re-archive only after §9 is complete.)
 
 ## 9. Real-server repair (spec review of `main...661e374e` against the handoff, 2026-09-22)
 
