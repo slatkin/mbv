@@ -143,6 +143,16 @@ pub struct ZebraStripe {
     pub unfocused: Color,
 }
 
+impl ZebraStripe {
+    /// One fill in both focus states.
+    pub const fn fixed(fill: Color) -> Self {
+        Self {
+            focused: fill,
+            unfocused: fill,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WideMediaListPaintPolicy {
     focused: bool,

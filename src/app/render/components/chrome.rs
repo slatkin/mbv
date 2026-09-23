@@ -160,7 +160,11 @@ pub(in crate::app) fn render_panel_shell_at(
 
 /// Overlay a thin scroll indicator on a sidebar's right border column when
 /// its content doesn't fit `content.height`. Reuses the existing border
-/// column instead of reserving a dedicated width for a scrollbar.
+/// column instead of reserving a dedicated width for a scrollbar. Thumb-only
+/// (`minimal()`): a box-drawing track line sits half a cell off the block
+/// thumb and reads as a disjoint column, so the track stays invisible and
+/// the grey thumb alone marks position — the same treatment as the main
+/// lists' `render_right_scrollbar`.
 pub(in crate::app) fn render_sidebar_scrollbar(
     f: &mut Frame,
     content: Rect,
@@ -174,8 +178,8 @@ pub(in crate::app) fn render_sidebar_scrollbar(
         content.height as usize,
         scroll,
         content.x.saturating_add(content.width),
-        thin_vertical_thumb(GlyphSet::box_drawing()),
-        palette::SCROLLBAR,
+        thin_vertical_thumb(GlyphSet::minimal()),
+        palette::SIDEBAR_SCROLLBAR,
     );
 }
 
@@ -193,15 +197,31 @@ pub(in crate::app) fn render_panel_row(
     width: u16,
     selected: bool,
     spans: Vec<Span>,
+    bg: Option<Color>,
 ) {
-    let indicator = Span::styled(
-        if selected { "\u{258c}" } else { " " },
-        Style::default().fg(palette::ACCENT),
-    );
-    let mut all = vec![indicator];
+    // A caller-painted background (zebra stripe, selected bar) fills the
+    // whole row through the widget style; the selected bar carries no gutter
+    // mark, so its indicator column stays blank to hold the text alignment.
+    let (mark, mark_fg) = if selected && bg.is_some() {
+        (" ", None)
+    } else {
+        (
+            if selected { "\u{258c}" } else { " " },
+            Some(palette::ACCENT),
+        )
+    };
+    let mut mark_style = Style::default();
+    if let Some(fg) = mark_fg {
+        mark_style = mark_style.fg(fg);
+    }
+    let mut all = vec![Span::styled(mark, mark_style)];
     all.extend(spans);
+    let mut row = Paragraph::new(Line::from(all));
+    if let Some(bg) = bg {
+        row = row.style(Style::default().bg(bg));
+    }
     f.render_widget(
-        Paragraph::new(Line::from(all)),
+        row,
         Rect {
             x,
             y,

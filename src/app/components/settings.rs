@@ -173,7 +173,7 @@ impl SettingsComponent {
         // indexed by action ordinal.
         self.keys_cursor = self
             .keys_cursor
-            .min(self.keys_action_count().saturating_sub(1));
+            .min(Self::action_count(&self.keys).saturating_sub(1));
         self.area = snapshot.area;
         self.initialized = true;
     }
@@ -276,12 +276,13 @@ impl SettingsComponent {
         }
     }
 
-    /// Keys rows: the count of cursor-numbered action rows (group headers
-    /// are not addressable). The Keys cursor is an ordinal over actions so
-    /// it stays aligned with the painter's highlight and the render
-    /// geometry's `cursor_lines`.
-    fn keys_action_count(&self) -> usize {
-        self.keys.iter().filter(|row| row.cursor.is_some()).count()
+    /// Cursor-numbered action rows in one list (group/section headers carry
+    /// no cursor and are not addressable). The cursor is an ordinal over
+    /// actions so it stays aligned with the painter's highlight and the
+    /// render geometry's `cursor_lines`; the Down clamp counts the same rows
+    /// so it cannot park past the last action.
+    fn action_count(rows: &[SettingsRow]) -> usize {
+        rows.iter().filter(|row| row.cursor.is_some()).count()
     }
 
     /// Largest valid scroll offset: the last geometry line fully in view.
@@ -295,10 +296,10 @@ impl SettingsComponent {
             .saturating_sub((self.geometry.content_area.height as usize).saturating_sub(1))
     }
 
-    /// Keep the Keys cursor's document line inside the scrolled window
+    /// Keep one cursor's document line inside the scrolled window
     /// (geometry from the latest paint; a no-op before the first paint).
-    fn scroll_keys_to_cursor(&mut self) {
-        let Some(&line) = self.geometry.cursor_lines.get(self.keys_cursor) else {
+    fn scroll_cursor_into_view(&mut self, cursor: usize) {
+        let Some(&line) = self.geometry.cursor_lines.get(cursor) else {
             return;
         };
         let height = self.geometry.content_area.height as usize;
@@ -353,13 +354,13 @@ impl SettingsComponent {
             return match key.code {
                 Key::Up => {
                     self.keys_cursor = self.keys_cursor.saturating_sub(1);
-                    self.scroll_keys_to_cursor();
+                    self.scroll_cursor_into_view(self.keys_cursor);
                     None
                 }
                 Key::Down => {
-                    self.keys_cursor =
-                        (self.keys_cursor + 1).min(self.keys_action_count().saturating_sub(1));
-                    self.scroll_keys_to_cursor();
+                    self.keys_cursor = (self.keys_cursor + 1)
+                        .min(Self::action_count(&self.keys).saturating_sub(1));
+                    self.scroll_cursor_into_view(self.keys_cursor);
                     None
                 }
                 Key::PageUp => {
@@ -437,14 +438,21 @@ impl SettingsComponent {
             }
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
+                self.scroll_cursor_into_view(self.cursor);
                 None
             }
             Key::Down => {
-                self.cursor = (self.cursor + 1).min(self.rows.len().saturating_sub(1));
+                self.cursor =
+                    (self.cursor + 1).min(Self::action_count(&self.rows).saturating_sub(1));
+                self.scroll_cursor_into_view(self.cursor);
                 None
             }
             Key::PageUp => {
                 self.scroll = self.scroll.saturating_sub(10);
+                None
+            }
+            Key::PageDown => {
+                self.scroll = self.scroll.saturating_add(10).min(self.max_scroll());
                 None
             }
             Key::Left | Key::Right | Key::Char(' ') | Key::Enter => Some(Msg::Shell(
@@ -526,7 +534,6 @@ impl Component for SettingsComponent {
             SettingsRenderModel {
                 destination: self.destination,
                 rows,
-                keys: &self.keys,
                 services: &self.services,
                 setup: self.setup.as_ref(),
                 cursor,
@@ -982,9 +989,77 @@ mod tests {
         assert_eq!(component.keys_cursor, 1);
     }
 
-    /// Arrow moves scroll the Keys window so the cursor's row stays
-    /// painted: ~40 rows overflow a 12-row panel, so moving the cursor off
-    /// the bottom pulls the scroll down, and moving back up restores it.
+    /// Arrow moves scroll the Main window so the cursor's row stays
+    /// painted: section headers are not addressable, so the Down clamp
+    /// stops at the last action and the scroll follows the highlight.
+    #[test]
+    fn main_arrow_moves_scroll_the_cursor_into_view() {
+        let mut rows = vec![SettingsRow {
+            label: "Group A".into(),
+            value: String::new(),
+            section: true,
+            cursor: None,
+        }];
+        rows.extend((0..20).map(|i| SettingsRow {
+            label: format!("action_{i}"),
+            value: "on".into(),
+            section: false,
+            cursor: Some(i),
+        }));
+        rows.push(SettingsRow {
+            label: "Group B".into(),
+            value: String::new(),
+            section: true,
+            cursor: None,
+        });
+        rows.extend((20..40).map(|i| SettingsRow {
+            label: format!("action_{i}"),
+            value: "on".into(),
+            section: false,
+            cursor: Some(i),
+        }));
+        let mut component = SettingsComponent::new();
+        component.set_content(SettingsSnapshot {
+            destination: SettingsDestination::Main,
+            rows,
+            services: Vec::new(),
+            keys: Vec::new(),
+            setup: None,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let height = component.geometry.content_area.height as usize;
+        assert!(
+            component.geometry.cursor_lines.len() > height,
+            "fixture overflows the viewport"
+        );
+        // Down past the end clamps at the last action, skipping headers.
+        for _ in 0..50 {
+            component.on(&key(Key::Down));
+        }
+        assert_eq!(component.cursor, 39);
+        let line = component.geometry.cursor_lines[39];
+        assert!(
+            line >= component.scroll && line < component.scroll + height,
+            "cursor row must be inside the scrolled window after Down"
+        );
+        assert!(
+            component.scroll > 0,
+            "the window scrolled to reach the last row"
+        );
+        for _ in 0..50 {
+            component.on(&key(Key::Up));
+        }
+        assert_eq!(component.cursor, 0);
+        let top = component.geometry.cursor_lines[0];
+        assert!(
+            top >= component.scroll && top < component.scroll + height,
+            "the first action row is inside the scrolled window again"
+        );
+    }
     #[test]
     fn keys_arrow_moves_scroll_the_cursor_into_view() {
         let mut component = painted_keys_content(40);

@@ -34,7 +34,7 @@ use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::Position;
-use time::{Date, Month};
+use time::Date;
 #[cfg(test)]
 use tuirealm::event::Key;
 use tuirealm::event::KeyEvent;
@@ -153,14 +153,11 @@ pub(super) fn build_latest_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListR
 
 fn parse_premiere_date(value: &str) -> Option<Date> {
     let date = value.split('T').next()?;
-    let mut parts = date.split('-');
-    let year = parts.next()?.parse().ok()?;
-    let month = Month::try_from(parts.next()?.parse::<u8>().ok()?).ok()?;
-    let day = parts.next()?.parse().ok()?;
-    if parts.next().is_some() {
-        return None;
-    }
-    Date::from_calendar_date(year, month, day).ok()
+    Date::parse(
+        date,
+        &time::format_description::well_known::Iso8601::DEFAULT,
+    )
+    .ok()
 }
 
 fn upcoming_date_heading(date: Date, today: Date) -> String {
@@ -915,12 +912,7 @@ impl TvContent {
     /// from the pushed season detail (design.md D4: the component carries the
     /// stable episode identity; the shell never reads the cursor).
     pub(in crate::app) fn selected_episode_item(&self) -> Option<EmbyItem> {
-        if matches!(
-            self.context.tv_content_mode,
-            Some(
-                mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
-            )
-        ) {
+        if self.flat_episode_mode() {
             return self
                 .carrier
                 .selected_target()

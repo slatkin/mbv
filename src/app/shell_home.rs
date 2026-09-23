@@ -162,7 +162,7 @@ impl Model {
         let pending = self.home_section_pending.clone();
         let acknowledged = self.acknowledged_home_latest_sources.clone();
         let restored = self.update_home_owner(|home| {
-            home.set_acknowledged_latest_sources(&acknowledged);
+            home.set_acknowledged_latest_sources(acknowledged);
             home.set_content(continue_items, latest, loading, feed_names);
             pending
                 .as_ref()
@@ -178,7 +178,7 @@ impl Model {
             // shell-owned acknowledgement must reach TV's matching Latest.
             self.acknowledged_home_latest_sources.insert(source);
             let acknowledged = self.acknowledged_home_latest_sources.clone();
-            self.update_home_owner(|home| home.set_acknowledged_latest_sources(&acknowledged));
+            self.update_home_owner(|home| home.set_acknowledged_latest_sources(acknowledged));
             self.push_tv_workspace_content();
         }
         // Reconcile the shell-owned semantic persistence identity from the

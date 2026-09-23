@@ -296,7 +296,7 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_movie_pill() {
     app.libs[0].library_total = Some(100);
     let level = &mut app.libs[0].nav_stack[0];
     level.total_count = 100;
-    level.letter_filter = crate::app::render::LetterFilter::for_index(2);
+    level.letter_filter = crate::app::render::LetterFilter::for_index_for_kind(2, crate::app::render::LetterFilterKind::Movie);
     level.items = vec![crate::app::tests::make_item("Movie G", "Movie")];
     level.loading = false;
     let mut harness = TickHarness::new(app);

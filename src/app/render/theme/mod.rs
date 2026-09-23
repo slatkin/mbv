@@ -38,9 +38,15 @@ pub const SURFACE_CHROME: Color = Palette::Ink.color();
 /// task 4.2).
 pub const SURFACE_FOCUSED: Color = Palette::Green1.color();
 pub const SURFACE_RESTING: Color = Palette::Storm.color(); // resting-content / unfocused half
-                                                           // Transitional: retired from production by task 4.2 (`SURFACE_PLAYBACK` was
-                                                           // `SURFACE_RESTING`'s value alias); the name stays reachable only because the
-                                                           // frozen `render/tests.rs` pins it, which the neutrality rule forbids editing.
+/// Expanded (F1-F4) sidebar body fill (the chrome panel shell's content
+/// area; the header/footer band keeps its own ink). Its own role over the
+/// scrollbar's `Palette::Green2` value it shares today (`SCROLLBAR`): the
+/// two are equal today and independently editable, so a scrollbar edit
+/// moves the scrollbar alone.
+pub const SURFACE_SIDEBAR: Color = Palette::Green2.color();
+// Transitional: retired from production by task 4.2 (`SURFACE_PLAYBACK` was
+// `SURFACE_RESTING`'s value alias); the name stays reachable only because the
+// frozen `render/tests.rs` pins it, which the neutrality rule forbids editing.
 #[cfg(test)]
 #[allow(dead_code)]
 pub const SURFACE_PLAYBACK: Color = Palette::Storm.color(); // now-playing-strip half
@@ -120,6 +126,21 @@ pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playi
                                                               // today and independently editable, so a
                                                               // text-colour edit moves the text alone
                                                               // (unify-surface-colour-neutral task 4.2)
+/// A playlist row whose playlist is currently loaded in the queue (F4 list).
+/// Its own role over the progress orange it shares today
+/// (`PROGRESS_PERCENT`): the loaded marker must read on the slate panel
+/// surface, which `TEXT_ACCENT_MUTED`'s dark green does not — equal today
+/// and independently editable, so a progress-colour edit moves progress alone.
+pub const PLAYLIST_LOADED_FG: Color = Palette::Orange.color();
+/// The F4 playlists list's secondary zebra fill (`#2e383c`). Its own role
+/// over the focused-surface green it shares today (`SURFACE_FOCUSED`): equal
+/// today and independently editable, so a focus-fill edit moves focus alone.
+pub const PLAYLIST_STRIPE_BG: Color = Palette::Green1.color();
+/// The settings list's secondary zebra fill (`#2e383c`). Its own role over
+/// the playlist stripe and focused-surface green it shares today
+/// (`PLAYLIST_STRIPE_BG`, `SURFACE_FOCUSED`): equal today and independently
+/// editable, so those edits move theirs alone.
+pub const SETTINGS_STRIPE_BG: Color = Palette::Green1.color();
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the
@@ -227,6 +248,12 @@ pub const PROGRESS_PERCENT: Color = Palette::Orange.color();
 /// editable, so a scrollbar edit moves the scrollbar alone
 /// (unify-surface-colour-neutral task 4.2).
 pub const SCROLLBAR: Color = Palette::Green2.color();
+/// Sidebar scrollbar track/thumb. Its own role over the dim-text grey it
+/// shares today (`TEXT_MUTED`): the sidebar bodies paint the scrollbar's
+/// own `Palette::Green2` value, so the shared chrome scrollbar would vanish
+/// against them — equal today and independently editable, so a dim-text
+/// edit moves dim text alone.
+pub const SIDEBAR_SCROLLBAR: Color = Palette::Grey2.color();
 
 /// The central focus lever (design decision 8). Every panel and component
 /// resolves its focused/unfocused surface through this single function

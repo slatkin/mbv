@@ -6,6 +6,7 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Default)]
 pub(in crate::app) struct SettingsRenderGeometry {
@@ -17,9 +18,6 @@ pub(in crate::app) struct SettingsRenderGeometry {
 pub(in crate::app) struct SettingsRenderModel<'a> {
     pub destination: SettingsDestination,
     pub rows: &'a [SettingsRow],
-    /// The Keys destination's rows; the scrollbar's document length there
-    /// (the main `rows` list is empty while Keys is mounted).
-    pub keys: &'a [SettingsRow],
     pub services: &'a [ServiceRow],
     pub setup: Option<&'a SetupDraft>,
     pub cursor: usize,
@@ -95,7 +93,12 @@ pub(in crate::app) fn render_settings_content(
             frame.render_widget(Paragraph::new(lines), content);
         }
         None => {
-            let mut lines = Vec::new();
+            let mut lines: Vec<Line> = Vec::new();
+            // Zebra over the data rows in the playlists-list style, opening
+            // on the panel fill; section headers and the blank group
+            // spacers keep the fill. Stripes ride on the rows, so they hold
+            // still under Paragraph scroll without offset math.
+            let mut striped = false;
             for row in model.rows {
                 if let Some(cursor) = row.cursor {
                     if geometry.cursor_lines.len() <= cursor {
@@ -104,6 +107,9 @@ pub(in crate::app) fn render_settings_content(
                     geometry.cursor_lines[cursor] = lines.len();
                 }
                 if row.section {
+                    if !lines.is_empty() {
+                        lines.push(Line::from(""));
+                    }
                     lines.push(Line::from(vec![
                         Span::raw(""),
                         Span::styled(
@@ -116,7 +122,7 @@ pub(in crate::app) fn render_settings_content(
                 } else {
                     let focused = row.cursor == Some(model.cursor);
                     let value_width = (content.width as usize).saturating_sub(row.label.len());
-                    lines.push(Line::from(vec![
+                    let mut spans = vec![
                         Span::styled(
                             row.label.clone(),
                             if focused {
@@ -129,18 +135,32 @@ pub(in crate::app) fn render_settings_content(
                             format!("{:>width$}", row.value, width = value_width),
                             Style::default().fg(palette::ACCENT),
                         ),
-                    ]));
+                    ];
+                    // A Paragraph line style leaves trailing cells on the
+                    // widget fill, so the stripe rides the spans with a pad
+                    // out to the content edge instead.
+                    if striped {
+                        for span in spans.iter_mut() {
+                            span.style = span.style.bg(palette::SETTINGS_STRIPE_BG);
+                        }
+                        let used: usize = spans.iter().map(|span| span.content.width()).sum();
+                        let pad = (content.width as usize).saturating_sub(used);
+                        if pad > 0 {
+                            spans.push(Span::styled(
+                                " ".repeat(pad),
+                                Style::default().bg(palette::SETTINGS_STRIPE_BG),
+                            ));
+                        }
+                    }
+                    striped = !striped;
+                    lines.push(Line::from(spans));
                 }
             }
+            let document = lines.len();
             frame.render_widget(
                 Paragraph::new(lines).scroll((model.scroll as u16, 0)),
                 content,
             );
-            let document = if model.destination == SettingsDestination::Keys {
-                model.keys.len()
-            } else {
-                model.rows.len()
-            };
             crate::app::render::render_sidebar_scrollbar(frame, content, document, model.scroll);
         }
     }
