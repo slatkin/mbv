@@ -1,5 +1,9 @@
 use super::*;
-use crate::app::components::library_panel::{LibraryPanelContent, ListSlot};
+use crate::app::components::library_panel::{
+    LibraryKey, LibraryKind, LibraryPanel, LibraryPanelContent, ListSlot,
+};
+use crate::app::components::tv_content::TvContent;
+use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use ratatui::layout::Rect;
 
 use crate::app::components::inline_search::{InlineSearch, SearchPool};
@@ -97,6 +101,7 @@ fn draw_skeleton(
                 &mut hits,
                 &mut windows,
                 80, // tall terminal: the short-pane caps must not skew the skeleton tests
+                true,
             );
         })
         .unwrap();
@@ -107,9 +112,48 @@ fn draw_skeleton(
     )
 }
 
+#[rstest::rstest]
+#[case::latest(mbv_core::config::TvContentMode::Latest)]
+#[case::upcoming(mbv_core::config::TvContentMode::Upcoming)]
+fn tv_flat_modes_reclaim_the_wide_hero_pane(#[case] mode: mbv_core::config::TvContentMode) {
+    let mut item = crate::app::tests::make_item("Episode One", "Episode");
+    item.series_name = "Example Series".into();
+    let list = LibraryListRenderCtx::from_items(vec![item], 0);
+    let mut context = TvWideRenderCtx::new(list, None, None, 0, None, false);
+    context.set_tv_content_mode(Some(mode));
+
+    let mut owner = TvContent::new();
+    owner.set_is_wide(true);
+    owner.set_content(context);
+    let key = LibraryKey::Service {
+        service: mbv_core::config::ServiceKind::Emby,
+        library_id: "tv".into(),
+        kind: LibraryKind::TvShows,
+    };
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(key.clone(), Box::new(owner));
+    panel.set_active(Some(key));
+    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
+    terminal
+        .draw(|f| tuirealm::component::Component::view(&mut panel, f, AREA))
+        .unwrap();
+
+    let geometry = panel.test_wide_geometry().expect("Wide panel geometry");
+    let panes =
+        wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None, false).expect("Wide arrangement");
+    assert_eq!(geometry.browser, panes.content_area);
+    assert_eq!(geometry.hero.width, 0);
+    assert_eq!(geometry.list_panel.right(), AREA.right());
+    assert!(text_in(
+        terminal.backend().buffer(),
+        geometry.list_area,
+        "Episode One"
+    ));
+}
+
 fn browser_pane(area: Rect) -> crate::app::render::arrangements::wide_hero::WideHeroBrowserPane {
     use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
-    let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None, true).expect("wide area");
     WideHeroBrowserPane {
         pills_area: panes.pills_area,
         spacer_area: panes.spacer_area,
@@ -201,7 +245,7 @@ fn hero_pane_starts_below_the_full_width_selector_band() {
         hero: None,
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
-    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None, true).expect("wide area");
     // Component-layer claim: the hero's own painted surface starts exactly at
     // the band's bottom, and the spacer row above it is not hero fill. The
     // band's full-width placement is the arrangement claim owned by
@@ -240,7 +284,7 @@ fn selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve() {
         }),
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
-    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None, true).expect("wide area");
     let pill_row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
 
     // The pill row starts flush at the panel's left edge and its own surface
@@ -766,7 +810,7 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
         }),
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
-    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None, true).expect("wide area");
     let pill_row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
 
     // The search box occupies the Selector row's place: query text in the
@@ -1161,6 +1205,7 @@ fn sub_breakpoint_area_paints_nothing() {
                 &mut hits,
                 &mut windows,
                 80, // tall terminal: the short-pane caps must not skew the skeleton tests
+                true,
             );
         })
         .unwrap();

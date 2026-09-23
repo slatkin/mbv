@@ -306,6 +306,7 @@ pub(in crate::app) fn render_wide_skeleton(
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
     terminal_height: u16,
+    show_hero_pane: bool,
 ) -> Option<WideSkeletonGeometry> {
     let WideLibraryPanes {
         pills_area,
@@ -314,7 +315,7 @@ pub(in crate::app) fn render_wide_skeleton(
         hero_panel,
         browser_panel,
         ..
-    } = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, override_width)?;
+    } = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, override_width, show_hero_pane)?;
     let pane = WideHeroBrowserPane {
         pills_area,
         spacer_area,
@@ -341,8 +342,13 @@ pub(in crate::app) fn render_wide_skeleton(
     // the list box above flips with the panel's focus. A focused Workspace
     // still shows through its own content-box tint. It is fed the band-reduced
     // `content_area` (D2), so the hero starts below the full-width Selector
-    // band instead of at the raw panel top.
-    let hero_area = wide_hero_hero_pane(f, content_area, false, override_width);
+    // band instead of at the raw panel top. Flat TV episode modes omit the
+    // pane in the arrangement, giving their list the entire content area.
+    let hero_area = if show_hero_pane {
+        wide_hero_hero_pane(f, content_area, false, override_width)
+    } else {
+        Rect::new(content_area.x, content_area.y, 0, content_area.height)
+    };
 
     let mut geometry = WideSkeletonGeometry {
         browser: browser_panel,

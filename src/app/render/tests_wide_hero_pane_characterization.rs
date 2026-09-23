@@ -66,7 +66,7 @@ fn tv_wide_left_pane_unconditional_fill_shared_inset() {
     let terminal = direct_terminal(|f| Component::view(&mut panel, f, area));
     let buffer = terminal.backend().buffer();
 
-    let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide fits");
+    let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None, true).expect("wide fits");
     let hero_panel = panes.hero_panel;
 
     assert_eq!(
