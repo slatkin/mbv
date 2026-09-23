@@ -1520,6 +1520,26 @@ fn tv_tree_geometry(width: u16, mini: bool) -> TickHarness {
     harness
 }
 
+fn tv_tree_text_position(harness: &mut TickHarness, text: &str) -> (u16, u16) {
+    let width = harness.model().app.terminal_width;
+    let height = harness.model().app.terminal_height;
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    for y in 0..buffer.area.height {
+        let mut line = String::new();
+        for x in 0..buffer.area.width {
+            line.push_str(buffer[(x, y)].symbol());
+        }
+        if let Some(x) = line.find(text) {
+            return (x as u16, y);
+        }
+    }
+    panic!("TV tree row {text:?} was not painted");
+}
+
 fn tick_tv_key(harness: &mut TickHarness, code: Key) -> Vec<Msg> {
     harness.inject(Event::Keyboard(KeyEvent {
         code,
@@ -1608,6 +1628,112 @@ fn tv_tree_show_activation_uses_the_selected_target_in_every_geometry(
     } else {
         assert!(panel(&harness).test_hero_overlay_open());
     }
+}
+
+#[rstest]
+#[case::wide(160, false)]
+#[case::narrow(80, false)]
+#[case::mini(crate::app::MINI_VIEW_THRESHOLD - 1, true)]
+fn tv_tree_mouse_click_resolves_the_painted_show_target_in_every_geometry(
+    #[case] width: u16,
+    #[case] mini: bool,
+) {
+    let mut harness = tv_tree_geometry(width, mini);
+    let (column, row) = tv_tree_text_position(&mut harness, "Second Movie");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }));
+
+    let outcome = harness.step();
+    assert_eq!(
+        outcome
+            .messages
+            .iter()
+            .filter(|message| matches!(
+                message,
+                Msg::Shell(ShellRequest::TvHitClick {
+                    hit: TvHit::SeriesRow(target)
+                }) if target == "series-1"
+            ))
+            .count(),
+        1,
+        "one Library Panel painter must resolve the row exactly once: {:?}",
+        outcome.messages
+    );
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        tv(&harness).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:8:series-1".into())),
+        "the Library Panel click must update the canonical TV tree selection"
+    );
+}
+
+#[rstest]
+#[case::wide(160, false)]
+#[case::narrow(80, false)]
+#[case::mini(crate::app::MINI_VIEW_THRESHOLD - 1, true)]
+fn tv_tree_mouse_uses_the_latest_painted_geometry_across_resize(
+    #[case] width: u16,
+    #[case] mini: bool,
+) {
+    let mut harness = tv_tree_geometry(width, mini);
+    let (row_column, row) = tv_tree_text_position(&mut harness, "Second Movie");
+    let painted_list = panel(&harness)
+        .test_list_rect()
+        .expect("the TV tree painted through the Library Panel");
+    let column = if width == 160 {
+        painted_list.right().saturating_sub(1)
+    } else {
+        row_column
+    };
+
+    // Resize the shell and run its sync pass without drawing. The component
+    // must continue to resolve input against the frame it actually painted.
+    harness.model_mut().app.terminal_width = if width == 160 { 80 } else { 160 };
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome
+            .messages
+            .iter()
+            .filter(|message| matches!(
+                message,
+                Msg::Shell(ShellRequest::TvHitClick {
+                    hit: TvHit::SeriesRow(target)
+                }) if target == "series-1"
+            ))
+            .count(),
+        1,
+        "mouse delivery must use the last painted tree geometry exactly once: {:?}",
+        outcome.messages
+    );
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        tv(&harness).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:8:series-1".into())),
+        "the stale painted-frame event resolves to the same stable target"
+    );
 }
 
 #[rstest]
