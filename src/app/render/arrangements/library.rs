@@ -22,6 +22,7 @@ pub(in crate::app) fn wide_library_panes(
     pad_x: u16,
     pad_y: u16,
     override_width: Option<u16>,
+    show_hero: bool,
 ) -> Option<WideLibraryPanes> {
     // Fit-first-then-carve (D1): the breakpoint is decided on the uncarved
     // `area`, so carving the Selector band cannot shift the Wide/Narrow choice
@@ -34,10 +35,16 @@ pub(in crate::app) fn wide_library_panes(
         spacer_area,
         content_area,
     } = wide_hero::pill_bar_areas(area);
-    let wide_hero::WideHeroPanes {
-        hero: hero_panel,
-        browser: browser_panel,
-    } = wide_hero::wide_hero_presentation(content_area, override_width);
+    let (hero_panel, browser_panel) = if show_hero {
+        let wide_hero::WideHeroPanes { hero, browser } =
+            wide_hero::wide_hero_presentation(content_area, override_width);
+        (hero, browser)
+    } else {
+        (
+            Rect::new(content_area.x, content_area.y, 0, content_area.height),
+            content_area,
+        )
+    };
     let hero_area = padded_rect(hero_panel, pad_x, pad_y);
     Some(WideLibraryPanes {
         pills_area,
@@ -93,7 +100,7 @@ mod tests {
             width: crate::app::TWO_COLUMN_THRESHOLD,
             height: WIDE_HERO_MIN_AREA_HEIGHT + 1,
         };
-        let panes = wide_library_panes(area, 2, 1, None).expect("wide area");
+        let panes = wide_library_panes(area, 2, 1, None, true).expect("wide area");
         assert_eq!(panes.hero_area.x, panes.hero_panel.x + 2);
         assert_eq!(panes.hero_area.y, panes.hero_panel.y + 1);
         assert!(wide_library_panes(
@@ -104,8 +111,18 @@ mod tests {
             2,
             1,
             None,
+            true,
         )
         .is_none());
+    }
+
+    #[test]
+    fn suppressed_hero_gives_the_browser_the_full_content_area() {
+        let area = Rect::new(2, 3, crate::app::TWO_COLUMN_THRESHOLD + 20, 30);
+        let panes = wide_library_panes(area, 2, 1, Some(70), false).expect("wide area");
+        assert_eq!(panes.browser_panel, panes.content_area);
+        assert_eq!(panes.hero_panel.width, 0);
+        assert_eq!(panes.hero_panel.height, panes.content_area.height);
     }
 
     /// Fit-first-then-carve (D1): the band carve must not move the Wide
@@ -122,7 +139,7 @@ mod tests {
                 width: crate::app::TWO_COLUMN_THRESHOLD,
                 height,
             };
-            let panes = wide_library_panes(area, 2, 1, None)
+            let panes = wide_library_panes(area, 2, 1, None, true)
                 .unwrap_or_else(|| panic!("height {height} keeps the Wide presentation"));
             assert_eq!(panes.pills_area.y, area.y);
             assert_eq!(panes.pills_area.width, area.width);
@@ -149,6 +166,7 @@ mod tests {
                 2,
                 1,
                 None,
+                true,
             )
             .is_none(),
             "one row below the shortest Wide area stays Narrow"

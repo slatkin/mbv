@@ -572,7 +572,7 @@ impl Model {
                         self.push_home_content();
                     }
                     ShellRequest::HomePillClick { target } => {
-                        self.select_home_section_from_component(target);
+                        self.acknowledge_home_section(target);
                     }
                     // Home typed effects (task 5.3d, Home typed-effect
                     // prep): `HomeComponent` owns the cursor and reports the
@@ -779,9 +779,19 @@ impl Model {
                     | ShellRequest::TvEpisodeMove { .. }
                     | ShellRequest::TvSeasonMove { .. }) => self.handle_tv_request(request),
                     ShellRequest::TvHitClick { hit } => {
+                        let acknowledge_latest =
+                            matches!(hit, crate::app::components::msg::TvHit::LetterPill(0));
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
                             self.app.handle_mouse_single_click_tv(lib_idx, hit);
                         }
+                        if acknowledge_latest {
+                            self.acknowledge_active_tv_latest();
+                        }
+                        // Always repaint the TV owner from the mutated App
+                        // browse state: the acknowledgement path pushes inside
+                        // `acknowledge_home_latest`, but its early returns
+                        // (non-TV library, non-Latest mode) would otherwise
+                        // leave a swallowed click's mutation unpainted.
                         self.push_tv_workspace_content();
                     }
                     ShellRequest::TvHitDoubleClick { hit } => {

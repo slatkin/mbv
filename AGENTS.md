@@ -18,6 +18,12 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
   lesson only in a commit message.
 * Durable plans in OpenSpec markdown, not chat; commit plans/specs/docs with
   code; sync applied deltas into `openspec/specs/`; archive when done.
+* **Probe the real service before planning API work.** Any feature whose design
+  depends on what a remote API returns — Emby, Audiobookshelf, feeds, any
+  remote endpoint — must be checked against the real service before the design
+  is finalized, with the observed responses recorded in the plan (per task:
+  a manual check note, never a live test). If what comes back does not support
+  the design, the plan is reopened and fixed before any code is written.
 * Change source-of-truth types before callers; ask only about material
   design/product choices.
 * Commit or undo your changes; never leave a dirty worktree.

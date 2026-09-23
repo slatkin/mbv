@@ -26,6 +26,7 @@ fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     }
 }
@@ -48,6 +49,7 @@ fn make_group_level() -> BrowseLevel {
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     }
 }

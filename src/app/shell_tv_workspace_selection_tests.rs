@@ -1,4 +1,71 @@
 use super::*;
+use crate::app::components::msg::TvHit;
+use rstest::rstest;
+
+#[rstest]
+#[case::small_forward(
+    300,
+    mbv_core::config::TvContentMode::All,
+    1,
+    mbv_core::config::TvContentMode::Latest
+)]
+#[case::small_backward(300, mbv_core::config::TvContentMode::Latest, -1, mbv_core::config::TvContentMode::All)]
+#[case::large_forward(
+    301,
+    mbv_core::config::TvContentMode::Range(2),
+    1,
+    mbv_core::config::TvContentMode::Latest
+)]
+#[case::large_backward(301, mbv_core::config::TvContentMode::Latest, -1, mbv_core::config::TvContentMode::Range(2))]
+fn tv_mode_cycle_wraps_over_the_painted_row(
+    #[case] library_total: usize,
+    #[case] current: mbv_core::config::TvContentMode,
+    #[case] delta: i64,
+    #[case] expected: mbv_core::config::TvContentMode,
+) {
+    let mut model = mounted_tv_model();
+    model.app.libs[0].library_total = Some(library_total);
+    model.app.libs[0].nav_stack[0].tv_content_mode = Some(current.clone());
+    model.app.libs[0].tv_content_mode = Some(current);
+
+    model.app.cycle_letter_pill(0, delta);
+
+    assert_eq!(
+        model.app.libs[0].nav_stack[0].tv_content_mode,
+        Some(expected.clone())
+    );
+    assert_eq!(model.app.libs[0].tv_content_mode, Some(expected));
+}
+
+#[rstest]
+#[case::small_latest(300, 0, mbv_core::config::TvContentMode::Latest)]
+#[case::small_upcoming(300, 1, mbv_core::config::TvContentMode::Upcoming)]
+#[case::small_all(300, 2, mbv_core::config::TvContentMode::All)]
+#[case::large_latest(301, 0, mbv_core::config::TvContentMode::Latest)]
+#[case::large_upcoming(301, 1, mbv_core::config::TvContentMode::Upcoming)]
+#[case::large_ai(301, 2, mbv_core::config::TvContentMode::Range(0))]
+#[case::large_jr(301, 3, mbv_core::config::TvContentMode::Range(1))]
+#[case::large_sz(301, 4, mbv_core::config::TvContentMode::Range(2))]
+fn tv_mouse_selection_selects_each_painted_mode(
+    #[case] library_total: usize,
+    #[case] pill_index: usize,
+    #[case] expected: mbv_core::config::TvContentMode,
+) {
+    let mut model = mounted_tv_model();
+    model.app.libs[0].library_total = Some(library_total);
+    model.app.libs[0].nav_stack[0].tv_content_mode = Some(mbv_core::config::TvContentMode::Latest);
+    model.app.libs[0].tv_content_mode = Some(mbv_core::config::TvContentMode::Latest);
+
+    model
+        .app
+        .handle_mouse_single_click_tv(0, TvHit::LetterPill(pill_index));
+
+    assert_eq!(
+        model.app.libs[0].nav_stack[0].tv_content_mode,
+        Some(expected.clone())
+    );
+    assert_eq!(model.app.libs[0].tv_content_mode, Some(expected));
+}
 
 #[test]
 fn typed_tv_requests_keep_component_cursor_authoritative() {
@@ -297,6 +364,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     model.handle_tv_request(ShellRequest::TvBack);

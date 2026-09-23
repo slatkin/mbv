@@ -11,7 +11,7 @@ use super::components::library_panel::LibraryPanel;
 use super::components::ComponentId;
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
-use super::types_playback::{HomeContent, HomeLatestSection};
+use super::types_playback::{HomeContent, HomeLatestSection, HomeLatestSource};
 use mbv_core::playback_queue::QueueItem;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -29,8 +29,97 @@ impl Model {
     pub(super) fn assign_home_content(&mut self, mut content: HomeContent) {
         content.feed_names = self.resolve_home_feed_names(&content);
         recompute_home_latest_markers(&mut content, self.app.home_latest_launch_window);
+        self.merge_tv_latest_snapshots_from_home(&mut content);
         self.home_content = content;
+        self.project_tv_latest_snapshots_to_libraries();
         self.push_home_content();
+    }
+
+    fn merge_tv_latest_snapshots_from_home(&mut self, content: &mut HomeContent) {
+        for section in &mut content.latest {
+            let super::types_playback::HomeLatestSource::Emby(library_id) = &section.source else {
+                continue;
+            };
+            if !self.app.libs.iter().any(|lib| {
+                lib.library.id == *library_id && lib.library.collection_type == "tvshows"
+            }) {
+                continue;
+            }
+            let snapshot = self
+                .tv_latest_snapshots
+                .entry(library_id.clone())
+                .or_insert_with(|| section.clone());
+            snapshot.title.clone_from(&section.title);
+            snapshot.items.clone_from(&section.items);
+            section.has_new_content = snapshot.has_new_content;
+        }
+    }
+
+    pub(super) fn update_tv_latest_snapshot(
+        &mut self,
+        library_id: String,
+        title: String,
+        items: Vec<mbv_core::playback_queue::QueueItem>,
+    ) {
+        let source = HomeLatestSource::Emby(library_id.clone());
+        let existing_section = self
+            .home_content
+            .latest
+            .iter()
+            .find(|section| section.source == source)
+            .cloned();
+        let snapshot = self
+            .tv_latest_snapshots
+            .entry(library_id)
+            .or_insert_with(|| {
+                existing_section.unwrap_or_else(|| {
+                    HomeLatestSection::new_with_launch_window(
+                        title.clone(),
+                        source.clone(),
+                        items.clone(),
+                        self.app.home_latest_launch_window,
+                    )
+                })
+            });
+        snapshot.title = title;
+        snapshot.items = items;
+        if let Some(section) = self
+            .home_content
+            .latest
+            .iter_mut()
+            .find(|section| section.source == source)
+        {
+            section.title.clone_from(&snapshot.title);
+            section.items.clone_from(&snapshot.items);
+            section.has_new_content = snapshot.has_new_content;
+        }
+        self.project_tv_latest_snapshots_to_libraries();
+        self.push_home_content();
+    }
+
+    fn project_tv_latest_snapshots_to_libraries(&mut self) {
+        for lib in &mut self.app.libs {
+            if lib.library.collection_type != "tvshows" {
+                continue;
+            }
+            let Some(level) = lib.nav_stack.last_mut() else {
+                continue;
+            };
+            if level.tv_content_mode != Some(mbv_core::config::TvContentMode::Latest) {
+                continue;
+            }
+            let Some(snapshot) = self.tv_latest_snapshots.get(&lib.library.id) else {
+                continue;
+            };
+            level.items = snapshot
+                .items
+                .iter()
+                .filter_map(|item| item.as_emby().cloned())
+                .collect();
+            level.fetched_rows = level.items.len();
+            level.total_count = level.items.len();
+            level.loading = false;
+        }
     }
 
     /// Shell-side feed-name resolution for a Home snapshot (design D2):
@@ -213,7 +302,7 @@ impl Model {
     /// The Home owner for shared reads, through the panel's owner map
     /// (design D2: addressed by `LibraryKey`, never by a destination
     /// component). `None` before the first `push_home_content` installs it.
-    fn home_owner_shared(&self) -> Option<&HomeOwner> {
+    pub(super) fn home_owner_shared(&self) -> Option<&HomeOwner> {
         self.application
             .get_component(&ComponentId::Library)
             .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
@@ -234,6 +323,18 @@ impl Model {
         if self.home_section_pref_semantic != source {
             self.home_section_pref_semantic = source;
         }
+    }
+
+    /// Acknowledge a Home Latest section from either surface. The set is
+    /// shell-owned, then both mounted owners are re-projected so their
+    /// markers clear in the same tick. This deliberately updates the Home
+    /// owner directly instead of pushing its content: a direct shell request
+    /// may precede the component's local selection projection.
+    pub(super) fn acknowledge_home_latest(&mut self, source: HomeLatestSource) {
+        self.acknowledged_home_latest_sources.insert(source);
+        let acknowledged = self.acknowledged_home_latest_sources.clone();
+        self.update_home_owner(|home| home.set_acknowledged_latest_sources(acknowledged));
+        self.push_tv_workspace_content();
     }
 
     /// Test-only accessor for the retained semantic source. Gated to avoid a

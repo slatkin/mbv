@@ -413,6 +413,7 @@ fn tv_two_level_model() -> Model {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     model
@@ -449,6 +450,7 @@ fn tv_season_skip_model() -> Model {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     let mut mirror_target = crate::app::tests::make_item("E", "Episode");
@@ -470,6 +472,7 @@ fn tv_season_skip_model() -> Model {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     model

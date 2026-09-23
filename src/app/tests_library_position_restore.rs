@@ -62,6 +62,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             letter_filter_index: None,
+                tv_content_mode: None,
             library_total: None,
         }],
         ..Default::default()
@@ -88,6 +89,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
     });
@@ -96,7 +98,7 @@ fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() 
     assert!(app.should_show_letter_pills(0));
     assert_eq!(
         app.libs[0].nav_stack[0].letter_filter,
-        Some(super::render::LetterFilter::default_filter()),
+        Some(super::render::LetterFilter::default_filter_for_kind(super::render::LetterFilterKind::Movie)),
         "large restored library should get the default A-C pill applied"
     );
 }
@@ -123,6 +125,7 @@ fn restored_default_library_fallback_updates_legacy_state_in_memory_only() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
             crate::config::LibraryPositionLevel {
@@ -136,6 +139,7 @@ fn restored_default_library_fallback_updates_legacy_state_in_memory_only() {
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
                 letter_filter_index: None,
+                tv_content_mode: None,
                 library_total: None,
             },
         ],
@@ -158,6 +162,7 @@ fn restored_default_library_fallback_updates_legacy_state_in_memory_only() {
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     }];
     let restored_position = crate::config::LibraryPosition {
@@ -206,6 +211,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             letter_filter_index: None,
+                tv_content_mode: None,
             library_total: None,
         }],
         ..Default::default()
@@ -231,6 +237,7 @@ fn stale_restore_is_ignored_after_saved_position_is_cleared() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
     });
@@ -262,6 +269,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             loading: true,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -278,6 +286,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             sort_by: "DateCreated".into(),
             sort_order: "Descending".into(),
             letter_filter_index: None,
+                tv_content_mode: None,
             library_total: None,
         }],
         ..Default::default()
@@ -302,6 +311,7 @@ fn stale_restore_is_ignored_when_scope_is_no_longer_active() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
     });

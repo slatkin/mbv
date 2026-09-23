@@ -667,6 +667,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     let default_position = app.libs[0].library_position_snapshot();
@@ -687,6 +688,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     };
 

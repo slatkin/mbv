@@ -153,6 +153,7 @@ impl App {
 
                     all_items: None,
                     letter_filter: None,
+                    tv_content_mode: None,
                     music_grouping: None,
                 };
                 // Grouped-state construction: apply the same boundary filter

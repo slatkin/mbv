@@ -53,6 +53,11 @@ impl TvContent {
             // The Browser pane's series list.
             LibrarySlotEvent::List(input) => self.series_list_event(input),
             LibrarySlotEvent::HeroActivate => match self.pane {
+                Pane::Series if self.flat_episode_mode() => {
+                    self.selected_episode_item().map(|episode| {
+                        Msg::Shell(ShellRequest::TvEpisodeActivate { episode })
+                    })
+                }
                 Pane::Series => self
                     .selected_item()
                     .map(|item| Msg::Shell(ShellRequest::TvActivate { item })),
@@ -284,10 +289,12 @@ impl TvContent {
     /// Resolve a click in the Browser pane's list slot to the series row it
     /// landed on from the carrier's own retained frame geometry.
     fn resolve_series_hit(&mut self, at: Position) -> Option<TvHit> {
-        self.carrier
-            .resolve_current_point(at)
-            .cloned()
-            .map(TvHit::SeriesRow)
+        let target = self.carrier.resolve_current_point(at).cloned()?;
+        Some(if self.flat_episode_mode() {
+            TvHit::EpisodeRow(target)
+        } else {
+            TvHit::SeriesRow(target)
+        })
     }
 
     /// Move the owner's local pane + pane cursor to the clicked `hit` (Wide
@@ -302,6 +309,12 @@ impl TvContent {
                 self.season_cursor = index;
                 self.refresh_episode_rows();
                 self.episodes.select_first();
+            }
+            TvHit::EpisodeRow(target) if self.flat_episode_mode() => {
+                // Flat episode rows are painted by the browser carrier, not
+                // the hidden season workspace. Keep the click on that owner
+                // and leave pane focus unchanged.
+                self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
             }
             TvHit::EpisodeRow(target) => {
                 self.pane = Pane::Episodes;

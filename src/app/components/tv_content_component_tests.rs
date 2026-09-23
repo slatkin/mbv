@@ -14,10 +14,12 @@ use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
 use mbv_core::config::{
     EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity, ServiceKind,
+    TvContentMode,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
+use rstest::rstest;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -131,6 +133,113 @@ fn tv_series_rows_use_the_canonical_state_in_both_geometries() {
             .any(|state| matches!(state, MediaSemanticState::Active { .. })),
         "the one canonical derivation dims in-progress rows in Wide too"
     );
+}
+
+#[rstest]
+#[case(
+    Some(301),
+    None,
+    vec!["Latest", "Upcoming", "A-I", "J-R", "S-Z"],
+    0
+)]
+#[case(Some(300), None, vec!["Latest", "Upcoming", "All"], 2)]
+#[case(Some(301), Some(TvContentMode::Range(1)), vec!["Latest", "Upcoming", "A-I", "J-R", "S-Z"], 3)]
+fn tv_mode_selector_composes_the_threshold_rows_in_order(
+    #[case] library_total: Option<usize>,
+    #[case] mode: Option<TvContentMode>,
+    #[case] expected_pills: Vec<&str>,
+    #[case] expected_active: usize,
+) {
+    let mut list = LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0);
+    list.library_total = library_total;
+    let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+    context.set_tv_content_mode(mode);
+    let mut owner = TvContent::new();
+    owner.set_content(context);
+
+    let selector = owner.content().selector.expect("TV mode selector");
+    assert_eq!(
+        selector.pills,
+        expected_pills
+            .into_iter()
+            .map(str::to_string)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(selector.active, Some(expected_active));
+    if library_total.is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD) {
+        assert!(!selector.pills.iter().any(|pill| pill == "All"));
+    }
+}
+
+#[test]
+fn tv_latest_marker_reads_shell_projection_and_acknowledgement() {
+    let mut list = LibraryListRenderCtx::from_items(vec![make_item("Episode", "Episode")], 0);
+    list.library_total = Some(301);
+    let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+    context.set_tv_content_mode(Some(TvContentMode::Latest));
+    let mut owner = TvContent::new();
+    owner.set_latest_marker(true, false);
+    owner.set_content(context.clone());
+    assert!(owner.content().selector.expect("TV mode selector").markers[0]);
+
+    owner.set_latest_marker(true, true);
+    owner.set_content(context);
+    assert!(!owner.content().selector.expect("TV mode selector").markers[0]);
+}
+
+#[test]
+fn tv_latest_mode_projects_feed_episodes_without_series_workspace() {
+    let mut first = make_item("Latest Episode", "Episode");
+    first.id = "latest-episode".into();
+    let mut list = LibraryListRenderCtx::from_items(vec![first], 0);
+    list.library_total = Some(301);
+    let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+    context.set_tv_content_mode(Some(TvContentMode::Latest));
+    let mut owner = TvContent::new();
+    owner.set_content(context);
+
+    assert_eq!(owner.selected_series_snapshot(), None);
+    assert_eq!(
+        owner.selected_episode_item().map(|episode| episode.id),
+        Some("latest-episode".into())
+    );
+    let content = owner.content();
+    assert_eq!(content.selector.expect("TV mode selector").active, Some(0));
+    assert!(
+        content.hero.is_none(),
+        "flat Latest has no series workspace"
+    );
+}
+
+#[test]
+fn tv_flat_episode_click_moves_the_browser_carrier_without_entering_workspace() {
+    let mut first = make_item("Episode A", "Episode");
+    first.id = "episode-a".into();
+    let mut second = make_item("Episode B", "Episode");
+    second.id = "episode-b".into();
+    let mut owner = TvContent::new();
+    let mut list = LibraryListRenderCtx::from_items(vec![first, second], 0);
+    list.library_total = Some(301);
+    let mut context = TvWideRenderCtx::new(list, None, None, 0, None, true);
+    context.set_tv_content_mode(Some(TvContentMode::Latest));
+    owner.set_content(context);
+    let mut panel = panel_with(owner, true);
+    paint(&mut panel, 100, 20);
+    let list_area = panel.test_wide_geometry().unwrap().list_area;
+
+    let click = panel.on(&mouse(
+        MouseEventKind::Down(MouseButton::Left),
+        list_area.x,
+        list_area.y + 1,
+    ));
+    assert!(matches!(
+        click,
+        Some(Msg::Shell(ShellRequest::TvHitClick {
+            hit: TvHit::EpisodeRow(ref target),
+        })) if target == "episode-b"
+    ));
+    assert_eq!(tv(&panel).selected_item_id(), Some("episode-b".into()));
+    assert!(!tv(&panel).episode_pane_focused());
 }
 
 #[test]

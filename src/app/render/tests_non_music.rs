@@ -68,30 +68,62 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
 
 #[test]
 fn letter_filter_buckets_match_emby_name_range_bounds() {
-    let ac = LetterFilter::for_index(0).unwrap();
+    let ac = LetterFilter::for_index_for_kind(0, LetterFilterKind::Movie).unwrap();
     assert_eq!(ac.label, "A\u{2013}C");
     assert_eq!(ac.name_ge, Some("A"));
     assert_eq!(ac.name_lt, Some("D"));
 
-    let vz = LetterFilter::for_index(7).unwrap();
+    let vz = LetterFilter::for_index_for_kind(7, LetterFilterKind::Movie).unwrap();
     assert_eq!(vz.label, "V\u{2013}Z");
     assert_eq!(vz.name_ge, Some("V"));
     assert_eq!(vz.name_lt, None, "V–Z has no upper bound");
 
-    let hash = LetterFilter::for_index(8).unwrap();
+    let hash = LetterFilter::for_index_for_kind(8, LetterFilterKind::Movie).unwrap();
     assert_eq!(hash.label, "#");
     assert_eq!(hash.name_ge, None, "# has no lower bound");
     assert_eq!(hash.name_lt, Some("A"));
 
-    assert!(LetterFilter::for_index(9).is_none());
-    assert_eq!(LetterFilter::count(), 9);
+    assert!(LetterFilter::for_index_for_kind(9, LetterFilterKind::Movie).is_none());
+    assert_eq!(LetterFilter::count_for_kind(LetterFilterKind::Movie), 9);
     assert_eq!(LetterFilter::labels().len(), 9);
 }
 
 #[test]
 fn letter_filter_default_is_the_first_bucket() {
     assert_eq!(
-        LetterFilter::default_filter(),
-        LetterFilter::for_index(0).unwrap()
+        LetterFilter::default_filter_for_kind(LetterFilterKind::Movie),
+        LetterFilter::for_index_for_kind(0, LetterFilterKind::Movie).unwrap()
+    );
+}
+
+#[test]
+fn tv_letter_filter_buckets_cover_three_ranges_and_sort_keys() {
+    let ai = LetterFilter::for_index_for_kind(0, LetterFilterKind::Tv).unwrap();
+    assert_eq!(ai.label, "A-I");
+    assert_eq!(ai.name_ge, None);
+    assert_eq!(ai.name_lt, Some("J"));
+
+    let jr = LetterFilter::for_index_for_kind(1, LetterFilterKind::Tv).unwrap();
+    assert_eq!(jr.label, "J-R");
+    assert_eq!(jr.name_ge, Some("J"));
+    assert_eq!(jr.name_lt, Some("S"));
+
+    let sz = LetterFilter::for_index_for_kind(2, LetterFilterKind::Tv).unwrap();
+    assert_eq!(sz.label, "S-Z");
+    assert_eq!(sz.name_ge, Some("S"));
+    assert_eq!(sz.name_lt, None);
+
+    assert_eq!(
+        LetterFilter::for_sort_key_for_kind("123 Title", LetterFilterKind::Tv),
+        Some(ai.clone())
+    );
+    assert_eq!(
+        LetterFilter::for_sort_key_for_kind("Zebra", LetterFilterKind::Tv),
+        Some(sz)
+    );
+    assert_eq!(LetterFilter::count_for_kind(LetterFilterKind::Tv), 3);
+    assert_eq!(
+        LetterFilter::labels_for_kind(LetterFilterKind::Tv),
+        vec!["A-I", "J-R", "S-Z"]
     );
 }

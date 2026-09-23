@@ -134,6 +134,7 @@ fn app_with_loaded_tv_library() -> App {
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     });
     app
@@ -773,6 +774,7 @@ fn app_with_paginated_tv_library() -> App {
         loading: false,
         all_items: None,
         letter_filter: None,
+            tv_content_mode: None,
         music_grouping: None,
     });
     app

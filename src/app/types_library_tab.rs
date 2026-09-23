@@ -12,6 +12,9 @@ pub(super) struct LibraryTab {
     /// header grouping so a scoped (small) fetch doesn't look "small" to the
     /// UI. See `LIBRARY_PILL_THRESHOLD`.
     pub(super) library_total: Option<usize>,
+    /// Selected top-level TV content mode. `None` is unresolved until the
+    /// library total is known; non-TV libraries leave this unset.
+    pub(super) tv_content_mode: Option<mbv_core::config::TvContentMode>,
 }
 
 impl LibraryTab {
@@ -21,6 +24,7 @@ impl LibraryTab {
             nav_stack: Vec::new(),
             feed_home_video: None,
             library_total: None,
+            tv_content_mode: None,
         }
     }
 
@@ -40,6 +44,7 @@ impl LibraryTab {
         // pill row without an extra unfiltered fetch (see `library_total`).
         if let Some(root) = levels.first_mut() {
             root.library_total = self.library_total;
+            root.tv_content_mode = self.tv_content_mode.clone();
         }
         crate::config::LibraryPosition {
             levels,
@@ -55,6 +60,10 @@ impl LibraryTab {
         nav_stack: Vec<BrowseLevel>,
     ) {
         self.library_total = position.levels.first().and_then(|l| l.library_total);
+        self.tv_content_mode = position
+            .levels
+            .first()
+            .and_then(|level| level.tv_content_mode.clone());
         self.nav_stack = nav_stack;
         if let Some(state) = self.feed_home_video.as_mut() {
             state.selected_group = position.feed_selected_group;

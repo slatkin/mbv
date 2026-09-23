@@ -283,6 +283,7 @@ impl App {
                 PANE_PAD_X,
                 PANE_PAD_Y,
                 list_pane_width,
+                true,
             ) {
                 let box_cells =
                     crate::app::components::library_panel::hero_header::hero_artwork_box(

@@ -62,11 +62,16 @@ fn go_back_ignores_popped_level_cursor_and_restores_by_parent_id() {
 #[test]
 fn cycle_letter_pill_derives_from_filter_not_cursor() {
     // A tvshows library large enough to surface letter pills, at its top
-    // browse level with pill bucket 0 (A–C) selected.
+    // browse level with pill bucket 0 (A-I) selected.
     let mut model = super::mounted_tv_model();
     model.app.libs[0].library_total = Some(1000);
-    model.app.libs[0].nav_stack[0].letter_filter =
-        Some(crate::app::render::LetterFilter::for_index(0).unwrap());
+    model.app.libs[0].nav_stack[0].letter_filter = Some(
+        crate::app::render::LetterFilter::for_index_for_kind(
+            0,
+            crate::app::render::LetterFilterKind::Tv,
+        )
+        .unwrap(),
+    );
 
     // Stale cursor: cycle_letter_pill must ignore `level.cursor` and
     // advance the filter 0 -> 1 purely from `letter_filter`.
@@ -87,8 +92,13 @@ fn cycle_letter_pill_derives_from_filter_not_cursor() {
     // the cycle never consults `level.cursor`.
     let mut fresh = super::mounted_tv_model();
     fresh.app.libs[0].library_total = Some(1000);
-    fresh.app.libs[0].nav_stack[0].letter_filter =
-        Some(crate::app::render::LetterFilter::for_index(0).unwrap());
+    fresh.app.libs[0].nav_stack[0].letter_filter = Some(
+        crate::app::render::LetterFilter::for_index_for_kind(
+            0,
+            crate::app::render::LetterFilterKind::Tv,
+        )
+        .unwrap(),
+    );
     fresh.app.libs[0].nav_stack[0].set_resting_cursor(0);
     fresh.app.cycle_letter_pill(0, 1);
     assert_eq!(

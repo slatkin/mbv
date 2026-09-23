@@ -25,6 +25,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
             loading: true,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -44,6 +45,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
         loading: false,
         all_items: None,
         letter_filter: None,
+        tv_content_mode: None,
         music_grouping: None,
     };
 
@@ -84,6 +86,7 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)

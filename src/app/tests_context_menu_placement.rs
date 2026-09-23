@@ -48,6 +48,7 @@ fn add_emby_tv_library(app: &mut App) {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)

@@ -52,6 +52,7 @@ pub fn make_movie_app() -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -132,6 +133,7 @@ pub fn make_music_group_app() -> App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
             BrowseLevel {
@@ -148,6 +150,7 @@ pub fn make_music_group_app() -> App {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
+                tv_content_mode: None,
                 music_grouping: None,
             },
         ],
@@ -248,6 +251,7 @@ pub fn make_home_video_app() -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         ..LibraryTab::new(library)
@@ -280,6 +284,7 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }],
         library_total: Some(library_total),

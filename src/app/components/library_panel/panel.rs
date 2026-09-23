@@ -105,6 +105,11 @@ pub struct LibraryPanel {
     deferred_msg: Option<Msg>,
     focused_summary: Option<SelectionSummary>,
     hero_overlay_open: bool,
+    /// Whether the current overlay was opened automatically for a compact
+    /// flat-episode hero. This remains armed after an explicit dismissal so
+    /// the mini-view sync pass does not immediately reopen the overlay.
+    /// Explicit series overlays are never closed by that pass.
+    mini_view_hero_auto_open: bool,
     overlay_geometry: Option<OverlayGeometry>,
 }
 
@@ -153,6 +158,7 @@ impl LibraryPanel {
             deferred_msg: None,
             focused_summary: None,
             hero_overlay_open: false,
+            mini_view_hero_auto_open: false,
             overlay_geometry: None,
         }
     }
@@ -194,6 +200,7 @@ impl LibraryPanel {
         let identity_changed = self.owners.active_key() != key.as_ref();
         if identity_changed {
             self.dismiss_hero_overlay();
+            self.mini_view_hero_auto_open = false;
             if let Some(previous) = self.owners.active_key().cloned() {
                 if let Some(owner) = self.owners.get_mut(&previous) {
                     owner.clear_selection();
@@ -253,6 +260,30 @@ impl LibraryPanel {
         }
         self.hero_overlay_open = true;
         true
+    }
+
+    /// Synchronize the compact mini-view episode hero. This overlay is a
+    /// presentation of the selected flat episode, not an activation route;
+    /// ordinary Enter handling remains owned by the destination.
+    pub(in crate::app) fn sync_mini_view_hero_overlay(&mut self, mini_view: bool) {
+        let available = mini_view
+            && self
+                .owners
+                .active_mut()
+                .is_some_and(|owner| owner.mini_view_hero_available());
+        if available {
+            if !self.hero_overlay_open && !self.mini_view_hero_auto_open {
+                if let Some(owner) = self.owners.active_mut() {
+                    owner.focus_hero_workspace();
+                    owner.set_hero_overlay_open(true);
+                }
+                self.hero_overlay_open = true;
+                self.mini_view_hero_auto_open = true;
+            }
+        } else if self.mini_view_hero_auto_open {
+            self.dismiss_hero_overlay();
+            self.mini_view_hero_auto_open = false;
+        }
     }
 
     /// Open the Library-local Hero overlay for tests that construct a panel

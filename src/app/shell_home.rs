@@ -108,12 +108,20 @@ impl Model {
                 }
                 self.push_home_content();
             }
-            ShellRequest::HomeSectionSelected(section) => {
-                self.select_home_section_from_component(section)
-            }
+            ShellRequest::HomeSectionSelected(section) => self.acknowledge_home_section(section),
             // unreachable: shell_messages.rs routes only the Home* group (Play/
             // Enqueue/ContextMenu/Delete/ToggleWatched/SectionSelected) here.
             _ => {}
+        }
+    }
+
+    pub(super) fn acknowledge_home_section(&mut self, section: usize) {
+        self.select_home_section_from_component(section);
+        let source = self
+            .home_owner_shared()
+            .and_then(|home| home.source_for_section(section));
+        if let Some(source) = source {
+            self.acknowledge_home_latest(source);
         }
     }
 
@@ -152,7 +160,9 @@ impl Model {
         // so the source identity is stable; arriving sources are applied by
         // `restore_section` only once a matching section exists.
         let pending = self.home_section_pending.clone();
+        let acknowledged = self.acknowledged_home_latest_sources.clone();
         let restored = self.update_home_owner(|home| {
+            home.set_acknowledged_latest_sources(acknowledged);
             home.set_content(continue_items, latest, loading, feed_names);
             pending
                 .as_ref()
@@ -161,8 +171,15 @@ impl Model {
         // A successful restore retains the pending source and clears the
         // marker; the semantic preference is then reconciled from the owner
         // below.
-        if restored.flatten().is_some() {
+        if let Some(source) = restored.flatten() {
             self.home_section_pending = None;
+            // Restoring the saved Home pill preserves the previous behavior:
+            // the launch location is already acknowledged, and the same
+            // shell-owned acknowledgement must reach TV's matching Latest.
+            self.acknowledged_home_latest_sources.insert(source);
+            let acknowledged = self.acknowledged_home_latest_sources.clone();
+            self.update_home_owner(|home| home.set_acknowledged_latest_sources(acknowledged));
+            self.push_tv_workspace_content();
         }
         // Reconcile the shell-owned semantic persistence identity from the
         // owner only while no one-time restore remains pending: with the

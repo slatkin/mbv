@@ -313,6 +313,7 @@ fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
             loading: false,
             all_items: None,
             letter_filter: None,
+            tv_content_mode: None,
             music_grouping: None,
         }];
         lib.feed_home_video = Some(FeedHomeVideoState {

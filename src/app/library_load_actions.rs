@@ -25,6 +25,28 @@ impl App {
             }
         }
         self.log_feed_home_video_state(lib_idx, "refresh_lib_before_spawn");
+        if self.libs[lib_idx].library.collection_type == "tvshows"
+            && self.libs[lib_idx].nav_stack.len() == 1
+            && (self.libs[lib_idx].tv_content_mode == Some(mbv_core::config::TvContentMode::Latest)
+                || self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .and_then(|level| level.tv_content_mode.as_ref())
+                    == Some(&mbv_core::config::TvContentMode::Latest))
+        {
+            let parent_id = self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|level| level.parent_id.clone());
+            if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                level.loading = true;
+            }
+            if let Some(parent_id) = parent_id {
+                let title = self.libs[lib_idx].library.name.clone();
+                self.spawn_tv_latest(lib_idx, parent_id, title);
+            }
+            return;
+        }
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.loading = true;
             let parent_id = lvl.parent_id.clone();
@@ -274,6 +296,7 @@ impl App {
             nav_stack: Vec<BrowseLevel>,
             feed_home_video: Option<FeedHomeVideoState>,
             library_total: Option<usize>,
+            tv_content_mode: Option<mbv_core::config::TvContentMode>,
         }
         let old_libs: HashMap<String, SavedLibState> = self
             .libs
@@ -285,6 +308,7 @@ impl App {
                         nav_stack: std::mem::take(&mut l.nav_stack),
                         feed_home_video: l.feed_home_video,
                         library_total: l.library_total,
+                        tv_content_mode: l.tv_content_mode,
                     },
                 )
             })
@@ -313,6 +337,7 @@ impl App {
                             resting: lvl.resting(),
                             all_items: lvl.all_items.clone(),
                             letter_filter: lvl.letter_filter.clone(),
+                            tv_content_mode: lvl.tv_content_mode.clone(),
                             music_grouping: lvl.music_grouping.clone(),
                         })
                         .collect()
@@ -320,10 +345,17 @@ impl App {
                 .unwrap_or_default();
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
             let library_total = saved.and_then(|s| s.library_total);
+            let tv_content_mode = (view.collection_type == "tvshows").then(|| {
+                super::render::resolve_tv_content_mode(
+                    library_total.unwrap_or_default(),
+                    saved.and_then(|state| state.tv_content_mode.as_ref()),
+                )
+            });
             self.libs.push(super::LibraryTab {
                 nav_stack: stack,
                 feed_home_video,
                 library_total,
+                tv_content_mode,
                 ..super::LibraryTab::new(view.clone())
             });
         }
