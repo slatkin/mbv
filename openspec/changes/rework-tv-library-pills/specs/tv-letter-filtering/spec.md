@@ -46,8 +46,8 @@ or season names as the filter key.
 The system SHALL support selecting a TV alphabet range with the mouse, cycling
 through the available TV content modes with the existing keyboard controls, and
 restoring the selected TV content mode when a saved TV library position is
-reopened. Mode ordering, cycling wrap, and persistence SHALL be governed by
-`tv-library-content-modes`.
+reopened, including after an orderly exit. Mode ordering, cycling wrap, and
+persistence SHALL be governed by `tv-library-content-modes`.
 
 #### Scenario: Cycle ranges with the keyboard
 - **WHEN** the user cycles forward or backward while the TV content-mode row is active
@@ -56,3 +56,7 @@ reopened. Mode ordering, cycling wrap, and persistence SHALL be governed by
 #### Scenario: Restore a selected range
 - **WHEN** the user reopens a TV library position saved with an alphabet range selected
 - **THEN** the same range is selected and the TV list is loaded with that range applied
+
+#### Scenario: Restore a pre-change saved range
+- **WHEN** the user reopens a TV library position saved before the three-bucket set with a nine-bucket range index
+- **THEN** the containing TV bucket is selected (saved indices 0–7 map by `index/3`, the old `#` maps to `A-I`) and the TV list is loaded with that bucket applied

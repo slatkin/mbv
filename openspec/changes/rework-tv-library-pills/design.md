@@ -55,18 +55,21 @@ See `proposal.md` — Why. Constraints that shape the approach:
 
 ### D1: The content mode is one value on the browse level, replacing the letter filter
 
-The persisted `letter_filter: Option<LetterFilter>` cannot express `Latest`,
+The in-session `letter_filter: Option<LetterFilter>` cannot express `Latest`,
 `Upcoming`, or `All`, and `None` currently overloads "unfiltered". Replace it
 with a closed `TvContentMode` value on the top-level `BrowseLevel` — roughly
-`Latest`, `Upcoming`, `All`, and `Range(LetterFilterIndex)` — carried in
-`LibraryPositionLevel` and restored on reopen. `None`/absent means the default
-mode for the library's size, resolved on load.
+`Latest`, `Upcoming`, `All`, and `Range(LetterFilterIndex)`. `None`/absent
+means the default mode for the library's size, resolved on load. This field is
+the in-session browse value. Cross-process restore is D8.
+`LibraryPositionLevel.tv_content_mode` is the in-memory legacy migration source
+only: `save_default_library_position` updates that document in memory and never
+writes it. Orderly exit serializes `TuiLaunchState`.
 
 Rationale: one value keeps row order, cycling, persistence, and content
 selection in agreement, and stops `None` from meaning both "no filter" and "the
 default a large library would auto-apply". Alternative considered: keep
 `letter_filter` and add a parallel `latest`/`upcoming` flag — rejected as three
-fields that can disagree.
+fields that can disagree. Index space and persistence (review B1): `TvContentMode::Range` holds an index into the TV three-bucket table only (0 = `A-I`, 1 = `J-R`, 2 = `S-Z`); TV indices are never interchangeable with the movie table's nine. `LibraryPositionLevel` gains an additive `tv_content_mode` value (`#[serde(default)]`, `None`-preserving) and `BrowseLevel` gains `tv_content_mode` for the TV top level; the existing `letter_filter`/`letter_filter_index` fields are untouched and remain the movie path's persistence byte-for-byte. TV restore precedence: `tv_content_mode` when present, else a legacy nine-bucket TV `letter_filter_index` mapped to its containing TV bucket (indices 0–7 map by integer `index/3`, index 8 — the old `#` — maps to 0 since `A-I` covers every pre-`J` name), else D3 resolution (capture load when no count is known, size default from the restored count otherwise). If the restored mode is not in the row the restored count composes (a saved range on a library that has since fallen to or below the threshold, or a saved `All` on one that has since exceeded it), the D3 size default is resolved instead of the restored value. That precedence is in-session restore and legacy migration. Cross-process identity is D8.
 
 ### D2: The alphabet bucket table becomes kind-aware; movies keep their own set
 
@@ -81,7 +84,7 @@ also closes today's accented-after-Z gap.
 Rationale: three single server ranges cover the whole alphabet with no title
 lost and no compound fetch. Alternative considered: a `#` pill plus three
 ranges — rejected as four pills against the requirement; a compound two-range
-third pill — rejected as more client work for the same result.
+third pill — rejected as more client work for the same result. Construction contract (review B1/B2): TV construction goes through TV-specific constructors (a `for_tv_index` and a TV `for_sort_key` variant); the existing kind-agnostic `for_index`/`for_sort_key` keep the nine-bucket movie table unchanged. Every TV call site uses the TV constructors, including the `activate_searched_series` landing in `src/app/lib_cursor_actions.rs`.
 
 ### D3: The threshold gates the ranges, not `Latest`/`Upcoming`
 
@@ -100,7 +103,12 @@ resolves the mode from the restored `library_total` before any fetch, so a
 large library's reopen loads `Latest` directly as its initial load. The
 `A-C` auto-apply arm is removed for TV only; movie, feed, and podcast
 libraries keep today's auto-scope and their small-library `A-C`-highlighted
-row byte-for-byte.
+row byte-for-byte. TV means `collection_type == "tvshows"` (the gate
+`shell_tv_workspace.rs` already uses); every other non-music Emby collection
+type (homevideos, musicvideos, mixed) follows the movie byte-for-byte path.
+A restored mode that is not in the row the restored count composes (a saved
+range on a library that has since fallen to or below the threshold, or a saved
+`All` on one that has since exceeded it) falls back to this size default.
 
 Rationale: `All` is the only way to see everything when there are no ranges, so
 it must exist below the threshold and must not exist above it (it would load the
@@ -114,7 +122,7 @@ behavior change from the old `A-C` default.
 path, so Home need not have loaded. `Upcoming` adds
 `get_upcoming(parent_id, limit)` over `GET /Shows/Upcoming` with `ParentId` set
 to the library. Both produce flat `EmbyItem` episode lists; they do not open a
-series detail and do not build a season workspace.
+series detail and do not build a season workspace. The `Upcoming` limit is 30, the same as `Latest` (review N1).
 
 ### D5: The new-content acknowledgement moves to the shell
 
@@ -145,12 +153,41 @@ a small library cycles `Latest → Upcoming → All`, and a large one cycles
 selects the clicked row's mode. This keeps the cycling and the painted row from
 diverging.
 
+### D8: Orderly exit restores the mode through `EmbySelectorKey`
+
+`TuiLaunchState.selector` is the cross-process path. TV `launch_snapshot`
+today maps a missing `letter_filter` to `EmbySelectorKey::Unfiltered`, so
+`Latest`, `Upcoming`, and `All` collapse to one key and the next launch cannot
+tell them apart. Add additive variants on `EmbySelectorKey` (the enum is
+externally tagged; snapshots that lack the new variants still deserialize):
+
+- `Latest`
+- `Upcoming`
+- `TvRange(TvLetterBucket)` where `TvLetterBucket` is `AToI | JToR | SToZ`
+
+`All` stays `Unfiltered`. Movie `Letter(EmbyLetterBucket)` and movie
+`Unfiltered` are unchanged, including the `usize::MAX` clear-letter restore.
+TV restore selects the mode identity on the painted row; it does not encode
+`Latest` or `Upcoming` as a letter index or as `usize::MAX`.
+
+`launch_snapshot` writes the key whenever the content-mode row is shown, not
+only when alphabet ranges are shown. `launch_selector` restores that key. A
+key that is not in the row the restored count composes uses the D3 size
+default.
+
+Legacy migration (`migrate_legacy_launch_state`): a TV library
+(`collection_type == "tvshows"`) maps `tv_content_mode` when present, else a
+nine-bucket `letter_filter_index` to the containing `TvRange` (indices 0–7 by
+`index/3`, index 8 to `AToI`). Movie positions stay
+`Letter(EmbyLetterBucket::from_index)`.
+
 ## Risks / Trade-offs
 
 - **`/Shows/Upcoming` may include episodes not playable from the library.** →
   Manual check against a real server before implementation is called done; if
-  unplayable rows appear, either filter to items present locally or play through
-  the same failure path as any unavailable item.
+  unplayable rows appear, play them through the same failure path as any
+  unavailable item; add local-presence filtering only if the manual check
+  shows rows that are materially misleading rather than merely unplayable.
 - **Hoisting acknowledgement conflicts with the in-flight seam work.** →
   Sequence this change after `extract-shared-list-components` lands, and keep
   the hoist to a shell-owned set with no new abstraction.
@@ -168,3 +205,8 @@ diverging.
   Keep `TvContentMode` at the browse-state boundary (what to load, what to
   select), not inside any list widget, so the tree change adopts it as the
   selector input rather than reinterpreting it.
+- **`/Shows/Upcoming` may ignore `ParentId` or `Limit`.** → The client test
+  pins the request it builds. Whether the server honors that request is the
+  manual check in tasks 8.2, required before the change is called done, not
+  before the client is written. If the check shows unscoped or unbounded
+  rows, filter locally before close-out.

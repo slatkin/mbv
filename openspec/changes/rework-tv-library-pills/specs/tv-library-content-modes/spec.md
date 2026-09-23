@@ -64,13 +64,19 @@ episodes; the list SHALL NOT nest.
 ### Requirement: Upcoming mode presents the library's upcoming episodes
 
 The `Upcoming` mode SHALL present the library's upcoming episodes from Emby's
-`GET /Shows/Upcoming` route scoped to that library. The rows SHALL be a flat
-list of episodes; the list SHALL NOT nest.
+`GET /Shows/Upcoming` route scoped to that library, at most 30 episodes. The
+rows SHALL be a flat list of episodes; the list SHALL NOT nest. Episodes that
+belong to a different library SHALL NOT appear.
 
 #### Scenario: Upcoming shows upcoming episodes
 - **WHEN** the user selects the `Upcoming` mode for a TV library
 - **THEN** the list shows that library's upcoming episodes from the `Upcoming` route scoped to the library
 - **AND** the rows are a flat episode list with no nesting
+- **AND** the list contains at most 30 episodes
+
+#### Scenario: Upcoming does not include another library's episodes
+- **WHEN** the user selects `Upcoming` on one TV library while another TV library also has upcoming episodes
+- **THEN** the list contains only episodes from the selected library
 
 ### Requirement: Latest and Upcoming rows play directly and never open a series workspace
 
@@ -96,14 +102,26 @@ list without an episode hero.
 ### Requirement: The content mode is part of the sticky library position
 
 The selected TV content mode SHALL be saved with the library's navigation
-position and restored when the library is reopened. Keyboard cycling SHALL move
-the selection across every mode in row order and SHALL wrap from the last mode
-to the first and from the first to the last. Mouse selection SHALL select the
-clicked mode.
+position and restored when the library is reopened, including when the client
+exits and launches again. Keyboard cycling SHALL move the selection across
+every mode in row order and SHALL wrap from the last mode to the first and
+from the first to the last. Mouse selection SHALL select the clicked mode.
 
 #### Scenario: The mode is restored on reopen
 - **WHEN** the user selects a TV content mode and later reopens that library's saved position
 - **THEN** the same mode is selected and its content is loaded
+
+#### Scenario: Orderly exit restores the mode on the next launch
+- **WHEN** the user exits the client while a TV content mode is selected and later launches the client again
+- **THEN** that library reopens with the same mode selected and its content loaded
+
+#### Scenario: Latest and Upcoming do not collapse to All on the next launch
+- **WHEN** the user exits while `Latest` or `Upcoming` is selected
+- **THEN** the next launch does not reopen that library on `All`
+
+#### Scenario: A restored mode that is no longer offered falls back to the size default
+- **WHEN** a TV library position saved with a mode is reopened and that mode is not in the row composed from the library's current show count — a saved range on a library now at or below the pill threshold, or a saved `All` on one now above it
+- **THEN** the size default for the current count is selected instead (`Latest` above the threshold, `All` at or below it)
 
 #### Scenario: Cycling wraps across modes
 - **WHEN** the user cycles forward from the last mode, or backward from the first

@@ -1,6 +1,6 @@
 ---
 name: openspec-plan-review
-description: Adversarial review of an OpenSpec change's planning artifacts (proposal, design, spec deltas, tasks) to decide whether it is ready for implementation. Use whenever the user asks to review, critique, red-team, or "sanity check" an OpenSpec change or plan, asks "is this ready to implement", wants a gate before starting the apply workflow, or asks to find holes, gaps, contradictions, or risks in a proposal/design/tasks — even if they just say "review the plan", "check the change", or "is this plan good".
+description: Adversarial review of an OpenSpec change's planning artifacts to decide whether it is ready for implementation. Use when the user asks to review, critique, red-team, or sanity-check an OpenSpec change or plan, including "review the plan", "check the change", or "is this plan good". A repeat review verifies the prior finding list plus text the fix touched; it does not start a fresh hunt. Ready means an implementer will not invent a user-visible behavior.
 ---
 
 # Adversarial plan review for OpenSpec changes
@@ -12,20 +12,48 @@ into the artifacts is a separate workflow (`openspec-update-change`).
 
 ## Why adversarial
 
-A plan that survives a friendly read still fails during apply: an unverifiable premise, a
-requirement with two readings, a task whose verification can't run, a delta that contradicts
-the main spec it overlays. The implementing agent cannot ask the author questions — every
-ambiguity becomes an invented decision. Your review must simulate the worst reader: an agent
-on a fresh session implementing `tasks.md` with only the artifacts on disk.
+A plan that survives a friendly read still fails during apply: a false premise, a
+requirement with two user-visible readings, a task whose verification can't run, a delta
+that contradicts the main spec it overlays. Simulate an agent implementing `tasks.md` with
+only the artifacts on disk. That agent may choose functions, callers, and test layout from
+the code. It may not invent a user-visible behavior.
+
+## What a blocker is
+
+A **BLOCKER** is only one of these:
+
+- a user-visible behavior with two readings, and the artifacts do not pick one
+- a contradiction with another artifact, a main spec, or a documented ADR or naming rule
+- a named premise a task depends on that is false in the code or in a cited external source
+- a verification that cannot observe the requirement it claims to prove
+
+Anything else is a **NOTE**. Call-site lists, which helper to edit, how to spell a test,
+and "strengthen a manual check that already observes the requirement" are notes. If one
+reading is the one the existing code already uses, that reading is not a second product
+decision — record it as a note only when naming it would save the implementer a wrong turn.
+
+## Repeat reviews
+
+If the user, the session, or the artifacts already carry a verdict or folded review notes,
+this is a repeat review. Verify that finding list and the text the fix touched. Do not
+re-open a path the prior inventory already checked. A newly discovered issue is a note
+unless the fix introduced it, or it is a contradiction with the finding list itself.
+"The next review will find something new" is a skill failure, not rigor. A first review
+(no prior verdict) is the only full hunt, and it must publish the inventory in the verdict
+so the next pass cannot fail the plan for a path this pass did not name.
 
 ## Steps
 
-1. **Load the full change and its surroundings.**
+On a repeat review, do not start at step 1. Verify the prior finding list and the text the
+fix touched, then deliver the verdict. A full hunt is a first review only.
+
+1. **Load the full change and its surroundings.** First review only.
    - `openspec status --change "<name>" --json` for artifact inventory, then read every
      artifact in full from disk (proposal, design, each spec delta, tasks). Partial reads
      miss cross-references, which is where plans fail.
    - `openspec validate --all` (or the change) — a structural failure is a finding, not a
-     footnote.
+     footnote. On a repeat review, skip the full surroundings read except where the finding
+     list or the fix points.
    - Read the main specs each delta modifies or is adjacent to. A delta is only meaningful
      against the spec it overlays; check for contradictions, duplicate requirements, and
      scenarios the delta silently rewrites.
@@ -81,12 +109,10 @@ on a fresh session implementing `tasks.md` with only the artifacts on disk.
      The classic failure is an artifact updated after a scope change while its downstream
      siblings still carry the old scope.
 
-5. **Classify and evidence every finding.**
-   - **BLOCKER** — would produce a wrong, broken, or stalled implementation: contradiction,
-     unverifiable premise a task depends on, untestable requirement, missing required
-     artifact, convention violation, dependency-ordering trap.
-   - **NOTE** — worth fixing, does not block: weaker wording, missing alternative, thin
-     verification, opportunistic cleanup.
+5. **Classify and evidence every finding.** Use **What a blocker is**. Do not promote a
+   note because the checklist found something. A missing required artifact or a failed
+   `openspec validate` is a blocker; a dependency-ordering trap is a blocker only when it
+   would make the implementer invent a user-visible behavior or follow a false premise.
    - Every finding cites evidence: `file:line`, a quoted sentence, or the exact command that
      failed. "Feels thin" is not a finding. Before reporting a BLOCKER, re-check its premise
      against the code — a false blocker wastes a whole correction round.
@@ -111,11 +137,16 @@ on a fresh session implementing `tasks.md` with only the artifacts on disk.
    | specs/...     | yes      | ...               |
    ```
 
-   READY only when there are zero blockers; READY WITH NOTES when blockers are absent but
-   notes are material; NOT READY otherwise. If a required artifact is missing or the change
-   fails `openspec validate`, the verdict is NOT READY by definition.
+   READY means an implementer will not invent a user-visible behavior and will not follow a
+   false premise. It does not mean the attack checklist is exhausted. READY only when there
+   are zero blockers under **What a blocker is**; READY WITH NOTES when blockers are absent
+   but notes are material; NOT READY otherwise. A missing required artifact or a failed
+   `openspec validate` is NOT READY by definition.
+
+   On a first review, end the verdict with an **Inventory**: every persistence/restore path
+   and every external contract the tasks depend on, each marked checked or unchecked. A
+   later review treats that list as closed.
 
 7. **Stop after the verdict.** Offer the follow-up path: "Address findings via
-   `openspec-update-change`, then re-run this review." Do not edit artifacts, do not start
-   apply. If the user wants a second opinion after fixes, re-review only the findings'
-   artifacts plus anything their fix touched.
+   `openspec-update-change`. A follow-up review verifies that finding list only." Do not
+   edit artifacts, do not start apply. Do not invite a fresh hunt.
