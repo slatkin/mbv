@@ -3,7 +3,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::home_content::HomeContent;
-use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use crate::app::components::media_list::{LibrarySelectionOrigin, SelectionOrigin};
 use crate::app::components::msg::HomeRowTarget;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
@@ -470,6 +470,48 @@ fn visual_mode_escape_clears_without_firing_playback_stop() {
         Msg::Playback(crate::app::components::PlaybackRequest::Stop)
     )));
     assert!(!outcome.deferred_fired);
+}
+
+#[test]
+fn mounted_home_latest_restore_falls_back_to_continue_only_content() {
+    let mut harness = home_harness(160, 30, 2);
+    harness.model_mut().app.pending_launch_tab_resolved = true;
+    harness.model_mut().app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
+        version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+        tab: mbv_core::config::TabIdentity::Home,
+        panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+        selector: Some(mbv_core::config::SelectorIdentity::Home {
+            key: mbv_core::config::HomeSelectorKey::Section("emby:latest".into()),
+        }),
+        item: Some(mbv_core::config::LibraryItemIdentity::Home {
+            id: "removed-latest-item".into(),
+        }),
+    });
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, 160, 30);
+    harness.inject(key(Key::Down));
+    harness.step();
+
+    let home = home_owner(&harness);
+    assert_eq!(home.launch_snapshot().0, Some(mbv_core::config::SelectorIdentity::Home {
+        key: mbv_core::config::HomeSelectorKey::Continue,
+    }));
+    assert_eq!(home.test_active_rows().len(), 2, "Home exposes only Continue Watching rows");
+    assert_eq!(
+        home.launch_snapshot().1,
+        Some(mbv_core::config::LibraryItemIdentity::Home { id: "home-1".into() })
+    );
+    assert!(
+        harness.model().application.get_component(&ComponentId::Library)
+            .expect("Library panel mounted")
+            .as_any()
+            .downcast_ref::<LibraryPanel>()
+            .expect("Library panel type")
+            .test_selector_hits()
+            .regions()
+            .is_empty(),
+        "Home paints no Latest selector pill"
+    );
 }
 
 #[test]
