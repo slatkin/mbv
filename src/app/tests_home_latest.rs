@@ -629,32 +629,10 @@ fn later_arrivals_do_not_reorder_provider_pills() {
     assert!(matches!(&content.latest[2].source, HomeLatestSource::Feeds));
 }
 
+/// A stale legacy Home Latest preference is ignored even when Home content
+/// rebuilds after startup; the default selection remains Continue Watching.
 #[test]
-fn home_latest_source_pref_key_round_trips() {
-    for source in [
-        HomeLatestSource::Emby("view-1".into()),
-        HomeLatestSource::Audiobookshelf("abs-lib".into()),
-        HomeLatestSource::Feeds,
-    ] {
-        let key = source.pref_key();
-        assert_eq!(
-            HomeLatestSource::from_pref_key(&key),
-            Some(source),
-            "pref_key round-trips {key:?}"
-        );
-    }
-    assert_eq!(HomeLatestSource::from_pref_key(""), None);
-    assert_eq!(HomeLatestSource::from_pref_key("unknown:2"), None);
-}
-
-/// Task 5.3d, Home persisted-section identity seam: while a one-time persisted
-/// restore is still pending (its source has not arrived), an actual async
-/// section rebuild/clamp path must not replace the loaded semantic source with
-/// the temporary numeric section identity (still Continue Watching / section
-/// 0). An unrelated `save_prefs()` after that clamp must keep the pending
-/// source identity on disk.
-#[test]
-fn async_clamp_keeps_pending_home_source_until_restored() {
+fn async_home_refresh_does_not_restore_legacy_latest_preference() {
     let _guard = crate::config::TestStateDirGuard::new();
     std::fs::write(
         crate::config::prefs_path(),
@@ -663,34 +641,25 @@ fn async_clamp_keeps_pending_home_source_until_restored() {
     .expect("write prefs");
     let mut model = Model::new(make_app_stub());
 
-    // Simulate an actual async clamp/rebuild path. With no Emby client and no
-    // cached Audiobookshelf/Feeds sections this rebuilds an empty `latest`
-    // while the pending restore remains in Model-owned shell state.
+    // Simulate an actual Home rebuild after startup. The old preference is
+    // a retired Latest selection and falls back to Continue Watching.
     let _content = model
         .app
         .fetch_home()
         .expect("fetch_home succeeds with no sources");
 
-    assert_eq!(
-        model.home_section_pending,
-        Some(HomeLatestSource::Audiobookshelf("book-lib".into())),
-        "pending restore must remain pending while the source is absent"
-    );
-    assert_eq!(
-        model.home_section_pref(),
-        "abs:book-lib",
-        "async clamp must not clear the pending semantic source"
-    );
+    assert_eq!(model.home_section_pending, None);
+    assert_eq!(model.home_section_pref(), "");
 
-    // An unrelated App preference save must retain the shell-owned pending
-    // source identity on disk, not overwrite it with Continue Watching.
+    // The legacy key remains harmlessly tolerated during unrelated saves; it
+    // is not loaded back into the Home selection.
     model.app.save_prefs();
     let saved = crate::config::prefs_path();
     let parsed: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(saved).expect("prefs written")).unwrap();
     assert_eq!(
         parsed["home_section"], "abs:book-lib",
-        "unrelated save must keep the pending Home source while restoration is pending"
+        "legacy preference remains stored but is ignored on startup"
     );
 }
 

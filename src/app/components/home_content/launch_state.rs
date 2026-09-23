@@ -14,14 +14,11 @@ impl HomeContent {
             return false;
         }
         let section = match state.selector.as_ref() {
+            // Home's former Latest sections remain decodable in old launch
+            // snapshots, but now resolve explicitly to Continue Watching.
             Some(SelectorIdentity::Home {
-                key: HomeSelectorKey::Section(source),
-            }) => self
-                .latest
-                .iter()
-                .position(|candidate| candidate.source.pref_key() == *source)
-                .map(|index| index + 1)
-                .unwrap_or(0),
+                key: HomeSelectorKey::Section(_),
+            }) => 0,
             Some(SelectorIdentity::Home {
                 key: HomeSelectorKey::Continue,
             })
@@ -137,6 +134,29 @@ mod tests {
             owner.launch_snapshot_impl().1,
             Some(LibraryItemIdentity::Home {
                 id: "latest-1".into()
+            })
+        );
+    }
+
+    #[test]
+    fn saved_latest_section_falls_back_to_continue_watching() {
+        let mut owner = continue_owner(&["continue-1"]);
+        let state = TuiLaunchState {
+            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
+            tab: mbv_core::config::TabIdentity::Home,
+            panel_focus: mbv_core::config::LaunchPanelFocus::Library,
+            selector: Some(SelectorIdentity::Home {
+                key: HomeSelectorKey::Section("emby:removed-latest".into()),
+            }),
+            item: Some(LibraryItemIdentity::Home { id: "stale".into() }),
+        };
+
+        assert!(owner.reanchor_launch_state_impl(&state));
+        assert_eq!(owner.section(), 0);
+        assert_eq!(
+            owner.launch_snapshot_impl().1,
+            Some(LibraryItemIdentity::Home {
+                id: "continue-1".into()
             })
         );
     }

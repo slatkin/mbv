@@ -72,6 +72,68 @@ fn tui_launch_state_round_trips_through_two_distinct_paths() {
 }
 
 #[test]
+fn tui_launch_state_latest_selector_identities_round_trip() {
+    let scratch = TestTempDir::new();
+    let path = scratch.join("tui_launch_state.json");
+    let states = [
+        TuiLaunchState {
+            version: TUI_LAUNCH_STATE_VERSION,
+            tab: TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Emby,
+                library_id: "movies".into(),
+            },
+            panel_focus: LaunchPanelFocus::Library,
+            selector: Some(SelectorIdentity::Emby {
+                key: EmbySelectorKey::Latest,
+            }),
+            item: None,
+        },
+        TuiLaunchState {
+            version: TUI_LAUNCH_STATE_VERSION,
+            tab: TabIdentity::ServiceLibrary {
+                kind: ServiceKind::Audiobookshelf,
+                library_id: "podcasts".into(),
+            },
+            panel_focus: LaunchPanelFocus::Library,
+            selector: Some(SelectorIdentity::Audiobookshelf {
+                key: AudiobookshelfSelectorKey::Latest,
+            }),
+            item: None,
+        },
+        TuiLaunchState {
+            version: TUI_LAUNCH_STATE_VERSION,
+            tab: TabIdentity::Feeds,
+            panel_focus: LaunchPanelFocus::Library,
+            selector: Some(SelectorIdentity::Feeds {
+                key: FeedsSelectorKey::Latest,
+            }),
+            item: None,
+        },
+    ];
+
+    for state in states {
+        save_tui_launch_state_at(&path, &state).unwrap();
+        assert_eq!(load_tui_launch_state_at(&path), Some(state));
+    }
+}
+
+#[test]
+fn tui_launch_state_existing_selector_identity_still_loads() {
+    let scratch = TestTempDir::new();
+    let path = scratch.join("tui_launch_state.json");
+    std::fs::write(
+        &path,
+        r#"{"version":1,"tab":{"type":"service_library","kind":"Emby","library_id":"lib-movies"},"panel_focus":"library","selector":{"destination":"emby","key":{"letter":"a_to_c"}},"item":{"destination":"emby","id":"movie-2"}}"#,
+    )
+    .unwrap();
+
+    assert_eq!(
+        load_tui_launch_state_at(&path),
+        Some(launch_state_sample())
+    );
+}
+
+#[test]
 fn tui_launch_state_missing_file_loads_none() {
     let scratch = TestTempDir::new();
     assert_eq!(

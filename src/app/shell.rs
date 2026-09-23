@@ -595,9 +595,10 @@ impl Model {
     ) -> Self {
         let application = Application::init(listener_cfg);
         app.home_latest_launch_window = home_latest_launch_window;
-        let home_section = App::load_prefs()["home_section"]
-            .as_str()
-            .and_then(HomeLatestSource::from_pref_key);
+        // Legacy `home_section` values named Home Latest sections. Home now
+        // has only Continue Watching, so every saved value explicitly falls
+        // back to its first section rather than restoring a removed source.
+        let home_section = None;
         let initial_terminal_size = (app.terminal_width, app.terminal_height);
         // The compiled `[keys]` configuration is read once, here, from the
         // config the App was built with; later config saves never rewrite it

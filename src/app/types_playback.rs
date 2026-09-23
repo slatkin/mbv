@@ -145,16 +145,6 @@ impl HomeLatestSource {
             HomeLatestSource::Feeds => "feeds".into(),
         }
     }
-
-    pub(super) fn from_pref_key(key: &str) -> Option<Self> {
-        let (prefix, id) = key.split_once(':').unwrap_or((key, ""));
-        match prefix {
-            "emby" => Some(HomeLatestSource::Emby(id.to_string())),
-            "abs" => Some(HomeLatestSource::Audiobookshelf(id.to_string())),
-            "feeds" => Some(HomeLatestSource::Feeds),
-            _ => None,
-        }
-    }
 }
 
 /// The shell-owned snapshot of one Home Latest section. `has_new_content`
