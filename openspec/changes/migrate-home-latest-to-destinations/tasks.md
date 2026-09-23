@@ -15,7 +15,7 @@
 
 ## 3. Other destinations
 
-- [ ] 3.1 Add Latest to each Audiobookshelf podcast library's state/show selector using its existing per-library shelf cache; verify empty shelf, async completion, provider-target play/enqueue, selector cycling without Emby, and selected-tab exit/relaunch restore versus All on other podcast tabs (`cargo nextest run -p mbv`). Shelf refetch on podcast refresh is separate issue #763.
+- [x] 3.1 Add Latest to each Audiobookshelf podcast library's state/show selector using its existing per-library shelf cache; verify empty shelf, async completion, provider-target play/enqueue, selector cycling without Emby, and selected-tab exit/relaunch restore versus All on other podcast tabs (`cargo nextest run -p mbv`). Shelf refetch on podcast refresh is separate issue #763.
 - [ ] 3.2 Add Latest to Feeds' group/filter selector using only the already loaded combined entries; verify played entries remain visible, selector exit restores the former group/filter, `w` leaves Latest and cycles the restored filter once, no fetch on entry, and `r` refresh updates Latest (`cargo nextest run -p mbv`).
 - [ ] 3.3 Project shared title parts, provider dates, marker glyph and selected detail through existing row/Hero painters for non-TV Latest; verify focused buffer tests at Narrow and Wide (`cargo nextest run -p mbv`).
 
