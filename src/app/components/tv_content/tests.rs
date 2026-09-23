@@ -388,7 +388,73 @@ fn virtual_idless_upcoming_rows_show_series_and_episode_context() {
     else {
         panic!("upcoming episode row missing");
     };
-    assert!(target.is_empty());
+    assert!(!target.is_empty());
     assert_eq!(primary, "Example Show");
     assert_eq!(secondary.as_deref(), Some("S02:E07 — Pilot"));
+}
+
+#[test]
+fn idless_upcoming_rows_have_stable_distinct_targets_and_resolve_selection() {
+    let mut first = make_item("First episode", "Episode");
+    first.id.clear();
+    first.series_id = "series-id".into();
+    first.series_name = "Example Show".into();
+    first.parent_index_number = 2;
+    first.index_number = 7;
+    let mut second = first.clone();
+    second.name = "Second episode".into();
+    second.index_number = 8;
+
+    let rows = upcoming_episode_rows(
+        &[first.clone(), second.clone()],
+        time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap(),
+    );
+    let targets: Vec<&str> = rows
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Item { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(targets.len(), 2);
+    assert_ne!(targets[0], targets[1]);
+    assert_eq!(targets[0], upcoming_episode_target(&first));
+    assert_eq!(targets[1], upcoming_episode_target(&second));
+    assert_eq!(
+        targets,
+        upcoming_episode_rows(
+            &[first.clone(), second.clone()],
+            time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap(),
+        )
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Item { target, .. } => Some(target.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+    );
+
+    let mut context = TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first, second], 0),
+        None,
+        None,
+        0,
+        None,
+        false,
+    );
+    context.set_tv_content_mode(Some(mbv_core::config::TvContentMode::Upcoming));
+    let mut component = TvContent::new();
+    component.set_content(context);
+    component.carrier.select_index(1);
+    assert_eq!(
+        component.carrier.selected_target().map(String::as_str),
+        Some(targets[1])
+    );
+    assert_eq!(
+        component
+            .selected_episode_item()
+            .as_ref()
+            .map(|item| item.name.as_str()),
+        Some("Second episode")
+    );
 }

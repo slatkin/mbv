@@ -137,6 +137,27 @@ fn upcoming_date_heading(date: Date, today: Date) -> String {
     }
 }
 
+fn upcoming_episode_target(episode: &EmbyItem) -> String {
+    if !episode.id.is_empty() {
+        return episode.id.clone();
+    }
+
+    let series = if episode.series_id.is_empty() {
+        &episode.series_name
+    } else {
+        &episode.series_id
+    };
+    format!(
+        "upcoming:{}:{}:{}:{}:{}:{}",
+        series.len(),
+        series,
+        episode.parent_index_number,
+        episode.index_number,
+        episode.name.len(),
+        episode.name
+    )
+}
+
 fn upcoming_episode_rows(episodes: &[EmbyItem], today: Date) -> Vec<MediaListRow<String>> {
     let mut groups: Vec<(Option<Date>, Vec<&EmbyItem>)> = Vec::new();
     for episode in episodes {
@@ -164,7 +185,7 @@ fn upcoming_episode_rows(episodes: &[EmbyItem], today: Date) -> Vec<MediaListRow
                         .then(|| fmt_duration_gutter(episode.runtime_ticks / TICKS_PER_SECOND))
                         .map(MediaListTrailing::Gutter);
                     MediaListRow::Item {
-                        target: episode.id.clone(),
+                        target: upcoming_episode_target(episode),
                         primary: episode.series_name.clone(),
                         secondary: Some(format!(
                             "S{:02}:E{:02} — {}",
@@ -661,7 +682,7 @@ impl TvContent {
                         .list
                         .items
                         .iter()
-                        .find(|item| item.id == *target)
+                        .find(|item| upcoming_episode_target(item) == *target)
                 })
                 .cloned();
         }
