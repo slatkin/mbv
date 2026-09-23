@@ -499,9 +499,9 @@ fn flat_episode_activation_plays_without_opening_a_series_workspace(
     assert_eq!(tv(&harness).selected_series_snapshot(), None);
     assert!(!tv(&harness).episode_pane_focused());
     assert_eq!(
-        harness.model().app.player_tab.total_queue_len(),
-        1,
-        "flat episode activation must submit the selected episode to playback"
+        harness.model().app.playback_queue().emby_items()[0].id,
+        "latest-episode",
+        "flat episode activation must play the selected episode id"
     );
 }
 
@@ -877,17 +877,25 @@ fn deferred_series_landing_runs_the_handoff_on_its_retry_drain() {
     );
 }
 
-/// A flat `Upcoming` level holding one Emby `/Shows/Upcoming` placeholder:
+/// A flat `Upcoming` level holding three Emby `/Shows/Upcoming` placeholders:
 /// `Type: Episode` with no `Id` and a `series_id` set (the real-server shape
-/// for an unaired/not-downloaded row).
+/// for unaired/not-downloaded rows).
 fn upcoming_placeholder_harness() -> TickHarness {
     let mut harness = tv_harness();
-    let mut episode = crate::app::tests::make_item("Upcoming Episode", "Episode");
-    episode.id.clear();
-    episode.series_id = "series-123".into();
-    episode.series_name = "The Show".into();
+    let episodes = (0..3)
+        .map(|index| {
+            let mut episode = crate::app::tests::make_item(
+                &format!("Upcoming Episode {index}"),
+                "Episode",
+            );
+            episode.id.clear();
+            episode.series_id = format!("series-{index}");
+            episode.series_name = format!("The Show {index}");
+            episode
+        })
+        .collect();
     let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
-    level.items = vec![episode];
+    level.items = episodes;
     level.item_types = Some("Episode".into());
     level.tv_content_mode = Some(mbv_core::config::TvContentMode::Upcoming);
     level.loading = false;
@@ -898,45 +906,24 @@ fn upcoming_placeholder_harness() -> TickHarness {
     harness
 }
 
-/// An id-less `/Shows/Upcoming` placeholder (empty `id`, `series_id` set)
-/// leaves the flat mode and lands its series' Workspace instead of playing,
-/// through the real tick path and the shared ensure-then-land machinery.
-#[test]
-fn upcoming_placeholder_activation_navigates_to_its_series_without_playing() {
-    let mut harness = upcoming_placeholder_harness();
-
-    harness.inject(Event::Keyboard(KeyEvent {
-        code: Key::Enter,
-        modifiers: KeyModifiers::NONE,
-    }));
-    step_and_drain(&mut harness);
-
-    assert_eq!(
-        harness.model().app.player_tab.total_queue_len(),
-        0,
-        "an id-less Upcoming placeholder must not be submitted to playback"
-    );
-    assert!(
-        matches!(
-            harness.model().app.libs[0].nav_stack[0].tv_content_mode,
-            Some(mbv_core::config::TvContentMode::All)
-                | Some(mbv_core::config::TvContentMode::Range(_))
-        ),
-        "the flat Upcoming mode is left for a series-bearing mode"
-    );
+/// Assert that activation leaves flat Upcoming mode and lands the selected
+/// placeholder's series Workspace through the shared ensure-then-land path.
+fn assert_placeholder_workspace(harness: &mut TickHarness, index: usize) {
+    let expected_id = format!("series-{index}");
+    assert_eq!(harness.model().app.player_tab.total_queue_len(), 0);
     let pending = harness
         .model()
         .app
         .pending_series_landing
         .as_ref()
         .expect("the series landing is armed");
-    assert_eq!(pending.reveal.id, "series-123");
+    assert_eq!(pending.reveal.id, expected_id);
     assert_eq!(pending.reveal.item_type, "Series");
 
     // The whole-library corpus drain lands the reveal and opens the Workspace
     // (the same path a Series search/navigation result uses).
-    let mut series = crate::app::tests::make_item("The Show", "Series");
-    series.id = "series-123".into();
+    let mut series = crate::app::tests::make_item(&format!("The Show {index}"), "Series");
+    series.id = expected_id.clone();
     harness
         .model_mut()
         .handle_inline_search_lib_event(LibEvent::AllItemsPrefetched {
@@ -945,55 +932,89 @@ fn upcoming_placeholder_activation_navigates_to_its_series_without_playing() {
             items: vec![series],
         });
     harness.step();
-
-    assert!(
-        harness.model().app.pending_series_landing.is_none(),
-        "the series corpus drain landed the placeholder's series"
-    );
-    assert_eq!(
-        tv(&harness).selected_item().map(|item| item.id),
-        Some("series-123".to_string())
-    );
-    assert!(
-        tv(&harness).episode_pane_focused(),
-        "the series Workspace is open with episode selection focused"
-    );
+    assert!(harness.model().app.pending_series_landing.is_none());
+    assert_eq!(tv(harness).selected_item().map(|item| item.id), Some(expected_id));
+    assert!(tv(harness).episode_pane_focused());
 }
 
-/// The mouse double-click path applies the same split: an id-less Upcoming
-/// placeholder navigates to its series and never plays.
-#[test]
-fn mouse_double_click_on_upcoming_placeholder_navigates_to_its_series_without_playing() {
+#[rstest]
+#[case::first_row(0)]
+#[case::middle_row(1)]
+#[case::last_row(2)]
+fn keyboard_activation_of_each_upcoming_placeholder_opens_its_series_workspace(
+    #[case] index: usize,
+) {
     let mut harness = upcoming_placeholder_harness();
-    harness
-        .model_mut()
-        .app
-        .handle_mouse_double_click_tv(0, TvHit::EpisodeRow(String::new()));
-
-    assert_eq!(
-        harness.model().app.player_tab.total_queue_len(),
-        0,
-        "the placeholder double-click must not submit playback"
-    );
-    let pending = harness
-        .model()
-        .app
-        .pending_series_landing
-        .as_ref()
-        .expect("the series landing is armed");
-    assert_eq!(pending.reveal.id, "series-123");
+    for _ in 0..index {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        step_and_drain(&mut harness);
+    }
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+    assert_placeholder_workspace(&mut harness, index);
 }
 
-/// The mouse double-click path keeps the ordinary play behavior for a row
-/// with a real episode id.
-#[test]
-fn mouse_double_click_on_a_playable_episode_still_plays() {
-    let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
-    harness
-        .model_mut()
-        .app
-        .handle_mouse_double_click_tv(0, TvHit::EpisodeRow("latest-episode".into()));
+#[rstest]
+#[case::first_row(0)]
+#[case::middle_row(1)]
+#[case::last_row(2)]
+fn mouse_activation_of_each_upcoming_placeholder_opens_the_clicked_series_workspace(
+    #[case] index: usize,
+) {
+    let mut harness = upcoming_placeholder_harness();
+    draw(&mut harness);
+    let row_area = panel(&harness)
+        .test_wide_geometry()
+        .expect("painted browser")
+        .list_area;
+    let point = (row_area.x + 1, row_area.y + index as u16);
+    let click = Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: point.0,
+        row: point.1,
+        modifiers: KeyModifiers::NONE,
+    });
+    harness.inject(click.clone());
+    step_and_drain(&mut harness);
+    harness.inject(click);
+    step_and_drain(&mut harness);
+    assert_placeholder_workspace(&mut harness, index);
+}
 
-    assert_eq!(harness.model().app.player_tab.total_queue_len(), 1);
+/// Mouse and keyboard activation of a playable flat episode both play it
+/// directly instead of navigating to a series Workspace.
+#[rstest]
+#[case::latest(mbv_core::config::TvContentMode::Latest)]
+#[case::upcoming(mbv_core::config::TvContentMode::Upcoming)]
+fn mouse_double_click_on_a_playable_episode_still_plays_through_tick(
+    #[case] mode: mbv_core::config::TvContentMode,
+) {
+    let mut harness = flat_episode_harness(mode);
+    draw(&mut harness);
+    let row_area = panel(&harness)
+        .test_wide_geometry()
+        .expect("painted browser")
+        .list_area;
+    let click = Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: row_area.x + 1,
+        row: row_area.y,
+        modifiers: KeyModifiers::NONE,
+    });
+    harness.inject(click.clone());
+    step_and_drain(&mut harness);
+    harness.inject(click);
+    step_and_drain(&mut harness);
+
+    assert_eq!(
+        harness.model().app.playback_queue().emby_items()[0].id,
+        "latest-episode"
+    );
     assert!(harness.model().app.pending_series_landing.is_none());
 }

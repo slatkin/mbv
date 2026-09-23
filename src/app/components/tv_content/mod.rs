@@ -137,7 +137,7 @@ fn upcoming_date_heading(date: Date, today: Date) -> String {
     }
 }
 
-fn upcoming_episode_target(episode: &EmbyItem) -> String {
+pub(in crate::app) fn upcoming_episode_target(episode: &EmbyItem) -> String {
     if !episode.id.is_empty() {
         return episode.id.clone();
     }
