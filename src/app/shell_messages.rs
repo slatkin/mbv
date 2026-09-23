@@ -425,6 +425,10 @@ impl Model {
                         self.handle_audiobookshelf_podcast_episode_intent(intent);
                         self.push_audiobookshelf_podcast_content();
                     }
+                    ShellRequest::FeedsLatestSelected => {
+                        self.record_home_latest_acknowledgement(HomeLatestSource::Feeds);
+                        self.sync_feeds();
+                    }
                     ShellRequest::AudiobookshelfPodcastLatestSelected => {
                         if let Some(index) = self.app.tab.audiobookshelf_index() {
                             if let Some(library) = self.app.audiobookshelf_libraries.get(index) {

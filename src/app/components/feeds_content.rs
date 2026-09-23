@@ -72,6 +72,9 @@ pub(in crate::app) struct FeedsContent {
     carrier: MediaListCarrier<String>,
     watched_filter: WatchedFilter,
     selected_group: usize,
+    latest_selected: bool,
+    latest_has_new_content: bool,
+    latest_acknowledged: bool,
     loading: bool,
     last_subscription_urls: Vec<String>,
     /// The rows last handed to the carrier (the 6.1 `last_projected_rows`
@@ -94,6 +97,9 @@ impl FeedsContent {
             carrier: MediaListCarrier::new(),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
+            latest_selected: false,
+            latest_has_new_content: false,
+            latest_acknowledged: false,
             loading: false,
             last_subscription_urls: Vec::new(),
             last_projected_rows: None,
@@ -115,6 +121,9 @@ impl FeedsContent {
         self.subscriptions = push.subscriptions;
         self.entries = push.entries;
         self.all_entries = push.all_entries;
+        if self.subscriptions.is_empty() {
+            self.latest_selected = false;
+        }
         self.selected_group = self
             .selected_group
             .min(self.group_count().saturating_sub(1));
@@ -146,6 +155,16 @@ impl FeedsContent {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn selected_group(&self) -> usize {
         self.selected_group
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(in crate::app) fn latest_selected(&self) -> bool {
+        self.latest_selected
+    }
+
+    pub(in crate::app) fn set_latest_marker(&mut self, has_new: bool, acknowledged: bool) {
+        self.latest_has_new_content = has_new;
+        self.latest_acknowledged = acknowledged;
     }
 
     pub(in crate::app) fn group_count(&self) -> usize {
@@ -203,6 +222,7 @@ impl FeedsContent {
 
     /// Cycle the Watched filter and re-project (the legacy `w` key).
     pub(in crate::app) fn cycle_watched_filter(&mut self) {
+        self.latest_selected = false;
         self.watched_filter = self.watched_filter.cycle();
         self.rebuild_visible_entries();
         self.reset_selection();
@@ -210,6 +230,7 @@ impl FeedsContent {
 
     /// Cycle the feed group and re-project (the legacy `[`/`]` keys).
     pub(in crate::app) fn cycle_group(&mut self, delta: i64) {
+        self.latest_selected = false;
         let count = self.group_count();
         self.selected_group =
             (self.selected_group as i64 + delta).rem_euclid(count as i64) as usize;
@@ -339,7 +360,7 @@ impl FeedsContent {
     }
 
     fn rebuild_visible_entries(&mut self) {
-        let source = if self.selected_group == 0 {
+        let source = if self.latest_selected || self.selected_group == 0 {
             &self.all_entries
         } else {
             self.entries
@@ -349,7 +370,7 @@ impl FeedsContent {
         };
         self.visible_entries = source
             .iter()
-            .filter(|entry| self.watched_filter.matches(entry.played))
+            .filter(|entry| self.latest_selected || self.watched_filter.matches(entry.played))
             .cloned()
             .collect();
 
@@ -441,12 +462,19 @@ impl LibraryContentOwner for FeedsContent {
             return false;
         }
         if self.subscriptions.is_empty() {
+            self.latest_selected = false;
             self.rebuild_visible_entries();
         } else {
             match state.selector.as_ref() {
                 Some(SelectorIdentity::Feeds {
+                    key: FeedsSelectorKey::Latest,
+                }) => {
+                    self.latest_selected = true;
+                }
+                Some(SelectorIdentity::Feeds {
                     key: FeedsSelectorKey::Filter(filter),
                 }) => {
+                    self.latest_selected = false;
                     self.selected_group = 0;
                     self.watched_filter = match filter {
                         FeedsFilter::All => WatchedFilter::All,
@@ -457,6 +485,7 @@ impl LibraryContentOwner for FeedsContent {
                 Some(SelectorIdentity::Feeds {
                     key: FeedsSelectorKey::Group(FeedGroupKey::Feed(url)),
                 }) => {
+                    self.latest_selected = false;
                     self.selected_group = self
                         .subscriptions
                         .iter()
@@ -466,6 +495,7 @@ impl LibraryContentOwner for FeedsContent {
                     self.watched_filter = WatchedFilter::All;
                 }
                 _ => {
+                    self.latest_selected = false;
                     self.selected_group = 0;
                     self.watched_filter = WatchedFilter::All;
                 }
@@ -485,6 +515,10 @@ impl LibraryContentOwner for FeedsContent {
     fn launch_snapshot(&self) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
         let selector = if self.subscriptions.is_empty() {
             None
+        } else if self.latest_selected {
+            Some(SelectorIdentity::Feeds {
+                key: FeedsSelectorKey::Latest,
+            })
         } else if self.selected_group == 0 && self.watched_filter != WatchedFilter::All {
             // The combined row's active pill is the filter block or the
             // selected Feed group. A non-default filter is the only stable
@@ -545,27 +579,39 @@ impl LibraryContentOwner for FeedsContent {
             }
         });
         let has_subs = !self.subscriptions.is_empty();
-        // One Selector bar carries the watched filter first, followed by the
-        // existing feed-group pills. Both selections remain owner-local.
+        // One Selector bar carries Latest, watched filters, then the existing
+        // feed-group pills. Group/filter selection remains owner-local.
         let selector = has_subs.then(|| SelectorRow {
-            pills: [
-                WatchedFilter::All,
-                WatchedFilter::Watched,
-                WatchedFilter::Unwatched,
-            ]
-            .iter()
-            .map(|filter| filter.label().to_string())
-            .chain(std::iter::once("All".to_string()))
-            .chain(
-                self.subscriptions
+            pills: std::iter::once("Latest".to_string())
+                .chain(
+                    [
+                        WatchedFilter::All,
+                        WatchedFilter::Watched,
+                        WatchedFilter::Unwatched,
+                    ]
                     .iter()
-                    .map(|subscription| trunc_str(&subscription.name, MAX_GROUP_LABEL)),
-            )
-            .collect(),
-            markers: vec![],
+                    .map(|filter| filter.label().to_string()),
+                )
+                .chain(std::iter::once("All".to_string()))
+                .chain(
+                    self.subscriptions
+                        .iter()
+                        .map(|subscription| trunc_str(&subscription.name, MAX_GROUP_LABEL)),
+                )
+                .collect(),
+            markers: std::iter::once(self.latest_has_new_content && !self.latest_acknowledged)
+                .chain(std::iter::repeat_n(
+                    false,
+                    WatchedFilter::COUNT + 1 + self.subscriptions.len(),
+                ))
+                .collect(),
             // `[`/`]` move the feed-group selection, so the active pill and
             // overflow window follow that group within the combined row.
-            active: Some(WatchedFilter::COUNT + self.selected_group),
+            active: Some(if self.latest_selected {
+                0
+            } else {
+                1 + WatchedFilter::COUNT + self.selected_group
+            }),
         });
         let list = if !has_subs {
             ListSlot::Empty {
@@ -594,12 +640,20 @@ impl LibraryContentOwner for FeedsContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
-                if index < WatchedFilter::COUNT {
-                    self.select_watched_filter(index);
+                if index == 0 {
+                    self.latest_selected = true;
+                    self.rebuild_visible_entries();
+                    self.reset_selection();
+                    Some(Msg::Shell(ShellRequest::FeedsLatestSelected))
+                } else if index <= WatchedFilter::COUNT {
+                    self.latest_selected = false;
+                    self.select_watched_filter(index - 1);
+                    None
                 } else {
-                    self.select_group(index - WatchedFilter::COUNT);
+                    self.latest_selected = false;
+                    self.select_group(index - 1 - WatchedFilter::COUNT);
+                    None
                 }
-                None
             }
             LibrarySlotEvent::List(input) => match input {
                 MediaListSurfaceInput::Wheel { at, delta } => {
@@ -756,15 +810,15 @@ mod tests {
         let selector = content.selector.as_ref().expect("feed-group pills");
         assert_eq!(
             selector.pills,
-            ["All", "Played", "Unplayed", "All", "A", "B"]
+            ["Latest", "All", "Played", "Unplayed", "All", "A", "B"]
         );
-        assert_eq!(selector.active, Some(3));
+        assert_eq!(selector.active, Some(4));
         // The panel's no-secondary-row contract is owned by the shared
         // `narrow_skeleton_keeps_fixed_rows_and_panel_slots` test.
         drop(content);
 
         owner.cycle_group(1);
-        assert_eq!(owner.content().selector.unwrap().active, Some(4));
+        assert_eq!(owner.content().selector.unwrap().active, Some(5));
     }
 
     /// Without subscriptions the legacy chrome painted no pill bar at all:
@@ -802,7 +856,7 @@ mod tests {
         owner.cycle_watched_filter();
         assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
         let content = owner.content();
-        assert_eq!(content.selector.unwrap().active, Some(3));
+        assert_eq!(content.selector.unwrap().active, Some(4));
         match content.list {
             ListSlot::Empty { loading, text } => {
                 assert!(!loading);

@@ -269,6 +269,9 @@ pub enum ShellRequest {
     /// Acknowledge this podcast library's Latest marker without requesting
     /// any per-show episode details.
     AudiobookshelfPodcastLatestSelected,
+    /// Acknowledge the Feeds Latest marker; the rows remain the already-loaded
+    /// combined Feeds snapshot and no fetch is started.
+    FeedsLatestSelected,
     /// Typed podcast episode action intent (task 5.3d.7). Emitted by the
     /// component for Space/Enter/Ctrl+A; the shell resolves the episode-
     /// selection and wide/narrow conditions from current App state/layout and

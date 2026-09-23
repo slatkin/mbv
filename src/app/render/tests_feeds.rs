@@ -116,8 +116,8 @@ fn feeds_paints_one_pill_bar_and_the_policy_header() {
         "the policy hero header must paint the selected entry title"
     );
     assert!(
-        output.contains("Played") && output.contains("Unplayed"),
-        "missing leading Watched filter pills: {output:?}"
+        output.contains("Latest") && output.contains("Played") && output.contains("Unplayed"),
+        "missing Latest and Watched filter pills: {output:?}"
     );
 }
 
@@ -130,7 +130,7 @@ fn watched_pill_click_changes_the_filter() {
     let selector = panel.test_selector_hits().regions();
     let (watched, _) = selector
         .iter()
-        .find(|(_, id)| *id == WatchedFilter::Watched.position())
+        .find(|(_, id)| *id == 1 + WatchedFilter::Watched.position())
         .expect("the Watched pill is painted");
     let watched_x = watched.x;
     let filter = |panel: &LibraryPanel| {
