@@ -16,7 +16,7 @@
   `remote-queue-disconnect` return-to-local presentation (local daemon
   re-adopt per that spec's reconnect requirement); daemon-announced shutdown
   keeps its existing dedicated handling.
-- [ ] 3.1 Tick-integration coverage (`tests_tick_integration*`) for the
+- [x] 3.1 Tick-integration coverage (`tests_tick_integration*`) for the
   disconnect event path through the shell sync pass: adopted remote queue
   visible before, local presentation after, toast shown once.
 - [ ] 4.1 Spec sync: fold the deltas into `openspec/specs/`, resolve the
