@@ -2,6 +2,7 @@ use super::*;
 use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::make_movie_app;
 use crate::app::types_browse::BrowseResting;
+use mbv_core::mock_http::MockHttp;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -12,6 +13,27 @@ mod group_tests;
 
 #[path = "shell_tv_workspace_selection_tests.rs"]
 mod selection_tests;
+
+fn mounted_tv_model_with_mock_emby(http: &MockHttp) -> Model {
+    let mut model = mounted_tv_model();
+    let mut config = model.app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    crate::app::tests::install_test_emby(&mut model.app, config);
+    let client = model
+        .app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    model
+}
 
 fn mounted_tv_model() -> Model {
     let mut app = make_movie_app();
@@ -94,6 +116,60 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
     );
     assert_eq!(model.app.image_fetches_active, active);
     assert_eq!(model.app.pending_image_fetches.len(), pending);
+}
+
+#[test]
+fn expanding_an_uncached_show_starts_the_detail_fetch() {
+    let http = MockHttp::new();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    let mut model = mounted_tv_model_with_mock_emby(&http);
+    assert!(model.app.series_detail_loading.is_empty());
+    assert!(model.app.series_detail_cache.is_empty());
+
+    model.handle_tv_request(ShellRequest::TvTreeExpand {
+        target: crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:13:movie-focused".into(),
+        ),
+    });
+
+    assert_eq!(
+        model.app.series_detail_loading,
+        std::collections::HashSet::from(["movie-focused".into()]),
+        "uncached expansion must arm the detail fetch"
+    );
+}
+
+#[test]
+fn expanding_an_uncached_season_starts_only_its_episode_fetch() {
+    let http = MockHttp::new();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    let mut model = mounted_tv_model_with_mock_emby(&http);
+    let mut season = crate::app::tests::make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    model.app.series_detail_cache.insert(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+    model.push_tv_workspace_content();
+    assert!(model.app.series_season_loading.is_empty());
+
+    model.handle_tv_request(ShellRequest::TvTreeExpand {
+        target: crate::app::components::tv_tree_target::TvTreeTarget::Season {
+            show: "tv-id:13:movie-focused".into(),
+            season: "season-1".into(),
+            occurrence: 0,
+        },
+    });
+
+    assert_eq!(
+        model.app.series_season_loading,
+        std::collections::HashSet::from([("movie-focused".into(), "season-1".into())]),
+        "season expansion must arm its episode fetch"
+    );
+    assert_eq!(model.app.series_season_loading.len(), 1);
 }
 
 #[test]
