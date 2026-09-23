@@ -10,7 +10,6 @@ up", an alphabet range, or the whole library instead of only an alphabet split.
 
 ## Requirements
 
-
 ### Requirement: The TV top level is a content-mode selector
 
 A TV library's top-level browse view SHALL present a pill row whose selectable
@@ -66,7 +65,8 @@ episodes; the list SHALL NOT nest.
 
 The `Upcoming` mode SHALL present the library's upcoming episodes from Emby's
 `GET /Shows/Upcoming` route scoped to that library. The rows SHALL be a flat
-list of episodes; the list SHALL NOT nest.
+list of episodes, possibly headed by non-selectable date headings (see the
+grouping requirement below); the list SHALL NOT nest.
 
 #### Scenario: Upcoming shows upcoming episodes
 - **WHEN** the user selects the `Upcoming` mode for a TV library
@@ -106,14 +106,7 @@ Home's `Latest` section for a TV library and the library's `Latest` mode SHALL p
 
 ### Requirement: Latest and Upcoming rows play directly or open their series
 
-Activating a `Latest` or `Upcoming` row that carries a playable episode id
-SHALL play that episode and SHALL NOT open a series detail or Workspace.
-Activating an `Upcoming` row that carries no episode id but names its series
-SHALL navigate the library to that series and open its Workspace instead of
-playing. Keyboard and mouse activation SHALL take the same path. A selected
-`Latest` or `Upcoming` episode SHALL show a hero only in mini view; in every
-other geometry the mode presents its flat list across the full panel with no
-reserved hero pane.
+Activating a `Latest` or `Upcoming` row that carries a playable episode id SHALL play that episode and SHALL NOT open a series detail or Workspace. Activating an `Upcoming` row that carries no episode id but names its series SHALL navigate the library to that series and open its Workspace instead of playing. Keyboard and mouse activation SHALL take the same path. A selected `Latest` or `Upcoming` episode SHALL show a hero only in mini view; in every other geometry the mode presents its flat list across the full panel with no reserved hero pane.
 
 #### Scenario: Activating a playable episode row plays it
 - **WHEN** the user selects a `Latest` or `Upcoming` episode row with an episode id and activates it
@@ -135,9 +128,10 @@ reserved hero pane.
 
 The selected TV content mode SHALL be saved with the library's navigation
 position and restored when the library is reopened. A saved mode that the
-reopened library's current show count no longer offers SHALL be replaced by the
-count's default mode before the row is painted or any fetch is issued. Keyboard
-cycling SHALL move the selection across every mode in row order and SHALL wrap from the last mode
+reopened library's current show count no longer offers SHALL be replaced by
+the count's default mode before the row is painted or any fetch is issued.
+Keyboard cycling SHALL move
+the selection across every mode in row order and SHALL wrap from the last mode
 to the first and from the first to the last. Mouse selection SHALL select the
 clicked mode.
 
