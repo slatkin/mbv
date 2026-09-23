@@ -906,6 +906,60 @@ mod tests {
     }
 
     #[test]
+    fn tv_latest_episode_rows_match_home_latest_text() {
+        let mut dated = make_item("Pilot", "Episode");
+        dated.id = "episode-1".into();
+        dated.series_name = "Example Show".into();
+        dated.index_number = 3;
+        dated.parent_index_number = 1;
+        dated.date_added = "2026-09-17T00:00:00Z".into();
+
+        let mut undated = make_item("Finale", "Episode");
+        undated.id = "episode-2".into();
+        undated.series_name = "Another Show".into();
+
+        let episodes = vec![dated, undated];
+        let home = owner_with_section(
+            HomeLatestSource::Emby("emby".into()),
+            episodes
+                .iter()
+                .cloned()
+                .map(|episode| QueueItem::Emby(Box::new(episode)))
+                .collect(),
+            &[],
+        );
+        let tv = super::super::tv_content::build_latest_episode_rows(&episodes);
+        let row_text = |rows: &[MediaListRow<String>]| {
+            rows.iter()
+                .map(|row| match row {
+                    MediaListRow::Item {
+                        primary,
+                        secondary,
+                        trailing,
+                        ..
+                    } => (primary.clone(), secondary.clone(), trailing.clone()),
+                    other => panic!("expected an item row, got {other:?}"),
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let home_text = row_text(home.test_active_rows());
+        let tv_text = row_text(&tv);
+        assert_eq!(tv_text, home_text);
+        assert_eq!(
+            home_text,
+            [
+                (
+                    "Example Show".into(),
+                    Some("Pilot".into()),
+                    Some(MediaListTrailing::Gutter("17 Sep".into())),
+                ),
+                ("Another Show".into(), Some("Finale".into()), None,),
+            ]
+        );
+    }
+
+    #[test]
     fn episode_rows_project_the_series_as_context_and_the_episode_title() {
         let mut episode = make_item("Pilot", "Episode");
         episode.id = "ep1".into();

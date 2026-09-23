@@ -27,9 +27,10 @@ use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit}
 use crate::app::render::{
     effective_sort_str, letter_bucket, LetterFilter, LetterFilterKind, TvWideRenderCtx,
 };
-use crate::app::ui_util::{fmt_duration_gutter, natural_sort_key};
+use crate::app::ui_util::{fmt_duration_gutter, fmt_publish_date_short, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::config::{EmbyLetterBucket, EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
+use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::Position;
 use time::{Date, Month};
 #[cfg(test)]
@@ -112,6 +113,34 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 duration: None,
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::from_emby(episode),
+            }
+        })
+        .collect()
+}
+
+/// TV Latest shares Home's split episode title and provider-date gutter.
+pub(super) fn build_latest_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
+    episodes
+        .iter()
+        .map(|episode| {
+            let item = QueueItem::Emby(Box::new(episode.clone()));
+            let parts = item.playback_title_parts(None);
+            let (primary, secondary) = match parts.context {
+                Some(context) => (context.text, Some(parts.title.text)),
+                None => (parts.title.text, None),
+            };
+            let trailing = crate::app::home_latest::provider_timestamp_secs(&item)
+                .map(fmt_publish_date_short)
+                .filter(|date| !date.is_empty())
+                .map(MediaListTrailing::Gutter);
+            MediaListRow::Item {
+                target: episode.id.clone(),
+                primary,
+                secondary,
+                trailing,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::from_queue_item(&item),
             }
         })
         .collect()
@@ -278,7 +307,7 @@ impl TvContent {
                 let today = time::OffsetDateTime::now_utc().date();
                 upcoming_episode_rows(&context.list.items, today)
             } else {
-                build_episode_rows(&context.list.items)
+                build_latest_episode_rows(&context.list.items)
             }
         } else {
             let grouped = !self.inline_search.is_active()
