@@ -3,12 +3,13 @@ use crate::app::tests::*;
 use rstest::rstest;
 
 #[rstest]
-#[case(mbv_core::config::TvContentMode::Latest)]
-#[case(mbv_core::config::TvContentMode::Upcoming)]
-#[case(mbv_core::config::TvContentMode::All)]
-#[case(mbv_core::config::TvContentMode::Range(1))]
+#[case::latest(mbv_core::config::TvContentMode::Latest, 301)]
+#[case::upcoming(mbv_core::config::TvContentMode::Upcoming, 301)]
+#[case::all(mbv_core::config::TvContentMode::All, 300)]
+#[case::range(mbv_core::config::TvContentMode::Range(1), 301)]
 fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
     #[case] mode: mbv_core::config::TvContentMode,
+    #[case] library_total: usize,
 ) {
     let mut saved = crate::config::LibraryPositionLevel {
         parent_id: "lib-tv".into(),
@@ -17,7 +18,7 @@ fn tv_content_mode_save_restore_round_trip_keeps_mode_and_content(
         sort_by: "SortName".into(),
         sort_order: "Ascending".into(),
         tv_content_mode: Some(mode.clone()),
-        library_total: Some(301),
+        library_total: Some(library_total),
         ..Default::default()
     };
     let item = make_item("Restored episode", "Episode");

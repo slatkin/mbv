@@ -86,6 +86,24 @@ pub(crate) fn letter_bucket(item: &mbv_core::api::EmbyItem, total: usize) -> Str
 /// used by `use_letter_groups` in `list.rs`.
 pub(crate) const LIBRARY_PILL_THRESHOLD: usize = 300;
 
+pub(crate) fn resolve_tv_content_mode(
+    total: usize,
+    restored: Option<&mbv_core::config::TvContentMode>,
+) -> mbv_core::config::TvContentMode {
+    let large = total > LIBRARY_PILL_THRESHOLD;
+    match restored {
+        Some(mbv_core::config::TvContentMode::All) if large => {
+            mbv_core::config::TvContentMode::Latest
+        }
+        Some(mbv_core::config::TvContentMode::Range(_)) if !large => {
+            mbv_core::config::TvContentMode::All
+        }
+        Some(mode) => mode.clone(),
+        None if large => mbv_core::config::TvContentMode::Latest,
+        None => mbv_core::config::TvContentMode::All,
+    }
+}
+
 /// The letter-range pill buckets, in display order. Single source of truth
 /// for both the pill labels and the Emby `NameStartsWithOrGreater` /
 /// `NameLessThan` fetch bounds, so they can't drift apart. Mirrors the range

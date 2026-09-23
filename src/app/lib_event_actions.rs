@@ -90,12 +90,8 @@ impl App {
             lib.library_total = Some(total);
         }
         if is_tv {
+            let mode = super::render::resolve_tv_content_mode(total, None);
             let large = total > super::render::LIBRARY_PILL_THRESHOLD;
-            let mode = if large {
-                mbv_core::config::TvContentMode::Latest
-            } else {
-                mbv_core::config::TvContentMode::All
-            };
             if let Some(lib) = self.libs.get_mut(lib_idx) {
                 lib.tv_content_mode = Some(mode.clone());
                 if let Some(level) = lib.nav_stack.last_mut() {
@@ -272,21 +268,21 @@ impl App {
             .collect();
         if let Some(root) = position.levels.first_mut() {
             root.library_total = library_total;
-            root.tv_content_mode = requested_position
-                .levels
-                .first()
-                .and_then(|level| level.tv_content_mode.clone())
-                .or_else(|| {
-                    (self.libs[lib_idx].library.collection_type == "tvshows").then(|| {
-                        if library_total
-                            .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
-                        {
-                            mbv_core::config::TvContentMode::Latest
-                        } else {
-                            mbv_core::config::TvContentMode::All
-                        }
-                    })
+            root.tv_content_mode =
+                (self.libs[lib_idx].library.collection_type == "tvshows").then(|| {
+                    super::render::resolve_tv_content_mode(
+                        library_total.unwrap_or_default(),
+                        requested_position
+                            .levels
+                            .first()
+                            .and_then(|level| level.tv_content_mode.as_ref()),
+                    )
                 });
+            if let Some(mbv_core::config::TvContentMode::Range(index)) = &root.tv_content_mode {
+                root.letter_filter_index = Some(*index);
+            } else if root.tv_content_mode.is_some() {
+                root.letter_filter_index = None;
+            }
         }
         // A restore an armed pending Series landing is waiting on is never
         // stale: the landing spawned it and cannot retry until it applies,

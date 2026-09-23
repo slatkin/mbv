@@ -86,8 +86,21 @@ impl App {
             .get(lib_idx)
             .filter(|lib| !lib.nav_stack.is_empty())
             .map(|lib| lib.library_position_snapshot());
-        let saved = self.saved_library_position(lib_idx);
-        if current.as_ref() == saved.as_ref() {
+        let mut saved = self.saved_library_position(lib_idx);
+        let is_tv = self.libs[lib_idx].library.collection_type == "tvshows";
+        let saved_mode_is_stale = saved
+            .as_ref()
+            .and_then(|position| position.levels.first())
+            .is_some_and(|root| match root.tv_content_mode.as_ref() {
+                Some(mbv_core::config::TvContentMode::All) => root
+                    .library_total
+                    .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD),
+                Some(mbv_core::config::TvContentMode::Range(_)) => root
+                    .library_total
+                    .is_some_and(|total| total <= super::render::LIBRARY_PILL_THRESHOLD),
+                _ => false,
+            });
+        if current.as_ref() == saved.as_ref() && (!is_tv || !saved_mode_is_stale) {
             if current.is_none() {
                 self.ensure_lib_loaded_for(lib_idx);
             } else if self.is_feed_home_video_library(lib_idx) {
@@ -102,6 +115,27 @@ impl App {
                 self.maybe_refresh_feed_groups_after_refresh(lib_idx);
             }
             return;
+        }
+        if is_tv {
+            if let Some(position) = saved.as_mut() {
+                if let Some(root) = position.levels.first_mut() {
+                    let mode = super::render::resolve_tv_content_mode(
+                        root.library_total.unwrap_or_default(),
+                        root.tv_content_mode.as_ref(),
+                    );
+                    root.letter_filter_index = match mode {
+                        mbv_core::config::TvContentMode::Range(index) => Some(index),
+                        _ => None,
+                    };
+                    root.tv_content_mode = Some(mode);
+                }
+            }
+        }
+        if let Some(position) = saved
+            .as_ref()
+            .filter(|position| !position.levels.is_empty())
+        {
+            self.replace_saved_library_position(lib_idx, position.clone());
         }
         match saved {
             Some(position) if !position.levels.is_empty() => {

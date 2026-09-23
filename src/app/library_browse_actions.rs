@@ -508,18 +508,13 @@ impl App {
                         self.libs[idx].library.collection_type.as_str(),
                     );
                     self.libs[idx].library_total = root.library_total;
-                    self.libs[idx].tv_content_mode = root.tv_content_mode.clone().or_else(|| {
+                    self.libs[idx].tv_content_mode =
                         (self.libs[idx].library.collection_type == "tvshows").then(|| {
-                            if root
-                                .library_total
-                                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
-                            {
-                                mbv_core::config::TvContentMode::Latest
-                            } else {
-                                mbv_core::config::TvContentMode::All
-                            }
-                        })
-                    });
+                            super::render::resolve_tv_content_mode(
+                                root.library_total.unwrap_or_default(),
+                                root.tv_content_mode.as_ref(),
+                            )
+                        });
                     self.libs[idx].nav_stack.push(BrowseLevel {
                         parent_id: root.parent_id.clone(),
                         title: root.title.clone(),
@@ -614,17 +609,11 @@ impl App {
                 visible_rows,
                 filter_kind,
                 |saved_level| {
-                    let tv_mode = saved_level.tv_content_mode.clone().or_else(|| {
-                        (filter_kind == super::render::LetterFilterKind::Tv).then(|| {
-                            if saved_level
-                                .library_total
-                                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
-                            {
-                                mbv_core::config::TvContentMode::Latest
-                            } else {
-                                mbv_core::config::TvContentMode::All
-                            }
-                        })
+                    let tv_mode = (filter_kind == super::render::LetterFilterKind::Tv).then(|| {
+                        super::render::resolve_tv_content_mode(
+                            saved_level.library_total.unwrap_or_default(),
+                            saved_level.tv_content_mode.as_ref(),
+                        )
                     });
                     if matches!(tv_mode, Some(mbv_core::config::TvContentMode::Latest)) {
                         let items = client.get_latest_episodes(&saved_level.parent_id, 30)?;

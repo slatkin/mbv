@@ -190,17 +190,11 @@ impl BrowseLevel {
                     crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
                 }),
             },
-            tv_content_mode: saved.tv_content_mode.clone().or_else(|| {
-                (filter_kind == crate::app::render::LetterFilterKind::Tv).then(|| {
-                    if saved
-                        .library_total
-                        .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD)
-                    {
-                        mbv_core::config::TvContentMode::Latest
-                    } else {
-                        mbv_core::config::TvContentMode::All
-                    }
-                })
+            tv_content_mode: (filter_kind == crate::app::render::LetterFilterKind::Tv).then(|| {
+                crate::app::render::resolve_tv_content_mode(
+                    saved.library_total.unwrap_or_default(),
+                    saved.tv_content_mode.as_ref(),
+                )
             }),
             music_grouping: None,
         }

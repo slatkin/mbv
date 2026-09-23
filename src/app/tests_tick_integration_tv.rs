@@ -12,9 +12,11 @@ use crate::app::components::tv_content::TvContent;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::render::make_movie_app;
+use crate::app::tests::install_test_emby;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_events::NavigateLanding;
 use crate::app::types_playback::{HomeLatestSection, HomeLatestSource};
+use mbv_core::mock_http::MockHttp;
 use mbv_core::playback_queue::QueueItem;
 use crate::app::{LibEvent, PanelFocus, PanelMode, TabSelection};
 use std::time::{Duration, Instant};
@@ -233,6 +235,141 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_tv_pill() {
             id: "series-zulu".into()
         })
     );
+}
+
+#[rstest]
+#[case::saved_all_grown_large(
+    mbv_core::config::TvContentMode::All,
+    301,
+    mbv_core::config::TvContentMode::Latest,
+    "IncludeItemTypes=Episode",
+)]
+#[case::saved_s_z_shrunk_small(
+    mbv_core::config::TvContentMode::Range(2),
+    300,
+    mbv_core::config::TvContentMode::All,
+    "IncludeItemTypes=Series",
+)]
+fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
+    #[case] saved_mode: mbv_core::config::TvContentMode,
+    #[case] current_total: usize,
+    #[case] expected_mode: mbv_core::config::TvContentMode,
+    #[case] expected_route: &str,
+) {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = make_movie_app();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::Both;
+    app.terminal_width = 160;
+    app.terminal_height = 50;
+    app.libs[0].library.collection_type = "tvshows".into();
+    app.libs[0].nav_stack.clear();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    let saved = mbv_core::config::LibraryPosition {
+        levels: vec![mbv_core::config::LibraryPositionLevel {
+            parent_id: "lib-movies".into(),
+            title: "TV".into(),
+            item_types: Some("Series".into()),
+            letter_filter_index: match &saved_mode {
+                mbv_core::config::TvContentMode::Range(index) => Some(*index),
+                _ => None,
+            },
+            tv_content_mode: Some(saved_mode),
+            library_total: Some(current_total),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    app.replace_saved_library_position(0, saved);
+    let response_item = match &expected_mode {
+        mbv_core::config::TvContentMode::Latest => {
+            r#"{"Id":"episode-1","Name":"Latest","Type":"Episode"}"#
+        }
+        _ => r#"{"Id":"series-1","Name":"Series","Type":"Series"}"#,
+    };
+    http.respond(
+        200,
+        &format!("{{\"Items\":[{response_item}],\"TotalRecordCount\":1}}"),
+    );
+
+    app.activate_library_position(0);
+    assert_eq!(app.libs[0].tv_content_mode, Some(expected_mode.clone()));
+    assert_eq!(
+        app.saved_library_position(0)
+            .unwrap()
+            .levels[0]
+            .tv_content_mode,
+        Some(expected_mode.clone()),
+        "the repaired mode is saved before the restore worker fetches"
+    );
+
+    let mut harness = TickHarness::new(app);
+    draw(&mut harness);
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].tv_content_mode,
+        Some(expected_mode.clone()),
+        "the pending restore paints the clamped mode before the fetch completes"
+    );
+    assert_eq!(
+        panel(&harness).test_selector_hits().regions().len(),
+        3 + usize::from(current_total > 300) * 2
+    );
+
+    let restored = harness
+        .model()
+        .app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("restored library event");
+    assert!(matches!(restored, LibEvent::RestoreLibraryPosition { .. }));
+    harness.model_mut().app.handle_lib_event(restored);
+    draw(&mut harness);
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].tv_content_mode,
+        Some(expected_mode.clone())
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('j'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+    draw(&mut harness);
+    assert_eq!(
+        harness.model().app.libs[0].tv_content_mode,
+        Some(expected_mode),
+        "the mounted TV owner receives the clamped mode through the shell sync pass"
+    );
+    assert_eq!(
+        panel(&harness).test_selector_hits().regions().len(),
+        3 + usize::from(current_total > 300) * 2
+    );
+
+    let requests = http.requests();
+    assert!(
+        requests.iter().any(|request| request.contains(expected_route)),
+        "expected {expected_route} request, got {requests:?}"
+    );
+    if current_total <= 300 {
+        assert!(requests.iter().all(|request| !request.contains("NameStartsWith")));
+    }
 }
 
 /// The one TV owner (task 8.4, design D2): registered inside the mounted
