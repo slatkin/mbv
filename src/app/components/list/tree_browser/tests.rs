@@ -819,6 +819,51 @@ fn shared_view_paints_depth_metadata_bars_and_scrollbar_without_state_glyphs() {
 }
 
 #[test]
+fn grouped_tree_stripes_items_only_and_reset_at_each_heading() {
+    let mut browser = TreeBrowser::new();
+    browser
+        .reconcile([
+            TreeEntry::Heading("First group".into()),
+            TreeEntry::Node(node(Target::Root, None)),
+            TreeEntry::Node(node(Target::Branch, None)),
+            TreeEntry::Spacer,
+            TreeEntry::Heading("Second group".into()),
+            TreeEntry::Node(node(Target::Other, None)),
+            TreeEntry::Node(node(Target::Missing, None)),
+        ])
+        .unwrap();
+    browser.focused = false;
+
+    let mut terminal = Terminal::new(TestBackend::new(20, 8)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 8)))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let zebra =
+        crate::app::palette::surface_colors(crate::app::palette::Surface::QueueColumn, false).fill;
+    let base =
+        crate::app::palette::surface_colors(crate::app::palette::Surface::QueuePanel, false).fill;
+
+    for (row, expected) in [
+        (0, base), // heading
+        (1, zebra),
+        (2, base),
+        (3, zebra), // spacer retains its existing fill behavior
+        (4, base),  // heading
+        (5, zebra), // parity resets at the heading
+        (6, base),
+    ] {
+        assert_eq!(buffer[(2, row)].bg, expected, "row {row}");
+    }
+
+    browser.viewport_offset = 5;
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 2)))
+        .unwrap();
+    assert_eq!(terminal.backend().buffer()[(2, 0)].bg, zebra);
+}
+
+#[test]
 fn grouped_tree_zebra_parity_survives_scrolling_past_its_heading() {
     let mut browser = TreeBrowser::new();
     browser
@@ -830,21 +875,22 @@ fn grouped_tree_zebra_parity_survives_scrolling_past_its_heading() {
             TreeEntry::Node(node(Target::Branch, None)),
         ])
         .unwrap();
+    browser.apply(TreeOperation::Select(Target::Branch));
     browser.focused = false;
 
     let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
     terminal
         .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 5)))
         .unwrap();
-    let branch_fill_before_scroll = terminal.backend().buffer()[(0, 4)].bg;
+    let zebra =
+        crate::app::palette::surface_colors(crate::app::palette::Surface::QueueColumn, false).fill;
+    assert_eq!(terminal.backend().buffer()[(0, 4)].bg, zebra);
 
     browser.viewport_offset = 4;
     terminal
-        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 5)))
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(0, 0, 20, 1)))
         .unwrap();
-    let branch_fill_after_scroll = terminal.backend().buffer()[(0, 0)].bg;
-
-    assert_eq!(branch_fill_after_scroll, branch_fill_before_scroll);
+    assert_eq!(terminal.backend().buffer()[(0, 0)].bg, zebra);
 }
 
 #[test]

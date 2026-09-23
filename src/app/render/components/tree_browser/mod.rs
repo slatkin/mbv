@@ -81,10 +81,17 @@ pub(in crate::app) fn render_tree_browser(
         };
         let fill = if full_width {
             palette::SELECTED_ROW_BG
-        } else if row.root_index.saturating_sub(row.group_root_index) % 2 == 0 {
-            zebra
         } else {
-            base
+            match row.kind {
+                TreePaintRowKind::Heading => base,
+                TreePaintRowKind::Node if row.zebra_striped => zebra,
+                TreePaintRowKind::Spacer
+                    if row.root_index.saturating_sub(row.group_root_index) % 2 == 0 =>
+                {
+                    zebra
+                }
+                TreePaintRowKind::Node | TreePaintRowKind::Spacer => base,
+            }
         };
         let (prefix, title) = match row.kind {
             TreePaintRowKind::Node => (" ".repeat(row.depth.saturating_mul(2)), row.title.clone()),

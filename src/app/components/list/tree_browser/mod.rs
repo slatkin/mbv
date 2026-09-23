@@ -74,6 +74,7 @@ pub(crate) struct TreePaintRow {
     pub(crate) depth: usize,
     pub(crate) root_index: usize,
     pub(crate) group_root_index: usize,
+    pub(crate) zebra_striped: bool,
     pub(crate) selected: bool,
     pub(crate) marked: bool,
     pub(crate) aggregate_mark: TreeAggregateMark,

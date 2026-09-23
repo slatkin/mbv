@@ -603,6 +603,12 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     pub(super) fn visible_rows(&self, visible_rows: &[VisibleRow]) -> Vec<TreePaintRow> {
         let mut rows = Vec::new();
         let mut group_root_index = 0;
+        let grouped = self.root_structures.values().any(|structures| {
+            structures
+                .iter()
+                .any(|structure| matches!(structure, StructuralRow::Heading(_)))
+        });
+        let mut group_item_index = 0;
         for (flow_index, &visible) in visible_rows.iter().enumerate() {
             if let VisibleRow::Structural(root, index) = visible {
                 let Some(entry) = self.arena.get(&root) else {
@@ -618,6 +624,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 let (kind, title) = match structure {
                     StructuralRow::Heading(title) => {
                         group_root_index = entry.root_index;
+                        group_item_index = 0;
                         (super::TreePaintRowKind::Heading, title.clone())
                     }
                     StructuralRow::Spacer => (super::TreePaintRowKind::Spacer, String::new()),
@@ -631,6 +638,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                         depth: 0,
                         root_index: entry.root_index,
                         group_root_index,
+                        zebra_striped: false,
                         selected: false,
                         marked: false,
                         aggregate_mark: TreeAggregateMark::None,
@@ -640,9 +648,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 }
                 continue;
             }
-            if flow_index < self.viewport_offset {
-                continue;
-            }
             let VisibleRow::Node(id) = visible else {
                 continue;
             };
@@ -650,6 +655,16 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 continue;
             };
             let target = &entry.node.target;
+            let zebra_striped = if grouped {
+                let striped = group_item_index % 2 == 0;
+                group_item_index += 1;
+                striped
+            } else {
+                entry.root_index.saturating_sub(group_root_index) % 2 == 0
+            };
+            if flow_index < self.viewport_offset {
+                continue;
+            }
             let marked = self.marks.contains(target);
             let aggregate_mark = if entry.node.mark_policy == TreeMarkPolicy::Aggregate {
                 match self.aggregate_mark_state_for(target) {
@@ -672,6 +687,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 depth: entry.depth,
                 root_index: entry.root_index,
                 group_root_index,
+                zebra_striped,
                 selected: self.selected.as_ref() == Some(target),
                 marked,
                 aggregate_mark,
