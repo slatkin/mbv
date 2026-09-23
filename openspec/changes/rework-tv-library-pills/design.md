@@ -149,6 +149,24 @@ a small library cycles `Latest → Upcoming → All`, and a large one cycles
 selects the clicked row's mode. This keeps the cycling and the painted row from
 diverging.
 
+### D8: The Latest section is one shell-owned snapshot (ADDED 2026-09-23, user ruling)
+
+Home's TV `Latest` section and the TV library's `Latest` mode are two views of
+one list, not two fetches of one feed. The shell owns a single snapshot of the
+newest-episodes items per library view — the same ownership pattern as the
+acknowledged `HomeLatestSource` set (D5). Both surfaces render from that
+snapshot; whichever surface triggers a load/refresh updates it once, and the
+other surface shows the updated items through the ordinary shell sync pass
+without issuing its own request. The new-content marker stays launch-window-
+based (D5): a refresh updates items, never the marker.
+
+Rationale: same-request + same-rendering parity (D4, and the 9.5 differential
+test) still let the two surfaces hold independently fetched copies that drift
+when loaded at different times; the user requires one list that changes on
+either surface. Alternative considered: a shared fetch cache with per-surface
+staleness — rejected as two copies plus a sync policy, which is the defect
+again.
+
 ## Risks / Trade-offs
 
 - **`/Shows/Upcoming` may include episodes not playable from the library.** →

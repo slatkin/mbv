@@ -161,3 +161,17 @@ The same items SHALL produce the same row text (primary, secondary, trailing) in
 #### Scenario: Differential rendering
 - **WHEN** identical items are fed to both render paths
 - **THEN** the row text is identical on both surfaces
+
+### Requirement: Home and the library present one shared Latest list (ADDED 2026-09-23)
+
+Home's `Latest` section for a TV library and the library's `Latest` mode SHALL present one shared, shell-owned snapshot of that library's newest episodes; neither surface SHALL hold or fetch its own independent copy. A load or refresh issued by either surface SHALL update the shared snapshot once, and the other surface SHALL present the updated items without issuing its own fetch. The new-content marker SHALL remain keyed to the launch window, so a refresh SHALL NOT change the marker.
+
+#### Scenario: A load on one surface is visible on both
+- **WHEN** the `Latest` section is loaded or refreshed from either Home or the library's `Latest` mode
+- **THEN** both surfaces present the same items
+- **AND** the section was fetched once, not once per surface
+
+#### Scenario: A refresh propagates without a second fetch
+- **WHEN** one surface refreshes the shared `Latest` snapshot while the other surface is also presented in the same run
+- **THEN** the other surface shows the refreshed items through the shell sync pass
+- **AND** it issues no fetch of its own
