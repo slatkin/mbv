@@ -573,6 +573,13 @@ fn move_up_on_feed_cursor_preserves_feed_slots(make_feed_entry: mbv_core::playba
 fn unified_queue_event_preserves_owner_slot_ids_and_source(make_feed_entry: mbv_core::playback_queue::FeedEntry) {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
+    // The shell's queue source is authoritative; the owner snapshot's copy
+    // can be stale (Save As / non-playing loads never resubmit it) and must
+    // not overwrite it.
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("pl-1".into()),
+        name: "Taskmaster".into(),
+    };
     let state = mbv_core::ctrl::UnifiedQueueStateData {
         status: Default::default(),
         slots: vec![
@@ -597,5 +604,11 @@ fn unified_queue_event_preserves_owner_slot_ids_and_source(make_feed_entry: mbv_
     assert_eq!(app.player_tab.queue_cursor, 1);
     assert_eq!(app.player_tab.slot_id_at(0).unwrap().raw(), 41);
     assert_eq!(app.player_tab.slot_id_at(1).unwrap().raw(), 97);
-    assert_eq!(app.queue_source, crate::config::QueueSource::Remote);
+    assert_eq!(
+        app.queue_source,
+        crate::config::QueueSource::Playlist {
+            id: Some("pl-1".into()),
+            name: "Taskmaster".into(),
+        }
+    );
 }

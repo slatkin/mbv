@@ -422,10 +422,16 @@ impl App {
                         .unwrap_or(active_cursor)
                 };
 
-                let source = unified.source.clone();
+                // Adopt only the owner's queue slots and coordinates. The
+                // snapshot's `source` is the owner's copy of the queue-source
+                // label, which goes stale whenever the shell changes the
+                // source without a resubmission (Save As, a non-playing
+                // playlist load) — adopting it here reverted the Loaded
+                // Playlist status to a previously loaded playlist on every
+                // queue edit. The shell's `queue_source` is maintained by
+                // every source-changing path and stays authoritative.
                 let queue = self.playback_queue_mut();
                 queue.set_unified_state(&unified, cursor);
-                self.queue_source = source;
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always

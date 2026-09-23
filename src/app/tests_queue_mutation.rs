@@ -628,6 +628,36 @@ fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue()
 }
 
 #[test]
+fn queue_broadcast_does_not_revert_saved_playlist_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_local_daemon_app_stub(make_items(4));
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("pl-taskmaster".into()),
+        name: "Taskmaster".into(),
+    };
+
+    // The daemon acks a queue edit with a snapshot whose source is still
+    // whatever it last stored (e.g. a previously loaded playlist): Save As
+    // and non-playing loads change the shell's source without a
+    // resubmission, so the owner's copy goes stale.
+    let mut unified = emby_unified_state(&app.player_tab.emby_items(), 0);
+    unified.source = crate::config::QueueSource::Playlist {
+        id: Some("pl-qixl".into()),
+        name: "QIXL".into(),
+    };
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(unified)));
+
+    assert_eq!(
+        app.queue_source,
+        crate::config::QueueSource::Playlist {
+            id: Some("pl-taskmaster".into()),
+            name: "Taskmaster".into(),
+        },
+        "owner queue broadcasts must not overwrite the shell's queue source"
+    );
+}
+
+#[test]
 fn removing_non_active_item_keeps_cursor_off_now_playing_after_daemon_ack() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_local_daemon_app_stub(make_items(4));
