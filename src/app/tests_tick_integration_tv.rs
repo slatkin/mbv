@@ -437,6 +437,18 @@ fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() 
         !latest.has_new_content,
         "refresh must not restore a marker after Latest was selected"
     );
+    assert_eq!(
+        harness.model().home_content.latest[0].items[0]
+            .as_emby()
+            .unwrap()
+            .name,
+        "Old episode",
+        "the destination refresh must not mirror its snapshot into Home"
+    );
+    assert!(
+        harness.model().home_content.latest[0].has_new_content,
+        "the TV destination marker must not acknowledge Home's independent marker"
+    );
     let latest_fetches = http
         .requests()
         .iter()

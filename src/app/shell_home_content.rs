@@ -29,14 +29,14 @@ impl Model {
     pub(super) fn assign_home_content(&mut self, mut content: HomeContent) {
         content.feed_names = self.resolve_home_feed_names(&content);
         recompute_home_latest_markers(&mut content, self.app.home_latest_launch_window);
-        self.merge_tv_latest_snapshots_from_home(&mut content);
+        self.merge_tv_latest_snapshots_from_home(&content);
         self.home_content = content;
         self.project_tv_latest_snapshots_to_libraries();
         self.push_home_content();
     }
 
-    fn merge_tv_latest_snapshots_from_home(&mut self, content: &mut HomeContent) {
-        for section in &mut content.latest {
+    fn merge_tv_latest_snapshots_from_home(&mut self, content: &HomeContent) {
+        for section in &content.latest {
             let super::types_playback::HomeLatestSource::Emby(library_id) = &section.source else {
                 continue;
             };
@@ -56,7 +56,6 @@ impl Model {
                 self.app.home_latest_launch_window,
                 &self.acknowledged_home_latest_sources,
             );
-            section.has_new_content = snapshot.has_new_content;
         }
     }
 
@@ -93,16 +92,6 @@ impl Model {
             self.app.home_latest_launch_window,
             &self.acknowledged_home_latest_sources,
         );
-        if let Some(section) = self
-            .home_content
-            .latest
-            .iter_mut()
-            .find(|section| section.source == source)
-        {
-            section.title.clone_from(&snapshot.title);
-            section.items.clone_from(&snapshot.items);
-            section.has_new_content = snapshot.has_new_content;
-        }
         self.project_tv_latest_snapshots_to_libraries();
         self.push_home_content();
     }
