@@ -81,6 +81,11 @@ pub(super) enum LibEvent {
         parent_id: String,
         level: Box<BrowseLevel>,
     },
+    EmbyLatestSnapshotFetched {
+        library_id: String,
+        title: String,
+        items: Vec<EmbyItem>,
+    },
     PageAppended {
         lib_idx: usize,
         parent_id: String,

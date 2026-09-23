@@ -237,7 +237,7 @@ impl Model {
                 .get(&library_id)
                 .map(|snapshot| snapshot.items.clone())
                 .unwrap_or(items);
-            self.update_tv_latest_snapshot(library_id, title, items);
+            self.update_emby_latest_snapshot(library_id, title, items);
         }
     }
 
@@ -394,6 +394,22 @@ impl Model {
             while let Ok(ev) = self.app.lib_rx.try_recv() {
                 had_events = true;
                 match ev {
+                    super::super::LibEvent::EmbyLatestSnapshotFetched {
+                        library_id,
+                        title,
+                        items,
+                    } => {
+                        self.update_emby_latest_snapshot(
+                            library_id,
+                            title,
+                            items
+                                .into_iter()
+                                .map(|item| {
+                                    mbv_core::playback_queue::QueueItem::Emby(Box::new(item))
+                                })
+                                .collect(),
+                        );
+                    }
                     super::super::LibEvent::Loaded {
                         lib_idx,
                         parent_id,
@@ -428,7 +444,7 @@ impl Model {
                             level,
                         });
                         if let Some((library_id, title, items)) = latest {
-                            self.update_tv_latest_snapshot(library_id, title, items);
+                            self.update_emby_latest_snapshot(library_id, title, items);
                         }
                     }
                     // Recursive album activation used to write `Some(0)` on

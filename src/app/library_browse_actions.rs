@@ -809,6 +809,28 @@ impl App {
         );
     }
 
+    pub(super) fn spawn_emby_latest_snapshot(&self, library_id: String, title: String) {
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let items = client.get_latest(&library_id, 30);
+            match items {
+                Ok(items) => {
+                    let _ = tx.send(LibEvent::EmbyLatestSnapshotFetched {
+                        library_id,
+                        title,
+                        items,
+                    });
+                }
+                Err(error) => {
+                    let _ = tx.send(LibEvent::Error(error));
+                }
+            }
+        });
+    }
+
     pub(super) fn spawn_tv_upcoming(&self, lib_idx: usize, parent_id: String, title: String) {
         self.spawn_tv_content(
             lib_idx,

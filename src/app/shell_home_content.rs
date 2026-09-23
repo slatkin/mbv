@@ -60,7 +60,7 @@ impl Model {
         }
     }
 
-    pub(super) fn update_tv_latest_snapshot(
+    pub(super) fn update_emby_latest_snapshot(
         &mut self,
         library_id: String,
         title: String,

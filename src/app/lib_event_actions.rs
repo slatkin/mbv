@@ -996,10 +996,11 @@ impl App {
             LibEvent::QueueEnriched { items } => {
                 let _ = self.merge_refreshed_queue(QueueScope::Local, items);
             }
-            // Shell-intercepted Home content-delivery variants (task 5.3d):
-            // the lib_rx drain handles them at the Model boundary, so they
-            // are unreachable here; the arms keep the exhaustive match total.
-            LibEvent::HomeContentRefreshed(_)
+            // Shell-intercepted content-delivery variants: the lib_rx drain
+            // handles them at the Model boundary, so they are unreachable
+            // here; the arms keep the exhaustive match total.
+            LibEvent::EmbyLatestSnapshotFetched { .. }
+            | LibEvent::HomeContentRefreshed(_)
             | LibEvent::HomeContentCleared
             | LibEvent::AudiobookshelfLatestRebuilt(_)
             | LibEvent::FeedsLatestRebuilt(_) => {}

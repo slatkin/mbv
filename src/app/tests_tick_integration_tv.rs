@@ -94,7 +94,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
         };
     let mut at_launch = crate::app::tests::make_item("At launch", "Episode");
     at_launch.date_added = "1970-01-01T00:03:20Z".into();
-    harness.model_mut().update_tv_latest_snapshot(
+    harness.model_mut().update_emby_latest_snapshot(
         source.clone(),
         "TV".into(),
         vec![QueueItem::Emby(Box::new(at_launch))],
@@ -112,7 +112,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
     at_current.date_added = "1970-01-01T00:03:20Z".into();
     let mut after_current = crate::app::tests::make_item("After current launch", "Episode");
     after_current.date_added = "1970-01-01T00:03:21Z".into();
-    harness.model_mut().update_tv_latest_snapshot(
+    harness.model_mut().update_emby_latest_snapshot(
         source.clone(),
         "TV".into(),
         vec![
@@ -125,7 +125,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
 
     let mut only_future = crate::app::tests::make_item("Future", "Episode");
     only_future.date_added = "1970-01-01T00:03:21Z".into();
-    harness.model_mut().update_tv_latest_snapshot(
+    harness.model_mut().update_emby_latest_snapshot(
         source.clone(),
         "TV".into(),
         vec![QueueItem::Emby(Box::new(only_future))],
@@ -149,7 +149,7 @@ fn preselected_latest_acknowledges_snapshot_that_arrives_later() {
 
     let mut arriving = crate::app::tests::make_item("Arriving episode", "Episode");
     arriving.date_added = "1970-01-01T00:02:00Z".into();
-    harness.model_mut().update_tv_latest_snapshot(
+    harness.model_mut().update_emby_latest_snapshot(
         "lib-movies".into(),
         "TV".into(),
         vec![QueueItem::Emby(Box::new(arriving))],
@@ -240,6 +240,103 @@ fn shrunken_tv_restore_does_not_replace_latest_snapshot_with_stale_items_through
 }
 
 #[test]
+fn non_tv_library_refresh_populates_only_its_latest_snapshot_without_home() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    http.respond(
+        200,
+        r#"[{"Id":"fresh-movie","Name":"Fresh movie","Type":"Movie"}]"#,
+    );
+    let mut harness = tv_harness();
+    let mut config = harness.model().app.config.lock().unwrap().clone();
+    config.emby_setup = Some(mbv_core::config::EmbySetup::new(
+        "http://127.0.0.1:1",
+        "user-1",
+    ));
+    install_test_emby(&mut harness.model_mut().app, config);
+    let mut client = harness
+        .model()
+        .app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    client.user_id = "user-1".into();
+    client.config.server_url = "http://127.0.0.1:1".into();
+    harness.model_mut().app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(
+        std::sync::Arc::new(std::sync::Mutex::new(client)),
+    );
+    let library = &mut harness.model_mut().app.libs[0];
+    library.library.id = "movies-id".into();
+    library.library.name = "Movies".into();
+    library.library.collection_type = "movies".into();
+    harness
+        .model_mut()
+        .tv_latest_snapshots
+        .insert("tv-id".into(), HomeLatestSection {
+            title: "TV".into(),
+            source: HomeLatestSource::Emby("tv-id".into()),
+            items: vec![QueueItem::Emby(Box::new(crate::app::tests::make_item(
+                "TV episode",
+                "Episode",
+            )))],
+            has_new_content: false,
+        });
+    assert!(harness.model().home_content.latest.is_empty());
+    // Isolate the library-scoped Latest request from the independent current-level refresh.
+    harness.model_mut().app.libs[0].nav_stack.clear();
+
+    harness.model_mut().app.refresh_lib(0);
+    loop {
+        let event = harness
+            .model()
+            .app
+            .lib_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("Emby latest snapshot completion");
+        match event {
+            LibEvent::EmbyLatestSnapshotFetched {
+                library_id,
+                title,
+                items,
+            } => {
+                harness.model_mut().update_emby_latest_snapshot(
+                    library_id,
+                    title,
+                    items
+                        .into_iter()
+                        .map(|item| QueueItem::Emby(Box::new(item)))
+                        .collect(),
+                );
+                break;
+            }
+            other => harness.model_mut().app.handle_lib_event(other),
+        }
+    }
+
+    let requests = http.requests();
+    let latest_requests: Vec<_> = requests
+        .iter()
+        .filter(|request| request.contains("Items/Latest"))
+        .collect();
+    assert_eq!(latest_requests.len(), 1, "requests: {requests:?}");
+    assert!(latest_requests[0].contains("ParentId=movies-id"), "requests: {requests:?}");
+    assert_eq!(
+        harness.model().tv_latest_snapshots["movies-id"].items[0]
+            .as_emby()
+            .unwrap()
+            .id,
+        "fresh-movie"
+    );
+    assert_eq!(harness.model().tv_latest_snapshots["tv-id"].items[0].as_emby().unwrap().name, "TV episode");
+    assert!(harness.model().home_content.latest.is_empty());
+}
+
+#[test]
 fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() {
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
@@ -317,7 +414,7 @@ fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() 
         item.date_added = "1970-01-01T00:02:00Z".into();
     }
     harness.model_mut().app.handle_lib_event(event);
-    harness.model_mut().update_tv_latest_snapshot(
+    harness.model_mut().update_emby_latest_snapshot(
         "lib-movies".into(),
         "TV".into(),
         items,
@@ -466,7 +563,7 @@ fn tv_latest_selection_acknowledges_the_destination_marker_through_tick() {
     let mut item = crate::app::tests::make_item("New episode", "Episode");
     item.id = "new-episode".into();
     item.date_added = "1970-01-01T00:02:00Z".into();
-    harness.model_mut().update_tv_latest_snapshot(
+    harness.model_mut().update_emby_latest_snapshot(
         "lib-movies".into(),
         "Latest TV".into(),
         vec![QueueItem::Emby(Box::new(item))],
