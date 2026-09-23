@@ -158,6 +158,18 @@ impl Player {
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
         *self.shutdown_report_timeout.lock().unwrap() = None;
+        // Test builds (PlayerProxy::stub) must never construct the real
+        // external: the player thread's first act is `init_mpv`, a live
+        // libmpv/libav/GnuTLS handle whose initialization races process
+        // teardown when the test returns (glibc double-free / SIGSEGV,
+        // issue #757). The queue/status seeding above is what stub-backed
+        // tests assert; only the real player thread (and the internal
+        // command/wakeup plumbing only that thread serves) is skipped, so
+        // `cmd_tx` keeps pointing at whatever the stub installed (a spy or
+        // a dropped receiver).
+        if self.mpv_inhibited.load(Ordering::Relaxed) {
+            return true;
+        }
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
         let wakeup_pipe = make_wakeup_pipe();

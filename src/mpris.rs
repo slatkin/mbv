@@ -1,3 +1,9 @@
+// In test builds the D-Bus-serving machinery below is deliberately dead:
+// nothing may claim `org.mpris.MediaPlayer2.mbv` on the real session bus
+// from a test process (issue #757), so `start` is only reachable from
+// production. Production builds keep full dead-code checking.
+#![cfg_attr(test, allow(dead_code))]
+
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};

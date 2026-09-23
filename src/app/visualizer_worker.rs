@@ -456,9 +456,8 @@ pub(crate) fn join_worker(handle: JoinHandle<()>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{capture_frame_bytes, PipeWireWorker, StereoSample, StereoSampleBuffer};
+    use super::{capture_frame_bytes, StereoSample, StereoSampleBuffer};
     use pipewire::spa::param::audio::{AudioFormat, AudioInfoRaw};
-    use std::time::{Duration, Instant};
 
     #[test]
     fn overwrite_buffer_keeps_newest_complete_stereo_pairs() {
@@ -551,17 +550,5 @@ mod tests {
     fn sample_window_capacity_uses_negotiated_rate() {
         assert_eq!(StereoSampleBuffer::with_sample_rate(44_100).capacity, 1_455);
         assert_eq!(StereoSampleBuffer::with_sample_rate(48_000).capacity, 1_584);
-    }
-
-    #[test]
-    fn worker_failure_is_reported_or_shutdown_is_bounded() {
-        match PipeWireWorker::start() {
-            Ok(mut worker) => {
-                let started = Instant::now();
-                worker.stop();
-                assert!(started.elapsed() < Duration::from_secs(2));
-            }
-            Err(error) => assert!(!error.is_empty()),
-        }
     }
 }

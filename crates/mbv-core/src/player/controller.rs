@@ -81,6 +81,11 @@ pub struct Player {
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
     pub(super) wakeup_fd: Arc<Mutex<Option<WakeupWriter>>>,
     pub(super) pre_warmed_mpv: Arc<Mutex<Option<(Mpv, bool)>>>,
+    /// Test-only inhibit (`PlayerProxy::stub`): `submit_queue_slots` keeps its
+    /// queue/status seeding but never spawns the player thread, whose first
+    /// act is `init_mpv` — a real libmpv/libav/GnuTLS handle that unit tests
+    /// must not construct (it raced process teardown at test exit; issue #757).
+    pub(super) mpv_inhibited: AtomicBool,
     pub status: Arc<Mutex<PlayerStatus>>,
     pub(super) thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
     pub(super) ws_tx: Arc<Mutex<Option<crate::ws::WsSender>>>,
@@ -119,6 +124,7 @@ impl Player {
             cmd_tx: Arc::new(Mutex::new(None)),
             wakeup_fd: Arc::new(Mutex::new(None)),
             pre_warmed_mpv: Arc::new(Mutex::new(None)),
+            mpv_inhibited: AtomicBool::new(false),
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
             ws_tx: Arc::new(Mutex::new(ws_tx)),

@@ -292,6 +292,7 @@ pub fn clear_image_disk_cache_prefix(prefix: &str) {
     }
 }
 
+#[cfg(not(test))]
 pub fn evict_old_image_cache() {
     std::thread::spawn(|| {
         let dir = image_disk_cache_dir();

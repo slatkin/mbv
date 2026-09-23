@@ -47,8 +47,14 @@ impl App {
         .with_video_cache(config.video_cache_forward_mb, config.video_cache_back_mb);
         let (_ws_tx, ws_rx) = mpsc::channel();
         let (_abs_tx, abs_rx) = mpsc::channel();
+        let player = PlayerProxy::local(raw_player, config.always_play_next);
+        // Test builds must never construct the real external (issue #757):
+        // a fall-through test that plays locally would otherwise cold-start
+        // a real mpv handle that races process teardown.
+        #[cfg(test)]
+        player.inhibit_mpv();
         Ok(SuspendedLocalSession {
-            player: PlayerProxy::local(raw_player, config.always_play_next),
+            player,
             player_rx,
             ws_rx,
             ws_send_tx: None,
@@ -480,6 +486,13 @@ impl App {
         let use_nerd_fonts = ui_config.use_nerd_fonts;
         let indicator_style: render::indicators::IndicatorStyle =
             ui_config.indicator_style.parse().unwrap_or_default();
+        // Both side effects below touch real system state, so test builds
+        // must never run them (issue #757): the eviction thread scans and
+        // prunes the user's real image-cache dir, and `mpris::start` claims
+        // `org.mpris.MediaPlayer2.mbv` on the real D-Bus session bus from a
+        // thread that has no shutdown path -- leaked into every test process
+        // that constructs a remote App, where process teardown races it.
+        #[cfg(not(test))]
         crate::config::evict_old_image_cache();
         // EmbyClient retains this snapshot only for constructing Emby API
         // requests. App general state owns the independent application copy;
@@ -534,14 +547,25 @@ impl App {
         // Moved here so App owns the resulting handle and can `rebind` it
         // later if `switch_to_direct_remote` / `restore_local_mode` swap
         // which target owns playback.
-        let mpris_remote = remote.clone();
-        let mpris_handle = crate::mpris::start(
-            mpris_remote.status.clone(),
-            move |cmd| {
-                mpris_remote.send_command(cmd);
-            },
-            Some(remote.disconnected_flag()),
-        );
+        // Test builds leave `mpris` unset (build() initializes it to None):
+        // `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real
+        // D-Bus session bus from a thread with no shutdown path -- leaked
+        // into every test process that constructs a remote App, where
+        // process teardown races it (issue #757). Tests that exercise
+        // rebind inject `mpris::test_handle` themselves.
+        #[cfg(not(test))]
+        let mpris_handle = {
+            let mpris_remote = remote.clone();
+            Some(crate::mpris::start(
+                mpris_remote.status.clone(),
+                move |cmd| {
+                    mpris_remote.send_command(cmd);
+                },
+                Some(remote.disconnected_flag()),
+            ))
+        };
+        #[cfg(test)]
+        let mpris_handle = None;
         let player = PlayerProxy::remote(remote, always_play_next);
         let (player_tab, remote_player_tab) = if endpoint.is_local() {
             // Local daemon: one unified queue, exactly like plain local
@@ -626,7 +650,7 @@ impl App {
             search_rx,
             idle_feed: None,
         });
-        app.mpris = Some(mpris_handle);
+        app.mpris = mpris_handle;
         app.player_endpoint = Some(endpoint.clone());
         app.home_is_local_daemon = endpoint.is_local();
         app.sync_subtitle_prefs_to_player();

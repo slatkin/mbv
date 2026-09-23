@@ -28,6 +28,11 @@ impl PlayerProxy {
             None,
         );
         player.status = status.clone();
+        // Never construct the real external from the stub: an inhibited
+        // player keeps the queue/status seeding a submit performs but skips
+        // the player thread whose first act is a real `init_mpv` handle
+        // (issue #757).
+        player.mpv_inhibited.store(true, Ordering::Relaxed);
         let subtitle_prefs = player.subtitle_prefs.clone();
         PlayerProxy {
             always_play_next: false,
@@ -59,6 +64,17 @@ impl PlayerProxy {
             status,
             subtitle_prefs,
             inner: PlayerProxyInner::Local(player),
+        }
+    }
+
+    /// Test builds only: mark the wrapped local player so later submits keep
+    /// their queue/status seeding but never spawn the player thread — whose
+    /// first act is a real `init_mpv` handle unit tests must not construct
+    /// (it raced process teardown at test exit; issue #757).
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn inhibit_mpv(&self) {
+        if let PlayerProxyInner::Local(p) = &self.inner {
+            p.mpv_inhibited.store(true, Ordering::Relaxed);
         }
     }
 
