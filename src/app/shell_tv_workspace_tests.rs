@@ -140,6 +140,53 @@ fn expanding_an_uncached_show_starts_the_detail_fetch() {
 }
 
 #[test]
+fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
+    let http = MockHttp::new();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    let mut model = mounted_tv_model_with_mock_emby(&http);
+
+    model
+        .app
+        .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
+    // Duplicate expansion intent is deduplicated while detail is in flight.
+    model
+        .app
+        .fetch_series_season_episodes("movie-focused".into(), "season-2".into());
+    assert_eq!(
+        model.app.pending_series_season_expansions,
+        std::collections::HashSet::from([("movie-focused".into(), "season-2".into())])
+    );
+    assert!(model.app.series_detail_loading.contains("movie-focused"));
+
+    let seasons = ["season-1", "season-2", "season-3"]
+        .into_iter()
+        .map(|id| {
+            let mut season = crate::app::tests::make_item(id, "Season");
+            season.id = id.into();
+            season
+        })
+        .collect();
+    model.app.handle_series_detail_fetched(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons,
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+
+    assert!(model.app.pending_series_season_expansions.is_empty());
+    assert_eq!(
+        model.app.series_season_loading,
+        std::collections::HashSet::from([
+            ("movie-focused".into(), "season-1".into()),
+            ("movie-focused".into(), "season-2".into()),
+        ]),
+        "preserve the Hero's first-season fetch and fetch the expanded season, but not every season"
+    );
+}
+
+#[test]
 fn expanding_an_uncached_season_starts_only_its_episode_fetch() {
     let http = MockHttp::new();
     http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);

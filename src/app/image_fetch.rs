@@ -73,6 +73,10 @@ impl App {
     pub(super) fn fetch_series_season_episodes(&mut self, series_id: String, season_id: String) {
         let key = (series_id.clone(), season_id.clone());
         let Some(detail) = self.series_detail_cache.get(&series_id) else {
+            if !series_id.is_empty() && !season_id.is_empty() {
+                self.pending_series_season_expansions.insert(key);
+                self.fetch_series_detail(series_id);
+            }
             return;
         };
         if !detail.seasons.iter().any(|season| season.id == season_id)

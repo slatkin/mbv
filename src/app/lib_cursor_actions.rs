@@ -283,6 +283,15 @@ impl App {
             .entry(series_id.clone())
             .or_insert(detail);
         self.series_detail_loading.remove(&series_id);
+        let pending_seasons = self
+            .pending_series_season_expansions
+            .iter()
+            .filter(|(pending_series, _)| pending_series == &series_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        for key in &pending_seasons {
+            self.pending_series_season_expansions.remove(key);
+        }
         let first_season_id = self
             .series_detail_cache
             .get(&series_id)
@@ -290,8 +299,11 @@ impl App {
             .map(|season| season.id.clone());
         if let Some(season_id) = first_season_id {
             self.fetch_series_season_episodes(series_id.clone(), season_id);
-            self.refresh_series_detail_loading(&series_id);
         }
+        for (_, season_id) in pending_seasons {
+            self.fetch_series_season_episodes(series_id.clone(), season_id);
+        }
+        self.refresh_series_detail_loading(&series_id);
     }
 
     pub(super) fn handle_series_season_episodes_fetched(
