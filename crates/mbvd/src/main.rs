@@ -485,7 +485,9 @@ fn run() -> Result<(), String> {
     }
 
     let config = config::load_config()?;
-    applog::init(config::is_system_instance(), Some(log_path()), log_level);
+    let is_system = config::is_system_instance();
+    let log_path = (!is_system).then(log_path);
+    applog::init(is_system, log_path, log_level);
     log::info!(target: "startup", "mbvd starting");
 
     daemon::run_with_options(

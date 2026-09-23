@@ -286,9 +286,9 @@ impl EmbyClient {
             "SupportsMediaControl": true,
             "SupportsSync": false
         });
-        log::info!(target: "api", "outbound: Capabilities");
+        log::debug!(target: "api", "outbound: Capabilities");
         match self.post("/Sessions/Capabilities/Full").send_json(body) {
-            Ok(r) => log::info!(target: "api", "inbound: {} Capabilities", r.status()),
+            Ok(r) => log::debug!(target: "api", "inbound: {} Capabilities", r.status()),
             Err(e) => log::warn!(target: "api", "err: Capabilities: {e}"),
         }
     }
