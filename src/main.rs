@@ -65,6 +65,25 @@ fn run_remote_app(
     run_tui(app);
 }
 
+fn parse_log_level_arg(args: &[String]) -> Result<Option<applog::Level>, String> {
+    let mut level = None;
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "--log-level" {
+            i += 1;
+            let Some(value) = args.get(i) else {
+                return Err("mbv: --log-level requires error, warn, info, or debug".into());
+            };
+            level = Some(
+                applog::Level::parse(value)
+                    .ok_or_else(|| format!("mbv: invalid log level {value:?}"))?,
+            );
+        }
+        i += 1;
+    }
+    Ok(level)
+}
+
 fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
     let mut endpoint: Option<String> = None;
     let mut iter = args.iter();
@@ -184,6 +203,9 @@ fn print_usage() {
     println!("Usage: mbv [OPTIONS]");
     println!();
     println!("Options:");
+    println!(
+        "      --log-level <level>   Set the log level: error, warn, info (default), or debug."
+    );
     println!("  -q                        Stop the running Player owner (bare mbv, or the local");
     println!("                             daemon in stay-alive mode).");
     println!("      --connect-daemon <endpoint>");
@@ -204,6 +226,15 @@ fn main() {
         print_usage();
         return;
     }
+
+    let log_level = match parse_log_level_arg(&args) {
+        Ok(level) => level,
+        Err(error) => {
+            print_usage();
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    };
 
     // Hidden local-daemon self-spawn subcommand (T2, design.md decision 1):
     // `mbv --__local-daemon` re-execs itself to run the local daemon in this
@@ -267,6 +298,7 @@ fn main() {
     applog::init(
         config::is_system_instance(),
         Some(state_dir().join("mbv.log")),
+        log_level.unwrap_or(applog::Level::Info),
     );
 
     if let Err(e) = config::migrate_legacy_emby_token() {
@@ -368,7 +400,9 @@ fn main() {
                 // becoming the actual Player-owning process) and attach to
                 // it as a client ourselves.
                 drop(guard);
-                if let Err(e) = local_daemon::spawn_detached(&socket_path.to_string_lossy()) {
+                if let Err(e) =
+                    local_daemon::spawn_detached(&socket_path.to_string_lossy(), log_level)
+                {
                     eprintln!("mbv: failed to start local daemon: {e}");
                     std::process::exit(1);
                 }
@@ -411,6 +445,24 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn log_level_arg_accepts_supported_values_and_rejects_invalid_values() {
+        for (value, expected) in [
+            ("error", applog::Level::Error),
+            ("warn", applog::Level::Warn),
+            ("info", applog::Level::Info),
+            ("debug", applog::Level::Debug),
+        ] {
+            assert_eq!(
+                parse_log_level_arg(&["--log-level".into(), value.into()]).unwrap(),
+                Some(expected)
+            );
+        }
+        assert!(parse_log_level_arg(&["--log-level".into(), "trace".into()]).is_err());
+        assert!(parse_log_level_arg(&["--log-level".into()]).is_err());
+        assert_eq!(parse_log_level_arg(&[]).unwrap(), None);
+    }
 
     #[test]
     fn connect_daemon_arg_accepts_split_and_equals_forms() {

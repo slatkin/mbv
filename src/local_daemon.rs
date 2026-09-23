@@ -33,10 +33,21 @@ fn to_io(e: nix::Error) -> io::Error {
 /// early because the cached token is missing/invalid -- returns the reason
 /// so the still-live launching terminal can report it, rather than the
 /// daemon failing silently in the background.
-pub fn spawn_detached(socket_path: &str) -> Result<(), String> {
+fn local_daemon_args(log_level: Option<mbv_core::applog::Level>) -> Vec<String> {
+    let mut args = vec!["--__local-daemon".to_string()];
+    if let Some(level) = log_level {
+        args.extend(["--log-level".to_string(), level.logfmt().to_string()]);
+    }
+    args
+}
+
+pub fn spawn_detached(
+    socket_path: &str,
+    log_level: Option<mbv_core::applog::Level>,
+) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|e| format!("cannot locate binary: {e}"))?;
     let mut cmd = Command::new(exe);
-    cmd.arg("--__local-daemon");
+    cmd.args(local_daemon_args(log_level));
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::piped());
@@ -78,6 +89,16 @@ pub fn spawn_detached(socket_path: &str) -> Result<(), String> {
 
 /// Entered via the hidden `mbv --__local-daemon` self-spawn. Never returns.
 pub fn run_local_daemon_main() -> ! {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let log_level = match crate::parse_log_level_arg(&args) {
+        Ok(level) => level.unwrap_or(mbv_core::applog::Level::Info),
+        Err(error) => {
+            crate::print_usage();
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    };
+
     // The daemon IS the SIGHUP firewall: closing the launching terminal
     // must not kill it (belt-and-suspenders with the setsid() done at
     // spawn time in `spawn_detached`).
@@ -91,7 +112,7 @@ pub fn run_local_daemon_main() -> ! {
     }
 
     let state_dir = crate::state_dir();
-    mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")));
+    mbv_core::applog::init(false, Some(state_dir.join("local-daemon.log")), log_level);
     log::info!(target: "local_daemon", "local daemon starting");
 
     let config = match crate::config::load_config() {
@@ -149,4 +170,18 @@ pub fn run_local_daemon_main() -> ! {
             }),
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn spawn_args_forward_only_an_explicit_log_level() {
+        assert_eq!(local_daemon_args(None), ["--__local-daemon"]);
+        assert_eq!(
+            local_daemon_args(Some(mbv_core::applog::Level::Debug)),
+            ["--__local-daemon", "--log-level", "debug"]
+        );
+    }
 }

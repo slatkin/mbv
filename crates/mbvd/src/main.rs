@@ -22,7 +22,7 @@ fn cap_glibc_arenas() {
 }
 
 fn print_usage() {
-    eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]");
+    eprintln!("Usage: mbvd [--audio-only] [--log-level <error|warn|info|debug>] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]");
 }
 
 fn daemon_running() -> bool {
@@ -56,7 +56,10 @@ fn stop_daemon() -> Result<String, String> {
 
 #[derive(Debug, PartialEq, Eq)]
 enum Action {
-    Serve { audio_only: bool },
+    Serve {
+        audio_only: bool,
+        log_level: applog::Level,
+    },
     ConnectEmby,
     ConnectAbs,
     DisconnectAbs,
@@ -67,11 +70,20 @@ enum Action {
 
 fn parse_action(args: &[String]) -> Result<Action, String> {
     let mut audio_only = false;
+    let mut log_level = applog::Level::Info;
     let mut action = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--audio-only" => audio_only = true,
+            "--log-level" => {
+                i += 1;
+                let Some(value) = args.get(i) else {
+                    return Err("mbvd: --log-level requires error, warn, info, or debug".into());
+                };
+                log_level = applog::Level::parse(value)
+                    .ok_or_else(|| format!("mbvd: invalid log level {value:?}"))?;
+            }
             "--help" | "-h" => select_action(&mut action, Action::Help)?,
             "--version" | "-V" => select_action(&mut action, Action::Version)?,
             "--quit" | "-q" => select_action(&mut action, Action::Quit)?,
@@ -112,7 +124,10 @@ fn parse_action(args: &[String]) -> Result<Action, String> {
     {
         return Err("mbvd: service administration cannot be combined with daemon selectors".into());
     }
-    Ok(action.unwrap_or(Action::Serve { audio_only }))
+    Ok(action.unwrap_or(Action::Serve {
+        audio_only,
+        log_level,
+    }))
 }
 
 fn select_action(action: &mut Option<Action>, next: Action) -> Result<(), String> {
@@ -439,7 +454,7 @@ fn run() -> Result<(), String> {
             return Err(error);
         }
     };
-    let audio_only = match action {
+    let (audio_only, log_level) = match action {
         Action::Help => {
             print_usage();
             return Ok(());
@@ -455,14 +470,19 @@ fn run() -> Result<(), String> {
             println!("{}", stop_daemon()?);
             return Ok(());
         }
-        Action::Serve { audio_only } => audio_only,
+        Action::Serve {
+            audio_only,
+            log_level,
+        } => (audio_only, log_level),
     };
     if daemon_running() {
         return Err("mbvd: a daemon is already running".to_string());
     }
 
     let config = config::load_config()?;
-    applog::init(config::is_system_instance(), Some(log_path()));
+    let is_system = config::is_system_instance();
+    let log_path = (!is_system).then(log_path);
+    applog::init(is_system, log_path, log_level);
     log::info!(target: "startup", "mbvd starting");
 
     daemon::run_with_options(
@@ -496,6 +516,8 @@ fn exit_code_for_error(error: &str) -> i32 {
         || error.contains("unknown argument")
         || error.contains("requires a Service")
         || error.contains("daemon selectors")
+        || error.contains("log-level")
+        || error.contains("log level")
     {
         2
     } else {
