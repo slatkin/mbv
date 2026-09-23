@@ -74,13 +74,10 @@ fn parse_log_level_arg(args: &[String]) -> Result<Option<applog::Level>, String>
             let Some(value) = args.get(i) else {
                 return Err("mbv: --log-level requires error, warn, info, or debug".into());
             };
-            level = Some(match value.as_str() {
-                "error" => applog::Level::Error,
-                "warn" => applog::Level::Warn,
-                "info" => applog::Level::Info,
-                "debug" => applog::Level::Debug,
-                _ => return Err(format!("mbv: invalid log level {value:?}")),
-            });
+            level = Some(
+                applog::Level::parse(value)
+                    .ok_or_else(|| format!("mbv: invalid log level {value:?}"))?,
+            );
         }
         i += 1;
     }

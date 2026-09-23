@@ -20,6 +20,16 @@ impl Level {
         }
     }
 
+    pub fn parse(value: &str) -> Option<Level> {
+        match value {
+            "error" => Some(Level::Error),
+            "warn" => Some(Level::Warn),
+            "info" => Some(Level::Info),
+            "debug" => Some(Level::Debug),
+            _ => None,
+        }
+    }
+
     fn max_level_filter(self) -> log::LevelFilter {
         match self {
             Level::Error => log::LevelFilter::Error,

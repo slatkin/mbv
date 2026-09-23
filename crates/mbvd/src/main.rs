@@ -81,13 +81,8 @@ fn parse_action(args: &[String]) -> Result<Action, String> {
                 let Some(value) = args.get(i) else {
                     return Err("mbvd: --log-level requires error, warn, info, or debug".into());
                 };
-                log_level = match value.as_str() {
-                    "error" => applog::Level::Error,
-                    "warn" => applog::Level::Warn,
-                    "info" => applog::Level::Info,
-                    "debug" => applog::Level::Debug,
-                    _ => return Err(format!("mbvd: invalid log level {value:?}")),
-                };
+                log_level = applog::Level::parse(value)
+                    .ok_or_else(|| format!("mbvd: invalid log level {value:?}"))?;
             }
             "--help" | "-h" => select_action(&mut action, Action::Help)?,
             "--version" | "-V" => select_action(&mut action, Action::Version)?,
