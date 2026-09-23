@@ -570,6 +570,7 @@ impl App {
             return true;
         }
         if self.player.is_remote_disconnected() {
+            *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return false;
         }
