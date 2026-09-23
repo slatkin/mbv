@@ -175,7 +175,7 @@ pub(in crate::app) fn render_sidebar_scrollbar(
         scroll,
         content.x.saturating_add(content.width),
         thin_vertical_thumb(GlyphSet::box_drawing()),
-        palette::SCROLLBAR,
+        palette::SIDEBAR_SCROLLBAR,
     );
 }
 

@@ -248,6 +248,12 @@ pub const PROGRESS_PERCENT: Color = Palette::Orange.color();
 /// editable, so a scrollbar edit moves the scrollbar alone
 /// (unify-surface-colour-neutral task 4.2).
 pub const SCROLLBAR: Color = Palette::Green2.color();
+/// Sidebar scrollbar track/thumb. Its own role over the dim-text grey it
+/// shares today (`TEXT_MUTED`): the sidebar bodies paint the scrollbar's
+/// own `Palette::Green2` value, so the shared chrome scrollbar would vanish
+/// against them — equal today and independently editable, so a dim-text
+/// edit moves dim text alone.
+pub const SIDEBAR_SCROLLBAR: Color = Palette::Grey2.color();
 
 /// The central focus lever (design decision 8). Every panel and component
 /// resolves its focused/unfocused surface through this single function

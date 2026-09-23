@@ -141,3 +141,57 @@ fn settings_groups_space_and_stripe_data_rows() {
     // Geometry follows the spaced document: cursor lines skip the spacer.
     assert_eq!(geometry.cursor_lines, vec![1, 2, 5]);
 }
+
+/// Overflow paints a visible sidebar scrollbar: at least one cell in the
+/// scrollbar column carries the scrollbar role (it must read against the
+/// sidebar body fill).
+#[test]
+fn settings_overflow_paints_a_visible_scrollbar() {
+    let mut rows = vec![SettingsRow {
+        label: "Group".into(),
+        value: String::new(),
+        section: true,
+        cursor: None,
+    }];
+    rows.extend((0..12).map(|i| SettingsRow {
+        label: format!("option_{i}"),
+        value: "on".into(),
+        section: false,
+        cursor: Some(i),
+    }));
+    let (width, height) = (50, 10);
+    let mut geometry = SettingsRenderGeometry::default();
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| {
+            render_settings_content(
+                frame,
+                frame.area(),
+                SettingsRenderModel {
+                    destination: SettingsDestination::Main,
+                    rows: &rows,
+                    services: &[],
+                    setup: None,
+                    cursor: 0,
+                    services_cursor: 0,
+                    scroll: 0,
+                },
+                &mut geometry,
+            );
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let scrollbar_x = geometry.content_area.x + geometry.content_area.width;
+    let body = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
+    assert_ne!(
+        palette::SIDEBAR_SCROLLBAR,
+        body,
+        "the scrollbar role must contrast the body it paints over"
+    );
+    let painted = (geometry.content_area.y..geometry.content_area.y + geometry.content_area.height)
+        .any(|y| {
+            let cell = &buffer[(scrollbar_x, y)];
+            cell.fg == palette::SIDEBAR_SCROLLBAR || cell.bg == palette::SIDEBAR_SCROLLBAR
+        });
+    assert!(painted, "overflow must paint the scrollbar column");
+}
