@@ -2,7 +2,7 @@
 
 ## 1. Shared destination contract
 
-- [ ] 1.1 Add stable Latest selector identities and legacy Home-selection fallback in source-of-truth launch/config types; verify config and launch-state unit tests (`cargo nextest run -p mbv-core`).
+- [ ] 1.1 Add stable Latest selector identities and fallback for saved Home Latest selections in both TUI launch state and legacy `home_section` preferences; verify config, launch-state, and Home restore tests (`cargo nextest run -p mbv-core` and `cargo nextest run -p mbv`).
 - [ ] 1.2 Move launch-window marker derivation and source-qualified acknowledgement to destination Latest snapshots without Home projection; verify first-launch, timestamp-boundary, preselected-before-load, and refresh tests (`cargo nextest run -p mbv`).
 - [ ] 1.3 Route existing Emby latest requests by library id into destination-owned snapshots so an unopened Home is irrelevant; verify TV still gets episodes, non-TV gets additions, and one destination refresh does not fetch another (`cargo nextest run -p mbv`).
 
@@ -15,8 +15,8 @@
 
 ## 3. Other destinations
 
-- [ ] 3.1 Add Latest to each Audiobookshelf podcast library's state/show selector using its existing per-library shelf cache; verify empty shelf, async completion, provider-target play/enqueue and selector cycling without Emby (`cargo nextest run -p mbv`).
-- [ ] 3.2 Add Latest to Feeds' group/filter selector using only the already loaded combined entries; verify played entries remain visible, former group/filter restore, no fetch on entry, and `r` refresh updates Latest (`cargo nextest run -p mbv`).
+- [ ] 3.1 Add Latest to each Audiobookshelf podcast library's state/show selector using its existing per-library shelf cache; verify empty shelf, async completion, provider-target play/enqueue, selector cycling without Emby, and selected-tab exit/relaunch restore versus All on other podcast tabs (`cargo nextest run -p mbv`). Shelf refetch on podcast refresh is separate issue #763.
+- [ ] 3.2 Add Latest to Feeds' group/filter selector using only the already loaded combined entries; verify played entries remain visible, selector exit restores the former group/filter, `w` leaves Latest and cycles the restored filter once, no fetch on entry, and `r` refresh updates Latest (`cargo nextest run -p mbv`).
 - [ ] 3.3 Project shared title parts, provider dates, marker glyph and selected detail through existing row/Hero painters for non-TV Latest; verify focused buffer tests at Narrow and Wide (`cargo nextest run -p mbv`).
 
 ## 4. Retire Home duplicates and settings
@@ -27,5 +27,5 @@
 ## 5. Integration and close-out
 
 - [ ] 5.1 Verify all destination selectors, mouse/keyboard activation, launch restore, markers after async refresh, and absence of Home Latest through mounted `Application::tick()` tests; run `cargo check -p mbv`, `cargo nextest run -p mbv -j 2`, `cargo nextest run -p mbv-core`, `cargo fmt --all -- --check`, and `cargo clippy --workspace --all-targets -- -D warnings`.
-- [ ] 5.2 Sync applied delta specs into main specs, revise the obsolete `home-latest-sections` Purpose and relevant `CONTEXT.md` vocabulary, and validate the change (`openspec validate migrate-home-latest-to-destinations --strict`).
+- [ ] 5.2 Sync applied delta specs into main specs, including the Home-only Latest promise in `service-independent-startup` and the personalized-shelf prohibition in both `audiobookshelf-podcast-library-ui` and `audiobookshelf-podcast-browsing` (allow the Newest Episodes shelf only in podcast Latest); revise the obsolete `home-latest-sections` Purpose and relevant `CONTEXT.md` vocabulary, and validate the change (`openspec validate migrate-home-latest-to-destinations --strict`).
 - [ ] 5.3 Manually inspect Home and every eligible destination (including a Music tree round-trip) at Narrow and Wide, confirm Latest selectors/dates/markers with real loaded content, and record the observations before requesting user visual sign-off; do not archive before that sign-off.
