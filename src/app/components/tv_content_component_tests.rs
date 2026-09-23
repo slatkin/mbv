@@ -273,6 +273,9 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
         })) if target == "id"
     ));
 
+    // Selection invalidates the tree's retained hit geometry; the next input
+    // must resolve against a newly painted frame.
+    paint(&mut panel, 100, 20);
     let right = panel.on(&mouse(MouseEventKind::Down(MouseButton::Right), col, row));
     assert!(matches!(
         right,
@@ -372,7 +375,12 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
             hit: TvHit::SeriesRow(ref target),
         })) if target == "series-b"
     ));
-    assert_eq!(tv(&panel).selected_item_id(), Some("series-b".into()));
+    assert_eq!(
+        tv(&panel).selected_tree_target(),
+        Some(&crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:8:series-b".into()
+        ))
+    );
 
     let blank = panel.on(&mouse(
         MouseEventKind::Down(MouseButton::Left),
@@ -381,12 +389,19 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
     ));
     assert!(blank.is_none());
 
+    // The click changed tree selection and invalidated the prior hit frame.
+    paint(&mut panel, 100, 20);
     let wheel = panel.on(&mouse(MouseEventKind::ScrollDown, col, row));
     assert!(matches!(
         wheel,
         Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
     ));
-    assert_eq!(tv(&panel).selected_item_id(), Some("series-b".into()));
+    assert_eq!(
+        tv(&panel).selected_tree_target(),
+        Some(&crate::app::components::tv_tree_target::TvTreeTarget::Show(
+            "tv-id:8:series-b".into()
+        ))
+    );
 }
 
 #[test]

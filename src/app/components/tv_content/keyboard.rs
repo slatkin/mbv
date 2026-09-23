@@ -1,7 +1,8 @@
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::inline_search::InlineSearchAction;
-use super::{Msg, Pane, ShellRequest, TvContent};
+use super::super::list::tree_browser::TreeOperation;
+use super::{Msg, Pane, ShellRequest, TerminalObserverEvent, TvContent};
 use crate::app::components::media_list::MediaListSurfaceInput;
 
 impl TvContent {
@@ -119,6 +120,34 @@ impl TvContent {
             _ => None,
         };
         request.map(Msg::Shell)
+    }
+
+    /// Show-mode navigation changes the tree's selected stable target. Moving
+    /// between show roots also projects the resolved show position to the
+    /// shell so its existing series-detail request remains synchronized.
+    fn handle_show_tree_navigation(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let operation = match key.code {
+            Key::Up | Key::Char('k') => TreeOperation::Move(-1),
+            Key::Down | Key::Char('j') => TreeOperation::Move(1),
+            Key::PageUp => TreeOperation::Page(-1),
+            Key::PageDown => TreeOperation::Page(1),
+            Key::Home => TreeOperation::First,
+            Key::End => TreeOperation::Last,
+            _ => return None,
+        };
+        let transition = self.browser.apply(operation);
+        let request = transition.selected_target.and_then(|target| {
+            self.show_item_for_tree_target(&target).and_then(|item| {
+                self.carrier.select_target(&item.id);
+                self.context
+                    .list
+                    .items
+                    .iter()
+                    .position(|candidate| candidate.id == item.id)
+                    .map(|index| Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index }))
+            })
+        });
+        Some(request.unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
     }
 
     /// Wide pane-based keyboard handling (unchanged from before the merge).
@@ -243,6 +272,12 @@ impl TvContent {
     /// effects, refresh/rescan, context menu, search and letter-pill cycling
     /// reuse the same requests Wide already emits.
     fn handle_key_narrow(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if !self.flat_episode_mode() && !self.inline_search.is_active() && self.pane == Pane::Series
+        {
+            if let Some(message) = self.handle_show_tree_navigation(key) {
+                return Some(message);
+            }
+        }
         if key.modifiers.contains(KeyModifiers::ALT)
             && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
         {

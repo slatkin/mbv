@@ -51,9 +51,8 @@ pub(in crate::app) struct TvContent {
     /// presentation at every breakpoint; geometry changes clamp its viewport
     /// in place without transferring state to another presentation.
     carrier: MediaListCarrier<String>,
-    /// Retained TV hierarchy projection. The Library Panel continues to paint
-    /// `carrier` until the tree slot migration; this owner already preserves
-    /// stable tree selection and expansion across show-mode refreshes.
+    /// Retained TV hierarchy projection for show modes. Flat episode modes
+    /// and Inline Search continue to use `carrier`/their own result list.
     browser: TreeBrowser<TvTreeTarget>,
     season_cursor: usize,
     /// Embedded canonical control for the recessed episode media-list box
@@ -776,8 +775,10 @@ impl TvContent {
         });
         let list = if searching {
             ListSlot::Search(&mut self.inline_search)
-        } else {
+        } else if flat_episode_mode {
             ListSlot::Media(&mut self.carrier)
+        } else {
+            ListSlot::Media(&mut self.browser)
         };
         LibraryPanelContent {
             selector,
@@ -834,6 +835,11 @@ impl TvContent {
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
     }
+    #[cfg(test)]
+    pub(crate) fn selected_tree_target(&self) -> Option<&TvTreeTarget> {
+        self.browser.selected_target()
+    }
+
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         let target = self.carrier.selected_target()?;

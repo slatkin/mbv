@@ -70,10 +70,13 @@ impl TvContent {
         }
     }
 
-    /// The series list's row-local input. Wide and Narrow share the one
-    /// carrier, so the resolved target and the emitted `TvHit` are the same
-    /// at both breakpoints; the shell's `TvHit*` arms do the rest.
+    /// The series list's row-local input. Flat episode modes retain their
+    /// carrier path; show modes resolve against the tree's latest painted
+    /// geometry and keep selection in that one owner.
     fn series_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        if !self.flat_episode_mode() {
+            return self.show_tree_list_event(input);
+        }
         match input {
             MediaListSurfaceInput::Wheel { at, delta } => {
                 // The series rail is the only scrollable TV surface. Its
@@ -286,8 +289,76 @@ impl TvContent {
         }
     }
 
-    /// Resolve a click in the Browser pane's list slot to the series row it
-    /// landed on from the carrier's own retained frame geometry.
+    fn show_tree_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        match input {
+            MediaListSurfaceInput::Wheel { at, delta } => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                self.browser.apply(TreeOperation::Move(delta));
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            MediaListSurfaceInput::Click(at)
+            | MediaListSurfaceInput::ToggleClick(at)
+            | MediaListSurfaceInput::RangeClick(at) => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                let target = self.browser.resolve_current_point(at).cloned()?;
+                let show = self.show_item_for_tree_target(&target);
+                self.browser
+                    .apply(TreeOperation::Select(target.clone()));
+                match target {
+                    TvTreeTarget::Show(_) => show.map(|item| {
+                        Msg::Shell(ShellRequest::TvHitClick {
+                            hit: TvHit::SeriesRow(item.id),
+                        })
+                    }),
+                    TvTreeTarget::Season { .. } | TvTreeTarget::Episode { .. } => {
+                        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                    }
+                }
+            }
+            MediaListSurfaceInput::ContextClick(at) => {
+                if !self.browser.claims_current_point(at) {
+                    return None;
+                }
+                let target = self.browser.resolve_current_point(at)?.clone();
+                let item = self.show_item_for_tree_target(&target)?;
+                self.browser.apply(TreeOperation::Select(target));
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                    Some((at.x, at.y)),
+                )))
+            }
+            _ => None,
+        }
+    }
+
+    fn show_item_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {
+        let TvTreeTarget::Show(show_target) = target else {
+            return None;
+        };
+        let mut shows: Vec<_> = self.context.list.items.iter().collect();
+        shows.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+        let mut counts = std::collections::HashMap::new();
+        for show in &shows {
+            *counts.entry(show.id.as_str()).or_insert(0usize) += 1;
+        }
+        let mut occurrences = std::collections::HashMap::new();
+        shows.into_iter().find_map(|show| {
+            let duplicate_id = counts.get(show.id.as_str()).copied().unwrap_or_default() > 1;
+            let base = TvContent::stable_show_target(show, duplicate_id, 0);
+            let occurrence = occurrences.entry(base.clone()).or_insert(0usize);
+            let matches = TvContent::stable_show_target(show, duplicate_id, *occurrence)
+                == *show_target;
+            *occurrence += 1;
+            matches.then(|| show.clone())
+        })
+    }
+
+    /// Resolve a click in the flat Browser list slot to the row it landed on
+    /// from the carrier's own retained frame geometry.
     fn resolve_series_hit(&mut self, at: Position) -> Option<TvHit> {
         let target = self.carrier.resolve_current_point(at).cloned()?;
         Some(if self.flat_episode_mode() {
