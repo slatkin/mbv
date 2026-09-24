@@ -5,9 +5,8 @@
 use crate::app::render::FeedAgeGroup;
 #[cfg(test)]
 use mbv_core::audiobookshelf::{
-    AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookProgress, AudiobookshelfChapter,
-    AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
-    AudiobookshelfShow,
+    AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfDownloadedEpisode,
+    AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow,
 };
 
 #[path = "audiobookshelf_browse_books.rs"]
