@@ -1,3 +1,5 @@
+use crate::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
+
 use super::*;
 
 impl PlaybackRun {
@@ -7,29 +9,29 @@ impl PlaybackRun {
     /// coordinate when the sequence holds no active marker. Deriving the
     /// neighbor from `current_idx` alone re-used a coordinate that a
     /// settling observation can briefly outrun.
-    pub(super) fn relative_step_base(&self) -> usize {
+    pub(in crate::player) fn relative_step_base(&self) -> usize {
         self.active_slot_id()
             .and_then(|id| self.queue.slot_index(id))
             .unwrap_or(self.current_idx)
     }
 
-    pub(super) fn queue_len(&self) -> usize {
+    pub(in crate::player) fn queue_len(&self) -> usize {
         self.queue.slots().len()
     }
 
-    pub(super) fn slot_id_at(&self, idx: usize) -> Option<QueueSlotId> {
+    pub(in crate::player) fn slot_id_at(&self, idx: usize) -> Option<QueueSlotId> {
         self.queue.slots().get(idx).map(|slot| slot.slot_id)
     }
 
-    pub(super) fn item_at(&self, idx: usize) -> Option<&QueueItem> {
+    pub(in crate::player) fn item_at(&self, idx: usize) -> Option<&QueueItem> {
         self.queue.slots().get(idx).map(|slot| &slot.item)
     }
 
-    pub(super) fn active_item(&self) -> Option<&QueueItem> {
+    pub(in crate::player) fn active_item(&self) -> Option<&QueueItem> {
         self.queue.active_slot().map(|slot| &slot.item)
     }
 
-    pub(super) fn active_slot_id(&self) -> Option<QueueSlotId> {
+    pub(in crate::player) fn active_slot_id(&self) -> Option<QueueSlotId> {
         self.queue.active_slot_id()
     }
 
@@ -57,7 +59,10 @@ impl PlaybackRun {
     /// background thread (ordinary stop, kept off the critical path so the
     /// UI/mpv can proceed immediately). Callers must still guard on
     /// `self.stop_report` before calling this.
-    pub(super) fn report_stop_now_or_background(&mut self, progress: &mut ProgressGuard) {
+    pub(in crate::player) fn report_stop_now_or_background(
+        &mut self,
+        progress: &mut ProgressGuard,
+    ) {
         let _ = progress.stop_tx.send(());
         if self.is_quit_shutdown() {
             self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
@@ -65,11 +70,14 @@ impl PlaybackRun {
             let handle = progress.handle.take();
             let budget = self.progress_join_budget();
             let stopped = self.reporter.stopped_report_data(self.last_valid_pos);
-            let _ = self.reporter.job_tx.send(ReportJob::ProgressJoinThenStopped {
-                handle,
-                budget,
-                stopped,
-            });
+            let _ = self
+                .reporter
+                .job_tx
+                .send(ReportJob::ProgressJoinThenStopped {
+                    handle,
+                    budget,
+                    stopped,
+                });
             // Fire-and-forget: we can't know synchronously whether Emby accepted
             // this. Treat it as accepted anyway so mark_progress_sync_pending
             // still protects the just-saved local position from being overwritten
@@ -80,7 +88,7 @@ impl PlaybackRun {
         }
     }
 
-    pub(super) fn report_stopped_for_end_file(&self, reason: EndFileReason) -> bool {
+    pub(in crate::player) fn report_stopped_for_end_file(&self, reason: EndFileReason) -> bool {
         match end_file_stop_report_context(reason) {
             StopReportContext::Ordinary => self.reporter.report_stopped(self.last_valid_pos),
             StopReportContext::ShutdownAware => self.report_stopped_for_current_context(),
@@ -91,7 +99,7 @@ impl PlaybackRun {
     /// transitions. There is no time pressure, so a generous fixed budget
     /// just guards against a truly stuck thread without adding latency to
     /// the common fast case.
-    pub(super) fn progress_join_budget(&self) -> Duration {
+    pub(in crate::player) fn progress_join_budget(&self) -> Duration {
         Duration::from_secs(30)
     }
 
@@ -106,20 +114,20 @@ impl PlaybackRun {
     /// `report_stopped_for_current_context` instead of the ordinary one —
     /// no crash, just quietly degraded reliability for the rest of the
     /// session.
-    pub(super) fn cancel_pending_quit(&mut self) {
+    pub(in crate::player) fn cancel_pending_quit(&mut self) {
         self.quit_at = None;
         self.stop_slot = None;
         self.stop_runtime = None;
         *self.shutdown_report_timeout.lock().unwrap() = None;
     }
 
-    pub(super) fn sync_status_position(&self) {
+    pub(in crate::player) fn sync_status_position(&self) {
         let mut s = self.status.lock().unwrap();
         s.current_idx = self.current_idx;
         s.queue_len = self.queue_len();
     }
 
-    pub(super) fn observe_reporting(&mut self, force_sync: bool) {
+    pub(in crate::player) fn observe_reporting(&mut self, force_sync: bool) {
         let (active, paused, position_ticks) = {
             let status = self.status.lock().unwrap();
             (status.active, status.paused, status.position_ticks)
@@ -129,7 +137,7 @@ impl PlaybackRun {
         self.active_lifecycle.sync(position_ticks, now, force_sync);
     }
 
-    pub(super) fn set_active_index(&mut self, idx: usize) -> bool {
+    pub(in crate::player) fn set_active_index(&mut self, idx: usize) -> bool {
         let Some(slot_id) = self.slot_id_at(idx) else {
             return false;
         };
@@ -148,19 +156,22 @@ impl PlaybackRun {
     /// mpv's raw `playlist-pos`, alongside the entry it names when that is
     /// not the run's active one — see `divergent_entry`. Returning the raw
     /// position too lets a caller log it without a second IPC round-trip.
-    pub(super) fn mpv_divergent_entry(&self, mpv: &Mpv) -> (i64, Option<usize>) {
+    pub(in crate::player) fn mpv_divergent_entry(&self, mpv: &Mpv) -> (i64, Option<usize>) {
         let pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
         if self.active_file {
             return (pos, None);
         }
-        (pos, divergent_entry(pos, self.current_idx, self.queue_len()))
+        (
+            pos,
+            divergent_entry(pos, self.current_idx, self.queue_len()),
+        )
     }
 
     /// Report the outgoing item stopped, then adopt the entry mpv moved to on
     /// its own — folded into one step so a caller can't tell Emby "stopped"
     /// without a completed adoption to back it up. Announces the observation
     /// only when adoption succeeds.
-    pub(super) fn report_stopped_and_adopt_mpv_entry(
+    pub(in crate::player) fn report_stopped_and_adopt_mpv_entry(
         &mut self,
         abandoned_slot: Option<QueueSlotId>,
         abandoned_pos: i64,
@@ -248,7 +259,7 @@ impl PlaybackRun {
     /// Report the active slot's item as started on Emby — or clear the Emby
     /// session for a non-Emby item — the same switch a track transition makes,
     /// so reporting identity always names the item playback is on.
-    pub(super) fn report_active_item(&mut self) {
+    pub(in crate::player) fn report_active_item(&mut self) {
         match self.active_item().cloned() {
             Some(QueueItem::Emby(emby)) => {
                 let (urls, ok) = self.reporter.start_item(&emby);
@@ -268,7 +279,10 @@ impl PlaybackRun {
         }
     }
 
-    pub(super) fn prepare_item(&mut self, item: &QueueItem) -> Result<PreparedSource, AudiobookshelfError> {
+    pub(in crate::player) fn prepare_item(
+        &mut self,
+        item: &QueueItem,
+    ) -> Result<PreparedSource, AudiobookshelfError> {
         // A new Audiobookshelf source opens a server session during preparation.
         // Finalize the current lifecycle first so normal transitions cannot
         // overlap the outgoing and incoming sessions.
@@ -281,7 +295,7 @@ impl PlaybackRun {
         )
     }
 
-    pub(super) fn install_active_projection(
+    pub(in crate::player) fn install_active_projection(
         &mut self,
         mpv: &Mpv,
         mut prepared: PreparedSource,
@@ -355,7 +369,7 @@ impl PlaybackRun {
         Ok(())
     }
 
-    pub(super) fn select_active_slot(
+    pub(in crate::player) fn select_active_slot(
         &mut self,
         slot_id: QueueSlotId,
         mpv: &Mpv,
@@ -377,11 +391,11 @@ impl PlaybackRun {
         Ok(())
     }
 
-    pub(super) fn close_prepared_source(&mut self) {
+    pub(in crate::player) fn close_prepared_source(&mut self) {
         self.close_prepared_source_at(self.last_valid_pos);
     }
 
-    pub(super) fn close_prepared_source_at(&mut self, position_ticks: i64) {
+    pub(in crate::player) fn close_prepared_source_at(&mut self, position_ticks: i64) {
         self.active_lifecycle.close(position_ticks);
         self.active_lifecycle = ActiveItemLifecycle::None;
         if let Some(mut prepared) = self.prepared_source.take() {
@@ -399,7 +413,7 @@ impl PlaybackRun {
     /// `player_run_commands.rs` (`cmd_submit_queue` empty, non-empty,
     /// and `cmd_load_new`). The caller must set `stop_report` and
     /// `load_state` itself because those differ per call site.
-    pub(super) fn begin_item_lifecycle(&mut self) {
+    pub(in crate::player) fn begin_item_lifecycle(&mut self) {
         self.tracks_initialized = false;
         self.forced_slot_id = None;
         self.forced_jump_from_idle = false;
@@ -411,7 +425,7 @@ impl PlaybackRun {
         self.stopped_near_end = false;
     }
 
-    pub(super) fn load_active_item_state(&mut self) {
+    pub(in crate::player) fn load_active_item_state(&mut self) {
         let Some(item) = self.active_item().cloned() else {
             self.osd_title.clear();
             self.last_valid_pos = 0;
@@ -493,7 +507,7 @@ impl PlaybackRun {
 
     /// Construct a `PlaybackRun` from the Player owner's canonical slots.
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn new_from_slot_items(
+    pub(in crate::player) fn new_from_slot_items(
         items: Vec<ExecSlot>,
         start_idx: usize,
         origin: PlaybackOrigin,
@@ -511,7 +525,10 @@ impl PlaybackRun {
     ) -> Self {
         let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
         let queue = ExecutionSequence::from_slot_items(
-            items.into_iter().map(|slot| (slot.slot_id, slot.item)).collect(),
+            items
+                .into_iter()
+                .map(|slot| (slot.slot_id, slot.item))
+                .collect(),
             active_slot_id,
         );
         Self::init_from_queue(

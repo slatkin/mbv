@@ -1,4 +1,6 @@
-fn noop_progress() -> ProgressGuard {
+use super::*;
+
+pub(in crate::player) fn noop_progress() -> ProgressGuard {
     let (stop_tx, _) = mpsc::channel();
     ProgressGuard {
         stop_tx,
@@ -6,7 +8,7 @@ fn noop_progress() -> ProgressGuard {
     }
 }
 
-fn abs_item() -> QueueItem {
+pub(in crate::player) fn abs_item() -> QueueItem {
     QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfQueueItem {
         library_item_id: "show".into(),
         episode_id: "episode".into(),
@@ -23,7 +25,7 @@ fn abs_item() -> QueueItem {
     })
 }
 
-fn abs_book_item() -> QueueItem {
+pub(in crate::player) fn abs_book_item() -> QueueItem {
     QueueItem::AudiobookshelfBook(crate::playback_queue::AudiobookshelfBookQueueItem {
         library_item_id: "book".into(),
         title: "Book".into(),

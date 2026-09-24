@@ -1,3 +1,5 @@
+use super::*;
+
 #[test]
 fn jump_to_absent_slot_is_discarded_and_rejected() {
     let (run, _status, events) = make_queue_session_for_pos_tests_with_events(0);
@@ -20,7 +22,10 @@ fn jump_to_after_replacement_resolves_new_occurrence() {
         Some(replacement_id),
     );
     assert_eq!(run.queue.slot_index(replacement_id), Some(0));
-    assert_eq!(run.queue.slot(replacement_id).unwrap().item.id(), "replacement");
+    assert_eq!(
+        run.queue.slot(replacement_id).unwrap().item.id(),
+        "replacement"
+    );
 }
 
 // Task 2.3: shared-boundary routing and failure surfacing.
@@ -105,8 +110,10 @@ fn queue_append_forwards_caller_slot_ids() {
 
     match cmd_rx.try_recv().expect("expected QueueAppend command") {
         PlayerCommand::QueueAppend { items } => {
-            assert_eq!(items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
-                       vec![QueueSlotId::from_raw(17), QueueSlotId::from_raw(4)]);
+            assert_eq!(
+                items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
+                vec![QueueSlotId::from_raw(17), QueueSlotId::from_raw(4)]
+            );
         }
         _ => panic!("expected QueueAppend command"),
     }

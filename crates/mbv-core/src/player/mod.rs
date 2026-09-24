@@ -271,26 +271,25 @@ fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
 
 pub mod owner_state;
 pub use owner_state::*;
-include!("types.rs");
-include!("sources.rs");
-include!("runtime.rs");
-include!("report_worker.rs");
-include!("reporting.rs");
-include!("run/mod.rs");
-// `run/` is included to keep the hot-loop files physically grouped while the
-// controller and submission concerns are wired as true submodules.
+mod types;
+pub use types::*;
+mod sources;
+pub use sources::*;
+mod runtime;
+pub use runtime::*;
+mod report_worker;
+pub use report_worker::*;
+mod reporting;
+pub use reporting::*;
+mod run;
+pub use run::*;
+// `run/` keeps the hot-loop files physically grouped while the controller and
+// submission concerns remain sibling modules.
 mod controller;
 mod submit;
 pub use controller::*;
-include!("proxy.rs");
+mod proxy;
+pub use proxy::*;
 
 #[cfg(test)]
-mod tests {
-    include!("tests/basic.rs");
-    include!("tests/session.rs");
-    include!("tests/session_feed.rs");
-    include!("tests/status.rs");
-    include!("tests/submit.rs");
-    include!("tests/active_file.rs");
-    include!("tests/proxy.rs");
-}
+mod tests;

@@ -1,10 +1,12 @@
-struct ProgressGuard {
-    stop_tx: mpsc::Sender<()>,
-    handle: Option<thread::JoinHandle<()>>,
+use super::*;
+
+pub(super) struct ProgressGuard {
+    pub(super) stop_tx: mpsc::Sender<()>,
+    pub(super) handle: Option<thread::JoinHandle<()>>,
 }
 
 impl ProgressGuard {
-    fn stop_and_join(&mut self, budget: Duration) {
+    pub(super) fn stop_and_join(&mut self, budget: Duration) {
         let _ = self.stop_tx.send(());
         if let Some(h) = self.handle.take() {
             let start = std::time::Instant::now();
@@ -30,19 +32,19 @@ impl ProgressGuard {
     }
 }
 
-struct MpvRunConfig {
-    headless: bool,
-    use_mpv_config: bool,
-    video_cache_forward_mb: u32,
-    video_cache_back_mb: u32,
-    no_scripts: bool,
-    always_skip_intro: bool,
-    audio_pipe_path: Option<String>,
-    audio_pipe_samplerate: u32,
-    audio_pipe_bitdepth: u8,
+pub(super) struct MpvRunConfig {
+    pub(super) headless: bool,
+    pub(super) use_mpv_config: bool,
+    pub(super) video_cache_forward_mb: u32,
+    pub(super) video_cache_back_mb: u32,
+    pub(super) no_scripts: bool,
+    pub(super) always_skip_intro: bool,
+    pub(super) audio_pipe_path: Option<String>,
+    pub(super) audio_pipe_samplerate: u32,
+    pub(super) audio_pipe_bitdepth: u8,
     /// Mutually exclusive with `audio_pipe_path`: set only when pipe output
     /// is not selected for this run (see `resolve_run_output`).
-    audio_device: Option<String>,
+    pub(super) audio_device: Option<String>,
 }
 
 fn user_mpv_config_dir() -> Option<PathBuf> {
@@ -194,7 +196,7 @@ fn ensure_pipe(path: &str) -> Result<(), String> {
     }
 }
 
-fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
+pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
     let ipc_path = crate::config::mpv_ipc_path();
     let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
     let ipc_existed = Path::new(&ipc_path).exists();
@@ -408,7 +410,7 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
     Ok((mpv, startup_pause_armed))
 }
 
-fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_volume: u8) {
+pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_volume: u8) {
     let mut st = status.lock().unwrap();
     let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
@@ -418,7 +420,7 @@ fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_volume: u8)
     st.volume = v;
 }
 
-fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
+pub(super) fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
     let _ = mpv.observe_property("time-pos", Format::Double, 0);
     let _ = mpv.observe_property("pause", Format::Flag, 1);
     let _ = mpv.observe_property("volume", Format::Double, 2);
@@ -435,7 +437,7 @@ fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
     }
 }
 
-fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
+pub(super) fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let interval = Duration::from_secs(reporter.client.config.progress_interval_secs);
     let handle = thread::spawn(move || loop {
@@ -453,7 +455,7 @@ fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     }
 }
 
-fn handle_intro(
+pub(super) fn handle_intro(
     ticks: i64,
     start: i64,
     end: i64,

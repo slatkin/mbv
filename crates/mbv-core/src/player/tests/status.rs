@@ -1,3 +1,4 @@
+use super::*;
 use rstest::rstest;
 
 fn make_status(current_idx: usize, queue_len: usize, active: bool, paused: bool) -> PlayerStatus {
@@ -210,12 +211,7 @@ fn disconnect_remote_is_a_no_op_for_a_local_player() {
 #[test]
 fn disconnect_remote_disconnects_a_remote_player() {
     let (remote, _event_rx) = crate::remote_player::RemotePlayer::stub(Vec::new(), 0);
-    let proxy = PlayerProxy {
-        always_play_next: false,
-        status: remote.status.clone(),
-        subtitle_prefs: remote.subtitle_prefs.clone(),
-        inner: PlayerProxyInner::Remote(remote),
-    };
+    let proxy = PlayerProxy::remote(remote, false);
     assert!(proxy.is_remote());
 
     proxy.disconnect_remote(); // must not panic; a stub has no real

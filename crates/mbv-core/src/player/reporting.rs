@@ -1,3 +1,5 @@
+use super::*;
+
 const AUDIOBOOKSHELF_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
 fn seconds_from_ticks(ticks: i64) -> f64 {
@@ -239,7 +241,7 @@ pub(crate) enum PreparedLifecycle {
 }
 
 impl PreparedLifecycle {
-    fn close(&mut self, position_ticks: i64) {
+    pub(super) fn close(&mut self, position_ticks: i64) {
         match self {
             PreparedLifecycle::Episode(lifecycle) => lifecycle.close(position_ticks),
             PreparedLifecycle::Book(lifecycle) => lifecycle.close(position_ticks),
@@ -248,7 +250,7 @@ impl PreparedLifecycle {
 }
 
 impl ActiveItemLifecycle {
-    fn for_item(item: &QueueItem, lifecycle: Option<PreparedLifecycle>) -> Self {
+    pub(super) fn for_item(item: &QueueItem, lifecycle: Option<PreparedLifecycle>) -> Self {
         match item {
             QueueItem::Emby(_) => Self::Emby,
             QueueItem::Audiobookshelf(_) => match lifecycle {
@@ -283,7 +285,7 @@ impl ActiveItemLifecycle {
         }
     }
 
-    fn close(&mut self, position_ticks: i64) {
+    pub(super) fn close(&mut self, position_ticks: i64) {
         let lifecycle = std::mem::replace(self, Self::None);
         match lifecycle {
             Self::Audiobookshelf(mut lifecycle) => lifecycle.close(position_ticks),
@@ -306,7 +308,7 @@ mod reporting_tests {
             name: "Emby".into(),
             item_type: "Movie".into(),
             is_folder: false,
-        child_count: None,
+            child_count: None,
             media_type: "Video".into(),
             collection_type: String::new(),
             runtime_ticks: 1,
@@ -363,7 +365,7 @@ mod reporting_tests {
             title: "ABS".into(),
             show_title: None,
             author: None,
-        description: None,
+            description: None,
             duration_ticks: None,
             position_ticks: 0,
             played: false,

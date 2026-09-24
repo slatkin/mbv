@@ -1,3 +1,5 @@
+use super::*;
+
 #[test]
 fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
     // Regression test for a code-review finding: cmd_load_new and
@@ -58,8 +60,7 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     session.forced_slot_id = Some(target);
     // Rapid Enter on two rows: the in-flight jump also carries its request
     // identity; an intermediate playlist-pos event must not clobber either.
-    session.forced_transition =
-        Some(crate::playback_transition::Transition::new(42, 1, target));
+    session.forced_transition = Some(crate::playback_transition::Transition::new(42, 1, target));
 
     session.on_playlist_pos_changed(1, 0);
 
@@ -144,7 +145,10 @@ fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
     // now: the adoption has to be announced, or the owner and the UI keep
     // reporting the entry mpv left.
     let announced = events.try_iter().find_map(|event| match event {
-        PlayerEvent::TrackChanged { slot_id, transition } => Some((slot_id, transition)),
+        PlayerEvent::TrackChanged {
+            slot_id,
+            transition,
+        } => Some((slot_id, transition)),
         _ => None,
     });
     assert_eq!(
@@ -153,11 +157,10 @@ fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
         "an mpv-initiated move is announced as a natural track change"
     );
     // The abandoned item was actually reported stopped, not just left behind.
-    assert!(
-        http.requests()
-            .iter()
-            .any(|r| r.starts_with("POST /Sessions/Playing/Stopped")),
-    );
+    assert!(http
+        .requests()
+        .iter()
+        .any(|r| r.starts_with("POST /Sessions/Playing/Stopped")),);
 }
 
 #[test]
@@ -165,7 +168,9 @@ fn append_items_to_queue_extends_queue_without_moving_current_idx() {
     let (mut session, status) = make_queue_session_for_pos_tests(1);
     let appended = make_media_item("ep4");
 
-    session.append_items_to_queue(owner_paired(vec![QueueItem::Emby(Box::new(appended.clone()))]));
+    session.append_items_to_queue(owner_paired(vec![QueueItem::Emby(Box::new(
+        appended.clone(),
+    ))]));
 
     assert_eq!(session.queue_len(), 4);
     assert_eq!(session.current_idx, 1);
@@ -686,15 +691,27 @@ fn divergent_entry_names_only_an_entry_mpv_actually_moved_to() {
 #[test]
 fn queue_layout_verdict_reasserts_only_a_complete_playlist() {
     // Every item landed and the active one is playing: nothing to repair.
-    assert_eq!(queue_layout_verdict(2, 4, 2, 4, false), QueueLayoutVerdict::Ok);
+    assert_eq!(
+        queue_layout_verdict(2, 4, 2, 4, false),
+        QueueLayoutVerdict::Ok
+    );
     // Correct ordinal is not enough: an idle player means the first item
     // never actually started, so the complete layout must be reasserted.
-    assert_eq!(queue_layout_verdict(2, 4, 2, 4, true), QueueLayoutVerdict::Reassert);
+    assert_eq!(
+        queue_layout_verdict(2, 4, 2, 4, true),
+        QueueLayoutVerdict::Reassert
+    );
     // mpv finished the layout on another entry — the ordinal the whole run
     // (current_idx, status, every reported item) is derived from is wrong and
     // has to be reasserted from the layout we built.
-    assert_eq!(queue_layout_verdict(2, 4, 0, 4, false), QueueLayoutVerdict::Reassert);
-    assert_eq!(queue_layout_verdict(2, 4, -1, 4, false), QueueLayoutVerdict::Reassert);
+    assert_eq!(
+        queue_layout_verdict(2, 4, 0, 4, false),
+        QueueLayoutVerdict::Reassert
+    );
+    assert_eq!(
+        queue_layout_verdict(2, 4, -1, 4, false),
+        QueueLayoutVerdict::Reassert
+    );
     // A short playlist means an ordinal no longer names its item: report it
     // instead of seeking to a position that means something else.
     assert_eq!(
@@ -739,7 +756,10 @@ fn standalone_natural_end_file_marks_status_inactive() {
 
     assert!(!session.on_end_file_standalone(mpv_end_file_reason::Eof, &mut progress));
 
-    assert!(!status.lock().unwrap().active, "EOF must deactivate the status snapshot");
+    assert!(
+        !status.lock().unwrap().active,
+        "EOF must deactivate the status snapshot"
+    );
     let PlayerEvent::Stopped { played, .. } = events.try_recv().unwrap() else {
         panic!("expected Stopped event");
     };

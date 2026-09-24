@@ -26,7 +26,7 @@ fn shift_index_for_move_leaves_unrelated_indices_alone() {
 
 // ── PlayerCommand serde (IPC protocol integrity) ─────────────────────────
 
-fn make_media_item(id: &str) -> crate::api::EmbyItem {
+pub(in crate::player) fn make_media_item(id: &str) -> crate::api::EmbyItem {
     crate::api::EmbyItem {
         id: id.into(),
         name: "Test Episode".into(),
@@ -72,7 +72,7 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
 /// Ids come from one monotonic counter per thread rather than a fixed base, so
 /// a test that seeds a run and *then* appends cannot hand the run an identity it
 /// already holds — the execution sequence asserts slot uniqueness on adoption.
-fn owner_paired(items: Vec<QueueItem>) -> Vec<ExecSlot> {
+pub(in crate::player) fn owner_paired(items: Vec<QueueItem>) -> Vec<ExecSlot> {
     items
         .into_iter()
         .map(|item| ExecSlot {
@@ -83,7 +83,7 @@ fn owner_paired(items: Vec<QueueItem>) -> Vec<ExecSlot> {
 }
 
 /// A fresh owner-assigned slot identity for fixture queues.
-fn owner_slot_id() -> QueueSlotId {
+pub(in crate::player) fn owner_slot_id() -> QueueSlotId {
     thread_local! {
         static NEXT_FIXTURE_SLOT_ID: std::cell::Cell<u64> = const { std::cell::Cell::new(1_000) };
     }
@@ -94,12 +94,14 @@ fn owner_slot_id() -> QueueSlotId {
     })
 }
 
-fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
+pub(in crate::player) fn make_queue_session_for_pos_tests(
+    start_idx: usize,
+) -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
     let (session, status, _) = make_queue_session_for_pos_tests_with_events(start_idx);
     (session, status)
 }
 
-fn make_queue_session_for_pos_tests_with_events(
+pub(in crate::player) fn make_queue_session_for_pos_tests_with_events(
     start_idx: usize,
 ) -> (
     PlaybackRun,
@@ -115,7 +117,7 @@ fn make_queue_session_for_pos_tests_with_events(
 /// no server with a 500ms retry sleep each. Script responses via the returned
 /// `MockHttp` before triggering. The mock transport ignores the URL, but it
 /// must stay an IP literal so the default resolver never attempts DNS.
-fn make_queue_session_for_pos_tests_with_mock(
+pub(in crate::player) fn make_queue_session_for_pos_tests_with_mock(
     start_idx: usize,
 ) -> (
     PlaybackRun,
