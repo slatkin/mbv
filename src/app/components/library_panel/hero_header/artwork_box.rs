@@ -91,7 +91,7 @@ pub(in crate::app) fn hero_artwork_box(
     }
     .min(landscape_cap);
     let (width, height) = match header.arm() {
-        super::super::content::HeroHeaderArm::Landscape => {
+        HeroHeaderArm::Landscape => {
             // 16:9 in terminal cells (cells are ~2x taller than wide).
             let h = (area.width.saturating_mul(9).saturating_add(31) / 32).max(1);
             // The artwork shrinks before the title/meta block below it is
@@ -104,12 +104,8 @@ pub(in crate::app) fn hero_artwork_box(
                 .saturating_sub(ARTWORK_TEXT_GAP_ROWS);
             (area.width, h.min(max_h).min(room_for_text))
         }
-        super::super::content::HeroHeaderArm::Portrait => {
-            box_from_height(max_h.min(non_landscape_cap), 4, 3, area)
-        }
-        super::super::content::HeroHeaderArm::Square => {
-            box_from_height(max_h.min(non_landscape_cap), 2, 1, area)
-        }
+        HeroHeaderArm::Portrait => box_from_height(max_h.min(non_landscape_cap), 4, 3, area),
+        HeroHeaderArm::Square => box_from_height(max_h.min(non_landscape_cap), 2, 1, area),
     };
     Rect {
         x: area.right().saturating_sub(width).max(area.x),

@@ -9,7 +9,6 @@ use super::super::content::{
 };
 use super::artwork_box::*;
 use super::title_meta::*;
-use super::*;
 use crate::app::palette;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
