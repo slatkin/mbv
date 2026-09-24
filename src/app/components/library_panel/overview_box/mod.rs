@@ -434,9 +434,7 @@ pub(in crate::app) fn overlay_links_grid(
 }
 
 #[cfg(test)]
-#[path = "overview_box_layout_tests.rs"]
-mod overview_box_layout_tests;
+mod layout_tests;
 
 #[cfg(test)]
-#[path = "overview_box_credits_tests.rs"]
-mod overview_box_credits_tests;
+mod credits_tests;

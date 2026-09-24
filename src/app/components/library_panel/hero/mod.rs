@@ -483,5 +483,4 @@ pub(in crate::app) fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
 }
 
 #[cfg(test)]
-#[path = "hero_tests.rs"]
-mod hero_tests;
+mod tests;

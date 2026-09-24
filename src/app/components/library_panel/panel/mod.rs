@@ -1023,9 +1023,7 @@ impl LibraryPanel {
     }
 }
 
-#[path = "panel_view.rs"]
-mod panel_view;
+mod view;
 
 #[cfg(test)]
-#[path = "panel_tests.rs"]
-mod panel_tests;
+mod tests;

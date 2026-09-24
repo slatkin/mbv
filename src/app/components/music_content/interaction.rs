@@ -1,10 +1,12 @@
+use super::*;
+
 impl MusicContent {
     /// Whether the destination's own tree filter owns pointer/keyboard input.
     /// Production Grouped Music filtering paints the tree and leaves the flat
     /// Inline Search carrier empty, so input must resolve through the
     /// current-frame tree geometry rather than the compatibility carrier path
     /// (design D5).
-    fn local_filter_owns_input(&self) -> bool {
+    pub(super) fn local_filter_owns_input(&self) -> bool {
         self.browser.filter_active()
             && !self.inline_search.has_pool_entries()
             && self.inline_search.results_len() == 0
@@ -14,7 +16,7 @@ impl MusicContent {
             .or(Some(Msg::Shell(ShellRequest::LibraryPanelFocus)))
     }
 
-    fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+    pub(super) fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
                 let delta = index as i64 - self.context.group_cursor as i64;
@@ -155,12 +157,10 @@ impl MusicContent {
                                 let album_target = album.clone();
                                 let track_id = track.clone();
                                 self.browser.apply(TreeOperation::Select(target));
-                                return Some(Msg::Shell(
-                                    ShellRequest::MusicTreeTrackActivate {
-                                        album_target,
-                                        track_id,
-                                    },
-                                ));
+                                return Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                                    album_target,
+                                    track_id,
+                                }));
                             }
                             self.browser.apply(TreeOperation::Select(target.clone()));
                             if matches!(target, MusicTreeTarget::Artist(_)) {
@@ -191,7 +191,9 @@ impl MusicContent {
                                 MusicTreeTarget::Artist(_) => self
                                     .artist_album_targets(&target)
                                     .into_iter()
-                                    .any(|target| marked.iter().any(|selected| selected == &target)),
+                                    .any(|target| {
+                                        marked.iter().any(|selected| selected == &target)
+                                    }),
                                 MusicTreeTarget::Track { .. } => false,
                             };
                             self.browser.apply(TreeOperation::Select(target));
@@ -247,7 +249,11 @@ impl MusicContent {
                 // `MusicWorkspaceComponent`'s wheel handling).
                 MediaListSurfaceInput::Wheel { at, delta } => {
                     if self.track_list.claims_current_point(at) {
-                        self.track_list.delegate_operation(MediaListSurfaceInput::Wheel { at, delta }.into_operation(None).expect("resolved media-list pointer target"));
+                        self.track_list.delegate_operation(
+                            MediaListSurfaceInput::Wheel { at, delta }
+                                .into_operation(None)
+                                .expect("resolved media-list pointer target"),
+                        );
                     }
                     None
                 }
@@ -257,14 +263,22 @@ impl MusicContent {
                 | MediaListSurfaceInput::DoubleClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     self.track_focused = true;
-                    self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
+                    self.track_list.delegate_operation(
+                        input
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
                     (matches!(input, MediaListSurfaceInput::DoubleClick(_)))
                         .then(|| self.workspace_track_activation())?
                 }
                 MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     let item = self.workspace_track_item(&target)?;
-                    let outcome = self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
+                    let outcome = self.track_list.delegate_operation(
+                        input
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
                     let _ = ();
                     let items = match outcome.external_intent {
                         Some(RowIntent::ContextSelection(targets)) => targets
@@ -273,11 +287,13 @@ impl MusicContent {
                             .collect(),
                         _ => vec![item],
                     };
-                    Some(Msg::Shell(ShellRequest::MusicRowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), Some((at.x, at.y)))))
-                },
+                    Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                        Some((at.x, at.y)),
+                    )))
+                }
                 _ => None,
             },
         }
     }
 }
-

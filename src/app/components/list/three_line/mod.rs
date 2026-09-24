@@ -248,5 +248,4 @@ impl<Target> ThreeLineFlatList<Target> {
 }
 
 #[cfg(test)]
-#[path = "three_line_tests.rs"]
 mod tests;

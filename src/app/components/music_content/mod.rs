@@ -11,6 +11,7 @@ use mbv_core::config::{EmbySelectorKey, LibraryItemIdentity, SelectorIdentity};
 use std::collections::HashMap;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
+use self::workspace::WorkspaceOwner;
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroImageState, LibraryPanelContent,
@@ -568,10 +569,10 @@ impl MusicContent {
     }
 }
 
-include!("music_interaction.rs");
-include!("music_content_tree_target.rs");
-include!("music_content_workspace.rs");
-include!("music_content_owner.rs");
+mod interaction;
+mod owner;
+mod tree_target;
+mod workspace;
 
 impl Default for MusicContent {
     fn default() -> Self {
@@ -580,5 +581,4 @@ impl Default for MusicContent {
 }
 
 #[cfg(test)]
-#[path = "music_content_tests.rs"]
 mod tests;

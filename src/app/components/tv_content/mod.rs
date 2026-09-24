@@ -1022,7 +1022,7 @@ impl TvContent {
         Some((series_id, season_id))
     }
 }
-include!("interaction.rs");
+mod interaction;
 impl Default for TvContent {
     fn default() -> Self {
         Self::new()

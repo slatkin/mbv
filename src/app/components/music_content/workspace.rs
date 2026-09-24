@@ -1,5 +1,5 @@
-// Included into `music_content` via `include!` (the module's doc and
-// imports live there, beside the split's other parts).
+// The module's documentation and shared imports live in the parent module.
+use super::*;
 
 pub(in crate::app) fn track_row_label(track: &EmbyItem, index: usize) -> String {
     let number = if track.index_number > 0 {
@@ -10,7 +10,7 @@ pub(in crate::app) fn track_row_label(track: &EmbyItem, index: usize) -> String 
     format!("{number}. {}", track.name)
 }
 
-fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
+pub(super) fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     tracks
         .iter()
         .enumerate()
@@ -62,7 +62,7 @@ fn build_artist_track_rows(
 /// detail projection. The Hero facts and the Workspace rows resolve through
 /// the same selection, so a stale snapshot can never paint under a new title.
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum WorkspaceOwner {
+pub(super) enum WorkspaceOwner {
     Album(String),
     Artist(MusicArtistTarget),
 }
@@ -137,7 +137,7 @@ impl MusicContent {
     /// artist root. The shell binds the projection to the owner-resolved
     /// target at push time; a local move onto a different root between pushes
     /// must not paint the prior root's summary, artwork, or groups.
-    fn current_artist_detail(
+    pub(super) fn current_artist_detail(
         &self,
     ) -> Option<&crate::app::state::music_artist_detail::ArtistDetailProjection> {
         self.context.artist_detail.as_ref().filter(|detail| {
@@ -162,7 +162,7 @@ impl MusicContent {
     /// changed owner clears any stale pane focus and re-seats the cursor; a
     /// pending Wide artist-Workspace entry takes the focus once the resolved
     /// root's rows exist.
-    fn reconcile_workspace_rows(&mut self) -> bool {
+    pub(super) fn reconcile_workspace_rows(&mut self) -> bool {
         let (owner, rows) = self.resolved_workspace();
         let owner_changed = self.track_rows_owner != owner;
         if owner_changed {
@@ -197,7 +197,7 @@ impl MusicContent {
     /// Voids the armed Wide artist-Workspace entry when the tree selection no
     /// longer resolves to the root that was armed (task 6.4): the entry may
     /// only take the cursor for the root the user pressed Right on.
-    fn void_artist_workspace_focus_off_root(&mut self) {
+    pub(super) fn void_artist_workspace_focus_off_root(&mut self) {
         let still_on_root = self
             .pending_artist_workspace_focus
             .as_ref()
@@ -213,7 +213,7 @@ impl MusicContent {
     /// Refreshes the component's projected view of the shell-owned artist
     /// cache. It is retained across a local move onto an album child because
     /// the shell's next album snapshot does not itself carry the artist cache.
-    fn project_tree_tracks(&mut self) {
+    pub(super) fn project_tree_tracks(&mut self) {
         if self.tree_track_revision != Some(self.context.catalog_revision) {
             self.tree_tracks.clear();
             self.tree_track_revision = Some(self.context.catalog_revision);
@@ -294,7 +294,7 @@ impl MusicContent {
 
     /// Resolves the focused artist's settled album targets against the latest
     /// content snapshot.
-    fn selected_artist_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
+    pub(super) fn selected_artist_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
         let targets = self.selected_artist_album_targets()?;
         Some(self.resolve_album_targets(targets))
     }
@@ -302,7 +302,7 @@ impl MusicContent {
     /// Resolves marked tree album leaves in settled display order. This is the
     /// multi-selection boundary: the tree owns membership and the content
     /// owner only translates stable album targets to the current snapshot.
-    fn selected_tree_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
+    pub(super) fn selected_tree_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
         let targets = self.selected_album_targets_in_display_order();
         if targets.is_empty() {
             return None;
@@ -310,7 +310,7 @@ impl MusicContent {
         Some(self.resolve_album_targets(targets))
     }
 
-    fn artist_action(&self, action: MusicTreeAction) -> Option<Msg> {
+    pub(super) fn artist_action(&self, action: MusicTreeAction) -> Option<Msg> {
         let origin = self.selection_origin.clone()?;
         let (items, unresolved_targets) = self
             .selected_tree_items()
@@ -352,7 +352,7 @@ impl MusicContent {
     /// snapshot), otherwise the selected album's cached tracks. Every row
     /// behaviour resolves through this one owner, so an artist track row and
     /// an album track row share the same paths.
-    fn workspace_track_item(&self, target: &str) -> Option<EmbyItem> {
+    pub(super) fn workspace_track_item(&self, target: &str) -> Option<EmbyItem> {
         if let Some(detail) = self.current_artist_detail() {
             return detail
                 .track_groups
@@ -392,10 +392,8 @@ impl MusicContent {
     /// onto a root is not that Workspace: there Enter keeps toggling the root
     /// (task 2.4) instead of resolving a track from a snapshot that no longer
     /// addresses the focused node.
-    fn artist_workspace_focused(&self) -> bool {
-        self.track_focused
-            && self.selected_is_artist()
-            && self.current_artist_detail().is_some()
+    pub(super) fn artist_workspace_focused(&self) -> bool {
+        self.track_focused && self.selected_is_artist() && self.current_artist_detail().is_some()
     }
 
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
@@ -413,7 +411,7 @@ impl MusicContent {
     /// `None` when no paint completed (retained geometry is not the painted
     /// projection), when an artist root is focused (the shipped suppression),
     /// or when the window has no album leaf.
-    fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
+    pub(super) fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
         if !self.neighbour_prefetch_eligible() {
             return None;
         }
@@ -449,7 +447,7 @@ impl MusicContent {
     /// the pane belongs to an artist root, otherwise as the ordinary album
     /// track activation. All Workspace gestures use this one fallback so the
     /// stable artist identity gate and album-item resolution cannot drift.
-    fn workspace_track_activation(&self) -> Option<Msg> {
+    pub(super) fn workspace_track_activation(&self) -> Option<Msg> {
         if self.artist_workspace_focused() {
             if let (Some(target), Some(track_id)) = (
                 self.artist_detail_target(),
@@ -463,7 +461,10 @@ impl MusicContent {
         }
         let track = self.selected_track_item()?;
         let album_id = self.focused_track_album_id()?;
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track }))
+        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+            album_id,
+            track,
+        }))
     }
 
     /// Select the album whose existing artwork path supplies an artist Hero.
@@ -522,7 +523,7 @@ impl MusicContent {
     /// leaf's from the album arm, and an artist root without a matching
     /// projection has no honest Hero yet (the push that follows its focus
     /// supplies one).
-    fn resolved_hero_data(&self) -> Option<HeroContentData> {
+    pub(super) fn resolved_hero_data(&self) -> Option<HeroContentData> {
         if let Some(detail) = self.current_artist_detail() {
             let artwork = self.artist_hero_artwork(detail);
             return Some(artist_hero_data(detail, artwork, self.hero_image.clone()));

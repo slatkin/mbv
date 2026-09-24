@@ -3,6 +3,7 @@
 
 use super::tree_fixtures::{find, tree_owner, tree_owner_with_tracks};
 use super::*;
+use crate::app::components::music_content::workspace::build_track_rows;
 
 /// double-click/Right Hero entry while filtered Enter stays local.
 #[test]

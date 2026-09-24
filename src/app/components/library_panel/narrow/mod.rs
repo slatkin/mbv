@@ -51,5 +51,4 @@ pub(in crate::app) fn render_narrow_skeleton(
 }
 
 #[cfg(test)]
-#[path = "narrow_tests.rs"]
-mod narrow_tests;
+mod tests;

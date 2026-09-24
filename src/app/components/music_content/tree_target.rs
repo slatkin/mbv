@@ -1,6 +1,7 @@
-// Included into `music_content` via `include!` (the module's doc and
-// imports live there, beside the split's other parts).
-//
+// The module's documentation and shared imports live in the parent module.
+use super::workspace::track_row_label;
+use super::*;
+
 // The destination's stable-target translation layer (design D6): Music
 // resolves its own domain facts — the selected album/track identity, the
 // focused artist root's settled scope, the ordered mark scope, the settled
@@ -10,7 +11,7 @@
 impl MusicContent {
     /// Resolves the selected tree track to stable identities only. The shell
     /// owns the cached Emby items and resolves the playback queue.
-    fn selected_tree_track(&self) -> Option<(String, String)> {
+    pub(super) fn selected_tree_track(&self) -> Option<(String, String)> {
         let (album_target, track_target) = self.selected_track_identity()?;
         self.tree_tracks
             .get(&album_target)?
@@ -43,12 +44,18 @@ impl MusicContent {
     /// Whether the selected node is an artist root (task 2.2: an artist focus
     /// resolves to no album and never writes album persistence).
     pub(in crate::app) fn selected_is_artist(&self) -> bool {
-        matches!(self.browser.selected_target(), Some(MusicTreeTarget::Artist(_)))
+        matches!(
+            self.browser.selected_target(),
+            Some(MusicTreeTarget::Artist(_))
+        )
     }
 
     /// Whether the selected node is a cached track row.
-    fn selected_is_track(&self) -> bool {
-        matches!(self.browser.selected_target(), Some(MusicTreeTarget::Track { .. }))
+    pub(super) fn selected_is_track(&self) -> bool {
+        matches!(
+            self.browser.selected_target(),
+            Some(MusicTreeTarget::Track { .. })
+        )
     }
 
     /// Whether an album leaf is in the shared owner's current visible flow.
@@ -58,7 +65,10 @@ impl MusicContent {
         if !self.browser.filter_active() {
             return true;
         }
-        self.browser.visible_targets().iter().any(|visible| visible == target)
+        self.browser
+            .visible_targets()
+            .iter()
+            .any(|visible| visible == target)
     }
 
     /// Album targets marked in insertion order. Hidden marks are masked while
@@ -109,7 +119,7 @@ impl MusicContent {
     /// filter session is active, the current visible flow is the visibility
     /// predicate, so only matching leaves cross the component boundary. A
     /// non-artist selection is not an artist action.
-    fn selected_artist_album_targets(&self) -> Option<Vec<String>> {
+    pub(super) fn selected_artist_album_targets(&self) -> Option<Vec<String>> {
         let selected = self.browser.selected_target()?.clone();
         if !matches!(selected, MusicTreeTarget::Artist(_)) {
             return None;
@@ -127,7 +137,7 @@ impl MusicContent {
     /// Resolves an artist root's currently visible album descendants in tree
     /// order for context-hit membership checks. A target the owner does not
     /// hold is an explicit empty result.
-    fn artist_album_targets(&self, root: &MusicTreeTarget) -> Vec<String> {
+    pub(super) fn artist_album_targets(&self, root: &MusicTreeTarget) -> Vec<String> {
         self.browser
             .children_of(root)
             .into_iter()
@@ -143,10 +153,12 @@ impl MusicContent {
     /// and the album's cached track children. Stored played/unplayed facts
     /// are deliberately ignored for music rows; a positive position still
     /// retains `Active`.
-    fn tree_projection(&self) -> Vec<TreeNode<MusicTreeTarget>> {
+    pub(super) fn tree_projection(&self) -> Vec<TreeNode<MusicTreeTarget>> {
         let mut nodes: Vec<TreeNode<MusicTreeTarget>> = Vec::new();
-        let mut root_of_key: HashMap<crate::app::state::music_grouping::ArtistKey, MusicTreeTarget> =
-            HashMap::new();
+        let mut root_of_key: HashMap<
+            crate::app::state::music_grouping::ArtistKey,
+            MusicTreeTarget,
+        > = HashMap::new();
         for &index in &self.context.album_order {
             let Some((artist, year, name)) = self.context.album_info.get(index) else {
                 continue;
@@ -162,16 +174,20 @@ impl MusicContent {
             } else {
                 let target = MusicTreeTarget::Artist(artist_key.clone());
                 root_of_key.insert(artist_key.clone(), target.clone());
-                nodes.push(TreeNode::new(
-                    target.clone(),
-                    None,
-                    artist.clone(),
-                    artist.clone(),
-                    MediaSemanticState::Ordinary,
-                    TreeMarkPolicy::Aggregate,
-                )
-                .with_title_role(crate::app::components::list::tree_browser::TreeTitleRole::Heading)
-                .with_expandable(true));
+                nodes.push(
+                    TreeNode::new(
+                        target.clone(),
+                        None,
+                        artist.clone(),
+                        artist.clone(),
+                        MediaSemanticState::Ordinary,
+                        TreeMarkPolicy::Aggregate,
+                    )
+                    .with_title_role(
+                        crate::app::components::list::tree_browser::TreeTitleRole::Heading,
+                    )
+                    .with_expandable(true),
+                );
                 target
             };
             // The tree's album projection is music by owner context even

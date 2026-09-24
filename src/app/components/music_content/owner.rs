@@ -1,5 +1,5 @@
-// Included into `music_content` via `include!` (the module's doc and
-// imports live there, beside the split's other parts).
+// The module's documentation and shared imports live in the parent module.
+use super::*;
 
 impl InlineSearchHost for MusicContent {
     fn inline_search(&self) -> &InlineSearch {
@@ -18,8 +18,7 @@ impl InlineSearchHost for MusicContent {
             self.inline_search.open();
             // Arming the shared filter session anchors it on the current
             // selection and shows the complete tree for the empty query.
-            self.browser
-                .apply(TreeOperation::EditFilter(String::new()));
+            self.browser.apply(TreeOperation::EditFilter(String::new()));
         }
     }
 
@@ -68,8 +67,7 @@ impl LibraryContentOwner for MusicContent {
         // An unfiltered artist root enters the same Hero/Workspace path as
         // Right on an expanded root. While filtering, Enter remains local to
         // the tree so the panel cannot bypass the filter interaction.
-        (!self.browser.filter_active()
-            && self.selected_is_artist())
+        (!self.browser.filter_active() && self.selected_is_artist())
             || self.selected_item().is_some()
     }
 
@@ -104,10 +102,10 @@ impl LibraryContentOwner for MusicContent {
     fn launch_selector(
         &self,
         state: &mbv_core::config::TuiLaunchState,
-    ) -> Option<super::library_panel::owner::LaunchSelector> {
+    ) -> Option<crate::app::components::library_panel::owner::LaunchSelector> {
         let target = self.group_cursor_for_launch_state(state);
         (self.context.group_cursor != target).then_some(
-            super::library_panel::owner::LaunchSelector::Emby { index: target },
+            crate::app::components::library_panel::owner::LaunchSelector::Emby { index: target },
         )
     }
 
@@ -130,15 +128,15 @@ impl LibraryContentOwner for MusicContent {
             false
         } else {
             match state.item.as_ref() {
-            Some(LibraryItemIdentity::Emby { id }) => {
-                self.browser
-                    .apply(TreeOperation::AnchorSelection {
-                        target: MusicTreeTarget::Album(id.clone()),
-                        flow_offset: 0,
-                    })
-                    .disposition
-                    == TreeConsumed::Consumed
-            }
+                Some(LibraryItemIdentity::Emby { id }) => {
+                    self.browser
+                        .apply(TreeOperation::AnchorSelection {
+                            target: MusicTreeTarget::Album(id.clone()),
+                            flow_offset: 0,
+                        })
+                        .disposition
+                        == TreeConsumed::Consumed
+                }
                 _ => false,
             }
         };
@@ -203,18 +201,19 @@ impl LibraryContentOwner for MusicContent {
                 }
             }
             return match self.inline_search.handle_key(key) {
-                Some(super::inline_search::InlineSearchAction::Activate { id, item_type }) => {
-                    Some(Msg::Shell(ShellRequest::InlineSearchActivate {
-                        id,
-                        item_type,
-                    }))
-                }
-                Some(super::inline_search::InlineSearchAction::Dismiss) => {
+                Some(crate::app::components::inline_search::InlineSearchAction::Activate {
+                    id,
+                    item_type,
+                }) => Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                    id,
+                    item_type,
+                })),
+                Some(crate::app::components::inline_search::InlineSearchAction::Dismiss) => {
                     self.inline_search.close();
                     self.browser.apply(TreeOperation::ClearFilter);
                     None
                 }
-                Some(super::inline_search::InlineSearchAction::QueryStarted) => {
+                Some(crate::app::components::inline_search::InlineSearchAction::QueryStarted) => {
                     Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
                 }
                 None => None,
@@ -339,8 +338,7 @@ impl LibraryContentOwner for MusicContent {
             Key::Char('/') => {
                 if !self.inline_search.is_active() {
                     self.inline_search.open();
-                    self.browser
-                        .apply(TreeOperation::EditFilter(String::new()));
+                    self.browser.apply(TreeOperation::EditFilter(String::new()));
                 }
                 Some(Msg::Shell(ShellRequest::OpenInlineSearch))
             }
@@ -363,17 +361,21 @@ impl LibraryContentOwner for MusicContent {
                             .into_iter()
                             .filter_map(|target| self.workspace_track_item(&target))
                             .collect();
-                        (!items.is_empty()).then_some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-                            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-                            None,
-                        )))
+                        (!items.is_empty()).then_some(Msg::Shell(
+                            ShellRequest::MusicRowContextMenu(
+                                crate::app::state::types::context_menu::ContextMenuTargets::Emby(
+                                    items,
+                                ),
+                                None,
+                            ),
+                        ))
                     }
                     Some(RowIntent::Context(target)) => {
                         self.workspace_track_item(&target).map(|track| {
                             Msg::Shell(ShellRequest::MusicRowContextMenu(
-                                crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
-                                    track,
-                                ]),
+                                crate::app::state::types::context_menu::ContextMenuTargets::Emby(
+                                    vec![track],
+                                ),
                                 None,
                             ))
                         })
@@ -394,7 +396,9 @@ impl LibraryContentOwner for MusicContent {
                 } else {
                     self.selected_item().map(|item| {
                         Msg::Shell(ShellRequest::MusicRowContextMenu(
-                            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
+                            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
+                                item,
+                            ]),
                             None,
                         ))
                     })
@@ -446,7 +450,8 @@ impl LibraryContentOwner for MusicContent {
                 if self.selected_is_artist() {
                     if let Some(root) = self.browser.selected_target().cloned() {
                         if self.browser.is_expanded(&root) {
-                            self.browser.apply(TreeOperation::ToggleExpansionTarget(root));
+                            self.browser
+                                .apply(TreeOperation::ToggleExpansionTarget(root));
                         }
                     }
                     None
@@ -471,7 +476,8 @@ impl LibraryContentOwner for MusicContent {
             Key::Right if !self.track_focused && !self.selected_is_artist() => {
                 if let Some(target) = self.browser.selected_target().cloned() {
                     if !self.browser.is_expanded(&target) {
-                        self.browser.apply(TreeOperation::ToggleExpansionTarget(target));
+                        self.browser
+                            .apply(TreeOperation::ToggleExpansionTarget(target));
                     }
                 }
                 None
@@ -484,7 +490,8 @@ impl LibraryContentOwner for MusicContent {
             Key::Right if !self.track_focused && self.selected_is_artist() => {
                 let root = self.browser.selected_target().cloned()?;
                 if !self.browser.is_expanded(&root) {
-                    self.browser.apply(TreeOperation::ToggleExpansionTarget(root));
+                    self.browser
+                        .apply(TreeOperation::ToggleExpansionTarget(root));
                     return None;
                 }
                 if self.inline_track_focus_enabled {

@@ -4,12 +4,12 @@
 //! the mounted `LibraryPanel` that hosts the owner (task 8.4 deleted the
 //! mounted component, its `ComponentId` and its hit stores).
 
-use super::inline_search::SearchPool;
-use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
-use super::media_list::MediaSemanticState;
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
-use super::tv_content::TvContent;
-use super::tv_tree_target::TvTreeTarget;
+use crate::app::components::inline_search::SearchPool;
+use crate::app::components::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
+use crate::app::components::media_list::MediaSemanticState;
+use crate::app::components::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
+use crate::app::components::tv_content::TvContent;
+use crate::app::components::tv_tree_target::TvTreeTarget;
 use crate::app::components::LibraryKind;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
@@ -78,7 +78,7 @@ fn down(owner: &mut TvContent, code: Key) -> Option<Msg> {
     owner.on_key(&key(code))
 }
 
-fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<super::UserEvent> {
+fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<crate::app::components::UserEvent> {
     Event::Mouse(MouseEvent {
         kind,
         column,
@@ -1058,5 +1058,4 @@ fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     );
 }
 
-#[path = "tv_content_component_tests_search.rs"]
-mod tv_content_component_tests_search;
+mod search;

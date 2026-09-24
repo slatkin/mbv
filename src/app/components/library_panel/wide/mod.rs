@@ -397,5 +397,4 @@ pub(in crate::app) fn text_in(buf: &ratatui::buffer::Buffer, area: Rect, needle:
 }
 
 #[cfg(test)]
-#[path = "wide_tests.rs"]
-mod wide_tests;
+mod tests;
