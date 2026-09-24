@@ -32,9 +32,6 @@ impl RecordedSnapshot {
 struct TestLoop {
     event_loop: DaemonLoop,
     persisted: Persisted,
-    /// Isolates the idle-load install path's incidental direct write; kept
-    /// alive for the test body. `None` when the thread already has a guard.
-    _state_dir: Option<crate::config::TestStateDirGuard>,
 }
 
 fn test_loop_with_role(role: crate::daemon::DaemonRole) -> TestLoop {
@@ -73,7 +70,6 @@ fn test_loop_with_queue(
     TestLoop {
         event_loop,
         persisted,
-        _state_dir: crate::config::TestStateDirGuard::new_if_unset(),
     }
 }
 
@@ -433,4 +429,52 @@ fn role_gate_non_local_dirty_event_persists_nothing() {
 
     assert_eq!(flow, LoopFlow::Continue);
     assert!(t.persisted.borrow().is_empty());
+}
+
+#[test]
+fn idle_queue_load_install_persists_once_through_injected_store() {
+    let mut t = test_loop_with_queue(
+        crate::daemon::DaemonRole::Local,
+        vec![emby_qi("old", "Video", "Movie")],
+        0,
+    );
+    // A real state dir would receive the install path's removed production
+    // write; point it at a tempdir and assert that file never appears.
+    let _guard = crate::config::TestStateDirGuard::new();
+    t.event_loop.client.lock().unwrap().token = "test-token".to_string();
+    let (client_id, _rx) = connect_client(&mut t.event_loop.ctrl_clients.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+
+    let flow = t.event_loop.handle_event(DaemonEvent::Ctrl(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 5,
+            slots: vec![crate::ctrl::UnifiedQueueSlot {
+                slot_id: 1,
+                item: emby_qi("new", "Video", "Movie"),
+            }],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        reply_tx,
+    ));
+
+    assert_eq!(flow, LoopFlow::Continue);
+    assert_eq!(t.event_loop.owner.core.queue.slots()[0].item.id(), "new");
+    assert_eq!(t.event_loop.owner.core.source, QueueSource::Album);
+    // The install path has no inline production write: the loop-pass store is
+    // the single writer, so a committed load records exactly one snapshot.
+    assert_eq!(t.persisted.borrow().len(), 1);
+    assert_eq!(t.persisted.borrow()[0].item_ids, vec!["new".to_string()]);
+    assert!(
+        !crate::config::stay_alive_queue_state_path().exists(),
+        "install path must not write the production store directly"
+    );
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::UnifiedQueueLoadResult {
+            request_id: 5,
+            result: crate::ctrl::QueueLoadResult::Accepted,
+        }
+    ));
 }

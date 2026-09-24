@@ -113,14 +113,10 @@ fn install_idle_queue_load(
         &owner.core.source,
         &owner.core.transitions,
     );
-    if let Err(error) = persist_stay_alive_owner_queue(
-        owner,
-        player,
-        shared_queue,
-        &mut crate::config::save_stay_alive_queue_state,
-    ) {
-        log::error!(target: "queue", "failed to persist accepted Stay-alive queue load: {error}");
-    }
+    // Persistence is owned by the caller's dirty-flag pass: every path that
+    // reaches here (`UnifiedQueueLoadIdle` handled directly, and
+    // `complete_pending_idle_queue_load` on a committed pending load) marks the
+    // owner queue dirty, so the loop persists once through the injected store.
     send_to(
         reply_tx,
         &CtrlEvent::UnifiedQueueLoadResult {
