@@ -83,7 +83,7 @@ impl Model {
     }
 
     pub(super) fn handle_playback_request(&mut self, request: PlaybackRequest) {
-        use super::action::Command;
+        use crate::app::dispatch::action::Command;
         match request {
             PlaybackRequest::TogglePlayPause => self.dispatch_playback(Command::TogglePlayPause),
             PlaybackRequest::Stop => self.dispatch_playback(Command::Stop),
@@ -103,7 +103,7 @@ impl Model {
         }
     }
 
-    fn dispatch_playback(&mut self, command: super::action::Command) {
+    fn dispatch_playback(&mut self, command: crate::app::dispatch::action::Command) {
         let _ = self.app.dispatch(command);
     }
 }

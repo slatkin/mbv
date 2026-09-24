@@ -43,7 +43,7 @@ impl App {
         >,
         delete_secret: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
-        use crate::app::notify_actions::ToastSeverity;
+        use crate::app::dispatch::notify::ToastSeverity;
         if generation.is_some_and(|generation| !self.emby_runtime.accepts(generation)) {
             log::debug!(target: "startup", "ignored stale Emby startup completion");
             return None;
@@ -158,7 +158,7 @@ impl App {
         self.flash(
             crate::app::dispatch::session::service_startup::startup_status(self.emby_runtime.state)
                 .into(),
-            crate::app::notify_actions::ToastSeverity::Warning,
+            crate::app::dispatch::notify::ToastSeverity::Warning,
         );
     }
 
@@ -182,7 +182,7 @@ impl App {
         completion: crate::app::dispatch::session::service_startup::SetupCompletion,
         start_network: bool,
     ) -> Option<HomeContent> {
-        use crate::app::notify_actions::ToastSeverity;
+        use crate::app::dispatch::notify::ToastSeverity;
         if !self.emby_runtime.accepts(completion.generation) {
             log::debug!(target: "startup", "ignored stale Emby setup completion");
             return None;

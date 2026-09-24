@@ -9,7 +9,7 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::action::Command;
+use crate::app::dispatch::action::Command;
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, UserEvent};

@@ -285,7 +285,7 @@ impl App {
         }
         let queue_items = state.items;
         let restored_count = queue_items.len();
-        let cursor = super::super::actions::queue_restore_cursor(
+        let cursor = crate::app::dispatch::actions::queue_restore_cursor(
             &queue_items,
             state.cursor,
             state.last_played_content_id.as_ref(),

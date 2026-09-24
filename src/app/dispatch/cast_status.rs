@@ -2,10 +2,10 @@
 // extrapolation (6.3, 6.4), matching a reported entry to a dispatched item
 // (6.5), and progress reporting to that item's provider (6.6).
 
-use super::App;
 use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
 };
+use crate::app::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
 use mbv_core::cast_client::{CastPlaybackState, CastStatus};
@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 /// design.md targets 5-10s; the receiver drops an unanswered sender after
 /// roughly 90s (see `CastClient::keep_alive`'s doc comment), so any cadence
 /// in that range keeps the heartbeat alive with margin to spare.
-pub(super) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
+pub(in crate::app) const CAST_STATUS_POLL_INTERVAL: Duration = Duration::from_secs(7);
 
 /// A progress report computed from a matched dispatched item, decoupled from
 /// how it's actually sent so the matching+extrapolation core (6.5, and the
@@ -26,7 +26,7 @@ struct CastProgressReport {
 }
 
 impl App {
-    pub(super) fn drain_cast_events(&mut self) -> bool {
+    pub(in crate::app) fn drain_cast_events(&mut self) -> bool {
         let mut produced = false;
         while let Ok(event) = self.cast_rx.try_recv() {
             produced = true;
@@ -39,7 +39,7 @@ impl App {
     /// submitting a job to its worker thread. Calling `keep_alive()` every
     /// tick is not optional plumbing -- see design.md Risks: an unanswered
     /// sender is dropped in ~90s.
-    pub(super) fn spawn_cast_status_poll(&mut self) {
+    pub(in crate::app) fn spawn_cast_status_poll(&mut self) {
         let Some(attachment) = self.cast_attachment.as_ref() else {
             return;
         };
@@ -62,7 +62,7 @@ impl App {
         }));
     }
 
-    pub(super) fn apply_cast_status(
+    pub(in crate::app) fn apply_cast_status(
         &mut self,
         receiver_id: String,
         status: Result<CastStatus, String>,
@@ -97,13 +97,15 @@ impl App {
 
     /// `None` when no cast target is attached; the caller falls back to
     /// local/remote-session playback state.
-    pub(super) fn cast_effective_playback_state(&self) -> Option<super::PlaybackState> {
+    pub(in crate::app) fn cast_effective_playback_state(
+        &self,
+    ) -> Option<crate::app::PlaybackState> {
         let cast = self.cast_attachment.as_ref()?;
         let Some(status) = cast.status.as_ref() else {
             // Attached and dispatched, but no status polled yet: present as
             // active so controls appear immediately (optimistic, matching
             // `attach_cast`'s optimistic-attach shape) rather than idle.
-            return Some(super::PlaybackState {
+            return Some(crate::app::PlaybackState {
                 active: !cast.dispatched.is_empty(),
                 active_idx: self.cast_active_queue_index(cast),
                 position_ticks: 0,
@@ -115,7 +117,7 @@ impl App {
         let position_seconds = cast_extrapolate(status, cast.status_at).unwrap_or(0.0);
         let runtime_ticks =
             (status.duration_seconds.unwrap_or(0.0) as f64 * TICKS_PER_SECOND as f64) as i64;
-        Some(super::PlaybackState {
+        Some(crate::app::PlaybackState {
             active,
             active_idx: self.cast_active_queue_index(cast),
             position_ticks: (position_seconds as f64 * TICKS_PER_SECOND as f64) as i64,
@@ -136,7 +138,7 @@ impl App {
 
     /// Title text for the now-playing header while a cast target is attached
     /// (6.2). `None` when the receiver reports no active media.
-    pub(super) fn cast_now_playing_title(&self, cast: &CastAttachment) -> Option<String> {
+    pub(in crate::app) fn cast_now_playing_title(&self, cast: &CastAttachment) -> Option<String> {
         if cast.disconnected {
             return Some("Cast: disconnected".to_string());
         }
@@ -152,7 +154,7 @@ impl App {
         }
     }
 
-    pub(super) fn cast_extrapolated_position_seconds(&self) -> Option<f32> {
+    pub(in crate::app) fn cast_extrapolated_position_seconds(&self) -> Option<f32> {
         let cast = self.cast_attachment.as_ref()?;
         cast_extrapolate(cast.status.as_ref()?, cast.status_at)
     }
@@ -160,7 +162,7 @@ impl App {
     /// Reports progress to the matched item's provider (6.6). No-op when
     /// nothing is attached, no status has been reported yet, or the
     /// receiver's playing entry can't be matched back to a dispatched item.
-    pub(super) fn report_cast_progress(&mut self) {
+    pub(in crate::app) fn report_cast_progress(&mut self) {
         let Some(cast) = self.cast_attachment.as_ref() else {
             return;
         };

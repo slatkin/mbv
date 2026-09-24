@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, RemoteSlotState};
 use mbv_core::remote_player::DaemonEndpoint;
 

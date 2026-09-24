@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PlayerTab, QueueScope};
 use mbv_core::api::parse_mbv_direct_tcp_port;
 use mbv_core::player::{PlayerEvent, PlayerProxy};

@@ -15,7 +15,7 @@ use crate::app::components::{
     ComponentId, ModalId, Msg, MusicContent, OverlayId, QueueRequest, SearchPool,
     SearchSidebarComponent, ShellRequest, TerminalObserverEvent, UserEvent,
 };
-use crate::app::action::Command;
+use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
@@ -118,7 +118,7 @@ fn live_tick_unhandled_escape_fires_stop_on_the_second_press() {
 
     harness.inject(key(Key::Esc));
     let second = harness.step();
-    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::Stop));
+    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::dispatch::action::Command::Stop));
     assert!(second.deferred_fired);
 }
 

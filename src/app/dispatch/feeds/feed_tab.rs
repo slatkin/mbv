@@ -1,7 +1,7 @@
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::infra::feed_parse::fetch_and_parse_entries;
 use crate::app::state::types::feed_tab::FeedTabRefreshResult;
+use crate::app::App;
 use mbv_core::feed_entry_state::FeedEntryState;
 use mbv_core::playback_queue::{FeedEntry, QueueItem};
 use std::collections::HashMap;
@@ -9,13 +9,13 @@ use std::collections::HashMap;
 impl App {
     /// Whether feed subscriptions are configured and the Feeds tab should
     /// be visible.
-    pub(super) fn has_feeds_subscriptions(&self) -> bool {
+    pub(in crate::app) fn has_feeds_subscriptions(&self) -> bool {
         !self.feed_tab.subscriptions.is_empty()
     }
 
     /// The 1-based tab position of the Feeds tab, or `None` when no
     /// subscriptions exist.
-    pub(super) fn feeds_tab_pos(&self) -> Option<usize> {
+    pub(in crate::app) fn feeds_tab_pos(&self) -> Option<usize> {
         if self.has_feeds_subscriptions() {
             Some(1 + self.libs.len() + self.audiobookshelf_libraries.len())
         } else {
@@ -26,7 +26,7 @@ impl App {
     /// Copy configured subscriptions from the client config into the
     /// feed tab state. Called once at startup and when the config is
     /// reloaded.
-    pub(super) fn sync_feed_subscriptions(&mut self) {
+    pub(in crate::app) fn sync_feed_subscriptions(&mut self) {
         let subs = self.config.lock().unwrap().feeds.clone();
         self.feed_tab.subscriptions = subs;
         // Ensure per-subscription entries vec is the right length.
@@ -35,7 +35,7 @@ impl App {
     }
 
     /// Drain completed background fetch results from the channel.
-    pub(super) fn drain_feed_tab_results(&mut self) -> bool {
+    pub(in crate::app) fn drain_feed_tab_results(&mut self) -> bool {
         let mut had_events = false;
         // Take the receiver once; we'll put it back after draining.
         let rx = match self.feed_tab.refresh_rx.take() {
@@ -91,7 +91,7 @@ impl App {
 
     /// Start a manual refresh of all configured feed subscriptions.
     /// Does nothing if already loading.
-    pub(super) fn refresh_feeds(&mut self) {
+    pub(in crate::app) fn refresh_feeds(&mut self) {
         if self.feed_tab.loading {
             self.flash(
                 "Feeds refresh already in progress".into(),
@@ -115,7 +115,7 @@ impl App {
     /// `refresh_feeds` (which adds a user-facing flash) and the async startup
     /// auto-fetch (which stays silent). Does nothing if already loading or if
     /// no subscriptions are configured.
-    pub(super) fn start_feed_fetch(&mut self) {
+    pub(in crate::app) fn start_feed_fetch(&mut self) {
         if self.feed_tab.loading || self.feed_tab.subscriptions.is_empty() {
             return;
         }
@@ -139,7 +139,7 @@ impl App {
     }
 
     /// Play the exact entry selected by the Feeds Interactive Component.
-    pub(super) fn play_feed_entry(&mut self, entry: FeedEntry) {
+    pub(in crate::app) fn play_feed_entry(&mut self, entry: FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -153,7 +153,7 @@ impl App {
     }
 
     /// Enqueue the exact entry selected by the Feeds Interactive Component.
-    pub(super) fn enqueue_feed_entry(&mut self, entry: FeedEntry) {
+    pub(in crate::app) fn enqueue_feed_entry(&mut self, entry: FeedEntry) {
         if entry.primary_source().is_none() {
             self.flash(
                 "Feed entry has no playable source".into(),
@@ -167,7 +167,7 @@ impl App {
     /// Play a feed selection in its supplied order. The first entry starts the
     /// playback run once; subsequent entries append instead of replacing the
     /// queue and moving playback to the last selected entry.
-    pub(super) fn play_feed_entries(&mut self, entries: Vec<FeedEntry>) {
+    pub(in crate::app) fn play_feed_entries(&mut self, entries: Vec<FeedEntry>) {
         let mut playable = Vec::with_capacity(entries.len());
         for entry in entries {
             if entry.primary_source().is_none() {
@@ -190,7 +190,7 @@ impl App {
     }
 
     /// Enqueue a feed selection in its supplied order.
-    pub(super) fn enqueue_feed_entries(&mut self, entries: Vec<FeedEntry>) {
+    pub(in crate::app) fn enqueue_feed_entries(&mut self, entries: Vec<FeedEntry>) {
         for entry in entries {
             self.enqueue_feed_entry(entry);
         }
@@ -212,7 +212,7 @@ impl App {
     /// Copy stored playback state into one entry before it is played or queued.
     /// A missing feed identity or a missing stored row leaves the entry exactly
     /// as fetched.
-    pub(super) fn hydrate_feed_entry_state(&mut self, mut entry: FeedEntry) -> FeedEntry {
+    pub(in crate::app) fn hydrate_feed_entry_state(&mut self, mut entry: FeedEntry) -> FeedEntry {
         let Some(feed_id) = entry.feed_id.clone() else {
             return entry;
         };
@@ -235,7 +235,7 @@ impl App {
     /// Merge stored state into one subscription's freshly fetched entries with a
     /// single store read rather than one read per entry. Entries with no stored
     /// row stay as fetched (zero position, unplayed).
-    pub(super) fn hydrate_feed_entries_for_subscription(
+    pub(in crate::app) fn hydrate_feed_entries_for_subscription(
         &mut self,
         feed_id: &str,
         entries: &mut [FeedEntry],
@@ -268,7 +268,7 @@ impl App {
     /// Store one entry's playback state and rewrite the state file. A failed
     /// write is logged and discarded: it never stops playback, and the
     /// previously written state stays intact.
-    pub(super) fn write_feed_entry_state(
+    pub(in crate::app) fn write_feed_entry_state(
         &mut self,
         feed_id: &str,
         entry_guid: &str,
@@ -308,7 +308,7 @@ impl App {
     /// invoking Emby progress reporting. `completed` is true for known-runtime
     /// EOF or stop at/above 95% -- played entries store position zero.
     /// Unknown-runtime EOF keeps `played` false.
-    pub(super) fn persist_feed_slot_lifecycle(
+    pub(in crate::app) fn persist_feed_slot_lifecycle(
         &mut self,
         slot_id: mbv_core::playback_queue::QueueSlotId,
         position_ticks: i64,

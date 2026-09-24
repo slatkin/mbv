@@ -255,7 +255,7 @@ fn queue_play_cursor_keeps_observed_progress_until_player_ack() {
     }
     app.panel_focus = crate::app::state::types::settings::PanelFocus::Queue;
     app.player_tab.queue_cursor = 2;
-    app.dispatch(crate::app::action::Command::QueuePlayCursor(2));
+    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(2));
     let observed = app.effective_playback_state();
     assert_eq!(observed.active_idx, Some(0));
     assert_eq!(observed.position_ticks, 18_000_000_000);
@@ -274,7 +274,7 @@ fn rejected_remote_queue_selection_keeps_observed_playhead() {
         status.position_ticks = 18_000_000_000;
         status.runtime_ticks = 24_000_000_000;
     }
-    app.dispatch(crate::app::action::Command::QueuePlayCursor(2));
+    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(2));
     let playback = app.effective_playback_state();
     assert_eq!(playback.active_idx, Some(0));
     assert_eq!(playback.position_ticks, 18_000_000_000);

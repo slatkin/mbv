@@ -321,7 +321,7 @@ fn mixed_play_submits_unchanged_and_reports_unplayable_count() {
     assert!(app.pending_local_play.is_none());
     assert_eq!(
         app.status_severity,
-        crate::app::notify_actions::ToastSeverity::Neutral
+        crate::app::dispatch::notify::ToastSeverity::Neutral
     );
     assert!(app.status.contains("1 item"));
     assert!(app.status.contains("unavailable"));

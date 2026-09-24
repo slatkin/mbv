@@ -3,8 +3,8 @@ use crate::app::state::app_struct::LevelFillState;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::state::types::events::{NavigateLanding, PendingSeriesHandoff};
 use crate::app::{
-    notify_actions::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
-    FeedHomeVideoState, LibEvent, QueueScope,
+    dispatch::notify::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App,
+    BrowseLevel, FeedHomeVideoState, LibEvent, QueueScope,
 };
 use mbv_core::api::EmbyItem;
 

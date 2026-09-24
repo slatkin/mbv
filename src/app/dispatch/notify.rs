@@ -1,4 +1,4 @@
-use super::App;
+use crate::app::App;
 use std::time::{Duration, Instant};
 
 /// Severity class for toast notifications. Neutral and Success display for 2 s;
@@ -42,7 +42,7 @@ impl App {
         }
     }
 
-    pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
         self.clear_saved_library_position(lib_idx);
         let Some(client) = self.emby_snapshot() else {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
@@ -61,7 +61,7 @@ impl App {
     /// bell. Desktop notification is attempted only when severity is not Neutral
     /// (preserving the existing `system_notifications` gating and the
     /// hide-on-success behavior in the render path).
-    pub(super) fn flash(&mut self, msg: String, severity: ToastSeverity) {
+    pub(in crate::app) fn flash(&mut self, msg: String, severity: ToastSeverity) {
         if severity != ToastSeverity::Neutral {
             self.notify_system(&msg);
         }
@@ -71,7 +71,7 @@ impl App {
     }
 
     /// Shorthand for the common `flash(format!("Error: {e}"), ToastSeverity::Error)` case.
-    pub(super) fn flash_error(&mut self, e: impl std::fmt::Display) {
+    pub(in crate::app) fn flash_error(&mut self, e: impl std::fmt::Display) {
         self.flash(format!("Error: {e}"), ToastSeverity::Error);
     }
 
@@ -89,7 +89,7 @@ impl App {
     /// `library_routes` entry would be wrongly rejected for a reason
     /// unrelated to library routing. Mirrors the same condition Task 9
     /// uses to gate `apply_route_for_playback`.
-    pub(super) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
+    pub(in crate::app) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
         if self.in_non_library_thin_client_mode() {
             log::info!(
                 target: "library_route",

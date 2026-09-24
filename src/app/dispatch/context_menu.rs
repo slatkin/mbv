@@ -1,17 +1,17 @@
-use super::notify_actions::ToastSeverity;
-use super::{
-    App, ContextAction, ContextMenuAnchor, ContextMenuEntry, LibEvent, PanelFocus,
-    PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
-};
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::context_menu_capabilities::ItemCapabilities;
 use crate::app::state::types::context_menu::BulkRemoveTarget;
 use crate::app::state::types::context_menu::ContextMenu;
 use crate::app::state::types::overlay::OverlayRequest;
+use crate::app::{
+    App, ContextAction, ContextMenuAnchor, ContextMenuEntry, LibEvent, PanelFocus,
+    PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
+};
 use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
 impl App {
-    pub(super) fn execute_context_action(
+    pub(in crate::app) fn execute_context_action(
         &mut self,
         action: Option<ContextAction>,
         cw_item: Option<EmbyItem>,
@@ -39,7 +39,9 @@ impl App {
                     // focus should not occur, but keep the legacy read for
                     // defensive parity with the pre-D2 behavior.
                     let index = self.displayed_queue().queue_cursor;
-                    self.dispatch(super::action::Command::QueuePlayCursor(index));
+                    self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+                        index,
+                    ));
                 } else if let Some(lib_idx) = lib_idx {
                     let cursor = self
                         .libs
@@ -123,7 +125,9 @@ impl App {
                 }
             }
             Some(ContextAction::PlayQueue(index)) => {
-                self.dispatch(super::action::Command::QueuePlayCursor(index));
+                self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+                    index,
+                ));
             }
             Some(ContextAction::PlayFolder(id)) => {
                 let ct = if let Some(lib_idx) = lib_idx {
@@ -200,7 +204,7 @@ impl App {
     /// queue on submission, while an attached Session must leave the local
     /// Composed queue untouched. Replayed by `run_routed_replacement` for the
     /// gated `PlaySelection`/`ShuffleSelection` sites.
-    pub(super) fn rebuild_queue_for_selection(
+    pub(in crate::app) fn rebuild_queue_for_selection(
         &mut self,
         items: &[EmbyItem],
         source: crate::config::QueueSource,
@@ -282,7 +286,7 @@ impl App {
         }
     }
 
-    pub(super) fn remove_from_continue_watching(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn remove_from_continue_watching(&mut self, item: EmbyItem) {
         // The shell resolved the target Continue Watching item at the Model
         // boundary from Model-owned `home_content` (task 5.3d) -- the App no
         // longer holds `home.continue_items`/`continue_cursor` to re-read.
@@ -315,7 +319,7 @@ impl App {
         }
     }
 
-    pub(super) fn toggle_watched_home_item(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn toggle_watched_home_item(&mut self, item: EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }
@@ -363,7 +367,7 @@ impl App {
     /// targets the supplied item's identity — identical in the legacy flow,
     /// and correct when the component-selected item differs from a parked
     /// App cursor.
-    pub(super) fn toggle_watched_item(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub(in crate::app) fn toggle_watched_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }
@@ -643,7 +647,7 @@ impl App {
         let _ = self.feed_entry_state.save();
     }
 
-    pub(super) fn open_feeds_context_menu(
+    pub(in crate::app) fn open_feeds_context_menu(
         &mut self,
         entries: Vec<mbv_core::playback_queue::FeedEntry>,
         anchor: Option<(u16, u16)>,
@@ -692,7 +696,11 @@ impl App {
     /// It is load-bearing under Queue panel focus while Home is
     /// the active Tab selection; the `self.tab.is_home()` guard short-circuits
     /// it on all other paths.
-    pub(super) fn open_context_menu(&mut self, home_cw_selected: bool, cw_item: Option<EmbyItem>) {
+    pub(in crate::app) fn open_context_menu(
+        &mut self,
+        home_cw_selected: bool,
+        cw_item: Option<EmbyItem>,
+    ) {
         if let Some(menu) = self.build_context_menu(home_cw_selected, cw_item) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
@@ -703,7 +711,7 @@ impl App {
     /// is never a Home-tab menu, so `home_cw_selected` is a harmless `false`
     /// and `cw_item` a harmless `None` (the `self.tab.is_home()` guard
     /// short-circuits both).
-    pub(super) fn open_context_menu_for(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn open_context_menu_for(&mut self, item: EmbyItem) {
         if let Some(menu) = self.build_context_menu_for(Some(item), false, None) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
@@ -712,7 +720,7 @@ impl App {
     /// Build the common multi-selection menu. Capability derivation is an
     /// intersection: an action is present only when every selected item has
     /// the corresponding backend.
-    pub(super) fn open_context_menu_for_selection(
+    pub(in crate::app) fn open_context_menu_for_selection(
         &mut self,
         items: Vec<EmbyItem>,
         anchor: Option<(u16, u16)>,
@@ -780,7 +788,7 @@ impl App {
 
     /// [`open_context_menu_for`](Self::open_context_menu_for) anchored at a
     /// pointer position (narrow grouped-Music album right-click).
-    pub(super) fn open_context_menu_for_at(&mut self, item: EmbyItem, x: u16, y: u16) {
+    pub(in crate::app) fn open_context_menu_for_at(&mut self, item: EmbyItem, x: u16, y: u16) {
         if let Some(mut menu) = self.build_context_menu_for(Some(item), false, None) {
             menu.anchor = ContextMenuAnchor::Pointer { x, y };
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
@@ -797,7 +805,7 @@ impl App {
     /// arm (task 5.3d); the Queue-focus right-click path (which renders the
     /// queue item, not the CW item) passes `None` — execution resolves it at
     /// the Model boundary instead.
-    pub(super) fn open_context_menu_at(
+    pub(in crate::app) fn open_context_menu_at(
         &mut self,
         x: u16,
         y: u16,
@@ -807,7 +815,7 @@ impl App {
         self.open_context_menu_at_for_item(x, y, home_cw_selected, cw_item, None);
     }
 
-    pub(super) fn open_context_menu_at_for_item(
+    pub(in crate::app) fn open_context_menu_at_for_item(
         &mut self,
         x: u16,
         y: u16,

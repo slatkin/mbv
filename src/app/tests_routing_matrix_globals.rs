@@ -1,7 +1,7 @@
 //! Routing matrix: globals precedence and policy rows.
 
 use super::tests_routing_matrix_support::*;
-use crate::app::action::Command;
+use crate::app::dispatch::action::Command;
 use crate::app::components::msg::{ConfirmIntent, ContextMenuIntent};
 use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest};
 use crate::app::input::router::{resolve_router_outcome_with_focused, RouterOutcome};

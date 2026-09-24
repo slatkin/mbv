@@ -1,5 +1,5 @@
-use super::{App, BrowseLevel};
 use crate::app::state::types::browse::BrowseResting;
+use crate::app::{App, BrowseLevel};
 
 /// The shared eligibility gate for the grouped Music owner, consumed by
 /// `is_music_group_view` and grouped landing validation. Keep this in sync
@@ -19,7 +19,7 @@ impl App {
     /// a group-selector bar at top with the album list below.
     /// Activated when `music.levels` starts with `"group"` and the nav stack
     /// has a group level plus an album level above it.
-    pub(super) fn is_grouped_music_library(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_grouped_music_library(&self, lib_idx: usize) -> bool {
         self.libs[lib_idx].library.collection_type == "music"
             && self
                 .music_levels
@@ -27,7 +27,7 @@ impl App {
                 .is_some_and(|level| level == "group")
     }
 
-    pub(super) fn is_music_group_view(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_music_group_view(&self, lib_idx: usize) -> bool {
         if !self.is_grouped_music_library(lib_idx) {
             return false;
         }
@@ -43,7 +43,7 @@ impl App {
     /// miss is a rejected apply: the caller flashes the library error and
     /// leaves the active tab, nav stack, saved Library position, and
     /// retained-owner selection unchanged.
-    pub(super) fn validate_grouped_music_landing(
+    pub(in crate::app) fn validate_grouped_music_landing(
         &self,
         library_id: &str,
         nav_stack: &[BrowseLevel],
@@ -85,7 +85,7 @@ impl App {
     /// while in the combined music group view. Pops the current album level,
     /// adjusts the group cursor (wraps around), then kicks off a fetch for
     /// the new group's albums.
-    pub(super) fn switch_music_group(&mut self, lib_idx: usize, delta: i64) {
+    pub(in crate::app) fn switch_music_group(&mut self, lib_idx: usize, delta: i64) {
         let stack_len = self.libs[lib_idx].nav_stack.len();
         if stack_len < 2 {
             return;
@@ -153,7 +153,7 @@ impl App {
         );
     }
 
-    pub(super) fn select_music_group(&mut self, lib_idx: usize, group_cursor: usize) {
+    pub(in crate::app) fn select_music_group(&mut self, lib_idx: usize, group_cursor: usize) {
         let stack_len = self.libs[lib_idx].nav_stack.len();
         if stack_len < 2 {
             return;
@@ -210,7 +210,7 @@ impl App {
     /// `render::LetterFilter` and
     /// `maybe_capture_library_total_and_apply_default_pill`, which populates
     /// `library_total` on a library's first load.
-    pub(super) fn should_show_letter_pills(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn should_show_letter_pills(&self, lib_idx: usize) -> bool {
         let Some(lib) = self.libs.get(lib_idx) else {
             return false;
         };
@@ -232,7 +232,7 @@ impl App {
     /// range from Emby (`get_items_sorted_ranged`) -- the existing in-list
     /// letter headers (`list.rs`) then bucket the smaller slice per-letter.
     /// Persists the choice so it survives a restart (`LibraryPositionLevel`).
-    pub(super) fn select_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
+    pub(in crate::app) fn select_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
@@ -248,9 +248,9 @@ impl App {
             // resolved TV mode. Treat an explicit pill selection as the
             // legacy range until the first load resolves the size default.
             if self.libs[lib_idx].tv_content_mode.is_none() {
-                let Some(filter) = super::render::LetterFilter::for_index_for_kind(
+                let Some(filter) = crate::app::render::LetterFilter::for_index_for_kind(
                     pill_index,
-                    super::render::LetterFilterKind::Tv,
+                    crate::app::render::LetterFilterKind::Tv,
                 ) else {
                     return;
                 };
@@ -284,7 +284,7 @@ impl App {
             }
             let large = self.libs[lib_idx]
                 .library_total
-                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD);
+                .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
             let mode = match pill_index {
                 0 => mbv_core::config::TvContentMode::Latest,
                 1 => mbv_core::config::TvContentMode::Upcoming,
@@ -292,7 +292,7 @@ impl App {
                 2 => mbv_core::config::TvContentMode::All,
                 _ => return,
             };
-            if matches!((&mode, large), (mbv_core::config::TvContentMode::Range(index), true) if *index >= super::render::LetterFilter::count_for_kind(super::render::LetterFilterKind::Tv))
+            if matches!((&mode, large), (mbv_core::config::TvContentMode::Range(index), true) if *index >= crate::app::render::LetterFilter::count_for_kind(crate::app::render::LetterFilterKind::Tv))
             {
                 return;
             }
@@ -358,9 +358,9 @@ impl App {
                     );
                 }
                 mbv_core::config::TvContentMode::Range(index) => {
-                    let Some(filter) = super::render::LetterFilter::for_index_for_kind(
+                    let Some(filter) = crate::app::render::LetterFilter::for_index_for_kind(
                         index,
-                        super::render::LetterFilterKind::Tv,
+                        crate::app::render::LetterFilterKind::Tv,
                     ) else {
                         return;
                     };
@@ -384,10 +384,11 @@ impl App {
             self.save_default_library_position(lib_idx);
             return;
         }
-        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
-        let Some(filter) = super::render::LetterFilter::for_index_for_kind(pill_index, filter_kind)
+        let Some(filter) =
+            crate::app::render::LetterFilter::for_index_for_kind(pill_index, filter_kind)
         else {
             return;
         };
@@ -426,7 +427,7 @@ impl App {
     /// Cycles the letter-range pill row by `delta` (`[`/`]` keyboard
     /// bindings), wrapping around -- the established pattern from
     /// `switch_music_group`.
-    pub(super) fn cycle_letter_pill(&mut self, lib_idx: usize, delta: i64) {
+    pub(in crate::app) fn cycle_letter_pill(&mut self, lib_idx: usize, delta: i64) {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
@@ -438,8 +439,8 @@ impl App {
                     .and_then(|level| level.tv_content_mode.clone());
             }
             if self.libs[lib_idx].tv_content_mode.is_none() {
-                let count = super::render::LetterFilter::count_for_kind(
-                    super::render::LetterFilterKind::Tv,
+                let count = crate::app::render::LetterFilter::count_for_kind(
+                    crate::app::render::LetterFilterKind::Tv,
                 );
                 let current = self.libs[lib_idx]
                     .nav_stack
@@ -454,7 +455,7 @@ impl App {
             }
             let large = self.libs[lib_idx]
                 .library_total
-                .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD);
+                .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
             let count = if large { 5 } else { 3 };
             let current = match self.libs[lib_idx].tv_content_mode.as_ref() {
                 Some(mbv_core::config::TvContentMode::Latest) => 0,
@@ -473,10 +474,10 @@ impl App {
             self.select_letter_pill(lib_idx, next);
             return;
         }
-        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
-        let n = super::render::LetterFilter::count_for_kind(filter_kind);
+        let n = crate::app::render::LetterFilter::count_for_kind(filter_kind);
         if n == 0 {
             return;
         }
@@ -493,7 +494,7 @@ impl App {
     /// If the music-group library's nav_stack was truncated back to just the
     /// group level (e.g., by a stale breadcrumb click), immediately re-push the
     /// current group's album level so the combined view stays intact.
-    pub(super) fn ensure_music_group_album_level(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn ensure_music_group_album_level(&mut self, lib_idx: usize) {
         if lib_idx >= self.libs.len() {
             return;
         }
@@ -552,13 +553,13 @@ impl App {
     /// indicators for that session (see #88), rather than the local
     /// playlist/cursor state, which doesn't reflect what the session is
     /// playing.
-    pub(super) fn is_audio_item(&self) -> bool {
+    pub(in crate::app) fn is_audio_item(&self) -> bool {
         self.playback_target().is_audio_item(self)
     }
 
-    // Visibility bump: private -> `pub(super)`. Called from
+    // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_loaded`, which stays behind in `actions.rs`.
-    pub(super) fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_auto_push_music_group_level(&mut self, lib_idx: usize) {
         // When the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.

@@ -1,9 +1,9 @@
 use crate::app::state::types::playback::PendingQueueAction;
 
-use super::App;
+use crate::app::App;
 
 impl App {
-    pub(super) fn drain_audiobookshelf_events(&mut self) -> bool {
+    pub(in crate::app) fn drain_audiobookshelf_events(&mut self) -> bool {
         let mut produced = false;
         for test in [false, true] {
             let receiver = if test {
@@ -139,7 +139,7 @@ impl App {
     /// confirmation and notification-failure flag).
     /// Extracted from `run()`'s loop body; returns whether any action was
     /// received so the caller can fold that into its own `had_events` for render scheduling.
-    pub(super) fn drain_notif_actions(&mut self) -> bool {
+    pub(in crate::app) fn drain_notif_actions(&mut self) -> bool {
         let mut produced = false;
         while let Ok(action) = self.notif_action_rx.try_recv() {
             produced = true;
@@ -161,7 +161,7 @@ impl App {
     /// `handle_session_event`. Extracted from `run()`'s loop body; returns
     /// whether any event was received so the caller can fold that into
     /// `had_events`.
-    pub(super) fn drain_session_events(&mut self) -> bool {
+    pub(in crate::app) fn drain_session_events(&mut self) -> bool {
         let mut produced = false;
         while let Ok(ev) = self.sessions_rx.try_recv() {
             produced = true;

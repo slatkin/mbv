@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 #[cfg(test)]
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::App;

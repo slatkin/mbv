@@ -1,4 +1,4 @@
-use crate::app::{notify_actions::ToastSeverity, App, LibEvent, PanelFocus};
+use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;

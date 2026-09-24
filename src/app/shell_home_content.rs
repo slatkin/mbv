@@ -8,8 +8,8 @@ use super::components::library_panel::LibraryKey;
 use super::components::library_panel::LibraryPanel;
 #[cfg(test)]
 use super::components::ComponentId;
-use super::notify_actions::ToastSeverity;
 use super::shell::Model;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
 };

@@ -12,7 +12,7 @@ use std::time::Duration;
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::ContextMenuComponent;
 use crate::app::components::{ComponentId, OverlayId};
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::tests::{install_test_emby, make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{BrowseLevel, LibraryTab, LibEvent, PanelFocus, PanelMode, TabSelection};

@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;

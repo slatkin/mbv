@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
 };
@@ -170,7 +170,7 @@ impl App {
         let sent = self.player.queue_append(items);
         if !sent && self.player.is_remote_disconnected() {
             self.flash(
-                crate::app::actions::CONNECTION_LOST_MESSAGE.to_string(),
+                crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
                 ToastSeverity::Error,
             );
             return false;
@@ -185,7 +185,7 @@ impl App {
         if !sent {
             self.flash(
                 if self.player.is_remote_disconnected() {
-                    crate::app::actions::CONNECTION_LOST_MESSAGE
+                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
                 } else {
                     "Playback owner rejected the queue append"
                 }

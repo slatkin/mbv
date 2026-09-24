@@ -1,8 +1,8 @@
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::App;
 
 impl App {
-    pub(super) fn toggle_mute(&mut self) {
+    pub(in crate::app) fn toggle_mute(&mut self) {
         self.playback_target().toggle_soft_mute(self);
     }
 
@@ -13,7 +13,7 @@ impl App {
     /// outbound command asynchronously via `do_session_command`. Does not
     /// touch local player mute state or the persisted `mute_on` preference --
     /// those are exclusively the local (no-session) branch's concern.
-    pub(super) fn session_toggle_mute(&mut self) {
+    pub(in crate::app) fn session_toggle_mute(&mut self) {
         let Some(conn_id) = self.connected_session_id.clone() else {
             return;
         };
@@ -29,7 +29,7 @@ impl App {
         self.do_session_command(move |c| c.session_set_mute(&conn_id, next));
     }
 
-    pub(super) fn cycle_audio(&mut self) {
+    pub(in crate::app) fn cycle_audio(&mut self) {
         self.playback_target().cycle_audio(self);
     }
 
@@ -42,7 +42,7 @@ impl App {
     /// preferences until the user manually cycled subtitle mode once.
     /// Call this right after any `self.player = PlayerProxy::remote(...)`
     /// assignment.
-    pub(super) fn sync_subtitle_prefs_to_player(&mut self) {
+    pub(in crate::app) fn sync_subtitle_prefs_to_player(&mut self) {
         let prefs = {
             let config = self.config.lock().unwrap();
             if config.subtitle_mode.is_empty()
@@ -64,7 +64,7 @@ impl App {
 
     /// Fetch Emby's preferences after a service-independent startup reaches
     /// Ready. Local preferences remain authoritative once explicitly set.
-    pub(super) fn sync_subtitle_prefs_from_emby(&mut self) {
+    pub(in crate::app) fn sync_subtitle_prefs_from_emby(&mut self) {
         let use_emby_prefs = {
             let config = self.config.lock().unwrap();
             config.subtitle_mode.is_empty()
@@ -89,7 +89,7 @@ impl App {
     }
 
     /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
-    pub(super) fn push_subtitle_prefs(&self) {
+    pub(in crate::app) fn push_subtitle_prefs(&self) {
         let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
         self.player
             .send_command(mbv_core::player::PlayerCommand::SetSubtitlePrefs {
@@ -99,7 +99,7 @@ impl App {
             });
     }
 
-    pub(super) fn cycle_subtitle_mode(&mut self) {
+    pub(in crate::app) fn cycle_subtitle_mode(&mut self) {
         let (new_mode, cfg) = {
             let mut config = self.config.lock().unwrap();
             config.subtitle_mode =
@@ -122,7 +122,7 @@ impl App {
     /// branches of `cycle_sub` so both walk the exact same wraparound logic
     /// (see #86: local `z` used to be a plain on/off toggle instead of
     /// cycling through every track like the remote path).
-    pub(super) fn next_subtitle_entry(entries: &[i64], current: i64) -> i64 {
+    pub(in crate::app) fn next_subtitle_entry(entries: &[i64], current: i64) -> i64 {
         if entries.is_empty() {
             return current;
         }
@@ -136,7 +136,7 @@ impl App {
     /// zero subtitle tracks (nothing to cycle through). Local playback no
     /// longer routes through here -- see #86, which replaced its on/off
     /// toggle with full track-cycling in `cycle_sub`.
-    pub(super) fn toggle_sub(&mut self) {
+    pub(in crate::app) fn toggle_sub(&mut self) {
         let Some(conn_id) = self.connected_session_id.clone() else {
             return;
         };
@@ -157,7 +157,7 @@ impl App {
         self.do_session_command(move |c| c.session_set_subtitle_index(&conn_id, next));
     }
 
-    pub(super) fn cycle_sub(&mut self) {
+    pub(in crate::app) fn cycle_sub(&mut self) {
         self.playback_target().cycle_sub(self);
     }
 }

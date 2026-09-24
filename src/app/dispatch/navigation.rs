@@ -1,9 +1,11 @@
-use super::{App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::infra::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
 use crate::app::state::types::browse::BrowseResting;
+use crate::app::{
+    App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
+};
 use mbv_core::api::EmbyItem;
 
-use super::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 
 impl App {
     /// Ctrl+P activation tail for an explicitly supplied library item (task
@@ -15,7 +17,7 @@ impl App {
     /// own selected item and routes it through the same tail) so the two
     /// paths share one body — the effect acts on the supplied item directly,
     /// never on a re-read App cursor.
-    pub(super) fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub(in crate::app) fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let ct = self.libs[lib_idx].library.collection_type.clone();
             self.play_folder(&item.id.clone(), ct);
@@ -24,7 +26,7 @@ impl App {
         }
     }
 
-    pub(super) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub(in crate::app) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let lib = &mut self.libs[lib_idx];
             lib.nav_stack.push(BrowseLevel {
@@ -178,7 +180,11 @@ impl App {
     /// false when no cached candidate holds the track: resolution failure
     /// flashes the existing library error and leaves queue and playback
     /// unchanged.
-    pub(super) fn play_grouped_track(&mut self, album_target: &str, track_id: &str) -> bool {
+    pub(in crate::app) fn play_grouped_track(
+        &mut self,
+        album_target: &str,
+        track_id: &str,
+    ) -> bool {
         let Some(action) = self.grouped_track_play_action(album_target, track_id) else {
             self.flash(
                 "Library error: track is no longer available".into(),
@@ -198,7 +204,7 @@ impl App {
     /// The tree supplies only its stable album occurrence target and track ID;
     /// this shell-side resolver chooses the cached ordered queue according to
     /// the current autoload policy and returns the complete pending action.
-    pub(super) fn grouped_track_play_action(
+    pub(in crate::app) fn grouped_track_play_action(
         &self,
         album_target: &str,
         track_id: &str,
@@ -244,7 +250,7 @@ impl App {
         true
     }
 
-    pub(super) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
+    pub(in crate::app) fn play_album_track(&mut self, album_id: &str, track: &EmbyItem) -> bool {
         let Some((tracks, start_idx)) = self.resolve_playable_album_tracks(album_id, &track.id)
         else {
             return false;
@@ -277,14 +283,18 @@ impl App {
     /// The caller has resolved this ordered sequence from the shell-owned
     /// artist-detail projection; this method deliberately reuses the existing
     /// Album queue source and routed playback executor.
-    pub(super) fn play_artist_tracks(&mut self, tracks: Vec<EmbyItem>, start_idx: usize) -> bool {
+    pub(in crate::app) fn play_artist_tracks(
+        &mut self,
+        tracks: Vec<EmbyItem>,
+        start_idx: usize,
+    ) -> bool {
         if tracks.is_empty() || start_idx >= tracks.len() {
             return false;
         }
         self.replace_and_route_album_queue(tracks, start_idx)
     }
 
-    pub(super) fn go_back(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn go_back(&mut self, lib_idx: usize) {
         // Defensive bounds check; see `move_lib_cursor_rows` in
         // `lib_cursor_actions.rs` for the stale index contract. Never
         // substitute library zero on a miss.

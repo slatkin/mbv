@@ -1,12 +1,12 @@
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::tab_selection::TabSelection;
+use crate::app::App;
 use mbv_core::config::FeedSubscription;
 
 impl App {
     /// Effect for `ConfirmAction::RemoveFeedSubscription`'s "yes" answer
     /// (§6.3): rewrites `config.feeds` without the removed entry.
-    pub(super) fn remove_feed_confirmed(&mut self, index: usize) {
+    pub(in crate::app) fn remove_feed_confirmed(&mut self, index: usize) {
         let feeds: Vec<FeedSubscription> = {
             let c = self.config.lock().unwrap();
             if index >= c.feeds.len() {
@@ -25,7 +25,7 @@ impl App {
     /// Writes `feeds` into App's general config and persists it via the
     /// existing read-modify-write toml merge (§6.3), then runs the §6.4
     /// post-mutation resync.
-    pub(super) fn persist_feeds(&mut self, feeds: Vec<FeedSubscription>) {
+    pub(in crate::app) fn persist_feeds(&mut self, feeds: Vec<FeedSubscription>) {
         let cfg = {
             let mut c = self.config.lock().unwrap();
             c.feeds = feeds;
@@ -46,7 +46,7 @@ impl App {
     /// the last subscription was removed while Feeds is selected. The Feeds
     /// content owner resets its local selection when the subscription
     /// identity changes during the next shell sync.
-    pub(super) fn after_feeds_mutation(&mut self) {
+    pub(in crate::app) fn after_feeds_mutation(&mut self) {
         self.sync_feed_subscriptions();
         let n = self.feed_tab.subscriptions.len();
         self.feed_tab.entries = vec![Vec::new(); n];

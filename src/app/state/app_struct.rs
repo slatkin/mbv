@@ -151,7 +151,7 @@ pub struct App {
     pub(in crate::app) remote_player_tab: Option<PlayerTab>,
     pub(in crate::app) status: String,
     pub(in crate::app) status_expires: Option<Instant>,
-    pub(in crate::app) status_severity: crate::app::notify_actions::ToastSeverity,
+    pub(in crate::app) status_severity: crate::app::dispatch::notify::ToastSeverity,
     /// `true` only for instances built via `App::new_remote` (the
     /// `--connect-daemon` / local-daemon-auto-detect thin-client launch
     /// path). Those instances never populate `active_route` or

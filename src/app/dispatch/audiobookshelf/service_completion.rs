@@ -47,7 +47,7 @@ impl App {
         &mut self,
         completion: crate::app::dispatch::session::service_startup::AudiobookshelfCompletion,
     ) {
-        use crate::app::notify_actions::ToastSeverity;
+        use crate::app::dispatch::notify::ToastSeverity;
         if !self.audiobookshelf_runtime.accepts(completion.generation) {
             log::debug!(target: "startup", "ignored stale Audiobookshelf completion");
             return;

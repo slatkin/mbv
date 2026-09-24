@@ -619,7 +619,7 @@ impl Model {
             // optional -- see `CAST_STATUS_POLL_INTERVAL`'s doc comment.
             if self.app.cast_attachment.is_some()
                 && self.app.last_cast_poll.elapsed()
-                    >= super::super::cast_status_actions::CAST_STATUS_POLL_INTERVAL
+                    >= crate::app::dispatch::cast_status::CAST_STATUS_POLL_INTERVAL
                 && !self.app.cast_status_loading
             {
                 self.app.spawn_cast_status_poll();

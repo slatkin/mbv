@@ -5,7 +5,7 @@
 //! precedence belongs to the router, not to distributed component mirrors.
 
 use super::resolver::KeyChord;
-use crate::app::action::{idle_feed_command_for_key, Command, VOLUME_STEP};
+use crate::app::dispatch::action::{idle_feed_command_for_key, Command, VOLUME_STEP};
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::keybinds::{action_by_id, Keybinds};

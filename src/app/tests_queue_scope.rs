@@ -169,7 +169,7 @@ fn local_owner_idle_load_rejection_is_reported_without_local_mutation() {
     assert_eq!(app.player_tab.emby_items(), before);
     assert_eq!(app.queue_source, crate::config::QueueSource::Album);
     assert!(app.status.contains("owner busy"));
-    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Error);
+    assert_eq!(app.status_severity, crate::app::dispatch::notify::ToastSeverity::Error);
 }
 
 #[test]
@@ -192,8 +192,8 @@ fn local_owner_disconnect_before_idle_load_acceptance_is_unknown_without_local_m
 
     assert!(matches!(commands.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)));
     assert_eq!(app.player_tab.emby_items(), before);
-    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
-    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+    assert_eq!(app.status, crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, crate::app::dispatch::notify::ToastSeverity::Warning);
 }
 
 #[test]
@@ -296,8 +296,8 @@ fn disconnected_remote_rejects_tab_queue_submission_with_warning() {
         app.queue_source.clone()
     ));
 
-    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
-    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+    assert_eq!(app.status, crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, crate::app::dispatch::notify::ToastSeverity::Warning);
 }
 
 #[test]
@@ -318,8 +318,8 @@ fn deferred_play_on_disconnected_remote_does_not_replace_queue_or_acknowledge() 
     });
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().emby_items(), before);
-    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
-    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+    assert_eq!(app.status, crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, crate::app::dispatch::notify::ToastSeverity::Warning);
 }
 
 #[test]
@@ -359,7 +359,7 @@ fn local_daemon_play_uses_owner_slot_despite_generation_mismatch() {
     }
     let owner_slot = app.player_tab.slots()[1].slot_id;
 
-    app.dispatch(crate::app::action::Command::QueuePlayCursor(1));
+    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(1));
 
     let commands: Vec<_> = cmd_rx.try_iter().collect();
     let requested_owner_slot = commands.iter().any(|cmd| matches!(

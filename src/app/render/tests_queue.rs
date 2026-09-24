@@ -695,7 +695,7 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
         "the panel starts on the playing item's live position"
     );
 
-    app.dispatch(crate::app::action::Command::QueuePlayCursor(1));
+    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(1));
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
 

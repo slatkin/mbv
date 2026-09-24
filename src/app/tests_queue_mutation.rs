@@ -433,8 +433,8 @@ fn enqueue_on_disconnected_remote_rolls_back_and_shows_connection_lost_error() {
             .collect::<Vec<_>>(),
         vec!["id0", "id1", "id2"]
     );
-    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
-    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Error);
+    assert_eq!(app.status, crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, crate::app::dispatch::notify::ToastSeverity::Error);
 }
 
 #[test]
@@ -453,8 +453,8 @@ fn playback_submission_on_disconnected_remote_keeps_queue_and_warns() {
     ));
 
     assert_eq!(app.remote_player_tab.as_ref().unwrap().emby_items().len(), 3);
-    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
-    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+    assert_eq!(app.status, crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, crate::app::dispatch::notify::ToastSeverity::Warning);
 }
 
 #[test]

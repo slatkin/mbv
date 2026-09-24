@@ -1,7 +1,7 @@
 //! Shell-invoked mouse effect handlers for migrated interactive surfaces.
 
-use crate::app::action::Command;
 use crate::app::components::msg::TvHit;
+use crate::app::dispatch::action::Command;
 use crate::app::{App, QueueScope};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
@@ -11,7 +11,7 @@ impl App {
     /// Seek to a 0.0..=1.0 `fraction` of the runtime. `LibraryPlaybackPanel`
     /// resolves the click column against its own painted `seekbar_area`, so the
     /// shell never reads that component-owned geometry.
-    pub(super) fn seek_to_fraction(&mut self, fraction: f64) {
+    pub(in crate::app) fn seek_to_fraction(&mut self, fraction: f64) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             let runtime_s = self
                 .connected_session_state
@@ -48,8 +48,12 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: String) {
-        self.set_panel_focus(super::PanelFocus::Library);
+    pub(in crate::app) fn handle_mouse_single_click_emby(
+        &mut self,
+        lib_idx: usize,
+        target: String,
+    ) {
+        self.set_panel_focus(crate::app::PanelFocus::Library);
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)
@@ -62,11 +66,11 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_single_click_queue(
+    pub(in crate::app) fn handle_mouse_single_click_queue(
         &mut self,
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
     ) -> Option<usize> {
-        self.set_panel_focus(super::PanelFocus::Queue);
+        self.set_panel_focus(crate::app::PanelFocus::Queue);
         let slot_id = slot_id?;
         let index = self
             .displayed_queue()
@@ -79,11 +83,15 @@ impl App {
         Some(index)
     }
 
-    pub(super) fn handle_mouse_selector_click_queue(&mut self, scope: QueueScope) {
+    pub(in crate::app) fn handle_mouse_selector_click_queue(&mut self, scope: QueueScope) {
         self.set_queue_scope(scope);
     }
 
-    pub(super) fn handle_mouse_selector_click_emby(&mut self, lib_idx: usize, target: usize) {
+    pub(in crate::app) fn handle_mouse_selector_click_emby(
+        &mut self,
+        lib_idx: usize,
+        target: usize,
+    ) {
         if self.is_music_group_view(lib_idx) {
             self.select_music_group(lib_idx, target);
         } else if self.is_feed_home_video_group_view(lib_idx) {
@@ -93,7 +101,11 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: String) {
+    pub(in crate::app) fn handle_mouse_double_click_emby(
+        &mut self,
+        lib_idx: usize,
+        target: String,
+    ) {
         self.handle_mouse_single_click_emby(lib_idx, target.clone());
         if self.is_viewing_album_folders(lib_idx) {
             // The mounted Music owner handles album-folder activation through
@@ -118,7 +130,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_double_click_queue(
+    pub(in crate::app) fn handle_mouse_double_click_queue(
         &mut self,
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
     ) {
@@ -131,7 +143,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_right_click_queue(
+    pub(in crate::app) fn handle_mouse_right_click_queue(
         &mut self,
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
         col: u16,
@@ -151,7 +163,7 @@ impl App {
     /// selection to the component-resolved slot and opens the context menu
     /// anchored at the selected row (legacy `SelectedItem` anchor), the same
     /// menu the right-click path builds.
-    pub(super) fn handle_keyboard_context_menu_queue(
+    pub(in crate::app) fn handle_keyboard_context_menu_queue(
         &mut self,
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
         home_cw_selected: bool,
@@ -203,13 +215,13 @@ impl App {
             .cloned()
     }
 
-    pub(super) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
+    pub(in crate::app) fn handle_mouse_single_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         match hit {
             TvHit::SeasonTab(_) | TvHit::EpisodeRow(_) => {
-                self.set_panel_focus(super::PanelFocus::Library);
+                self.set_panel_focus(crate::app::PanelFocus::Library);
             }
             TvHit::SeriesRow(target) => {
-                self.set_panel_focus(super::PanelFocus::Library);
+                self.set_panel_focus(crate::app::PanelFocus::Library);
                 // The component resolved the stable ID from its painted row;
                 // persist that resolved nav index rather than re-reading the
                 // shell's previous cursor. A stale target is a no-op.
@@ -229,13 +241,13 @@ impl App {
             // clicked pill, mirroring `handle_mouse_selector_click_emby`'s
             // letter-pill arm.
             TvHit::LetterPill(index) => {
-                self.set_panel_focus(super::PanelFocus::Library);
+                self.set_panel_focus(crate::app::PanelFocus::Library);
                 self.select_letter_pill(lib_idx, index);
             }
         }
     }
 
-    pub(super) fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
+    pub(in crate::app) fn handle_mouse_double_click_tv(&mut self, lib_idx: usize, hit: TvHit) {
         if let TvHit::SeriesRow(target) = &hit {
             // A target can go stale between painting and delivery; in that
             // case the double-click is intentionally ignored.

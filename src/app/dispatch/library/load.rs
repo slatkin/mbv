@@ -1,6 +1,6 @@
 use crate::app::state::types::playback::HomeContent;
 use crate::app::{
-    notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
+    dispatch::notify::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
 use mbv_core::api::EmbyItem;

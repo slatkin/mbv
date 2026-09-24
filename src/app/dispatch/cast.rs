@@ -5,12 +5,12 @@
 // resolve-and-connect primitive (`connect_cast_receiver`) that attach-on-
 // selection uses lives here too.
 
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
+use crate::app::App;
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::audiobookshelf::AudiobookshelfClient;
 use mbv_core::cast_client::CastMediaItem;
@@ -35,9 +35,9 @@ const CAST_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(3);
 /// open a playback session and resolve its castable source, mirroring
 /// `AudiobookshelfPlayerContext` (player_sources.rs) without depending on
 /// that excluded file.
-pub(super) struct AbsCastContext {
-    pub(super) client: AudiobookshelfClient,
-    pub(super) credential: String,
+pub(in crate::app) struct AbsCastContext {
+    pub(in crate::app) client: AudiobookshelfClient,
+    pub(in crate::app) credential: String,
     device_id: String,
 }
 
@@ -51,7 +51,7 @@ struct ResolvedCastItem {
 }
 
 impl App {
-    pub(super) fn is_cast_attached(&self) -> bool {
+    pub(in crate::app) fn is_cast_attached(&self) -> bool {
         self.cast_attachment.is_some()
     }
 
@@ -65,7 +65,7 @@ impl App {
     /// tick regardless, but doing it here covers the frame between attach
     /// and that tick, and both of this function's callers -- selection and
     /// reattach -- need the same teardown).
-    pub(super) fn attach_cast(&mut self, receiver_id: String) {
+    pub(in crate::app) fn attach_cast(&mut self, receiver_id: String) {
         self.cast_attachment = Some(CastAttachment {
             receiver_id,
             client: None,
@@ -86,7 +86,7 @@ impl App {
     /// completes (matching this codebase's optimistic-attach convention --
     /// see `types_cast.rs`'s doc comment on `CastAttachment.client`), then
     /// reuses the shared resolve-and-connect primitive below.
-    pub(super) fn select_panel_target(&mut self, target: PanelTarget) {
+    pub(in crate::app) fn select_panel_target(&mut self, target: PanelTarget) {
         match target {
             PanelTarget::Emby(session) => self.connect_to_session(&session),
             PanelTarget::Cast(receiver) => {
@@ -101,7 +101,7 @@ impl App {
     /// result back as `CastEvent::DiscoveryCompleted` (8.1). Runs
     /// concurrently with `spawn_sessions_load`'s `/Sessions` fetch -- callers
     /// invoke both, never wait on this one before showing Emby rows.
-    pub(super) fn spawn_cast_discovery(&mut self) {
+    pub(in crate::app) fn spawn_cast_discovery(&mut self) {
         let tx = self.cast_tx.clone();
         std::thread::spawn(move || {
             let receivers = mbv_core::cast_discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
@@ -109,7 +109,7 @@ impl App {
         });
     }
 
-    pub(super) fn set_cast_client(&mut self, receiver_id: &str, client: Sender<CastJob>) {
+    pub(in crate::app) fn set_cast_client(&mut self, receiver_id: &str, client: Sender<CastJob>) {
         if let Some(attachment) = self.cast_attachment.as_mut() {
             if attachment.receiver_id == receiver_id {
                 attachment.client = Some(client);
@@ -121,7 +121,7 @@ impl App {
     /// queue"): no stop, no teardown call. Subsequent playback returns to
     /// the local player because `playback_target()` stops seeing a cast
     /// attachment (5.6).
-    pub(super) fn detach_cast(&mut self) {
+    pub(in crate::app) fn detach_cast(&mut self) {
         self.cast_attachment = None;
     }
 
@@ -131,7 +131,7 @@ impl App {
     /// PlaybackInfo, Audiobookshelf session open), so it runs on a
     /// background thread; the result comes back through `cast_rx`
     /// (`handle_cast_event`).
-    pub(super) fn dispatch_selection_to_cast(
+    pub(in crate::app) fn dispatch_selection_to_cast(
         &mut self,
         all_items: Vec<QueueItem>,
         selected_index: usize,
@@ -188,7 +188,7 @@ impl App {
         });
     }
 
-    pub(super) fn audiobookshelf_cast_context(&self) -> Option<AbsCastContext> {
+    pub(in crate::app) fn audiobookshelf_cast_context(&self) -> Option<AbsCastContext> {
         let config = self.config.lock().unwrap().clone();
         let (setup, credential) =
             crate::app::dispatch::session::service_startup::audiobookshelf_setup_and_key(&config)?;
@@ -208,7 +208,7 @@ impl App {
     /// are blocking network calls (mirrors `try_daemon_route_connect`'s
     /// blocking-network style), and neither may run on the caller's thread.
     /// Shared by attach-on-selection from the discovery panel (8.3).
-    pub(super) fn connect_cast_receiver(&mut self, id: String, timeout: Duration) {
+    pub(in crate::app) fn connect_cast_receiver(&mut self, id: String, timeout: Duration) {
         let tx = self.cast_tx.clone();
         let connect = cast_connect_fn();
         std::thread::spawn(move || {
@@ -226,7 +226,7 @@ impl App {
         });
     }
 
-    pub(super) fn handle_cast_event(&mut self, event: CastEvent) {
+    pub(in crate::app) fn handle_cast_event(&mut self, event: CastEvent) {
         match event {
             CastEvent::Dispatched {
                 receiver_id,
@@ -314,7 +314,7 @@ impl App {
     /// round trip -- the job runs on the dedicated worker instead (see
     /// `state::types::cast::spawn_cast_worker`). A no-op when nothing is attached or
     /// the transport hasn't connected yet.
-    pub(super) fn send_cast_command(
+    pub(in crate::app) fn send_cast_command(
         &self,
         f: impl FnOnce(&mut dyn CastTransport) -> Result<(), String> + Send + 'static,
     ) {
@@ -349,8 +349,9 @@ fn resolve_and_connect_cast_receiver(
 }
 
 #[cfg(test)]
-fn cast_connect_fn() -> super::CastConnectFn {
-    (*super::CAST_CONNECT_OVERRIDE.lock().unwrap()).unwrap_or(resolve_and_connect_cast_receiver)
+fn cast_connect_fn() -> crate::app::CastConnectFn {
+    (*crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap())
+        .unwrap_or(resolve_and_connect_cast_receiver)
 }
 
 #[cfg(not(test))]
@@ -544,11 +545,11 @@ mod tests {
 
     #[test]
     fn selecting_a_cast_target_from_the_panel_attaches_and_leaves_the_queue_intact() {
-        let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
         fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
             Err("not reached by this test".to_string())
         }
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
         app.player_tab.queue = mbv_core::playback_queue::PlaybackQueue::from_queue_items(
@@ -571,7 +572,7 @@ mod tests {
         };
         app.select_panel_target(PanelTarget::Cast(receiver));
 
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
 
         assert!(app.is_cast_attached());
         assert_eq!(
@@ -590,11 +591,11 @@ mod tests {
 
     #[test]
     fn failed_connect_after_selection_detaches_the_phantom_attachment() {
-        let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
         fn connect_fail(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
             Err("receiver not found".to_string())
         }
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_fail);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_fail);
 
         let mut app = make_app_stub();
         let receiver = mbv_core::cast_discovery::CastReceiver {
@@ -614,7 +615,7 @@ mod tests {
             .unwrap();
         app.handle_cast_event(event);
 
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
 
         assert!(
             !app.is_cast_attached(),
@@ -625,11 +626,11 @@ mod tests {
 
     #[test]
     fn selecting_a_cast_target_severs_a_watched_session() {
-        let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
         fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
             Err("not reached by this test".to_string())
         }
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
         app.connected_session_id = Some("sess-1".to_string());
@@ -643,7 +644,7 @@ mod tests {
         };
         app.select_panel_target(PanelTarget::Cast(receiver));
 
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
 
         assert!(app.is_cast_attached());
         assert!(app.connected_session_id.is_none());
@@ -652,11 +653,11 @@ mod tests {
 
     #[test]
     fn selecting_a_cast_target_severs_the_previous_cast_attachment() {
-        let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
         fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
             Err("not reached by this test".to_string())
         }
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
         app.attach_cast("device-old".to_string());
@@ -669,7 +670,7 @@ mod tests {
         };
         app.select_panel_target(PanelTarget::Cast(receiver));
 
-        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
 
         assert_eq!(
             app.cast_attachment.as_ref().unwrap().receiver_id,

@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, LibEvent};
 use mbv_core::config::{QueueState, ServiceKind};
 use mbv_core::playback_queue::QueueItem;

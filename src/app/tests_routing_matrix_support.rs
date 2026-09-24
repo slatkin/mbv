@@ -154,7 +154,7 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
         leaf.clone(),
         key(KeyCode::Char('q')),
         focused.clone(),
-        RouterOutcome::Command(crate::app::action::Command::Quit),
+        RouterOutcome::Command(crate::app::dispatch::action::Command::Quit),
     );
     assert!(command.is_empty(), "Command replaces the focused leaf request");
 

@@ -12,9 +12,9 @@
 //! enum. Other modal handlers still speak directly to `App` and are expected to
 //! migrate to this same `Command` enum over time, one handler at a time.
 
-use super::input::resolver::KeyChord;
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::input::resolver::KeyChord;
+use crate::app::App;
 use crossterm::event::KeyCode;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
@@ -27,7 +27,7 @@ use std::sync::Arc;
 pub(crate) const VOLUME_STEP: i64 = 5;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum Command {
+pub(in crate::app) enum Command {
     OpenIdleFeedLink,
     ToggleVisualizer,
     TogglePlayPause,
@@ -100,7 +100,7 @@ pub(super) enum Command {
     OpenSearch,
     /// Model-owned because mounting Help belongs to the TuiRealm shell.
     OpenHelp,
-    FocusPanel(super::PanelFocus),
+    FocusPanel(crate::app::PanelFocus),
 }
 
 /// Resolve the idle-feed link shortcut. The link's eligibility is its own
@@ -114,7 +114,7 @@ pub(super) enum Command {
 /// queue-visible layout, so the gate follows it instead of the panel mode and
 /// the link is gated off in idle `both` and `queue-only`, on in idle
 /// `library-only` where the strip displays the feed.
-pub(super) fn idle_feed_command_for_key(
+pub(in crate::app) fn idle_feed_command_for_key(
     chord: KeyChord,
     player_active: bool,
     has_connected_session: bool,
@@ -147,7 +147,7 @@ impl App {
             return false;
         }
         self.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
-            super::actions::CONNECTION_LOST_MESSAGE.to_string(),
+            crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
         ));
         true
     }
@@ -165,7 +165,7 @@ impl App {
         sent
     }
 
-    pub(super) fn dispatch_jump(
+    pub(in crate::app) fn dispatch_jump(
         &mut self,
         transition: mbv_core::playback_transition::Transition,
     ) -> bool {
@@ -186,7 +186,7 @@ impl App {
     /// here. When this process is the owner, sync the canonical snapshot,
     /// mint and accept a local transition, and dispatch the transition the
     /// owner accepted now (or queue it behind an in-flight one).
-    pub(super) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
+    pub(in crate::app) fn request_slot_jump(&mut self, slot_id: QueueSlotId) -> bool {
         if self.player.is_remote() {
             return self.request_remote_slot_jump(slot_id);
         }
@@ -211,7 +211,7 @@ impl App {
     /// command vs. a local `Player` command, matching the divergent behavior
     /// `handle_playback_key` had inline (including its known bugs — see issue
     /// #78 follow-up).
-    pub(super) fn dispatch(&mut self, command: Command) -> bool {
+    pub(in crate::app) fn dispatch(&mut self, command: Command) -> bool {
         match command {
             Command::OpenIdleFeedLink => {
                 self.open_idle_feed_link();
@@ -279,7 +279,7 @@ impl App {
                 ) {
                     self.flash(
                         "Playback owner rejected this Audiobookshelf item".into(),
-                        super::notify_actions::ToastSeverity::Error,
+                        crate::app::dispatch::notify::ToastSeverity::Error,
                     );
                     return false;
                 }
@@ -298,13 +298,14 @@ impl App {
                         } else {
                             self.handle_player_event(
                                 mbv_core::player::PlayerEvent::CommandRejected(
-                                    super::actions::CONNECTION_LOST_MESSAGE.to_string(),
+                                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
+                                        .to_string(),
                                 ),
                             );
                         }
                     } else {
                         self.flash(
-                            super::actions::CONNECTION_LOST_MESSAGE.into(),
+                            crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                             ToastSeverity::Warning,
                         );
                     }
@@ -315,7 +316,7 @@ impl App {
                     if entry.primary_source().is_none() {
                         self.flash(
                             "Feed entry has no playable source".into(),
-                            super::notify_actions::ToastSeverity::Error,
+                            crate::app::dispatch::notify::ToastSeverity::Error,
                         );
                         return false;
                     }
@@ -442,7 +443,7 @@ impl App {
                     );
                     if !submitted && self.player.is_remote_disconnected() {
                         self.flash(
-                            super::actions::CONNECTION_LOST_MESSAGE.into(),
+                            crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                             ToastSeverity::Warning,
                         );
                     }
@@ -463,8 +464,8 @@ impl App {
             Command::ForceClear => self.force_clear = true,
             Command::RequestClearQueue => self.request_clear_queue(),
             Command::RefreshCurrentView => self.refresh_current_view(),
-            Command::ToggleSettings => self.request_sidebar_toggle(super::SidebarId::Settings),
-            Command::OpenSessions => self.request_sidebar_toggle(super::SidebarId::Sessions),
+            Command::ToggleSettings => self.request_sidebar_toggle(crate::app::SidebarId::Settings),
+            Command::OpenSessions => self.request_sidebar_toggle(crate::app::SidebarId::Sessions),
             Command::OpenPlaylists => self.open_playlists_panel(),
             Command::OpenSearch => self.open_search_sidebar(),
             // Model handles this shell-only command before delegating the
@@ -483,30 +484,30 @@ impl App {
             Command::CyclePanelMode => {
                 // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view
                 // toggles exactly two states, library-only ⇄ queue-only.
-                if self.terminal_width < super::MINI_VIEW_THRESHOLD {
+                if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
                     self.mini_view_focus = match self.mini_view_focus {
-                        super::PanelFocus::Library => super::PanelFocus::Queue,
-                        super::PanelFocus::Queue => super::PanelFocus::Library,
+                        crate::app::PanelFocus::Library => crate::app::PanelFocus::Queue,
+                        crate::app::PanelFocus::Queue => crate::app::PanelFocus::Library,
                     };
-                    if matches!(self.mini_view_focus, super::PanelFocus::Queue) {
+                    if matches!(self.mini_view_focus, crate::app::PanelFocus::Queue) {
                         self.focus_queue_initial_item();
                     }
                 } else {
                     self.panel_mode = match self.panel_mode {
-                        super::PanelMode::Both => super::PanelMode::QueueOnly,
-                        super::PanelMode::QueueOnly => super::PanelMode::LibraryOnly,
-                        super::PanelMode::LibraryOnly => super::PanelMode::Both,
+                        crate::app::PanelMode::Both => crate::app::PanelMode::QueueOnly,
+                        crate::app::PanelMode::QueueOnly => crate::app::PanelMode::LibraryOnly,
+                        crate::app::PanelMode::LibraryOnly => crate::app::PanelMode::Both,
                     };
                     match self.panel_mode {
-                        super::PanelMode::LibraryOnly => {
-                            if matches!(self.panel_focus, super::PanelFocus::Queue) {
-                                self.set_panel_focus(super::PanelFocus::Library);
+                        crate::app::PanelMode::LibraryOnly => {
+                            if matches!(self.panel_focus, crate::app::PanelFocus::Queue) {
+                                self.set_panel_focus(crate::app::PanelFocus::Library);
                             }
                         }
-                        super::PanelMode::QueueOnly => {
-                            self.set_panel_focus(super::PanelFocus::Queue);
+                        crate::app::PanelMode::QueueOnly => {
+                            self.set_panel_focus(crate::app::PanelFocus::Queue);
                         }
-                        super::PanelMode::Both => {}
+                        crate::app::PanelMode::Both => {}
                     }
                 }
             }
@@ -516,5 +517,4 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "action_tests.rs"]
 mod tests;

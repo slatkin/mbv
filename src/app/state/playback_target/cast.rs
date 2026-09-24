@@ -4,7 +4,7 @@
 // cast-protocol primitive in v1 (design.md Risks) and surface the standard
 // "command not supported" flash instead of a client call.
 
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::render::indicators::IndicatorData;
 use crate::app::{App, CastPlaybackTarget};
 use mbv_core::cast_client::CastPlaybackState;

@@ -1,6 +1,6 @@
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::infra::ui_util::is_playable;
+use crate::app::App;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 
@@ -14,7 +14,7 @@ impl App {
     /// item-targeted tail) from `latest` pills (played directly, or
     /// submitted through the shared non-Emby helper). The folder guard
     /// mirrors `home_play`'s early return.
-    pub(super) fn home_play_target(&mut self, item: QueueItem, from_cw: bool) {
+    pub(in crate::app) fn home_play_target(&mut self, item: QueueItem, from_cw: bool) {
         if matches!(&item, QueueItem::Emby(inner) if inner.is_folder) {
             return;
         }
@@ -42,7 +42,7 @@ impl App {
     /// Enqueue the Home flat-list item the shell resolved at the Model
     /// boundary (task 5.3d, Home typed-effect prep). Uses the supplied item
     /// directly instead of any App-owned cursor.
-    pub(super) fn home_enqueue_target(&mut self, item: QueueItem, from_cw: bool) {
+    pub(in crate::app) fn home_enqueue_target(&mut self, item: QueueItem, from_cw: bool) {
         if from_cw {
             // CW items enqueue through the item-targeted helper with the
             // already-resolved item (task 5.3d, Home effect decoupling)
@@ -69,7 +69,7 @@ impl App {
     /// (`home_play_target`/`cw_play` pre-filter them, matching today's
     /// reachable behavior); non-playable items are a silent no-op, as in
     /// `select_home`.
-    pub(super) fn play_home_cw_item(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn play_home_cw_item(&mut self, item: EmbyItem) {
         if !is_playable(&item) {
             return;
         }

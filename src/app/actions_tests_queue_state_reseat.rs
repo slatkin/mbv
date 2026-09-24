@@ -1,4 +1,4 @@
-use crate::app::action::Command;
+use crate::app::dispatch::action::Command;
 use crate::app::tests::{make_app_stub, make_audio_items};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::time::{Duration, Instant};

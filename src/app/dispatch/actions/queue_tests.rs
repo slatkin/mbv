@@ -82,7 +82,7 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
 
 #[test]
 fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
-    use crate::app::action::Command;
+    use crate::app::dispatch::action::Command;
     use crate::app::state::types::overlay::OverlayRequest;
     use crate::app::tests::make_item;
     use crate::player::PlayerCommand;
@@ -171,7 +171,7 @@ fn queue_double_click_plays_clicked_index_not_follow_cursor() {
 
 #[test]
 fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
-    use crate::app::action::Command;
+    use crate::app::dispatch::action::Command;
     use crate::app::tests::make_item;
     use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
     use crate::player::PlayerCommand;

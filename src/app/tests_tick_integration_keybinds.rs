@@ -49,12 +49,12 @@ fn configured_rebind_fires_through_tick() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::action::Command::OpenHelp),
+        RouterOutcome::Command(crate::app::dispatch::action::Command::OpenHelp),
         "the configured chord fires the rebound action through tick()"
     );
     harness
         .model_mut()
-        .dispatch_router_command(crate::app::action::Command::OpenHelp);
+        .dispatch_router_command(crate::app::dispatch::action::Command::OpenHelp);
     assert!(
         harness.model().application.mounted(&crate::app::components::ComponentId::Overlay(
             OverlayId::Help
@@ -96,7 +96,7 @@ fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::action::Command::PreviousLibraryTab),
+        RouterOutcome::Command(crate::app::dispatch::action::Command::PreviousLibraryTab),
         "Shift+Tab must fire previous_library_tab through tick()"
     );
 }
@@ -128,7 +128,7 @@ fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::action::Command::AdjustVolume(5)),
+        RouterOutcome::Command(crate::app::dispatch::action::Command::AdjustVolume(5)),
         "the configured chord fires the rebound transport action through tick()"
     );
 
@@ -164,7 +164,7 @@ fn shift_n_default_fires_next_track_through_tick() {
     let outcome = harness.step();
     assert_eq!(
         outcome.router,
-        RouterOutcome::Command(crate::app::action::Command::NextTrack),
+        RouterOutcome::Command(crate::app::dispatch::action::Command::NextTrack),
         "Shift+N must fire next_track through tick()"
     );
 }

@@ -3,7 +3,7 @@ use ratatui::Terminal;
 use rstest::rstest;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::action::Command;
+use crate::app::dispatch::action::Command;
 use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
 use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
 use crate::app::tests::{make_app_stub, make_session};

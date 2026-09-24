@@ -1,13 +1,13 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::infra::feed_parse::fetch_and_parse_rss;
 use crate::app::state::types::browse::BrowseResting;
+use crate::app::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use mbv_core::api::EmbyItem;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 impl App {
-    pub(super) fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
+    pub(in crate::app) fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
         let Some(lib) = self.libs.get(lib_idx) else {
             log::debug!(target: "feedhv", "{context}: lib_idx={lib_idx} missing");
             return;
@@ -41,7 +41,7 @@ impl App {
             .unwrap_or(0)
     }
 
-    pub(super) fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
+    pub(in crate::app) fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
         self.libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
@@ -49,7 +49,7 @@ impl App {
             .unwrap_or(0)
     }
 
-    pub(super) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<EmbyItem> {
+    pub(in crate::app) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<EmbyItem> {
         let Some(state) = self
             .libs
             .get(lib_idx)
@@ -69,7 +69,10 @@ impl App {
         }
     }
 
-    pub(super) fn feed_home_video_selected_parent_id(&self, lib_idx: usize) -> Option<String> {
+    pub(in crate::app) fn feed_home_video_selected_parent_id(
+        &self,
+        lib_idx: usize,
+    ) -> Option<String> {
         let lib = self.libs.get(lib_idx)?;
         let root = lib.nav_stack.first()?;
         let state = lib.feed_home_video.as_ref()?;
@@ -88,7 +91,7 @@ impl App {
     /// selected-group item list (see `feed_home_video_selected_items`, which
     /// does clone the full list and remains the right choice for callers that
     /// actually need it).
-    pub(super) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<EmbyItem> {
+    pub(in crate::app) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<EmbyItem> {
         let state = self
             .libs
             .get(lib_idx)
@@ -108,7 +111,7 @@ impl App {
         }
     }
 
-    pub(super) fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
         let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -127,7 +130,11 @@ impl App {
         }
     }
 
-    pub(super) fn remove_item_from_feed_home_video_cache(&mut self, lib_idx: usize, item_id: &str) {
+    pub(in crate::app) fn remove_item_from_feed_home_video_cache(
+        &mut self,
+        lib_idx: usize,
+        item_id: &str,
+    ) {
         let Some(state) = self
             .libs
             .get_mut(lib_idx)
@@ -144,7 +151,7 @@ impl App {
         self.log_feed_home_video_state(lib_idx, "remove_from_cache");
     }
 
-    pub(super) fn ensure_feed_home_video_group_level(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn ensure_feed_home_video_group_level(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
@@ -285,7 +292,7 @@ impl App {
         });
     }
 
-    pub(super) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         let has_state = lib.feed_home_video.as_ref().is_some_and(|state| {
             state.loading || !state.groups.is_empty() || !state.all_items.is_empty()
@@ -308,7 +315,7 @@ impl App {
                 .is_some_and(|lvl| lvl.item_types.is_none())
     }
 
-    pub(super) fn ensure_feed_home_video_root_loaded(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn ensure_feed_home_video_root_loaded(&mut self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
         }
@@ -381,7 +388,7 @@ impl App {
             .contains(&lib.library.name.to_lowercase())
     }
 
-    pub(super) fn select_feed_folder_group(&mut self, lib_idx: usize, group_idx: usize) {
+    pub(in crate::app) fn select_feed_folder_group(&mut self, lib_idx: usize, group_idx: usize) {
         if self.libs[lib_idx].nav_stack.is_empty() {
             return;
         }
@@ -398,7 +405,7 @@ impl App {
         self.log_feed_home_video_state(lib_idx, "select_group");
     }
 
-    pub(super) fn maybe_aggregate_feed_after_loaded(&self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_aggregate_feed_after_loaded(&self, lib_idx: usize) {
         let should_aggregate_feed = self.should_aggregate_feed(lib_idx, |root| {
             root.item_types.is_none() && !root.unplayed_only
         });
@@ -408,7 +415,11 @@ impl App {
         }
     }
 
-    pub(super) fn maybe_aggregate_feed_after_page_append(&self, lib_idx: usize, parent_id: &str) {
+    pub(in crate::app) fn maybe_aggregate_feed_after_page_append(
+        &self,
+        lib_idx: usize,
+        parent_id: &str,
+    ) {
         let should_aggregate_feed =
             self.should_aggregate_feed(lib_idx, |root| root.parent_id == parent_id);
         if should_aggregate_feed {
@@ -417,7 +428,7 @@ impl App {
         }
     }
 
-    pub(super) fn maybe_refresh_feed_groups_after_refresh(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_refresh_feed_groups_after_refresh(&mut self, lib_idx: usize) {
         let should_refresh_feed_groups = self
             .libs
             .get(lib_idx)
@@ -443,7 +454,7 @@ impl App {
     }
 
     /// Spawn a background thread to fetch and parse the idle RSS feed.
-    pub(super) fn spawn_idle_feed_fetch(&self) {
+    pub(in crate::app) fn spawn_idle_feed_fetch(&self) {
         let Some(ref idle_feed) = self.idle_feed else {
             return;
         };
@@ -461,7 +472,7 @@ impl App {
         });
     }
 
-    pub(super) fn idle_feed_link_available(&self) -> bool {
+    pub(in crate::app) fn idle_feed_link_available(&self) -> bool {
         self.idle_feed
             .as_ref()
             .and_then(|feed| feed.items.get(feed.current_index))
@@ -470,7 +481,7 @@ impl App {
     }
 
     /// Open the currently displayed idle-feed item in the user's browser.
-    pub(super) fn open_idle_feed_link(&mut self) {
+    pub(in crate::app) fn open_idle_feed_link(&mut self) {
         let Some(link) = self
             .idle_feed
             .as_ref()
@@ -482,7 +493,7 @@ impl App {
             return;
         };
 
-        if let Err(error) = super::open_url(&link) {
+        if let Err(error) = crate::app::open_url(&link) {
             log::warn!(target: "idle_feed", "Failed to open feed link {link:?}: {error}");
             self.flash(
                 format!("Unable to open feed link: {error}"),
@@ -492,7 +503,7 @@ impl App {
     }
 
     /// Advance the idle feed rotation if enough time has elapsed.
-    pub(super) fn advance_idle_feed_rotation(&mut self) {
+    pub(in crate::app) fn advance_idle_feed_rotation(&mut self) {
         let Some(ref mut idle_feed) = self.idle_feed else {
             return;
         };

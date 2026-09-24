@@ -142,7 +142,7 @@ fn mini_view_panel_does_not_overlay_queue_on_mode_switch() {
     // queue's rows until the next pass. The component paints with the rect the
     // base frame publishes for the frame being drawn, which is empty while the
     // legacy frame owns the queue-only panel.
-    use crate::app::action::Command;
+    use crate::app::dispatch::action::Command;
     let rows = |terminal: &Terminal<TestBackend>, range: std::ops::Range<u16>| -> Vec<String> {
         let buf = terminal.backend().buffer().clone();
         range

@@ -1,7 +1,7 @@
 //! Routing matrix: blocking precedence and policy rows.
 
 use super::tests_routing_matrix_support::*;
-use crate::app::action::Command;
+use crate::app::dispatch::action::Command;
 use crate::app::components::msg::ConfirmIntent;
 use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest};
 use crate::app::input::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};

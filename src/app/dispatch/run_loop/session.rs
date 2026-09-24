@@ -1,7 +1,7 @@
 //! `SessionEvent` handling, split out of `run_loop_events.rs` to keep that
 //! file within the repository's file-size limit.
 
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PanelFocus, SessionEvent, SidebarId};
 use std::time::{Duration, Instant};
 

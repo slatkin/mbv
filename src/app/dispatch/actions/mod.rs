@@ -1,18 +1,18 @@
-use super::notify_actions::ToastSeverity;
-use super::{
+use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::infra::ui_util::natural_sort_key;
+use crate::app::{
     App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
 };
-use crate::app::infra::ui_util::natural_sort_key;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
 use mbv_core::player::PlayerCommand;
-pub(super) use mbv_core::player::CONNECTION_LOST_MESSAGE;
+pub(in crate::app) use mbv_core::player::CONNECTION_LOST_MESSAGE;
 use mbv_core::ItemId;
 use std::sync::Arc;
 
 /// Classification for an explicit Emby play against the attached owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum PlaybackEligibility {
+pub(in crate::app) enum PlaybackEligibility {
     Ineligible,
     WhollyUnplayable { unplayable_count: usize },
     Mixed { unplayable_count: usize },
@@ -70,7 +70,7 @@ fn classify_playback_eligibility(
 impl App {
     /// Return the audio-only fall-through decision for an explicit Emby play.
     /// Empty/unknown selections and Library routes remain on today's path.
-    pub(super) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
+    pub(in crate::app) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
         let attached = self.connected_session_id.is_some() || self.player.is_remote();
         let owner_is_audio_only = if self.connected_session_id.is_some() {
             self.session_owner_is_audio_only()
@@ -181,9 +181,9 @@ impl App {
     /// The tab's canonical pairs are the identity source for both local and
     /// direct-remote owners; fresh `play_queue` projections would diverge
     /// from monotonic tab ids after a replacement.
-    pub(super) fn submit_tab_queue(
+    pub(in crate::app) fn submit_tab_queue(
         &mut self,
-        scope: super::QueueScope,
+        scope: crate::app::QueueScope,
         start_idx: usize,
         source: crate::config::QueueSource,
     ) -> bool {
@@ -207,7 +207,7 @@ impl App {
         if !sent && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
         }
-        if sent && matches!(scope, super::QueueScope::Local) && !self.player.is_remote() {
+        if sent && matches!(scope, crate::app::QueueScope::Local) && !self.player.is_remote() {
             self.stamp_queue_generation(scope);
         }
         sent
@@ -217,9 +217,9 @@ impl App {
     /// mutually exclusive attachment slots (see `remote_slot_state.rs`), but
     /// this ordering keeps the seam correct even if that invariant is ever
     /// relaxed.
-    pub(super) fn playback_target(&self) -> PlaybackTarget {
+    pub(in crate::app) fn playback_target(&self) -> PlaybackTarget {
         if self.cast_attachment.is_some() {
-            return PlaybackTarget::Cast(super::CastPlaybackTarget);
+            return PlaybackTarget::Cast(crate::app::CastPlaybackTarget);
         }
         match self.connected_session_id.clone() {
             Some(session_id) => PlaybackTarget::Remote(RemotePlaybackTarget { session_id }),
@@ -227,7 +227,7 @@ impl App {
         }
     }
 
-    pub(super) fn playback_display_target(&self) -> PlaybackTarget {
+    pub(in crate::app) fn playback_display_target(&self) -> PlaybackTarget {
         if self.cast_attachment.is_some() || self.connected_session_state.is_some() {
             self.playback_target()
         } else {
@@ -235,7 +235,7 @@ impl App {
         }
     }
 
-    pub(super) fn playback_indicator_target(&self) -> PlaybackTarget {
+    pub(in crate::app) fn playback_indicator_target(&self) -> PlaybackTarget {
         let local_active = self.player.status.lock().unwrap().active;
         if local_active {
             PlaybackTarget::Local(LocalPlaybackTarget)
@@ -246,7 +246,7 @@ impl App {
 }
 
 impl App {
-    pub(super) fn remote_audio_indexes(&self) -> Vec<i64> {
+    pub(in crate::app) fn remote_audio_indexes(&self) -> Vec<i64> {
         self.connected_session_state
             .as_ref()
             .map(|state| {
@@ -260,7 +260,7 @@ impl App {
             .unwrap_or_default()
     }
 
-    pub(super) fn remote_subtitle_indexes(&self) -> Vec<i64> {
+    pub(in crate::app) fn remote_subtitle_indexes(&self) -> Vec<i64> {
         self.connected_session_state
             .as_ref()
             .map(|state| {
@@ -274,7 +274,7 @@ impl App {
             .unwrap_or_default()
     }
 
-    pub(super) fn lib_page_size(&self) -> usize {
+    pub(in crate::app) fn lib_page_size(&self) -> usize {
         // The library list is rendered into the right panel; use the panel
         // height directly (rows are single-line; subtract 1 for the
         // count/search header line).
@@ -287,7 +287,11 @@ impl App {
     /// resolved index the caller owns (component-resolved for the generic
     /// browser, or the App nav-level cursor on the legacy context-menu/mouse
     /// paths) — never re-read from `BrowseLevel` (task 4.3, R1).
-    pub(super) fn current_lib_item(&self, lib_idx: usize, cursor: usize) -> Option<EmbyItem> {
+    pub(in crate::app) fn current_lib_item(
+        &self,
+        lib_idx: usize,
+        cursor: usize,
+    ) -> Option<EmbyItem> {
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
@@ -300,7 +304,7 @@ impl App {
         }
     }
 
-    pub(super) fn play_items_routed(
+    pub(in crate::app) fn play_items_routed(
         &mut self,
         items: Vec<EmbyItem>,
         start_idx: usize,
@@ -372,7 +376,7 @@ impl App {
         }
     }
 
-    pub(super) fn play_item(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn play_item(&mut self, item: EmbyItem) {
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return;
@@ -465,7 +469,7 @@ impl App {
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
-    pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::EmbyItem) {
+    pub(in crate::app) fn do_enqueue_folder(&mut self, item: mbv_core::api::EmbyItem) {
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
         let resolved = self.resolve_route_for_enqueue_folder(&item);
         if self.enqueue_route_conflict(resolved) {
@@ -516,7 +520,11 @@ impl App {
     /// enqueue path. Callers resolve their own provider-specific
     /// selection/admission ahead of the call. Returns whether the submit
     /// succeeded.
-    pub(super) fn submit_queue_item(&mut self, item: QueueItem, start_playback: bool) -> bool {
+    pub(in crate::app) fn submit_queue_item(
+        &mut self,
+        item: QueueItem,
+        start_playback: bool,
+    ) -> bool {
         let scope = if start_playback {
             self.playing_queue_scope()
         } else {
@@ -616,23 +624,16 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "actions_tests_letter.rs"]
 mod letter_tests;
 #[cfg(test)]
-#[path = "actions_tests_queue_enrich.rs"]
 mod queue_enrich_tests;
 #[cfg(test)]
-#[path = "actions_tests_queue_state_controls.rs"]
 mod queue_state_control_tests;
 #[cfg(test)]
-#[path = "actions_tests_queue_state.rs"]
 mod queue_state_tests;
 #[cfg(test)]
-#[path = "actions_tests_queue.rs"]
 mod queue_tests;
 #[cfg(test)]
-#[path = "actions_tests_routes.rs"]
 mod route_tests;
 #[cfg(test)]
-#[path = "actions_tests.rs"]
 mod tests;

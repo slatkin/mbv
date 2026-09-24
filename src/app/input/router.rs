@@ -11,8 +11,8 @@ use mbv_core::keybinds::Keybinds;
 
 use super::key_policy::{command_for_policy, resolve_policy, KeyPolicyBinding};
 use super::resolver::KeyChord;
-use crate::app::action::Command;
 use crate::app::components::ComponentId;
+use crate::app::dispatch::action::Command;
 
 pub(in crate::app) use super::key_policy::RouterSnapshot;
 

@@ -189,7 +189,7 @@ impl super::shell::Model {
         if name.is_empty() {
             self.app.flash(
                 "Feed name can't be empty".into(),
-                super::notify_actions::ToastSeverity::Error,
+                crate::app::dispatch::notify::ToastSeverity::Error,
             );
             return;
         }
@@ -218,7 +218,7 @@ impl super::shell::Model {
         }
         self.app.flash(
             format!("Updated '{name}'"),
-            super::notify_actions::ToastSeverity::Success,
+            crate::app::dispatch::notify::ToastSeverity::Success,
         );
     }
 
@@ -232,7 +232,7 @@ impl super::shell::Model {
         if name.is_empty() || url.is_empty() {
             self.app.flash(
                 "Feed name and URL are required".into(),
-                super::notify_actions::ToastSeverity::Error,
+                crate::app::dispatch::notify::ToastSeverity::Error,
             );
             return;
         }
@@ -278,7 +278,7 @@ impl super::shell::Model {
         }
         self.app.flash(
             "Fetching feed…".into(),
-            super::notify_actions::ToastSeverity::Neutral,
+            crate::app::dispatch::notify::ToastSeverity::Neutral,
         );
     }
 
@@ -315,7 +315,7 @@ impl super::shell::Model {
                 self.app.persist_feeds(feeds.clone());
                 self.app.flash(
                     format!("Added '{}'", result.name),
-                    super::notify_actions::ToastSeverity::Success,
+                    crate::app::dispatch::notify::ToastSeverity::Success,
                 );
                 if let Some(component) = self.feeds_manage_component_mut() {
                     component.set_stage(FeedsManageStage::List);
@@ -326,7 +326,7 @@ impl super::shell::Model {
             Err(e) => {
                 self.app.flash(
                     format!("Couldn't add feed: {e}"),
-                    super::notify_actions::ToastSeverity::Error,
+                    crate::app::dispatch::notify::ToastSeverity::Error,
                 );
                 if let Some(component) = self.feeds_manage_component_mut() {
                     component.set_pending_add(None);

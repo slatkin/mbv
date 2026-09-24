@@ -187,6 +187,6 @@ fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
         .into_iter()
         .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
         .collect();
-    let cursor = super::actions::queue_restore_cursor(&items, 2, None, None, false);
+    let cursor = crate::app::dispatch::actions::queue_restore_cursor(&items, 2, None, None, false);
     assert_eq!(cursor, 2);
 }

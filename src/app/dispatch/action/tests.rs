@@ -273,7 +273,10 @@ fn play_item_on_disconnected_remote_shows_connection_lost_not_requesting() {
 
     app.play_item(make_item("Track", "Audio"));
 
-    assert_eq!(app.status, crate::app::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(
+        app.status,
+        crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
+    );
     assert!(!app.status.contains("Requesting playback"));
     assert_eq!(app.status_severity, ToastSeverity::Warning);
 }
@@ -292,7 +295,10 @@ fn queue_play_cursor_on_disconnected_remote_reports_jump_rejection() {
 
     app.dispatch(Command::QueuePlayCursor(1));
 
-    assert_eq!(app.status, crate::app::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(
+        app.status,
+        crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
+    );
     assert_eq!(app.status_severity, ToastSeverity::Error);
     assert_eq!(app.pending_remote_move_cursor, None);
 }

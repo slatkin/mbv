@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use super::action::Command;
 use super::components::msg::AlbumCursorKind;
 use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
@@ -11,6 +10,7 @@ use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
 use super::{App, IdleFeed, ToastSeverity};
+use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 use crate::app::state::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
 use crate::app::state::types::feeds_manage::FeedsManagePopup;

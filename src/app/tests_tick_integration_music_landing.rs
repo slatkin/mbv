@@ -125,7 +125,7 @@ fn navigated_track_is_selected_in_the_workspace_track_list() {
     );
     assert_ne!(
         harness.model().app.status_severity,
-        crate::app::notify_actions::ToastSeverity::Error,
+        crate::app::dispatch::notify::ToastSeverity::Error,
         "a successful deep selection does not flash: {}",
         harness.model().app.status
     );
@@ -159,7 +159,7 @@ fn absent_track_keeps_the_landing_with_default_selection() {
     );
     assert_ne!(
         harness.model().app.status_severity,
-        crate::app::notify_actions::ToastSeverity::Error,
+        crate::app::dispatch::notify::ToastSeverity::Error,
         "absence is not failure: {}",
         harness.model().app.status
     );
@@ -850,7 +850,7 @@ fn rejected_grouped_album_apply_flashes_and_leaves_every_committed_value_unchang
     );
     assert_eq!(
         harness.model().app.status_severity,
-        crate::app::notify_actions::ToastSeverity::Error
+        crate::app::dispatch::notify::ToastSeverity::Error
     );
     assert_eq!(
         harness.model().app.tab,
@@ -899,7 +899,7 @@ fn rejected_non_grouped_music_shape_flashes_and_leaves_every_committed_value_unc
     );
     assert_eq!(
         harness.model().app.status_severity,
-        crate::app::notify_actions::ToastSeverity::Error
+        crate::app::dispatch::notify::ToastSeverity::Error
     );
     assert_eq!(
         harness.model().app.tab,

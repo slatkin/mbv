@@ -4,7 +4,7 @@ use super::components::{
 };
 use super::shell::Model;
 use super::{PanelFocus, PlaybackState, QueueScope};
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use mbv_core::playback_queue::QueueSlotId;
 
 /// The row projection inputs that can change queue rows. Chrome and pause
@@ -244,7 +244,9 @@ impl Model {
             QueueRequest::Play { scope, slot_id } => {
                 if let Some(index) = self.select_queue_slot(scope, slot_id) {
                     self.app
-                        .dispatch(super::action::Command::QueuePlayCursor(index));
+                        .dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+                            index,
+                        ));
                 }
             }
             QueueRequest::Remove { scope, slot_id } => {

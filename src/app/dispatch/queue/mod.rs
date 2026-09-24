@@ -1,19 +1,18 @@
-use super::notify_actions::ToastSeverity;
-use super::{
+use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::infra::ui_util::is_playable;
+use crate::app::state::types::playback::PlaylistMutation;
+use crate::app::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
 };
-use crate::app::infra::ui_util::is_playable;
-use crate::app::state::types::playback::PlaylistMutation;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
 
-#[path = "queue_actions_playlist_mutation.rs"]
-mod queue_actions_playlist_mutation;
+mod playlist_mutation;
 
 impl App {
-    pub(super) fn remove_from_queue(&mut self, pos: usize) {
+    pub(in crate::app) fn remove_from_queue(&mut self, pos: usize) {
         let scope = self.viewed_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
         let active = self.player.status.lock().unwrap().active;
@@ -117,7 +116,7 @@ impl App {
     /// A selection that includes the now-playing row keeps the dedicated
     /// per-row confirmation flow, because stopping playback is a decision the
     /// user has to answer, not a plain edit.
-    pub(super) fn remove_slots_from_queue(
+    pub(in crate::app) fn remove_slots_from_queue(
         &mut self,
         scope: QueueScope,
         slot_ids: &[mbv_core::playback_queue::QueueSlotId],
@@ -212,13 +211,13 @@ impl App {
 
     /// Moves the item at `from` one position earlier. No-op at the start of
     /// the queue.
-    pub(super) fn move_queue_item_up(&mut self, from: usize) {
+    pub(in crate::app) fn move_queue_item_up(&mut self, from: usize) {
         self.move_queue_item_by(from, -1);
     }
 
     /// Moves the item at `from` one position later. No-op at the end of the
     /// queue.
-    pub(super) fn move_queue_item_down(&mut self, from: usize) {
+    pub(in crate::app) fn move_queue_item_down(&mut self, from: usize) {
         self.move_queue_item_by(from, 1);
     }
 
@@ -249,7 +248,7 @@ impl App {
     /// Moves the item at `from` to `to` within `scope`'s queue and records the
     /// undo entry. `scope` is passed explicitly (D2) rather than re-read from
     /// `viewed_queue_scope()` as an ambient channel.
-    pub(super) fn move_queue_item_to(&mut self, scope: QueueScope, from: usize, to: usize) {
+    pub(in crate::app) fn move_queue_item_to(&mut self, scope: QueueScope, from: usize, to: usize) {
         let Some(slot_id) = self.queue_for_scope_mut(scope).slot_id_at(from) else {
             return;
         };
@@ -269,7 +268,12 @@ impl App {
     /// queue copy (mirroring how active-playback removals keep that copy in
     /// sync). Returns
     /// `false` (no-op) if `from`/`to` are out of bounds or equal.
-    pub(super) fn apply_queue_move(&mut self, scope: QueueScope, from: usize, to: usize) -> bool {
+    pub(in crate::app) fn apply_queue_move(
+        &mut self,
+        scope: QueueScope,
+        from: usize,
+        to: usize,
+    ) -> bool {
         let Some(slot_id) = self.queue_for_scope_mut(scope).slot_id_at(from) else {
             return false;
         };
@@ -313,7 +317,7 @@ impl App {
     /// Pops and reverses the most recent undoable edit in `scope`'s queue —
     /// re-inserting a removed item, or swapping a moved item back to where it
     /// came from. No-op if the undo stack for that scope is empty.
-    pub(super) fn undo_last_queue_edit(&mut self, scope: QueueScope) {
+    pub(in crate::app) fn undo_last_queue_edit(&mut self, scope: QueueScope) {
         let Some(entry) = self.undo_stack_for_scope_mut(scope).pop() else {
             return;
         };
@@ -343,13 +347,13 @@ impl App {
         self.set_queue_scope(scope);
     }
 
-    pub(super) fn on_queue_replace_silent(&mut self) {
+    pub(in crate::app) fn on_queue_replace_silent(&mut self) {
         self.reset_bare_transitions();
         self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         self.queue_dirty = false;
     }
 
-    pub(super) fn replace_queue_or_prompt(&mut self, action: PendingQueueAction) {
+    pub(in crate::app) fn replace_queue_or_prompt(&mut self, action: PendingQueueAction) {
         if self.action_touches_local_queue(&action)
             && self.queue_dirty
             && self.queue_is_saved_playlist()
@@ -372,7 +376,10 @@ impl App {
     /// caller must confirm before the replacement runs. An empty target queue
     /// needs no confirmation. Only a `PlayItems` payload is gated; a bare
     /// clear already owns its own confirmation flow.
-    pub(super) fn queue_replacement_needs_confirmation(&self, action: &PendingQueueAction) -> bool {
+    pub(in crate::app) fn queue_replacement_needs_confirmation(
+        &self,
+        action: &PendingQueueAction,
+    ) -> bool {
         matches!(action, PendingQueueAction::PlayItems { .. })
             && self.playback_queue().total_queue_len() > 0
     }
@@ -388,7 +395,7 @@ impl App {
     /// `ReplacePopulatedQueue` confirmation arm reads it, so an in-flight
     /// playlist save (whose completion consumes the shared deferral slot)
     /// cannot fire a replacement the user never confirmed.
-    pub(super) fn request_queue_replacement(
+    pub(in crate::app) fn request_queue_replacement(
         &mut self,
         action: PendingQueueAction,
         via: ReplacementExecutor,
@@ -410,7 +417,11 @@ impl App {
     /// executor its entry point selected. Both the empty-queue path and the
     /// `ReplacePopulatedQueue` confirmation arm call this, so a gated payload
     /// replays exactly what an ungated one would have.
-    pub(super) fn run_replacement(&mut self, action: PendingQueueAction, via: ReplacementExecutor) {
+    pub(in crate::app) fn run_replacement(
+        &mut self,
+        action: PendingQueueAction,
+        via: ReplacementExecutor,
+    ) {
         match via {
             ReplacementExecutor::Pending => {
                 let playlist_load = matches!(
@@ -493,7 +504,7 @@ impl App {
     /// submission). Local saved-playlist protection still runs through
     /// `replace_queue_or_prompt`, which may raise its own save/discard prompt
     /// as a second step before this payload executes.
-    pub(super) fn execute_queue_replacement(&mut self, action: PendingQueueAction) {
+    pub(in crate::app) fn execute_queue_replacement(&mut self, action: PendingQueueAction) {
         if self.has_direct_remote_queue() {
             if let PendingQueueAction::PlayItems {
                 items,
@@ -517,7 +528,7 @@ impl App {
         }
     }
 
-    pub(super) fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
+    pub(in crate::app) fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
         if self.action_touches_local_queue(&action) {
             self.queue_dirty = false;
         }
@@ -530,7 +541,7 @@ impl App {
             } => {
                 if autostart && self.player.is_remote_disconnected() {
                     self.flash(
-                        super::actions::CONNECTION_LOST_MESSAGE.into(),
+                        crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                         ToastSeverity::Warning,
                     );
                     return;
@@ -555,7 +566,7 @@ impl App {
                     match result {
                         Some(Ok(())) => self.set_queue_scope(self.playing_queue_scope()),
                         Some(Err(_)) if self.player.is_remote_disconnected() => self.flash(
-                            super::actions::CONNECTION_LOST_MESSAGE.into(),
+                            crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
                             ToastSeverity::Warning,
                         ),
                         Some(Err(reason)) => self.flash(reason, ToastSeverity::Error),
@@ -639,14 +650,14 @@ impl App {
         }
     }
 
-    pub(super) fn queue_is_saved_playlist(&self) -> bool {
+    pub(in crate::app) fn queue_is_saved_playlist(&self) -> bool {
         matches!(
             &self.queue_source,
             crate::config::QueueSource::Playlist { id: Some(_), .. }
         )
     }
 
-    pub(super) fn queue_playlist_id(&self) -> Option<&str> {
+    pub(in crate::app) fn queue_playlist_id(&self) -> Option<&str> {
         if let crate::config::QueueSource::Playlist {
             id: Some(ref id), ..
         } = self.queue_source
@@ -657,7 +668,7 @@ impl App {
         }
     }
 
-    pub(super) fn queue_playlist_name(&self) -> &str {
+    pub(in crate::app) fn queue_playlist_name(&self) -> &str {
         if let crate::config::QueueSource::Playlist { ref name, .. } = self.queue_source {
             name.as_str()
         } else {
@@ -665,7 +676,7 @@ impl App {
         }
     }
 
-    pub(super) fn save_playlist_to_emby(&mut self) {
+    pub(in crate::app) fn save_playlist_to_emby(&mut self) {
         let Some(playlist_id) = self.queue_playlist_id() else {
             return;
         };
@@ -683,7 +694,7 @@ impl App {
         );
     }
 
-    pub(super) fn save_queue_as_playlist(&mut self, name: String) {
+    pub(in crate::app) fn save_queue_as_playlist(&mut self, name: String) {
         let source_playlist_id = self.queue_playlist_id().map(str::to_string);
         let queue_lineage = self.remote_queue_lineage;
         let owner_queue_lineage = self
@@ -725,7 +736,7 @@ impl App {
     /// update recreates server entry identities. Every full update
     /// (Save/Replace/CreateAs) pushes this queue to Emby, so those identities
     /// are invalidated.
-    pub(super) fn clear_local_playlist_entry_ids(&mut self) {
+    pub(in crate::app) fn clear_local_playlist_entry_ids(&mut self) {
         let slot_ids: Vec<_> = self
             .player_tab
             .queue
@@ -747,7 +758,7 @@ impl App {
         }
     }
 
-    pub(super) fn enqueue_playlist_mutation(
+    pub(in crate::app) fn enqueue_playlist_mutation(
         &mut self,
         playlist_id: String,
         mutation: PlaylistMutation,
@@ -764,7 +775,7 @@ impl App {
         }
     }
 
-    pub(super) fn finish_playlist_mutation(&mut self, playlist_id: &str, mutation_id: u64) {
+    pub(in crate::app) fn finish_playlist_mutation(&mut self, playlist_id: &str, mutation_id: u64) {
         let Some(state) = self.playlist_mutations.get_mut(playlist_id) else {
             return;
         };

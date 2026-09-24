@@ -155,7 +155,7 @@ impl App {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            status_severity: crate::app::notify_actions::ToastSeverity::default(),
+            status_severity: crate::app::dispatch::notify::ToastSeverity::default(),
             layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,

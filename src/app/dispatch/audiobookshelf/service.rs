@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::App;
 use mbv_core::config::QueueState;
 use mbv_core::service_runtime::ServiceState;
@@ -51,7 +51,7 @@ impl App {
         &mut self,
         completion: crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion,
     ) {
-        use crate::app::notify_actions::ToastSeverity;
+        use crate::app::dispatch::notify::ToastSeverity;
         if !self.audiobookshelf_runtime.accepts(completion.generation) {
             return;
         }
@@ -413,7 +413,7 @@ impl App {
         &mut self,
         ev: mbv_core::audiobookshelf_socket::SocketEvent,
     ) {
-        use crate::app::notify_actions::ToastSeverity;
+        use crate::app::dispatch::notify::ToastSeverity;
         match ev {
             mbv_core::audiobookshelf_socket::SocketEvent::Authenticated => {}
             mbv_core::audiobookshelf_socket::SocketEvent::InvalidToken => {

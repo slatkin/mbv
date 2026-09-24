@@ -1,4 +1,4 @@
-use crate::app::notify_actions::ToastSeverity;
+use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
     SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,

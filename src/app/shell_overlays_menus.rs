@@ -457,7 +457,7 @@ impl Model {
                 drop(client);
                 self.app.flash(
                     format!("⚠ Library routes couldn't load libraries ({e})"),
-                    crate::app::notify_actions::ToastSeverity::Error,
+                    crate::app::dispatch::notify::ToastSeverity::Error,
                 );
                 return;
             }
@@ -535,7 +535,7 @@ impl Model {
                 log::warn!(target: "library_route", "F2 session fetch failed library={library_lower:?}: {e}");
                 self.app.flash(
                     format!("⚠ Library routes couldn't load devices ({e})"),
-                    crate::app::notify_actions::ToastSeverity::Error,
+                    crate::app::dispatch::notify::ToastSeverity::Error,
                 );
                 return;
             }
@@ -606,7 +606,7 @@ impl Model {
                     format!(
                         "{name} is not currently routable (no resolvable direct-connect endpoint)"
                     ),
-                    crate::app::notify_actions::ToastSeverity::Neutral,
+                    crate::app::dispatch::notify::ToastSeverity::Neutral,
                 );
                 return;
             }
@@ -640,7 +640,7 @@ impl Model {
                 log::warn!(target: "library_route", "F2 post-save library refresh failed: {e}");
                 self.app.flash(
                     format!("⚠ Library route saved but couldn't refresh libraries ({e})"),
-                    crate::app::notify_actions::ToastSeverity::Error,
+                    crate::app::dispatch::notify::ToastSeverity::Error,
                 );
                 return;
             }
@@ -675,7 +675,7 @@ impl Model {
                 log::warn!(target: "library_route", "config save failed: {e}");
                 self.app.flash(
                     format!("⚠ Library route changed but config save failed ({e})"),
-                    crate::app::notify_actions::ToastSeverity::Error,
+                    crate::app::dispatch::notify::ToastSeverity::Error,
                 );
                 false
             }
