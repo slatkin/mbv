@@ -1,7 +1,9 @@
 //! Audiobookshelf browse tabs: the one-shot browse-kind dispatch plus the
 //! podcast and book browse states, which live in sibling files by tab.
 
+#[cfg(test)]
 use crate::app::render::FeedAgeGroup;
+#[cfg(test)]
 use mbv_core::audiobookshelf::{
     AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookProgress, AudiobookshelfChapter,
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
