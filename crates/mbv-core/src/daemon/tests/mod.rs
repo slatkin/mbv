@@ -8,8 +8,9 @@ use crate::ctrl::DisconnectReason;
 use crate::ctrl::{
     CtrlCmd, CtrlEvent, PlaybackIntent, PlaybackIntentAction, PlaybackIntentOutcome, WireCommand,
 };
-use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem};
-use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerStatus, PlayerOwnerState, SubtitlePrefs};
+use crate::playback_queue::{FeedEntry, PlaybackQueue, QueueItem, AudiobookshelfBookQueueItem};
+use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerStatus, PlayerOwnerState, SubtitlePrefs, AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate};
+use crate::service_runtime::SetupGeneration;
 use crate::ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
@@ -41,6 +42,8 @@ mod abs_queue;
 pub use abs_queue::abs_qi;
 
 mod abs_queue_progress;
+// Re-export helper from abs_queue_progress
+pub use abs_queue_progress::book_qi;
 mod queue_ops;
 // Re-export helper from queue_ops
 pub use queue_ops::owner_with;
