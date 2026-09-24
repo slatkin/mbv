@@ -231,7 +231,43 @@ impl PlaybackRun {
         }
     }
 
+    fn settle_idle_jump_on_restart(
+        &mut self,
+        position_ticks: i64,
+    ) -> Option<(QueueSlotId, Option<crate::playback_transition::Transition>)> {
+        if !self.forced_jump_from_idle {
+            return None;
+        }
+        let slot_id = self.forced_slot_id.take()?;
+        let index = self.queue.slot_index(slot_id)?;
+        let transition = self.forced_transition.take();
+        self.forced_jump_from_idle = false;
+        if !self.set_active_index(index) {
+            return None;
+        }
+        self.load_active_item_state();
+        self.last_valid_pos = position_ticks;
+        self.report_active_item();
+        self.stop_report = StopReport::NotSent;
+        {
+            let item = self.active_item();
+            let mut status = self.status.lock().unwrap();
+            status.active = true;
+            status.position_ticks = self.last_valid_pos;
+            status.runtime_ticks = item.map_or(0, QueueItem::runtime_ticks);
+            if let Some(emby) = item.and_then(QueueItem::as_emby) {
+                status.set_current_item_metadata(emby);
+            } else if let Some(item) = item {
+                status.title = item.title().to_string();
+                status.art_item_id = item.id().to_string();
+            }
+        }
+        self.observe_reporting(true);
+        Some((slot_id, transition))
+    }
+
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        let settled_idle_jump = self.settle_idle_jump_on_restart(mpv_position_ticks(mpv));
         let was_seek = self.last_seek_at.is_some();
         self.active_file_starting = false;
         // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as
@@ -317,6 +353,9 @@ impl PlaybackRun {
         }
         if was_seek {
             self.observe_reporting(true);
+        }
+        if let Some((slot_id, transition)) = settled_idle_jump {
+            self.emit_track_changed(slot_id, transition);
         }
     }
 
@@ -582,6 +621,7 @@ impl PlaybackRun {
         // only if this observation actually lands on its target slot.
         let settling_transition = self.forced_transition.take();
         let logged_forced_slot_id = self.forced_slot_id;
+        self.forced_jump_from_idle = false;
         let next_idx = self
             .forced_slot_id
             .take()

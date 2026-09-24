@@ -125,22 +125,14 @@ fn active_file_load_location() -> (&'static str, String) {
 
 /// Start playback at `start_idx` after the no-play queue loads (design D3).
 ///
-/// Two writes, because mpv resolves the start entry through two different
-/// mechanisms: a *deferred* first start — the one taken when the loads land
-/// inside mpv's own initialization window, which is exactly where the
-/// pre-warmed player sits — comes from the `playlist-start` option, while a
-/// start over an already-playing instance comes from the `playlist-pos`
-/// property write. Leaving `playlist-start` at its default (0) makes the
-/// deferred start play entry 0, and after the D3 head-inserts entry 0 is the
-/// queue's first item: the wrong track plays from the first audible moment and
-/// the run only observes it afterwards. Setting `playlist-pos` on the fully
-/// built, still-idle playlist is what makes mpv load that entry when it is
-/// already settled. An armed audio-pipe startup pause stays in force until the
-/// run's PlaybackRestart gate releases it.
+/// Set the deferred-start ordinal and select the target after the no-play
+/// loads. `playlist-play-index` is required as well as the position writes:
+/// `playlist-pos` can be a no-op when mpv already points at the requested
+/// ordinal (commonly entry zero), leaving a freshly loaded playlist idle.
+/// An armed audio-pipe startup pause stays in force until PlaybackRestart.
 fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
-    // The queue is fully loaded but idle: a failed start leaves the run
-    // silent, so neither write below may be a silent `let _`. The reassert
-    // below only reports a layout mismatch, which this is not.
+    // A position write can be a no-op on an already-selected idle entry, so
+    // issue mpv's explicit play command rather than inferring playback from it.
     warn_on_set_property(
         mpv,
         "start_queue_playback",
@@ -153,6 +145,9 @@ fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
         "playlist-pos",
         start_idx as i64,
     );
+    if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
+        log::warn!(target: "player", "start_queue_playback playlist-play-index={start_idx} failed: {}", mpv_err_str(&error));
+    }
 }
 
 fn warn_on_set_property(mpv: &Mpv, caller: &str, name: &str, value: i64) {
@@ -184,10 +179,11 @@ fn queue_layout_verdict(
     item_count: usize,
     mpv_pos: i64,
     mpv_count: i64,
+    mpv_idle: bool,
 ) -> QueueLayoutVerdict {
     if mpv_count != item_count as i64 {
         QueueLayoutVerdict::ShortLayout
-    } else if mpv_pos == start_idx as i64 {
+    } else if mpv_pos == start_idx as i64 && !mpv_idle {
         QueueLayoutVerdict::Ok
     } else {
         QueueLayoutVerdict::Reassert
@@ -224,16 +220,16 @@ fn mpv_position_ticks(mpv: &Mpv) -> i64 {
 /// layout settles, so nothing else ever re-derives it: reports keep naming the
 /// requested item while mpv streams another one.
 ///
-/// Called once after the loads and the `start_queue_playback` step as a
-/// safety net: with design D3's load-then-play sequence the layout is
-/// already correct, so this must observe `Ok` and do nothing; a mismatch
-/// log after this change means the no-play load plan drifted. A layout that
-/// is short an entry is reported rather than repaired, because a missing
+/// Called after the loads and `start_queue_playback` as a safety net. A
+/// complete, already-playing target observes `Ok`; if mpv still reports idle,
+/// the explicit play command is retried. A layout that is short an entry is
+/// reported rather than repaired, because a missing
 /// entry means the ordinal no longer names the item we think it does.
 fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
     let mpv_count = mpv.get_property::<i64>("playlist-count").unwrap_or(-1);
     let mpv_pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
-    match queue_layout_verdict(start_idx, item_count, mpv_pos, mpv_count) {
+    let mpv_idle = mpv.get_property::<bool>("idle-active").unwrap_or(false);
+    match queue_layout_verdict(start_idx, item_count, mpv_pos, mpv_count, mpv_idle) {
         QueueLayoutVerdict::Ok => {}
         QueueLayoutVerdict::Reassert => {
             log::warn!(
@@ -241,8 +237,14 @@ fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
                 "queue layout mismatch: start_idx={start_idx} items={item_count} \
                  mpv_pos={mpv_pos} mpv_count={mpv_count}; reasserting the active ordinal",
             );
-            let _ = mpv.set_property("playlist-pos", start_idx as i64);
-            let _ = mpv.set_property("pause", false);
+            if mpv_idle {
+                if let Err(error) = mpv.command("playlist-play-index", &[&start_idx.to_string()]) {
+                    log::warn!(target: "player", "queue layout repair playlist-play-index={start_idx} failed: {}", mpv_err_str(&error));
+                }
+            } else {
+                let _ = mpv.set_property("playlist-pos", start_idx as i64);
+                let _ = mpv.set_property("pause", false);
+            }
         }
         QueueLayoutVerdict::ShortLayout => {
             log::error!(

@@ -343,6 +343,25 @@ fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_ite
     ));
 }
 
+#[test]
+fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_video_item() {
+    let mut app = make_app_stub();
+    set_local_queue(&mut app, vec![make_item("Movie", "Movie")], 0);
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 0;
+    }
+    let rx = app.player.spy_on_commands();
+
+    app.dispatch(Command::QueuePlayCursor(0));
+
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(PlayerCommand::SeekAbsolute(pos)) if pos == 0.0
+    ));
+}
+
 // Same unique-tempdir convention as api.rs's test-only `make_temp_data_dir`
 // (uuid-suffixed, under the OS tempdir).
 fn tempfile_dir() -> std::path::PathBuf {

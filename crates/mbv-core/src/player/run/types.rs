@@ -24,6 +24,9 @@ struct PlaybackRun {
     // loop state
     current_idx: usize,
     forced_slot_id: Option<QueueSlotId>,
+    /// Whether the current playlist jump began with no active playback. Such a
+    /// jump has no outgoing EndFile to settle it; PlaybackRestart must do so.
+    forced_jump_from_idle: bool,
     /// Request identity of the in-flight explicit jump that set
     /// `forced_slot_id`, so the settling `TrackChanged` observation can be
     /// tagged with the `(request_id, generation)` it satisfies (design D4).

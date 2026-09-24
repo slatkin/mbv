@@ -380,8 +380,7 @@ impl App {
                     && self.queue_scope_is_playback(scope)
                     && self.local_queue_is_owner_queue(scope)
                 {
-                    let is_audio = item.is_audio();
-                    if t == current_idx && is_audio {
+                    if t == current_idx {
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                     } else if t != current_idx {
                         let Some(slot_id) = slot_id else {

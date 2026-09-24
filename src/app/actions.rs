@@ -456,7 +456,11 @@ impl App {
                 ToastSeverity::Neutral,
             );
         }
-        self.submit_tab_queue(self.playing_queue_scope(), 0, self.queue_source.clone());
+        self.submit_tab_queue(
+            self.playing_queue_scope(),
+            0,
+            crate::config::QueueSource::Unknown,
+        );
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
