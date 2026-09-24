@@ -141,6 +141,11 @@ pub const PLAYLIST_STRIPE_BG: Color = Palette::Green1.color();
 /// (`PLAYLIST_STRIPE_BG`, `SURFACE_FOCUSED`): equal today and independently
 /// editable, so those edits move theirs alone.
 pub const SETTINGS_STRIPE_BG: Color = Palette::Green1.color();
+/// The F3 sessions sidebar list's secondary zebra fill (`#2e383c`). Its own
+/// role replacing the sidebar-band chrome the list painted before
+/// (`SURFACE_CHROME`, `#1e2326` ink), independently editable from that chrome
+/// and the other lists' stripes.
+pub const SESSIONS_STRIPE_BG: Color = Palette::Green1.color();
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the

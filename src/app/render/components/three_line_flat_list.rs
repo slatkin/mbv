@@ -33,7 +33,7 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
         let bg = if selected {
             palette::SELECTED_ROW_BG
         } else if index % 2 == 1 {
-            palette::surface_colors(palette::Surface::SidebarBand, false).fill
+            palette::SESSIONS_STRIPE_BG
         } else {
             surface
         };

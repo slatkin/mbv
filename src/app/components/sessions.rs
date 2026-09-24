@@ -475,7 +475,7 @@ mod tests {
 
         let content = component.painted_content_area.unwrap();
         let y = content.y;
-        let stripe = palette::surface_colors(palette::Surface::SidebarBand, false).fill;
+        let stripe = palette::SESSIONS_STRIPE_BG;
         let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
         let buffer = terminal.backend().buffer();
         // With gap 0 the items are adjacent: item 0 owns y..y+3 and item 1 owns

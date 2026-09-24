@@ -88,7 +88,7 @@ fn test_three_line_buffer_stripes_follow_flow_position_after_scroll() {
         .draw(|frame| list.view(frame, Rect::new(0, 0, 12, 7)))
         .unwrap();
     let buffer = terminal.backend().buffer();
-    let stripe = palette::surface_colors(palette::Surface::SidebarBand, false).fill;
+    let stripe = palette::SESSIONS_STRIPE_BG;
     let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
     assert_eq!(buffer[(0, 0)].bg, stripe);
     assert_eq!(buffer[(0, 4)].bg, palette::SELECTED_ROW_BG);
