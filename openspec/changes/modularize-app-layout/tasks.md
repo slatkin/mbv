@@ -19,8 +19,8 @@ Rules for every task:
 
 ## 2. `state/`
 
-- [ ] 2.1 Move every `types_*.rs` to `state/types/<x>.rs` (`context_menu` as a directory with its tests), merge `settings.rs` into `state/types/settings.rs` (Decision 8), and replace the `use self::types_x::{…}` block in `app/mod.rs` with `use self::state::types::x::{…}`. Keep `pub(crate) use … SidebarId`. Verify: gate, and `ls src/app/types_* src/app/settings.rs` matches nothing.
-- [ ] 2.2 Move the rest of the `state/` table (app_struct, app_init, construct, bootstrap, the `*_state` files, `playback_target/`, `music_artist_detail/`, etc.). Keep the `pub use self::…::App`, `capture_launch_window` and `current_launch_secs` re-exports stable. Verify: gate, and none of the `state/` table's old paths exist.
+- [x] 2.1 Move every `types_*.rs` to `state/types/<x>.rs` (`context_menu` as a directory with its tests), merge `settings.rs` into `state/types/settings.rs` (Decision 8), and replace the `use self::types_x::{…}` block in `app/mod.rs` with `use self::state::types::x::{…}`. Keep `pub(crate) use … SidebarId`. Verify: gate, and `ls src/app/types_* src/app/settings.rs` matches nothing.
+- [x] 2.2 Move the rest of the `state/` table (app_struct, app_init, construct, bootstrap, the `*_state` files, `playback_target/`, `music_artist_detail/`, etc.). Keep the `pub use self::…::App`, `capture_launch_window` and `current_launch_secs` re-exports stable. Verify: gate, and none of the `state/` table's old paths exist.
 
 ## 3. `input/`
 
