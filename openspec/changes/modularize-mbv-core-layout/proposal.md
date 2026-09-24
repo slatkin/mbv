@@ -43,4 +43,4 @@ None. This is a pure refactor, so `skip_specs: true`.
   - Start after `split-daemon-event-loop` is archived, because it rewrites `daemon_run.rs` and adds `daemon_loop.rs`.
   - Start after `tidy-repo-layout`, which fixes the `remote_player/connect` module style first.
   - Don't run it alongside any other change that edits `crates/mbv-core/src/`.
-- Umbrella: sibling of `tidy-repo-layout` and `modularize-app-layout`.
+- Umbrella #772: sibling of `tidy-repo-layout` and `modularize-app-layout`.

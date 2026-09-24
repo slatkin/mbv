@@ -31,4 +31,4 @@ None. This is a pure refactor/tooling change, so `skip_specs: true`.
 - File moves under `scripts/`, `assets/`, `src/app/components/`, `src/app/render/components/`, `crates/mbv-core/src/remote_player/`.
 - `mbv-core`'s public API is unchanged.
 - Out of scope: the audits also flagged `test-support` being enabled on a runtime dependency. `coverage-quick-wins` (#771), task 1.1, already fixes that, so it is not repeated here.
-- Umbrella: tracks alongside `modularize-mbv-core-layout` and `modularize-app-layout`. Land this change first; it is small and makes the later diffs smaller.
+- Umbrella #772: tracks alongside `modularize-mbv-core-layout` and `modularize-app-layout`. Land this change first; it is small and makes the later diffs smaller.

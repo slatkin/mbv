@@ -51,4 +51,4 @@ None. This is a pure refactor, so `skip_specs: true`.
   - Start after `tidy-repo-layout`.
   - Preferably start after `modularize-mbv-core-layout`, which rewrites some `mbv_core::cast_*` paths in `src/app`.
   - Start only when no other active change edits `src/app/`. Today `gate-all-queue-replacements`, `coverage-quick-wins` and `three-line-flat-list` would conflict with the moves.
-- Umbrella: sibling of `tidy-repo-layout` and `modularize-mbv-core-layout`.
+- Umbrella #772: sibling of `tidy-repo-layout` and `modularize-mbv-core-layout`.
