@@ -422,6 +422,10 @@ pub fn run_with_options(
             }
         };
 
+        // Set by any arm below that mutated the owner's canonical queue;
+        // persisted once after the match instead of inline per mutation site.
+        let mut owner_queue_dirty = false;
+
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged { slot_id, transition }) => {
                 // Resolve the reported slot against the canonical queue. A
@@ -615,11 +619,7 @@ pub fn run_with_options(
                     &owner.core.transitions,
                 );
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
-                if role == DaemonRole::Local {
-                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
-                        log::error!(target: "queue", "failed to persist Stay-alive queue progress: {error}");
-                    }
-                }
+                owner_queue_dirty = true;
             }
             DaemonEvent::Player(pe) => {
                 if let PlayerEvent::Stopped { run_identity, .. } = &pe {
@@ -750,10 +750,8 @@ pub fn run_with_options(
                     }
                 }
                 broadcast_player_event_if_not_replaced(&ctrl_clients, pe, replacement_committed);
-                if role == DaemonRole::Local && (stopped_queue_updated || replacement_committed) {
-                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
-                        log::error!(target: "queue", "failed to persist Stay-alive stopped queue: {error}");
-                    }
+                if stopped_queue_updated || replacement_committed {
+                    owner_queue_dirty = true;
                 }
             }
             DaemonEvent::Ws { generation, event } => {
@@ -772,11 +770,7 @@ pub fn run_with_options(
                         &shared_queue,
                         &ctrl_clients,
                     );
-                    if role == DaemonRole::Local {
-                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
-                            log::error!(target: "queue", "failed to persist Stay-alive queue after server update: {error}");
-                        }
-                    }
+                    owner_queue_dirty = true;
                 }
             }
             DaemonEvent::QueueEnriched(items) => {
@@ -894,13 +888,8 @@ pub fn run_with_options(
                     config.stay_alive,
                     role,
                 );
-                if role == DaemonRole::Local
-                    && persist_after_command
-                    && owner.pending_idle_load.is_none()
-                {
-                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
-                        log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
-                    }
+                if persist_after_command && owner.pending_idle_load.is_none() {
+                    owner_queue_dirty = true;
                 }
             }
             DaemonEvent::PlaybackResolved {
@@ -991,11 +980,7 @@ pub fn run_with_options(
                         &ctrl_clients,
                         &owner.core.transitions,
                     );
-                    if role == DaemonRole::Local {
-                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
-                            log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
-                        }
-                    }
+                    owner_queue_dirty = true;
                 }
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
@@ -1024,6 +1009,12 @@ pub fn run_with_options(
                 player.join_or_timeout(std::time::Duration::from_secs(5));
                 let _ = std::fs::remove_file(pid_file());
                 std::process::exit(0);
+            }
+        }
+
+        if role == DaemonRole::Local && owner_queue_dirty {
+            if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
+                log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
             }
         }
     }
