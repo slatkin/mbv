@@ -11,7 +11,7 @@
 
 ## 3. One module-file style
 
-- [ ] 3.1 `git mv src/app/components/msg.rs src/app/components/msg/mod.rs`, `git mv src/app/render/components/media_list.rs src/app/render/components/media_list/mod.rs`, and `git mv crates/mbv-core/src/remote_player/connect.rs crates/mbv-core/src/remote_player/connect/mod.rs`. Fix any relative `include!`/`#[path]` inside the moved files. `connect.rs:4` does `include!("tests.rs")`, which already resolves against `connect/`, so check it still does. Verify: `cargo check --workspace --all-targets` passes, and this loop prints nothing: `for d in (find src crates -mindepth 1 -type d -not -name tests -not -name fixtures -not -name examples); test -f $d.rs; and echo $d; end`
+- [x] 3.1 `git mv src/app/components/msg.rs src/app/components/msg/mod.rs`, `git mv src/app/render/components/media_list.rs src/app/render/components/media_list/mod.rs`, and `git mv crates/mbv-core/src/remote_player/connect.rs crates/mbv-core/src/remote_player/connect/mod.rs`. Fix any relative `include!`/`#[path]` inside the moved files. `connect.rs:4` does `include!("tests.rs")`, which already resolves against `connect/`, so check it still does. Verify: `cargo check --workspace --all-targets` passes, and this loop prints nothing: `for d in (find src crates -mindepth 1 -type d -not -name tests -not -name fixtures -not -name examples); test -f $d.rs; and echo $d; end`
 
 ## 4. Gates
 
