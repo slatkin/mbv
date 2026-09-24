@@ -2,7 +2,7 @@
 
 ## 1. Shared Three-Line Presentation
 
-- [ ] 1.1 Add the target-keyed three-line flat control and one Render Component over the existing `RowFlow`/`Cursored`/`Viewported`/`PaintRetained` seam, with a configurable separator gap; verify with focused state and buffer tests for selection, stripe parity after scroll, short heights, full-card hit bounds, stale-paint invalidation, and gap changes (`cargo nextest run -p mbv -E 'test(three_line)'`). Keep one-line media rows and the tree unchanged.
+- [x] 1.1 Add the target-keyed three-line flat control and one Render Component over the existing `RowFlow`/`Cursored`/`Viewported`/`PaintRetained` seam, with a configurable separator gap; verify with focused state and buffer tests for selection, stripe parity after scroll, short heights, full-card hit bounds, stale-paint invalidation, and gap changes (`cargo nextest run -p mbv -E 'test(three_line)'`). Keep one-line media rows and the tree unchanged.
 
 ## 2. F3 Target Boundary
 
