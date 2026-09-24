@@ -104,7 +104,8 @@ impl App {
     pub(super) fn spawn_cast_discovery(&mut self) {
         let tx = self.cast_tx.clone();
         std::thread::spawn(move || {
-            let receivers = mbv_core::cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
+            let receivers =
+                mbv_core::cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
             let _ = tx.send(CastEvent::DiscoveryCompleted(receivers));
         });
     }
