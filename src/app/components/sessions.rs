@@ -68,6 +68,12 @@ impl SessionsComponent {
         can_disconnect: bool,
         panel_area: Option<Rect>,
     ) {
+        let geometry_changed = self.requested_panel_area != panel_area
+            || self
+                .targets
+                .iter()
+                .map(PanelTarget::key)
+                .ne(targets.iter().map(PanelTarget::key));
         self.targets = targets.to_vec();
         self.loading = loading;
         self.connected_session_id = connected_session_id.map(str::to_owned);
@@ -75,7 +81,9 @@ impl SessionsComponent {
         self.can_disconnect = can_disconnect;
         self.requested_panel_area = panel_area;
         self.content_dirty = true;
-        self.list.invalidate_paint();
+        if geometry_changed {
+            self.list.invalidate_paint();
+        }
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -228,6 +236,27 @@ impl SessionsComponent {
     #[cfg(test)]
     pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
         self.mouse_gestures.reset_for_test();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn selection_and_offset_for_test(&self) -> (Option<SessionTargetKey>, usize) {
+        (
+            self.list.selected_target().cloned(),
+            Viewported::viewport_offset(&self.list),
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn content_area_for_test(&self) -> Option<Rect> {
+        self.painted_content_area
+    }
+
+    #[cfg(test)]
+    pub(crate) fn target_at_for_test(
+        &self,
+        point: ratatui::layout::Position,
+    ) -> Option<SessionTargetKey> {
+        self.list.resolve_point(point).cloned()
     }
 }
 
