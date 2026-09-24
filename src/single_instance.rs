@@ -92,3 +92,77 @@ pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
 pub fn read_pid(lock: &Path) -> Option<u32> {
     std::fs::read_to_string(lock).ok()?.trim().parse().ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::net::UnixListener;
+
+    fn unique_temp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("mbv-si-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    /// `Fresh` + PID round-trip: a free lock is acquired and `mbv -q`'s
+    /// `read_pid` must then recover this process's id.
+    #[test]
+    fn fresh_lock_round_trips_the_pid() {
+        let dir = unique_temp_dir();
+        let lock = dir.join("mbv.lock");
+        let socket = dir.join("mbv.sock");
+
+        let Ok(Resolution::Fresh(mut guard)) = resolve(&socket, &lock) else {
+            panic!("expected a fresh lock on an unused path");
+        };
+        guard.write_pid().expect("write pid under the held lock");
+        assert_eq!(read_pid(&lock), Some(std::process::id()));
+
+        drop(guard);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Held lock: `Attach` iff the socket actually connects. A plain file at
+    /// the socket path must not count (ADR 0006). The held lock is
+    /// reproducible because flocks attach to the open file description.
+    #[test]
+    fn held_lock_attaches_only_to_a_connectable_socket() {
+        let dir = unique_temp_dir();
+        let lock = dir.join("mbv.lock");
+        let socket = dir.join("mbv.sock");
+
+        let Ok(Resolution::Fresh(_guard)) = resolve(&socket, &lock) else {
+            panic!("expected the first resolve to take a fresh lock");
+        };
+
+        // No socket file at all: a bare foreground TUI owns the lock.
+        assert!(matches!(resolve(&socket, &lock), Ok(Resolution::Refuse)));
+
+        // A non-listening file at the socket path must not be mistaken for a
+        // daemon.
+        std::fs::write(&socket, b"").expect("seed socket path with a plain file");
+        assert!(matches!(resolve(&socket, &lock), Ok(Resolution::Refuse)));
+
+        // A real listener: attach as a client.
+        std::fs::remove_file(&socket).expect("clear path for bind");
+        let listener = UnixListener::bind(&socket).expect("bind test listener");
+        assert!(matches!(resolve(&socket, &lock), Ok(Resolution::Attach)));
+        drop(listener);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `mbv -q` must not choke on a missing or malformed lock file.
+    #[test]
+    fn read_pid_is_none_for_missing_or_garbage_lock() {
+        let dir = unique_temp_dir();
+
+        assert_eq!(read_pid(&dir.join("absent.lock")), None);
+
+        let garbage = dir.join("garbage.lock");
+        std::fs::write(&garbage, "not-a-pid\n").expect("write garbage lock");
+        assert_eq!(read_pid(&garbage), None);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
