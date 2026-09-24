@@ -101,16 +101,16 @@
 
 ## 7. Verification and closure
 
-- [ ] 7.1 Run the gates: `cargo fmt --all -- --check`,
+- [x] 7.1 Run the gates: `cargo fmt --all -- --check`,
   `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo nextest run -p mbv-core`, `cargo nextest run -p mbv`. All must pass.
-- [ ] 7.2 Re-measure coverage with
+- [x] 7.2 Re-measure coverage with
   `cargo llvm-cov --workspace --json --output-path /tmp/mbv-cov.json -- --test-threads=4`
   and confirm `run_loop_drains.rs`, `ws_event_actions.rs`, `single_instance.rs` and the
   Audiobookshelf book path are all off zero coverage with no new gap introduced
   elsewhere. Record the before/after numbers (baseline: prod 65,186/82,966 = 78.5%,
   total 91,751/110,094 = 83.3%).
-- [ ] 7.3 Update #771 with the outcome, and state there that #697's actions 1 and 2 are
+- [x] 7.3 Update #771 with the outcome, and state there that #697's actions 1 and 2 are
   withdrawn rather than deferred (libmpv is out of test scope) and that its
   `Browser*`-dead-arm, `list_letter_groups.rs`, and "restore what `39b3fbf4` deleted"
   findings are already resolved.
