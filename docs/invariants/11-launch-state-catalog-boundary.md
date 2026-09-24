@@ -1,6 +1,6 @@
 # Invariant 11 — Launch restoration needs a live catalog and a loaded tab
 
-**Scope:** launch-tab resolution (`src/app/cw_library_tab_actions.rs`), the
+**Scope:** launch-tab resolution (`src/app/dispatch/library/cw_library_tab.rs`), the
 `emby_catalog_ready` / `audiobookshelf_catalog_ready` markers, and every place
 live Emby views become `App::libs` (`apply_emby_bootstrap`, `fetch_home`).
 

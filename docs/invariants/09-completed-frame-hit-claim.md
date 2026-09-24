@@ -3,8 +3,8 @@
 **Scope:** `MusicTreeBrowser` (`src/app/components/music_tree.rs`), its
 `PanelList` adapter (`src/app/components/library_panel/panel_list.rs`), the
 Wide paint order that drives it
-(`src/app/components/library_panel/wide.rs`), and the pointer consumers
-(`src/app/components/music_interaction.rs`, `music_content.rs`).
+(`src/app/components/library_panel/wide/mod.rs`), and the pointer consumers
+(`src/app/components/music_content/interaction.rs`, `music_content/mod.rs`).
 
 ## The invariant
 
@@ -21,7 +21,7 @@ Wide paint order that drives it
      (a no-op settled push keeps the completed geometry);
    - `set_filter_matches` (via `apply_filter_query`) — only when the filter
      rebuilds the projection; an unchanged match set/config early-returns in
-     `apply_filter_query` (`src/app/components/music_tree.rs:247`) so every
+     `apply_filter_query` (`src/app/components/music_content/tree_target.rs:247`) so every
      settled push keeps the filtered tree's completed hit rows claimable;
    - `expand_root` / `collapse_root` (and `toggle_root` through them);
    - `select_id` / `select_album_target` — the crate's `select_by_id`
@@ -81,7 +81,7 @@ render, so the retained geometry still matches the frame the user saw.
   claimable geometry; the run loop draws after processing events, so a
   pointer event is resolved against the previous completed frame.
 - **Tests.** `tree_hit_geometry_is_claimable_only_after_the_latest_view`
-  (`src/app/components/music_tree_tests.rs`) pins the gate for an explicit
+  (`src/app/components/music_content/tests/tree.rs`) pins the gate for an explicit
   `invalidate`, a `reconcile` that rebuilds, and `clamp_viewport_to`.
 
 ## Where it currently fails / how it could regress
