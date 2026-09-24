@@ -278,9 +278,10 @@ fn accepted_stay_alive_save_as_cleans_and_persists_on_owner_snapshot_once() {
     assert_eq!(app.queue_source, accepted_source);
     assert!(!app.queue_dirty);
     assert!(app.player_tab.emby_items().iter().all(|item| item.playlist_item_id.is_empty()));
-    let persisted = crate::config::load_queue_state().expect("accepted source persisted");
-    assert_eq!(persisted.source, accepted_source);
-    assert!(persisted.emby_items().iter().all(|item| item.playlist_item_id.is_empty()));
+    assert!(
+        crate::config::load_queue_state().is_none(),
+        "the Stay-alive Client must not persist the owner's queue locally"
+    );
 
     app.queue_dirty = true;
     app.handle_player_event(mbv_core::player::PlayerEvent::UnifiedQueueUpdated(Box::new(accepted)));

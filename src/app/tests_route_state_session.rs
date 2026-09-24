@@ -43,7 +43,7 @@ fn local_daemon_remote_disconnect_raises_recovery_modal_without_restoring() {
 }
 
 #[test]
-fn failed_local_daemon_queue_adoption_at_construction_raises_recovery_modal() {
+fn local_daemon_construction_ignores_saved_queue_without_recovery_modal() {
     let _guard = crate::config::TestStateDirGuard::new();
     crate::config::save_queue_state(&crate::config::QueueState::from_emby_items(
         make_items(1),
@@ -65,10 +65,8 @@ fn failed_local_daemon_queue_adoption_at_construction_raises_recovery_modal() {
     );
 
     assert!(app.is_local_daemon());
-    assert!(matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::DaemonLost(_))
-    ));
+    assert!(app.pending_overlay.is_none());
+    assert!(app.player_tab.emby_items().is_empty());
 }
 
 #[test]

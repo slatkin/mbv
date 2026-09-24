@@ -43,7 +43,7 @@ pub(crate) fn save_stay_alive_queue_state_at(
     let json = serde_json::to_string(state).map_err(|error| format!("serialize owner queue: {error}"))?;
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, json).map_err(|error| format!("write {}: {error}", tmp.display()))?;
-    std::fs::rename(&tmp, &path)
+    std::fs::rename(&tmp, path)
         .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))
 }
 
