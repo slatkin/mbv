@@ -15,4 +15,4 @@
 
 ## 4. Gates
 
-- [ ] 4.1 `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace` all pass. Commit.
+- [x] 4.1 `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace` all pass. Commit.
