@@ -1,4 +1,3 @@
-use super::*;
 use std::sync::mpsc;
 
 pub(crate) fn setup_shutdown_signal() -> (mpsc::SyncSender<()>, mpsc::Receiver<()>) {

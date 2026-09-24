@@ -7,6 +7,7 @@ pub use types_queue_state::*;
 mod launch_state;
 pub use launch_state::*;
 mod test_support;
+#[cfg(any(test, feature = "test-support"))]
 pub use test_support::*;
 mod types_feed;
 pub use types_feed::*;

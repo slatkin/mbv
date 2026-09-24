@@ -1,5 +1,4 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpListener;
 use std::os::unix::net::UnixListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -7,18 +6,16 @@ use std::time::{Duration, Instant};
 
 use super::control::{broadcast_queue_state, unified_queue_state_for_peer};
 use super::ws::all_audio;
-use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
+use crate::api::EmbyItem;
 use crate::ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello,
-    DisconnectReason, PlaybackGeneration, PlaybackIntent, PlaybackIntentAction,
-    PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
+    PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
+    PlaybackIntentOutcome, PlaybackRequestId,
 };
 pub use crate::daemon::ctrl::CtrlTransport;
 use crate::daemon::ctrl::{
-    send_to, serialize_ctrl_event, take_authority_for_emby_remote, AuthorityHolder, ClientRegistry,
-    CtrlClientId, CtrlClients, CtrlOutbound, CtrlRequest, CtrlSender,
+    serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlOutbound, CtrlSender,
 };
-use crate::playback_execution_sequence::ExecSlot;
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::stream::SocketStream;

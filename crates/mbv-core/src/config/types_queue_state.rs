@@ -1,5 +1,3 @@
-use super::*;
-
 // Queue/library position state types. Included into `config`'s module scope
 // (see `config.rs`), so callers reach them as `crate::config::…`.
 

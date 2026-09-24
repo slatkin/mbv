@@ -1,17 +1,13 @@
 use super::core::DaemonEvent;
 use super::*;
-use crate::api::{EmbyClient, EmbyItem};
+use crate::api::EmbyClient;
 use crate::ctrl::{
     CtrlCmd, CtrlEvent, DisconnectReason, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome,
 };
-use crate::daemon::ctrl::{
-    send_to, take_authority_for_emby_remote, ClientRegistry, CtrlClientId, CtrlRequest, CtrlSender,
-};
-use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::daemon::ctrl::{send_to, ClientRegistry, CtrlRequest};
+use crate::playback_queue::QueueItem;
 use crate::player::{Player, PlayerCommand, PlayerEvent};
-use crate::ws::WsEvent;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

@@ -6,13 +6,10 @@ mod client_auth;
 mod types_parsing;
 pub use client_auth::*;
 mod client_library;
-pub use client_library::*;
-mod client_reporting;
-pub use client_reporting::*;
 mod client_playlists;
+mod client_reporting;
 pub use client_playlists::*;
 mod client_sessions;
-pub use client_sessions::*;
 
 #[cfg(test)]
 mod tests;

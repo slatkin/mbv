@@ -2,6 +2,7 @@
 // (see `config.rs`) so callers reach it as `crate::config::TestTempDir`, next
 // to `TestStateDirGuard` in `config_types_paths.rs`.
 
+#[cfg(any(test, feature = "test-support"))]
 use std::path::PathBuf;
 
 /// Scratch directory for tests that must exercise a real filesystem path.

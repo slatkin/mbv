@@ -1,7 +1,6 @@
 use super::types::{
     decode_entities, EmbyArtistRef, EmbyImageTags, EmbyItem, EmbyLink, EmbyPerson,
     SessionAudioStream, SessionMediaInfo, SessionSubtitleStream,
-    MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS, TICKS_PER_SECOND,
 };
 use serde_json::Value;
 

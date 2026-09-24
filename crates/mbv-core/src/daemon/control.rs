@@ -2,7 +2,7 @@ use super::core::DaemonEvent;
 use super::*;
 use crate::api::EmbyClient;
 use crate::api::EmbyItem;
-use crate::ctrl::{CtrlCmd, CtrlEvent, PlaybackIntent, PlaybackIntentAction};
+use crate::ctrl::{CtrlCmd, CtrlEvent};
 use crate::playback_execution_sequence::ExecSlot;
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerOwnerState};

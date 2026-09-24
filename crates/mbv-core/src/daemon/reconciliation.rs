@@ -2,7 +2,7 @@ use super::*;
 use crate::config::{EmbySetup, QueueSource};
 use crate::ctrl::ServiceSetupRejection;
 use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::Player;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

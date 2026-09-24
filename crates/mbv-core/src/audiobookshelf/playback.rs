@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
-use super::catalog::*;
 use super::{AudiobookshelfClient, AudiobookshelfError, AudiobookshelfFailureClass};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,7 +1,6 @@
 use super::*;
-use crate::api::EmbyItem;
-use crate::ctrl::{CtrlCmd, CtrlEvent};
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::ctrl::CtrlEvent;
+use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::Player;
 
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
