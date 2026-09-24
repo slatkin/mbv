@@ -1,5 +1,5 @@
 use super::components::ShellRequest;
-use super::shell::Model;
+use super::Model;
 use super::{ConfirmAction, ConfirmModal};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use std::time::Instant;
@@ -15,7 +15,7 @@ impl Model {
     /// browser is mounted only for the active generic/Movies/home-video
     /// `EmbyLibrary` tab, same derivation as the `EmbyLibraryRow*`/`EmbyLibraryPillClick` mouse arms).
     /// A missing library index is a defensive no-op.
-    pub(super) fn handle_emby_library_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_emby_library_request(&mut self, request: ShellRequest) {
         let Some(lib_idx) = self.app.tab.emby_library_index() else {
             return;
         };

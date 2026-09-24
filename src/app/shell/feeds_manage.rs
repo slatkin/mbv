@@ -14,7 +14,7 @@ use crate::app::state::types::feeds_manage::{
 };
 use mbv_core::config::FeedSubscription;
 
-impl super::shell::Model {
+impl super::Model {
     /// Mount the feeds-management component and seed it (task 5.3c/5.3d).
     /// The component owns the stage/cursor; `Model::feeds_manage` carries
     /// only the background add-feed channel, the pending-add marker and the

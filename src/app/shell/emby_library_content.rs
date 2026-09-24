@@ -17,7 +17,7 @@
 use super::components::emby_library_content::EmbyLibraryIdentity;
 use super::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
 use super::components::{LibraryKey, LibraryKind};
-use super::shell::Model;
+use super::Model;
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
@@ -27,7 +27,9 @@ impl Model {
     /// `LibraryKey::Service`). `None` for every other tab, including a TV or
     /// Music library (still served by their own mounted components) or a
     /// non-`EmbyLibrary` tab.
-    pub(super) fn active_emby_library_owner(&self) -> Option<(usize, LibraryKey, LibraryKind)> {
+    pub(in crate::app) fn active_emby_library_owner(
+        &self,
+    ) -> Option<(usize, LibraryKey, LibraryKind)> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
@@ -88,7 +90,7 @@ impl Model {
     /// `App::fetch_nearby_movie_posters`, moved here from
     /// the old draw path since that call no longer
     /// runs for these three kinds).
-    pub(super) fn push_emby_library_owner_content(
+    pub(in crate::app) fn push_emby_library_owner_content(
         &mut self,
         index: usize,
         key: &LibraryKey,
@@ -209,13 +211,13 @@ impl Model {
         }
     }
 
-    pub(super) fn push_active_emby_library_owner_content(&mut self) {
+    pub(in crate::app) fn push_active_emby_library_owner_content(&mut self) {
         if let Some((index, key, kind)) = self.active_emby_library_owner() {
             self.push_emby_library_owner_content(index, &key, kind);
         }
     }
 
-    pub(super) fn active_emby_library_owner_is_latest(&self) -> bool {
+    pub(in crate::app) fn active_emby_library_owner_is_latest(&self) -> bool {
         let Some((_, key, _)) = self.active_emby_library_owner() else {
             return false;
         };

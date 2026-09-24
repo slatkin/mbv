@@ -1,5 +1,5 @@
 use super::components::ComponentId;
-use super::shell::Model;
+use super::Model;
 use super::{PanelFocus, PanelMode};
 
 impl Model {
@@ -18,7 +18,7 @@ impl Model {
     /// guard Queue falls back to legacy key routing (issue #610, blocks
     /// the #607 acceptance gate). Mirrors the exact condition
     /// `sync_queue` uses to claim focus.
-    pub(super) fn sync_active_destination(&mut self) {
+    pub(in crate::app) fn sync_active_destination(&mut self) {
         // Prefix-armed capture (design D6, task 6.1) holds focus off while
         // armed — the arm blurred it and the disarm restores it — so the
         // pass must not re-activate a destination mid-capture.
@@ -41,7 +41,7 @@ impl Model {
     }
 
     /// The active library surface is always the mounted Library panel.
-    pub(super) fn active_surface_id(&self) -> Option<ComponentId> {
+    pub(in crate::app) fn active_surface_id(&self) -> Option<ComponentId> {
         Some(ComponentId::Library)
     }
 
@@ -49,14 +49,14 @@ impl Model {
     /// The queue-only mode (including the narrow mini view) hides the library
     /// entirely, so its mounted destination must not paint over the queue that
     /// now owns the whole frame.
-    pub(super) fn library_panel_visible(&self) -> bool {
+    pub(in crate::app) fn library_panel_visible(&self) -> bool {
         self.app.effective_panel_mode() != PanelMode::QueueOnly
     }
 
     /// ADR 0024 D2: the mouse-eligible component set for the current frame, a
     /// three-rung ladder derived from the active mounted surfaces the
     /// active-destination pass uses (no second "did I paint" ledger).
-    pub(super) fn mouse_eligible_ids(&self) -> Vec<ComponentId> {
+    pub(in crate::app) fn mouse_eligible_ids(&self) -> Vec<ComponentId> {
         use super::components::{ModalId, OverlayId, PopupId};
 
         // Rung 1: a mounted blocking overlay/modal is eligible alone.
@@ -125,11 +125,11 @@ impl Model {
     /// Whether the Queue boundary column may receive mouse input. Shared by
     /// `mouse_eligible_ids` (subscription) and `sync_queue_boundary` (arming)
     /// so the two can never disagree.
-    pub(super) fn queue_boundary_mouse_eligible(&self) -> bool {
+    pub(in crate::app) fn queue_boundary_mouse_eligible(&self) -> bool {
         self.app.effective_panel_mode() == PanelMode::Both && self.panel_mouse_eligible()
     }
 
-    pub(super) fn sync_queue_boundary(&mut self) {
+    pub(in crate::app) fn sync_queue_boundary(&mut self) {
         let id = ComponentId::QueueBoundary;
         // Task 1.4: the boundary is a two-panel-layout component only.
         // `RootFrame` places it (with its one-column rect) in the Both layout;
@@ -186,7 +186,7 @@ impl Model {
     /// Any change therefore wipes the whole mouse table and rebuilds it from
     /// the eligible set; `self.mouse_subscribed` mirrors the result so the
     /// reconciler knows the current state without querying `Application`.
-    pub(super) fn sync_mouse_subscriptions(&mut self) {
+    pub(in crate::app) fn sync_mouse_subscriptions(&mut self) {
         let eligible: std::collections::HashSet<ComponentId> =
             self.mouse_eligible_ids().into_iter().collect();
         if eligible == self.mouse_subscribed {
@@ -220,7 +220,7 @@ impl Model {
     /// focus-management sync pass (`sync_active_destination`, `sync_queue`)
     /// consults this before re-activating its own surface, so a mounted
     /// overlay that just took focus is never stolen back on the next tick.
-    pub(super) fn overlay_holds_focus(&self) -> bool {
+    pub(in crate::app) fn overlay_holds_focus(&self) -> bool {
         [
             ComponentId::Overlay(super::components::OverlayId::Search),
             ComponentId::Overlay(super::components::OverlayId::Settings),
@@ -241,5 +241,4 @@ impl Model {
 }
 
 #[cfg(test)]
-#[path = "shell_library_tests.rs"]
 mod tests;

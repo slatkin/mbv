@@ -38,7 +38,7 @@ impl Model {
     /// Publish the queue card reservation before root placements are synced.
     /// The reservation is derived from the prior paint checkpoint, so draw
     /// remains read-only with respect to `AppLayout`.
-    pub(super) fn sync_queue_card_geometry(&mut self) {
+    pub(in crate::app) fn sync_queue_card_geometry(&mut self) {
         if self.app.now_playing_status() == NowPlayingStatus::Idle {
             self.app.layout.card = CardGeometry::default();
             return;
@@ -157,7 +157,7 @@ impl Model {
 
     /// Mount/unmount the `TabPanel` to the `RootFrame.tab` placement and
     /// project the tab content (titles, selected position, scroll anchor).
-    pub(super) fn sync_tab_panel(&mut self) {
+    pub(in crate::app) fn sync_tab_panel(&mut self) {
         let placement = self.sync_chrome_root().tab;
         self.mount_to_placement(ChromePanel::Tab, placement);
         let id = ChromePanel::Tab.id();
@@ -193,7 +193,7 @@ impl Model {
     /// spans, built by `chrome_status.rs`'s App-side builders). The
     /// Local/Remote queue-scope pills are queue concern: the shell projects
     /// them into the `QueueComponent` footer in `sync_queue`, never here.
-    pub(super) fn sync_status_bar_panel(&mut self) {
+    pub(in crate::app) fn sync_status_bar_panel(&mut self) {
         let placement = self.sync_chrome_root().status_bar;
         self.mount_to_placement(ChromePanel::StatusBar, placement);
         let id = ChromePanel::StatusBar.id();
@@ -261,7 +261,7 @@ impl Model {
     /// word and playback target, and the transport facts from the shared
     /// transport projection. Mounted in every queue-visible layout, idle
     /// included, because the header is always painted (D10).
-    pub(super) fn sync_queue_playback_panel(&mut self) {
+    pub(in crate::app) fn sync_queue_playback_panel(&mut self) {
         let placement = self.sync_chrome_root().queue_playback;
         self.mount_to_placement(ChromePanel::QueuePlayback, placement);
         let id = ChromePanel::QueuePlayback.id();
@@ -313,7 +313,11 @@ impl Model {
     /// `render_card`, task 3.4) paints the visual slot below the header row.
     /// While idle the slot and transport collapse to zero rows (task 3.6) and
     /// only the header row paints.
-    pub(super) fn render_queue_playback_panel(&mut self, frame: &mut Frame, placement: Rect) {
+    pub(in crate::app) fn render_queue_playback_panel(
+        &mut self,
+        frame: &mut Frame,
+        placement: Rect,
+    ) {
         let id = ComponentId::QueuePlaybackPanel;
         if !self.application.mounted(&id) {
             return;
@@ -366,7 +370,7 @@ impl Model {
     }
 
     /// Paint the mounted `TabPanel` into the `RootFrame.tab` placement.
-    pub(super) fn render_tab_panel_at(&mut self, frame: &mut Frame, area: Rect) {
+    pub(in crate::app) fn render_tab_panel_at(&mut self, frame: &mut Frame, area: Rect) {
         self.render_placed_panel(frame, Some(area), &ComponentId::TabPanel);
     }
 
@@ -376,7 +380,7 @@ impl Model {
     /// when the queue column is hidden — there the strip is the frame's one
     /// transport; in every queue-visible layout the panel is unmounted and
     /// the transport is the Queue playback panel's.
-    pub(super) fn sync_library_playback_panel(&mut self) {
+    pub(in crate::app) fn sync_library_playback_panel(&mut self) {
         let placement = self.sync_chrome_root().library_playback;
         self.mount_to_placement(ChromePanel::LibraryPlayback, placement);
         let id = ChromePanel::LibraryPlayback.id();
@@ -392,7 +396,11 @@ impl Model {
     /// .library_playback` placement (task 4.1, D1's view rule). The panel
     /// paints the whole placement — the `PLAYER_BOX_HEIGHT` strip band —
     /// through the shared transport arrangement.
-    pub(super) fn render_library_playback_panel_at(&mut self, frame: &mut Frame, area: Rect) {
+    pub(in crate::app) fn render_library_playback_panel_at(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+    ) {
         self.render_placed_panel(frame, Some(area), &ComponentId::LibraryPlaybackPanel);
     }
 
@@ -401,7 +409,7 @@ impl Model {
     /// (`library_body_fill`: the column's focus pair), and
     /// the status row is inset two columns each side, so the bar floats clear
     /// of the content above and the column's edges.
-    pub(super) fn render_status_bar_panel_at(&mut self, frame: &mut Frame, area: Rect) {
+    pub(in crate::app) fn render_status_bar_panel_at(&mut self, frame: &mut Frame, area: Rect) {
         let id = ComponentId::StatusBarPanel;
         if !self.application.mounted(&id) {
             return;

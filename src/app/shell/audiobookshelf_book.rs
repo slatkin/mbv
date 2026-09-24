@@ -2,7 +2,7 @@ use super::components::book_content::BookContent;
 use super::components::library_panel::LibraryKey;
 use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
 use super::components::LibraryKind;
-use super::shell::Model;
+use super::Model;
 use super::TabSelection;
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_core::config::ServiceKind;
@@ -36,7 +36,7 @@ impl Model {
         self.update_library_owner(key, || Box::new(BookContent::new()), f)
     }
 
-    pub(super) fn push_audiobookshelf_book_content(&mut self) {
+    pub(in crate::app) fn push_audiobookshelf_book_content(&mut self) {
         if self.abs_book_key().is_none() {
             return;
         }
@@ -54,13 +54,13 @@ impl Model {
         });
     }
 
-    pub(super) fn sync_audiobookshelf_book(&mut self) {
+    pub(in crate::app) fn sync_audiobookshelf_book(&mut self) {
         // Books are retained as a LibraryPanel owner for the lifetime of the
         // catalog entry; content is pushed by discrete writers/events. The
         // panel sync pass reconciles the active owner and focus separately.
     }
 
-    pub(super) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
         // A request can arrive before the Books owner has been registered by
         // its first discrete content push. Do not mutate shell focus on that
         // handled no-op path.
@@ -118,12 +118,12 @@ impl Model {
     }
 
     #[cfg(test)]
-    pub(super) fn test_abs_book_owner(&self) -> &BookContent {
+    pub(in crate::app) fn test_abs_book_owner(&self) -> &BookContent {
         self.abs_book_owner().expect("book owner")
     }
 
     #[cfg(test)]
-    pub(super) fn test_abs_book_owner_mut(&mut self) -> &mut BookContent {
+    pub(in crate::app) fn test_abs_book_owner_mut(&mut self) -> &mut BookContent {
         let key = self.abs_book_key().expect("book key");
         self.library_owner_mut(&key).expect("book owner")
     }

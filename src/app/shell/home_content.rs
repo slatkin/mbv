@@ -8,7 +8,7 @@ use super::components::library_panel::LibraryKey;
 use super::components::library_panel::LibraryPanel;
 #[cfg(test)]
 use super::components::ComponentId;
-use super::shell::Model;
+use super::Model;
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
@@ -17,12 +17,12 @@ use mbv_core::playback_queue::QueueItem;
 use std::time::Instant;
 
 impl Model {
-    pub(super) fn assign_home_content(&mut self, content: HomeContent) {
+    pub(in crate::app) fn assign_home_content(&mut self, content: HomeContent) {
         self.home_content = content;
         self.push_home_content();
     }
 
-    pub(super) fn update_emby_latest_snapshot(
+    pub(in crate::app) fn update_emby_latest_snapshot(
         &mut self,
         library_id: String,
         title: String,
@@ -71,12 +71,12 @@ impl Model {
         self.push_active_emby_library_owner_content();
     }
 
-    pub(super) fn clear_home_content(&mut self) {
+    pub(in crate::app) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
         self.push_home_content();
     }
 
-    pub(super) fn home_stable_target(
+    pub(in crate::app) fn home_stable_target(
         &self,
         target: &super::components::msg::HomeRowTarget,
     ) -> Option<(QueueItem, bool)> {
@@ -92,7 +92,7 @@ impl Model {
             .map(|item| (QueueItem::Emby(Box::new(item)), true))
     }
 
-    pub(super) fn fetch_home_at_startup(&mut self) {
+    pub(in crate::app) fn fetch_home_at_startup(&mut self) {
         let fetched_home = self.app.fetch_home();
         self.home_content.loading = false;
         match fetched_home {
@@ -113,7 +113,7 @@ impl Model {
         }
     }
 
-    pub(super) fn apply_emby_completion_drain(
+    pub(in crate::app) fn apply_emby_completion_drain(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::Completion,
     ) {
@@ -122,7 +122,7 @@ impl Model {
         }
     }
 
-    pub(super) fn apply_emby_setup_completion_drain(
+    pub(in crate::app) fn apply_emby_setup_completion_drain(
         &mut self,
         completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) {
@@ -131,12 +131,12 @@ impl Model {
         }
     }
 
-    pub(super) fn home_continue_watching_selected(&self) -> bool {
+    pub(in crate::app) fn home_continue_watching_selected(&self) -> bool {
         true
     }
 
     #[cfg(test)]
-    pub(super) fn home_owner_shared(&self) -> Option<&HomeOwner> {
+    pub(in crate::app) fn home_owner_shared(&self) -> Option<&HomeOwner> {
         self.application
             .get_component(&ComponentId::Library)
             .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
@@ -144,12 +144,15 @@ impl Model {
             .and_then(|owner| owner.as_any().downcast_ref::<HomeOwner>())
     }
 
-    pub(super) fn acknowledge_home_latest(&mut self, source: DestinationLatestSource) {
+    pub(in crate::app) fn acknowledge_home_latest(&mut self, source: DestinationLatestSource) {
         self.record_home_latest_acknowledgement(source);
         self.push_tv_workspace_content();
     }
 
-    pub(super) fn record_home_latest_acknowledgement(&mut self, source: DestinationLatestSource) {
+    pub(in crate::app) fn record_home_latest_acknowledgement(
+        &mut self,
+        source: DestinationLatestSource,
+    ) {
         self.acknowledged_home_latest_sources.insert(source.clone());
         if let DestinationLatestSource::Emby(library_id) = source {
             if let Some(snapshot) = self.tv_latest_snapshots.get_mut(&library_id) {

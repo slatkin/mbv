@@ -3,11 +3,11 @@
 use super::components::home_content::HomeContent;
 use super::components::library_panel::LibraryKey;
 use super::components::ShellRequest;
-use super::shell::Model;
+use super::Model;
 use mbv_core::playback_queue::QueueItem;
 
 impl Model {
-    pub(super) fn handle_home_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_home_request(&mut self, request: ShellRequest) {
         match request {
             ShellRequest::HomePlay(target) => {
                 if let Some((item, from_cw)) = self.home_stable_target(&target) {
@@ -93,14 +93,14 @@ impl Model {
         }
     }
 
-    pub(super) fn update_home_owner<R>(
+    pub(in crate::app) fn update_home_owner<R>(
         &mut self,
         f: impl FnOnce(&mut HomeContent) -> R,
     ) -> Option<R> {
         self.update_library_owner(LibraryKey::Home, || Box::new(HomeContent::new()), f)
     }
 
-    pub(super) fn push_home_content(&mut self) {
+    pub(in crate::app) fn push_home_content(&mut self) {
         let continue_items = self
             .home_content
             .continue_items

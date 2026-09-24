@@ -2,7 +2,7 @@ use super::components::{
     ComponentId, QueueColumnResize, QueueComponent, QueueCursorUpdate, QueueIntent, QueueMove,
     QueueRequest,
 };
-use super::shell::Model;
+use super::Model;
 use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::dispatch::notify::ToastSeverity;
 use mbv_core::playback_queue::QueueSlotId;
@@ -49,7 +49,7 @@ fn projected_active_target(
 }
 
 impl Model {
-    pub(super) fn sync_queue(&mut self) {
+    pub(in crate::app) fn sync_queue(&mut self) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
             self.application
@@ -194,7 +194,7 @@ impl Model {
         }
     }
 
-    pub(super) fn render_queue_boundary_at(
+    pub(in crate::app) fn render_queue_boundary_at(
         &mut self,
         frame: &mut ratatui::Frame,
         area: ratatui::layout::Rect,
@@ -205,7 +205,7 @@ impl Model {
         }
     }
 
-    pub(super) fn render_queue_panel_at(
+    pub(in crate::app) fn render_queue_panel_at(
         &mut self,
         frame: &mut ratatui::Frame,
         _placement: ratatui::layout::Rect,
@@ -228,7 +228,7 @@ impl Model {
         self.application.view(&id, frame, placement);
     }
 
-    pub(super) fn handle_queue_request(&mut self, request: QueueRequest) {
+    pub(in crate::app) fn handle_queue_request(&mut self, request: QueueRequest) {
         match request {
             QueueRequest::Scope(scope) => {
                 if scope == QueueScope::Local || self.app.has_direct_remote_queue() {
@@ -319,7 +319,7 @@ impl Model {
         }
     }
 
-    pub(super) fn handle_queue_intent(&mut self, intent: QueueIntent) {
+    pub(in crate::app) fn handle_queue_intent(&mut self, intent: QueueIntent) {
         match intent {
             QueueIntent::Clear => self.app.request_clear_queue(),
             QueueIntent::ResizeColumn(direction) => {

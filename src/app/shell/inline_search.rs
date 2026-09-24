@@ -1,7 +1,7 @@
 use super::components::inline_search::InlineSearchHost;
 use super::components::library_panel::LibraryPanel;
 use super::components::{ComponentId, SearchPool};
-use super::shell::Model;
+use super::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
 
 impl Model {
@@ -66,11 +66,11 @@ impl Model {
         }
     }
 
-    pub(super) fn dismiss_active_inline_search(&mut self) {
+    pub(in crate::app) fn dismiss_active_inline_search(&mut self) {
         let _ = self.with_active_inline_search_host(|host| host.close_inline_search());
     }
 
-    pub(super) fn push_inline_search_content(&mut self) {
+    pub(in crate::app) fn push_inline_search_content(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
@@ -124,7 +124,7 @@ impl Model {
         });
     }
 
-    pub(super) fn open_inline_search(&mut self) {
+    pub(in crate::app) fn open_inline_search(&mut self) {
         if !self.with_active_inline_search_host(|host| host.open_inline_search()) {
             return;
         }
@@ -138,7 +138,7 @@ impl Model {
     /// control reports the empty→non-empty edge): start the corpus load for
     /// the active destination, then re-push so the loading indicator and any
     /// partial pool reflect the started query.
-    pub(super) fn inline_search_query_started(&mut self) {
+    pub(in crate::app) fn inline_search_query_started(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
@@ -161,7 +161,7 @@ impl Model {
     /// wall-clock ticks directly, mirroring `tick_search_clock`. Returns
     /// whether a debounce fired and the scored results changed (a redraw
     /// signal).
-    pub(super) fn tick_inline_search_clock(&mut self, now: std::time::Instant) -> bool {
+    pub(in crate::app) fn tick_inline_search_clock(&mut self, now: std::time::Instant) -> bool {
         let mut changed = false;
         self.with_active_inline_search_host(|host| {
             changed = host.inline_search_mut().handle_clock(now);
@@ -172,7 +172,7 @@ impl Model {
         changed
     }
 
-    pub(super) fn activate_inline_search_item(&mut self, id: String, item_type: String) {
+    pub(in crate::app) fn activate_inline_search_item(&mut self, id: String, item_type: String) {
         let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
             return;
         };

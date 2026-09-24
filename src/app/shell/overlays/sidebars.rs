@@ -3,7 +3,7 @@ use super::super::components::{
     SessionsComponent, SettingsComponent,
 };
 use super::super::components::{Msg, UserEvent};
-use super::super::shell::Model;
+use super::super::Model;
 use super::super::SidebarId;
 use tuirealm::component::AppComponent;
 
@@ -86,7 +86,7 @@ impl Model {
         self.update_playlists_content();
         self.update_sessions_content();
 
-        let panel_area = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
+        let panel_area = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
         let help_id = ComponentId::Overlay(OverlayId::Help);
         if let Some(comp) = self.application.get_component_mut(&help_id) {
             if let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>() {
@@ -109,7 +109,7 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        let panel_area = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
+        let panel_area = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
         let connected_session_id = self.app.sessions_panel_connected_id();
         let cast_attachment_id = self
             .app

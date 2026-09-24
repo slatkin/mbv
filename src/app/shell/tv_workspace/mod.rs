@@ -17,13 +17,13 @@ use super::components::tv_content::TvContent;
 use super::components::ComponentId;
 use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
-use super::shell::{Model, PendingEpisodeSelection};
 use super::TabSelection;
+use super::{Model, PendingEpisodeSelection};
 use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    pub(super) fn handle_tv_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_tv_request(&mut self, request: ShellRequest) {
         let Some(lib_idx) = self.app.tab.emby_library_index() else {
             return;
         };
@@ -122,7 +122,7 @@ impl Model {
     /// owner's series selection at a stable target (a navigation the shell
     /// performed, e.g. an Inline Search activation); the next content push
     /// preserves it.
-    pub(super) fn reanchor_tv_owner_selection(&mut self, target: &str) {
+    pub(in crate::app) fn reanchor_tv_owner_selection(&mut self, target: &str) {
         self.update_tv_owner(|owner| {
             owner.select_series_target(target);
         });
@@ -130,7 +130,7 @@ impl Model {
 
     /// Make the TV owner's workspace active: episode selection holds the
     /// local focus (the same state the ordinary second Enter enters).
-    pub(super) fn focus_tv_owner_episodes(&mut self) {
+    pub(in crate::app) fn focus_tv_owner_episodes(&mut self) {
         self.update_tv_owner(TvContent::enter_episode_selection);
     }
 
@@ -139,7 +139,11 @@ impl Model {
     /// owner re-anchors onto the series, the workspace content is pushed, the
     /// Wide workspace / Narrow Library Hero overlay opens, and the content is
     /// re-pushed so the opened presentation reads the re-anchored selection.
-    pub(super) fn open_series_workspace_handoff(&mut self, lib_idx: usize, item: &EmbyItem) {
+    pub(in crate::app) fn open_series_workspace_handoff(
+        &mut self,
+        lib_idx: usize,
+        item: &EmbyItem,
+    ) {
         // Re-anchor the owner's selection onto the navigated-to series before
         // the presentation push reads it (the owner otherwise preserves its
         // prior stable target).
@@ -187,7 +191,7 @@ impl Model {
     /// clears and the landed show keeps its default selection (no error --
     /// the navigation target was reached). A manual tab change discards the
     /// pending silently, like the hand-off it extends.
-    pub(super) fn drain_pending_episode_selection(&mut self) {
+    pub(in crate::app) fn drain_pending_episode_selection(&mut self) {
         enum Step {
             /// The series detail (or an in-flight season fetch) has not
             /// landed yet; stay armed.
@@ -249,7 +253,7 @@ impl Model {
         }
     }
 
-    pub(super) fn acknowledge_active_tv_latest(&mut self) {
+    pub(in crate::app) fn acknowledge_active_tv_latest(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
@@ -303,7 +307,7 @@ impl Model {
     /// Test-only: the active TV owner's key, for shell tests' owner-map
     /// membership checks (mirrors [`Model::test_tv_owner`]).
     #[cfg(test)]
-    pub(super) fn test_tv_owner_key(&self) -> LibraryKey {
+    pub(in crate::app) fn test_tv_owner_key(&self) -> LibraryKey {
         self.tv_owner_key().expect("TV library active")
     }
 
@@ -311,7 +315,7 @@ impl Model {
     /// active tab (the Movies-tab assertions check the absence of a TV owner
     /// for a non-TV library).
     #[cfg(test)]
-    pub(super) fn test_tv_owner_key_at(&self, index: usize) -> LibraryKey {
+    pub(in crate::app) fn test_tv_owner_key_at(&self, index: usize) -> LibraryKey {
         LibraryKey::Service {
             service: ServiceKind::Emby,
             library_id: self.app.libs[index].library.id.clone(),
@@ -339,14 +343,14 @@ impl Model {
     /// TV-specific component id, so tests address the owner through the panel's
     /// `LibraryKey` map exactly as production does).
     #[cfg(test)]
-    pub(super) fn test_tv_owner(&self) -> &TvContent {
+    pub(in crate::app) fn test_tv_owner(&self) -> &TvContent {
         let key = self.tv_owner_key().expect("TV library active");
         self.library_owner(&key).expect("tv owner installed")
     }
 
     /// Test-only: mutable twin of [`Model::test_tv_owner`].
     #[cfg(test)]
-    pub(super) fn test_tv_owner_mut(&mut self) -> &mut TvContent {
+    pub(in crate::app) fn test_tv_owner_mut(&mut self) -> &mut TvContent {
         let key = self.tv_owner_key().expect("TV library active");
         self.library_owner_mut(&key).expect("tv owner installed")
     }
@@ -356,7 +360,7 @@ impl Model {
     /// the paint path — the shell's own draw does the same through
     /// `render_library_panel` + `take_image_paint`).
     #[cfg(test)]
-    pub(super) fn test_paint_library_panel(
+    pub(in crate::app) fn test_paint_library_panel(
         &mut self,
         area: ratatui::layout::Rect,
     ) -> Option<crate::app::components::library_panel::PanelHeroImagePaint> {
@@ -390,7 +394,7 @@ impl Model {
     /// tab leaves the retained owner untouched. Runs in the sync pass so the
     /// owner exists before the panel's focus/mouse pass reads the migrated
     /// owner map.
-    pub(super) fn sync_tv_content(&mut self) {
+    pub(in crate::app) fn sync_tv_content(&mut self) {
         self.push_tv_workspace_content();
     }
 
@@ -398,7 +402,7 @@ impl Model {
     /// TV episode gets the existing Library Hero overlay. It is synchronized
     /// after the panel points at the active owner, so opening it never targets
     /// the previous tab's owner.
-    pub(super) fn sync_tv_mini_view_hero(&mut self) {
+    pub(in crate::app) fn sync_tv_mini_view_hero(&mut self) {
         let mini_view = self.app.terminal_width < crate::app::MINI_VIEW_THRESHOLD
             && matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
         if let Some(panel) = self
@@ -410,7 +414,7 @@ impl Model {
         }
     }
 
-    pub(super) fn push_tv_workspace_content(&mut self) {
+    pub(in crate::app) fn push_tv_workspace_content(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
@@ -534,5 +538,4 @@ impl Model {
 }
 
 #[cfg(test)]
-#[path = "shell_tv_workspace_tests.rs"]
 mod tests;

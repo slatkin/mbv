@@ -2,12 +2,12 @@ use super::components::msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent
 use super::components::{
     ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, SavePlaylistComponent,
 };
-use super::shell::Model;
+use super::Model;
 use crate::app::state::types::confirm::ConfirmAction;
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl Model {
-    pub(super) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
+    pub(in crate::app) fn handle_confirm_intent(&mut self, intent: ConfirmIntent) {
         let key = match intent {
             ConfirmIntent::Accept => {
                 KeyEvent::new(KeyCode::Char('y'), crossterm::event::KeyModifiers::NONE)
@@ -28,7 +28,7 @@ impl Model {
         self.handle_confirm_key(key);
     }
 
-    pub(super) fn handle_confirm_key(&mut self, key: KeyEvent) {
+    pub(in crate::app) fn handle_confirm_key(&mut self, key: KeyEvent) {
         let id = ComponentId::Modal(ModalId::Confirm);
         let Some(action) = self
             .application
@@ -44,7 +44,7 @@ impl Model {
         self.app.apply_confirm_action(action, key);
     }
 
-    pub(super) fn handle_daemon_lost_intent(&mut self, intent: DaemonLostIntent) -> bool {
+    pub(in crate::app) fn handle_daemon_lost_intent(&mut self, intent: DaemonLostIntent) -> bool {
         let id = ComponentId::Modal(ModalId::DaemonLost);
         if !self.application.mounted(&id) {
             return false;
@@ -78,7 +78,7 @@ impl Model {
         }
     }
 
-    pub(super) fn handle_save_playlist_intent(&mut self, intent: SavePlaylistIntent) {
+    pub(in crate::app) fn handle_save_playlist_intent(&mut self, intent: SavePlaylistIntent) {
         let id = ComponentId::Modal(ModalId::SavePlaylist);
         let Some((input, rename, rename_id)) = self
             .application

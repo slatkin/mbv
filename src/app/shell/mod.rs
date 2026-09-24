@@ -7,9 +7,13 @@ use super::components::{
 };
 use super::input::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::{
+    components, palette, render, AlbumIndexState, App, BrowseLevel, ConfirmAction, ConfirmModal,
+    IdleFeed, LibEvent, PanelFocus, PanelMode, PlaybackState, PlayerTab, QueueScope,
+    SavePlaylistDialog, SavePlaylistStage, SidebarId, TabSelection, ToastSeverity,
+};
+use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
-use super::{App, IdleFeed, ToastSeverity};
 use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
 use crate::app::state::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
@@ -20,10 +24,30 @@ use crate::app::state::types::playback::{
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
-#[path = "shell_messages.rs"]
-mod shell_messages;
-#[path = "shell_run.rs"]
-mod shell_run;
+mod audiobookshelf_book;
+mod audiobookshelf_podcast;
+mod chrome_panels;
+mod draw;
+mod emby_library;
+mod emby_library_content;
+mod feeds;
+mod feeds_manage;
+mod home;
+mod home_content;
+mod inline_search;
+mod library;
+mod library_panel;
+mod messages;
+mod modal_actions;
+mod music_workspace;
+mod overlays;
+mod playback;
+mod playlists;
+mod queue;
+mod root;
+mod run;
+mod settings;
+mod tv_workspace;
 
 /// How often the TuiRealm crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is
@@ -48,7 +72,7 @@ const DOUBLE_ESC_STOP_WINDOW: Duration = Duration::from_millis(600);
 /// so a re-anchor that outruns that album's track fetch can retry on the
 /// tracks re-push without ever firing on a different album.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum MusicTrackFocusRequest {
+pub(in crate::app) enum MusicTrackFocusRequest {
     /// Enter inline track focus for this album (recursive album activation).
     Enter { album_id: String },
     /// Clear inline track focus (saved-position restore).
@@ -62,10 +86,10 @@ pub(super) enum MusicTrackFocusRequest {
 /// episode's season episodes are in hand; absence of the episode from the
 /// fetched detail clears it silently (the landing stands, no error).
 #[derive(Clone, Debug)]
-pub(super) struct PendingEpisodeSelection {
-    pub(super) lib_idx: usize,
-    pub(super) series_id: String,
-    pub(super) episode_id: String,
+pub(in crate::app) struct PendingEpisodeSelection {
+    pub(in crate::app) lib_idx: usize,
+    pub(in crate::app) series_id: String,
+    pub(in crate::app) episode_id: String,
 }
 
 /// Deep selection (task 6.2, design D6): a navigated track the adopted
@@ -74,15 +98,15 @@ pub(super) struct PendingEpisodeSelection {
 /// `push_music_workspace_content` once the album's track rows arrive;
 /// absence clears it silently.
 #[derive(Clone, Debug)]
-pub(super) struct MusicTrackSelection {
-    pub(super) album_id: String,
-    pub(super) track_id: String,
+pub(in crate::app) struct MusicTrackSelection {
+    pub(in crate::app) album_id: String,
+    pub(in crate::app) track_id: String,
 }
 
 /// Shell model holding the legacy `App` and the TuiRealm `Application`.
 pub struct Model {
     pub app: App,
-    pub(super) application: Application<ComponentId, Msg, UserEvent>,
+    pub(in crate::app) application: Application<ComponentId, Msg, UserEvent>,
     /// Components currently carrying the `mouse_sub()` subscription. Owned
     /// solely by `sync_mouse_subscriptions` (ADR 0024 D2): it is the mouse
     /// arbitration table. `tuirealm` 4.1's `Application::unsubscribe` removes
@@ -90,19 +114,19 @@ pub struct Model {
     /// one component's mouse sub in isolation), so the reconciler wipes and
     /// rebuilds the whole set on any change and this mirror is how it knows
     /// the current state without querying `Application`.
-    pub(super) mouse_subscribed: std::collections::HashSet<ComponentId>,
+    pub(in crate::app) mouse_subscribed: std::collections::HashSet<ComponentId>,
     /// One-shot shell→component request for the mounted Music workspace's
     /// inline track focus, applied at the next `push_music_workspace_content`
     /// after the component is mounted/synced (so mount-timing never loses it).
     /// Neither mirrors App state: the component owns the cursor, the shell
     /// only delivers the trigger that used to write the deleted inline
     /// track-focus field.
-    pub(super) music_track_focus_request: Option<MusicTrackFocusRequest>,
+    pub(in crate::app) music_track_focus_request: Option<MusicTrackFocusRequest>,
     /// Deep-selection pending state (tasks 6.1/6.2). TV: see
     /// `PendingEpisodeSelection`; consumed at the sync pass. Music: see
     /// `MusicTrackSelection`; consumed at the workspace content push.
-    pub(super) pending_episode_selection: Option<PendingEpisodeSelection>,
-    pub(super) pending_music_track_selection: Option<MusicTrackSelection>,
+    pub(in crate::app) pending_episode_selection: Option<PendingEpisodeSelection>,
+    pub(in crate::app) pending_music_track_selection: Option<MusicTrackSelection>,
     /// One-shot shell→component re-anchor trigger for the mounted Music
     /// workspace's album cursor/scroll, consumed at the next
     /// `push_music_workspace_content`. Set at the three navigation events that
@@ -110,31 +134,33 @@ pub struct Model {
     /// activation, saved-position restore -- and once after mount. An ordinary
     /// content push never adopts the shell cursor; this is the explicit
     /// re-anchor that replaced the deleted echo-suppression test.
-    pub(super) music_workspace_reanchor: bool,
+    pub(in crate::app) music_workspace_reanchor: bool,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
     /// from here each tick; the mpsc cannot live in the component.
-    pub(super) feeds_manage: Option<FeedsManagePopup>,
+    pub(in crate::app) feeds_manage: Option<FeedsManagePopup>,
     /// Model-owned Home content (task 5.3d): the sole snapshot pushed to
     /// `HomeComponent`; App-internal writers deliver computed snapshots via
     /// lib_tx; `loading` mirrors the deleted `App.home_loading`.
-    pub(super) home_content: HomeContent,
+    pub(in crate::app) home_content: HomeContent,
     /// Shell-owned acknowledgement shared by Home and TV Latest surfaces.
-    pub(super) acknowledged_home_latest_sources: std::collections::HashSet<DestinationLatestSource>,
+    pub(in crate::app) acknowledged_home_latest_sources:
+        std::collections::HashSet<DestinationLatestSource>,
     /// One authoritative TV Latest section snapshot per Emby library view.
-    pub(super) tv_latest_snapshots: std::collections::HashMap<String, DestinationLatestSnapshot>,
-    pub(super) home_context_item: Option<mbv_core::api::EmbyItem>,
+    pub(in crate::app) tv_latest_snapshots:
+        std::collections::HashMap<String, DestinationLatestSnapshot>,
+    pub(in crate::app) home_context_item: Option<mbv_core::api::EmbyItem>,
     /// The last terminal size the sync pass applied resize side effects for
     /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
     /// size never spuriously resize; the draw path's size normalization is
     /// picked up at the next sync pass.
-    pub(super) handled_terminal_size: (u16, u16),
+    pub(in crate::app) handled_terminal_size: (u16, u16),
     /// Armed by the Resize observer (the real terminal-resize event) and
     /// consumed by the next sync pass, which then also applies the mini-view
     /// focus hand-off (task 1.2). Size normalization without a resize event
     /// (a direct frame, a fixture) never arms it.
-    pub(super) pending_terminal_resize: bool,
+    pub(in crate::app) pending_terminal_resize: bool,
     /// Terminal hyperlink support resolved once during terminal initialization.
     /// Fingerprint of the inputs `sync_queue` last projected into the mounted
     /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
@@ -142,11 +168,13 @@ pub struct Model {
     /// projection depends on changed is pure waste (#675). The fingerprint
     /// gates the rebuild: queue revision + viewed scope + active slot + a
     /// progress-% bucket + paused + the title model.
-    pub(super) last_queue_projection: Option<super::shell_queue::QueueProjectionFingerprint>,
+    pub(in crate::app) last_queue_projection: Option<queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
-    pub(super) visual_selection: Option<(crate::app::state::types::settings::PanelFocus, usize)>,
-    pub(super) context_menu_origin: Option<crate::app::components::media_list::SelectionOrigin>,
-    pub(super) context_action_snapshot: Option<
+    pub(in crate::app) visual_selection:
+        Option<(crate::app::state::types::settings::PanelFocus, usize)>,
+    pub(in crate::app) context_menu_origin:
+        Option<crate::app::components::media_list::SelectionOrigin>,
+    pub(in crate::app) context_action_snapshot: Option<
         crate::app::state::types::context_menu::ContextActionSnapshot<
             crate::app::state::types::context_menu::ContextMenuTargets,
         >,
@@ -154,7 +182,7 @@ pub struct Model {
     /// The last Esc press, for the double-Esc playback stop. Shell-owned
     /// timing state: a single Esc falls through to its claimants, and only
     /// a second Esc within [`DOUBLE_ESC_STOP_WINDOW`] dispatches the stop.
-    pub(super) last_esc: Option<std::time::Instant>,
+    pub(in crate::app) last_esc: Option<std::time::Instant>,
     /// Compiled keybind configuration, parsed once from the config file at
     /// startup (change `add-configurable-keybinds`, design D3): the optional
     /// prefix chord plus per-section router overrides and prefix-namespace
@@ -167,7 +195,7 @@ pub struct Model {
     /// records what was focused when the shell armed, and the disarm
     /// restores it (falling back to the sync passes' canonical
     /// re-derivation when it was unmounted meanwhile).
-    pub(super) prefix_armed_focus: Option<ComponentId>,
+    pub(in crate::app) prefix_armed_focus: Option<ComponentId>,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -187,7 +215,7 @@ pub struct Model {
 /// Non-key observer signals (`Resize`, `FocusGained/Lost`, `NoOp`) always pass
 /// through: they are redraw/layout signals, not chords.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ArbitrationDiagnostic {
+pub(in crate::app) struct ArbitrationDiagnostic {
     pub chord: Option<String>,
     pub captured_focus: Option<String>,
     pub router_result: String,
@@ -199,7 +227,7 @@ pub(super) struct ArbitrationDiagnostic {
 /// Test seam over `arbitrate_key`: the folded message list without the
 /// diagnostic record. Production routes through `arbitrate_key` directly.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(super) fn fold_keyboard_messages(
+pub(in crate::app) fn fold_keyboard_messages(
     messages: Vec<Msg>,
     focused: Option<&ComponentId>,
     router: &RouterOutcome,
@@ -209,7 +237,7 @@ pub(super) fn fold_keyboard_messages(
 
 /// Pure arbitration seam, returning both surviving messages and its compact
 /// diagnostic record (never containing request payloads).
-pub(super) fn arbitrate_key(
+pub(in crate::app) fn arbitrate_key(
     messages: Vec<Msg>,
     focused: Option<&ComponentId>,
     router: &RouterOutcome,
@@ -328,7 +356,7 @@ pub(super) fn arbitrate_key(
 /// component mounts its own non-mouse subscription, a non-mouse tick could reach
 /// this fold with no marker and be mistaken for a mouse claim — release builds
 /// drop it silently, debug builds trip the `debug_assert!` below (ADR 0024).
-pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
+pub(in crate::app) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
     let observed_key = messages
         .iter()
         .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))));
@@ -514,7 +542,7 @@ impl Model {
     /// behaves as a first press. Returns whether the candidate fired. The
     /// shell's quit signal is unaffected: deferred candidates are only ever
     /// `TogglePlayPause`/`Stop`, which never quit.
-    pub(super) fn apply_deferred_candidate(
+    pub(in crate::app) fn apply_deferred_candidate(
         &mut self,
         router: &RouterOutcome,
         leaf_consumed: bool,
@@ -764,5 +792,4 @@ mod mouse_fold_tests {
 }
 
 #[cfg(test)]
-#[path = "shell_tests.rs"]
 mod tests;

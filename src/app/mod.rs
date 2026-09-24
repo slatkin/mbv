@@ -4,7 +4,6 @@ mod dispatch;
 mod infra;
 mod input;
 pub mod render;
-mod shell_draw;
 pub(in crate::app) mod state;
 
 pub(in crate::app) use self::infra::layout::{
@@ -28,28 +27,6 @@ pub(in crate::app) use self::test_seams::{
     SESSIONS_LOAD_OVERRIDE, SESSIONS_LOAD_TEST_LOCK,
 };
 mod shell;
-mod shell_audiobookshelf_book;
-mod shell_audiobookshelf_podcast;
-mod shell_chrome_panels;
-mod shell_emby_library;
-mod shell_emby_library_content;
-mod shell_feeds;
-mod shell_feeds_manage;
-mod shell_home;
-mod shell_home_content;
-mod shell_inline_search;
-mod shell_library;
-#[path = "shell_library_panel.rs"]
-mod shell_library_panel;
-mod shell_modal_actions;
-mod shell_music_workspace;
-mod shell_overlays;
-mod shell_playback;
-mod shell_playlists;
-mod shell_queue;
-mod shell_root;
-mod shell_settings;
-mod shell_tv_workspace;
 use self::dispatch::notify::ToastSeverity;
 use self::infra::resize::spawn_resize_worker;
 pub use self::shell::Model;

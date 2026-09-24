@@ -1,5 +1,5 @@
 use super::components::{ComponentId, ModalId, OverlayId, PopupId, UiRootComponent};
-use super::shell::Model;
+use super::Model;
 
 impl Model {
     /// Overlay paint order is the canonical `OVERLAY_IDS` order filtered by
@@ -7,7 +7,7 @@ impl Model {
     /// mirror kept a retained mount order; TuiRealm's native LIFO focus stack
     /// owns actual stacking, so the paint order only needs to be a stable
     /// canonical order — task 5.3d).
-    pub(super) fn render_overlay_stack(&mut self, frame: &mut ratatui::Frame) {
+    pub(in crate::app) fn render_overlay_stack(&mut self, frame: &mut ratatui::Frame) {
         let mounted: Vec<ComponentId> = UiRootComponent::overlay_ids()
             .iter()
             .filter(|id| self.application.mounted(id))
@@ -43,13 +43,13 @@ impl Model {
     /// Whether the ordinary Queue/Library panel surfaces may receive mouse
     /// input. Any mounted overlay arbitrates the panel surfaces, including
     /// non-blocking overlays that remain visible without dimming the frame.
-    pub(super) fn panel_mouse_eligible(&self) -> bool {
+    pub(in crate::app) fn panel_mouse_eligible(&self) -> bool {
         !UiRootComponent::overlay_ids()
             .iter()
             .any(|id| self.application.mounted(id))
     }
 
-    pub(super) fn blocking_overlay_active(&self) -> bool {
+    pub(in crate::app) fn blocking_overlay_active(&self) -> bool {
         [
             ComponentId::Overlay(OverlayId::ContextMenu),
             ComponentId::Modal(ModalId::Confirm),

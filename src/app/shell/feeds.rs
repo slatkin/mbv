@@ -1,6 +1,6 @@
 use super::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::components::library_panel::LibraryKey;
-use super::shell::Model;
+use super::Model;
 
 impl Model {
     /// Event-scoped content projection for the Feeds owner inside the mounted
@@ -8,7 +8,7 @@ impl Model {
     /// The owner is retained across pushes, so its group/filter selection and
     /// the shared list owner's cursor/scroll survive a refresh; a hidden tab
     /// leaves the retained owner untouched.
-    pub(super) fn sync_feeds(&mut self) {
+    pub(in crate::app) fn sync_feeds(&mut self) {
         if !matches!(self.app.tab, super::TabSelection::Feeds) {
             return;
         }
@@ -61,7 +61,7 @@ impl Model {
     /// the shell pushes content addressed by `LibraryKey`), creating it on
     /// first push. The owner is installed with the panel at startup (task
     /// 7.3), so the create branch is defensive.
-    pub(super) fn update_feeds_owner<R>(
+    pub(in crate::app) fn update_feeds_owner<R>(
         &mut self,
         f: impl FnOnce(&mut FeedsContent) -> R,
     ) -> Option<R> {

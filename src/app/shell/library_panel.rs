@@ -16,7 +16,7 @@ use super::components::library_panel::owner::LaunchSelector;
 use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::components::{ComponentId, LibraryKey, LibraryKind};
-use super::shell::Model;
+use super::Model;
 use super::{PanelFocus, PanelMode, TabSelection};
 use crate::app::state::types::playback::DestinationLatestSource;
 use mbv_core::config::ServiceKind;
@@ -24,7 +24,7 @@ use mbv_core::config::ServiceKind;
 impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner
     /// map's addressing key (design D2: `Home | Feeds | Service(LibraryKey)`).
-    pub(super) fn active_library_key(&self) -> Option<LibraryKey> {
+    pub(in crate::app) fn active_library_key(&self) -> Option<LibraryKey> {
         match self.app.tab {
             TabSelection::Home => Some(LibraryKey::Home),
             TabSelection::Feeds => Some(LibraryKey::Feeds),
@@ -54,7 +54,7 @@ impl Model {
     /// Assemble the selected destination's bounded launch identities. This is
     /// a teardown-only query: the panel asks only its active owner, never any
     /// unselected destination.
-    pub(super) fn launch_state_snapshot(&self) -> mbv_core::config::TuiLaunchState {
+    pub(in crate::app) fn launch_state_snapshot(&self) -> mbv_core::config::TuiLaunchState {
         let key = self.active_library_key();
         let (selector, item) = key
             .as_ref()
@@ -86,7 +86,7 @@ impl Model {
     /// The active library's stable selection origin (design D6/D7): the
     /// identity a projection or delayed action carries so a clear intent can
     /// route to the list that produced it, never the dispatch-time focus.
-    pub(super) fn active_library_selection_origin(
+    pub(in crate::app) fn active_library_selection_origin(
         &self,
     ) -> Option<crate::app::components::media_list::SelectionOrigin> {
         self.active_library_key().map(|key| {
@@ -186,7 +186,7 @@ impl Model {
     /// Return an Emby letter-pilled library to its unfiltered scope. This is
     /// the clear counterpart to an ordinary pill click: it refreshes the full
     /// range instead of treating index zero as an A–C pill.
-    pub(super) fn clear_emby_letter_filter(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn clear_emby_letter_filter(&mut self, lib_idx: usize) {
         if !self.app.should_show_letter_pills(lib_idx) {
             return;
         }
@@ -225,7 +225,7 @@ impl Model {
     /// Consume the pending destination-level launch state after the selected
     /// owner has received its current content. Resolution is deliberately
     /// pill-before-item and happens once; later refreshes only project content.
-    pub(super) fn reanchor_pending_launch_destination(&mut self) {
+    pub(in crate::app) fn reanchor_pending_launch_destination(&mut self) {
         if !self.app.pending_launch_tab_resolved {
             return;
         }
@@ -269,7 +269,7 @@ impl Model {
     /// always live (Home, Feeds) plus one `Service` key per configured
     /// library, independent of the active tab. `LibraryPanel::retain_owners`
     /// drops owners whose key is not here (design D2's retention rule).
-    pub(super) fn live_library_keys(&self) -> Vec<LibraryKey> {
+    pub(in crate::app) fn live_library_keys(&self) -> Vec<LibraryKey> {
         let mut keys = vec![LibraryKey::Home, LibraryKey::Feeds];
         keys.extend(self.app.libs.iter().map(|tab| LibraryKey::Service {
             service: ServiceKind::Emby,
@@ -293,7 +293,7 @@ impl Model {
     }
 
     /// Whether the panel hosts an owner for `key`.
-    pub(super) fn library_panel_has_owner(&self, key: &LibraryKey) -> bool {
+    pub(in crate::app) fn library_panel_has_owner(&self, key: &LibraryKey) -> bool {
         self.application
             .get_component(&ComponentId::Library)
             .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
@@ -303,7 +303,7 @@ impl Model {
     /// Typed immutable access to the panel's owner for `key`: the shared
     /// lookup/downcast path every per-content-type `*_owner` reader collapses
     /// to (design D2 — one panel, many typed owners).
-    pub(super) fn library_owner<T: LibraryContentOwner + 'static>(
+    pub(in crate::app) fn library_owner<T: LibraryContentOwner + 'static>(
         &self,
         key: &LibraryKey,
     ) -> Option<&T> {
@@ -315,7 +315,7 @@ impl Model {
     }
 
     /// Typed mutable access to the panel's owner for `key`.
-    pub(super) fn library_owner_mut<T: LibraryContentOwner + 'static>(
+    pub(in crate::app) fn library_owner_mut<T: LibraryContentOwner + 'static>(
         &mut self,
         key: &LibraryKey,
     ) -> Option<&mut T> {
@@ -329,7 +329,7 @@ impl Model {
     /// Mutate the owner for `key`, creating it via `make` on first reach: the
     /// shared create-if-absent path every per-content-type `update_*_owner`
     /// collapses to.
-    pub(super) fn update_library_owner<T: LibraryContentOwner + 'static, R>(
+    pub(in crate::app) fn update_library_owner<T: LibraryContentOwner + 'static, R>(
         &mut self,
         key: LibraryKey,
         make: impl FnOnce() -> Box<T>,
@@ -344,7 +344,7 @@ impl Model {
     /// Open the active owner's Hero through the Library panel's local overlay
     /// contract. Destination actions use this instead of constructing the
     /// Library Hero overlay.
-    pub(super) fn open_library_hero_overlay(&mut self) -> bool {
+    pub(in crate::app) fn open_library_hero_overlay(&mut self) -> bool {
         self.application
             .get_component_mut(&ComponentId::Library)
             .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
@@ -386,7 +386,7 @@ impl Model {
     /// and a migrated active owner, and the mouse eligibility ladder
     /// subscribes it only while the library column is visible, so a hidden
     /// panel never paints or claims input.
-    pub(super) fn sync_library_panel(&mut self) {
+    pub(in crate::app) fn sync_library_panel(&mut self) {
         let id = ComponentId::Library;
         if self.library_panel_visible() && !self.application.mounted(&id) {
             self.application
@@ -463,7 +463,7 @@ impl Model {
     }
 
     /// The library content rect painted by the mounted panel.
-    pub(super) fn library_panel_content_area(&self) -> Option<Rect> {
+    pub(in crate::app) fn library_panel_content_area(&self) -> Option<Rect> {
         let area = self.app.layout.root_frame.library?;
         let collapsed = self.app.effective_panel_mode() != PanelMode::Both;
         Some(crate::app::render::components::widgets::right_panel_content_area(area, collapsed))
@@ -474,7 +474,7 @@ impl Model {
     /// `SURFACE_FOCUSED` fill, resting the column's app backdrop; one named
     /// authority both the placement fill and the status band's padding rows
     /// read, so both follow the same bit in every geometry.
-    pub(super) fn library_body_fill(&self) -> ratatui::style::Color {
+    pub(in crate::app) fn library_body_fill(&self) -> ratatui::style::Color {
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
         crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryColumn, focused)
             .fill
@@ -483,7 +483,11 @@ impl Model {
     /// The transitional draw step: give the library rect to the mounted
     /// `LibraryPanel` when the active library's owner has migrated; otherwise
     /// the old destination components paint (the caller gates them).
-    pub(super) fn render_library_panel_at(&mut self, frame: &mut ratatui::Frame, area: Rect) {
+    pub(in crate::app) fn render_library_panel_at(
+        &mut self,
+        frame: &mut ratatui::Frame,
+        area: Rect,
+    ) {
         let id = ComponentId::Library;
         if !self.application.mounted(&id) {
             return;
@@ -530,7 +534,7 @@ impl Model {
     /// visual slot's separate projection (task 3.4) is untouched.
     /// Driven every sync pass so a cursor move, breakpoint change, or split
     /// drag re-projects on the next pass.
-    pub(super) fn sync_library_hero_images(&mut self) {
+    pub(in crate::app) fn sync_library_hero_images(&mut self) {
         if !self.library_panel_visible() {
             return;
         }

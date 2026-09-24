@@ -2,14 +2,14 @@ use super::components::{
     ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsIntent,
     SettingsRow, SettingsSnapshot, SetupDraft,
 };
-use super::shell::Model;
+use super::Model;
 use crate::app::state::types::settings;
 use crate::app::state::types::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use mbv_core::keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use ratatui::layout::Rect;
 
 impl Model {
-    pub(super) fn update_settings_content(&mut self) {
+    pub(in crate::app) fn update_settings_content(&mut self) {
         let id = ComponentId::Overlay(super::components::OverlayId::Settings);
         if !self.application.mounted(&id) {
             return;
@@ -37,7 +37,7 @@ impl Model {
         }
     }
 
-    pub(super) fn render_settings_overlay(&mut self, frame: &mut ratatui::Frame) {
+    pub(in crate::app) fn render_settings_overlay(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Overlay(super::components::OverlayId::Settings);
         if !self.application.mounted(&id) {
             return;
@@ -127,7 +127,7 @@ impl Model {
             services,
             keys,
             setup,
-            area: if let Some(panel_area) = super::shell_chrome_panels::sync_panel_area(&self.app) {
+            area: if let Some(panel_area) = super::chrome_panels::sync_panel_area(&self.app) {
                 panel_area
             } else {
                 Rect {
@@ -188,7 +188,7 @@ impl Model {
         rows
     }
 
-    pub(super) fn handle_service_request(&mut self, request: ServiceRequest) -> bool {
+    pub(in crate::app) fn handle_service_request(&mut self, request: ServiceRequest) -> bool {
         match request {
             ServiceRequest::RemoveEmby => {
                 self.mount_sidebar(super::SidebarId::Settings);
@@ -266,7 +266,7 @@ impl Model {
         }
     }
 
-    pub(super) fn handle_settings_intent(&mut self, intent: SettingsIntent) -> bool {
+    pub(in crate::app) fn handle_settings_intent(&mut self, intent: SettingsIntent) -> bool {
         match intent {
             SettingsIntent::Back => {
                 if matches!(
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn settings_service_request_stays_at_shell_boundary() {
-        let mut app = super::super::tests::make_app_stub();
+        let mut app = crate::app::tests::make_app_stub();
         app.open_services_settings();
         let mut model = Model::new(app);
         model.handle_service_request(ServiceRequest::ActivateService(0));
@@ -334,7 +334,7 @@ mod tests {
     fn keys_row_summary_follows_the_loaded_configuration() {
         use crate::app::state::types::settings;
         use crate::app::SettingKey;
-        let app = super::super::tests::make_app_stub();
+        let app = crate::app::tests::make_app_stub();
         let cfg = app.config.lock().unwrap().clone();
         let ui = app.ui_config_snapshot();
         assert_eq!(
@@ -372,7 +372,7 @@ mod tests {
     /// the registry set, and an override renders the configured chord.
     #[test]
     fn keys_destination_lists_registry_groups_rows_and_overrides() {
-        let mut app = super::super::tests::make_app_stub();
+        let mut app = crate::app::tests::make_app_stub();
         app.settings_destination = SettingsDestination::Keys;
         let mut model = Model::new(app);
         model.keybinds = mbv_core::keybinds::Keybinds {

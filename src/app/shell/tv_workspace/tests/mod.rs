@@ -8,11 +8,9 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-#[path = "shell_tv_workspace_group_tests.rs"]
-mod group_tests;
+mod group;
 
-#[path = "shell_tv_workspace_selection_tests.rs"]
-mod selection_tests;
+mod selection;
 
 fn mounted_tv_model_with_mock_emby(http: &MockHttp) -> Model {
     let mut model = mounted_tv_model();
@@ -711,5 +709,4 @@ fn tv_season_skip_model() -> Model {
     model
 }
 
-#[path = "shell_tv_workspace_activation_tests.rs"]
-mod activation_tests;
+mod activation;

@@ -1,15 +1,15 @@
 use super::components::{
     ComponentId, ModalId, OverlayId, PlaylistsComponent, PlaylistsContent, ShellRequest,
 };
-use super::shell::Model;
+use super::Model;
 
 impl Model {
-    pub(super) fn update_playlists_content(&mut self) {
+    pub(in crate::app) fn update_playlists_content(&mut self) {
         let id = ComponentId::Overlay(OverlayId::Playlists);
         if !self.application.mounted(&id) {
             return;
         }
-        let panel = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
+        let panel = crate::app::shell::chrome_panels::sync_panel_area(&self.app);
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>() {
                 playlists.set_content(PlaylistsContent {
@@ -34,7 +34,7 @@ impl Model {
         }
     }
 
-    pub(super) fn render_playlists_overlay(&mut self, frame: &mut ratatui::Frame) {
+    pub(in crate::app) fn render_playlists_overlay(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Overlay(OverlayId::Playlists);
         if !self.application.mounted(&id) {
             return;
@@ -42,14 +42,14 @@ impl Model {
         self.application.view(&id, frame, frame.area());
     }
 
-    pub(super) fn render_save_playlist_overlay(&mut self, frame: &mut ratatui::Frame) {
+    pub(in crate::app) fn render_save_playlist_overlay(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Modal(ModalId::SavePlaylist);
         if self.application.mounted(&id) {
             self.application.view(&id, frame, frame.area());
         }
     }
 
-    pub(super) fn handle_playlists_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_playlists_request(&mut self, request: ShellRequest) {
         match request {
             ShellRequest::PlaylistsBack => {
                 self.app.playlists_open = None;

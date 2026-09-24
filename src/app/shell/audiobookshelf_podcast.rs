@@ -2,7 +2,7 @@ use super::components::library_panel::LibraryKey;
 use super::components::msg::PodcastEpisodeIntent;
 use super::components::podcast_content::PodcastContent;
 use super::components::LibraryKind;
-use super::shell::Model;
+use super::Model;
 use super::TabSelection;
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_core::config::ServiceKind;
@@ -34,7 +34,7 @@ impl Model {
         self.update_library_owner(key, || Box::new(PodcastContent::new()), f)
     }
 
-    pub(super) fn push_audiobookshelf_podcast_content(&mut self) {
+    pub(in crate::app) fn push_audiobookshelf_podcast_content(&mut self) {
         let Some(index) = self.app.tab.audiobookshelf_index() else {
             return;
         };
@@ -93,7 +93,7 @@ impl Model {
         });
     }
 
-    pub(super) fn handle_audiobookshelf_podcast_episode_intent(
+    pub(in crate::app) fn handle_audiobookshelf_podcast_episode_intent(
         &mut self,
         intent: PodcastEpisodeIntent,
     ) {

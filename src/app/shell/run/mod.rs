@@ -776,5 +776,4 @@ impl Model {
 }
 
 #[cfg(test)]
-#[path = "shell_run_tests.rs"]
 mod tests;

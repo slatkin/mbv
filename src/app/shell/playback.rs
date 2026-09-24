@@ -1,5 +1,5 @@
 use super::components::{PlaybackProjection, PlaybackRequest};
-use super::shell::Model;
+use super::Model;
 use super::{palette, PanelFocus};
 
 impl Model {
@@ -82,7 +82,7 @@ impl Model {
         }
     }
 
-    pub(super) fn handle_playback_request(&mut self, request: PlaybackRequest) {
+    pub(in crate::app) fn handle_playback_request(&mut self, request: PlaybackRequest) {
         use crate::app::dispatch::action::Command;
         match request {
             PlaybackRequest::TogglePlayPause => self.dispatch_playback(Command::TogglePlayPause),
@@ -116,7 +116,7 @@ mod tests {
 
     #[test]
     fn playback_chrome_request_routes_through_shell_authority() {
-        let app = super::super::tests::make_app_stub();
+        let app = crate::app::tests::make_app_stub();
         let mut model = Model::new(app);
         model.handle_playback_request(PlaybackRequest::VolumeDelta(5));
         assert!(matches!(

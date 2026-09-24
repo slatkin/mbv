@@ -4,7 +4,7 @@ use super::super::components::{
     ComponentId, ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, OverlayId,
     PopupId, QueueComponent, ShellRequest,
 };
-use super::super::shell::Model;
+use super::super::Model;
 use crate::app::state::types::context_menu::{
     is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,

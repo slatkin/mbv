@@ -6,13 +6,13 @@ use super::components::library_panel::LibraryKey;
 use super::components::msg::MusicArtistTarget;
 use super::components::music_content::MusicContent;
 use super::components::LibraryKind;
-use super::shell::{Model, MusicTrackFocusRequest, MusicTrackSelection};
 use super::BrowseLevel;
 use super::TabSelection;
+use super::{Model, MusicTrackFocusRequest, MusicTrackSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    pub(super) fn music_owner_key(&self) -> Option<LibraryKey> {
+    pub(in crate::app) fn music_owner_key(&self) -> Option<LibraryKey> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
@@ -31,7 +31,7 @@ impl Model {
         self.library_owner(&key)
     }
 
-    pub(super) fn update_music_owner<R>(
+    pub(in crate::app) fn update_music_owner<R>(
         &mut self,
         f: impl FnOnce(&mut MusicContent) -> R,
     ) -> Option<R> {
@@ -47,7 +47,7 @@ impl Model {
     /// repeat pushes with the same identity are free. Used by the projection
     /// push; the component's typed request arms dispatch the two concerns
     /// through their own shell arms.
-    pub(super) fn request_music_artist_detail(&mut self, target: MusicArtistTarget) {
+    pub(in crate::app) fn request_music_artist_detail(&mut self, target: MusicArtistTarget) {
         self.request_music_artist_tracks(target.clone());
         self.request_music_artist_artwork(target);
     }
@@ -56,7 +56,7 @@ impl Model {
     /// identity arms the `ArtistIds` Audio query — or, for a fallback root
     /// (`artist_id == None`), the explicit per-album aggregation fetches —
     /// with no invented provider ID.
-    pub(super) fn request_music_artist_tracks(&mut self, target: MusicArtistTarget) {
+    pub(in crate::app) fn request_music_artist_tracks(&mut self, target: MusicArtistTarget) {
         let Some(destination) = self.music_owner_key() else {
             return;
         };
@@ -66,7 +66,7 @@ impl Model {
     /// The typed artwork request's handler (task 6.2): the stable artist ID
     /// walks the existing image/cache boundary; a fallback artist is the
     /// explicit no-artwork arm inside `request_artist_artwork`.
-    pub(super) fn request_music_artist_artwork(&mut self, target: MusicArtistTarget) {
+    pub(in crate::app) fn request_music_artist_artwork(&mut self, target: MusicArtistTarget) {
         let Some(destination) = self.music_owner_key() else {
             return;
         };
@@ -147,7 +147,7 @@ impl Model {
         self.music_workspace_reanchor = true;
     }
 
-    pub(super) fn push_music_workspace_content(&mut self) {
+    pub(in crate::app) fn push_music_workspace_content(&mut self) {
         // Music projects only in the album-folder grouped view (the same
         // gate `music_owner_key` applies): outside it there is no owner to
         // push into, and the body below must not run its side effects
@@ -294,11 +294,11 @@ impl Model {
     }
 
     #[cfg(test)]
-    pub(super) fn test_music_owner(&self) -> &MusicContent {
+    pub(in crate::app) fn test_music_owner(&self) -> &MusicContent {
         self.music_owner().expect("music owner")
     }
     #[cfg(test)]
-    pub(super) fn test_music_owner_mut(&mut self) -> &mut MusicContent {
+    pub(in crate::app) fn test_music_owner_mut(&mut self) -> &mut MusicContent {
         self.music_owner_key()
             .and_then(|key| self.library_owner_mut::<MusicContent>(&key))
             .expect("music owner")
@@ -584,5 +584,4 @@ mod tests {
 }
 
 #[cfg(test)]
-#[path = "shell_music_workspace_owner_tests.rs"]
 mod owner_tests;

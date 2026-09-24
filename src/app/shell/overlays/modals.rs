@@ -2,7 +2,7 @@ use super::super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, ModalId, OverlayId,
     SavePlaylistComponent,
 };
-use super::super::shell::Model;
+use super::super::Model;
 use crate::app::state::types::overlay::OverlayRequest;
 
 impl Model {
