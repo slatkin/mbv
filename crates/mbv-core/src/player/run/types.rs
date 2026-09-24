@@ -1,12 +1,12 @@
 use super::*;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub(crate) enum PlaybackOrigin {
+pub(in crate::player) enum PlaybackOrigin {
     Standalone,
     Queue,
 }
 
-pub(crate) struct PlaybackRun {
+pub(in crate::player) struct PlaybackRun {
     pub(in crate::player) origin: PlaybackOrigin,
     pub(in crate::player) run_identity: (
         crate::ctrl::PlaybackRequestId,
