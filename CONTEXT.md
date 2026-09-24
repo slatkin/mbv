@@ -299,6 +299,20 @@ does not mean playing: a stopped owner still holds its queue, and queues can be
 Bound to two owners at once while only one of them plays.
 _Avoid_: active queue, live queue, running queue, attached queue
 
+**Owner-held queue and source**:
+In the Stay-alive model, the owner (the Stay-alive process) holds the only
+authoritative Bound queue and Queue source and persists them; attached
+Clients are readers that display owner-accepted snapshots and never stage,
+persist, or seed a queue of their own. Gate: the owner-side path is
+`DaemonRole::Local`; packaged mbvd and Bare mode are unchanged.
+_Avoid_: client-owned queue, thin-client seeding, staged local queue
+
+**QueueLineage**:
+An owner-minted identity accompanying an accepted queue state. A source-only
+update (Save As) applies only to the lineage the owner held when it was
+requested; Clients echo owner-minted lineage and never self-authorize it.
+_Avoid_: generation stamp, client lineage, fence token
+
 **Unplayable item**:
 An item a Player owner lacks the capability to play, because of media kind,
 required Service availability, or playback support. It never enters that
