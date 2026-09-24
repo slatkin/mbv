@@ -32,6 +32,7 @@ Open items resolved from the code:
 - **Each `continue` becomes `return LoopFlow::Continue`.** That skips persistence for the pass, which is the same as today.
 - **Stopped arm:** `if let PlayerEvent::Stopped { slot_id, run_identity, position_ticks, played, error, .. } = &pe` is bound once, and the pending-match, cancel, apply, commit and broadcast logic uses those bindings. This removes the `unreachable!()`.
 - **Test location:** new `daemon_loop_tests.rs`, so `daemon_tests.rs` (1071 lines) doesn't grow. A `test_loop()` builder combines `cold_player()`, an empty `CtrlClients`, `role = Local` and a recording store.
+- **Idle-load install keeps its direct persist (out of scope).** `install_idle_queue_load` (`daemon_control.rs`) is a third `persist_stay_alive_owner_queue` caller, reached from `handle_ctrl_for_role` and from `complete_pending_idle_queue_load` on a committed pending idle load. It keeps the production store `config::save_stay_alive_queue_state`; the injected `DaemonLoop` store covers the loop-pass persistence only. Threading the store through it would change `handle_ctrl_for_role`'s signature and ~30 test call sites for no observable effect. Consequently §3's idle-load test asserts that the loop-pass store records exactly one snapshot for a committed pass (row 3.3 "persists once"); the install's pre-existing inline write is not asserted and, under test, lands in the framework's test state dir (`TestStateDirGuard` / `TEST_DEFAULT_STATE_DIR`, `config_test_support.rs`).
 
 ## Risks / Trade-offs
 
