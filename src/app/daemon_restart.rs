@@ -1,4 +1,4 @@
-use super::bootstrap::{bootstrap_local_daemon_queue, bootstrap_unified_queue};
+use super::bootstrap::{bootstrap_unified_queue, LocalDaemonBootstrap};
 use super::{App, QueueScope};
 use mbv_core::player::PlayerProxy;
 use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
@@ -17,11 +17,9 @@ impl App {
     /// client's socket. Only called for a `home_is_local_daemon` app, so
     /// `player_endpoint` is always the managed local daemon after this succeeds.
     ///
-    /// `resume = false` suppresses the saved-queue adoption so the new
-    /// daemon comes up idle -- the `[S]` choice on the daemon-lost modal,
-    /// which exists to escape a crash loop where resuming the offending
-    /// item re-triggers the crash.
-    pub(super) fn restart_local_daemon(&mut self, resume: bool) -> Result<(), String> {
+    /// The owner reloads its own persisted queue; this Client never seeds it
+    /// from its per-user snapshot.
+    pub(super) fn restart_local_daemon(&mut self, _resume: bool) -> Result<(), String> {
         let socket_path = crate::single_instance::socket_path();
         let lock_path = crate::single_instance::lock_path();
         match crate::single_instance::resolve(&socket_path, &lock_path) {
@@ -53,27 +51,18 @@ impl App {
         let remote_cursor = remote.status.lock().unwrap().current_idx;
         let remote_unified_state = remote.unified_queue_state();
         let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-        let bootstrap = remote_unified_state
-            .as_ref()
-            .filter(|state| !state.slots.is_empty())
-            .map_or_else(
-                || {
-                    bootstrap_local_daemon_queue(
-                        remote_items,
-                        remote_cursor,
-                        remote_queue_source,
-                        if resume {
-                            crate::config::load_queue_state()
-                        } else {
-                            None
-                        },
-                    )
-                },
-                bootstrap_unified_queue,
-            );
-        let adoption_failed = bootstrap
-            .adopt_queue
-            .is_some_and(|(items, cursor, source)| !remote.adopt_queue(items, cursor, source));
+        let bootstrap = remote_unified_state.as_ref().map_or_else(
+            || LocalDaemonBootstrap {
+                player_tab: super::types_player_tab::PlayerTab::from_emby_items(
+                    remote_items,
+                    remote_cursor,
+                ),
+                queue_source: remote_queue_source,
+                last_played_item_id: None,
+                last_played_completed: false,
+            },
+            bootstrap_unified_queue,
+        );
 
         // Tear down the old (already-dead) connection before overwriting it,
         // mirroring `restore_local_mode`'s remote-to-remote swap (#233).
@@ -105,9 +94,6 @@ impl App {
         self.next_up_item = None;
         self.dismiss_daemon_lost();
 
-        if adoption_failed {
-            self.handle_failed_local_daemon_adoption();
-        }
         Ok(())
     }
 }
