@@ -241,6 +241,7 @@ impl RemotePlayer {
                 item: queue_item,
             }],
             Some(0),
+            source.clone(),
         ));
         if sent {
             *self.items.lock().unwrap() = vec![item.clone()];
@@ -267,7 +268,11 @@ impl RemotePlayer {
                 item,
             })
             .collect();
-        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(slots, Some(start_idx)));
+        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
+            slots,
+            Some(start_idx),
+            source.clone(),
+        ));
         if sent {
             *self.items.lock().unwrap() = items;
             *self.queue_source.lock().unwrap() = source;
@@ -306,6 +311,47 @@ impl RemotePlayer {
 
     pub fn supports_audio_only(&self) -> bool {
         self.ctrl_compatibility.supports_audio_only
+    }
+
+    pub fn supports_owner_queue_load(&self) -> bool {
+        self.ctrl_compatibility.supports_owner_queue_load
+    }
+
+    /// Send a correlated idle load without changing the Client's queue
+    /// projection. A peer without the additive capability is refused locally.
+    pub fn update_queue_source(
+        &self,
+        source: crate::config::QueueSource,
+        lineage: crate::ctrl::QueueLineage,
+    ) -> Result<(), String> {
+        if !self.supports_owner_queue_load() {
+            return Err("daemon does not support owner queue source updates".to_string());
+        }
+        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueSourceUpdate { source, lineage }) {
+            return Err("could not send queue source update to Player owner".to_string());
+        }
+        Ok(())
+    }
+
+    pub fn load_queue_idle(
+        &self,
+        request_id: crate::ctrl::QueueLoadRequestId,
+        slots: Vec<crate::ctrl::UnifiedQueueSlot>,
+        cursor: usize,
+        source: crate::config::QueueSource,
+    ) -> Result<(), String> {
+        if !self.supports_owner_queue_load() {
+            return Err("daemon does not support owner-authoritative idle queue loads".to_string());
+        }
+        if !self.send_ctrl_cmd(CtrlCmd::UnifiedQueueLoadIdle {
+            request_id,
+            slots,
+            cursor,
+            source,
+        }) {
+            return Err("could not send idle queue load to Player owner".to_string());
+        }
+        Ok(())
     }
 
     pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
@@ -395,6 +441,17 @@ impl RemotePlayer {
             event_rx,
             cmd_rx,
         )
+    }
+
+    /// Test-support stub that advertises owner-authoritative idle queue loads.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn stub_owner_queue_load_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_owner_queue_load = true;
+        (remote, event_rx, cmd_rx)
     }
 
     /// Test-support stub whose advertised ctrl capability identifies an

@@ -56,6 +56,7 @@ fn spawn_ctrl_client(
             supports_abs_progress,
             supports_abs_book_queue,
             supports_abs_book_progress,
+            supports_owner_queue_load,
         ) = match serde_json::from_str::<CtrlCmd>(&line) {
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
@@ -77,6 +78,7 @@ fn spawn_ctrl_client(
                     info.supports_abs_progress(),
                     info.supports_abs_book_queue(),
                     info.supports_abs_book_progress(),
+                    info.supports_owner_queue_load(),
                 )
             }
             Ok(_) => {
@@ -93,10 +95,12 @@ fn spawn_ctrl_client(
         let q = shared_queue.queue.lock().unwrap().clone();
         let source = shared_queue.source.lock().unwrap().clone();
         let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
+        let lineage = *shared_queue.lineage.lock().unwrap();
         let init_event = unified_queue_state_for_peer(
             &status,
             &q,
             &source,
+            lineage,
             observed_active_slot,
             None,
             None,
@@ -114,6 +118,7 @@ fn spawn_ctrl_client(
             supports_abs_progress,
             supports_abs_book_queue,
             supports_abs_book_progress,
+            supports_owner_queue_load,
         );
 
         for line in lines {

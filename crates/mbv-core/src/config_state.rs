@@ -3,27 +3,76 @@
 // share the same module scope as the other config_*.rs files.
 
 pub fn save_queue_state(state: &QueueState) -> Result<(), String> {
-    let path = queue_state_path();
+    save_json_atomic(&queue_state_path(), state, "queue state")
+}
+
+pub fn load_queue_state() -> Option<QueueState> {
+    load_json(&queue_state_path(), "queue_state.json")
+}
+
+fn save_json_atomic<T: serde::Serialize>(
+    path: &std::path::Path,
+    state: &T,
+    what: &str,
+) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
     }
-    let json = serde_json::to_string(state).map_err(|e| format!("serialize queue state: {e}"))?;
+    let json = serde_json::to_string(state).map_err(|e| format!("serialize {what}: {e}"))?;
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, &json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, &path)
+    std::fs::rename(&tmp, path)
         .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
 }
 
-pub fn load_queue_state() -> Option<QueueState> {
-    let text = std::fs::read_to_string(queue_state_path()).ok()?;
+fn load_json<T: serde::de::DeserializeOwned>(path: &std::path::Path, what: &str) -> Option<T> {
+    let text = std::fs::read_to_string(path).ok()?;
     match serde_json::from_str(&text) {
         Ok(state) => Some(state),
         Err(e) => {
-            log::warn!(target: "queue", "queue_state.json failed to parse, queue not restored: {e}");
+            log::warn!(target: "queue", "{what} failed to parse, queue not restored: {e}");
             None
         }
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StayAliveQueueState {
+    pub queue: QueueState,
+    pub lineage: crate::ctrl::QueueLineage,
+}
+
+pub(crate) fn save_stay_alive_queue_state_at(
+    path: &std::path::Path,
+    state: &StayAliveQueueState,
+) -> Result<(), String> {
+    save_json_atomic(path, state, "owner queue")
+}
+
+pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), String> {
+    save_stay_alive_queue_state_at(&stay_alive_queue_state_path(), state)
+}
+
+pub(crate) fn load_stay_alive_queue_state_at(path: &std::path::Path) -> Option<StayAliveQueueState> {
+    load_json(path, "owner queue state")
+}
+
+pub fn load_stay_alive_queue_state() -> Option<StayAliveQueueState> {
+    load_stay_alive_queue_state_at(&stay_alive_queue_state_path())
+}
+
+pub(crate) fn legacy_queue_for_owner_if_absent(
+    owner_path: &std::path::Path,
+    legacy: Option<QueueState>,
+) -> Option<StayAliveQueueState> {
+    if owner_path.exists() {
+        return None;
+    }
+    legacy.map(|queue| StayAliveQueueState {
+        queue,
+        lineage: crate::ctrl::QueueLineage::default(),
+    })
 }
 
 pub fn clear_queue_state() -> Result<(), String> {

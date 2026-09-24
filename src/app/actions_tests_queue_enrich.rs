@@ -264,6 +264,7 @@ fn queue_enriched_preserves_pending_sync_until_server_confirms_it() {
     }
     app.handle_player_event(mbv_core::player::PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
+        run_identity: (0, 0),
         position_ticks: 6 * mbv_core::api::TICKS_PER_SECOND,
         played: false,
         consume: false,

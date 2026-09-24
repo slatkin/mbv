@@ -66,6 +66,7 @@ where
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
             compatibility.supports_audio_only = info.supports_audio_only();
             compatibility.supports_control_auth = info.supports_control_auth();
+            compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -234,6 +235,11 @@ fn apply_ctrl_event(
                     // connection actually closes; nothing to do here.
                     DisconnectReason::DaemonShutdown => {}
                 }
+            }
+        }
+        CtrlEvent::UnifiedQueueLoadResult { request_id, result } => {
+            if notify {
+                let _ = event_tx.send(PlayerEvent::UnifiedQueueLoadResult { request_id, result });
             }
         }
         CtrlEvent::UnifiedQueueState(unified) => {
@@ -564,6 +570,7 @@ pub fn connect_stub_daemon_pair() -> Result<
             active_slot: None,
             revision: 0,
             source: crate::config::QueueSource::Unknown,
+            lineage: crate::ctrl::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         }))

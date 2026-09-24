@@ -194,6 +194,10 @@ pub enum PlayerEvent {
         /// index-shaped `Stopped` still decodes (to `None`).
         #[serde(default)]
         slot_id: Option<QueueSlotId>,
+        /// Identity of the Playback run that observed this stop. The owner
+        /// submission generation is paired with a reserved request id of 0.
+        #[serde(default)]
+        run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -220,6 +224,10 @@ pub enum PlayerEvent {
     TrackCompleted {
         /// Owner-assigned identity of the completed occurrence (design D7).
         slot_id: QueueSlotId,
+        /// Identity of the Playback run that observed this completion. The
+        /// owner submission generation is paired with a reserved request id of 0.
+        #[serde(default)]
+        run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -250,6 +258,11 @@ pub enum PlayerEvent {
     /// sync the full canonical queue (tagged QueueItems, slot identity, active
     /// slot, revision) without decomposing into legacy Emby-only shapes.
     UnifiedQueueUpdated(Box<crate::ctrl::UnifiedQueueStateData>),
+    /// Correlated result of an owner-authoritative idle queue load.
+    UnifiedQueueLoadResult {
+        request_id: crate::ctrl::QueueLoadRequestId,
+        result: crate::ctrl::QueueLoadResult,
+    },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
         intro_end_ticks: i64,

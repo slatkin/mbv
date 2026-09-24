@@ -47,7 +47,11 @@ impl App {
                     }
                     self.player_tab.set_items(vec![item.clone()], 0);
                     self.flash(item.playback_label(), ToastSeverity::Neutral);
-                    self.submit_tab_queue(self.playing_queue_scope(), 0);
+                    self.submit_tab_queue(
+                        self.playing_queue_scope(),
+                        0,
+                        crate::config::QueueSource::Remote,
+                    );
                 } else {
                     log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
                     // Always hand the whole list to play_queue (not just the clicked
@@ -61,7 +65,11 @@ impl App {
                     self.player_tab.set_items(items_with_pos, start_idx);
                     // Keep the tab's canonical slot identities when starting
                     // this replacement; do not mint a fresh sequential run.
-                    self.submit_tab_queue(self.playing_queue_scope(), start_idx);
+                    self.submit_tab_queue(
+                        self.playing_queue_scope(),
+                        start_idx,
+                        crate::config::QueueSource::Remote,
+                    );
                 }
                 self.save_queue_state();
             }

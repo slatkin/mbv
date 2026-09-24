@@ -20,14 +20,16 @@ impl App {
         matches!(self.playback_target(), PlaybackTarget::Local(_))
     }
 
+    pub(super) fn stay_alive_owner_is_queue_authority(&self) -> bool {
+        self.is_local_daemon()
+    }
+
     /// Whether the scope's canonical queue is the playback owner's accepted
-    /// submission. A locally replaced queue is fenced one generation ahead of
-    /// the owner until its next submit (`replace_playback_queue`); while
-    /// fenced, the owner still holds the previous queue, so neither edits nor
-    /// appends may be forwarded to it, and its broadcasts must not replace
-    /// the local copy. Same predicate the jump-to-slot path enforces.
+    /// submission. Bare mode uses a generation fence until submit; the
+    /// Stay-alive owner is authoritative from its snapshots, while direct
+    /// remote scope is already independently projected.
     pub(super) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
-        if scope == QueueScope::Remote {
+        if scope == QueueScope::Remote || self.stay_alive_owner_is_queue_authority() {
             return true;
         }
         self.queue_for_scope(scope).sequence_generation
@@ -76,6 +78,9 @@ impl App {
     /// Stamps `scope`'s queue with the playback owner's current sequence
     /// generation, after a submit the owner accepted at that generation.
     pub(super) fn stamp_queue_generation(&mut self, scope: QueueScope) {
+        if self.stay_alive_owner_is_queue_authority() {
+            return;
+        }
         let generation = self.player.status.lock().unwrap().sequence_generation;
         self.queue_for_scope_mut(scope).sequence_generation = generation;
     }
@@ -110,8 +115,17 @@ impl App {
         self.local_queue_metadata_applies(self.action_queue_scope(action))
     }
 
+    pub(super) fn set_queue_source_if_not_local_daemon(
+        &mut self,
+        source: crate::config::QueueSource,
+    ) {
+        if !self.stay_alive_owner_is_queue_authority() {
+            self.queue_source = source;
+        }
+    }
+
     pub(super) fn clear_local_queue_metadata(&mut self) {
-        self.queue_source = crate::config::QueueSource::Unknown;
+        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
     }
@@ -134,8 +148,7 @@ impl App {
             return true;
         }
         if scope != QueueScope::Remote && !self.local_queue_is_owner_queue(scope) {
-            // Fenced-ahead local queue: the owner holds a previous queue, so
-            // the append stays local until the next submit cold-starts it.
+            // Bare mode has no live command channel before its first submit.
             return true;
         }
         if !self.player.is_remote() && !self.player.status.lock().unwrap().active {
@@ -184,11 +197,12 @@ impl App {
         match self.playing_queue_scope() {
             QueueScope::Local => {
                 self.player_tab.set_items(items, cursor);
-                // Keep the client queue fenced from the owner's last
-                // accepted submission until the next explicit play submits
-                // this replacement.
-                let owner_generation = self.player.status.lock().unwrap().sequence_generation;
-                self.player_tab.sequence_generation = owner_generation.saturating_add(1);
+                // Bare mode fences a local replacement until submit. A
+                // Stay-alive Client instead reconciles the owner's snapshots.
+                if !self.stay_alive_owner_is_queue_authority() {
+                    let owner_generation = self.player.status.lock().unwrap().sequence_generation;
+                    self.player_tab.sequence_generation = owner_generation.saturating_add(1);
+                }
             }
             QueueScope::Remote => {
                 let queue = self

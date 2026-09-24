@@ -335,6 +335,8 @@ pub struct App {
     pub(super) playlists_open_loading: bool,
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
+    pub(super) pending_owner_source_update:
+        Option<(crate::config::QueueSource, mbv_core::ctrl::QueueLineage)>,
     /// Deferred queue replacement awaiting the save/discard answer, then the
     /// `PlaylistMutationComplete` boundary. Owned by `replace_queue_or_prompt`
     /// and its existing callers (`ClearQueue`, the album/artist track paths,
@@ -368,6 +370,7 @@ pub struct App {
     pub(super) remote_queue_lineage: u64,
     pub(super) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(super) next_playlist_mutation: u64,
+    pub(super) next_owner_queue_load_request: u64,
     pub(super) direct_remote_connected: bool,
     pub(super) direct_remote_label: Option<String>,
     /// Emby session id of a remote owner under Direct remote control, so the

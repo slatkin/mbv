@@ -18,9 +18,9 @@ impl App {
     pub(super) fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let ct = self.libs[lib_idx].library.collection_type.clone();
-            self.queue_source = crate::config::QueueSource::Collection {
+            self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Collection {
                 collection_type: ct,
-            };
+            });
             self.play_folder(&item.id.clone());
             self.save_queue_state();
         } else {
@@ -116,9 +116,11 @@ impl App {
                                 let ct = self.libs[lib_idx].library.collection_type.clone();
                                 drop(client);
                                 self.replace_playback_queue(siblings.clone(), start_idx);
-                                self.queue_source = crate::config::QueueSource::Collection {
-                                    collection_type: ct,
-                                };
+                                self.set_queue_source_if_not_local_daemon(
+                                    crate::config::QueueSource::Collection {
+                                        collection_type: ct,
+                                    },
+                                );
                                 if !self.has_direct_remote_queue() {
                                     self.save_queue_state();
                                 }
@@ -228,7 +230,7 @@ impl App {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return false;
         }
-        self.queue_source = crate::config::QueueSource::Album;
+        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Album);
         self.replace_playback_queue(tracks.clone(), start_idx);
         self.play_items_routed(tracks, start_idx, crate::config::QueueSource::Album);
         if !self.has_direct_remote_queue() {

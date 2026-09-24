@@ -20,6 +20,10 @@ pub fn queue_state_path() -> PathBuf {
     state_dir().join("queue_state.json")
 }
 
+pub fn stay_alive_queue_state_path() -> PathBuf {
+    state_dir().join("stay_alive_queue_state.json")
+}
+
 pub fn library_position_state_path() -> PathBuf {
     state_dir().join("library_position_state.json")
 }

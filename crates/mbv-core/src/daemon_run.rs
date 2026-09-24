@@ -1,3 +1,103 @@
+pub(super) fn broadcast_player_event_if_not_replaced(
+    ctrl_clients: &ClientRegistry,
+    event: PlayerEvent,
+    replacement_committed: bool,
+) {
+    if !replacement_committed {
+        broadcast(ctrl_clients, &CtrlEvent::Player(event));
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct PlaybackRunIdentity {
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+}
+
+impl From<(PlaybackRequestId, PlaybackGeneration)> for PlaybackRunIdentity {
+    fn from((request_id, generation): (PlaybackRequestId, PlaybackGeneration)) -> Self {
+        Self {
+            request_id,
+            generation,
+        }
+    }
+}
+
+pub(super) fn playback_run_identity_is_current(
+    run_identity: PlaybackRunIdentity,
+    player: &Player,
+) -> bool {
+    run_identity
+        == PlaybackRunIdentity {
+            request_id: 0,
+            generation: player.status.lock().unwrap().sequence_generation,
+        }
+}
+
+fn apply_track_completed_observation(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    run_identity: PlaybackRunIdentity,
+    slot_id: QueueSlotId,
+    position_ticks: i64,
+    played: bool,
+    consume: bool,
+    consume_videos: bool,
+    consume_audio: bool,
+) -> bool {
+    if !playback_run_identity_is_current(run_identity, player) {
+        return false;
+    }
+    if let Some(slot) = owner.core.queue.slot(slot_id) {
+        // Completion observations ignore small progress changes; stopped observations below
+        // retain any positive position so an interrupted item can resume precisely.
+        let position = if played {
+            0
+        } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
+            && !slot.item.is_audio()
+        {
+            position_ticks
+        } else {
+            slot.item.playback_position_ticks()
+        };
+        owner.core.apply_completion_progress(slot_id, position, played);
+    }
+    if owner.core.consume_completed_slot(slot_id, consume, consume_videos, consume_audio) {
+        log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
+    }
+    *shared_queue.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
+    true
+}
+
+pub(super) fn apply_stopped_observation(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    run_identity: PlaybackRunIdentity,
+    slot_id: Option<QueueSlotId>,
+    position_ticks: i64,
+    played: bool,
+) -> Option<bool> {
+    if !playback_run_identity_is_current(run_identity, player) {
+        return None;
+    }
+    let Some(slot_id) = slot_id else {
+        return Some(false);
+    };
+    let Some(slot) = owner.core.queue.slot(slot_id) else {
+        return Some(false);
+    };
+    let position = if played {
+        0
+    } else if position_ticks > 0 && !slot.item.is_audio() {
+        position_ticks
+    } else {
+        slot.item.playback_position_ticks()
+    };
+    owner.core.apply_completion_progress(slot_id, position, played);
+    Some(true)
+}
+
 fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
     owner: &mut DaemonPlayerOwner,
@@ -126,9 +226,58 @@ pub fn run_with_options(
 
     // Shared state for ctrl socket initial-state snapshots — stores the
     // canonical queue so all ctrl peers are seeded from one source.
+    let owner_state = if role == DaemonRole::Local {
+        let owner_path = crate::config::stay_alive_queue_state_path();
+        crate::config::load_stay_alive_queue_state().or_else(|| {
+            (!owner_path.exists()).then(crate::config::load_queue_state).flatten()
+                .and_then(|queue| {
+                    crate::config::legacy_queue_for_owner_if_absent(&owner_path, Some(queue))
+                })
+        })
+    } else {
+        None
+    };
+    let (initial_queue, initial_source, initial_lineage) = owner_state
+        .map(|state| {
+            let queue = PlaybackQueue::from_queue_items(
+                state.queue.items,
+                Some(state.queue.cursor),
+            );
+            (queue, state.queue.source, state.lineage)
+        })
+        .unwrap_or_else(|| {
+            (
+                PlaybackQueue::default(),
+                crate::config::QueueSource::Unknown,
+                crate::ctrl::QueueLineage::default(),
+            )
+        });
+    if role == DaemonRole::Local {
+        if let Err(error) = crate::config::save_stay_alive_queue_state(
+            &crate::config::StayAliveQueueState {
+                queue: project_queue_state(
+                    &initial_queue,
+                    &initial_source,
+                    &player.status.lock().unwrap(),
+                ),
+                lineage: initial_lineage,
+            },
+        ) {
+            log::error!(target: "queue", "failed to initialize Stay-alive queue state: {error}");
+        }
+        player.set_initial_queue(
+            &initial_queue
+                .slots()
+                .iter()
+                .map(|slot| slot.item.clone())
+                .collect::<Vec<_>>(),
+            initial_queue.active_index().unwrap_or(0),
+        );
+    }
     let shared_queue = SharedQueueState {
-        queue: Arc::new(Mutex::new(PlaybackQueue::default())),
-        source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
+        queue: Arc::new(Mutex::new(initial_queue.clone())),
+        source: Arc::new(Mutex::new(initial_source.clone())),
+        lineage: Arc::new(Mutex::new(initial_lineage)),
         observed_active_slot: Arc::new(Mutex::new(None)),
     };
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -248,7 +397,10 @@ pub fn run_with_options(
     }
 
     // ── Canonical queue authority — single source of truth ──────────────
-    let mut owner = DaemonPlayerOwner::default();
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(initial_queue, initial_source),
+        ..Default::default()
+    };
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
 
@@ -271,6 +423,8 @@ pub fn run_with_options(
         let ev = match merged_rx.recv_timeout(Duration::from_millis(25)) {
             Ok(ev) => ev,
             Err(mpsc::RecvTimeoutError::Timeout) => {
+                cancel_pending_idle_queue_load_if_run_changed(&mut owner, &player);
+                expire_pending_idle_queue_load(&mut owner, Instant::now());
                 if let Some((connection_id, event)) = owner.intents.settle_buffering_if_due() {
                     log::info!(target: "pipe_latency", "request={} generation={} outcome=settled", event.request_id, event.generation);
                     let clients = ctrl_clients.lock().unwrap();
@@ -288,6 +442,10 @@ pub fn run_with_options(
                 unreachable!("daemon event channel closed")
             }
         };
+
+        // Set by any arm below that mutated the owner's canonical queue;
+        // persisted once after the match instead of inline per mutation site.
+        let mut owner_queue_dirty = false;
 
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged { slot_id, transition }) => {
@@ -449,44 +607,30 @@ pub fn run_with_options(
             }
             DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted {
                 slot_id,
+                run_identity,
                 position_ticks,
                 played,
                 consume,
                 ..
             }) => {
-                // The canonical queue must record this occurrence's real
-                // position before it is consumed/broadcast — otherwise every
-                // client resync (including the very next TrackChanged) rebuilds
-                // from the slot's stale submission-time position, silently
-                // reverting whatever progress the just-finished play recorded.
-                if let Some(slot) = owner.core.queue.slot(slot_id) {
-                    // Only record meaningful progress for video; audio and
-                    // startup noise keep the prior stored value.
-                    let position = if played {
-                        0
-                    } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
-                        && !slot.item.is_audio()
-                    {
-                        position_ticks
-                    } else {
-                        slot.item.playback_position_ticks()
-                    };
-                    owner.core.apply_completion_progress(slot_id, position, played);
-                }
                 let (consume_videos, consume_audio) = {
                     let cfg = client.lock().unwrap();
                     (cfg.config.consume_videos, cfg.config.consume_audio)
                 };
-                if owner.core.consume_completed_slot(
+                if !apply_track_completed_observation(
+                    &mut owner,
+                    &player,
+                    &shared_queue,
+                    run_identity.into(),
                     slot_id,
+                    position_ticks,
+                    played,
                     consume,
                     consume_videos,
                     consume_audio,
                 ) {
-                    log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
+                    continue;
                 }
-                *shared_queue.observed_active_slot.lock().unwrap() =
-                    owner.core.observed_active_slot();
                 broadcast_queue_state(
                     &ctrl_clients,
                     &player,
@@ -496,49 +640,81 @@ pub fn run_with_options(
                     &owner.core.transitions,
                 );
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
+                owner_queue_dirty = true;
             }
             DaemonEvent::Player(pe) => {
-                if let PlayerEvent::Stopped {
-                    slot_id: Some(slot_id),
+                if let PlayerEvent::Stopped { run_identity, .. } = &pe {
+                    if owner.pending_idle_load.as_ref().is_some_and(|pending| {
+                        pending.stopped_run != *run_identity
+                    }) {
+                        cancel_pending_idle_queue_load(
+                            &mut owner,
+                            "playback stopped for a different run during queue load",
+                        );
+                    }
+                }
+                let pending_idle_load_matches = match &pe {
+                    PlayerEvent::Stopped { run_identity, .. } => owner
+                        .pending_idle_load
+                        .as_ref()
+                        .is_some_and(|pending| pending.stopped_run == *run_identity),
+                    _ => false,
+                };
+                let stopped_queue_updated = if let PlayerEvent::Stopped {
+                    slot_id,
+                    run_identity,
                     position_ticks,
                     played,
                     ..
                 } = &pe
                 {
-                    // Record real progress on the canonical queue before it is
-                    // broadcast, or the next resync reverts a fully-stopped
-                    // item to 0. Unlike TrackCompleted's gate above, a real
-                    // Stopped carries no minimum-progress floor — mirrors the
-                    // shell's own pre-existing Stopped handling
-                    // (`src/app/player_event.rs`), on the reasoning that an
-                    // explicit stop is a deliberate action worth recording at
-                    // whatever position it happened, not a mid-queue
-                    // transition noisy enough to need a floor.
-                    if let Some(slot) = owner.core.queue.slot(*slot_id) {
-                        let position = if *played {
-                            0
-                        } else if *position_ticks > 0 && !slot.item.is_audio() {
-                            *position_ticks
-                        } else {
-                            slot.item.playback_position_ticks()
-                        };
-                        owner.core.apply_completion_progress(*slot_id, position, *played);
-                        // Unlike TrackCompleted (which broadcasts unconditionally
-                        // below via the raw player event too), a full Stopped has
-                        // no other broadcast carrying the corrected queue —
-                        // without this, only this event's own client sees the
-                        // right value (via its own local apply), and any other
-                        // client or later resync stays stale until an unrelated
-                        // queue-affecting event happens to broadcast next.
-                        broadcast_queue_state(
-                            &ctrl_clients,
-                            &player,
-                            &shared_queue,
-                            &owner.core.queue,
-                            &owner.core.source,
-                            &owner.core.transitions,
-                        );
-                    }
+                    let Some(updated) = apply_stopped_observation(
+                        &mut owner,
+                        &player,
+                        (*run_identity).into(),
+                        *slot_id,
+                        *position_ticks,
+                        *played,
+                    ) else {
+                        continue;
+                    };
+                    updated
+                } else {
+                    false
+                };
+                let replacement_committed = if pending_idle_load_matches {
+                    let failure = match &pe {
+                        PlayerEvent::Stopped { error, .. } => error.clone(),
+                        _ => None,
+                    };
+                    complete_pending_idle_queue_load(
+                        match &pe {
+                            PlayerEvent::Stopped { run_identity, .. } => *run_identity,
+                            _ => unreachable!(),
+                        },
+                        failure.clone(),
+                        &mut owner,
+                        &player,
+                        &shared_queue,
+                        &ctrl_clients,
+                    ) && failure.is_none()
+                } else {
+                    false
+                };
+                if stopped_queue_updated && !replacement_committed {
+                    // Unlike TrackCompleted (which broadcasts unconditionally
+                    // below via the raw player event too), a full Stopped has
+                    // no other broadcast carrying the corrected queue. The
+                    // successful pending-load commit publishes the new stopped
+                    // queue once instead of first publishing this old queue.
+                    broadcast_queue_state(
+                        &ctrl_clients,
+                        &player,
+                        &shared_queue,
+                        &owner.core.queue,
+                        &owner.core.source,
+                        &owner.core.transitions,
+                    );
                 }
                 if let PlayerEvent::PausedChanged(paused) = &pe {
                     if let Some((connection_id, request_id, generation)) = owner.intents
@@ -594,7 +770,10 @@ pub fn run_with_options(
                         }
                     }
                 }
-                broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
+                broadcast_player_event_if_not_replaced(&ctrl_clients, pe, replacement_committed);
+                if stopped_queue_updated || replacement_committed {
+                    owner_queue_dirty = true;
+                }
             }
             DaemonEvent::Ws { generation, event } => {
                 if emby_runtime
@@ -612,6 +791,7 @@ pub fn run_with_options(
                         &shared_queue,
                         &ctrl_clients,
                     );
+                    owner_queue_dirty = true;
                 }
             }
             DaemonEvent::QueueEnriched(items) => {
@@ -701,7 +881,8 @@ pub fn run_with_options(
                     }
                     continue;
                 }
-                handle_ctrl(
+                let persist_after_command = cmd.mutates_owner_queue();
+                handle_ctrl_for_role(
                     cmd,
                     client_id,
                     CtrlRequest {
@@ -716,7 +897,11 @@ pub fn run_with_options(
                     audiobookshelf_runtime.is_some(),
                     &merged_tx,
                     config.stay_alive,
+                    role,
                 );
+                if persist_after_command && owner.pending_idle_load.is_none() {
+                    owner_queue_dirty = true;
+                }
             }
             DaemonEvent::PlaybackResolved {
                 start_idx,
@@ -806,6 +991,7 @@ pub fn run_with_options(
                         &ctrl_clients,
                         &owner.core.transitions,
                     );
+                    owner_queue_dirty = true;
                 }
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
@@ -814,6 +1000,11 @@ pub fn run_with_options(
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
+                if role == DaemonRole::Local {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
+                        log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
+                    }
+                }
                 // Announce the deliberate shutdown to every connected client
                 // before closing their connections, so they exit cleanly
                 // instead of treating this as an unannounced crash.
@@ -829,6 +1020,12 @@ pub fn run_with_options(
                 player.join_or_timeout(std::time::Duration::from_secs(5));
                 let _ = std::fs::remove_file(pid_file());
                 std::process::exit(0);
+            }
+        }
+
+        if role == DaemonRole::Local && owner_queue_dirty {
+            if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
+                log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
             }
         }
     }

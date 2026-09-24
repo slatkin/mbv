@@ -231,7 +231,51 @@ impl PlaybackRun {
         }
     }
 
+    fn settle_idle_jump_on_restart(
+        &mut self,
+        position_ticks: i64,
+    ) -> Option<(QueueSlotId, Option<crate::playback_transition::Transition>)> {
+        if !self.forced_jump_from_idle {
+            return None;
+        }
+        let Some(slot_id) = self.forced_slot_id.take() else {
+            self.forced_jump_from_idle = false;
+            self.forced_transition = None;
+            return None;
+        };
+        let Some(index) = self.queue.slot_index(slot_id) else {
+            self.forced_jump_from_idle = false;
+            self.forced_transition = None;
+            return None;
+        };
+        let transition = self.forced_transition.take();
+        self.forced_jump_from_idle = false;
+        if !self.set_active_index(index) {
+            return None;
+        }
+        self.load_active_item_state();
+        self.last_valid_pos = position_ticks;
+        self.report_active_item();
+        self.stop_report = StopReport::NotSent;
+        {
+            let item = self.active_item();
+            let mut status = self.status.lock().unwrap();
+            status.active = true;
+            status.position_ticks = self.last_valid_pos;
+            status.runtime_ticks = item.map_or(0, QueueItem::runtime_ticks);
+            if let Some(emby) = item.and_then(QueueItem::as_emby) {
+                status.set_current_item_metadata(emby);
+            } else if let Some(item) = item {
+                status.title = item.title().to_string();
+                status.art_item_id = item.id().to_string();
+            }
+        }
+        self.observe_reporting(true);
+        Some((slot_id, transition))
+    }
+
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        let settled_idle_jump = self.settle_idle_jump_on_restart(mpv_position_ticks(mpv));
         let was_seek = self.last_seek_at.is_some();
         self.active_file_starting = false;
         // `PlaybackRestart` is the concrete mpv-owned event used by mbvd as
@@ -318,6 +362,9 @@ impl PlaybackRun {
         if was_seek {
             self.observe_reporting(true);
         }
+        if let Some((slot_id, transition)) = settled_idle_jump {
+            self.emit_track_changed(slot_id, transition);
+        }
     }
 
     // libmpv2 returns MPV_EVENT_END_FILE failures as Err(Error::Raw(...)),
@@ -336,6 +383,7 @@ impl PlaybackRun {
         self.status.lock().unwrap().active = false;
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: stopped_slot,
+            run_identity: self.run_identity,
             position_ticks: 0,
             played: false,
             consume: false,
@@ -390,6 +438,7 @@ impl PlaybackRun {
         if !self.stopped_event_sent {
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: 0,
                 played: natural_end && !completed_is_audio && self.reporter.has_session(),
                 consume: false,
@@ -435,6 +484,7 @@ impl PlaybackRun {
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -498,6 +548,7 @@ impl PlaybackRun {
                 StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: self.last_valid_pos,
                 played: false,
                 consume: false,
@@ -578,6 +629,7 @@ impl PlaybackRun {
         // only if this observation actually lands on its target slot.
         let settling_transition = self.forced_transition.take();
         let logged_forced_slot_id = self.forced_slot_id;
+        self.forced_jump_from_idle = false;
         let next_idx = self
             .forced_slot_id
             .take()
@@ -614,6 +666,7 @@ impl PlaybackRun {
             }
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: completed_pos,
                 played: played_out,
                 consume: consume_track,
@@ -654,6 +707,7 @@ impl PlaybackRun {
             self.status.lock().unwrap().active = false;
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: 0,
                 played: false,
                 consume: false,
@@ -717,6 +771,7 @@ impl PlaybackRun {
         if let Some(completed_slot_id) = completed_slot_id {
             let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
                 slot_id: completed_slot_id,
+                run_identity: self.run_identity,
                 position_ticks: completed_pos,
                 played: played_out,
                 consume: consume_track,
@@ -762,6 +817,7 @@ impl PlaybackRun {
             if !self.stopped_event_sent {
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
                     slot_id: stopped_slot,
+                    run_identity: self.run_identity,
                     position_ticks: self.last_valid_pos,
                     played: near_end,
                     consume: false,
@@ -785,6 +841,7 @@ impl PlaybackRun {
         // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: stopped_slot,
+            run_identity: self.run_identity,
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,

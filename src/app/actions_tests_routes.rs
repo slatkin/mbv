@@ -13,6 +13,7 @@ use crate::app::{
     FeedHomeVideoState, LibEvent, LibraryTab, PanelFocus, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::ctrl::CtrlCmd;
 use mbv_core::mock_http::MockHttp;
 use mbv_core::player::PlayerEvent;
 use rstest::rstest;
@@ -56,6 +57,31 @@ fn playback_eligibility_classifies_owner_and_selection(
         ),
         expected
     );
+}
+
+#[test]
+fn stay_alive_single_item_play_does_not_reuse_the_previous_queue_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands) =
+        crate::app::tests::make_local_daemon_app_stub_with_cmd_rx(make_items(1));
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("old-playlist".into()),
+        name: "Old playlist".into(),
+    };
+    let mut item = make_item("Movie", "Movie");
+    item.id = "movie-1".into();
+
+    app.play_item(item);
+
+    assert!(matches!(
+        commands
+            .try_iter()
+            .find(|command| matches!(command, CtrlCmd::UnifiedQueueReplace { .. })),
+        Some(CtrlCmd::UnifiedQueueReplace {
+            source: crate::config::QueueSource::Unknown,
+            ..
+        })
+    ));
 }
 
 #[test]

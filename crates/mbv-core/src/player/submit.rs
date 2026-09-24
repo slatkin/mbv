@@ -75,10 +75,7 @@ impl Player {
         // Every accepted submission establishes a new queue identity. The
         // generation is serialized in PlayerStatus so clients can fence
         // slot-addressed commands against a locally replaced queue.
-        {
-            let mut st = self.status.lock().unwrap();
-            st.sequence_generation = st.sequence_generation.saturating_add(1);
-        }
+        let run_identity = (0, self.advance_sequence_generation());
 
         // Fast path: reuse existing mpv window when headless state matches.
         if self.status.lock().unwrap().active
@@ -188,6 +185,7 @@ impl Player {
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
                             slot_id: None,
+                            run_identity,
                             position_ticks: 0,
                             played: false,
                             consume: false,
@@ -220,6 +218,7 @@ impl Player {
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
                             slot_id: None,
+                            run_identity,
                             position_ticks: 0,
                             played: false,
                             consume: false,
@@ -252,6 +251,7 @@ impl Player {
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped {
                             slot_id: None,
+                            run_identity,
                             position_ticks: 0,
                             played: false,
                             consume: false,

@@ -60,8 +60,16 @@ pub const CTRL_CAP_ABS_BOOK_PROGRESS: &str = "abs-book-progress";
 /// Peer owner is configured audio-only and cannot play video. Additive — no
 /// protocol-version bump.
 pub const CTRL_CAP_AUDIO_ONLY: &str = "audio-only";
+/// Peer supports owner-authoritative idle queue loads and source updates.
+/// Additive — no protocol-version bump.
+pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
 
 pub type PlaybackRequestId = u64;
+pub type QueueLoadRequestId = u64;
+/// Opaque owner-minted replacement lineage carried by queue snapshots and
+/// source-only updates.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QueueLineage(pub u64);
 pub type PlaybackGeneration = u64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,6 +98,7 @@ impl CtrlHello {
                 CTRL_CAP_ABS_PROGRESS.to_string(),
                 CTRL_CAP_ABS_BOOK_QUEUE.to_string(),
                 CTRL_CAP_ABS_BOOK_PROGRESS.to_string(),
+                CTRL_CAP_OWNER_QUEUE_LOAD.to_string(),
             ],
             control_token: None,
         }
@@ -167,6 +176,12 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_ABS_BOOK_PROGRESS)
     }
 
+    pub fn supports_owner_queue_load(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_OWNER_QUEUE_LOAD)
+    }
+
     pub fn validate_control_credential(&self, expected: &str) -> Result<(), String> {
         let Some(presented) = self.control_token.as_deref() else {
             return Err("invalid Control credential".to_string());
@@ -200,6 +215,7 @@ pub struct CtrlCompatibility {
     pub supports_abs_progress: bool,
     pub supports_abs_book_queue: bool,
     pub supports_abs_book_progress: bool,
+    pub supports_owner_queue_load: bool,
 }
 
 impl CtrlCompatibility {
@@ -216,6 +232,7 @@ impl CtrlCompatibility {
                 supports_abs_progress: true,
                 supports_abs_book_queue: true,
                 supports_abs_book_progress: true,
+                supports_owner_queue_load: false,
             }),
             _ => Err(format!(
                 "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
@@ -258,6 +275,9 @@ pub struct UnifiedQueueStateData {
     pub revision: u64,
     #[serde(default)]
     pub source: QueueSource,
+    /// Owner-minted identity for the current whole-queue replacement lineage.
+    #[serde(default)]
+    pub lineage: QueueLineage,
     /// Transition dispatched to the Playback run and awaiting observation
     /// (design D5). `None` when no transition is in flight.
     #[serde(default)]
@@ -309,6 +329,23 @@ pub enum CtrlCmd {
         #[serde(default)]
         slots: Vec<UnifiedQueueSlot>,
         start_idx: Option<usize>,
+        #[serde(default)]
+        source: QueueSource,
+    },
+    /// Replace the owner's queue without starting playback. Requires the
+    /// `owner-queue-load` capability and is correlated by request identity.
+    #[serde(rename = "UnifiedQueueLoadIdle")]
+    UnifiedQueueLoadIdle {
+        request_id: QueueLoadRequestId,
+        slots: Vec<UnifiedQueueSlot>,
+        cursor: usize,
+        source: QueueSource,
+    },
+    /// Update only the source of the owner queue if its lineage still matches.
+    #[serde(rename = "UnifiedQueueSourceUpdate")]
+    UnifiedQueueSourceUpdate {
+        source: QueueSource,
+        lineage: QueueLineage,
     },
     /// Append item-generic values to the tail of the queue.
     UnifiedQueueAppend {
@@ -345,14 +382,96 @@ pub enum CtrlCmd {
     },
 }
 
+/// Reply a gated command's `OwnerGate` failure sends. Carried by
+/// [`OwnerGate::OwnerOnly`]/[`OwnerGate::NonOwnerOnly`] so
+/// `send_role_gate_rejection` (daemon_control.rs) can match on it
+/// exhaustively with no wildcard arm.
+pub enum OwnerGateRejection {
+    AdoptQueue,
+    QueueLoadIdle { request_id: QueueLoadRequestId },
+    QueueSourceUpdate,
+}
+
+/// Owner-role gate for a ctrl command: whether acceptance depends on the
+/// daemon being the Stay-alive owner (`DaemonRole::Local`).
+pub enum OwnerGate {
+    /// Accepted only from the owner.
+    OwnerOnly(OwnerGateRejection),
+    /// Accepted only from a non-owner (e.g. a Client adopting a cold
+    /// daemon's queue).
+    NonOwnerOnly(OwnerGateRejection),
+    /// No role gate.
+    Any,
+}
+
 impl CtrlCmd {
+    /// Owner-role gate for commands whose acceptance depends on whether the
+    /// daemon is the Stay-alive owner (`DaemonRole::Local`).
+    pub fn requires_owner(&self) -> OwnerGate {
+        match self {
+            CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } => {
+                OwnerGate::OwnerOnly(OwnerGateRejection::QueueLoadIdle {
+                    request_id: *request_id,
+                })
+            }
+            CtrlCmd::UnifiedQueueSourceUpdate { .. } => {
+                OwnerGate::OwnerOnly(OwnerGateRejection::QueueSourceUpdate)
+            }
+            CtrlCmd::UnifiedAdoptQueue { .. } => {
+                OwnerGate::NonOwnerOnly(OwnerGateRejection::AdoptQueue)
+            }
+            CtrlCmd::Hello(_)
+            | CtrlCmd::PlayerCmd(_)
+            | CtrlCmd::Stop
+            | CtrlCmd::PlaybackIntent(_)
+            | CtrlCmd::RequestShutdown
+            | CtrlCmd::ApplyServiceSetup { .. }
+            | CtrlCmd::UnifiedQueueReplace { .. }
+            | CtrlCmd::UnifiedQueueAppend { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlot { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlots { .. }
+            | CtrlCmd::UnifiedQueueMoveSlot { .. }
+            | CtrlCmd::UnifiedQueuePlaySlot { .. }
+            | CtrlCmd::UnifiedQueueClear => OwnerGate::Any,
+        }
+    }
+
+    /// Whether the owner must persist its queue after handling this command.
+    /// Exhaustive so a new queue-editing command cannot silently skip
+    /// persistence.
+    pub fn mutates_owner_queue(&self) -> bool {
+        match self {
+            CtrlCmd::UnifiedQueueLoadIdle { .. }
+            | CtrlCmd::UnifiedQueueSourceUpdate { .. }
+            | CtrlCmd::UnifiedQueueReplace { .. }
+            | CtrlCmd::UnifiedQueueAppend { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlot { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlots { .. }
+            | CtrlCmd::UnifiedQueueMoveSlot { .. }
+            | CtrlCmd::UnifiedQueueClear => true,
+            CtrlCmd::Hello(_)
+            | CtrlCmd::PlayerCmd(_)
+            | CtrlCmd::Stop
+            | CtrlCmd::PlaybackIntent(_)
+            | CtrlCmd::RequestShutdown
+            | CtrlCmd::ApplyServiceSetup { .. }
+            | CtrlCmd::UnifiedQueuePlaySlot { .. }
+            | CtrlCmd::UnifiedAdoptQueue { .. } => false,
+        }
+    }
+
     /// Builds `UnifiedQueueReplace`, deriving the legacy `items` payload from
     /// `slots` so callers don't each re-project the same list.
-    pub fn unified_queue_replace(slots: Vec<UnifiedQueueSlot>, start_idx: Option<usize>) -> Self {
+    pub fn unified_queue_replace(
+        slots: Vec<UnifiedQueueSlot>,
+        start_idx: Option<usize>,
+        source: QueueSource,
+    ) -> Self {
         CtrlCmd::UnifiedQueueReplace {
             items: slots.iter().map(|slot| slot.item.clone()).collect(),
             slots,
             start_idx,
+            source,
         }
     }
 }
@@ -554,6 +673,12 @@ pub enum CtrlEvent {
     /// Full item-generic queue state.  Sent on initial connection and
     /// after every queue mutation.
     UnifiedQueueState(UnifiedQueueStateData),
+    /// Result of an idle whole-queue load, correlated with its request.
+    #[serde(rename = "UnifiedQueueLoadResult")]
+    UnifiedQueueLoadResult {
+        request_id: QueueLoadRequestId,
+        result: QueueLoadResult,
+    },
 
     /// Redacted, provider-qualified Audiobookshelf progress. Sent only to
     /// peers advertising `abs-progress`. See `AudiobookshelfProgressEvent`
@@ -596,6 +721,12 @@ pub struct AudiobookshelfBookProgressEvent {
     /// Setup generation the acknowledged progress was produced under;
     /// receivers discard progress from a stale generation.
     pub setup_generation: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum QueueLoadResult {
+    Accepted,
+    Rejected { reason: String },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

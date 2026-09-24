@@ -595,6 +595,7 @@ fn unified_queue_event_preserves_owner_slot_ids_and_source(make_feed_entry: mbv_
         active_slot: Some(97),
         revision: 12,
         source: crate::config::QueueSource::Remote,
+        lineage: mbv_core::ctrl::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     };

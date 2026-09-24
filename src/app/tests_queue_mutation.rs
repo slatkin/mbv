@@ -628,11 +628,10 @@ fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue()
 }
 
 #[test]
-fn fenced_queue_delete_is_not_forwarded_to_the_owner() {
+fn local_daemon_queue_delete_is_forwarded_by_owner_slot_id() {
     let _guard = crate::config::TestStateDirGuard::new();
-    // The daemon still holds the previously submitted queue (its own stub
-    // items); the user then loads a playlist locally, which fences the tab
-    // one generation ahead of the owner until the next submit.
+    // The client has a replacement queue which the owner has not yet
+    // broadcast. Slot edits still target owner slot IDs and are forwarded.
     let (mut app, cmd_rx) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
     let taskmaster = make_items(2);
     app.replace_playback_queue(taskmaster.clone(), 0);
@@ -642,11 +641,11 @@ fn fenced_queue_delete_is_not_forwarded_to_the_owner() {
 
     app.remove_from_queue(1);
 
-    // The owner must not be told anything: it holds a different queue, and
-    // editing it would re-broadcast the old items over the user's queue.
     assert!(
-        cmd_rx.try_recv().is_err(),
-        "a fenced queue edit must not reach the playback owner"
+        cmd_rx
+            .try_iter()
+            .any(|cmd| matches!(cmd, mbv_core::ctrl::CtrlCmd::UnifiedQueueRemoveSlot { .. })),
+        "the slot edit must reach the authoritative owner"
     );
     assert_eq!(
         app.player_tab.emby_items().len(),
@@ -660,29 +659,76 @@ fn fenced_queue_delete_is_not_forwarded_to_the_owner() {
 }
 
 #[test]
-fn owner_broadcast_does_not_replace_a_fenced_local_queue() {
+fn local_daemon_owner_broadcast_replaces_client_queue_and_source() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, _) = make_local_daemon_app_stub_with_cmd_rx(make_items(3));
+    let mut other = make_local_daemon_app_stub(make_items(4));
     let taskmaster = make_items(2);
     app.replace_playback_queue(taskmaster.clone(), 0);
+    other.replace_playback_queue(taskmaster, 0);
+    for client in [&app, &other] {
+        let mut status = client.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 1;
+    }
 
-    // The owner's snapshot describes its own previous queue.
-    let stale = emby_unified_state(&make_items(3), 0);
-    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(stale)));
+    let replacement = make_items(3);
+    let mut owner = emby_unified_state(&replacement, 0);
+    owner.status.active = false;
+    owner.source = crate::config::QueueSource::Shuffle;
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(owner.clone())));
+    other.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(owner)));
 
-    assert_eq!(
-        app.player_tab
-            .emby_items()
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>(),
-        taskmaster.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
-        "the owner's stale queue must not clobber a fenced local replacement"
-    );
+    for client in [&app, &other] {
+        assert_eq!(
+            client.player_tab.emby_items()[0].id,
+            replacement[0].id,
+            "each client adopts the owner's stopped replacement"
+        );
+        assert_eq!(client.queue_source, crate::config::QueueSource::Shuffle);
+        assert!(!client.queue_row_playback_state().active);
+    }
 }
 
 #[test]
-fn queue_broadcast_does_not_revert_saved_playlist_source() {
+fn local_daemon_play_waits_for_owner_snapshot_to_adopt_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, _) = make_local_daemon_app_stub_with_cmd_rx(make_items(2));
+    let previous_source = crate::config::QueueSource::Album;
+    app.queue_source = previous_source.clone();
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(3),
+        start_idx: 1,
+        source: crate::config::QueueSource::Shuffle,
+        autostart: true,
+    });
+
+    assert_eq!(app.queue_source, previous_source, "play must not predict owner source");
+    let mut owner = emby_unified_state(&app.player_tab.emby_items(), 1);
+    owner.source = crate::config::QueueSource::Shuffle;
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(owner)));
+    assert_eq!(app.queue_source, crate::config::QueueSource::Shuffle);
+}
+
+#[test]
+fn local_daemon_clear_waits_for_owner_snapshot_to_adopt_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_local_daemon_app_stub(make_items(2));
+    let previous_source = crate::config::QueueSource::Album;
+    app.queue_source = previous_source.clone();
+
+    app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
+
+    assert_eq!(app.queue_source, previous_source, "clear must not predict owner source");
+    let mut owner = emby_unified_state(&[], 0);
+    owner.source = crate::config::QueueSource::Unknown;
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(owner)));
+    assert_eq!(app.queue_source, crate::config::QueueSource::Unknown);
+}
+
+#[test]
+fn local_daemon_queue_broadcast_adopts_owner_source() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_local_daemon_app_stub(make_items(4));
     app.queue_source = crate::config::QueueSource::Playlist {
@@ -690,10 +736,7 @@ fn queue_broadcast_does_not_revert_saved_playlist_source() {
         name: "Taskmaster".into(),
     };
 
-    // The daemon acks a queue edit with a snapshot whose source is still
-    // whatever it last stored (e.g. a previously loaded playlist): Save As
-    // and non-playing loads change the shell's source without a
-    // resubmission, so the owner's copy goes stale.
+    // The owner snapshot is the displayed source authority for Stay-alive.
     let mut unified = emby_unified_state(&app.player_tab.emby_items(), 0);
     unified.source = crate::config::QueueSource::Playlist {
         id: Some("pl-qixl".into()),
@@ -704,10 +747,10 @@ fn queue_broadcast_does_not_revert_saved_playlist_source() {
     assert_eq!(
         app.queue_source,
         crate::config::QueueSource::Playlist {
-            id: Some("pl-taskmaster".into()),
-            name: "Taskmaster".into(),
+            id: Some("pl-qixl".into()),
+            name: "QIXL".into(),
         },
-        "owner queue broadcasts must not overwrite the shell's queue source"
+        "the owner snapshot must set the displayed queue source"
     );
 }
 

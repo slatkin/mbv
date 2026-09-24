@@ -182,7 +182,7 @@ impl App {
         // If queue_source was tied to ABS (currently QueueSource has no ABS variant,
         // but future-proof: if items empty, reset source).
         if self.player_tab.total_queue_len() == 0 {
-            self.queue_source = crate::config::QueueSource::Unknown;
+            self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         }
         self.queue_dirty = false;
     }

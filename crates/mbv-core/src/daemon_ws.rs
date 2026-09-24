@@ -169,6 +169,6 @@ fn handle_ws(
     }
 }
 
-fn all_audio(items: &[QueueItem]) -> bool {
-    items.iter().all(QueueItem::is_audio)
+fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> bool {
+    items.into_iter().all(QueueItem::is_audio)
 }

@@ -6,6 +6,14 @@ use crate::app::{App, PanelFocus, SessionEvent, SidebarId};
 use std::time::{Duration, Instant};
 
 impl App {
+    fn reject_stay_alive_queue_source_update(&mut self, coordinator_key: &str, mutation_id: u64) {
+        self.flash(
+            "Could not update the Stay-alive queue source".into(),
+            ToastSeverity::Error,
+        );
+        self.finish_playlist_mutation(coordinator_key, mutation_id);
+    }
+
     /// Handle a single `SessionEvent` from the sessions-poll channel. Faithful
     /// transcription of the match arms previously inlined in `run()`'s
     /// `sessions_rx` drain loop (see `drain_session_events`).
@@ -198,8 +206,9 @@ impl App {
             } => {
                 match result {
                     Ok(id) if queue_lineage == self.remote_queue_lineage => {
-                        self.queue_source =
-                            crate::config::QueueSource::Playlist { id: Some(id), name };
+                        self.set_queue_source_if_not_local_daemon(
+                            crate::config::QueueSource::Playlist { id: Some(id), name },
+                        );
                         self.queue_dirty = false;
                         // The queue now identifies the replacement playlist; its
                         // items must not retain entry identities from a previously
@@ -224,6 +233,7 @@ impl App {
                 name,
                 queue_lineage,
                 source_playlist_id,
+                owner_queue_lineage,
                 result,
             } => {
                 match result {
@@ -231,19 +241,41 @@ impl App {
                         if queue_lineage == self.remote_queue_lineage
                             && self.queue_playlist_id() == source_playlist_id.as_deref() =>
                     {
-                        self.queue_source = crate::config::QueueSource::Playlist {
+                        let source = crate::config::QueueSource::Playlist {
                             id: Some(id),
                             name: name.clone(),
                         };
-                        self.queue_dirty = false;
-                        // The new source must never retain entry identities
-                        // from the old playlist.
-                        self.clear_local_playlist_entry_ids();
-                        self.save_queue_state();
-                        self.flash(
-                            format!("Saved as playlist \"{name}\""),
-                            ToastSeverity::Success,
-                        );
+                        if self.stay_alive_owner_is_queue_authority() {
+                            let Some(lineage) = owner_queue_lineage else {
+                                self.reject_stay_alive_queue_source_update(
+                                    &coordinator_key,
+                                    mutation_id,
+                                );
+                                return;
+                            };
+                            let sent = self.player.as_remote().is_some_and(|remote| {
+                                remote.update_queue_source(source.clone(), lineage).is_ok()
+                            });
+                            if !sent {
+                                self.reject_stay_alive_queue_source_update(
+                                    &coordinator_key,
+                                    mutation_id,
+                                );
+                                return;
+                            }
+                            self.pending_owner_source_update = Some((source, lineage));
+                        } else {
+                            self.set_queue_source_if_not_local_daemon(source);
+                            self.queue_dirty = false;
+                            // The new source must never retain entry identities
+                            // from the old playlist.
+                            self.clear_local_playlist_entry_ids();
+                            self.save_queue_state();
+                            self.flash(
+                                format!("Saved as playlist \"{name}\""),
+                                ToastSeverity::Success,
+                            );
+                        }
                     }
                     Ok(_) => {
                         log::debug!(target: "playlist", "discarding stale Save As completion");

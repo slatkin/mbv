@@ -57,6 +57,7 @@ struct CtrlClient {
     /// Whether this peer advertised `abs-book-progress` in its Hello. Gates
     /// whether it receives the redacted Audiobookshelf book progress event.
     supports_abs_book_progress: bool,
+    supports_owner_queue_load: bool,
 }
 
 pub(crate) type ClientRegistry = Arc<Mutex<CtrlClients>>;
@@ -92,6 +93,7 @@ impl CtrlClients {
         supports_abs_progress: bool,
         supports_abs_book_queue: bool,
         supports_abs_book_progress: bool,
+        supports_owner_queue_load: bool,
     ) -> CtrlClientId {
         let id = self.next_id;
         self.next_id += 1;
@@ -103,6 +105,7 @@ impl CtrlClients {
             supports_abs_progress,
             supports_abs_book_queue,
             supports_abs_book_progress,
+            supports_owner_queue_load,
         });
         if self.authority == AuthorityHolder::None {
             self.authority = AuthorityHolder::Ctrl;
@@ -146,6 +149,13 @@ impl CtrlClients {
     /// Whether the client `id` advertised `abs-book-queue` support at Hello.
     /// Used to gate Audiobookshelf book `QueueItem` transport in both
     /// directions.
+    pub(crate) fn supports_owner_queue_load(&self, id: CtrlClientId) -> bool {
+        self.connection
+            .iter()
+            .find(|c| c.id == id)
+            .is_some_and(|c| c.supports_owner_queue_load)
+    }
+
     pub(crate) fn supports_abs_book_queue(&self, id: CtrlClientId) -> bool {
         self.connection
             .iter()

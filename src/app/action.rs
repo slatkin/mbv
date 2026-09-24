@@ -375,16 +375,12 @@ impl App {
                 let st = self.player.status.lock().unwrap();
                 let active = st.active;
                 let current_idx = st.current_idx;
-                let sequence_generation = st.sequence_generation;
                 drop(st);
-                let queue_generation = self.queue_for_scope(scope).sequence_generation;
                 if active
                     && self.queue_scope_is_playback(scope)
-                    && (scope != super::QueueScope::Local
-                        || queue_generation <= sequence_generation)
+                    && self.local_queue_is_owner_queue(scope)
                 {
-                    let is_audio = item.is_audio();
-                    if t == current_idx && is_audio {
+                    if t == current_idx {
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                     } else if t != current_idx {
                         let Some(slot_id) = slot_id else {
@@ -439,6 +435,7 @@ impl App {
                     let submitted = self.player.submit_queue_slots(
                         eligible,
                         start_idx,
+                        self.queue_source.clone(),
                         self.emby_snapshot().map(Arc::new),
                         headless,
                         self.ui_volume,

@@ -74,6 +74,56 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
 }
 
 #[test]
+fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation() {
+    let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    session.pending_initial_playlist_layout = false;
+    session.forced_jump_from_idle = true;
+    let slot_id = session.slot_id_at(1).unwrap();
+    let transition = crate::playback_transition::Transition::new(42, 7, slot_id);
+    session.forced_slot_id = Some(slot_id);
+    session.forced_transition = Some(transition);
+    status.lock().unwrap().active = false;
+    // `report_active_item` uses the same mocked Emby transport; supply the
+    // expected successful responses so the test stays synchronous and hermetic.
+    for body in ["", "{}", "", "{}", ""] {
+        http.respond(200, body);
+    }
+
+    let settled = session.settle_idle_jump_on_restart(0);
+    assert_eq!(settled, Some((slot_id, Some(transition))));
+    let (settled_slot, settled_transition) = settled.unwrap();
+    session.emit_track_changed(settled_slot, settled_transition);
+
+    assert_eq!(session.current_idx, 1);
+    assert!(status.lock().unwrap().active);
+    assert_eq!(session.forced_slot_id, None);
+    assert!(!session.forced_jump_from_idle);
+    assert!(matches!(
+        events.try_recv(),
+        Ok(PlayerEvent::TrackChanged {
+            slot_id: observed,
+            transition: Some((42, 7)),
+        }) if observed == slot_id
+    ));
+}
+
+#[test]
+fn idle_jump_to_removed_slot_clears_the_pending_transition() {
+    let (mut session, _status, _events) = make_queue_session_for_pos_tests_with_events(0);
+    let missing = QueueSlotId::from_raw(u64::MAX);
+    let transition = crate::playback_transition::Transition::new(42, 7, missing);
+    session.forced_jump_from_idle = true;
+    session.forced_slot_id = Some(missing);
+    session.forced_transition = Some(transition);
+
+    assert_eq!(session.settle_idle_jump_on_restart(0), None);
+
+    assert!(!session.forced_jump_from_idle);
+    assert_eq!(session.forced_slot_id, None);
+    assert_eq!(session.forced_transition, None);
+}
+
+#[test]
 fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
     let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
     session.pending_initial_playlist_layout = false;
@@ -605,7 +655,7 @@ fn queue_load_plan_never_starts_playback_mid_load() {
         // With the plan built, the reassert safety net must observe Ok: a
         // mismatch there means the no-play load plan drifted.
         assert_eq!(
-            queue_layout_verdict(start_idx, len, start_idx as i64, len as i64),
+            queue_layout_verdict(start_idx, len, start_idx as i64, len as i64, false),
             QueueLayoutVerdict::Ok
         );
     }
@@ -636,16 +686,19 @@ fn divergent_entry_names_only_an_entry_mpv_actually_moved_to() {
 #[test]
 fn queue_layout_verdict_reasserts_only_a_complete_playlist() {
     // Every item landed and the active one is playing: nothing to repair.
-    assert_eq!(queue_layout_verdict(2, 4, 2, 4), QueueLayoutVerdict::Ok);
+    assert_eq!(queue_layout_verdict(2, 4, 2, 4, false), QueueLayoutVerdict::Ok);
+    // Correct ordinal is not enough: an idle player means the first item
+    // never actually started, so the complete layout must be reasserted.
+    assert_eq!(queue_layout_verdict(2, 4, 2, 4, true), QueueLayoutVerdict::Reassert);
     // mpv finished the layout on another entry — the ordinal the whole run
     // (current_idx, status, every reported item) is derived from is wrong and
     // has to be reasserted from the layout we built.
-    assert_eq!(queue_layout_verdict(2, 4, 0, 4), QueueLayoutVerdict::Reassert);
-    assert_eq!(queue_layout_verdict(2, 4, -1, 4), QueueLayoutVerdict::Reassert);
+    assert_eq!(queue_layout_verdict(2, 4, 0, 4, false), QueueLayoutVerdict::Reassert);
+    assert_eq!(queue_layout_verdict(2, 4, -1, 4, false), QueueLayoutVerdict::Reassert);
     // A short playlist means an ordinal no longer names its item: report it
     // instead of seeking to a position that means something else.
     assert_eq!(
-        queue_layout_verdict(2, 4, 2, 3),
+        queue_layout_verdict(2, 4, 2, 3, false),
         QueueLayoutVerdict::ShortLayout
     );
 }

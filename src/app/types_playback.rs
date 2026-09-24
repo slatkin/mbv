@@ -240,6 +240,7 @@ pub(super) enum PlaylistMutation {
         name: String,
         queue_lineage: u64,
         source_playlist_id: Option<String>,
+        owner_queue_lineage: Option<mbv_core::ctrl::QueueLineage>,
         item_ids: Option<Vec<String>>,
     },
     Replace {

@@ -65,11 +65,17 @@ impl PlaybackRun {
                     }
                 } else {
                 // mpv playlist indices are adapter coordinates; pin the
-                // target slot identity before asking mpv to move.
+                // target slot identity before asking mpv to move. Idle jumps
+                // settle on PlaybackRestart because no outgoing EndFile exists.
+                self.forced_jump_from_idle = !self.status.lock().unwrap().active;
+                if self.forced_jump_from_idle {
+                    self.tracks_initialized = false;
+                }
                 self.forced_slot_id = Some(slot_id);
                 self.forced_resume_ticks = resume_ticks;
                 if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
                     self.forced_slot_id = None;
+                    self.forced_jump_from_idle = false;
                     self.forced_transition = None;
                     self.forced_resume_ticks = None;
                     log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
@@ -82,6 +88,11 @@ impl PlaybackRun {
                         self.current_idx,
                         self.queue_len(),
                     );
+                    if self.forced_jump_from_idle {
+                        if let Err(error) = mpv.command("playlist-play-index", &[&idx.to_string()]) {
+                            log::warn!(target: "player", "jump-to playlist-play-index={idx} failed: {}", mpv_err_str(&error));
+                        }
+                    }
                     // Selecting a track should always start it playing, even if
                     // mpv was paused on the previous track — otherwise the new
                     // track loads silently "stuck" paused (see issue: Enter on a
@@ -258,6 +269,9 @@ impl PlaybackRun {
                 cancel_stop = true;
             }
             PlayerCommand::SubmitQueue { items, start_idx } => {
+                if !items.is_empty() {
+                    self.run_identity = (0, self.status.lock().unwrap().sequence_generation);
+                }
                 self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;
             }
@@ -698,6 +712,7 @@ impl PlaybackRun {
 
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: self.active_slot_id(),
+            run_identity: self.run_identity,
             position_ticks,
             played: false,
             consume: false,

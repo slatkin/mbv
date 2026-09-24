@@ -11,8 +11,8 @@ pub(super) struct PlayerTab {
     pub(super) queue: PlaybackQueue,
     /// The newest desired playback slot from the owner snapshot, if any.
     pub(super) pending_playback_slot: Option<QueueSlotId>,
-    /// Generation of the queue represented by this tab, compared with the
-    /// owner's status before issuing slot-addressed playback commands.
+    /// Generation of the queue represented by this tab. Bare mode compares
+    /// it with Player status before issuing slot-addressed playback commands.
     pub(super) sequence_generation: u64,
 }
 

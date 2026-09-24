@@ -92,7 +92,7 @@ fn replace_queue_succeeds_unconditionally() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueReplace {
             items: vec![QueueItem::Emby(Box::new(item("replacement", "Video", "Movie")))],
             slots: vec![crate::ctrl::UnifiedQueueSlot {
@@ -100,6 +100,7 @@ fn replace_queue_succeeds_unconditionally() {
                 item: QueueItem::Emby(Box::new(item("replacement", "Video", "Movie"))),
             }],
             start_idx: Some(0),
+            source: QueueSource::Album,
         },
         sender_id,
         CtrlRequest {
@@ -114,6 +115,7 @@ fn replace_queue_succeeds_unconditionally() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     let queue = owner.core.queue;
 

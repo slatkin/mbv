@@ -1,5 +1,20 @@
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence.
+fn persist_stay_alive_owner_queue(
+    owner: &DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+) -> Result<(), String> {
+    crate::config::save_stay_alive_queue_state(&crate::config::StayAliveQueueState {
+        queue: project_queue_state(
+            &owner.core.queue,
+            &owner.core.source,
+            &player.status.lock().unwrap(),
+        ),
+        lineage: *shared_queue.lineage.lock().unwrap(),
+    })
+}
+
 fn project_queue_state(
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
@@ -68,6 +83,7 @@ fn unified_queue_state_for_peer(
     status: &crate::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
+    lineage: crate::ctrl::QueueLineage,
     observed_active_slot: Option<crate::playback_queue::QueueSlotId>,
     in_flight_transition: Option<crate::ctrl::TransitionSummary>,
     queued_latest_transition: Option<crate::ctrl::TransitionSummary>,
@@ -103,6 +119,7 @@ fn unified_queue_state_for_peer(
         active_slot,
         revision: queue.revision().raw(),
         source: source.clone(),
+        lineage,
         in_flight_transition,
         queued_latest_transition,
     })
@@ -120,19 +137,20 @@ fn broadcast_queue_state(
     let status = player.status.lock().unwrap().clone();
     let (in_flight, queued_latest) = transitions.summaries();
     let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
+    let lineage = *shared_queue.lineage.lock().unwrap();
 
     // ── Unified-queue peers, gate ABS episodes and books independently ──
     let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, true,
+        &status, queue, source, lineage, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, true,
     ));
     let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, false,
+        &status, queue, source, lineage, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, false,
     ));
     let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, observed_active_slot, in_flight.clone(), queued_latest.clone(), false, true,
+        &status, queue, source, lineage, observed_active_slot, in_flight.clone(), queued_latest.clone(), false, true,
     ));
     let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, observed_active_slot, in_flight, queued_latest, false, false,
+        &status, queue, source, lineage, observed_active_slot, in_flight, queued_latest, false, false,
     ));
 
     if let (
@@ -249,14 +267,14 @@ fn daemon_admits(
 /// (`abs-queue` for episodes, `abs-book-queue` for books). Checked ahead of
 /// queue mutation so an incapable peer's operation is refused outright rather
 /// than silently dropping the unsupported item.
-fn abs_queue_transport_rejection(
-    items: &[QueueItem],
+fn abs_queue_transport_rejection<'a>(
+    items: impl IntoIterator<Item = &'a QueueItem> + Clone,
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
 ) -> Option<String> {
-    if !supports_abs_queue && items.iter().any(QueueItem::is_audiobookshelf) {
+    if !supports_abs_queue && items.clone().into_iter().any(QueueItem::is_audiobookshelf) {
         Some("peer did not negotiate Audiobookshelf queue transport".to_string())
-    } else if !supports_abs_book_queue && items.iter().any(QueueItem::is_audiobookshelf_book) {
+    } else if !supports_abs_book_queue && items.into_iter().any(QueueItem::is_audiobookshelf_book) {
         Some("peer did not negotiate Audiobookshelf book queue transport".to_string())
     } else {
         None
@@ -272,6 +290,7 @@ fn reject_command(
     player: &Player,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
+    lineage: crate::ctrl::QueueLineage,
     reason: String,
 ) {
     send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
@@ -287,6 +306,7 @@ fn reject_command(
             &status,
             queue,
             source,
+            lineage,
             queue.active_slot_id(),
             None,
             None,

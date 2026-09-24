@@ -1,10 +1,11 @@
+use super::bootstrap::bootstrap_legacy_queue;
 use super::types_playback::QueueScope;
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
 use super::types_tab_selection::TabSelection;
 use super::{
-    bootstrap_local_daemon_queue, bootstrap_unified_queue, layout, render, spawn_resize_worker,
-    App, AppInit, SessionEvent, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
+    bootstrap_unified_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
+    SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
@@ -245,6 +246,7 @@ impl App {
             playlists_open_loading: false,
             queue_source: crate::config::QueueSource::Unknown,
             queue_dirty: false,
+            pending_owner_source_update: None,
             pending_queue_action: None,
             pending_queue_replacement: None,
             pending_local_play: None,
@@ -260,6 +262,7 @@ impl App {
             remote_queue_lineage: 0,
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
+            next_owner_queue_load_request: 1,
             direct_remote_connected: false,
             direct_remote_label: None,
             direct_remote_session_id: None,
@@ -516,29 +519,17 @@ impl App {
             QueueScope::Local
         };
         let local_daemon_bootstrap = endpoint.is_local().then(|| {
-            remote_unified_state
-                .as_ref()
-                .filter(|state| !state.slots.is_empty())
-                .map_or_else(
-                    || {
-                        bootstrap_local_daemon_queue(
-                            remote_items.clone(),
-                            remote_cursor,
-                            remote_queue_source.clone(),
-                            crate::config::load_queue_state(),
-                        )
-                    },
-                    bootstrap_unified_queue,
-                )
+            remote_unified_state.as_ref().map_or_else(
+                || {
+                    bootstrap_legacy_queue(
+                        remote_items.clone(),
+                        remote_cursor,
+                        remote_queue_source.clone(),
+                    )
+                },
+                bootstrap_unified_queue,
+            )
         });
-        // `adopt_queue` returns false when the ctrl socket is already dead
-        // (the command send failed); tracked so construction doesn't
-        // silently carry on with a queue the daemon never actually adopted
-        // (#119 task 5) — see `handle_failed_local_daemon_adoption` below.
-        let local_daemon_adoption_failed = local_daemon_bootstrap
-            .as_ref()
-            .and_then(|bootstrap| bootstrap.adopt_queue.clone())
-            .is_some_and(|(items, cursor, source)| !remote.adopt_queue(items, cursor, source));
         // Start MPRIS against this `RemotePlayer` (#175, previously done in
         // `main.rs::run_remote_app` before this constructor even ran).
         // Moved here so App owns the resulting handle and can `rebind` it
@@ -664,9 +655,6 @@ impl App {
         } else {
             app.queue_source = remote_queue_source;
         }
-        if local_daemon_adoption_failed {
-            app.handle_failed_local_daemon_adoption();
-        }
         if endpoint.is_local() {
             app.try_auto_reconnect();
         }
@@ -675,17 +663,6 @@ impl App {
             && audiobookshelf_credential_present)
             .then_some((app.config.lock().unwrap().clone(), generation));
         app
-    }
-
-    /// Routes a local-daemon queue adoption whose command send failed (dead
-    /// ctrl socket, see `new_remote`) through the same disconnect handling a
-    /// live `PlayerEvent::RemoteDisconnected` uses, instead of silently
-    /// continuing to build on optimistic queue state the daemon never
-    /// actually received (#119 task 5).
-    pub(super) fn handle_failed_local_daemon_adoption(&mut self) {
-        self.handle_player_event(PlayerEvent::RemoteDisconnected(
-            "local daemon connection lost while restoring the saved queue".to_string(),
-        ));
     }
 
     /// Query the terminal for its image protocol (sixel/kitty/iterm2/etc,

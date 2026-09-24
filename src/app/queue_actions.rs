@@ -8,6 +8,7 @@ use super::{
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
+
 #[path = "queue_actions_playlist_mutation.rs"]
 mod queue_actions_playlist_mutation;
 
@@ -344,7 +345,7 @@ impl App {
 
     pub(super) fn on_queue_replace_silent(&mut self) {
         self.reset_bare_transitions();
-        self.queue_source = crate::config::QueueSource::Unknown;
+        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         self.queue_dirty = false;
     }
 
@@ -452,8 +453,38 @@ impl App {
                     return;
                 }
                 let direct_remote = self.has_direct_remote_queue();
+                if !autostart && self.stay_alive_owner_is_queue_authority() {
+                    let request_id = self.next_owner_queue_load_request;
+                    self.next_owner_queue_load_request =
+                        self.next_owner_queue_load_request.saturating_add(1);
+                    let slots = items
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, item)| mbv_core::ctrl::UnifiedQueueSlot {
+                            slot_id: (index + 1) as u64,
+                            item: QueueItem::Emby(Box::new(item)),
+                        })
+                        .collect();
+                    let result = self
+                        .player
+                        .as_remote()
+                        .map(|remote| remote.load_queue_idle(request_id, slots, start_idx, source));
+                    match result {
+                        Some(Ok(())) => self.set_queue_scope(self.playing_queue_scope()),
+                        Some(Err(_)) if self.player.is_remote_disconnected() => self.flash(
+                            super::actions::CONNECTION_LOST_MESSAGE.into(),
+                            ToastSeverity::Warning,
+                        ),
+                        Some(Err(reason)) => self.flash(reason, ToastSeverity::Error),
+                        None => self.flash(
+                            "Could not send idle queue load to Player owner".into(),
+                            ToastSeverity::Error,
+                        ),
+                    }
+                    return;
+                }
                 if self.local_queue_metadata_applies(self.playing_queue_scope()) {
-                    self.queue_source = source;
+                    self.set_queue_source_if_not_local_daemon(source.clone());
                 }
                 if !autostart {
                     // Playlist Enter populates the queue; Space/Enter starts it.
@@ -485,7 +516,7 @@ impl App {
                     );
                     self.submit_attached_sequence(&id, &items, start_idx);
                 } else {
-                    self.submit_tab_queue(self.playing_queue_scope(), start_idx);
+                    self.submit_tab_queue(self.playing_queue_scope(), start_idx, source);
                     self.player
                         .send_command(PlayerCommand::SetMute(self.mute_on));
                 }
@@ -506,7 +537,7 @@ impl App {
                 } else if self.queue_scope_is_playback(scope) {
                     self.reset_bare_transitions();
                     self.player.stop();
-                    if self.is_local_daemon() {
+                    if self.stay_alive_owner_is_queue_authority() {
                         self.player.clear_queue();
                     }
                 }
@@ -572,6 +603,15 @@ impl App {
     pub(super) fn save_queue_as_playlist(&mut self, name: String) {
         let source_playlist_id = self.queue_playlist_id().map(str::to_string);
         let queue_lineage = self.remote_queue_lineage;
+        let owner_queue_lineage = self
+            .stay_alive_owner_is_queue_authority()
+            .then(|| {
+                self.player
+                    .as_remote()
+                    .and_then(|remote| remote.unified_queue_state())
+                    .map(|state| state.lineage)
+            })
+            .flatten();
         let mutation_id = self.next_playlist_mutation;
         self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
         let key = source_playlist_id
@@ -586,6 +626,7 @@ impl App {
                 name,
                 queue_lineage,
                 source_playlist_id,
+                owner_queue_lineage,
                 item_ids: None,
             },
         );

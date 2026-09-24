@@ -30,7 +30,7 @@ fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
 fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
     // abs_queue=false, abs_progress=false, abs_book_*=false
-    let id = clients.connect(tx, CtrlTransport::Local, false, false, false, false);
+    let id = clients.connect(tx, CtrlTransport::Local, false, false, false, false, false);
     (id, rx)
 }
 
@@ -50,9 +50,7 @@ fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
     let observed = queue.slots()[1].slot_id;
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
-    let event = super::unified_queue_state_for_peer(
-        &status, &queue, &source, Some(observed), None, None, true, true,
-    );
+    let event = super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), Some(observed), None, None, true, true);
     let CtrlEvent::UnifiedQueueState(data) = event else {
         panic!("expected UnifiedQueueState");
     };
@@ -75,7 +73,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
     // Not playing: no observation and no fallback -> no active slot.
     let idle = crate::player::PlayerStatus::default();
     let CtrlEvent::UnifiedQueueState(idle_data) =
-        super::unified_queue_state_for_peer(&idle, &queue, &source, None, None, None, true, true)
+        super::unified_queue_state_for_peer(&idle, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, true, true)
     else {
         panic!("expected UnifiedQueueState");
     };
@@ -87,7 +85,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
         ..Default::default()
     };
     let CtrlEvent::UnifiedQueueState(playing_data) =
-        super::unified_queue_state_for_peer(&playing, &queue, &source, None, None, None, true, true)
+        super::unified_queue_state_for_peer(&playing, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, true, true)
     else {
         panic!("expected UnifiedQueueState");
     };
@@ -103,11 +101,11 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let source = crate::config::QueueSource::Unknown;
 
     let capable_data =
-        match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, true, false) {
+        match super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, true, false) {
             CtrlEvent::UnifiedQueueState(d) => d,
             _ => panic!("expected UnifiedQueueState"),
         };
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
@@ -132,7 +130,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
@@ -168,7 +166,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     let emby_slot_id = crate::ctrl::slot_id_to_u64(queue.slots()[1].slot_id);
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueuePlaySlot {
             slot_id: emby_slot_id,
         },
@@ -185,6 +183,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     let _queue = owner.core.queue;
 
@@ -226,7 +225,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
             cursor: 0,
@@ -245,6 +244,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 
@@ -287,7 +287,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
             cursor: 0,
@@ -306,6 +306,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 
@@ -340,7 +341,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
             cursor: 0,
@@ -359,6 +360,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let _queue = owner.core.queue;
 
@@ -394,7 +396,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
             cursor: 0,
@@ -413,6 +415,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
         true,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 

@@ -11,6 +11,7 @@ fn stopped_progress_updates_the_queue_model_not_just_the_shadow() {
 
     app.handle_player_event(PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
+        run_identity: (0, 0),
         position_ticks: 600_000_000,
         played: false,
         consume: false,
@@ -41,6 +42,7 @@ fn stopped_with_accepted_report_marks_pending_sync_and_clears_active_slot() {
 
     app.handle_player_event(PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
+        run_identity: (0, 0),
         position_ticks: 600_000_000,
         played: false,
         consume: false,
@@ -75,6 +77,7 @@ fn stopped_consume_removes_the_right_slot_occurrence() {
 
     app.handle_player_event(PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(2),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: true,
         consume: true,
@@ -140,6 +143,7 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
 
     app.handle_player_event(PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: false,
         consume: false,
@@ -200,6 +204,7 @@ fn stopped_path_consumes_the_last_audio_item_in_the_queue() {
 
     app.handle_player_event(PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: false,
         consume: true,
@@ -223,6 +228,7 @@ fn stopped_path_does_not_consume_audio_when_consume_audio_is_off() {
 
     app.handle_player_event(PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: false,
         consume: true,
@@ -254,6 +260,7 @@ fn track_completed_progress_follows_slot_after_earlier_removal() {
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 600_000_000,
         played: false,
         consume: false,
@@ -280,6 +287,7 @@ fn track_completed_for_removed_slot_does_not_mutate_queue() {
     // a slot id that was never allocated in this queue
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: mbv_core::playback_queue::QueueSlotId::from_raw(9999),
+        run_identity: (0, 0),
         position_ticks: 600_000_000,
         played: true,
         consume: true,
@@ -323,6 +331,7 @@ fn track_completed_consumes_before_track_changed() {
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: true,
         consume: true,
@@ -353,6 +362,7 @@ fn consuming_a_video_without_autosave_marks_queue_dirty() {
     // First item finishes playing and is consumed at completion.
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: true,
         consume: true,
@@ -390,6 +400,7 @@ fn consuming_a_video_resyncs_the_players_own_queue() {
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: consumed_slot,
+        run_identity: (0, 0),
         position_ticks: 0,
         played: true,
         consume: true,
@@ -420,6 +431,7 @@ fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: true,
         consume: true,
@@ -458,6 +470,7 @@ fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: true,
         consume: true,
@@ -495,6 +508,7 @@ fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: false,
         consume: true,
@@ -529,6 +543,7 @@ fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirt
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: false,
         consume: true,
@@ -558,6 +573,7 @@ fn consume_videos_flag_does_not_consume_audio_items() {
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: false,
         consume: true,
@@ -582,6 +598,7 @@ fn consume_audio_flag_does_not_consume_video_items() {
 
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
+        run_identity: (0, 0),
         position_ticks: 0,
         played: true,
         consume: true,

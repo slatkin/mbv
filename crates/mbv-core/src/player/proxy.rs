@@ -180,6 +180,7 @@ impl PlayerProxy {
         &self,
         slots: Vec<ExecSlot>,
         start_idx: usize,
+        source: crate::config::QueueSource,
         client: Option<Arc<EmbyClient>>,
         headless: bool,
         initial_volume: u8,
@@ -220,6 +221,7 @@ impl PlayerProxy {
                 r.send_ctrl_cmd(crate::ctrl::CtrlCmd::unified_queue_replace(
                     slots,
                     Some(start_idx),
+                    source,
                 ))
             }
         }
@@ -321,15 +323,6 @@ impl PlayerProxy {
                 }
                 r.queue_append(slots.into_iter().map(|slot| slot.item).collect())
             }
-        }
-    }
-
-    /// Update the source metadata associated with a canonical submission.
-    /// Local owners keep this in the shell; remote stubs expose it for the
-    /// same source bookkeeping as the legacy play_queue path.
-    pub fn set_queue_source(&self, source: crate::config::QueueSource) {
-        if let PlayerProxyInner::Remote(remote) = &self.inner {
-            *remote.queue_source.lock().unwrap() = source;
         }
     }
 

@@ -355,8 +355,9 @@ use crate::player::PlayerOwnerState;
 /// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
 /// loop owns exactly one of these.
 #[derive(Default)]
-struct DaemonPlayerOwner {
+pub(super) struct DaemonPlayerOwner {
     core: PlayerOwnerState,
+    pending_idle_load: Option<PendingIdleQueueLoad>,
     /// Guarded direct-playback lifecycle coordinator. Retained functionally
     /// as-is (task 3.2 folds its single `current` into the core `transitions`);
     /// kept here so the event loop owns one struct. Meaningless in Bare mode,
@@ -367,6 +368,16 @@ struct DaemonPlayerOwner {
     /// when it is displaced. task 3.5 folds transition/intent identity tracking
     /// together.
     queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
+}
+
+pub(super) struct PendingIdleQueueLoad {
+    request_id: crate::ctrl::QueueLoadRequestId,
+    slots: Vec<(QueueSlotId, QueueItem)>,
+    cursor: usize,
+    source: crate::config::QueueSource,
+    reply_tx: CtrlSender,
+    stopped_run: (PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+    started_at: Instant,
 }
 
 /// Route one slot-jump transition through the owner's one-in-flight dispatch
@@ -534,9 +545,10 @@ fn expire_and_redispatch(
 /// ctrl-socket clients.  The queue itself is the single source of truth;
 /// `UnifiedQueueState` is derived from it at the broadcast boundary.
 #[derive(Clone)]
-struct SharedQueueState {
+pub(super) struct SharedQueueState {
     queue: Arc<Mutex<PlaybackQueue>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
+    lineage: Arc<Mutex<crate::ctrl::QueueLineage>>,
     observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
@@ -596,7 +608,10 @@ fn broadcast_audiobookshelf_book_progress(
 /// `Player`/`EmbyClient`. Returns the bare reason (not a `CtrlEvent`) so the
 /// same string can be reused for both the server-side log line and the wire
 /// event the caller sends — one message, not two that can drift apart.
-fn audio_only_rejection(audio_only: bool, fetched: &[QueueItem]) -> Option<String> {
+fn audio_only_rejection<'a>(
+    audio_only: bool,
+    fetched: impl IntoIterator<Item = &'a QueueItem>,
+) -> Option<String> {
     if audio_only && !all_audio(fetched) {
         Some("Daemon is running in audio-only mode; can't play video items".to_string())
     } else {

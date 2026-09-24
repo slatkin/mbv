@@ -1,5 +1,7 @@
 use super::{
-    all_audio, apply_queue_enriched, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
+    all_audio, apply_queue_enriched, apply_stopped_observation,
+    apply_track_completed_observation, audio_only_rejection, broadcast,
+    handle_ctrl_for_role, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
     CtrlRequest, CtrlTransport, DaemonEvent, DaemonPlayerOwner, PlaybackIntentState,
     PlayerOwnerState,
@@ -82,7 +84,7 @@ fn video_feed_qi(guid: &str) -> QueueItem {
 /// Connects a client the same way the accept thread does.
 fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true);
+    let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true, true);
     (id, rx)
 }
 
@@ -90,6 +92,7 @@ fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
+        lineage: Arc::new(Mutex::new(crate::ctrl::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
     }
 }
@@ -267,7 +270,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::PlayerCmd(
             WireCommand::try_from_player_command(PlayerCommand::TogglePause).unwrap(),
         ),
@@ -284,6 +287,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     let _queue = owner.core.queue;
 
@@ -312,7 +316,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let (dummy_merged_tx, dummy_merged_rx) = mpsc::channel::<DaemonEvent>();
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("adopted", "Video", "Movie")],
             cursor: 0,
@@ -331,6 +335,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     assert!(
         dummy_merged_rx.try_recv().is_err(),
@@ -561,7 +566,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("stale", "Video", "Movie")],
             cursor: 0,
@@ -580,6 +585,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 
@@ -652,7 +658,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
     };
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::PlayerCmd(WireCommand::JumpTo(1)),
         1,
         CtrlRequest {
@@ -667,6 +673,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
 
     match recv_event(&reply_rx) {
@@ -676,6 +683,133 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
     // The stale command is never repaired by position.
     assert_eq!(owner.core.queue.active_index(), Some(0));
     assert_eq!(owner.core.observed_active_slot(), None);
+}
+
+#[test]
+fn stale_stopped_and_completed_run_observations_are_rejected() {
+    let player = cold_player();
+    player.status.lock().unwrap().sequence_generation = 5;
+    let current_run = (0, 5);
+    let old_run = (0, 4);
+    let shared_queue = shared_queue_state();
+
+    let queue = queue_from_items(
+        &[item("stopped-a", "Video", "Movie"), item("stopped-b", "Video", "Movie")],
+        0,
+    );
+    let mut stopped_owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+    let stopped_slot = stopped_owner.core.queue.slots()[0].slot_id;
+    stopped_owner.core.note_observed_active_slot(Some(stopped_slot));
+    *shared_queue.observed_active_slot.lock().unwrap() = Some(stopped_slot);
+    let original_position = stopped_owner.core.queue.slot(stopped_slot).unwrap().item.playback_position_ticks();
+
+    assert_eq!(
+        apply_stopped_observation(
+            &mut stopped_owner,
+            &player,
+            old_run.into(),
+            Some(stopped_slot),
+            900,
+            true,
+        ),
+        None
+    );
+    assert!(!stopped_owner.core.queue.slot(stopped_slot).unwrap().item.played());
+    assert_eq!(
+        apply_stopped_observation(
+            &mut stopped_owner,
+            &player,
+            current_run.into(),
+            Some(stopped_slot),
+            900,
+            false,
+        ),
+        Some(true)
+    );
+    assert_eq!(
+        stopped_owner.core.queue.slot(stopped_slot).unwrap().item.playback_position_ticks(),
+        900
+    );
+    assert_eq!(stopped_owner.core.observed_active_slot(), Some(stopped_slot));
+    assert_eq!(
+        *shared_queue.observed_active_slot.lock().unwrap(),
+        Some(stopped_slot)
+    );
+    assert_ne!(
+        stopped_owner.core.queue.slot(stopped_slot).unwrap().item.playback_position_ticks(),
+        original_position
+    );
+
+    let queue = queue_from_items(
+        &[item("completed-a", "Video", "Movie"), item("completed-b", "Video", "Movie")],
+        0,
+    );
+    let mut completed_owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+    let completed_slot = completed_owner.core.queue.slots()[0].slot_id;
+    completed_owner.core.note_observed_active_slot(Some(completed_slot));
+    *shared_queue.observed_active_slot.lock().unwrap() = Some(completed_slot);
+    let original_len = completed_owner.core.queue.len();
+    let original_position = completed_owner.core.queue.slot(completed_slot).unwrap().item.playback_position_ticks();
+
+    assert!(!apply_track_completed_observation(
+        &mut completed_owner,
+        &player,
+        &shared_queue,
+        old_run.into(),
+        completed_slot,
+        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        true,
+        true,
+        true,
+        false,
+    ));
+    assert_eq!(completed_owner.core.queue.len(), original_len);
+    assert_eq!(completed_owner.core.observed_active_slot(), Some(completed_slot));
+    assert_eq!(
+        *shared_queue.observed_active_slot.lock().unwrap(),
+        Some(completed_slot)
+    );
+    assert_eq!(
+        completed_owner.core.queue.slot(completed_slot).unwrap().item.playback_position_ticks(),
+        original_position
+    );
+    assert!(!completed_owner.core.queue.slot(completed_slot).unwrap().item.played());
+
+    assert!(apply_track_completed_observation(
+        &mut completed_owner,
+        &player,
+        &shared_queue,
+        current_run.into(),
+        completed_slot,
+        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
+        false,
+        false,
+        true,
+        false,
+    ));
+    assert_eq!(
+        completed_owner.core.queue.slot(completed_slot).unwrap().item.playback_position_ticks(),
+        crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1
+    );
+    assert!(apply_track_completed_observation(
+        &mut completed_owner,
+        &player,
+        &shared_queue,
+        current_run.into(),
+        completed_slot,
+        0,
+        true,
+        true,
+        true,
+        false,
+    ));
+    assert_eq!(completed_owner.core.queue.len(), original_len - 1);
 }
 
 #[test]
@@ -756,7 +890,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
     });
 
     // First press: nothing in flight, observed slot A -> jump to B.
-    handle_ctrl(
+    handle_ctrl_for_role(
         next_intent(1),
         client_id,
         CtrlRequest {
@@ -771,6 +905,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     assert!(
         matches!(
@@ -782,7 +917,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
 
     // Second rapid press, B still in flight: steps from B and queues C
     // behind it.
-    handle_ctrl(
+    handle_ctrl_for_role(
         next_intent(2),
         client_id,
         CtrlRequest {
@@ -797,6 +932,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     // The second press must not dispatch past the in-flight jump (one
     // in-flight at a time, design D4): C is held queued, not sent to the run.
@@ -865,7 +1001,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
     assert_eq!(owner.core.observed_active_slot(), None);
 
     // Next press dispatches the slot jump the active-file run will execute.
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::PlaybackIntent(PlaybackIntent {
             request_id: 1,
             generation: 1,
@@ -884,6 +1020,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     let (jump_request_id, jump_generation) = match cmd_rx.recv().unwrap() {
         PlayerCommand::JumpTo {
