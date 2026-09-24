@@ -8,10 +8,6 @@ use std::time::Duration;
 #[path = "catalog_books.rs"]
 mod catalog_books;
 pub use catalog_books::*;
-// Re-export test helpers for sibling test modules
-pub(super) use catalog_books::{
-    book_author_display, first_listed_author_sort_key, AuthorWire, BooksResponse,
-};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudiobookshelfLibrary {
@@ -174,7 +170,7 @@ pub(super) struct ShelfEntryWire {
     pub(super) recent_episode: Option<RecentEpisodeWire>,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct ShelfMediaWire {
+pub(super) struct ShelfMediaWire {
     #[serde(default)]
     metadata: Option<ShelfEntryMetadataWire>,
     #[serde(rename = "coverPath", default)]
@@ -188,7 +184,7 @@ struct ShelfEntryMetadataWire {
     author: Option<String>,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct RecentEpisodeWire {
+pub(super) struct RecentEpisodeWire {
     /// The episode id, needed to play the episode.
     id: String,
     #[serde(default)]
