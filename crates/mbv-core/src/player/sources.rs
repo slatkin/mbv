@@ -1,3 +1,5 @@
+use super::*;
+
 use crate::audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
@@ -89,10 +91,10 @@ pub(crate) struct PreparedSource {
     pub(crate) start_seconds: f64,
     /// Remaining sources appended after `url` to project a book's audio files
     /// as one continuous merged timeline.
-    book_extra_sources: Vec<AudiobookshelfAudioSource>,
+    pub(super) book_extra_sources: Vec<AudiobookshelfAudioSource>,
     /// Whether this source is projected as a merged multi-file timeline
     /// (books) rather than a single `loadfile`.
-    merged_timeline: bool,
+    pub(super) merged_timeline: bool,
     lifecycle: Option<PreparedLifecycle>,
 }
 
@@ -112,7 +114,7 @@ impl PreparedSource {
     /// header). For a merged timeline the resume start is omitted here and
     /// applied as an absolute seek after loading, so the position is
     /// unambiguous across the whole book.
-    fn mpv_load_options(&self, item: &QueueItem) -> String {
+    pub(super) fn mpv_load_options(&self, item: &QueueItem) -> String {
         let mut options = vec![mpv_title_opt(&item.display_name())];
         if self.start_seconds > 0.0 && !self.merged_timeline {
             options.push(format!("start={}", self.start_seconds));
@@ -123,27 +125,27 @@ impl PreparedSource {
 
     /// Header-only options for appended merged-timeline sources (no title,
     /// no resume start).
-    fn extra_source_options(&self) -> String {
+    pub(super) fn extra_source_options(&self) -> String {
         self.mpv_options.join(",")
     }
 
-    fn close(&mut self, current_time: f64) {
+    pub(super) fn close(&mut self, current_time: f64) {
         if let Some(lifecycle) = self.lifecycle.as_mut() {
             lifecycle.close((current_time.max(0.0) * crate::api::TICKS_PER_SECOND as f64) as i64);
         }
         self.lifecycle = None;
     }
 
-    fn take_lifecycle(&mut self) -> Option<PreparedLifecycle> {
+    pub(super) fn take_lifecycle(&mut self) -> Option<PreparedLifecycle> {
         self.lifecycle.take()
     }
 
-    fn has_sensitive_lifecycle(&self) -> bool {
+    pub(super) fn has_sensitive_lifecycle(&self) -> bool {
         self.lifecycle.is_some()
     }
 }
 
-fn prepare_source(
+pub(super) fn prepare_source(
     item: &QueueItem,
     server_url: &str,
     token: &str,
@@ -272,4 +274,3 @@ fn prepare_book_source(
     }
     Ok(prepared)
 }
-

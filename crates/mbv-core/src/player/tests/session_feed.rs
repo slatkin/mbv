@@ -1,6 +1,12 @@
+use super::*;
+use rstest::rstest;
+
 // ── Feed playback plumbing (task 5.1) ─────────────────────────────────────
 
-fn make_feed_entry(guid: &str, title: &str) -> crate::playback_queue::FeedEntry {
+pub(in crate::player) fn make_feed_entry(
+    guid: &str,
+    title: &str,
+) -> crate::playback_queue::FeedEntry {
     crate::playback_queue::FeedEntry {
         guid: guid.into(),
         title: title.into(),
@@ -94,7 +100,10 @@ fn feed_session_properties(
         }
         2 => assert_eq!(session.origin, PlaybackOrigin::Standalone),
         3 => assert!(session.ext_sub_urls.is_empty()),
-        4 => assert!(!session.reporter.has_session(), "feed reporter must have no Emby session"),
+        4 => assert!(
+            !session.reporter.has_session(),
+            "feed reporter must have no Emby session"
+        ),
         _ => unreachable!(),
     }
 }
@@ -152,9 +161,7 @@ fn feed_append_to_existing_queue_preserves_original_items() {
     let feed = make_feed_entry("feed-appended", "Appended Feed");
     let queue_item = QueueItem::Feed(feed.clone());
     let new_idx = session.queue_len();
-    session
-        .queue
-        .append_with_id(owner_slot_id(), queue_item);
+    session.queue.append_with_id(owner_slot_id(), queue_item);
     session.current_idx = new_idx;
 
     // Original items preserved, feed appended at end.
@@ -439,7 +446,11 @@ fn append_items_to_queue_keeps_feed_items() {
 
     assert_eq!(session.queue_len(), 4);
     assert_eq!(
-        session.queue.slots().last().map(|slot| slot.item.id().to_string()),
+        session
+            .queue
+            .slots()
+            .last()
+            .map(|slot| slot.item.id().to_string()),
         Some(entry.guid.clone())
     );
     // The owner-assigned slot id is retained through the append helper.

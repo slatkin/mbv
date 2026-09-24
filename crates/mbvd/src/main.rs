@@ -526,8 +526,4 @@ fn exit_code_for_error(error: &str) -> i32 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    include!("tests.rs");
-}
+mod tests;

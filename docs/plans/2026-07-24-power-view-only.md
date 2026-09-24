@@ -78,7 +78,7 @@ Each agent's entry condition is the previous commit **committed, building clean,
 
 ## Task 2: Delete `ViewMode` and the Standard-only state
 
-**Files:** `src/app/mod.rs`, `src/app/actions.rs`, `src/app/input.rs`, `src/app/settings.rs`, `src/app/render/overlays/settings.rs`, `crates/mbv-core/src/config.rs`, `src/login.rs`
+**Files:** `src/app/mod.rs`, `src/app/actions.rs`, `src/app/input.rs`, `src/app/settings.rs`, `src/app/render/overlays/settings.rs`, `crates/mbv-core/src/config/mod.rs`, `src/login.rs`
 
 Fields to delete from `App` (line numbers are pre-change):
 
@@ -99,14 +99,14 @@ Functions to delete: `set_view_mode` (actions.rs:3541), `save_config_view_mode` 
 - [ ] Delete the fields, enum, and functions above
 - [ ] Rewire every `tab_idx` reference — most become unconditional, some become `library_tab`
 - [ ] Delete the two `SettingKey` variants and every match arm across settings.rs / overlays/settings.rs
-- [ ] Delete the `Config` fields and their TOML read/write in `crates/mbv-core/src/config.rs`
+- [ ] Delete the `Config` fields and their TOML read/write in `crates/mbv-core/src/config/mod.rs`
 - [ ] `cargo build` clean
 
 ---
 
 ## Task 3: Collapse `LibraryPositionScope`
 
-**Files:** `src/app/mod.rs` (enum at :617), `crates/mbv-core/src/config.rs` (`LibraryViewPositions` at :542)
+**Files:** `src/app/mod.rs` (enum at :617), `crates/mbv-core/src/config/mod.rs` (`LibraryViewPositions` at :542)
 
 `LibraryViewPositions { default: Option<LibraryPosition>, power: Option<LibraryPosition> }` collapses so that `LibraryPositionState.libraries` becomes `HashMap<String, LibraryPosition>` directly. Delete the `LibraryPositionScope` enum and drop the scope argument from `activate_library_position_scope` and every caller.
 

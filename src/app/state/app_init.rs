@@ -40,7 +40,7 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) ws_send_tx: Option<mbv_core::ws::WsSender>,
     pub(in crate::app) audiobookshelf_socket_rx:
-        mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
+        mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,

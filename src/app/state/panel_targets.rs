@@ -5,7 +5,7 @@
 // module's job is only the merge.
 
 use mbv_core::api::SessionInfo;
-use mbv_core::cast_discovery::CastReceiver;
+use mbv_core::cast::discovery::CastReceiver;
 
 /// One row in the F3 target panel. The channel that produced a target
 /// determines how mbv controls it (design.md "Discovery is a second channel

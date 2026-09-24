@@ -1,3 +1,5 @@
+use super::*;
+
 enum PlayerProxyInner {
     Local(Player),
     Remote(crate::remote_player::RemotePlayer),
@@ -203,9 +205,7 @@ impl PlayerProxy {
                 {
                     return false;
                 }
-                if slots
-                    .iter()
-                    .any(|slot| slot.item.is_audiobookshelf_book())
+                if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
                     && !r.ctrl_compatibility.supports_abs_book_queue
                 {
                     return false;
@@ -314,9 +314,7 @@ impl PlayerProxy {
                 {
                     return false;
                 }
-                if slots
-                    .iter()
-                    .any(|slot| slot.item.is_audiobookshelf_book())
+                if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
                     && !r.ctrl_compatibility.supports_abs_book_queue
                 {
                     return false;
@@ -511,7 +509,7 @@ impl PlayerProxy {
 
 /// Retry mark_played in a detached thread with exponential backoff.
 /// Max 3 attempts (initial + 2 retries), delays: 500ms, 2s.
-fn retry_mark_played(client: Arc<EmbyClient>, item_id: ItemId) {
+pub(super) fn retry_mark_played(client: Arc<EmbyClient>, item_id: ItemId) {
     std::thread::spawn(move || {
         let delays = [500, 2000]; // ms
         for (i, delay_ms) in delays.iter().enumerate() {
@@ -557,7 +555,7 @@ pub(crate) fn queue_completed_pos(
     }
 }
 
-fn quit_timeout_stop_flags(
+pub(super) fn quit_timeout_stop_flags(
     origin: PlaybackOrigin,
     is_audio: bool,
     last_valid_pos: i64,
@@ -574,12 +572,12 @@ fn quit_timeout_stop_flags(
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum StopReportContext {
+pub(super) enum StopReportContext {
     Ordinary,
     ShutdownAware,
 }
 
-fn end_file_stop_report_context(reason: EndFileReason) -> StopReportContext {
+pub(super) fn end_file_stop_report_context(reason: EndFileReason) -> StopReportContext {
     if reason == mpv_end_file_reason::Quit {
         StopReportContext::ShutdownAware
     } else {

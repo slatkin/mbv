@@ -1,11 +1,16 @@
-fn reject_stale_jump(event_tx: &mpsc::Sender<PlayerEvent>, slot_id: QueueSlotId) {
+use super::*;
+
+pub(in crate::player) fn reject_stale_jump(
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    slot_id: QueueSlotId,
+) {
     let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
     log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
     let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
 }
 
 impl PlaybackRun {
-    fn handle_command(
+    pub(in crate::player) fn handle_command(
         &mut self,
         cmd: PlayerCommand,
         mpv: &Mpv,
@@ -48,8 +53,9 @@ impl PlaybackRun {
                     reject_stale_jump(&self.event_tx, slot_id);
                     return cancel_stop;
                 };
-                self.forced_transition =
-                    Some(crate::playback_transition::Transition::new(request_id, generation, slot_id));
+                self.forced_transition = Some(crate::playback_transition::Transition::new(
+                    request_id, generation, slot_id,
+                ));
                 if self.active_file {
                     if let Err(error) = self.select_active_slot(slot_id, mpv) {
                         log::warn!(target: "player", "active-file selection failed: {error}");
@@ -64,41 +70,43 @@ impl PlaybackRun {
                         self.emit_track_changed(slot_id, self.forced_transition);
                     }
                 } else {
-                // mpv playlist indices are adapter coordinates; pin the
-                // target slot identity before asking mpv to move. Idle jumps
-                // settle on PlaybackRestart because no outgoing EndFile exists.
-                self.forced_jump_from_idle = !self.status.lock().unwrap().active;
-                if self.forced_jump_from_idle {
-                    self.tracks_initialized = false;
-                }
-                self.forced_slot_id = Some(slot_id);
-                self.forced_resume_ticks = resume_ticks;
-                if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
-                    self.forced_slot_id = None;
-                    self.forced_jump_from_idle = false;
-                    self.forced_transition = None;
-                    self.forced_resume_ticks = None;
-                    log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
-                } else {
-                    log::info!(
-                        target: "transition",
-                        "jump-to: playlist-pos ok slot_id={:?} idx={} current_idx={} queue_len={}",
-                        slot_id,
-                        idx,
-                        self.current_idx,
-                        self.queue_len(),
-                    );
+                    // mpv playlist indices are adapter coordinates; pin the
+                    // target slot identity before asking mpv to move. Idle jumps
+                    // settle on PlaybackRestart because no outgoing EndFile exists.
+                    self.forced_jump_from_idle = !self.status.lock().unwrap().active;
                     if self.forced_jump_from_idle {
-                        if let Err(error) = mpv.command("playlist-play-index", &[&idx.to_string()]) {
-                            log::warn!(target: "player", "jump-to playlist-play-index={idx} failed: {}", mpv_err_str(&error));
-                        }
+                        self.tracks_initialized = false;
                     }
-                    // Selecting a track should always start it playing, even if
-                    // mpv was paused on the previous track — otherwise the new
-                    // track loads silently "stuck" paused (see issue: Enter on a
-                    // queue item, or a remote Next/Previous command, while paused).
-                    let _ = mpv.set_property("pause", false);
-                }
+                    self.forced_slot_id = Some(slot_id);
+                    self.forced_resume_ticks = resume_ticks;
+                    if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
+                        self.forced_slot_id = None;
+                        self.forced_jump_from_idle = false;
+                        self.forced_transition = None;
+                        self.forced_resume_ticks = None;
+                        log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
+                    } else {
+                        log::info!(
+                            target: "transition",
+                            "jump-to: playlist-pos ok slot_id={:?} idx={} current_idx={} queue_len={}",
+                            slot_id,
+                            idx,
+                            self.current_idx,
+                            self.queue_len(),
+                        );
+                        if self.forced_jump_from_idle {
+                            if let Err(error) =
+                                mpv.command("playlist-play-index", &[&idx.to_string()])
+                            {
+                                log::warn!(target: "player", "jump-to playlist-play-index={idx} failed: {}", mpv_err_str(&error));
+                            }
+                        }
+                        // Selecting a track should always start it playing, even if
+                        // mpv was paused on the previous track — otherwise the new
+                        // track loads silently "stuck" paused (see issue: Enter on a
+                        // queue item, or a remote Next/Previous command, while paused).
+                        let _ = mpv.set_property("pause", false);
+                    }
                 }
             }
             PlayerCommand::Next => {
@@ -316,7 +324,7 @@ impl PlaybackRun {
         }
     }
 
-    fn append_items_to_queue(&mut self, items: Vec<ExecSlot>) {
+    pub(in crate::player) fn append_items_to_queue(&mut self, items: Vec<ExecSlot>) {
         for slot in items {
             self.queue.append_with_id(slot.slot_id, slot.item);
         }
@@ -332,7 +340,10 @@ impl PlaybackRun {
             self.append_items_to_queue(new_items);
             return;
         }
-        if new_items.iter().any(|slot| slot.item.is_audiobookshelf_any()) {
+        if new_items
+            .iter()
+            .any(|slot| slot.item.is_audiobookshelf_any())
+        {
             let Some(active_item) = self.active_item().cloned() else {
                 return;
             };
@@ -505,7 +516,10 @@ impl PlaybackRun {
         let active_title = active_item.title().to_string();
         let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
         self.queue = ExecutionSequence::from_slot_items(
-            items.into_iter().map(|slot| (slot.slot_id, slot.item)).collect(),
+            items
+                .into_iter()
+                .map(|slot| (slot.slot_id, slot.item))
+                .collect(),
             active_slot_id,
         );
         self.current_idx = start_idx;
@@ -616,7 +630,10 @@ impl PlaybackRun {
         progress.stop_and_join(self.progress_join_budget());
         let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
         self.queue = ExecutionSequence::from_slot_items(
-            items.into_iter().map(|slot| (slot.slot_id, slot.item)).collect(),
+            items
+                .into_iter()
+                .map(|slot| (slot.slot_id, slot.item))
+                .collect(),
             active_slot_id,
         );
         self.current_idx = start_idx;
@@ -674,7 +691,10 @@ impl PlaybackRun {
         if !items.is_empty() {
             let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
             self.queue = ExecutionSequence::from_slot_items(
-                items.into_iter().map(|slot| (slot.slot_id, slot.item)).collect(),
+                items
+                    .into_iter()
+                    .map(|slot| (slot.slot_id, slot.item))
+                    .collect(),
                 active_slot_id,
             );
         }
@@ -727,7 +747,11 @@ impl PlaybackRun {
 /// - Feed: the enclosure/link URL handed directly to mpv.
 /// - Audiobookshelf: not yet playable; returns empty (will fail visibly
 ///   rather than crash; owner admission will reject before this path).
-fn mpv_url_for_queue_item(item: &QueueItem, server_url: &str, token: &str) -> String {
+pub(in crate::player) fn mpv_url_for_queue_item(
+    item: &QueueItem,
+    server_url: &str,
+    token: &str,
+) -> String {
     match item {
         QueueItem::Emby(emby) => {
             let ep = if emby.is_audio() { "Audio" } else { "Videos" };

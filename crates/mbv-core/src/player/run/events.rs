@@ -1,4 +1,11 @@
-fn is_clocked_audio_error(error: &libmpv2::Error, audio_device_configured: bool) -> bool {
+use crate::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
+
+use super::*;
+
+pub(in crate::player) fn is_clocked_audio_error(
+    error: &libmpv2::Error,
+    audio_device_configured: bool,
+) -> bool {
     audio_device_configured
         && matches!(
             error,
@@ -19,7 +26,7 @@ fn is_clocked_audio_error(error: &libmpv2::Error, audio_device_configured: bool)
 /// the user actually selected, desyncing the UI from what mpv is playing.
 /// mpv's upcoming `start-file` / `playlist-pos` change is authoritative
 /// instead.
-fn is_superseded_jump_end_file(
+pub(in crate::player) fn is_superseded_jump_end_file(
     reason: EndFileReason,
     has_forced_slot: bool,
     track_finished: bool,
@@ -34,7 +41,7 @@ impl PlaybackRun {
     /// the transition's target matches (design D1/D4 settle shape: an
     /// active-file `JumpTo` and an `on_end_file` settle both confirm a
     /// transition through this same emit).
-    fn emit_track_changed(
+    pub(in crate::player) fn emit_track_changed(
         &mut self,
         slot_id: QueueSlotId,
         transition: Option<crate::playback_transition::Transition>,
@@ -54,7 +61,7 @@ impl PlaybackRun {
         });
     }
 
-    fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
+    pub(in crate::player) fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
         {
             let mut st = self.status.lock().unwrap();
@@ -138,7 +145,7 @@ impl PlaybackRun {
         );
     }
 
-    fn on_playlist_pos_changed(&mut self, pos: i64, mpv_pos_ticks: i64) {
+    pub(in crate::player) fn on_playlist_pos_changed(&mut self, pos: i64, mpv_pos_ticks: i64) {
         if self.active_file {
             return;
         }
@@ -177,7 +184,7 @@ impl PlaybackRun {
         self.report_stopped_and_adopt_mpv_entry(previous_slot, previous_pos, index, mpv_pos_ticks);
     }
 
-    fn on_playlist_count_changed(&mut self, count: usize) {
+    pub(in crate::player) fn on_playlist_count_changed(&mut self, count: usize) {
         if self.active_file {
             return;
         }
@@ -231,7 +238,7 @@ impl PlaybackRun {
         }
     }
 
-    fn settle_idle_jump_on_restart(
+    pub(in crate::player) fn settle_idle_jump_on_restart(
         &mut self,
         position_ticks: i64,
     ) -> Option<(QueueSlotId, Option<crate::playback_transition::Transition>)> {
@@ -274,7 +281,7 @@ impl PlaybackRun {
         Some((slot_id, transition))
     }
 
-    fn on_playback_restart(&mut self, mpv: &Mpv) {
+    pub(in crate::player) fn on_playback_restart(&mut self, mpv: &Mpv) {
         let settled_idle_jump = self.settle_idle_jump_on_restart(mpv_position_ticks(mpv));
         let was_seek = self.last_seek_at.is_some();
         self.active_file_starting = false;
@@ -369,7 +376,11 @@ impl PlaybackRun {
 
     // libmpv2 returns MPV_EVENT_END_FILE failures as Err(Error::Raw(...)),
     // so classify the output-specific error before the generic event logging.
-    fn on_mpv_error(&mut self, error: libmpv2::Error, progress: &mut ProgressGuard) -> bool {
+    pub(in crate::player) fn on_mpv_error(
+        &mut self,
+        error: libmpv2::Error,
+        progress: &mut ProgressGuard,
+    ) -> bool {
         if !is_clocked_audio_error(&error, self.config.audio_device.is_some()) {
             log::warn!(target: "player", "event error: {}", mpv_err_str(&error));
             return false;
@@ -399,7 +410,11 @@ impl PlaybackRun {
     /// queue paths, no Shutdown or TrackChanged will refresh it. A daemon
     /// client attaching later would otherwise inherit a "still playing"
     /// now-playing panel frozen at the final position.
-    fn on_end_file_standalone(&mut self, reason: EndFileReason, progress: &mut ProgressGuard) -> bool {
+    pub(in crate::player) fn on_end_file_standalone(
+        &mut self,
+        reason: EndFileReason,
+        progress: &mut ProgressGuard,
+    ) -> bool {
         if reason == mpv_end_file_reason::Quit {
             self.stop_runtime = Some(self.active_item().map_or(0, |item| item.runtime_ticks()));
         }
@@ -451,7 +466,7 @@ impl PlaybackRun {
     }
 
     /// Returns true if the event loop should `continue`.
-    fn on_end_file(
+    pub(in crate::player) fn on_end_file(
         &mut self,
         reason: EndFileReason,
         mpv: &Mpv,
@@ -621,7 +636,8 @@ impl PlaybackRun {
         // a dispatched command) would otherwise still see this slot's
         // submission-time position.
         if let Some(slot_id) = completed_slot_id {
-            self.queue.apply_progress(slot_id, completed_pos, played_out);
+            self.queue
+                .apply_progress(slot_id, completed_pos, played_out);
         }
 
         // Consume the in-flight jump's identity alongside `forced_slot_id`
@@ -784,7 +800,7 @@ impl PlaybackRun {
         false
     }
 
-    fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
+    pub(in crate::player) fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
         // Prefer the slot captured when the stop/quit was first observed
         // (design D2); fall back to the currently observed active slot only
         // when mpv shut down with no prior end-file to capture from. This is
@@ -855,7 +871,7 @@ impl PlaybackRun {
     }
 }
 
-fn provider_lifecycle_close_pos(
+pub(in crate::player) fn provider_lifecycle_close_pos(
     item: &QueueItem,
     natural_end: bool,
     runtime: i64,

@@ -3,7 +3,7 @@
 **Scope:** `PlaybackQueue` (`crates/mbv-core/src/playback_queue.rs`) and its
 two index-translation clients: the app model (`src/app/state/types/player_tab.rs`,
 `src/app/state/queue_scope.rs`, `src/app/dispatch/session/player_event.rs`) and the daemon/player
-mirror (`crates/mbv-core/src/daemon_control.rs`,
+mirror (`crates/mbv-core/src/daemon/control.rs`,
 `crates/mbv-core/src/player_run_*.rs`).
 
 ## The invariant

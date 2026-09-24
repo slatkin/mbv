@@ -7,7 +7,7 @@ each connected shell's `PlaybackQueue` mirror (`src/app/dispatch/session/player_
 shared write path (`crate::playback::queue::apply_progress_to_queue_item`),
 resume resolution (`crate::player::resume_start_pos` /
 `resume_ticks_for_item` / `resume_ticks_for_slot`, `crates/mbv-core/src/player/mod.rs`),
-jump dispatch (`crates/mbv-core/src/daemon_core.rs`, `src/app/dispatch/action/mod.rs`,
+jump dispatch (`crates/mbv-core/src/daemon/core.rs`, `src/app/dispatch/action/mod.rs`,
 `crates/mbv-core/src/playback/transition.rs`), and the Playback run's
 forced-jump/re-seek state (`crates/mbv-core/src/player/run/{types,commands,events,queue}.rs`).
 

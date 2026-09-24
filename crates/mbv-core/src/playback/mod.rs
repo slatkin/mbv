@@ -5,3 +5,6 @@ pub mod transition;
 pub use execution_sequence::*;
 pub use queue::*;
 pub use transition::*;
+
+#[cfg(test)]
+mod tests;

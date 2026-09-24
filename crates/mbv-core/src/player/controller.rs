@@ -1,3 +1,5 @@
+use std::os::unix::io::RawFd;
+
 use super::*;
 
 // Write end of a self-pipe used to wake the player event loop immediately

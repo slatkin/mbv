@@ -1,7 +1,7 @@
 use super::*;
 use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::audiobookshelf_socket::AudiobookshelfProgress;
-use mbv_core::audiobookshelf_socket::SocketEvent;
+use mbv_core::audiobookshelf::socket::AudiobookshelfProgress;
+use mbv_core::audiobookshelf::socket::SocketEvent;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerEvent;
 use rstest::{fixture, rstest};

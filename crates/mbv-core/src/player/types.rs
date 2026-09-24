@@ -1,3 +1,5 @@
+use super::*;
+
 #[derive(Clone, Default)]
 pub struct SubtitlePrefs {
     pub mode: String, // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"
@@ -197,7 +199,10 @@ pub enum PlayerEvent {
         /// Identity of the Playback run that observed this stop. The owner
         /// submission generation is paired with a reserved request id of 0.
         #[serde(default)]
-        run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+        run_identity: (
+            crate::ctrl::PlaybackRequestId,
+            crate::ctrl::PlaybackGeneration,
+        ),
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -214,7 +219,10 @@ pub enum PlayerEvent {
         /// request. `None` for natural advancement. Bare-mode dispatch
         /// populates this in Section 3; today it is always `None`.
         #[serde(default)]
-        transition: Option<(crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration)>,
+        transition: Option<(
+            crate::ctrl::PlaybackRequestId,
+            crate::ctrl::PlaybackGeneration,
+        )>,
     },
     /// Emitted after the player confirms its paused property transition.
     PausedChanged(bool),
@@ -227,7 +235,10 @@ pub enum PlayerEvent {
         /// Identity of the Playback run that observed this completion. The
         /// owner submission generation is paired with a reserved request id of 0.
         #[serde(default)]
-        run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+        run_identity: (
+            crate::ctrl::PlaybackRequestId,
+            crate::ctrl::PlaybackGeneration,
+        ),
         position_ticks: i64,
         played: bool,
         consume: bool,
@@ -384,7 +395,7 @@ pub enum PlayerCommand {
     },
 }
 
-fn lang_code_to_name(code: &str) -> &'static str {
+pub(in crate::player) fn lang_code_to_name(code: &str) -> &'static str {
     match code.to_lowercase().as_str() {
         "en" | "eng" => "English",
         "fr" | "fre" | "fra" => "French",
@@ -437,7 +448,11 @@ fn label_matches_lang(label: &str, lang_pref: &str) -> bool {
     l.starts_with(&p)
 }
 
-fn auto_select_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, prefs: &SubtitlePrefs) {
+pub(super) fn auto_select_tracks(
+    mpv: &Mpv,
+    status: &Arc<Mutex<PlayerStatus>>,
+    prefs: &SubtitlePrefs,
+) {
     refresh_tracks(mpv, status);
 
     // Audio: select track matching AudioLanguagePreference
@@ -532,7 +547,7 @@ fn auto_select_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, prefs: &Subt
     refresh_tracks(mpv, status);
 }
 
-fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
+pub(super) fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     let count: i64 = match mpv.get_property("track-list/count") {
         Ok(n) => n,
         Err(_) => return,

@@ -7,8 +7,8 @@
 `crates/mbv-core/src/player_run_queue.rs:506`,
 `crates/mbv-core/src/player_run_commands.rs:326,433`,
 `crates/mbv-core/src/player_run_events.rs:637`,
-`crates/mbv-core/src/daemon_reconciliation.rs:173,199,234`,
-`crates/mbv-core/src/config_state.rs:273`,
+`crates/mbv-core/src/daemon/reconciliation.rs:197,233,276`,
+`crates/mbv-core/src/config/state.rs:309`,
 `src/app/dispatch/audiobookshelf/service.rs:44,161,175`.
 
 ## The invariant

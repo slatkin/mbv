@@ -8,7 +8,7 @@ use crate::app::state::types::cast::{
 use crate::app::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
-use mbv_core::cast_client::{CastPlaybackState, CastStatus};
+use mbv_core::cast::client::{CastPlaybackState, CastStatus};
 use std::time::{Duration, Instant};
 
 /// design.md targets 5-10s; the receiver drops an unanswered sender after
@@ -290,7 +290,7 @@ mod tests {
     use super::*;
     use crate::app::state::types::cast::CastProgressTarget as ProgressTarget;
     use crate::app::tests::make_app_stub;
-    use mbv_core::cast_client::CastStatus;
+    use mbv_core::cast::client::CastStatus;
     use mbv_core::playback_queue::QueueItemContentId;
 
     fn dispatched(url: &str) -> DispatchedCastItem {

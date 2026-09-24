@@ -5,7 +5,7 @@ enqueue — in particular `src/app/dispatch/audiobookshelf/browse/mod.rs`'s
 `selected_audiobookshelf_queue_item_target` (both its shelf-cache-hit branch
 and its build-from-episode fallback), and the cache sources those paths read
 (`audiobookshelf_shelf_cache`; `AudiobookshelfQueueItem` construction in
-`crates/mbv-core/src/audiobookshelf_catalog.rs`).
+`crates/mbv-core/src/audiobookshelf/catalog_books.rs`).
 
 ## The invariant
 
@@ -23,7 +23,7 @@ Cache entries are built at different times and for different purposes than
 queue submission, and their progress fields are not maintained by the
 progress pipeline. The Audiobookshelf shelf cache's items are constructed
 with zeroed progress (`position_ticks: 0`, `played: false`,
-`is_finished: false` in `crates/mbv-core/src/audiobookshelf_catalog.rs`),
+`is_finished: false` in `crates/mbv-core/src/audiobookshelf/catalog_books.rs`),
 because the catalog payload they mirror carries no per-user progress. The
 browse state's `state.progress` map, by contrast, is kept current.
 

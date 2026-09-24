@@ -142,7 +142,7 @@ pub struct App {
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
     pub(in crate::app) audiobookshelf_socket_rx:
-        mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
+        mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(in crate::app) audiobookshelf_socket_generation:
         Option<mbv_core::service_runtime::SetupGeneration>,
@@ -333,7 +333,7 @@ pub struct App {
     pub(in crate::app) sessions: Vec<mbv_core::api::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
-    pub(in crate::app) cast_receivers: Vec<mbv_core::cast_discovery::CastReceiver>,
+    pub(in crate::app) cast_receivers: Vec<mbv_core::cast::discovery::CastReceiver>,
     /// The F3 panel's merged Emby+Cast target list, rebuilt from `sessions`/
     /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
     pub(in crate::app) panel_targets: Vec<PanelTarget>,

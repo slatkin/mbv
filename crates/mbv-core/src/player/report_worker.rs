@@ -1,8 +1,10 @@
+use super::*;
+
 // Snapshotted inputs for a stopped-report job: the values report_stopped
 // captures today before handing off, so the worker never reads ids/status
 // under a lock itself. `is_audio` and `last_valid_pos` are only needed for
 // the log line (`pos` is already the zeroed-for-audio value to send).
-struct StoppedReportData {
+pub(super) struct StoppedReportData {
     client: Arc<EmbyClient>,
     ws_tx: Option<crate::ws::WsSender>,
     id: ItemId,
@@ -18,7 +20,7 @@ struct StoppedReportData {
 // caller already resolved them synchronously (transition_to), or the fetch
 // is deferred to the worker (transition_to_deferred, for pipe output where
 // even the synchronous get_playback_info call would delay loadfile).
-enum StartIds {
+pub(super) enum StartIds {
     Resolved {
         media_source_id: MediaSourceId,
         session_id: EmbySessionId,
@@ -31,7 +33,7 @@ enum StartIds {
 
 // The three jobs SessionReporter used to run on detached per-call threads,
 // now executed FIFO on one worker thread fed by `SessionReporter::job_tx`.
-enum ReportJob {
+pub(super) enum ReportJob {
     Stopped(StoppedReportData),
     Start {
         client: Arc<EmbyClient>,
@@ -122,25 +124,25 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
 // Shared between the event loop thread and the progress reporter thread.
 // All mutable fields are Arc-wrapped so transitions are visible to both.
 #[derive(Clone)]
-struct SessionReporter {
-    client: Arc<EmbyClient>,
+pub(super) struct SessionReporter {
+    pub(super) client: Arc<EmbyClient>,
     ws_tx: Option<crate::ws::WsSender>,
     // (item_id, msid, sid) in a single lock so progress and event-loop threads never
     // observe a torn triple during item transitions.
-    ids: Arc<Mutex<(ItemId, MediaSourceId, EmbySessionId)>>,
+    pub(super) ids: Arc<Mutex<(ItemId, MediaSourceId, EmbySessionId)>>,
     // Shared with progress thread so it knows whether to send progress or just ping.
-    is_audio: Arc<AtomicBool>,
+    pub(super) is_audio: Arc<AtomicBool>,
     status: Arc<Mutex<PlayerStatus>>,
     // FIFO worker: stopped/start/progress-join jobs are sent here instead of
     // spawning a detached thread per call, so an outgoing stopped-report and
     // an incoming start-report can never race out of order (#bound-daemon-
     // playback-memory). The worker thread ends when every clone's sender
     // drops.
-    job_tx: mpsc::Sender<ReportJob>,
+    pub(super) job_tx: mpsc::Sender<ReportJob>,
 }
 
 impl SessionReporter {
-    fn new(
+    pub(super) fn new(
         client: Arc<EmbyClient>,
         ws_tx: Option<crate::ws::WsSender>,
         item_id: ItemId,
@@ -165,7 +167,7 @@ impl SessionReporter {
     // need, so the worker reads nothing from a shared lock. `None` when the
     // reporter has no session (feed-only playback), matching has_session's
     // no-op contract for callers.
-    fn stopped_report_data(&self, last_valid_pos: i64) -> Option<StoppedReportData> {
+    pub(super) fn stopped_report_data(&self, last_valid_pos: i64) -> Option<StoppedReportData> {
         if !self.has_session() {
             return None;
         }
@@ -193,7 +195,7 @@ impl SessionReporter {
     /// Returns `true` when the reporter holds a real Emby session (non-empty
     /// item ID). Guards against noisy failed HTTP calls during feed-only
     /// playback where no Emby session was ever established.
-    fn has_session(&self) -> bool {
+    pub(super) fn has_session(&self) -> bool {
         !self
             .ids
             .lock()
@@ -206,7 +208,7 @@ impl SessionReporter {
     /// Clear all session IDs so subsequent report calls are safe no-ops.
     /// Called when transitioning from Emby playback to a feed entry to
     /// prevent stale session state from leaking into the feed lifecycle.
-    fn clear_session(&self) {
+    pub(super) fn clear_session(&self) {
         let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
         ids.0 = ItemId::empty();
         ids.1 = MediaSourceId::new("");
@@ -217,7 +219,7 @@ impl SessionReporter {
     // Recovers from poisoned mutexes so the progress thread never panics while
     // holding a lock.  No-op when the reporter has no session (feed-only
     // playback) so callers never need to guard.
-    fn report_progress(&self, event_name: &str) {
+    pub(super) fn report_progress(&self, event_name: &str) {
         if !self.has_session() {
             return;
         }
@@ -240,7 +242,7 @@ impl SessionReporter {
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
     // Returns false (no-op) when the reporter has no session so callers get the
     // correct StopReport state without needing per-site guards.
-    fn report_stopped(&self, last_valid_pos: i64) -> bool {
+    pub(super) fn report_stopped(&self, last_valid_pos: i64) -> bool {
         let Some(d) = self.stopped_report_data(last_valid_pos) else {
             return false;
         };
@@ -255,7 +257,7 @@ impl SessionReporter {
     // item immediately instead of waiting on this HTTP call (and the WS flush,
     // which report_stopped's synchronous callers don't do — it's bookkeeping
     // that doesn't affect playback).  No-op when the reporter has no session.
-    fn report_stopped_background(&self, last_valid_pos: i64) {
+    pub(in crate::player) fn report_stopped_background(&self, last_valid_pos: i64) {
         if let Some(data) = self.stopped_report_data(last_valid_pos) {
             let _ = self.job_tx.send(ReportJob::Stopped(data));
         }
@@ -280,17 +282,27 @@ impl SessionReporter {
         });
     }
 
-    fn report_stopped_for_shutdown(&self, last_valid_pos: i64, timeout: Duration) -> bool {
+    pub(super) fn report_stopped_for_shutdown(
+        &self,
+        last_valid_pos: i64,
+        timeout: Duration,
+    ) -> bool {
         let Some(d) = self.stopped_report_data(last_valid_pos) else {
             return false;
         };
         log::info!(target: "player", "report_stopped shutdown: item={} is_audio={} last_valid_pos={}s sending pos={}s timeout={}ms",
             d.id, d.is_audio, d.last_valid_pos / TICKS_PER_SECOND, d.pos / TICKS_PER_SECOND, timeout.as_millis());
-        self.client
-            .report_stopped_for_shutdown(&d.id, &d.msid, d.pos, &d.sid, d.runtime_ticks, timeout)
+        self.client.report_stopped_for_shutdown(
+            &d.id,
+            &d.msid,
+            d.pos,
+            &d.sid,
+            d.runtime_ticks,
+            timeout,
+        )
     }
 
-    fn report_ping(&self) {
+    pub(super) fn report_ping(&self) {
         let sid = self.ids.lock().unwrap_or_else(|e| e.into_inner()).2.clone();
         self.client.report_ping(&sid);
     }
@@ -299,7 +311,7 @@ impl SessionReporter {
     // *before* the network call so the progress reporter thread never sends
     // stale IDs to Emby.
     // Returns (ext_sub_urls, success).
-    fn start_item(&self, item: &EmbyItem) -> (Vec<String>, bool) {
+    pub(super) fn start_item(&self, item: &EmbyItem) -> (Vec<String>, bool) {
         let info = self.client.get_playback_info(&item.id);
         // Update ids before report_start so the progress reporter (which reads
         // ids on a 10-second timer) always sees the new item.
@@ -320,7 +332,7 @@ impl SessionReporter {
     // both pure Emby bookkeeping, so both fire on background threads. Only
     // get_playback_info runs synchronously here — the session needs its ids
     // and ext_sub_urls before loadfile can be issued for the new item.
-    fn transition_to(&self, new_item: &EmbyItem, last_valid_pos: i64) -> Vec<String> {
+    pub(super) fn transition_to(&self, new_item: &EmbyItem, last_valid_pos: i64) -> Vec<String> {
         self.report_stopped_background(last_valid_pos);
         let info = self.client.get_playback_info(&new_item.id);
         let ext_sub_urls = info.external_subtitle_urls;
@@ -339,7 +351,7 @@ impl SessionReporter {
     // are irrelevant (audio-only) and the progress reporter can tolerate briefly
     // stale ids. Moves get_playback_info off the player thread so loadfile can be
     // issued immediately.
-    fn transition_to_deferred(&self, new_item: &EmbyItem, last_valid_pos: i64) {
+    pub(super) fn transition_to_deferred(&self, new_item: &EmbyItem, last_valid_pos: i64) {
         self.report_stopped_background(last_valid_pos);
         let _ = self.job_tx.send(ReportJob::Start {
             client: self.client.clone(),
