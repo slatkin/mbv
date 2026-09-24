@@ -603,6 +603,15 @@ impl App {
     pub(super) fn save_queue_as_playlist(&mut self, name: String) {
         let source_playlist_id = self.queue_playlist_id().map(str::to_string);
         let queue_lineage = self.remote_queue_lineage;
+        let owner_queue_lineage = self
+            .is_local_daemon()
+            .then(|| {
+                self.player
+                    .as_remote()
+                    .and_then(|remote| remote.unified_queue_state())
+                    .map(|state| state.lineage)
+            })
+            .flatten();
         let mutation_id = self.next_playlist_mutation;
         self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
         let key = source_playlist_id
@@ -617,6 +626,7 @@ impl App {
                 name,
                 queue_lineage,
                 source_playlist_id,
+                owner_queue_lineage,
                 item_ids: None,
             },
         );

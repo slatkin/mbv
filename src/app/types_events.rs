@@ -310,6 +310,7 @@ pub(super) enum SessionEvent {
         name: String,
         queue_lineage: u64,
         source_playlist_id: Option<String>,
+        owner_queue_lineage: Option<mbv_core::ctrl::QueueLineage>,
         result: Result<String, String>,
     },
     Error(String),

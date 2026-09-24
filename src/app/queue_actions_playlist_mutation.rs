@@ -120,6 +120,7 @@ impl App {
                 item_ids,
                 queue_lineage,
                 source_playlist_id,
+                owner_queue_lineage,
                 ..
             } => {
                 *item_ids = Some(
@@ -133,6 +134,7 @@ impl App {
                 let name = name.clone();
                 let coordinator_key = coordinator_key.clone();
                 let source_playlist_id = source_playlist_id.clone();
+                let owner_queue_lineage = *owner_queue_lineage;
                 let queue_lineage = *queue_lineage;
                 std::thread::spawn(move || {
                     let result = client.create_playlist(&name, &ids);
@@ -142,6 +144,7 @@ impl App {
                         name,
                         queue_lineage,
                         source_playlist_id,
+                        owner_queue_lineage,
                         result,
                     });
                 });
