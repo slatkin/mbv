@@ -42,7 +42,7 @@ Every task: pure moves plus the compile-forced edits only, with no renames of ty
 
 ## 8. Final gates
 
-- [ ] 8.1 `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace` all pass. `ls crates/mbv-core/src` shows only `lib.rs`, the 8 flat files from design Decision 1, and directories.
+- [x] 8.1 `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace` all pass. `ls crates/mbv-core/src` shows only `lib.rs`, the 8 flat files from design Decision 1, and directories. — Run on the merged tree (main/app-layout #778 merged at 26fa83c3). Two clippy blockers resolved: `pub(self)` dropped (needless_pub_self) and `player/run/run.rs` renamed to `run_loop.rs` (module_inception; user-decided rename following the design's own daemon_loop→event_loop precedent — one-line deviation from Decision 1's literal name mapping). Totals: mbv-core 727, mbv 2356, mbvd 7 (3090).
 
 ## 9. Docs
 
