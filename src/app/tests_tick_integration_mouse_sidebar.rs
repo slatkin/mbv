@@ -44,7 +44,7 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     let outcome = harness.step();
     assert!(matches!(
         outcome.router,
-        crate::app::router::RouterOutcome::Command(Command::OpenPlaylists)
+        crate::app::input::router::RouterOutcome::Command(Command::OpenPlaylists)
     ));
     assert!(outcome.messages.is_empty(), "the router consumes F4's leaf message");
     harness

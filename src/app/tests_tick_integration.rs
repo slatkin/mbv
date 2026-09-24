@@ -16,7 +16,7 @@ use crate::app::components::{
     SearchSidebarComponent, ShellRequest, TerminalObserverEvent, UserEvent,
 };
 use crate::app::action::Command;
-use crate::app::router::RouterOutcome;
+use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;

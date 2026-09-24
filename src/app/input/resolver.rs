@@ -15,9 +15,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 /// terminal-specific `kind`/`state` fields of `KeyEvent` dropped. This is the
 /// unit the resolver matches bindings against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct KeyChord {
-    pub(super) code: KeyCode,
-    pub(super) mods: KeyModifiers,
+pub(in crate::app) struct KeyChord {
+    pub(in crate::app) code: KeyCode,
+    pub(in crate::app) mods: KeyModifiers,
 }
 
 impl KeyChord {
@@ -28,7 +28,7 @@ impl KeyChord {
     /// away here for both the pressed chord (`from_key`) and the configured
     /// chord (`from_keybinds_chord`). Other non-Char codes keep SHIFT:
     /// literal bindings such as the queue-column-width entry match on it.
-    pub(super) fn new(code: KeyCode, mods: KeyModifiers) -> Self {
+    pub(in crate::app) fn new(code: KeyCode, mods: KeyModifiers) -> Self {
         let mods = if code == KeyCode::BackTab {
             mods - KeyModifiers::SHIFT
         } else {
@@ -37,7 +37,7 @@ impl KeyChord {
         Self { code, mods }
     }
 
-    pub(super) fn from_key(key: KeyEvent) -> Self {
+    pub(in crate::app) fn from_key(key: KeyEvent) -> Self {
         Self::new(key.code, key.modifiers)
     }
 
@@ -46,7 +46,7 @@ impl KeyChord {
     /// policy matching can compare it against the pressed chord. The registry
     /// carries only Ctrl/Shift/Alt, which map losslessly onto crossterm
     /// modifiers.
-    pub(super) fn from_keybinds_chord(chord: mbv_core::keybinds::Chord) -> Self {
+    pub(in crate::app) fn from_keybinds_chord(chord: mbv_core::keybinds::Chord) -> Self {
         use mbv_core::keybinds::{Key as RegistryKey, KeyMods};
         let mut mods = KeyModifiers::empty();
         if chord.mods.contains(KeyMods::CTRL) {
@@ -83,7 +83,7 @@ impl KeyChord {
 
 /// Convert a TuiRealm `KeyEvent` to a crossterm `KeyEvent` for the
 /// central keyboard router.
-pub(super) fn tuirealm_key_to_crossterm(
+pub(in crate::app) fn tuirealm_key_to_crossterm(
     key: tuirealm::event::KeyEvent,
 ) -> crossterm::event::KeyEvent {
     use tuirealm::event::{Key as TuiKey, KeyModifiers as TuiMods};

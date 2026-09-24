@@ -8,7 +8,7 @@
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 use crate::app::components::{OverlayId, UserEvent};
-use crate::app::router::RouterOutcome;
+use crate::app::input::router::RouterOutcome;
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
 

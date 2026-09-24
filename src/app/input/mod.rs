@@ -1,3 +1,18 @@
+mod browse_dispatch;
+mod confirm_keys;
+mod key_policy;
+mod lib_keys;
+mod playlist_keys;
+mod queue_keys;
+pub(in crate::app) mod resolver;
+pub(in crate::app) mod router;
+mod search_sidebar_keys;
+
+#[cfg(test)]
+mod music_track_scope_tests;
+#[cfg(test)]
+mod music_track_test_support;
+
 use super::{App, PanelFocus, TabSelection};
 use mbv_core::api::EmbyItem;
 // The following are unused by input.rs's own code (the code that used them
@@ -8,7 +23,7 @@ use mbv_core::api::EmbyItem;
 use super::ContextAction;
 
 impl App {
-    pub(super) fn context_menu_play_state(&self, item: &EmbyItem) -> bool {
+    pub(in crate::app) fn context_menu_play_state(&self, item: &EmbyItem) -> bool {
         if item.is_folder {
             item.unplayed_item_count == 0
         } else {
@@ -16,7 +31,7 @@ impl App {
         }
     }
 
-    pub(super) fn context_menu_lib_idx(&self) -> Option<usize> {
+    pub(in crate::app) fn context_menu_lib_idx(&self) -> Option<usize> {
         if matches!(self.effective_panel_focus(), PanelFocus::Library) {
             match self.tab {
                 TabSelection::EmbyLibrary(lib_idx) => Some(lib_idx),
@@ -29,13 +44,13 @@ impl App {
 
     /// Home + one tab per library (no Queue tab -- the queue is the
     /// always-visible left column, not a tab).
-    pub(super) fn tab_count(&self) -> usize {
+    pub(in crate::app) fn tab_count(&self) -> usize {
         1 + self.libs.len()
             + self.audiobookshelf_libraries.len()
             + if self.has_feeds_subscriptions() { 1 } else { 0 }
     }
 
-    pub(super) fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
+    pub(in crate::app) fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
         // The shared tab-window computation (task 2.1): the same one the tab
         // bar painter resolves the painted window and hit regions from, so
         // the keyboard scroll anchor and the painted bar cannot drift.
@@ -46,7 +61,7 @@ impl App {
         )
     }
 
-    pub(super) fn ensure_tab_visible(&mut self) {
+    pub(in crate::app) fn ensure_tab_visible(&mut self) {
         let n = self.tab_count();
         if n == 0 {
             return;
@@ -68,7 +83,7 @@ impl App {
             )
         } else {
             self.terminal_width
-                .saturating_sub(super::TABBAR_LEFT_RESERVE)
+                .saturating_sub(crate::app::TABBAR_LEFT_RESERVE)
         };
         loop {
             let (_, end) = self.visible_tab_range(tab_w);
@@ -80,7 +95,7 @@ impl App {
     }
 
     /// Tab-bar title widths: Continue + one per library + Feeds when present.
-    pub(super) fn tab_title_widths(&self) -> Vec<u16> {
+    pub(in crate::app) fn tab_title_widths(&self) -> Vec<u16> {
         let pad: u16 = 2;
         let mut w = vec![
             crate::app::ui_util::continue_tab_title(self.use_nerd_fonts)
@@ -100,7 +115,7 @@ impl App {
         w
     }
 
-    pub(super) fn load_prefs() -> serde_json::Value {
+    pub(in crate::app) fn load_prefs() -> serde_json::Value {
         let path = crate::config::prefs_path();
         std::fs::read_to_string(path)
             .ok()
@@ -108,7 +123,7 @@ impl App {
             .unwrap_or_default()
     }
 
-    pub(super) fn save_prefs(&self) {
+    pub(in crate::app) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
         // Keep legacy launch keys readable for the one-time migration, but do
         // not update them during the session. Launch state is written only by
@@ -128,13 +143,6 @@ impl App {
         }
     }
 }
-
-#[cfg(test)]
-#[path = "input_music_track_scope_tests.rs"]
-mod music_track_scope_tests;
-#[cfg(test)]
-#[path = "input_music_track_test_support.rs"]
-mod music_track_test_support;
 
 #[cfg(test)]
 mod prefs_tests {

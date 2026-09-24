@@ -1,5 +1,5 @@
-use super::notify_actions::ToastSeverity;
-use super::{
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{
     App, ConfirmAction, ConfirmModal, PanelFocus, PendingQueueAction, QueueScope,
     SavePlaylistDialog, SavePlaylistStage, SidebarId, UndoEntry,
 };
@@ -12,7 +12,7 @@ impl App {
     /// which `ConfirmAction` is pending and re-uses each action's existing
     /// effect, preserving the exact key bindings each confirmation had
     /// before migrating off status-bar toast text / bespoke dialogs.
-    pub(super) fn apply_confirm_action(
+    pub(in crate::app) fn apply_confirm_action(
         &mut self,
         action: ConfirmAction,
         key: KeyEvent,
@@ -188,7 +188,7 @@ impl App {
     }
 
     /// Show the clear-queue confirmation modal (called from QueueIntent::Clear).
-    pub(super) fn request_clear_queue(&mut self) {
+    pub(in crate::app) fn request_clear_queue(&mut self) {
         let scope = self.viewed_queue_scope();
         // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote
         // scope outright, which also swallowed `c` for a socket-attached mbvd
@@ -216,5 +216,4 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "input_confirm_keys_tests.rs"]
 mod tests;

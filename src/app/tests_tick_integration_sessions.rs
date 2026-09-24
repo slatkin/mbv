@@ -39,7 +39,7 @@ fn apply_messages(harness: &mut TickHarness, outcome: StepOutcome) {
 fn open_sessions(harness: &mut TickHarness) {
     harness.inject(key(Key::Function(3)));
     let outcome = harness.step();
-    assert_eq!(outcome.router, crate::app::router::RouterOutcome::Command(Command::OpenSessions));
+    assert_eq!(outcome.router, crate::app::input::router::RouterOutcome::Command(Command::OpenSessions));
     harness
         .model_mut()
         .dispatch_router_command(Command::OpenSessions);

@@ -12,7 +12,7 @@
 //! enum. Other modal handlers still speak directly to `App` and are expected to
 //! migrate to this same `Command` enum over time, one handler at a time.
 
-use super::input_resolver::KeyChord;
+use super::input::resolver::KeyChord;
 use super::notify_actions::ToastSeverity;
 use super::App;
 use crossterm::event::KeyCode;

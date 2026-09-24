@@ -4,15 +4,15 @@
 //! plain-data snapshot. It deliberately does not read TuiRealm attributes:
 //! precedence belongs to the router, not to distributed component mirrors.
 
-use super::action::{idle_feed_command_for_key, Command, VOLUME_STEP};
-use super::input_resolver::KeyChord;
+use super::resolver::KeyChord;
+use crate::app::action::{idle_feed_command_for_key, Command, VOLUME_STEP};
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::keybinds::{action_by_id, Keybinds};
 
 /// Plain-data state read by the central keyboard policy.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(super) struct RouterSnapshot {
+pub(in crate::app) struct RouterSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
     pub connected_session_id_present: bool,
@@ -47,7 +47,7 @@ pub(super) struct RouterSnapshot {
 
 /// One ordered layer of the keyboard policy.
 #[derive(Debug, Clone)]
-pub(super) struct KeyPolicyEntry {
+pub(in crate::app) struct KeyPolicyEntry {
     /// Human-readable row label for the policy table; only the tests below
     /// read it, so silence dead-code just where the tests are compiled out.
     #[cfg_attr(not(test), allow(dead_code))]
@@ -60,7 +60,7 @@ pub(super) struct KeyPolicyEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum KeyPolicyBinding {
+pub(in crate::app) enum KeyPolicyBinding {
     SettingsOpen,
     SessionsOpen,
     SessionsDismiss,
@@ -124,7 +124,7 @@ impl KeyPolicyBinding {
 /// Runtime condition for a policy layer. Every condition is evaluated from
 /// `RouterSnapshot`; no component attribute or subscription state participates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum KeyPolicyGate {
+pub(in crate::app) enum KeyPolicyGate {
     NoBlockingOverlay,
     NoBlockingOverlayAndHelpClosed,
     PanelFocusQueue,
@@ -152,7 +152,7 @@ pub(super) enum KeyPolicyGate {
 }
 
 impl KeyPolicyGate {
-    pub(super) fn allows(self, chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
+    pub(in crate::app) fn allows(self, chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
         match self {
             Self::NoBlockingOverlay => !snapshot.blocking_overlay_open,
             Self::NoBlockingOverlayAndHelpClosed => {
@@ -202,7 +202,7 @@ impl KeyPolicyGate {
 }
 
 /// The ordered keyboard policy. Entries are first-match-wins.
-pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
+pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
     // Prefix arming (design D6, task 6.2): the top layer. Its chord is
     // validated at load never to collide with any configured or declared
     // binding, so first-match order cannot shadow another entry; a closed
@@ -459,7 +459,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
 /// declared action matches the chords configured for it in `keybinds`
 /// (falling back to its declared defaults when unconfigured, design D1/D3);
 /// entries without a declared action keep their literal match.
-pub(super) fn resolve_policy(
+pub(in crate::app) fn resolve_policy(
     key: KeyChord,
     snapshot: &RouterSnapshot,
     keybinds: &Keybinds,
@@ -493,7 +493,10 @@ fn entry_matches(entry: &KeyPolicyEntry, key: KeyChord, keybinds: &Keybinds) -> 
 /// `playback_command_for_key` table bound them — so the eligibility gate and
 /// registry chord matching in `resolve_policy` fully decide whether a
 /// command dispatches.
-pub(super) fn command_for_policy(binding: KeyPolicyBinding, key: KeyChord) -> Option<Command> {
+pub(in crate::app) fn command_for_policy(
+    binding: KeyPolicyBinding,
+    key: KeyChord,
+) -> Option<Command> {
     match binding {
         KeyPolicyBinding::SettingsOpen => Some(Command::ToggleSettings),
         KeyPolicyBinding::SessionsOpen => Some(Command::OpenSessions),
@@ -557,7 +560,7 @@ pub(super) fn command_for_policy(binding: KeyPolicyBinding, key: KeyChord) -> Op
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::router::RouterSnapshot;
+    use crate::app::input::router::RouterSnapshot;
     use mbv_core::keybinds::{Chord, KeyGate, KeySection, SectionBindings, KEYBIND_ACTIONS};
 
     fn keybinds() -> Keybinds {
@@ -637,24 +640,24 @@ mod tests {
         let mut text_entry = snapshot();
         text_entry.text_entry_focused = true;
         assert_eq!(
-            crate::app::router::resolve_router_outcome_with_focused(
+            crate::app::input::router::resolve_router_outcome_with_focused(
                 key,
                 &text_entry,
                 None,
                 &keybinds()
             ),
-            crate::app::router::RouterOutcome::FallThrough
+            crate::app::input::router::RouterOutcome::FallThrough
         );
 
         let normal = snapshot();
         assert_eq!(
-            crate::app::router::resolve_router_outcome_with_focused(
+            crate::app::input::router::resolve_router_outcome_with_focused(
                 key,
                 &normal,
                 None,
                 &keybinds()
             ),
-            crate::app::router::RouterOutcome::Command(Command::CyclePanelMode)
+            crate::app::input::router::RouterOutcome::Command(Command::CyclePanelMode)
         );
     }
 
@@ -887,13 +890,13 @@ mod tests {
             "alt_swallow"
         );
         assert_eq!(
-            crate::app::router::resolve_router_outcome_with_focused(
+            crate::app::input::router::resolve_router_outcome_with_focused(
                 crossterm::event::KeyEvent::new(KeyCode::Char('k'), KeyModifiers::ALT),
                 &snapshot(),
                 None,
                 &keybinds()
             ),
-            crate::app::router::RouterOutcome::Swallow
+            crate::app::input::router::RouterOutcome::Swallow
         );
     }
 
@@ -940,13 +943,13 @@ mod tests {
             "sessions_sidebar_escape"
         );
         assert_eq!(
-            crate::app::router::resolve_router_outcome_with_focused(
+            crate::app::input::router::resolve_router_outcome_with_focused(
                 crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
                 &armed,
                 None,
                 &keybinds()
             ),
-            crate::app::router::RouterOutcome::FallThrough
+            crate::app::input::router::RouterOutcome::FallThrough
         );
     }
 
@@ -1085,7 +1088,7 @@ mod tests {
     /// `resolve_router_outcome_with_focused` (the single routing site).
     mod prefix_mode {
         use super::*;
-        use crate::app::router::RouterOutcome;
+        use crate::app::input::router::RouterOutcome;
         use crossterm::event::KeyEvent;
 
         fn prefix_keybinds(assignments: &[(&str, &str)]) -> Keybinds {
@@ -1124,7 +1127,9 @@ mod tests {
         }
 
         fn resolve(key: KeyEvent, snapshot: &RouterSnapshot, keybinds: &Keybinds) -> RouterOutcome {
-            crate::app::router::resolve_router_outcome_with_focused(key, snapshot, None, keybinds)
+            crate::app::input::router::resolve_router_outcome_with_focused(
+                key, snapshot, None, keybinds,
+            )
         }
 
         #[test]
@@ -1196,7 +1201,7 @@ mod tests {
                 crate::app::components::ModalId::Confirm,
             );
             assert_eq!(
-                crate::app::router::resolve_router_outcome_with_focused(
+                crate::app::input::router::resolve_router_outcome_with_focused(
                     crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
                     &blocked,
                     Some(&focused),

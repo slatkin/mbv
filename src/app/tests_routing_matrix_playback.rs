@@ -3,7 +3,7 @@
 use super::tests_routing_matrix_support::*;
 use crate::app::action::Command;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
+use crate::app::input::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]

@@ -24,7 +24,7 @@
 //! candidate resolves as `Deferred`.
 
 use crate::app::components::{ComponentId, Msg, TerminalObserverEvent};
-use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
+use crate::app::input::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crate::app::shell::fold_keyboard_messages;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::keybinds::{Chord, KeySection, Keybinds, SectionBindings};

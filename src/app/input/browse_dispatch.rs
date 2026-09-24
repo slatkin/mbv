@@ -1,6 +1,6 @@
 use mbv_core::api::EmbyItem;
 
-use super::App;
+use crate::app::App;
 
 impl App {
     /// Applies the single Series activation gate shared by keyboard Enter and
@@ -9,7 +9,7 @@ impl App {
     ///
     /// Resolves the target via `selected_series_item`, then delegates the
     /// wide/narrow branch to `activate_selected_series_item`.
-    pub(super) fn activate_selected_series(&mut self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn activate_selected_series(&mut self, lib_idx: usize) -> bool {
         let cursor = self.libs[lib_idx]
             .nav_stack
             .last()
@@ -27,7 +27,7 @@ impl App {
     /// Keeps the non-Series guard (`enter_series_selection` also enforces
     /// `item_type == "Series"` and a non-empty id) and the wide-fetch vs
     /// narrow-modal branch.
-    pub(super) fn activate_selected_series_item(
+    pub(in crate::app) fn activate_selected_series_item(
         &mut self,
         lib_idx: usize,
         item: &EmbyItem,

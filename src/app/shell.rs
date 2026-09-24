@@ -6,7 +6,7 @@ use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,
 };
-use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
+use super::input::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
@@ -383,7 +383,7 @@ impl Model {
         }) else {
             return RouterOutcome::FallThrough;
         };
-        let key = super::input_resolver::tuirealm_key_to_crossterm(tui_key);
+        let key = super::input::resolver::tuirealm_key_to_crossterm(tui_key);
         // Double-Esc stop: a single Esc must stay free for whatever claims
         // it (sidebar, search, overlay dismissal), so the stop dispatches
         // only when this Esc follows another Esc inside the window. The

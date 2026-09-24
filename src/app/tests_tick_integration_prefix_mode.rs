@@ -13,7 +13,7 @@ use crate::app::action::Command;
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, UserEvent};
-use crate::app::router::RouterOutcome;
+use crate::app::input::router::RouterOutcome;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, TabSelection};

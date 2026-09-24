@@ -9,18 +9,18 @@
 use crossterm::event::KeyEvent;
 use mbv_core::keybinds::Keybinds;
 
-use super::action::Command;
-use super::components::ComponentId;
-use super::input_resolver::KeyChord;
 use super::key_policy::{command_for_policy, resolve_policy, KeyPolicyBinding};
+use super::resolver::KeyChord;
+use crate::app::action::Command;
+use crate::app::components::ComponentId;
 
-pub(super) use super::key_policy::RouterSnapshot;
+pub(in crate::app) use super::key_policy::RouterSnapshot;
 
 /// ADR 0002's three routing outcomes, exactly. `Application::tick` returns the
 /// focused component's message before subscribers'; the router's outcome
 /// selects between running the leaf's request and discarding it.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum RouterOutcome {
+pub(in crate::app) enum RouterOutcome {
     /// Run this semantic command and discard the leaf's message for this tick.
     Command(Command),
     /// Run nothing and discard the leaf's message for this tick.
@@ -66,7 +66,7 @@ pub(super) enum RouterOutcome {
 ///
 /// The `blocking_overlay_open` catch-all rules stay: they still discard the
 /// focused leaf's message when no overlay is mounted.
-pub(super) fn resolve_router_outcome_with_focused(
+pub(in crate::app) fn resolve_router_outcome_with_focused(
     key: KeyEvent,
     snapshot: &RouterSnapshot,
     focused: Option<&ComponentId>,
@@ -133,7 +133,7 @@ pub(super) fn resolve_router_outcome_with_focused(
 /// bypasses it) and disarms; Escape or an unmapped chord — including a mapped
 /// chord whose gate is closed — swallows and disarms. There is no FallThrough
 /// path: while armed, no chord reaches the focused component or any surface.
-pub(super) fn resolve_armed_outcome(
+pub(in crate::app) fn resolve_armed_outcome(
     chord: KeyChord,
     snapshot: &RouterSnapshot,
     keybinds: &Keybinds,
@@ -181,8 +181,8 @@ pub(super) fn resolve_armed_outcome(
 /// Mirrors the shell's `blocking_overlay_active` set so the router can tell
 /// "the focused leaf is the overlay itself" from "an overlay is mounted
 /// elsewhere".
-pub(super) fn is_blocking_overlay(id: &ComponentId) -> bool {
-    use super::components::{ModalId, OverlayId, PopupId};
+pub(in crate::app) fn is_blocking_overlay(id: &ComponentId) -> bool {
+    use crate::app::components::{ModalId, OverlayId, PopupId};
     matches!(
         id,
         ComponentId::Overlay(OverlayId::ContextMenu)

@@ -1,4 +1,4 @@
-use super::{App, LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP};
+use crate::app::{App, LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP};
 use std::time::{Duration, Instant};
 
 /// How long a queue navigation gesture (Up/Down/click) holds the cursor
@@ -7,7 +7,7 @@ const QUEUE_NAV_CURSOR_HOLD: Duration = Duration::from_millis(500);
 
 impl App {
     /// Apply a QueueComponent-owned column resize intent.
-    pub(super) fn resize_queue_column(&mut self, wider: bool) {
+    pub(in crate::app) fn resize_queue_column(&mut self, wider: bool) {
         if wider {
             self.queue_column_width += LEFT_WIDTH_STEP;
         } else {
@@ -22,13 +22,13 @@ impl App {
     /// Record that the user just navigated the queue, arming a short
     /// hold window during which background events must not snap the
     /// cursor to the now-playing item.
-    pub(super) fn mark_queue_cursor_user_active(&mut self) {
+    pub(in crate::app) fn mark_queue_cursor_user_active(&mut self) {
         self.last_nav_at = Instant::now();
     }
 
     /// Whether a recent user navigation gesture should prevent a
     /// background event from overwriting `queue_cursor`.
-    pub(super) fn queue_cursor_held_by_user(&self) -> bool {
+    pub(in crate::app) fn queue_cursor_held_by_user(&self) -> bool {
         self.last_nav_at.elapsed() < QUEUE_NAV_CURSOR_HOLD
     }
 }
