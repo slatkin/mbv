@@ -117,7 +117,7 @@ fn tick_sessions_focus_selection_and_responsive_clamp(#[case] width: u16) {
     draw(&mut harness, resized_width, 14);
     assert_eq!(
         sessions_component_mut(&mut harness).selection_and_offset_for_test(),
-        (Some(SessionTargetKey::Emby("s6".into())), 5),
+        (Some(SessionTargetKey::Emby("s6".into())), 4),
         "selection remains keyed and scroll stays within the list after resize"
     );
 }
@@ -142,7 +142,7 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
             .expect("painted content geometry");
         let point = ratatui::layout::Position {
             x: content.x + 1,
-            y: content.y + item * 4,
+            y: content.y + item * 3,
         };
         assert_eq!(
             sessions_component_mut(harness).target_at_for_test(point),
@@ -249,7 +249,7 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
         let content = sessions_component_mut(&mut harness)
             .content_area_for_test()
             .expect("painted content geometry");
-        ratatui::layout::Position::new(content.x + 1, content.y + 4)
+        ratatui::layout::Position::new(content.x + 1, content.y + 3)
     };
     let second = SessionTargetKey::Emby("second".into());
     assert_eq!(

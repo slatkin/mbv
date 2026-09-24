@@ -38,7 +38,7 @@ pub struct SessionsComponent {
 
 impl SessionsComponent {
     pub fn new() -> Self {
-        let mut list = ThreeLineFlatList::new(1);
+        let mut list = ThreeLineFlatList::new(0);
         list.set_focused(true);
         Self {
             targets: Vec::new(),
@@ -452,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn test_session_buffer_selection_badge_zebra_and_separator() {
+    fn test_session_buffer_zebra_adjacency_selection_and_hit_geometry() {
         use crate::app::palette;
         use crate::app::tests::make_session;
 
@@ -478,31 +478,54 @@ mod tests {
         let stripe = palette::surface_colors(palette::Surface::SidebarBand, false).fill;
         let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
         let buffer = terminal.backend().buffer();
-        assert_eq!(
-            buffer[(content.x, y)].bg,
-            surface,
-            "first item is unstriped"
-        );
-        for row in y + 4..y + 7 {
+        // With gap 0 the items are adjacent: item 0 owns y..y+3 and item 1 owns
+        // y+3..y+6, alternating stripes with no blank row between them.
+        for row in y..y + 3 {
+            assert_eq!(buffer[(content.x, row)].bg, surface, "first item unstriped");
+        }
+        for row in y + 3..y + 6 {
             assert_eq!(buffer[(content.x, row)].bg, stripe, "second item's zebra");
         }
-        assert_eq!(
-            buffer[(content.x, y + 3)].bg,
-            surface,
-            "separator stays unfilled"
-        );
-        let badge_x = cell_x(buffer, y + 4, "✚");
-        assert_eq!(buffer[(badge_x, y + 4)].fg, palette::ACCENT_ACTIVE);
+        // Every painted line resolves to its own item; no dead rows between.
+        let first_key = SessionTargetKey::Emby("first".into());
+        let second_key = SessionTargetKey::Emby("connected".into());
+        for row in y..y + 3 {
+            assert_eq!(
+                component.target_at_for_test(Position {
+                    x: content.x,
+                    y: row
+                }),
+                Some(first_key.clone()),
+                "line {row} resolves to item 0"
+            );
+        }
+        for row in y + 3..y + 6 {
+            assert_eq!(
+                component.target_at_for_test(Position {
+                    x: content.x,
+                    y: row
+                }),
+                Some(second_key.clone()),
+                "line {row} resolves to item 1"
+            );
+        }
+        let badge_x = cell_x(buffer, y + 3, "✚");
+        assert_eq!(buffer[(badge_x, y + 3)].fg, palette::ACCENT_ACTIVE);
 
         component.list.set_focused(true);
         terminal
             .draw(|frame| component.view(frame, frame.area()))
             .unwrap();
         let buffer = terminal.backend().buffer();
+        // The selected bar spans exactly item 0's three lines and stops there.
         for row in y..y + 3 {
             assert_eq!(buffer[(content.x, row)].bg, palette::SELECTED_ROW_BG);
         }
-        assert_eq!(buffer[(content.x, y + 3)].bg, surface);
+        assert_eq!(
+            buffer[(content.x, y + 3)].bg,
+            stripe,
+            "selection bar does not bleed into the next item"
+        );
 
         component
             .list
@@ -511,15 +534,15 @@ mod tests {
             .draw(|frame| component.view(frame, frame.area()))
             .unwrap();
         let buffer = terminal.backend().buffer();
-        for row in y + 4..y + 7 {
+        for row in y + 3..y + 6 {
             assert_eq!(buffer[(content.x, row)].bg, palette::SELECTED_ROW_BG);
         }
-        let badge_x = cell_x(buffer, y + 4, "✚");
-        assert_eq!(buffer[(badge_x, y + 4)].fg, palette::ACCENT_ACTIVE);
+        let badge_x = cell_x(buffer, y + 3, "✚");
+        assert_eq!(buffer[(badge_x, y + 3)].fg, palette::ACCENT_ACTIVE);
         assert_eq!(
-            buffer[(content.x, y + 7)].bg,
+            buffer[(content.x, y + 6)].bg,
             surface,
-            "separator stays unfilled"
+            "selection bar ends with item 1"
         );
     }
 
@@ -542,7 +565,7 @@ mod tests {
             x: 10,
             y: component.painted_content_area.unwrap().y + 4,
         };
-        // The next item starts after three content lines and one separator.
+        // The second item starts immediately after the first item's three lines.
         assert_eq!(component.handle_mouse(&left_down(point.x, point.y)), None);
         assert_eq!(
             component.list.selected_target(),
