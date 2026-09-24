@@ -28,7 +28,7 @@ Every task: pure moves plus the compile-forced edits only, with no renames of ty
 
 ## 5. `ctrl/` and `keybinds/`
 
-- [ ] 5.1 `git mv` `ctrl.rs` → `ctrl/mod.rs`, `ctrl_tests.rs` → `ctrl/tests.rs`, `keybinds.rs` → `keybinds/mod.rs`, and `keybinds_tests.rs` → `keybinds/tests.rs`. Replace each `mod tests { include!(…) }` with `#[cfg(test)] mod tests;`, moving the block's `use` lines into `tests.rs`. Verify: gate green, and `rg -n 'include!' crates/mbv-core/src/{ctrl,keybinds}` is empty.
+- [x] 5.1 `git mv` `ctrl.rs` → `ctrl/mod.rs`, `ctrl_tests.rs` → `ctrl/tests.rs`, `keybinds.rs` → `keybinds/mod.rs`, and `keybinds_tests.rs` → `keybinds/tests.rs`. Replace each `mod tests { include!(…) }` with `#[cfg(test)] mod tests;`, moving the block's `use` lines into `tests.rs`. Verify: gate green, and `rg -n 'include!' crates/mbv-core/src/{ctrl,keybinds}` is empty.
 
 ## 6. `player/`, `player/run/`, `playback/`
 
