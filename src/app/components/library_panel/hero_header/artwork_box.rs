@@ -26,16 +26,10 @@ pub(super) const HERO_ARTWORK_MAX_ROWS: u16 = 25;
 /// and a taller block reads as oversized beside the title/meta text.
 pub(super) const HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS: u16 = 20;
 
-/// Panes whose *terminal* is this short (or fewer rows) use the compact caps
-/// below so the header leaves room for the text block, overview, and
-/// Workspace beneath it. Measured on the terminal, not the pane, so panel
-/// chrome does not change the decision.
-pub(in crate::app) const HERO_SHORT_PANE_MAX_HEIGHT: u16 = 50;
-
 /// The compact-cap decision, shared by the artwork box, the overview box,
 /// and the shell's image projection: the threshold is the terminal height.
 pub(in crate::app) fn short_pane(terminal_height: u16) -> bool {
-    terminal_height <= HERO_SHORT_PANE_MAX_HEIGHT
+    terminal_height <= super::HERO_SHORT_PANE_MAX_HEIGHT
 }
 
 /// Compact caps for short panes: 15 rows for Landscape and non-landscape arms

@@ -17,5 +17,9 @@ mod artwork_box;
 mod hero_header_tests;
 mod title_meta;
 
-pub(in crate::app) use artwork_box::{hero_artwork_box, short_pane, HERO_SHORT_PANE_MAX_HEIGHT};
+/// Panes whose *terminal* is this short (or fewer rows) use compact caps so
+/// the header leaves room for text, overview, and Workspace beneath it. The
+/// measurement is the terminal, not pane, height, so panel chrome is excluded.
+pub(in crate::app) const HERO_SHORT_PANE_MAX_HEIGHT: u16 = 50;
+pub(in crate::app) use artwork_box::{hero_artwork_box, short_pane};
 pub(in crate::app) use title_meta::paint_hero_pane_content;
