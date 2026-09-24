@@ -6,7 +6,8 @@ include!("run_shutdown.rs");
 include!("run.rs");
 include!("event_loop.rs");
 include!("audiobookshelf.rs");
-include!("control.rs");
+mod control;
+pub use control::*;
 include!("ws.rs");
 include!("reconciliation.rs");
 

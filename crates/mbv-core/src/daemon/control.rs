@@ -1,4 +1,8 @@
-include!("control_queue.rs");
+use super::*;
+
+#[path = "control_queue.rs"]
+mod control_queue;
+pub use control_queue::*;
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the
 /// result through `tx` as a `DaemonEvent`, built by `to_event`. Shared by
@@ -26,7 +30,7 @@ fn spawn_item_lookup<F>(
 /// control-flow re-entry; the wire variant is gone (ADR 0020), so the
 /// resolved-play path now lives here as a plain function.
 #[allow(clippy::too_many_arguments)]
-fn play_resolved_items(
+pub(super) fn play_resolved_items(
     fetched: Vec<EmbyItem>,
     start_idx: usize,
     start_ticks: i64,
@@ -264,7 +268,7 @@ fn send_role_gate_rejection(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn handle_ctrl_for_role(
+pub(super) fn handle_ctrl_for_role(
     cmd: CtrlCmd,
     client_id: CtrlClientId,
     request: CtrlRequest<'_>,
@@ -1054,7 +1058,7 @@ fn handle_ctrl_for_role(
     }
 }
 
-fn owner_admin_transport_allowed(
+pub(super) fn owner_admin_transport_allowed(
     role: crate::daemon::DaemonRole,
     kind: crate::config::ServiceKind,
     transport: Option<CtrlTransport>,

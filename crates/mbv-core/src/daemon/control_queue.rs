@@ -1,7 +1,9 @@
+use crate::daemon::*;
+
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence. The snapshot is handed to the
 /// injected `store`, so tests can observe it without touching real state.
-fn persist_stay_alive_owner_queue(
+pub(crate) fn persist_stay_alive_owner_queue(
     owner: &DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
@@ -17,7 +19,7 @@ fn persist_stay_alive_owner_queue(
     })
 }
 
-fn project_queue_state(
+pub(crate) fn project_queue_state(
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
     player_status: &crate::player::PlayerStatus,
@@ -81,7 +83,7 @@ fn project_queue_state(
 /// `abs-book-queue` for books); when a slot is dropped, `active_slot` is
 /// cleared too if the active slot was itself dropped, so a peer never
 /// receives an `active_slot` pointing at a slot missing from `slots`.
-fn unified_queue_state_for_peer(
+pub(crate) fn unified_queue_state_for_peer(
     status: &crate::player::PlayerStatus,
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,
@@ -128,7 +130,7 @@ fn unified_queue_state_for_peer(
 }
 
 /// Broadcasts a queue snapshot to clients and shared state.
-fn broadcast_queue_state(
+pub(crate) fn broadcast_queue_state(
     ctrl_clients: &ClientRegistry,
     player: &Player,
     shared_queue: &SharedQueueState,
@@ -214,7 +216,7 @@ fn admit_queue<T>(
     (admitted, cursor)
 }
 
-fn admit_queue_items(
+pub(super) fn admit_queue_items(
     original: Vec<QueueItem>,
     requested_cursor: Option<usize>,
     audio_only: bool,
@@ -248,7 +250,7 @@ pub(super) fn admit_queue_slots(
     )
 }
 
-fn daemon_admits(
+pub(super) fn daemon_admits(
     item: &QueueItem,
     audio_only: bool,
     has_emby: bool,
@@ -269,7 +271,7 @@ fn daemon_admits(
 /// (`abs-queue` for episodes, `abs-book-queue` for books). Checked ahead of
 /// queue mutation so an incapable peer's operation is refused outright rather
 /// than silently dropping the unsupported item.
-fn abs_queue_transport_rejection<'a>(
+pub(super) fn abs_queue_transport_rejection<'a>(
     items: impl IntoIterator<Item = &'a QueueItem> + Clone,
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
@@ -285,7 +287,7 @@ fn abs_queue_transport_rejection<'a>(
 
 /// Rejects a queue command with `reason` and echoes the daemon's
 /// authoritative state back to the requester.
-fn reject_command(
+pub(super) fn reject_command(
     reply_tx: &CtrlSender,
     ctrl_clients: &ClientRegistry,
     client_id: CtrlClientId,
