@@ -132,7 +132,7 @@ pub struct App {
     pub(super) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(super) ws_rx: mpsc::Receiver<WsEvent>,
     pub(super) audiobookshelf_socket_rx:
-        mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
+        mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent>,
     pub(super) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
     pub(super) audiobookshelf_socket_generation: Option<mbv_core::service_runtime::SetupGeneration>,
     pub(super) libs: Vec<LibraryTab>,

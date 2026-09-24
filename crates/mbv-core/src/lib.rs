@@ -3,7 +3,6 @@ use rand::RngExt;
 pub mod api;
 pub mod applog;
 pub mod audiobookshelf;
-pub mod audiobookshelf_socket;
 pub(crate) mod bounded;
 pub mod cast_client;
 pub mod cast_discovery;

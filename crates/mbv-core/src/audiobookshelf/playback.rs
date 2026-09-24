@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
+use super::catalog::*;
 use super::{AudiobookshelfClient, AudiobookshelfError, AudiobookshelfFailureClass};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -507,7 +508,7 @@ impl AudiobookshelfClient {
             .header("Authorization", &format!("Bearer {api_key}"))
             .header("Content-Type", "application/json")
             .send_json(body)
-            .map_err(super::audiobookshelf_catalog::map_error)
+            .map_err(super::catalog::map_error)
     }
 
     fn wait_for_hls_ready(

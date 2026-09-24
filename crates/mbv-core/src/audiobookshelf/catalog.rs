@@ -5,10 +5,11 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::time::Duration;
 
-mod audiobookshelf_catalog_books;
-pub use audiobookshelf_catalog_books::*;
-#[cfg(test)]
-use audiobookshelf_catalog_books::{book_author_display, first_listed_author_sort_key, AuthorWire};
+#[path = "catalog_books.rs"]
+mod catalog_books;
+pub use catalog_books::*;
+// Re-export test helpers for sibling test modules
+pub(super) use catalog_books::{book_author_display, first_listed_author_sort_key, AuthorWire, BooksResponse};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudiobookshelfLibrary {
@@ -73,102 +74,102 @@ pub struct AudiobookshelfShowPage {
 }
 
 #[derive(Debug, Deserialize)]
-struct LibrariesResponse {
-    libraries: Vec<LibraryWire>,
+pub(super) struct LibrariesResponse {
+    pub(super) libraries: Vec<LibraryWire>,
 }
 #[derive(Debug, Deserialize)]
-struct LibraryWire {
-    id: String,
-    name: String,
+pub(super) struct LibraryWire {
+    pub(super) id: String,
+    pub(super) name: String,
     #[serde(rename = "mediaType")]
-    media_type: String,
+    pub(super) media_type: String,
 }
 #[derive(Debug, Deserialize)]
-struct ItemsResponse {
-    page: usize,
-    limit: usize,
-    total: usize,
+pub(super) struct ItemsResponse {
+    pub(super) page: usize,
+    pub(super) limit: usize,
+    pub(super) total: usize,
     #[serde(alias = "items")]
-    results: Vec<ShowWire>,
+    pub(super) results: Vec<ShowWire>,
 }
 #[derive(Debug, Deserialize)]
-struct ShowWire {
+pub(super) struct ShowWire {
     #[serde(rename = "id", alias = "libraryItemId")]
-    library_item_id: String,
+    pub(super) library_item_id: String,
     #[serde(default)]
-    title: Option<String>,
+    pub(super) title: Option<String>,
     #[serde(default)]
-    author: Option<String>,
+    pub(super) author: Option<String>,
     #[serde(rename = "coverPath", default)]
-    cover_path: Option<String>,
+    pub(super) cover_path: Option<String>,
     #[serde(default)]
-    media: Option<PodcastMediaWire>,
+    pub(super) media: Option<PodcastMediaWire>,
 }
 #[derive(Debug, Deserialize)]
-struct PodcastMediaWire {
+pub(super) struct PodcastMediaWire {
     #[serde(rename = "coverPath", default)]
-    cover_path: Option<String>,
-    metadata: Option<PodcastMetadataWire>,
+    pub(super) cover_path: Option<String>,
+    pub(super) metadata: Option<PodcastMetadataWire>,
 }
 #[derive(Debug, Deserialize)]
-struct PodcastMetadataWire {
-    title: Option<String>,
-    author: Option<String>,
-    description: Option<String>,
+pub(super) struct PodcastMetadataWire {
+    pub(super) title: Option<String>,
+    pub(super) author: Option<String>,
+    pub(super) description: Option<String>,
 }
 #[derive(Debug, Deserialize)]
-struct ExpandedWire {
-    id: String,
-    media: Option<MediaWire>,
+pub(super) struct ExpandedWire {
+    pub(super) id: String,
+    pub(super) media: Option<MediaWire>,
 }
 #[derive(Debug, Deserialize)]
-struct MediaWire {
-    episodes: Option<Vec<EpisodeWire>>,
+pub(super) struct MediaWire {
+    pub(super) episodes: Option<Vec<EpisodeWire>>,
 }
 #[derive(Debug, Deserialize)]
-struct EpisodeWire {
-    id: String,
-    title: String,
+pub(super) struct EpisodeWire {
+    pub(super) id: String,
+    pub(super) title: String,
     #[serde(default)]
-    description: Option<String>,
+    pub(super) description: Option<String>,
     #[serde(rename = "publishedAt")]
-    published_at: Option<serde_json::Value>,
-    duration: Option<f64>,
+    pub(super) published_at: Option<serde_json::Value>,
+    pub(super) duration: Option<f64>,
 }
 #[derive(Debug, Deserialize)]
-struct ProgressResponse {
+pub(super) struct ProgressResponse {
     #[serde(rename = "mediaProgress")]
-    media_progress: Vec<ProgressWire>,
+    pub(super) media_progress: Vec<ProgressWire>,
 }
 #[derive(Debug, Deserialize)]
-struct ProgressWire {
+pub(super) struct ProgressWire {
     #[serde(rename = "libraryItemId")]
-    library_item_id: String,
+    pub(super) library_item_id: String,
     #[serde(rename = "episodeId")]
-    episode_id: Option<String>,
+    pub(super) episode_id: Option<String>,
     #[serde(rename = "currentTime")]
-    current_time: Option<f64>,
+    pub(super) current_time: Option<f64>,
     #[serde(rename = "isFinished")]
-    is_finished: Option<bool>,
+    pub(super) is_finished: Option<bool>,
 }
 /// One personalized shelf as ABS returns it (`GET /api/libraries/{id}/personalized`).
 /// Shelf entries are full minified library items under `entities` — not bare IDs
 /// — each carrying an embedded `media` (the podcast) and a top-level `recentEpisode`
 /// (the episode to surface), verified against ABS 2.36.0.
 #[derive(Debug, Clone, Deserialize)]
-struct ShelfWire {
-    label: String,
+pub(super) struct ShelfWire {
+    pub(super) label: String,
     #[serde(rename = "entities")]
-    entities: Vec<ShelfEntryWire>,
+    pub(super) entities: Vec<ShelfEntryWire>,
 }
 #[derive(Debug, Clone, Deserialize)]
-struct ShelfEntryWire {
+pub(super) struct ShelfEntryWire {
     /// The library item id — the podcast/show id.
-    id: String,
+    pub(super) id: String,
     #[serde(default)]
-    media: Option<ShelfMediaWire>,
+    pub(super) media: Option<ShelfMediaWire>,
     #[serde(rename = "recentEpisode", default)]
-    recent_episode: Option<RecentEpisodeWire>,
+    pub(super) recent_episode: Option<RecentEpisodeWire>,
 }
 #[derive(Debug, Clone, Deserialize)]
 struct ShelfMediaWire {
@@ -208,7 +209,7 @@ struct AudioFileDurationWire {
 /// per-library Latest pill) can build a `QueueItem` without a follow-up fetch.
 /// An entry without a `recentEpisode` (a podcast with no published episode yet)
 /// maps to a bare `Show` id rather than a playable episode.
-fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
+pub(super) fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
     let Some(recent_episode) = entry.recent_episode else {
         return AudiobookshelfShelfEntry::Show(entry.id);
     };
@@ -250,7 +251,7 @@ fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
 /// seconds as a number or numeric string, or ISO-8601 / RFC 2822 text. A
 /// missing, unreadable, or zero (ABS's absent-date sentinel) value is `None`
 /// (it groups as `Unknown date` rather than 1970-01-01).
-fn published_at_secs(value: Option<serde_json::Value>) -> Option<u64> {
+pub(super) fn published_at_secs(value: Option<serde_json::Value>) -> Option<u64> {
     match value? {
         serde_json::Value::Number(number) => {
             let raw = number.as_u64().or_else(|| {
@@ -407,7 +408,7 @@ impl AudiobookshelfClient {
             })
             .collect())
     }
-    fn podcast_shows(
+    pub(super) fn podcast_shows(
         &self,
         key: &str,
         id: &str,
@@ -453,7 +454,7 @@ impl AudiobookshelfClient {
                 .collect(),
         })
     }
-    fn podcast_detail(
+    pub(super) fn podcast_detail(
         &self,
         key: &str,
         id: &str,
@@ -561,5 +562,5 @@ pub(super) fn map_error(error: ureq::Error) -> AudiobookshelfError {
 }
 
 #[cfg(test)]
-#[path = "audiobookshelf_catalog_tests.rs"]
+#[path = "tests/catalog.rs"]
 mod tests;

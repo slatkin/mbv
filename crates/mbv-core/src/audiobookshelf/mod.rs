@@ -1,16 +1,14 @@
 use serde::Deserialize;
 use std::time::Duration;
 
-#[path = "audiobookshelf_catalog.rs"]
-mod audiobookshelf_catalog;
-pub use audiobookshelf_catalog::*;
-#[path = "audiobookshelf_playback.rs"]
-mod audiobookshelf_playback;
-pub use audiobookshelf_playback::*;
+mod catalog;
+pub use catalog::*;
+mod playback;
+pub use playback::*;
+pub mod socket;
 
 #[cfg(test)]
-#[path = "audiobookshelf_playback_tests.rs"]
-mod audiobookshelf_playback_tests;
+mod tests;
 
 /// The identity returned by Audiobookshelf's authenticated `/api/me` request.
 /// Profile and permission data deliberately stay at the HTTP boundary.

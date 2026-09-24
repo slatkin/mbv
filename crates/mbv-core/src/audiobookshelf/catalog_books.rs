@@ -71,7 +71,7 @@ pub fn audiobook_author_sort_key(name: &str) -> String {
 
 /// The full raw author credit for display: the joined `authors` list (object
 /// form from the detail endpoint), else the `author`/`authorName` string.
-pub(super) fn book_author_display(
+pub fn book_author_display(
     author: Option<&str>,
     authors: Option<&[AuthorWire]>,
 ) -> Option<String> {
@@ -91,7 +91,7 @@ pub(super) fn book_author_display(
 }
 
 /// Sort key from the raw credit: only the first-listed author participates.
-pub(super) fn first_listed_author_sort_key(credit: &str) -> String {
+pub fn first_listed_author_sort_key(credit: &str) -> String {
     let first = credit.split(',').next().unwrap_or_default().trim();
     if first.is_empty() {
         credit.to_string()
@@ -101,61 +101,61 @@ pub(super) fn first_listed_author_sort_key(credit: &str) -> String {
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct BooksResponse {
-    pub(super) page: usize,
-    pub(super) limit: usize,
-    pub(super) total: usize,
+pub struct BooksResponse {
+    pub page: usize,
+    pub limit: usize,
+    pub total: usize,
     #[serde(alias = "items")]
-    pub(super) results: Vec<BookWire>,
+    pub results: Vec<BookWire>,
 }
 #[derive(Debug, Deserialize)]
-pub(super) struct BookWire {
+pub struct BookWire {
     #[serde(rename = "id", alias = "libraryItemId")]
-    pub(super) library_item_id: String,
+    pub library_item_id: String,
     #[serde(default)]
-    pub(super) title: Option<String>,
+    pub title: Option<String>,
     #[serde(rename = "coverPath", default)]
-    pub(super) cover_path: Option<String>,
+    pub cover_path: Option<String>,
     #[serde(default)]
-    pub(super) media: Option<BookMediaWire>,
+    pub media: Option<BookMediaWire>,
 }
 #[derive(Debug, Deserialize, Default)]
-pub(super) struct BookMediaWire {
+pub struct BookMediaWire {
     #[serde(rename = "coverPath", default)]
-    pub(super) cover_path: Option<String>,
+    pub cover_path: Option<String>,
     #[serde(default)]
-    pub(super) duration: Option<f64>,
+    pub duration: Option<f64>,
     #[serde(default)]
-    pub(super) metadata: Option<BookMetadataWire>,
+    pub metadata: Option<BookMetadataWire>,
     #[serde(default)]
-    pub(super) chapters: Option<Vec<ChapterWire>>,
+    pub chapters: Option<Vec<ChapterWire>>,
     #[serde(rename = "audioFiles", default)]
-    pub(super) audio_files: Option<Vec<AudioFileWire>>,
+    pub audio_files: Option<Vec<AudioFileWire>>,
 }
 #[derive(Debug, Deserialize)]
-pub(super) struct BookMetadataWire {
-    pub(super) title: Option<String>,
+pub struct BookMetadataWire {
+    pub title: Option<String>,
     /// List endpoint uses `authorName` (string); detail endpoint uses
     /// `author` (string) and/or `authors` (list of `{id,name}` objects).
     /// All three resolve to the same display string via [`book_author_display`].
     #[serde(default, alias = "authorName")]
-    pub(super) author: Option<String>,
+    pub author: Option<String>,
     #[serde(default, alias = "narratorName")]
-    pub(super) narrator: Option<String>,
+    pub narrator: Option<String>,
     #[serde(default, alias = "authors")]
-    pub(super) authors: Option<Vec<AuthorWire>>,
+    pub authors: Option<Vec<AuthorWire>>,
     #[serde(default, alias = "publishedYear")]
-    pub(super) published_year: Option<String>,
+    pub published_year: Option<String>,
     #[serde(default)]
-    pub(super) genres: Option<Vec<String>>,
+    pub genres: Option<Vec<String>>,
     #[serde(default)]
-    pub(super) description: Option<String>,
+    pub description: Option<String>,
     #[serde(default, alias = "seriesName")]
-    pub(super) series_name: Option<String>,
+    pub series_name: Option<String>,
 }
 #[derive(Debug, Deserialize)]
-pub(super) struct AuthorWire {
-    pub(super) name: String,
+pub struct AuthorWire {
+    pub name: String,
 }
 #[derive(Debug, Deserialize)]
 pub(super) struct ChapterWire {
