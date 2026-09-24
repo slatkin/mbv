@@ -216,9 +216,11 @@ pub(super) fn complete_pending_idle_queue_load(
 /// Sends the rejection reply for a command whose owner-role gate
 /// (`CtrlCmd::requires_owner`) failed. Reply shape/event and reason text are
 /// kept per-command, matching what each arm sent before the gate moved here.
+/// Matches `OwnerGateRejection` exhaustively: its 3 variants are exactly the
+/// gated commands, so there is no wildcard/unreachable arm to fall into.
 #[allow(clippy::too_many_arguments)]
 fn send_role_gate_rejection(
-    cmd: &CtrlCmd,
+    rejection: crate::ctrl::OwnerGateRejection,
     reply_tx: &CtrlSender,
     ctrl_clients: &ClientRegistry,
     client_id: CtrlClientId,
@@ -227,8 +229,8 @@ fn send_role_gate_rejection(
     source: &crate::config::QueueSource,
     queue_lineage: crate::ctrl::QueueLineage,
 ) {
-    match cmd {
-        CtrlCmd::UnifiedAdoptQueue { .. } => reject_command(
+    match rejection {
+        crate::ctrl::OwnerGateRejection::AdoptQueue => reject_command(
             reply_tx,
             ctrl_clients,
             client_id,
@@ -238,23 +240,22 @@ fn send_role_gate_rejection(
             queue_lineage,
             "Stay-alive owner queues cannot be adopted by Clients".to_string(),
         ),
-        CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } => send_to(
+        crate::ctrl::OwnerGateRejection::QueueLoadIdle { request_id } => send_to(
             reply_tx,
             &CtrlEvent::UnifiedQueueLoadResult {
-                request_id: *request_id,
+                request_id,
                 result: crate::ctrl::QueueLoadResult::Rejected {
                     reason: "idle queue loads are supported only by the Stay-alive owner"
                         .to_string(),
                 },
             },
         ),
-        CtrlCmd::UnifiedQueueSourceUpdate { .. } => send_to(
+        crate::ctrl::OwnerGateRejection::QueueSourceUpdate => send_to(
             reply_tx,
             &CtrlEvent::CommandRejected(
                 "queue source updates are supported only by the Stay-alive owner".to_string(),
             ),
         ),
-        _ => unreachable!("send_role_gate_rejection only called for gated commands"),
     }
 }
 
@@ -306,22 +307,34 @@ fn handle_ctrl_for_role(
     // re-lock per read; `mint_queue_lineage` below writes the new value
     // straight to `shared_queue.lineage` for the next command's read.
     let queue_lineage = *shared_queue.lineage.lock().unwrap();
-    let role_satisfied = match cmd.requires_owner() {
-        Some(requires_local) => (role == crate::daemon::DaemonRole::Local) == requires_local,
-        None => true,
-    };
-    if !role_satisfied {
-        send_role_gate_rejection(
-            &cmd,
-            request.reply_tx,
-            ctrl_clients,
-            client_id,
-            player,
-            queue,
-            source,
-            queue_lineage,
-        );
-        return;
+    match cmd.requires_owner() {
+        crate::ctrl::OwnerGate::OwnerOnly(rejection) if role != crate::daemon::DaemonRole::Local => {
+            send_role_gate_rejection(
+                rejection,
+                request.reply_tx,
+                ctrl_clients,
+                client_id,
+                player,
+                queue,
+                source,
+                queue_lineage,
+            );
+            return;
+        }
+        crate::ctrl::OwnerGate::NonOwnerOnly(rejection) if role == crate::daemon::DaemonRole::Local => {
+            send_role_gate_rejection(
+                rejection,
+                request.reply_tx,
+                ctrl_clients,
+                client_id,
+                player,
+                queue,
+                source,
+                queue_lineage,
+            );
+            return;
+        }
+        _ => {}
     }
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {

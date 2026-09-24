@@ -382,17 +382,44 @@ pub enum CtrlCmd {
     },
 }
 
+/// Reply a gated command's `OwnerGate` failure sends. Carried by
+/// [`OwnerGate::OwnerOnly`]/[`OwnerGate::NonOwnerOnly`] so
+/// `send_role_gate_rejection` (daemon_control.rs) can match on it
+/// exhaustively with no wildcard arm.
+pub enum OwnerGateRejection {
+    AdoptQueue,
+    QueueLoadIdle { request_id: QueueLoadRequestId },
+    QueueSourceUpdate,
+}
+
+/// Owner-role gate for a ctrl command: whether acceptance depends on the
+/// daemon being the Stay-alive owner (`DaemonRole::Local`).
+pub enum OwnerGate {
+    /// Accepted only from the owner.
+    OwnerOnly(OwnerGateRejection),
+    /// Accepted only from a non-owner (e.g. a Client adopting a cold
+    /// daemon's queue).
+    NonOwnerOnly(OwnerGateRejection),
+    /// No role gate.
+    Any,
+}
+
 impl CtrlCmd {
     /// Owner-role gate for commands whose acceptance depends on whether the
-    /// daemon is the Stay-alive owner (`DaemonRole::Local`). `Some(true)`
-    /// means the command is accepted only from the owner; `Some(false)`
-    /// means it is accepted only from a non-owner (e.g. a Client adopting a
-    /// cold daemon's queue); `None` means the command has no role gate.
-    pub fn requires_owner(&self) -> Option<bool> {
+    /// daemon is the Stay-alive owner (`DaemonRole::Local`).
+    pub fn requires_owner(&self) -> OwnerGate {
         match self {
-            CtrlCmd::UnifiedQueueLoadIdle { .. } => Some(true),
-            CtrlCmd::UnifiedQueueSourceUpdate { .. } => Some(true),
-            CtrlCmd::UnifiedAdoptQueue { .. } => Some(false),
+            CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } => {
+                OwnerGate::OwnerOnly(OwnerGateRejection::QueueLoadIdle {
+                    request_id: *request_id,
+                })
+            }
+            CtrlCmd::UnifiedQueueSourceUpdate { .. } => {
+                OwnerGate::OwnerOnly(OwnerGateRejection::QueueSourceUpdate)
+            }
+            CtrlCmd::UnifiedAdoptQueue { .. } => {
+                OwnerGate::NonOwnerOnly(OwnerGateRejection::AdoptQueue)
+            }
             CtrlCmd::Hello(_)
             | CtrlCmd::PlayerCmd(_)
             | CtrlCmd::Stop
@@ -405,7 +432,7 @@ impl CtrlCmd {
             | CtrlCmd::UnifiedQueueRemoveSlots { .. }
             | CtrlCmd::UnifiedQueueMoveSlot { .. }
             | CtrlCmd::UnifiedQueuePlaySlot { .. }
-            | CtrlCmd::UnifiedQueueClear => None,
+            | CtrlCmd::UnifiedQueueClear => OwnerGate::Any,
         }
     }
 
