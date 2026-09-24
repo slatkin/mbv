@@ -9,7 +9,9 @@ use std::time::Duration;
 mod catalog_books;
 pub use catalog_books::*;
 // Re-export test helpers for sibling test modules
-pub(super) use catalog_books::{book_author_display, first_listed_author_sort_key, AuthorWire, BooksResponse};
+pub(super) use catalog_books::{
+    book_author_display, first_listed_author_sort_key, AuthorWire, BooksResponse,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudiobookshelfLibrary {
@@ -560,7 +562,3 @@ pub(super) fn map_error(error: ureq::Error) -> AudiobookshelfError {
         _ => AudiobookshelfError::connectivity(),
     }
 }
-
-#[cfg(test)]
-#[path = "tests/catalog.rs"]
-mod tests;

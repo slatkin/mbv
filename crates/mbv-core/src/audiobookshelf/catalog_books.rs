@@ -71,10 +71,7 @@ pub fn audiobook_author_sort_key(name: &str) -> String {
 
 /// The full raw author credit for display: the joined `authors` list (object
 /// form from the detail endpoint), else the `author`/`authorName` string.
-pub fn book_author_display(
-    author: Option<&str>,
-    authors: Option<&[AuthorWire]>,
-) -> Option<String> {
+pub fn book_author_display(author: Option<&str>, authors: Option<&[AuthorWire]>) -> Option<String> {
     if let Some(authors) = authors.filter(|list| !list.is_empty()) {
         return Some(
             authors
