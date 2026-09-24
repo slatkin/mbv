@@ -14,12 +14,12 @@
 
 ## 3. Unit tests (`daemon_loop_tests.rs`)
 
-- [ ] 3.1 Add a `test_loop()` builder: `cold_player()`, `CtrlClients::default()`, `role = DaemonRole::Local`, and a store closure that pushes snapshots into a shared `Rc<RefCell<Vec<_>>>`. No real config or state dirs, no sockets.
-- [ ] 3.2 TrackCompleted: a current-run completion consumes or advances the slot and persists exactly one snapshot. A stale run identity leaves the queue alone and persists nothing.
-- [ ] 3.3 Stopped: a current-run Stopped that updates the queue persists. A stale-run Stopped persists nothing. With a pending idle load whose `stopped_run` matches, a successful commit replaces the queue and persists once. A Stopped for a different run cancels the pending load.
-- [ ] 3.4 Ws: with a matching `emby_runtime.generation`, a non-network `WsEvent` (for example `Stop`) persists. With a mismatched generation, nothing is persisted.
-- [ ] 3.5 PlaybackResolved: a resolved playback replaces the queue/source and persists. If the arm has a non-dirty path (stale request), cover that it does not persist.
-- [ ] 3.6 Role gate: the same dirty event with `role != Local` persists nothing.
+- [x] 3.1 Add a `test_loop()` builder: `cold_player()`, `CtrlClients::default()`, `role = DaemonRole::Local`, and a store closure that pushes snapshots into a shared `Rc<RefCell<Vec<_>>>`. No real config or state dirs, no sockets.
+- [x] 3.2 TrackCompleted: a current-run completion consumes or advances the slot and persists exactly one snapshot. A stale run identity leaves the queue alone and persists nothing.
+- [x] 3.3 Stopped: a current-run Stopped that updates the queue persists. A stale-run Stopped persists nothing. With a pending idle load whose `stopped_run` matches, a successful commit replaces the queue and persists once. A Stopped for a different run cancels the pending load.
+- [x] 3.4 Ws: with a matching `emby_runtime.generation`, a non-network `WsEvent` (for example `Stop`) persists. With a mismatched generation, nothing is persisted.
+- [x] 3.5 PlaybackResolved: a resolved playback replaces the queue/source and persists. If the arm has a non-dirty path (stale request), cover that it does not persist.
+- [x] 3.6 Role gate: the same dirty event with `role != Local` persists nothing.
 
 ## 4. Gates
 
