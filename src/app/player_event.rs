@@ -424,26 +424,18 @@ impl App {
                         .unwrap_or(active_cursor)
                 };
 
-                // A locally replaced queue is fenced one generation ahead of
-                // the owner (`replace_playback_queue`) until its next submit.
-                // The snapshot then describes the owner's previous queue, so
-                // adopting it would replace the user's queue with items they
-                // replaced — skip the whole adoption; a later submit or a new
-                // replacement resolves the divergence.
+                // Bare mode retains its local generation fence. For the
+                // Stay-alive owner, this ordered snapshot is authoritative for
+                // slots, playback coordinates, and source.
                 if !self.local_queue_is_owner_queue(self.playing_queue_scope()) {
                     return true;
                 }
 
-                // Adopt only the owner's queue slots and coordinates. The
-                // snapshot's `source` is the owner's copy of the queue-source
-                // label, which goes stale whenever the shell changes the
-                // source without a resubmission (Save As, a non-playing
-                // playlist load) — adopting it here reverted the Loaded
-                // Playlist status to a previously loaded playlist on every
-                // queue edit. The shell's `queue_source` is maintained by
-                // every source-changing path and stays authoritative.
                 let queue = self.playback_queue_mut();
                 queue.set_unified_state(&unified, cursor);
+                if self.is_local_daemon() {
+                    self.queue_source = unified.source.clone();
+                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always

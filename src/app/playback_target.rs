@@ -226,16 +226,9 @@ impl App {
             .or_else(|| self.bare_in_flight_slot())
     }
 
-    /// The playback projection the queue ROWS are painted from: like
-    /// `displayed_queue_playback_state`, but a queue fenced ahead of the
-    /// playback owner's accepted submission may not claim a row — the
-    /// owner's coordinate addresses its previous queue, which this queue
-    /// never held (unified-playback-queue: a new queue is never paired with
-    /// the previous active coordinate). `local_queue_is_owner_queue`
-    /// compares with `<=`, so owner snapshots adopted into the tab (which
-    /// reset the tab generation to 0) keep every row lit while the tab
-    /// genuinely mirrors the owner. Pending selections keep their claim:
-    /// the generation fence upgrades them to a full submit before minting.
+    /// The playback projection the queue ROWS are painted from. Bare mode
+    /// blanks a queue fenced ahead of its local Player; out-of-process owner
+    /// snapshots reconcile queue slots and playback coordinates together.
     pub(super) fn queue_row_playback_state(&self) -> super::PlaybackState {
         let mut state = self.displayed_queue_playback_state();
         if state.active && !self.local_queue_is_owner_queue(self.viewed_queue_scope()) {
@@ -374,16 +367,12 @@ mod now_playing_status_tests {
     }
 
     /// Regression: with a stay-alive local daemon still playing the previous
-    /// queue's first video, loading a new playlist replaces the queue fenced
-    /// ahead of the owner. The owner's playhead (current_idx 0) belongs to
-    /// its old queue and must not light up the new queue's row at the same
-    /// position — nothing in the displayed queue is playing.
+    /// Bare mode's local playhead must not claim a row of a fenced replacement.
     #[test]
-    fn fenced_queue_claims_no_now_playing_row_while_owner_plays_the_old_queue() {
-        use crate::app::tests::make_local_daemon_app_stub;
-
-        let mut app = make_local_daemon_app_stub(make_items(3));
-        // The daemon owner is playing the first item of its previous queue.
+    fn fenced_queue_claims_no_now_playing_row_while_bare_player_plays_the_old_queue() {
+        let mut app = make_app_stub();
+        app.player_tab.set_items(make_items(3), 0);
+        // The local Player is playing the first item of its previous queue.
         {
             let mut status = app.player.status.lock().unwrap();
             status.active = true;
@@ -438,6 +427,22 @@ mod now_playing_status_tests {
             // Owner advanced past the never-stamped tab generation.
             status.sequence_generation = 7;
         }
+        let state = app.queue_row_playback_state();
+        assert!(state.active);
+        assert_eq!(state.active_idx, Some(1));
+    }
+
+    #[test]
+    fn local_daemon_queue_row_ignores_client_generation_mismatch() {
+        let mut app = crate::app::tests::make_local_daemon_app_stub(make_items(3));
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 1;
+            status.sequence_generation = 7;
+        }
+        app.player_tab.sequence_generation = 8;
+
         let state = app.queue_row_playback_state();
         assert!(state.active);
         assert_eq!(state.active_idx, Some(1));

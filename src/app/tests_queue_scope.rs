@@ -305,6 +305,37 @@ fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
 }
 
 #[test]
+fn local_daemon_play_uses_owner_slot_despite_generation_mismatch() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, cmd_rx) =
+        crate::app::tests::make_local_daemon_app_stub_with_cmd_rx(make_items(3));
+    app.player_tab.sequence_generation = 8;
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+        status.sequence_generation = 0;
+    }
+    let owner_slot = app.player_tab.slots()[1].slot_id;
+
+    app.dispatch(crate::app::action::Command::QueuePlayCursor(1));
+
+    let commands: Vec<_> = cmd_rx.try_iter().collect();
+    let requested_owner_slot = commands.iter().any(|cmd| matches!(
+        cmd,
+        CtrlCmd::UnifiedQueuePlaySlot { slot_id }
+            if *slot_id == mbv_core::ctrl::slot_id_to_u64(owner_slot)
+    ));
+    assert!(
+        requested_owner_slot,
+        "expected owner slot {owner_slot:?}; local-daemon={}, owner-queue={}, playback-scope={}",
+        app.is_local_daemon(),
+        app.local_queue_is_owner_queue(crate::app::QueueScope::Local),
+        app.queue_scope_is_playback(crate::app::QueueScope::Local),
+    );
+}
+
+#[test]
 fn local_daemon_queue_refresh_prune_reaches_daemon_via_unified_slot_command() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (remote, player_rx, cmd_rx) =
