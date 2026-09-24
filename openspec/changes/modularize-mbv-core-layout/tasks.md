@@ -32,9 +32,9 @@ Every task: pure moves plus the compile-forced edits only, with no renames of ty
 
 ## 6. `player/`, `player/run/`, `playback/`
 
-- [ ] 6.1 Convert `player/run/mod.rs`'s 6 `include!`s to `mod` + glob re-export. Verify: gate green, and `rg -n 'include!' crates/mbv-core/src/player/run` is empty.
-- [ ] 6.2 Convert `player/mod.rs`'s 7 production `include!`s (including `run/mod.rs`, which becomes `mod run;`) and its test block (7 includes) into `mod`s plus `player/tests/mod.rs`. Verify: gate green, and `rg -n 'include!' crates/mbv-core/src/player` is empty.
-- [ ] 6.3 Convert `playback/queue.rs`'s `include!("queue_items.rs")` and the `#[path = "tests/playback_queue_tests.rs"]` chain (3 nested includes) into `mod`s under `playback/tests/`. Verify: gate green, and `rg -n 'include!|#\[path' crates/mbv-core/src/playback` is empty.
+- [x] 6.1 Convert `player/run/mod.rs`'s 6 `include!`s to `mod` + glob re-export. Verify: gate green, and `rg -n 'include!' crates/mbv-core/src/player/run` is empty.
+- [x] 6.2 Convert `player/mod.rs`'s 7 production `include!`s (including `run/mod.rs`, which becomes `mod run;`) and its test block (7 includes) into `mod`s plus `player/tests/mod.rs`. Verify: gate green, and `rg -n 'include!' crates/mbv-core/src/player` is empty.
+- [x] 6.3 Convert `playback/queue.rs`'s `include!("queue_items.rs")` and the `#[path = "tests/playback_queue_tests.rs"]` chain (3 nested includes) into `mod`s under `playback/tests/`. Verify: gate green, and `rg -n 'include!|#\[path' crates/mbv-core/src/playback` is empty.
 
 ## 7. `remote_player` and `mbvd`
 
