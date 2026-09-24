@@ -23,5 +23,5 @@
 
 ## 4. Docs
 
-- [ ] 4.1 Update `docs/invariants/10-deferred-queue-mutation-slot-ownership.md`: slot payload now `(action, executor)`, writer and reader line refs
-- [ ] 4.2 Gates: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`
+- [x] 4.1 Update `docs/invariants/10-deferred-queue-mutation-slot-ownership.md`: slot payload now `(action, executor)`, writer and reader line refs
+- [x] 4.2 Gates: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`
