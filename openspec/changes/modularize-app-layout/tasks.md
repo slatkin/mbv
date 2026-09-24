@@ -47,7 +47,7 @@ Rules for every task:
 
 ## 8. Final gates
 
-- [ ] 8.1 `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace` all pass, and `src/app/mod.rs` contains only `mod`, `use` and `pub … use` lines (plus attributes and comments).
+- [x] 8.1 `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --workspace` all pass, and `src/app/mod.rs` contains only `mod`, `use` and `pub … use` lines (plus attributes and comments).
 
 ## 9. Docs
 
