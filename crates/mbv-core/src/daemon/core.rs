@@ -6,11 +6,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
-use crate::daemon_ctrl::{
+use crate::daemon::ctrl::{
     serialize_ctrl_event, send_to, take_authority_for_emby_remote, AuthorityHolder,
     ClientRegistry, CtrlClientId, CtrlClients, CtrlOutbound, CtrlRequest, CtrlSender,
 };
-pub use crate::daemon_ctrl::CtrlTransport;
+pub use crate::daemon::ctrl::CtrlTransport;
 use crate::ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello,
     DisconnectReason, PlaybackGeneration, PlaybackIntent, PlaybackIntentAction,
@@ -619,4 +619,4 @@ fn audio_only_rejection<'a>(
     }
 }
 
-include!("daemon_core_ctrl_spawn.rs");
+include!("core_ctrl_spawn.rs");

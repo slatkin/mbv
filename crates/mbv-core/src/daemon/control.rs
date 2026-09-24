@@ -1,4 +1,4 @@
-include!("daemon_control_queue.rs");
+include!("control_queue.rs");
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the
 /// result through `tx` as a `DaemonEvent`, built by `to_event`. Shared by
