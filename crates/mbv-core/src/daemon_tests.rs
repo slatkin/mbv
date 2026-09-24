@@ -92,6 +92,7 @@ fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
+        lineage: Arc::new(Mutex::new(crate::ctrl::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
     }
 }

@@ -50,9 +50,7 @@ fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
     let observed = queue.slots()[1].slot_id;
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
-    let event = super::unified_queue_state_for_peer(
-        &status, &queue, &source, Some(observed), None, None, true, true,
-    );
+    let event = super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), Some(observed), None, None, true, true);
     let CtrlEvent::UnifiedQueueState(data) = event else {
         panic!("expected UnifiedQueueState");
     };
@@ -75,7 +73,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
     // Not playing: no observation and no fallback -> no active slot.
     let idle = crate::player::PlayerStatus::default();
     let CtrlEvent::UnifiedQueueState(idle_data) =
-        super::unified_queue_state_for_peer(&idle, &queue, &source, None, None, None, true, true)
+        super::unified_queue_state_for_peer(&idle, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, true, true)
     else {
         panic!("expected UnifiedQueueState");
     };
@@ -87,7 +85,7 @@ fn unified_projection_falls_back_to_canonical_active_slot_while_playing() {
         ..Default::default()
     };
     let CtrlEvent::UnifiedQueueState(playing_data) =
-        super::unified_queue_state_for_peer(&playing, &queue, &source, None, None, None, true, true)
+        super::unified_queue_state_for_peer(&playing, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, true, true)
     else {
         panic!("expected UnifiedQueueState");
     };
@@ -103,11 +101,11 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let source = crate::config::QueueSource::Unknown;
 
     let capable_data =
-        match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, true, false) {
+        match super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, true, false) {
             CtrlEvent::UnifiedQueueState(d) => d,
             _ => panic!("expected UnifiedQueueState"),
         };
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),
@@ -132,7 +130,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, None, None, None, false, false)
+    let old_data = match super::unified_queue_state_for_peer(&status, &queue, &source, crate::ctrl::QueueLineage::default(), None, None, None, false, false)
     {
         CtrlEvent::UnifiedQueueState(d) => d,
         _ => panic!("expected UnifiedQueueState"),

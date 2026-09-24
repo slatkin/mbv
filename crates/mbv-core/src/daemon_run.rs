@@ -208,6 +208,7 @@ pub fn run_with_options(
     let shared_queue = SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
+        lineage: Arc::new(Mutex::new(crate::ctrl::QueueLineage::default())),
         observed_active_slot: Arc::new(Mutex::new(None)),
     };
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -903,6 +904,7 @@ pub fn run_with_options(
                         &mut owner.core.source,
                         &shared_queue,
                         &ctrl_clients,
+                        &mut owner.queue_lineage,
                         &owner.core.transitions,
                     );
                 }

@@ -95,10 +95,12 @@ fn spawn_ctrl_client(
         let q = shared_queue.queue.lock().unwrap().clone();
         let source = shared_queue.source.lock().unwrap().clone();
         let observed_active_slot = *shared_queue.observed_active_slot.lock().unwrap();
+        let lineage = *shared_queue.lineage.lock().unwrap();
         let init_event = unified_queue_state_for_peer(
             &status,
             &q,
             &source,
+            lineage,
             observed_active_slot,
             None,
             None,

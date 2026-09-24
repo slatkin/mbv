@@ -66,9 +66,9 @@ pub const CTRL_CAP_OWNER_QUEUE_LOAD: &str = "owner-queue-load";
 
 pub type PlaybackRequestId = u64;
 pub type QueueLoadRequestId = u64;
-/// Opaque owner queue lineage carried by source-only updates. Minting and
-/// validation are implemented at the owner boundary in a later change.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+/// Opaque owner-minted replacement lineage carried by queue snapshots and
+/// source-only updates.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QueueLineage(pub u64);
 pub type PlaybackGeneration = u64;
 
@@ -275,6 +275,9 @@ pub struct UnifiedQueueStateData {
     pub revision: u64,
     #[serde(default)]
     pub source: QueueSource,
+    /// Owner-minted identity for the current whole-queue replacement lineage.
+    #[serde(default)]
+    pub lineage: QueueLineage,
     /// Transition dispatched to the Playback run and awaiting observation
     /// (design D5). `None` when no transition is in flight.
     #[serde(default)]

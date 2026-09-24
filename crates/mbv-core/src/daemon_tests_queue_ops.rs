@@ -531,6 +531,7 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
 
     assert!(owner.core.queue.is_empty());
     assert_eq!(owner.core.source, QueueSource::Unknown);
+    assert_eq!(owner.queue_lineage, crate::ctrl::QueueLineage(1));
     match cmd_rx.recv().unwrap() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert!(items.is_empty());
@@ -1113,4 +1114,201 @@ fn unified_queue_replace_clears_observed_active_slot() {
     assert_eq!(*shared_queue.observed_active_slot.lock().unwrap(), None);
     // The spy receiver stays attached so the submit path's cold-start thread
     // targets the test player, mirroring `replace_queue_succeeds_unconditionally`.
+}
+
+#[test]
+fn matching_source_update_publishes_without_replacing_queue_or_playback() {
+    let player = cold_player();
+    let commands = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 71,
+            slots: vec![crate::ctrl::UnifiedQueueSlot {
+                slot_id: 81,
+                item: emby_qi("loaded", "Video", "Movie"),
+            }],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue,
+        &registry,
+        false,
+        &merged_tx,
+        true,
+        crate::daemon::DaemonRole::Local,
+    );
+    assert!(matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(_)));
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 71,
+        result: crate::ctrl::QueueLoadResult::Accepted,
+    }));
+    let lineage = owner.queue_lineage;
+    let slots_before: Vec<_> = owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+        .collect();
+    player.status.lock().unwrap().active = true;
+    let status_before = {
+        let status = player.status.lock().unwrap();
+        (status.active, status.sequence_generation, status.current_idx, status.queue_len)
+    };
+
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueSourceUpdate {
+            source: QueueSource::Playlist {
+                id: Some("playlist-1".to_string()),
+                name: "Saved playlist".to_string(),
+            },
+            lineage,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue,
+        &registry,
+        false,
+        &merged_tx,
+        true,
+        crate::daemon::DaemonRole::Local,
+    );
+
+    let CtrlEvent::UnifiedQueueState(snapshot) = recv_event(&client_rx) else {
+        panic!("source-only update must publish the owner snapshot");
+    };
+    assert_eq!(owner.queue_lineage, lineage);
+    assert_eq!(snapshot.lineage, lineage);
+    assert_eq!(snapshot.source, owner.core.source);
+    assert_eq!(snapshot.source, QueueSource::Playlist {
+        id: Some("playlist-1".to_string()),
+        name: "Saved playlist".to_string(),
+    });
+    assert_eq!(
+        owner.core.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect::<Vec<_>>(),
+        slots_before,
+    );
+    let status = player.status.lock().unwrap();
+    assert_eq!(
+        (status.active, status.sequence_generation, status.current_idx, status.queue_len),
+        status_before,
+    );
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+}
+
+#[test]
+fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
+    let player = cold_player();
+    let commands = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_a, rx_a) = connect_client(&mut registry.lock().unwrap());
+    let (client_b, rx_b) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+
+    for (request_id, client_id, item_id, playlist_name) in [
+        (72, client_a, "first", "First"),
+        (73, client_b, "second", "Second"),
+    ] {
+        handle_ctrl_for_role(
+            CtrlCmd::UnifiedQueueLoadIdle {
+                request_id,
+                slots: vec![crate::ctrl::UnifiedQueueSlot {
+                    slot_id: request_id,
+                    item: emby_qi(item_id, "Video", "Movie"),
+                }],
+                cursor: 0,
+                source: QueueSource::Playlist {
+                    id: Some(request_id.to_string()),
+                    name: playlist_name.to_string(),
+                },
+            },
+            client_id,
+            CtrlRequest { reply_tx: &reply_tx },
+            &client,
+            &player,
+            false,
+            &mut owner,
+            &shared_queue,
+            &registry,
+            false,
+            &merged_tx,
+            true,
+            crate::daemon::DaemonRole::Local,
+        );
+        assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+            request_id: got,
+            result: crate::ctrl::QueueLoadResult::Accepted,
+        } if got == request_id));
+    }
+    let stale_lineage = crate::ctrl::QueueLineage(1);
+    assert_eq!(owner.queue_lineage, crate::ctrl::QueueLineage(2));
+    // Drain both replacement broadcasts before asserting the rejection result.
+    for rx in [&rx_a, &rx_b] {
+        let _ = recv_event(rx);
+        let _ = recv_event(rx);
+    }
+    let slots_before: Vec<_> = owner
+        .core
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+        .collect();
+    let source_before = owner.core.source.clone();
+
+    handle_ctrl_for_role(
+        CtrlCmd::UnifiedQueueSourceUpdate {
+            source: QueueSource::Playlist {
+                id: Some("stale".to_string()),
+                name: "Stale save".to_string(),
+            },
+            lineage: stale_lineage,
+        },
+        client_a,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue,
+        &registry,
+        false,
+        &merged_tx,
+        true,
+        crate::daemon::DaemonRole::Local,
+    );
+
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("lineage changed")));
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueState(snapshot)
+        if snapshot.lineage == crate::ctrl::QueueLineage(2) && snapshot.source == source_before));
+    assert_eq!(owner.core.source, source_before);
+    assert_eq!(owner.queue_lineage, crate::ctrl::QueueLineage(2));
+    assert_eq!(
+        owner.core.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect::<Vec<_>>(),
+        slots_before,
+    );
+    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
 }

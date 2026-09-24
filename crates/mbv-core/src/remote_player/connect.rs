@@ -570,6 +570,7 @@ pub fn connect_stub_daemon_pair() -> Result<
             active_slot: None,
             revision: 0,
             source: crate::config::QueueSource::Unknown,
+            lineage: crate::ctrl::QueueLineage::default(),
             in_flight_transition: None,
             queued_latest_transition: None,
         }))

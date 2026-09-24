@@ -388,6 +388,7 @@ fn unified_queue_state_data_round_trips() {
         active_slot: Some(1),
         revision: 5,
         source: QueueSource::Unknown,
+        lineage: QueueLineage(42),
         in_flight_transition: Some(crate::ctrl::TransitionSummary {
             request_id: 7,
             generation: 3,
@@ -404,6 +405,7 @@ fn unified_queue_state_data_round_trips() {
     assert_eq!(decoded.slots.len(), 2);
     assert_eq!(decoded.active_slot, Some(1));
     assert_eq!(decoded.revision, 5);
+    assert_eq!(decoded.lineage, QueueLineage(42));
     assert_eq!(decoded.in_flight_transition, state.in_flight_transition);
     assert_eq!(
         decoded.queued_latest_transition,
@@ -415,9 +417,11 @@ fn unified_queue_state_data_round_trips() {
     let obj = legacy.as_object_mut().unwrap();
     obj.remove("in_flight_transition");
     obj.remove("queued_latest_transition");
+    obj.remove("lineage");
     let decoded_legacy: UnifiedQueueStateData = serde_json::from_value(legacy).unwrap();
     assert_eq!(decoded_legacy.in_flight_transition, None);
     assert_eq!(decoded_legacy.queued_latest_transition, None);
+    assert_eq!(decoded_legacy.lineage, QueueLineage::default());
 }
 
 #[test]
@@ -618,6 +622,7 @@ fn unified_queue_state_event_round_trips() {
         active_slot: None,
         revision: 0,
         source: QueueSource::Unknown,
+        lineage: QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     });
