@@ -1,14 +1,10 @@
 //! Audiobookshelf browse tabs: the one-shot browse-kind dispatch plus the
 //! podcast and book browse states, which live in sibling files by tab.
 
-#[path = "audiobookshelf_browse_books.rs"]
-mod books;
-#[path = "audiobookshelf_browse_podcast.rs"]
+pub(in crate::app) mod books;
 mod podcast;
 
-pub(in crate::app) use books::{
-    build_surname_buckets, AudiobookshelfBookBrowseState, BookRow, SurnameBucket,
-};
+pub(in crate::app) use books::{AudiobookshelfBookBrowseState, BookRow};
 pub(in crate::app) use podcast::{
     podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
     PodcastDisplayRow,
@@ -36,5 +32,4 @@ impl AudiobookshelfBrowseKind {
     }
 }
 #[cfg(test)]
-#[path = "audiobookshelf_browse_tests.rs"]
 mod tests;

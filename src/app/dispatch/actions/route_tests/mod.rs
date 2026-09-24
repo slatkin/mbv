@@ -34,13 +34,10 @@ fn selection(media_types: &[&str]) -> Vec<EmbyItem> {
 }
 
 /// Session-aware audio ownership reads and album-track fetch guards.
-#[path = "route_audio_session_tests.rs"]
 mod audio_session;
 /// Library-route enqueue conflicts, direct-remote play submission, and
 /// library autoplay gating.
-#[path = "route_library_routing_tests.rs"]
 mod library_routing;
 /// Playback eligibility classification and deferred local-play fall-through
 /// when the queue owner cannot play the selection.
-#[path = "route_playback_tests.rs"]
 mod playback;

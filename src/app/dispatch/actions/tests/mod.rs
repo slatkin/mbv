@@ -57,13 +57,10 @@ fn queued_track_ids(app: &App) -> Vec<String> {
 
 /// Album, artist and grouped-track playback dispatch tests.
 #[cfg(test)]
-#[path = "tests_album_artist_playback.rs"]
 mod album_artist_playback;
 /// Recursive album-index build, traversal and activation-path tests.
 #[cfg(test)]
-#[path = "tests_album_index.rs"]
 mod album_index;
 /// Populated/empty-queue replacement-gate tests for album-track and folder plays.
 #[cfg(test)]
-#[path = "tests_replacement_gate.rs"]
 mod replacement_gate;

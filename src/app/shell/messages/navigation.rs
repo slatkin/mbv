@@ -4,11 +4,11 @@ impl super::super::Model {
     pub(super) fn handle_navigation_request(
         &mut self,
         request: ShellRequest,
-    ) -> Result<bool, ShellRequest> {
-        let mut quit = false;
+        quit: &mut bool,
+    ) -> Option<ShellRequest> {
         match request {
             // Help overlay cross-boundary requests (design D4).
-            ShellRequest::Quit => quit = true,
+            ShellRequest::Quit => *quit = true,
             // Tab bar click: the mounted `TabPanel` resolved the tab from
             // its own painted hit regions (task 2.1); the shell runs the
             // same tab-switch entry point the keyboard path uses.
@@ -40,7 +40,7 @@ impl super::super::Model {
             }
             ShellRequest::DaemonLostIntent(intent) => {
                 if self.handle_daemon_lost_intent(intent) {
-                    quit = true;
+                    *quit = true;
                 }
             }
             // Context menu: the shell owns cursor navigation and
@@ -178,8 +178,8 @@ impl super::super::Model {
                 }
                 self.push_audiobookshelf_podcast_content();
             }
-            _ => return Err(request),
+            _ => return Some(request),
         }
-        Ok(quit)
+        None
     }
 }

@@ -6,7 +6,7 @@ impl super::super::Model {
         request: ShellRequest,
         music_resize: &mut bool,
         tv_resize: &mut bool,
-    ) -> Result<(), ShellRequest> {
+    ) -> Option<ShellRequest> {
         match request {
             ShellRequest::MusicAlbumActivate { item } => {
                 let owner_has_target = self
@@ -222,8 +222,8 @@ impl super::super::Model {
                 self.music_workspace_reanchor = true;
                 self.push_music_workspace_content();
             }
-            _ => return Err(request),
+            _ => return Some(request),
         }
-        Ok(())
+        None
     }
 }

@@ -3,13 +3,9 @@ use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
 use mbv_core::api::EmbyItem;
 
-#[path = "episode_rows_tests.rs"]
 mod episode_rows_tests;
-#[path = "tree_panel_tests.rs"]
 mod tree_panel_tests;
-#[path = "tree_projection_tests.rs"]
 mod tree_projection_tests;
-#[path = "workspace_tests.rs"]
 mod workspace_tests;
 
 fn tv_tree_context(

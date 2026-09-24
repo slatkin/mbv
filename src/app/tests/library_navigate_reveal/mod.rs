@@ -61,11 +61,7 @@ fn app_with_loaded_tv_library() -> App {
     app
 }
 
-#[path = "library_navigate_reveal_album.rs"]
 mod library_navigate_reveal_album;
-#[path = "library_navigate_reveal_series.rs"]
 mod library_navigate_reveal_series;
-#[path = "library_navigate_reveal_target.rs"]
 mod library_navigate_reveal_target;
-#[path = "library_navigate_reveal_worker.rs"]
 mod library_navigate_reveal_worker;

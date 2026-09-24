@@ -314,10 +314,10 @@ fn panel_of(harness: &TickHarness) -> Option<&crate::app::components::library_pa
         })
 }
 
-/// A Wide→Narrow resize drops the stale Wide geometry (ADR 0024): the old
-/// gutter no longer arms the split drag, and a click inside the freshly
-/// painted narrow list — outside the stale Wide list rect — still reaches the
-/// active owner instead of being silently dropped.
+// A Wide→Narrow resize drops the stale Wide geometry (ADR 0024): the old
+// gutter no longer arms the split drag, and a click inside the freshly
+// painted narrow list — outside the stale Wide list rect — still reaches the
+// active owner instead of being silently dropped.
 
 // ── Library Hero overlay Workspace focus (bug-fix unit) ────────────────
 //

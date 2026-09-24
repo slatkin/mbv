@@ -558,11 +558,8 @@ pub(in crate::app) fn command_for_policy(
 //   runs any remaining App effects. This pattern is wired per surface.
 
 #[cfg(test)]
-#[path = "key_policy_prefix_tests.rs"]
 mod prefix_tests;
 #[cfg(test)]
-#[path = "key_policy_resolution_tests.rs"]
 mod resolution_tests;
 #[cfg(test)]
-#[path = "key_policy_test_support.rs"]
 mod test_support;

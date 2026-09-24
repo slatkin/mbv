@@ -9,9 +9,8 @@ use crate::app::components::{ComponentId, QueueComponent};
 use crate::app::layout::AppLayout;
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
-use crate::app::state::types::audiobookshelf_browse::{
-    build_surname_buckets, AudiobookshelfBookBrowseState,
-};
+use crate::app::state::types::audiobookshelf_browse::books::build_surname_buckets;
+use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{App, PanelFocus};
 use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState, TabSelection};

@@ -31,9 +31,7 @@ use super::media_list::{
 use super::msg::{Msg, ShellRequest};
 use crate::app::render::{effective_sort_str, LetterFilter};
 
-#[path = "emby_library_content_input.rs"]
 mod input;
-#[path = "emby_library_content_panel.rs"]
 mod panel;
 
 /// Browse identity used to decide when a projected position should be applied.

@@ -22,18 +22,9 @@ impl Model {
                 apply_terminal_observer(self, event, music_resize, tv_resize)
             }
             Msg::Shell(request) => {
-                let request = match self.handle_music_request(request, music_resize, tv_resize) {
-                    Ok(()) => None,
-                    Err(request) => Some(request),
-                };
+                let request = self.handle_music_request(request, music_resize, tv_resize);
                 let request =
-                    request.and_then(|request| match self.handle_navigation_request(request) {
-                        Ok(navigation_quit) => {
-                            quit |= navigation_quit;
-                            None
-                        }
-                        Err(request) => Some(request),
-                    });
+                    request.and_then(|request| self.handle_navigation_request(request, &mut quit));
                 if let Some(request) = request {
                     match request {
                         ShellRequest::LibraryPanelFocus => {

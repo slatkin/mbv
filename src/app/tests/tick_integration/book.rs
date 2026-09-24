@@ -45,7 +45,7 @@ fn harness() -> TickHarness {
         })
         .collect();
     state.buckets =
-        crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&state.books);
+        crate::app::state::types::audiobookshelf_browse::books::build_surname_buckets(&state.books);
     state.selected_id = Some("book-0".into());
     state.detail_cache.insert(
         "book-0".into(),
@@ -161,8 +161,9 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     let browse = &mut h.model_mut().app.audiobookshelf_book_browse[1];
     browse.books.rotate_left(1);
     browse.selected_id = Some("book-1".into());
-    browse.buckets =
-        crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&browse.books);
+    browse.buckets = crate::app::state::types::audiobookshelf_browse::books::build_surname_buckets(
+        &browse.books,
+    );
     h.model_mut().push_audiobookshelf_book_content();
     h.model_mut().sync_mounted_surfaces();
     draw_at(&mut h, 80, 24);

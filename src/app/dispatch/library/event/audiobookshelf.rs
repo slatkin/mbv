@@ -130,10 +130,7 @@ impl App {
                     .iter()
                     .any(|show| show.library_item_id == library_item_id)
             });
-            let Some(state) = index.and_then(|index| self.audiobookshelf_browse.get_mut(index))
-            else {
-                return None;
-            };
+            let state = index.and_then(|index| self.audiobookshelf_browse.get_mut(index))?;
             // The response belongs to this state only when the show's
             // in-flight mark still carries its request serial: an orphaned
             // response (its mark cleared by a refresh) or a superseded one (a

@@ -109,17 +109,13 @@ pub fn queue_from_items(items: &[EmbyItem], active: usize) -> PlaybackQueue {
 }
 
 // Control-client authority and lifetime behavior.
-#[path = "basic_clients.rs"]
 mod clients;
 
 // Queue adoption and asynchronous enrichment behavior.
-#[path = "basic_adoption.rs"]
 mod adoption;
 
 // Stale identity and observation rejection behavior.
-#[path = "basic_stale_identity.rs"]
 mod stale_identity;
 
 // Relative playback intents and active-file jump confirmation behavior.
-#[path = "basic_playback_intents.rs"]
 mod playback_intents;
