@@ -214,7 +214,7 @@ impl App {
     }
 
     pub(in crate::app) fn save_queue_state(&mut self) {
-        if self.is_local_daemon() {
+        if self.stay_alive_owner_is_queue_authority() {
             return;
         }
         let state = self.build_queue_state();
@@ -242,7 +242,7 @@ impl App {
     /// session with no recovery path. Only an explicit `ClearQueue` action (which
     /// goes through `save_queue_state`) should ever delete the file.
     pub(in crate::app) fn save_queue_state_no_clear(&mut self) {
-        if self.is_local_daemon() {
+        if self.stay_alive_owner_is_queue_authority() {
             return;
         }
         let state = self.build_queue_state();
@@ -260,7 +260,7 @@ impl App {
     /// Restore the saved queue only for an owner this Client owns. A
     /// Stay-alive Client always takes its queue from the attached owner.
     pub(in crate::app) fn maybe_restore_queue_state(&mut self) {
-        if self.is_local_daemon() {
+        if self.stay_alive_owner_is_queue_authority() {
             return;
         }
         self.restore_queue_state();
@@ -272,7 +272,7 @@ impl App {
     /// by a real user action before it lands. See `spawn_enrich_queue_state`
     /// for the separate, best-effort refresh of played/position state.
     pub(in crate::app) fn restore_queue_state(&mut self) {
-        if self.is_local_daemon() {
+        if self.stay_alive_owner_is_queue_authority() {
             return;
         }
         let Some(state) = crate::config::load_queue_state() else {

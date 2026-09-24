@@ -6,6 +6,14 @@ use crate::app::{App, PanelFocus, SessionEvent, SidebarId};
 use std::time::{Duration, Instant};
 
 impl App {
+    fn reject_stay_alive_queue_source_update(&mut self, coordinator_key: &str, mutation_id: u64) {
+        self.flash(
+            "Could not update the Stay-alive queue source".into(),
+            ToastSeverity::Error,
+        );
+        self.finish_playlist_mutation(coordinator_key, mutation_id);
+    }
+
     /// Handle a single `SessionEvent` from the sessions-poll channel. Faithful
     /// transcription of the match arms previously inlined in `run()`'s
     /// `sessions_rx` drain loop (see `drain_session_events`).
@@ -237,24 +245,22 @@ impl App {
                             id: Some(id),
                             name: name.clone(),
                         };
-                        if self.is_local_daemon() {
+                        if self.stay_alive_owner_is_queue_authority() {
                             let Some(lineage) = owner_queue_lineage else {
-                                self.flash(
-                                    "Could not update the Stay-alive queue source".into(),
-                                    ToastSeverity::Error,
+                                self.reject_stay_alive_queue_source_update(
+                                    &coordinator_key,
+                                    mutation_id,
                                 );
-                                self.finish_playlist_mutation(&coordinator_key, mutation_id);
                                 return;
                             };
                             let sent = self.player.as_remote().is_some_and(|remote| {
                                 remote.update_queue_source(source.clone(), lineage).is_ok()
                             });
                             if !sent {
-                                self.flash(
-                                    "Could not update the Stay-alive queue source".into(),
-                                    ToastSeverity::Error,
+                                self.reject_stay_alive_queue_source_update(
+                                    &coordinator_key,
+                                    mutation_id,
                                 );
-                                self.finish_playlist_mutation(&coordinator_key, mutation_id);
                                 return;
                             }
                             self.pending_owner_source_update = Some((source, lineage));

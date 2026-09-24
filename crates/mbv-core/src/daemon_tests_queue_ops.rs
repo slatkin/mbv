@@ -934,12 +934,12 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
     assert_eq!(owner.core.source, QueueSource::Album);
     assert!(owner.core.observed_active_slot().is_none());
     assert!(!player.status.lock().unwrap().active);
-    assert!(!crate::daemon::playback_run_identity_is_current(old_run, &player));
+    assert!(!crate::daemon::playback_run_identity_is_current(old_run.into(), &player));
     assert_eq!(
         crate::daemon::apply_stopped_observation(
             &mut owner,
             &player,
-            old_run,
+            old_run.into(),
             Some(old_slot),
             99_000_000,
             false,

@@ -20,12 +20,16 @@ impl App {
         matches!(self.playback_target(), PlaybackTarget::Local(_))
     }
 
+    pub(super) fn stay_alive_owner_is_queue_authority(&self) -> bool {
+        self.is_local_daemon()
+    }
+
     /// Whether the scope's canonical queue is the playback owner's accepted
     /// submission. Bare mode uses a generation fence until submit; the
     /// Stay-alive owner is authoritative from its snapshots, while direct
     /// remote scope is already independently projected.
     pub(super) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
-        if scope == QueueScope::Remote || self.is_local_daemon() {
+        if scope == QueueScope::Remote || self.stay_alive_owner_is_queue_authority() {
             return true;
         }
         self.queue_for_scope(scope).sequence_generation
@@ -74,7 +78,7 @@ impl App {
     /// Stamps `scope`'s queue with the playback owner's current sequence
     /// generation, after a submit the owner accepted at that generation.
     pub(super) fn stamp_queue_generation(&mut self, scope: QueueScope) {
-        if self.is_local_daemon() {
+        if self.stay_alive_owner_is_queue_authority() {
             return;
         }
         let generation = self.player.status.lock().unwrap().sequence_generation;
@@ -115,7 +119,7 @@ impl App {
         &mut self,
         source: crate::config::QueueSource,
     ) {
-        if !self.is_local_daemon() {
+        if !self.stay_alive_owner_is_queue_authority() {
             self.queue_source = source;
         }
     }
@@ -195,7 +199,7 @@ impl App {
                 self.player_tab.set_items(items, cursor);
                 // Bare mode fences a local replacement until submit. A
                 // Stay-alive Client instead reconciles the owner's snapshots.
-                if !self.is_local_daemon() {
+                if !self.stay_alive_owner_is_queue_authority() {
                     let owner_generation = self.player.status.lock().unwrap().sequence_generation;
                     self.player_tab.sequence_generation = owner_generation.saturating_add(1);
                 }

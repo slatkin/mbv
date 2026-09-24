@@ -1,4 +1,4 @@
-use super::bootstrap::{bootstrap_unified_queue, LocalDaemonBootstrap};
+use super::bootstrap::{bootstrap_legacy_queue, bootstrap_unified_queue};
 use super::{App, QueueScope};
 use mbv_core::player::PlayerProxy;
 use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
@@ -19,7 +19,7 @@ impl App {
     ///
     /// The owner reloads its own persisted queue; this Client never seeds it
     /// from its per-user snapshot.
-    pub(super) fn restart_local_daemon(&mut self, _resume: bool) -> Result<(), String> {
+    pub(super) fn restart_local_daemon(&mut self) -> Result<(), String> {
         let socket_path = crate::single_instance::socket_path();
         let lock_path = crate::single_instance::lock_path();
         match crate::single_instance::resolve(&socket_path, &lock_path) {
@@ -52,15 +52,7 @@ impl App {
         let remote_unified_state = remote.unified_queue_state();
         let remote_queue_source = remote.queue_source.lock().unwrap().clone();
         let bootstrap = remote_unified_state.as_ref().map_or_else(
-            || LocalDaemonBootstrap {
-                player_tab: super::types_player_tab::PlayerTab::from_emby_items(
-                    remote_items,
-                    remote_cursor,
-                ),
-                queue_source: remote_queue_source,
-                last_played_item_id: None,
-                last_played_completed: false,
-            },
+            || bootstrap_legacy_queue(remote_items, remote_cursor, remote_queue_source),
             bootstrap_unified_queue,
         );
 

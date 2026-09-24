@@ -8,18 +8,37 @@ pub(super) fn broadcast_player_event_if_not_replaced(
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct PlaybackRunIdentity {
+    request_id: PlaybackRequestId,
+    generation: PlaybackGeneration,
+}
+
+impl From<(PlaybackRequestId, PlaybackGeneration)> for PlaybackRunIdentity {
+    fn from((request_id, generation): (PlaybackRequestId, PlaybackGeneration)) -> Self {
+        Self {
+            request_id,
+            generation,
+        }
+    }
+}
+
 pub(super) fn playback_run_identity_is_current(
-    run_identity: (PlaybackRequestId, PlaybackGeneration),
+    run_identity: PlaybackRunIdentity,
     player: &Player,
 ) -> bool {
-    run_identity == (0, player.status.lock().unwrap().sequence_generation)
+    run_identity
+        == PlaybackRunIdentity {
+            request_id: 0,
+            generation: player.status.lock().unwrap().sequence_generation,
+        }
 }
 
 fn apply_track_completed_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
-    run_identity: (PlaybackRequestId, PlaybackGeneration),
+    run_identity: PlaybackRunIdentity,
     slot_id: QueueSlotId,
     position_ticks: i64,
     played: bool,
@@ -31,6 +50,8 @@ fn apply_track_completed_observation(
         return false;
     }
     if let Some(slot) = owner.core.queue.slot(slot_id) {
+        // Completion observations ignore small progress changes; stopped observations below
+        // retain any positive position so an interrupted item can resume precisely.
         let position = if played {
             0
         } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
@@ -52,7 +73,7 @@ fn apply_track_completed_observation(
 pub(super) fn apply_stopped_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
-    run_identity: (PlaybackRequestId, PlaybackGeneration),
+    run_identity: PlaybackRunIdentity,
     slot_id: Option<QueueSlotId>,
     position_ticks: i64,
     played: bool,
@@ -600,7 +621,7 @@ pub fn run_with_options(
                     &mut owner,
                     &player,
                     &shared_queue,
-                    run_identity,
+                    run_identity.into(),
                     slot_id,
                     position_ticks,
                     played,
@@ -650,7 +671,7 @@ pub fn run_with_options(
                     let Some(updated) = apply_stopped_observation(
                         &mut owner,
                         &player,
-                        *run_identity,
+                        (*run_identity).into(),
                         *slot_id,
                         *position_ticks,
                         *played,

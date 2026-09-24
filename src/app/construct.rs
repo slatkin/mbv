@@ -1,4 +1,4 @@
-use super::bootstrap::LocalDaemonBootstrap;
+use super::bootstrap::bootstrap_legacy_queue;
 use super::types_playback::QueueScope;
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode};
@@ -520,11 +520,12 @@ impl App {
         };
         let local_daemon_bootstrap = endpoint.is_local().then(|| {
             remote_unified_state.as_ref().map_or_else(
-                || LocalDaemonBootstrap {
-                    player_tab: PlayerTab::from_emby_items(remote_items.clone(), remote_cursor),
-                    queue_source: remote_queue_source.clone(),
-                    last_played_item_id: None,
-                    last_played_completed: false,
+                || {
+                    bootstrap_legacy_queue(
+                        remote_items.clone(),
+                        remote_cursor,
+                        remote_queue_source.clone(),
+                    )
                 },
                 bootstrap_unified_queue,
             )

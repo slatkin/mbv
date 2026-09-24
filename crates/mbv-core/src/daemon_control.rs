@@ -125,21 +125,23 @@ fn install_idle_queue_load(
     );
 }
 
+fn reject_queue_load(reply_tx: &CtrlSender, request_id: crate::ctrl::QueueLoadRequestId, reason: String) {
+    send_to(
+        reply_tx,
+        &CtrlEvent::UnifiedQueueLoadResult {
+            request_id,
+            result: crate::ctrl::QueueLoadResult::Rejected { reason },
+        },
+    );
+}
+
 const IDLE_QUEUE_LOAD_STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub(super) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reason: &str) -> bool {
     let Some(pending) = owner.pending_idle_load.take() else {
         return false;
     };
-    send_to(
-        &pending.reply_tx,
-        &CtrlEvent::UnifiedQueueLoadResult {
-            request_id: pending.request_id,
-            result: crate::ctrl::QueueLoadResult::Rejected {
-                reason: reason.to_string(),
-            },
-        },
-    );
+    reject_queue_load(&pending.reply_tx, pending.request_id, reason.to_string());
     true
 }
 
@@ -190,13 +192,7 @@ pub(super) fn complete_pending_idle_queue_load(
     }
     let pending = owner.pending_idle_load.take().expect("checked above");
     if let Some(reason) = failure {
-        send_to(
-            &pending.reply_tx,
-            &CtrlEvent::UnifiedQueueLoadResult {
-                request_id: pending.request_id,
-                result: crate::ctrl::QueueLoadResult::Rejected { reason },
-            },
-        );
+        reject_queue_load(&pending.reply_tx, pending.request_id, reason);
         return true;
     }
     install_idle_queue_load(
@@ -213,22 +209,34 @@ pub(super) fn complete_pending_idle_queue_load(
     true
 }
 
+struct RoleGateContext<'a> {
+    reply_tx: &'a CtrlSender,
+    ctrl_clients: &'a ClientRegistry,
+    client_id: CtrlClientId,
+    player: &'a Player,
+    queue: &'a PlaybackQueue,
+    source: &'a crate::config::QueueSource,
+    queue_lineage: crate::ctrl::QueueLineage,
+}
+
 /// Sends the rejection reply for a command whose owner-role gate
 /// (`CtrlCmd::requires_owner`) failed. Reply shape/event and reason text are
 /// kept per-command, matching what each arm sent before the gate moved here.
 /// Matches `OwnerGateRejection` exhaustively: its 3 variants are exactly the
 /// gated commands, so there is no wildcard/unreachable arm to fall into.
-#[allow(clippy::too_many_arguments)]
 fn send_role_gate_rejection(
     rejection: crate::ctrl::OwnerGateRejection,
-    reply_tx: &CtrlSender,
-    ctrl_clients: &ClientRegistry,
-    client_id: CtrlClientId,
-    player: &Player,
-    queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
-    queue_lineage: crate::ctrl::QueueLineage,
+    context: RoleGateContext<'_>,
 ) {
+    let RoleGateContext {
+        reply_tx,
+        ctrl_clients,
+        client_id,
+        player,
+        queue,
+        source,
+        queue_lineage,
+    } = context;
     match rejection {
         crate::ctrl::OwnerGateRejection::AdoptQueue => reject_command(
             reply_tx,
@@ -240,15 +248,10 @@ fn send_role_gate_rejection(
             queue_lineage,
             "Stay-alive owner queues cannot be adopted by Clients".to_string(),
         ),
-        crate::ctrl::OwnerGateRejection::QueueLoadIdle { request_id } => send_to(
+        crate::ctrl::OwnerGateRejection::QueueLoadIdle { request_id } => reject_queue_load(
             reply_tx,
-            &CtrlEvent::UnifiedQueueLoadResult {
-                request_id,
-                result: crate::ctrl::QueueLoadResult::Rejected {
-                    reason: "idle queue loads are supported only by the Stay-alive owner"
-                        .to_string(),
-                },
-            },
+            request_id,
+            "idle queue loads are supported only by the Stay-alive owner".to_string(),
         ),
         crate::ctrl::OwnerGateRejection::QueueSourceUpdate => send_to(
             reply_tx,
@@ -278,14 +281,10 @@ fn handle_ctrl_for_role(
     cancel_pending_idle_queue_load_if_run_changed(owner, player);
     if owner.pending_idle_load.is_some() && !matches!(&cmd, CtrlCmd::RequestShutdown) {
         if let CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } = cmd {
-            send_to(
+            reject_queue_load(
                 request.reply_tx,
-                &CtrlEvent::UnifiedQueueLoadResult {
-                    request_id,
-                    result: crate::ctrl::QueueLoadResult::Rejected {
-                        reason: "another idle queue load is pending".to_string(),
-                    },
-                },
+                request_id,
+                "another idle queue load is pending".to_string(),
             );
         } else {
             send_to(
@@ -311,26 +310,30 @@ fn handle_ctrl_for_role(
         crate::ctrl::OwnerGate::OwnerOnly(rejection) if role != crate::daemon::DaemonRole::Local => {
             send_role_gate_rejection(
                 rejection,
-                request.reply_tx,
-                ctrl_clients,
-                client_id,
-                player,
-                queue,
-                source,
-                queue_lineage,
+                RoleGateContext {
+                    reply_tx: request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    queue_lineage,
+                },
             );
             return;
         }
         crate::ctrl::OwnerGate::NonOwnerOnly(rejection) if role == crate::daemon::DaemonRole::Local => {
             send_role_gate_rejection(
                 rejection,
-                request.reply_tx,
-                ctrl_clients,
-                client_id,
-                player,
-                queue,
-                source,
-                queue_lineage,
+                RoleGateContext {
+                    reply_tx: request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    queue_lineage,
+                },
             );
             return;
         }
@@ -641,13 +644,7 @@ fn handle_ctrl_for_role(
                 )
             };
             if let Some(reason) = reason {
-                send_to(
-                    request.reply_tx,
-                    &CtrlEvent::UnifiedQueueLoadResult {
-                        request_id,
-                        result: crate::ctrl::QueueLoadResult::Rejected { reason },
-                    },
-                );
+                reject_queue_load(request.reply_tx, request_id, reason);
                 return;
             }
             let submitted: Vec<_> = slots
@@ -668,13 +665,7 @@ fn handle_ctrl_for_role(
                 audio_only_rejection(audio_only, admitted.iter().map(|(_, item)| item))
             };
             if let Some(reason) = admission_error {
-                send_to(
-                    request.reply_tx,
-                    &CtrlEvent::UnifiedQueueLoadResult {
-                        request_id,
-                        result: crate::ctrl::QueueLoadResult::Rejected { reason },
-                    },
-                );
+                reject_queue_load(request.reply_tx, request_id, reason);
                 return;
             }
 

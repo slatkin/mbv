@@ -453,7 +453,7 @@ impl App {
                     return;
                 }
                 let direct_remote = self.has_direct_remote_queue();
-                if !autostart && self.is_local_daemon() {
+                if !autostart && self.stay_alive_owner_is_queue_authority() {
                     let request_id = self.next_owner_queue_load_request;
                     self.next_owner_queue_load_request =
                         self.next_owner_queue_load_request.saturating_add(1);
@@ -537,7 +537,7 @@ impl App {
                 } else if self.queue_scope_is_playback(scope) {
                     self.reset_bare_transitions();
                     self.player.stop();
-                    if self.is_local_daemon() {
+                    if self.stay_alive_owner_is_queue_authority() {
                         self.player.clear_queue();
                     }
                 }
@@ -604,7 +604,7 @@ impl App {
         let source_playlist_id = self.queue_playlist_id().map(str::to_string);
         let queue_lineage = self.remote_queue_lineage;
         let owner_queue_lineage = self
-            .is_local_daemon()
+            .stay_alive_owner_is_queue_authority()
             .then(|| {
                 self.player
                     .as_remote()
