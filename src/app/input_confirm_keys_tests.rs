@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::app::tests::*;
+use crate::app::types_playback::ReplacementExecutor;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::EmbyItem;
 
@@ -82,7 +83,7 @@ fn empty_local_target_queue_executes_the_replacement_immediately() {
     let mut app = make_app_stub();
     assert_eq!(app.playback_queue().total_queue_len(), 0);
 
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     assert!(!confirm_pending(&app), "an empty queue asks nothing");
     assert!(app.pending_queue_replacement.is_none());
@@ -101,7 +102,7 @@ fn empty_direct_remote_target_queue_executes_the_replacement_immediately() {
     );
     assert_eq!(app.playback_queue().total_queue_len(), 0);
 
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     assert!(!confirm_pending(&app));
     assert_eq!(queue_ids(&app), ["track-1"]);
@@ -119,7 +120,7 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
     let mut app = make_app_stub();
     app.player_tab.set_items(vec![audio("existing")], 0);
 
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     assert_eq!(
         pending_confirm_action(&app),
@@ -128,7 +129,10 @@ fn populated_local_target_queue_stores_the_action_and_prompts() {
     assert!(
         matches!(
             app.pending_queue_replacement,
-            Some(PendingQueueAction::PlayItems { .. })
+            Some((
+                PendingQueueAction::PlayItems { .. },
+                ReplacementExecutor::Pending
+            ))
         ),
         "the complete payload is stored, not re-derived at confirmation time"
     );
@@ -148,7 +152,7 @@ fn populated_direct_remote_target_queue_prompts_before_staging() {
     let mut app = make_remote_app_stub(Vec::new(), vec![audio("existing")]);
     assert!(app.has_direct_remote_queue());
 
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     assert_eq!(
         pending_confirm_action(&app),
@@ -186,7 +190,7 @@ fn confirming_a_populated_local_queue_executes_the_stored_action() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab.set_items(vec![audio("existing")], 0);
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     app.apply_confirm_action(
         ConfirmAction::ReplacePopulatedQueue,
@@ -204,7 +208,7 @@ fn cancelling_the_replace_queue_prompt_changes_neither_queue_nor_playback() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab.set_items(vec![audio("existing")], 0);
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     app.apply_confirm_action(ConfirmAction::ReplacePopulatedQueue, key(KeyCode::Esc));
 
@@ -228,7 +232,7 @@ fn dismissing_the_replace_queue_prompt_clears_the_stored_action() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab.set_items(vec![audio("existing")], 0);
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     app.apply_confirm_action(
         ConfirmAction::ReplacePopulatedQueue,
@@ -245,7 +249,7 @@ fn dismissing_the_replace_queue_prompt_clears_the_stored_action() {
 fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = dirty_saved_playlist_app();
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
 
     mount_confirmation(&mut app);
     app.apply_confirm_action(
@@ -271,7 +275,7 @@ fn confirmed_dirty_saved_playlist_replacement_raises_the_save_discard_prompt() {
 fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = dirty_saved_playlist_app();
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::ReplacePopulatedQueue,
@@ -294,7 +298,7 @@ fn discarding_the_dirty_prompt_executes_the_stored_replacement() {
 fn saving_the_dirty_playlist_defers_the_stored_replacement() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = dirty_saved_playlist_app();
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::ReplacePopulatedQueue,
@@ -321,7 +325,7 @@ fn saving_the_dirty_playlist_defers_the_stored_replacement() {
 fn cancelling_the_dirty_prompt_changes_neither_queue_nor_playback() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = dirty_saved_playlist_app();
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::ReplacePopulatedQueue,
@@ -348,7 +352,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
 
     // First activation: confirmed at the populated-queue gate, then deferred
     // behind the dirty-playlist save prompt's `s` answer.
-    app.request_queue_replacement(play_action(&["track-1"]));
+    app.request_queue_replacement(play_action(&["track-1"]), ReplacementExecutor::Pending);
     mount_confirmation(&mut app);
     app.apply_confirm_action(
         ConfirmAction::ReplacePopulatedQueue,
@@ -373,7 +377,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
 
     // Second activation while that save is still in flight: it gates on the
     // populated queue instead of overwriting the deferred intent.
-    app.request_queue_replacement(play_action(&["track-2"]));
+    app.request_queue_replacement(play_action(&["track-2"]), ReplacementExecutor::Pending);
     assert_eq!(
         pending_confirm_action(&app),
         Some(ConfirmAction::ReplacePopulatedQueue)

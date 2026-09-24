@@ -95,6 +95,18 @@ fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
     assert!(items.iter().all(|item| !item.is_audiobookshelf_any()));
 }
 
+/// Confirm the populated-queue replacement gate the way the shell's confirm
+/// modal does, so a gated replacement executes.
+fn confirm_replace_queue(app: &mut crate::app::App) {
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::ReplacePopulatedQueue,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::NONE,
+        ),
+    );
+}
+
 fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) {
     let mut app = crate::app::tests::make_app_stub();
     app.player_tab.queue.append_with_id(
@@ -106,6 +118,9 @@ fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) 
         QueueItem::Emby(Box::new(make_item("stale-2", "Movie"))),
     );
     app.execute_context_action(Some(action), None);
+    // The target queue is populated, so the selection is held behind the
+    // replacement gate; confirming runs its rebuild + submission.
+    confirm_replace_queue(&mut app);
 
     let slots = app.player_tab.queue.slots();
     assert_eq!(slots.len(), 2);

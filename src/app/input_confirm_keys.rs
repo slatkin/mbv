@@ -175,8 +175,8 @@ impl App {
             // masquerade as a confirmed replacement.
             ConfirmAction::ReplacePopulatedQueue => match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
-                    if let Some(action) = self.pending_queue_replacement.take() {
-                        self.execute_queue_replacement(action);
+                    if let Some((action, via)) = self.pending_queue_replacement.take() {
+                        self.run_replacement(action, via);
                     }
                 }
                 _ => {

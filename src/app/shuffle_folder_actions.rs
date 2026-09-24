@@ -1,6 +1,6 @@
 use super::notify_actions::ToastSeverity;
 use super::ui_util::natural_sort_key;
-use super::{App, PanelFocus};
+use super::{App, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
 use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
@@ -102,11 +102,17 @@ impl App {
             crate::config::QueueSource::Unknown
         };
         // Keep the Library focused: `play_items_routed` only moves focus when
-        // the caller is not already in the Library panel. Save once after the
-        // single composed replacement and playback submission.
-        self.replace_playback_queue(items.clone(), 0);
-        self.play_items_routed(items, 0, source);
-        self.save_queue_state();
+        // the caller is not already in the Library panel. The gate defers the
+        // single composed replacement and its save to `run_replacement`.
+        self.request_queue_replacement(
+            PendingQueueAction::PlayItems {
+                items,
+                start_idx: 0,
+                source,
+                autostart: true,
+            },
+            ReplacementExecutor::Routed(RoutedReplacementPrep::MusicAlbums),
+        );
     }
 
     pub(super) fn play_folder(&mut self, folder_id: &str) {
@@ -127,9 +133,15 @@ impl App {
                     return;
                 }
                 drop(client);
-                self.replace_playback_queue(items.clone(), 0);
-                self.set_panel_focus(PanelFocus::Queue);
-                self.play_items_routed(items, 0, crate::config::QueueSource::Unknown);
+                self.request_queue_replacement(
+                    PendingQueueAction::PlayItems {
+                        items,
+                        start_idx: 0,
+                        source: crate::config::QueueSource::Unknown,
+                        autostart: true,
+                    },
+                    ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),
+                );
             }
             Err(e) => {
                 drop(client);
@@ -182,13 +194,15 @@ impl App {
                 }
                 items.shuffle(&mut rand::rng());
                 drop(client);
-                self.replace_playback_queue(items.clone(), 0);
-                self.set_panel_focus(PanelFocus::Queue);
-                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Shuffle);
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
-                self.play_items_routed(items, 0, crate::config::QueueSource::Shuffle);
+                self.request_queue_replacement(
+                    PendingQueueAction::PlayItems {
+                        items,
+                        start_idx: 0,
+                        source: crate::config::QueueSource::Shuffle,
+                        autostart: true,
+                    },
+                    ReplacementExecutor::Routed(RoutedReplacementPrep::ShuffleFolder),
+                );
             }
             Err(e) => {
                 drop(client);

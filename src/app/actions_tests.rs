@@ -26,6 +26,18 @@ fn folder(id: &str, name: &str) -> EmbyItem {
     item
 }
 
+/// Confirm the populated-queue replacement gate the way the shell's confirm
+/// modal does, so a gated replacement executes.
+fn confirm_replace_queue(app: &mut App) {
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::ReplacePopulatedQueue,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::NONE,
+        ),
+    );
+}
+
 #[test]
 fn unavailable_album_playback_keeps_the_existing_queue() {
     let mut app = make_app_stub();
@@ -325,6 +337,9 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
     // activated row) must not hide the artist group the row came from.
     app.album_tracks_cache.insert("album-1".into(), Vec::new());
     assert!(app.play_album_track("album-1", &only));
+    // The second activation targets a populated queue, so it goes through the
+    // replacement gate before the queue changes.
+    confirm_replace_queue(&mut app);
     assert_eq!(
         queued_track_ids(&app),
         ["album-track", "artist-extra"],
