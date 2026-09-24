@@ -1,3 +1,5 @@
+use super::*;
+
 pub(super) fn broadcast_player_event_if_not_replaced(
     ctrl_clients: &ClientRegistry,
     event: PlayerEvent,
@@ -34,7 +36,7 @@ pub(super) fn playback_run_identity_is_current(
         }
 }
 
-fn apply_track_completed_observation(
+pub(super) fn apply_track_completed_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
@@ -98,7 +100,7 @@ pub(super) fn apply_stopped_observation(
     Some(true)
 }
 
-fn apply_queue_enriched(
+pub(super) fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
     owner: &mut DaemonPlayerOwner,
     player: &Player,

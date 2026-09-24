@@ -1,3 +1,4 @@
+use std::sync::mpsc;
 use super::*;
 
 pub(super) fn setup_shutdown_signal() -> (mpsc::SyncSender<()>, mpsc::Receiver<()>) {
