@@ -765,3 +765,91 @@ fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel
 
     assert!(app.active_route.is_none());
 }
+
+/// Row 3.6: library autoplay (`select_item` with autoload) replaces a
+/// populated queue without the replacement confirmation -- a browse
+/// activation is not a user-initiated queue replacement.
+#[test]
+fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let http = MockHttp::new();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    app.config.lock().unwrap().autoload = true;
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    // Populated target queue + a browse level whose parent holds the item.
+    let mut existing = make_item("Existing", "Movie");
+    existing.id = "existing".into();
+    app.player_tab.set_items(vec![existing], 0);
+    let mut anchor = make_item("Anchor", "Movie");
+    anchor.id = "anchor-1".into();
+    let mut sibling = make_item("Sibling", "Movie");
+    sibling.id = "sibling-1".into();
+    app.libs.push(LibraryTab {
+        nav_stack: vec![BrowseLevel {
+            parent_id: "parent-1".into(),
+            title: "Movies".into(),
+            items: vec![anchor.clone()],
+            fetched_rows: 1,
+            total_count: 1,
+            resting: crate::app::types_browse::BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        }],
+        ..LibraryTab::new(anchor.clone())
+    });
+
+    // Request 1: `get_items_by_ids` resolves the activated row; request 2:
+    // `get_direct_playable` resolves the autoload siblings.
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"anchor-1","Name":"Anchor","Type":"Movie","MediaType":"Video"}]}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[
+            {"Id":"anchor-1","Name":"Anchor","Type":"Movie","MediaType":"Video"},
+            {"Id":"sibling-1","Name":"Sibling","Type":"Movie","MediaType":"Video"}
+        ]}"#,
+    );
+
+    app.select_item(0, anchor.clone());
+
+    assert!(
+        !matches!(
+            app.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
+        ),
+        "library autoplay is never gated"
+    );
+    assert!(app.pending_queue_replacement.is_none());
+    assert_eq!(
+        app.playback_queue()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["anchor-1", "sibling-1"]
+    );
+}

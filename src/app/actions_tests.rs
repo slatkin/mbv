@@ -729,3 +729,94 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         Some("artist-c")
     );
 }
+
+/// Row 3.1: an album track on a populated target queue asks before the routed
+/// replacement runs; confirming plays the album through the routed path.
+#[test]
+fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
+    let mut app = remote_playback_app();
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.remote_player_tab
+        .as_mut()
+        .expect("the direct remote fixture keeps a target queue")
+        .set_items(vec![existing], 0);
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![track.clone()]);
+
+    assert!(app.play_album_track("album-1", &track));
+
+    assert!(matches!(
+        &app.pending_overlay,
+        Some(crate::app::types_overlay::OverlayRequest::Confirm(modal))
+            if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
+    ));
+    assert!(matches!(
+        app.pending_queue_replacement,
+        Some((
+            _,
+            crate::app::types_playback::ReplacementExecutor::Routed(
+                crate::app::types_playback::RoutedReplacementPrep::Album
+            )
+        ))
+    ));
+    assert_eq!(queued_track_ids(&app), ["existing"]);
+    assert_eq!(app.playback_queue().queue_cursor, 0);
+
+    confirm_replace_queue(&mut app);
+
+    assert_eq!(queued_track_ids(&app), ["track-1"]);
+    assert!(app.pending_queue_replacement.is_none());
+}
+
+/// Row 3.1 cancellation: Esc at the album-track replacement prompt changes
+/// neither the queue nor playback and leaves no stored payload.
+#[test]
+fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
+    let mut app = remote_playback_app();
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.remote_player_tab
+        .as_mut()
+        .expect("the direct remote fixture keeps a target queue")
+        .set_items(vec![existing], 0);
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![track.clone()]);
+
+    assert!(app.play_album_track("album-1", &track));
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::ReplacePopulatedQueue,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ),
+    );
+
+    assert!(app.pending_queue_replacement.is_none());
+    assert_eq!(queued_track_ids(&app), ["existing"]);
+    assert_eq!(app.playback_queue().queue_cursor, 0);
+}
+
+/// Row 3.4: an album track on an empty target queue plays immediately; the
+/// gate asks nothing.
+#[test]
+fn empty_queue_album_track_needs_no_replacement_confirmation() {
+    let mut app = remote_playback_app();
+    let mut track = make_item("Track", "Audio");
+    track.id = "track-1".into();
+    app.album_tracks_cache
+        .insert("album-1".into(), vec![track.clone()]);
+
+    assert!(app.play_album_track("album-1", &track));
+
+    assert!(app.pending_queue_replacement.is_none());
+    assert!(!matches!(
+        app.pending_overlay,
+        Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
+    ));
+    assert_eq!(queued_track_ids(&app), ["track-1"]);
+}

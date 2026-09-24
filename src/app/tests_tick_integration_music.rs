@@ -581,3 +581,86 @@ mod landing;
 #[path = "tests_tick_integration_music_artist.rs"]
 mod artist;
 
+
+/// Row 3.3: a playlist activation on a populated, dirty saved-playlist queue
+/// asks the replacement question through the production shell path; confirming
+/// it reaches the existing save/discard prompt instead of replacing the queue.
+#[test]
+fn playlist_activation_on_a_populated_dirty_queue_asks_then_reaches_the_save_prompt() {
+    use crate::app::tests::make_item;
+    let mut app = make_app_stub();
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.player_tab.set_items(vec![existing], 0);
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("saved-1".into()),
+        name: "Saved".into(),
+    };
+    app.queue_dirty = true;
+    let playlist = make_item("P1", "Playlist");
+    let mut song = make_item("Song", "Audio");
+    song.id = "item-1".into();
+    app.playlists = vec![playlist.clone()];
+    app.playlists_open = Some(playlist);
+    app.playlists_open_items = vec![song];
+    app.playlists_open_cursor = 0;
+    let mut harness = TickHarness::new(app);
+
+    harness
+        .model_mut()
+        .handle_playlists_request(ShellRequest::PlaylistsActivate {
+            open: true,
+            index: 0,
+        });
+    assert!(matches!(
+        &harness.model().app.pending_overlay,
+        Some(OverlayRequest::Confirm(modal))
+            if modal.on_confirm == ConfirmAction::ReplacePopulatedQueue
+    ));
+    assert!(harness.model().app.pending_queue_replacement.is_some());
+    assert_eq!(
+        harness
+            .model()
+            .app
+            .playback_queue()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["existing"],
+        "the load has not touched the queue before confirmation"
+    );
+    // Mount the gate modal so the shell's confirm-intent path reads its action.
+    harness.model_mut().sync_mounted_surfaces();
+    let confirm_id = ComponentId::Modal(ModalId::Confirm);
+    assert!(
+        harness.model().application.mounted(&confirm_id),
+        "the replacement gate mounts its confirm modal"
+    );
+
+    let (mut music_resize, mut tv_resize) = (false, false);
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+
+    assert!(matches!(
+        &harness.model().app.pending_overlay,
+        Some(OverlayRequest::Confirm(modal))
+            if modal.on_confirm == ConfirmAction::DiscardOrSaveDirtyPlaylist
+    ));
+    assert!(harness.model().app.pending_queue_replacement.is_none());
+    assert_eq!(
+        harness
+            .model()
+            .app
+            .playback_queue()
+            .emby_items()
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        ["existing"],
+        "the dirty-playlist save/discard second step still defers the load"
+    );
+}
