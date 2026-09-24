@@ -305,4 +305,124 @@ mod tests {
             ),
         }
     }
+
+    /// Install a stub Emby runtime whose transport is `http`, so the handler's
+    /// synchronous fetch is served from scripted in-memory responses (no real
+    /// server, per the mocks-only test policy).
+    fn app_with_mock_emby(http: &mbv_core::mock_http::MockHttp) -> crate::app::App {
+        let mut app = make_app_stub();
+        let config = crate::config::Config {
+            server_url: "http://127.0.0.1:1".into(),
+            ..crate::config::Config::default()
+        };
+        let client = mbv_core::api::EmbyClient::new(config).with_test_agent(http.agent());
+        app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+            std::sync::Mutex::new(client),
+        ));
+        app
+    }
+
+    /// Two server items with distinct resume positions so a case can tell the
+    /// honoured `start_position_ticks` apart from the value the fetch returned.
+    const PLAY_TWO_ITEMS: &str = r#"{"Items":[
+        {"Id":"a","Name":"A","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":111}},
+        {"Id":"b","Name":"B","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":222}}
+    ]}"#;
+    const PLAY_ONE_ITEM: &str = r#"{"Items":[
+        {"Id":"a","Name":"A","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":111}}
+    ]}"#;
+
+    /// `Play` issues a real Emby fetch (`get_items_by_ids`), so its queue
+    /// replacement, `Remote` source, honoured start position, and persisted
+    /// queue state are asserted end to end against the mock transport.
+    #[rstest]
+    #[case::single_item(
+        PLAY_ONE_ITEM,
+        vec!["a".to_string()],
+        0,
+        12_345,
+        vec![("a", 12_345)]
+    )]
+    #[case::multi_item(
+        PLAY_TWO_ITEMS,
+        vec!["a".to_string(), "b".to_string()],
+        1,
+        999,
+        vec![("a", 111), ("b", 999)]
+    )]
+    fn play_replaces_queue_with_remote_source_and_persists(
+        #[case] response: &str,
+        #[case] item_ids: Vec<String>,
+        #[case] start_index: usize,
+        #[case] start_position_ticks: i64,
+        #[case] expected_positions: Vec<(&str, i64)>,
+    ) {
+        let http = mbv_core::mock_http::MockHttp::new();
+        http.respond(200, response);
+        let mut app = app_with_mock_emby(&http);
+
+        app.handle_ws_event(WsEvent::Play {
+            item_ids,
+            play_now: true,
+            start_position_ticks,
+            start_index,
+        });
+
+        let items = app.player_tab.emby_items();
+        let actual: Vec<(&str, i64)> = items
+            .iter()
+            .map(|i| (i.id.as_str(), i.playback_position_ticks))
+            .collect();
+        assert_eq!(
+            actual, expected_positions,
+            "the queue is replaced in fetch order and only start_index honours start_position_ticks"
+        );
+        let cursor = start_index.min(items.len() - 1);
+        assert_eq!(app.player_tab.queue_cursor, cursor);
+        assert_eq!(app.queue_source, crate::config::QueueSource::Remote);
+
+        let state = crate::config::load_queue_state().expect("Play persists the replaced queue");
+        let persisted_items = state.emby_items();
+        let persisted: Vec<(&str, i64)> = persisted_items
+            .iter()
+            .map(|i| (i.id.as_str(), i.playback_position_ticks))
+            .collect();
+        assert_eq!(persisted, expected_positions);
+        assert_eq!(state.cursor, cursor);
+        assert_eq!(state.source, crate::config::QueueSource::Remote);
+    }
+
+    #[test]
+    fn user_data_changed_successful_fetch_sends_home_content_refreshed() {
+        let http = mbv_core::mock_http::MockHttp::new();
+        // `fetch_home` sequences: VirtualFolders, user Views, Continue Watching.
+        http.respond(200, "[]");
+        http.respond(200, r#"{"Items":[]}"#);
+        http.respond(200, r#"{"Items":[]}"#);
+        let mut app = app_with_mock_emby(&http);
+
+        app.handle_ws_event(WsEvent::UserDataChanged);
+
+        match app.lib_rx.try_recv() {
+            Ok(LibEvent::HomeContentRefreshed(content)) => {
+                assert!(content.continue_items.is_empty());
+            }
+            Ok(_) => panic!("a successful home fetch must emit HomeContentRefreshed"),
+            Err(e) => panic!("expected a HomeContentRefreshed event, got none: {e}"),
+        }
+    }
+
+    #[test]
+    fn user_data_changed_failed_fetch_sends_nothing() {
+        let http = mbv_core::mock_http::MockHttp::new();
+        http.fail(std::io::ErrorKind::ConnectionRefused);
+        let mut app = app_with_mock_emby(&http);
+
+        app.handle_ws_event(WsEvent::UserDataChanged);
+
+        assert!(
+            app.lib_rx.try_recv().is_err(),
+            "a failed home fetch must not emit HomeContentRefreshed"
+        );
+    }
 }
