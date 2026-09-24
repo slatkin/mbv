@@ -2,7 +2,6 @@
 //! geometry, the grouped row contracts at the smallest non-Wide width, and the
 //! panel-inset claim geometry.
 
-use super::test_helpers::*;
 use super::*;
 use crate::app::render::components::tree_browser::{
     tree_metadata_gutter_width, TREE_METADATA_SLOT_WIDTH,

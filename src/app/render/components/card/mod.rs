@@ -474,8 +474,6 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "card_painter_tests.rs"]
 mod painter_tests;
 #[cfg(test)]
-#[path = "card_tests.rs"]
 mod tests;

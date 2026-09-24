@@ -769,5 +769,4 @@ pub(in crate::app) fn render_status_bar(
 }
 
 #[cfg(test)]
-#[path = "chrome_status_tests.rs"]
 mod chrome_status_tests;

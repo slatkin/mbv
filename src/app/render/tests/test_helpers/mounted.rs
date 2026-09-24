@@ -151,7 +151,7 @@ fn music_tree_fixture_projection(
 /// The panel-hosted TV owner (task 8.4: reached through the mounted
 /// `LibraryPanel`'s `LibraryKey` map, never a `ComponentId`).
 pub fn tv_owner(model: &Model) -> &TvContent {
-    let key = super::test_helpers::tv_owner_key(model);
+    let key = super::tv_owner_key(model);
     model
         .application
         .get_component(&ComponentId::Library)

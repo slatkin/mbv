@@ -24,14 +24,11 @@ use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use ratatui::Terminal;
 
-#[path = "test_helpers_mounted.rs"]
 mod mounted;
 pub use mounted::*;
-#[path = "test_helpers_fixtures.rs"]
 mod fixtures;
 pub use fixtures::*;
 
-#[path = "test_helpers_music_tree.rs"]
 mod music_tree;
 pub use music_tree::*;
 
