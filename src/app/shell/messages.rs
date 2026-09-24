@@ -974,7 +974,7 @@ impl Model {
 mod tests {
     use crate::app::components::{Msg, ShellRequest};
     use crate::app::render::make_movie_app;
-    use crate::app::tests_tick_harness::TickHarness;
+    use crate::app::tests::tick_integration::harness::TickHarness;
     use crate::app::{PanelFocus, PanelMode};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;

@@ -1,8 +1,8 @@
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::msg::AudiobookshelfBookMove;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
+use crate::app::tests::podcast::audiobookshelf_app;
 use crate::app::tests::tick_integration::harness::TickHarness;
-use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::TabSelection;
 use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
 use ratatui::backend::TestBackend;

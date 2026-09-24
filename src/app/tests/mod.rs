@@ -1,6 +1,32 @@
 use super::*;
 use crate::app::state::types::settings::SettingsDestination;
 
+mod actions_tests_queue_state_reseat;
+mod audiobookshelf_browse_actions_sibling_tests;
+mod audiobookshelf_runtime;
+mod auto_reconnect;
+mod context_menu_placement;
+mod daemon_bootstrap;
+mod feeds;
+mod home_latest;
+mod library_navigate_reveal;
+mod library_position;
+mod library_route;
+mod lifecycle;
+mod music_grouping;
+mod narrow_browse_migration;
+mod next_up_accept_dispatch;
+mod panel_focus;
+mod player_event;
+mod podcast;
+mod queue;
+mod reattach;
+mod remote_commands;
+mod route_state;
+mod routing_matrix;
+mod services_settings_lifecycle;
+mod session_connect;
+mod split_browse_state_browse_level_tests;
 pub(crate) mod tick_integration;
 
 use ratatui::backend::TestBackend;
