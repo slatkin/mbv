@@ -2,6 +2,9 @@ use super::*;
 use crate::app::images::{series_image_cache_key, CachedImage};
 use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use crate::app::render::make_movie_app;
+use crate::app::tests::{make_app_stub, make_session};
+use crate::app::SessionEvent;
+use rstest::rstest;
 
 fn mounted_wide_tv_model() -> Model {
     let mut app = make_movie_app();
@@ -113,5 +116,107 @@ fn non_series_image_completion_leaves_tv_projection_alone() {
     assert!(
         wide_tv_shows_placeholder(&mut model),
         "a non-Series completion must leave the TV projection alone"
+    );
+}
+
+/// Task 3.1: `clear:yes` dismisses the confirmation modal and routes the
+/// clear-queue action, and the drain reports that it produced work.
+#[test]
+fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
+    let mut app = make_app_stub();
+    app.notif_action_tx
+        .send("clear:yes".into())
+        .expect("notif channel");
+
+    assert!(
+        app.drain_notif_actions(),
+        "a queued action must report produced=true"
+    );
+    assert!(
+        matches!(
+            app.pending_overlay,
+            Some(crate::app::types_overlay::OverlayRequest::DismissConfirm)
+        ),
+        "clear:yes must dismiss the confirmation modal"
+    );
+    assert_eq!(
+        app.status, "Queue cleared",
+        "clear:yes must route the clear-queue action"
+    );
+}
+
+/// Task 3.1: `__notif_failed__` raises the notification-failure flag.
+#[test]
+fn drain_notif_actions_failed_sets_the_failure_flag() {
+    let mut app = make_app_stub();
+    app.notif_action_tx
+        .send("__notif_failed__".into())
+        .expect("notif channel");
+
+    assert!(
+        app.drain_notif_actions(),
+        "a queued action must report produced=true"
+    );
+    assert!(app.notif_failed, "__notif_failed__ must set the flag");
+}
+
+/// Task 3.1: payloads without a retained action -- the explicit no-ops and an
+/// empty channel -- change no state; `produced` reflects only whether a
+/// message was received, so an unrecognised payload still reports `true`
+/// while the empty channel reports `false`.
+#[rstest]
+#[case(Some(""), true)]
+#[case(Some("ignore"), true)]
+#[case(Some("cancel"), true)]
+#[case(Some("unrecognised"), true)]
+#[case(None, false)]
+fn drain_notif_actions_without_a_known_action_produce_nothing(
+    #[case] payload: Option<&str>,
+    #[case] expected_produced: bool,
+) {
+    let mut app = make_app_stub();
+    if let Some(payload) = payload {
+        app.notif_action_tx
+            .send(payload.into())
+            .expect("notif channel");
+    }
+
+    assert_eq!(
+        app.drain_notif_actions(),
+        expected_produced,
+        "produced must reflect whether a message was received"
+    );
+    assert!(!app.notif_failed, "no failure flag may be raised");
+    assert!(app.pending_overlay.is_none(), "no overlay may be requested");
+    assert!(app.status.is_empty(), "no toast may be raised");
+}
+
+/// Task 3.2: a queued `SessionEvent` is dispatched to `handle_session_event`
+/// and the drain reports that it produced work.
+#[test]
+fn drain_session_events_dispatches_a_queued_event() {
+    let mut app = make_app_stub();
+    app.sessions_loading = true;
+    app.sessions_tx
+        .send(SessionEvent::Loaded {
+            sessions: vec![make_session("living-room", "mbv")],
+        })
+        .expect("sessions channel");
+
+    assert!(
+        app.drain_session_events(),
+        "a queued event must report produced=true"
+    );
+    assert_eq!(app.sessions.len(), 1, "the Loaded event must be dispatched");
+    assert!(!app.sessions_loading, "Loaded must clear the loading flag");
+}
+
+/// Task 3.2: an empty sessions channel reports produced=false.
+#[test]
+fn drain_session_events_empty_channel_produces_nothing() {
+    let mut app = make_app_stub();
+    assert!(
+        !app.drain_session_events(),
+        "an empty channel must report produced=false"
     );
 }
