@@ -117,14 +117,7 @@ impl DaemonLoop {
                 }
                 *self.shared_queue.observed_active_slot.lock().unwrap() =
                     self.owner.core.observed_active_slot();
-                broadcast_queue_state(
-                    &self.ctrl_clients,
-                    &self.player,
-                    &self.shared_queue,
-                    &self.owner.core.queue,
-                    &self.owner.core.source,
-                    &self.owner.core.transitions,
-                );
+                self.broadcast_owner_queue_state();
                 // Settle playback intent if the reported slot matches.
                 if let Some((connection_id, request_id, generation)) = self.owner.intents
                     .current
@@ -237,14 +230,7 @@ impl DaemonLoop {
                 // track-to-track transition, so clients never get a snapshot
                 // reflecting `status.active` and the started slot. Push one
                 // here so their now-playing highlight lands on the right row.
-                broadcast_queue_state(
-                    &self.ctrl_clients,
-                    &self.player,
-                    &self.shared_queue,
-                    &self.owner.core.queue,
-                    &self.owner.core.source,
-                    &self.owner.core.transitions,
-                );
+                self.broadcast_owner_queue_state();
             }
             DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted {
                 slot_id,
@@ -272,14 +258,7 @@ impl DaemonLoop {
                 ) {
                     return LoopFlow::Continue;
                 }
-                broadcast_queue_state(
-                    &self.ctrl_clients,
-                    &self.player,
-                    &self.shared_queue,
-                    &self.owner.core.queue,
-                    &self.owner.core.source,
-                    &self.owner.core.transitions,
-                );
+                self.broadcast_owner_queue_state();
                 broadcast(&self.ctrl_clients, &CtrlEvent::Player(pe));
                 owner_queue_dirty = true;
             }
@@ -351,14 +330,7 @@ impl DaemonLoop {
                     // no other broadcast carrying the corrected queue. The
                     // successful pending-load commit publishes the new stopped
                     // queue once instead of first publishing this old queue.
-                    broadcast_queue_state(
-                        &self.ctrl_clients,
-                        &self.player,
-                        &self.shared_queue,
-                        &self.owner.core.queue,
-                        &self.owner.core.source,
-                        &self.owner.core.transitions,
-                    );
+                    self.broadcast_owner_queue_state();
                 }
                 if let PlayerEvent::PausedChanged(paused) = &pe {
                     if let Some((connection_id, request_id, generation)) = self.owner.intents
@@ -656,12 +628,7 @@ impl DaemonLoop {
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
                 if self.role == DaemonRole::Local {
-                    if let Err(error) = persist_stay_alive_owner_queue(
-                        &self.owner,
-                        &self.player,
-                        &self.shared_queue,
-                        &mut *self.store,
-                    ) {
+                    if let Err(error) = self.persist_owner_queue() {
                         log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
                     }
                 }
@@ -683,16 +650,34 @@ impl DaemonLoop {
         }
 
         if self.role == DaemonRole::Local && owner_queue_dirty {
-            if let Err(error) = persist_stay_alive_owner_queue(
-                &self.owner,
-                &self.player,
-                &self.shared_queue,
-                &mut *self.store,
-            ) {
+            if let Err(error) = self.persist_owner_queue() {
                 log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
             }
         }
 
         LoopFlow::Continue
+    }
+
+    /// Broadcasts the canonical owner queue to every ctrl peer.
+    fn broadcast_owner_queue_state(&self) {
+        broadcast_queue_state(
+            &self.ctrl_clients,
+            &self.player,
+            &self.shared_queue,
+            &self.owner.core.queue,
+            &self.owner.core.source,
+            &self.owner.core.transitions,
+        );
+    }
+
+    /// Persists the owner queue through the injected store, returning the
+    /// store's error so the caller can log it in context.
+    fn persist_owner_queue(&mut self) -> Result<(), String> {
+        persist_stay_alive_owner_queue(
+            &self.owner,
+            &self.player,
+            &self.shared_queue,
+            &mut *self.store,
+        )
     }
 }
