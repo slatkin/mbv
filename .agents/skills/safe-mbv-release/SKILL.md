@@ -5,7 +5,7 @@ description: Safely prepare and publish an mbv release using the repository's re
 
 # Safe mbv Release
 
-Use the repository's `scripts/release.sh` as the single source of truth for
+Use the repository's `tools/release.sh` as the single source of truth for
 release preparation. The script runs the project checks, updates `Cargo.toml`
 and `Cargo.lock`, commits the release, and applies different behavior on
 `main` versus a feature branch. Do not reproduce those steps manually unless
@@ -25,7 +25,7 @@ git tag --sort=-version:refname | head -10
 - Confirm the requested version and release summary. If the summary is absent,
   derive a concise one from commits since the previous tag and show it before
   running the release command; do not invent product claims.
-- Read `scripts/release.sh` before invoking it, especially if the script has
+- Read `tools/release.sh` before invoking it, especially if the script has
   changed since the last release.
 - Check both local and remote tag state. Stop if the release tag already exists
   locally or on `origin`; the script only protects against an existing local
@@ -42,7 +42,7 @@ git tag --sort=-version:refname | head -10
 Run the repository-provided command with the normalized version and summary:
 
 ```bash
-scripts/release.sh <version> "<summary>"
+tools/release.sh <version> "<summary>"
 ```
 
 The script accepts either `0.x.y` or `v0.x.y`; Cargo uses the version without
