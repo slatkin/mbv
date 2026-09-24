@@ -587,10 +587,17 @@ impl App {
                     self.refresh_after_stop();
                 }
             }
-            // The idle-load result is carried over ctrl for the later Client
-            // dispatch work; until that boundary is implemented, do not stage
-            // a local queue or claim acceptance here.
-            PlayerEvent::UnifiedQueueLoadResult { .. } => {}
+            PlayerEvent::UnifiedQueueLoadResult { result, .. } => match result {
+                mbv_core::ctrl::QueueLoadResult::Accepted => {
+                    self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
+                }
+                mbv_core::ctrl::QueueLoadResult::Rejected { reason } => {
+                    self.flash(
+                        format!("Queue load rejected: {reason}"),
+                        ToastSeverity::Error,
+                    );
+                }
+            },
             PlayerEvent::AudiobookshelfProgress(ev) => {
                 // No client-side generation gate: the daemon already drops
                 // stale-generation updates before emitting, and the daemon's

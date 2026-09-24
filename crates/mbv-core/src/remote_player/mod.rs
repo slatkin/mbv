@@ -443,6 +443,17 @@ impl RemotePlayer {
         )
     }
 
+    /// Test-support stub that advertises owner-authoritative idle queue loads.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn stub_owner_queue_load_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_owner_queue_load = true;
+        (remote, event_rx, cmd_rx)
+    }
+
     /// Test-support stub whose advertised ctrl capability identifies an
     /// audio-only playback owner.
     #[cfg(any(test, feature = "test-support"))]

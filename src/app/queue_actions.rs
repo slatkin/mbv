@@ -8,6 +8,9 @@ use super::{
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static NEXT_OWNER_QUEUE_LOAD_REQUEST: AtomicU64 = AtomicU64::new(1);
 #[path = "queue_actions_playlist_mutation.rs"]
 mod queue_actions_playlist_mutation;
 
@@ -452,6 +455,34 @@ impl App {
                     return;
                 }
                 let direct_remote = self.has_direct_remote_queue();
+                if !autostart && self.is_local_daemon() {
+                    let request_id = NEXT_OWNER_QUEUE_LOAD_REQUEST.fetch_add(1, Ordering::Relaxed);
+                    let slots = items
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, item)| mbv_core::ctrl::UnifiedQueueSlot {
+                            slot_id: (index + 1) as u64,
+                            item: QueueItem::Emby(Box::new(item)),
+                        })
+                        .collect();
+                    let result = self
+                        .player
+                        .as_remote()
+                        .map(|remote| remote.load_queue_idle(request_id, slots, start_idx, source));
+                    match result {
+                        Some(Ok(())) => self.set_queue_scope(self.playing_queue_scope()),
+                        Some(Err(_)) if self.player.is_remote_disconnected() => self.flash(
+                            super::actions::CONNECTION_LOST_MESSAGE.into(),
+                            ToastSeverity::Warning,
+                        ),
+                        Some(Err(reason)) => self.flash(reason, ToastSeverity::Error),
+                        None => self.flash(
+                            "Could not send idle queue load to Player owner".into(),
+                            ToastSeverity::Error,
+                        ),
+                    }
+                    return;
+                }
                 if self.local_queue_metadata_applies(self.playing_queue_scope()) {
                     self.queue_source = source;
                 }

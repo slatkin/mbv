@@ -68,6 +68,134 @@ fn queue_scope_resolution_matrix_direct_remote_displaying_remote() {
     assert!(!app.local_queue_metadata_applies(QueueScope::Remote));
 }
 
+fn local_owner_app() -> (App, std::sync::mpsc::Receiver<CtrlCmd>) {
+    let (remote, _events, commands) =
+        mbv_core::remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(
+            make_items(2),
+            0,
+        );
+    let app = App::new_remote(
+        mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+        remote,
+        _events,
+        mbv_core::remote_player::DaemonEndpoint::Local,
+    );
+    while commands.try_recv().is_ok() {}
+    (app, commands)
+}
+
+#[test]
+fn local_owner_idle_load_during_playback_sends_without_local_replacement() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands) = local_owner_app();
+    let before = make_items(2);
+    app.player_tab.set_items(before.clone(), 1);
+    app.player_tab.sequence_generation = 17;
+    app.queue_source = crate::config::QueueSource::Album;
+    app.player.status.lock().unwrap().active = true;
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(3),
+        start_idx: 1,
+        source: crate::config::QueueSource::Shuffle,
+        autostart: false,
+    });
+
+    let CtrlCmd::UnifiedQueueLoadIdle { request_id, slots, cursor, source } =
+        commands.try_recv().unwrap()
+    else {
+        panic!("expected owner idle load command");
+    };
+    assert_eq!(slots.len(), 3);
+    assert_eq!(cursor, 1);
+    assert_eq!(source, crate::config::QueueSource::Shuffle);
+    assert_eq!(app.status, "");
+    app.handle_player_event(PlayerEvent::UnifiedQueueLoadResult {
+        request_id,
+        result: mbv_core::ctrl::QueueLoadResult::Accepted,
+    });
+    assert_eq!(app.status, "Queue load accepted");
+    assert_eq!(app.player_tab.emby_items(), before);
+    assert_eq!(app.player_tab.sequence_generation, 17);
+    assert_eq!(app.queue_source, crate::config::QueueSource::Album);
+    assert!(app.player.status.lock().unwrap().active);
+    assert_ne!(app.status, "Loaded: id1");
+}
+
+#[test]
+fn local_owner_empty_idle_load_is_sent_without_clearing_confirmed_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands) = local_owner_app();
+    let before = make_items(2);
+    app.player_tab.set_items(before.clone(), 0);
+    app.queue_source = crate::config::QueueSource::Album;
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: Vec::new(),
+        start_idx: 0,
+        source: crate::config::QueueSource::Shuffle,
+        autostart: false,
+    });
+
+    assert!(matches!(commands.try_recv(), Ok(CtrlCmd::UnifiedQueueLoadIdle { slots, .. }) if slots.is_empty()));
+    assert_eq!(app.player_tab.emby_items(), before);
+    assert_eq!(app.queue_source, crate::config::QueueSource::Album);
+}
+
+#[test]
+fn local_owner_idle_load_rejection_is_reported_without_local_mutation() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands) = local_owner_app();
+    let before = make_items(2);
+    app.player_tab.set_items(before.clone(), 0);
+    app.queue_source = crate::config::QueueSource::Album;
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(1),
+        start_idx: 0,
+        source: crate::config::QueueSource::Shuffle,
+        autostart: false,
+    });
+    let CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } = commands.try_recv().unwrap() else {
+        panic!("expected owner idle load command");
+    };
+    app.handle_player_event(PlayerEvent::UnifiedQueueLoadResult {
+        request_id,
+        result: mbv_core::ctrl::QueueLoadResult::Rejected {
+            reason: "owner busy".into(),
+        },
+    });
+
+    assert_eq!(app.player_tab.emby_items(), before);
+    assert_eq!(app.queue_source, crate::config::QueueSource::Album);
+    assert!(app.status.contains("owner busy"));
+    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Error);
+}
+
+#[test]
+fn local_owner_disconnect_before_idle_load_acceptance_is_unknown_without_local_mutation() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands) = local_owner_app();
+    let before = make_items(2);
+    app.player_tab.set_items(before.clone(), 0);
+    app.player
+        .disconnected_flag()
+        .unwrap()
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(1),
+        start_idx: 0,
+        source: crate::config::QueueSource::Shuffle,
+        autostart: false,
+    });
+
+    assert!(matches!(commands.try_recv(), Err(std::sync::mpsc::TryRecvError::Empty)));
+    assert_eq!(app.player_tab.emby_items(), before);
+    assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
+    assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
+}
+
 #[test]
 fn direct_remote_play_items_keeps_local_queue_intact() {
     let _guard = crate::config::TestStateDirGuard::new();
