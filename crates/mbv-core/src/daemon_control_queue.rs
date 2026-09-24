@@ -266,14 +266,14 @@ fn daemon_admits(
 /// (`abs-queue` for episodes, `abs-book-queue` for books). Checked ahead of
 /// queue mutation so an incapable peer's operation is refused outright rather
 /// than silently dropping the unsupported item.
-fn abs_queue_transport_rejection(
-    items: &[QueueItem],
+fn abs_queue_transport_rejection<'a>(
+    items: impl IntoIterator<Item = &'a QueueItem> + Clone,
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
 ) -> Option<String> {
-    if !supports_abs_queue && items.iter().any(QueueItem::is_audiobookshelf) {
+    if !supports_abs_queue && items.clone().into_iter().any(QueueItem::is_audiobookshelf) {
         Some("peer did not negotiate Audiobookshelf queue transport".to_string())
-    } else if !supports_abs_book_queue && items.iter().any(QueueItem::is_audiobookshelf_book) {
+    } else if !supports_abs_book_queue && items.into_iter().any(QueueItem::is_audiobookshelf_book) {
         Some("peer did not negotiate Audiobookshelf book queue transport".to_string())
     } else {
         None

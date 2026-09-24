@@ -609,7 +609,10 @@ fn broadcast_audiobookshelf_book_progress(
 /// `Player`/`EmbyClient`. Returns the bare reason (not a `CtrlEvent`) so the
 /// same string can be reused for both the server-side log line and the wire
 /// event the caller sends — one message, not two that can drift apart.
-fn audio_only_rejection(audio_only: bool, fetched: &[QueueItem]) -> Option<String> {
+fn audio_only_rejection<'a>(
+    audio_only: bool,
+    fetched: impl IntoIterator<Item = &'a QueueItem>,
+) -> Option<String> {
     if audio_only && !all_audio(fetched) {
         Some("Daemon is running in audio-only mode; can't play video items".to_string())
     } else {

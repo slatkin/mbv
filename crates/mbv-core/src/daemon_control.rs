@@ -567,7 +567,7 @@ fn handle_ctrl_for_role(
                 Some("peer did not negotiate owner queue-load capability".to_string())
             } else {
                 abs_queue_transport_rejection(
-                    &slots.iter().map(|slot| slot.item.clone()).collect::<Vec<_>>(),
+                    slots.iter().map(|slot| &slot.item),
                     supports_abs_queue,
                     supports_abs_book_queue,
                 )
@@ -594,11 +594,10 @@ fn handle_ctrl_for_role(
                 has_emby,
                 has_audiobookshelf,
             );
-            let admitted_items: Vec<_> = admitted.iter().map(|(_, item)| item.clone()).collect();
             let admission_error = if was_nonempty && admitted.is_empty() {
                 Some("Playback owner rejected the queue load".to_string())
             } else {
-                audio_only_rejection(audio_only, &admitted_items)
+                audio_only_rejection(audio_only, admitted.iter().map(|(_, item)| item))
             };
             if let Some(reason) = admission_error {
                 send_to(
