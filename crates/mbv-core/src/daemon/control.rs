@@ -169,7 +169,7 @@ fn reject_queue_load(
 
 const IDLE_QUEUE_LOAD_STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub(crate) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reason: &str) -> bool {
+pub(super) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reason: &str) -> bool {
     let Some(pending) = owner.pending_idle_load.take() else {
         return false;
     };
@@ -177,7 +177,7 @@ pub(crate) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reas
     true
 }
 
-pub(crate) fn cancel_pending_idle_queue_load_if_run_changed(
+pub(super) fn cancel_pending_idle_queue_load_if_run_changed(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
 ) -> bool {
@@ -192,7 +192,7 @@ pub(crate) fn cancel_pending_idle_queue_load_if_run_changed(
     false
 }
 
-pub(crate) fn expire_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, now: Instant) -> bool {
+pub(super) fn expire_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, now: Instant) -> bool {
     if owner.pending_idle_load.as_ref().is_some_and(|pending| {
         now.duration_since(pending.started_at) >= IDLE_QUEUE_LOAD_STOP_TIMEOUT
     }) {
@@ -204,7 +204,7 @@ pub(crate) fn expire_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, now:
     false
 }
 
-pub(crate) fn complete_pending_idle_queue_load(
+pub(super) fn complete_pending_idle_queue_load(
     run_identity: (
         crate::ctrl::PlaybackRequestId,
         crate::ctrl::PlaybackGeneration,
@@ -295,7 +295,7 @@ fn send_role_gate_rejection(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn handle_ctrl_for_role(
+pub(super) fn handle_ctrl_for_role(
     cmd: CtrlCmd,
     client_id: CtrlClientId,
     request: CtrlRequest<'_>,

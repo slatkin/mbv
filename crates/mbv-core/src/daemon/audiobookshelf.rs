@@ -7,7 +7,7 @@ use std::sync::mpsc;
 /// Install (or clear) the daemon player's Audiobookshelf context from the
 /// owner runtime, wiring the player's acknowledged-progress sender into the
 /// daemon event loop. Mirrors the bare-mode install in the TUI app.
-pub(crate) fn install_daemon_audiobookshelf_context(
+pub(super) fn install_daemon_audiobookshelf_context(
     player: &Player,
     runtime: &Option<AudiobookshelfOwnerContext>,
     merged_tx: &mpsc::Sender<DaemonEvent>,

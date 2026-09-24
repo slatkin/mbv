@@ -72,7 +72,7 @@ fn update_player_queue(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn reconcile_packaged_emby(
+pub(super) fn reconcile_packaged_emby(
     requested_revision: u64,
     current: &mut Option<EmbyOwnerContext>,
     ws_send_tx: &mut Option<crate::ws::WsSender>,

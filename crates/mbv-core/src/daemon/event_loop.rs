@@ -29,29 +29,29 @@ pub(crate) type OwnerQueueStore =
 /// Owns every local the daemon event loop reads, so one event can be handled
 /// without exiting the process (`Shutdown` is returned to the caller).
 pub(crate) struct DaemonLoop {
-    pub(crate) owner: DaemonPlayerOwner,
-    pub(crate) player: Player,
-    pub(crate) shared_queue: SharedQueueState,
-    pub(crate) ctrl_clients: ClientRegistry,
-    pub(crate) client: Arc<Mutex<EmbyClient>>,
-    pub(crate) emby_runtime: Option<EmbyOwnerContext>,
-    pub(crate) audiobookshelf_runtime: Option<AudiobookshelfOwnerContext>,
-    pub(crate) merged_tx: mpsc::Sender<DaemonEvent>,
-    pub(crate) ws_send_tx: Option<crate::ws::WsSender>,
-    pub(crate) direct_commands: Vec<String>,
-    pub(crate) stay_alive: bool,
-    pub(crate) role: DaemonRole,
-    pub(crate) audio_only: bool,
-    pub(crate) last_keepalive: Instant,
-    pub(crate) last_capabilities: Instant,
+    pub(super) owner: DaemonPlayerOwner,
+    pub(super) player: Player,
+    pub(super) shared_queue: SharedQueueState,
+    pub(super) ctrl_clients: ClientRegistry,
+    pub(super) client: Arc<Mutex<EmbyClient>>,
+    pub(super) emby_runtime: Option<EmbyOwnerContext>,
+    pub(super) audiobookshelf_runtime: Option<AudiobookshelfOwnerContext>,
+    pub(super) merged_tx: mpsc::Sender<DaemonEvent>,
+    pub(super) ws_send_tx: Option<crate::ws::WsSender>,
+    pub(super) direct_commands: Vec<String>,
+    pub(super) stay_alive: bool,
+    pub(super) role: DaemonRole,
+    pub(super) audio_only: bool,
+    pub(super) last_keepalive: Instant,
+    pub(super) last_capabilities: Instant,
     /// Injected owner-queue persistence, so tests can record snapshots instead
     /// of writing real state files.
-    pub(crate) store: OwnerQueueStore,
+    pub(super) store: OwnerQueueStore,
 }
 
 impl DaemonLoop {
     /// Keepalive/capability timers, run once per loop pass.
-    pub(crate) fn tick(&mut self, now: Instant) {
+    pub(super) fn tick(&mut self, now: Instant) {
         if self.emby_runtime.is_some() && self.last_keepalive.elapsed() >= Duration::from_secs(30) {
             if let Some(ws_send_tx) = &self.ws_send_tx {
                 let _ = ws_send_tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
@@ -72,7 +72,7 @@ impl DaemonLoop {
     }
 
     /// Idle work performed when no event arrived within the poll timeout.
-    pub(crate) fn on_recv_timeout(&mut self, now: Instant) {
+    pub(super) fn on_recv_timeout(&mut self, now: Instant) {
         cancel_pending_idle_queue_load_if_run_changed(&mut self.owner, &self.player);
         expire_pending_idle_queue_load(&mut self.owner, now);
         if let Some((connection_id, event)) = self.owner.intents.settle_buffering_if_due() {
@@ -95,7 +95,7 @@ impl DaemonLoop {
 
     /// Processes exactly one event. Never exits the process: `Shutdown` is
     /// returned so `run_with_options` can remove the pid file and exit.
-    pub(crate) fn handle_event(&mut self, ev: DaemonEvent) -> LoopFlow {
+    pub(super) fn handle_event(&mut self, ev: DaemonEvent) -> LoopFlow {
         // Set by any arm below that mutated the owner's canonical queue;
         // persisted once after the match instead of inline per mutation site.
         let mut owner_queue_dirty = false;

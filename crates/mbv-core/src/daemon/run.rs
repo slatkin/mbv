@@ -48,7 +48,7 @@ pub(crate) fn playback_run_identity_is_current(
         }
 }
 
-pub(crate) fn apply_track_completed_observation(
+pub(super) fn apply_track_completed_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
@@ -89,7 +89,7 @@ pub(crate) fn apply_track_completed_observation(
     true
 }
 
-pub(crate) fn apply_stopped_observation(
+pub(super) fn apply_stopped_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     run_identity: PlaybackRunIdentity,
@@ -119,7 +119,7 @@ pub(crate) fn apply_stopped_observation(
     Some(true)
 }
 
-pub(crate) fn apply_queue_enriched(
+pub(super) fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
     owner: &mut DaemonPlayerOwner,
     player: &Player,
