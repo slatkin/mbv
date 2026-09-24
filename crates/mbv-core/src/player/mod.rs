@@ -278,7 +278,7 @@ pub use sources::*;
 mod runtime;
 pub(crate) use runtime::*;
 mod report_worker;
-pub(self) use report_worker::*;
+use report_worker::*;
 mod reporting;
 pub(crate) use reporting::*;
 mod run;
