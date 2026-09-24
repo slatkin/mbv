@@ -3,7 +3,7 @@ use super::*;
 /// Install (or clear) the daemon player's Audiobookshelf context from the
 /// owner runtime, wiring the player's acknowledged-progress sender into the
 /// daemon event loop. Mirrors the bare-mode install in the TUI app.
-pub(super) fn install_daemon_audiobookshelf_context(
+pub(crate) fn install_daemon_audiobookshelf_context(
     player: &Player,
     runtime: &Option<AudiobookshelfOwnerContext>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
@@ -62,7 +62,7 @@ pub(super) fn install_daemon_audiobookshelf_context(
 /// queue (matched by provider-qualified identity), then broadcast the redacted
 /// progress to capable clients. Drops updates from a stale setup generation
 /// without either side effect.
-pub(super) fn apply_audiobookshelf_progress(
+pub(crate) fn apply_audiobookshelf_progress(
     update: crate::player::AudiobookshelfProgressUpdate,
     current_generation: Option<crate::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,
@@ -111,7 +111,7 @@ pub(super) fn apply_audiobookshelf_progress(
 /// Bound queue (matched by `library_item_id` only), then broadcast the
 /// redacted book progress to capable clients. Drops updates from a stale
 /// setup generation without either side effect.
-pub(super) fn apply_audiobookshelf_book_progress(
+pub(crate) fn apply_audiobookshelf_book_progress(
     update: crate::player::AudiobookshelfBookProgressUpdate,
     current_generation: Option<crate::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,

@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn broadcast_player_event_if_not_replaced(
+pub(crate) fn broadcast_player_event_if_not_replaced(
     ctrl_clients: &ClientRegistry,
     event: PlayerEvent,
     replacement_committed: bool,
@@ -11,7 +11,7 @@ pub(super) fn broadcast_player_event_if_not_replaced(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct PlaybackRunIdentity {
+pub(crate) struct PlaybackRunIdentity {
     request_id: PlaybackRequestId,
     generation: PlaybackGeneration,
 }
@@ -25,7 +25,7 @@ impl From<(PlaybackRequestId, PlaybackGeneration)> for PlaybackRunIdentity {
     }
 }
 
-pub(super) fn playback_run_identity_is_current(
+pub(crate) fn playback_run_identity_is_current(
     run_identity: PlaybackRunIdentity,
     player: &Player,
 ) -> bool {
@@ -36,7 +36,7 @@ pub(super) fn playback_run_identity_is_current(
         }
 }
 
-pub(super) fn apply_track_completed_observation(
+pub(crate) fn apply_track_completed_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
@@ -72,7 +72,7 @@ pub(super) fn apply_track_completed_observation(
     true
 }
 
-pub(super) fn apply_stopped_observation(
+pub(crate) fn apply_stopped_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     run_identity: PlaybackRunIdentity,
@@ -100,7 +100,7 @@ pub(super) fn apply_stopped_observation(
     Some(true)
 }
 
-pub(super) fn apply_queue_enriched(
+pub(crate) fn apply_queue_enriched(
     items: Vec<(QueueSlotId, EmbyItem)>,
     owner: &mut DaemonPlayerOwner,
     player: &Player,

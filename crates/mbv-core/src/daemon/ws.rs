@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn handle_ws(
+pub(crate) fn handle_ws(
     ev: WsEvent,
     client: Option<&Arc<Mutex<EmbyClient>>>,
     player: &Player,
@@ -171,6 +171,6 @@ pub(super) fn handle_ws(
     }
 }
 
-pub(super) fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> bool {
+pub(crate) fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> bool {
     items.into_iter().all(QueueItem::is_audio)
 }

@@ -355,7 +355,7 @@ use crate::player::PlayerOwnerState;
 /// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
 /// loop owns exactly one of these.
 #[derive(Default)]
-pub(super) struct DaemonPlayerOwner {
+pub(crate) struct DaemonPlayerOwner {
     core: PlayerOwnerState,
     pending_idle_load: Option<PendingIdleQueueLoad>,
     /// Guarded direct-playback lifecycle coordinator. Retained functionally
@@ -370,7 +370,7 @@ pub(super) struct DaemonPlayerOwner {
     queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
 }
 
-pub(super) struct PendingIdleQueueLoad {
+pub(crate) struct PendingIdleQueueLoad {
     request_id: crate::ctrl::QueueLoadRequestId,
     slots: Vec<(QueueSlotId, QueueItem)>,
     cursor: usize,
@@ -545,7 +545,7 @@ fn expire_and_redispatch(
 /// ctrl-socket clients.  The queue itself is the single source of truth;
 /// `UnifiedQueueState` is derived from it at the broadcast boundary.
 #[derive(Clone)]
-pub(super) struct SharedQueueState {
+pub(crate) struct SharedQueueState {
     queue: Arc<Mutex<PlaybackQueue>>,
     source: Arc<Mutex<crate::config::QueueSource>>,
     lineage: Arc<Mutex<crate::ctrl::QueueLineage>>,

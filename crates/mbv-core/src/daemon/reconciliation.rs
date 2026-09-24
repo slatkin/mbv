@@ -67,7 +67,7 @@ fn update_player_queue(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn reconcile_packaged_emby(
+pub(crate) fn reconcile_packaged_emby(
     requested_revision: u64,
     current: &mut Option<EmbyOwnerContext>,
     ws_send_tx: &mut Option<crate::ws::WsSender>,
@@ -165,7 +165,7 @@ pub(super) fn reconcile_packaged_emby(
 /// mismatched revision or unreadable storage rejects without changing the
 /// runtime.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn reconcile_packaged_audiobookshelf(
+pub(crate) fn reconcile_packaged_audiobookshelf(
     requested_revision: u64,
     current: &mut Option<AudiobookshelfOwnerContext>,
     player: &Player,

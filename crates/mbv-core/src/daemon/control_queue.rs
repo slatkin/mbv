@@ -216,7 +216,7 @@ fn admit_queue<T>(
     (admitted, cursor)
 }
 
-pub(super) fn admit_queue_items(
+pub(crate) fn admit_queue_items(
     original: Vec<QueueItem>,
     requested_cursor: Option<usize>,
     audio_only: bool,
@@ -233,7 +233,7 @@ pub(super) fn admit_queue_items(
     )
 }
 
-pub(super) fn admit_queue_slots(
+pub(crate) fn admit_queue_slots(
     original: Vec<(crate::playback_queue::QueueSlotId, QueueItem)>,
     requested_cursor: Option<usize>,
     audio_only: bool,
@@ -250,7 +250,7 @@ pub(super) fn admit_queue_slots(
     )
 }
 
-pub(super) fn daemon_admits(
+pub(crate) fn daemon_admits(
     item: &QueueItem,
     audio_only: bool,
     has_emby: bool,
@@ -271,7 +271,7 @@ pub(super) fn daemon_admits(
 /// (`abs-queue` for episodes, `abs-book-queue` for books). Checked ahead of
 /// queue mutation so an incapable peer's operation is refused outright rather
 /// than silently dropping the unsupported item.
-pub(super) fn abs_queue_transport_rejection<'a>(
+pub(crate) fn abs_queue_transport_rejection<'a>(
     items: impl IntoIterator<Item = &'a QueueItem> + Clone,
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
@@ -287,7 +287,7 @@ pub(super) fn abs_queue_transport_rejection<'a>(
 
 /// Rejects a queue command with `reason` and echoes the daemon's
 /// authoritative state back to the requester.
-pub(super) fn reject_command(
+pub(crate) fn reject_command(
     reply_tx: &CtrlSender,
     ctrl_clients: &ClientRegistry,
     client_id: CtrlClientId,

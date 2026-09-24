@@ -30,7 +30,7 @@ fn spawn_item_lookup<F>(
 /// control-flow re-entry; the wire variant is gone (ADR 0020), so the
 /// resolved-play path now lives here as a plain function.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn play_resolved_items(
+pub(crate) fn play_resolved_items(
     fetched: Vec<EmbyItem>,
     start_idx: usize,
     start_ticks: i64,
@@ -142,7 +142,7 @@ fn reject_queue_load(reply_tx: &CtrlSender, request_id: crate::ctrl::QueueLoadRe
 
 const IDLE_QUEUE_LOAD_STOP_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub(super) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reason: &str) -> bool {
+pub(crate) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reason: &str) -> bool {
     let Some(pending) = owner.pending_idle_load.take() else {
         return false;
     };
@@ -150,7 +150,7 @@ pub(super) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reas
     true
 }
 
-pub(super) fn cancel_pending_idle_queue_load_if_run_changed(
+pub(crate) fn cancel_pending_idle_queue_load_if_run_changed(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
 ) -> bool {
@@ -165,7 +165,7 @@ pub(super) fn cancel_pending_idle_queue_load_if_run_changed(
     false
 }
 
-pub(super) fn expire_pending_idle_queue_load(
+pub(crate) fn expire_pending_idle_queue_load(
     owner: &mut DaemonPlayerOwner,
     now: Instant,
 ) -> bool {
@@ -180,7 +180,7 @@ pub(super) fn expire_pending_idle_queue_load(
     false
 }
 
-pub(super) fn complete_pending_idle_queue_load(
+pub(crate) fn complete_pending_idle_queue_load(
     run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
     failure: Option<String>,
     owner: &mut DaemonPlayerOwner,
@@ -268,7 +268,7 @@ fn send_role_gate_rejection(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn handle_ctrl_for_role(
+pub(crate) fn handle_ctrl_for_role(
     cmd: CtrlCmd,
     client_id: CtrlClientId,
     request: CtrlRequest<'_>,
@@ -1058,7 +1058,7 @@ pub(super) fn handle_ctrl_for_role(
     }
 }
 
-pub(super) fn owner_admin_transport_allowed(
+pub(crate) fn owner_admin_transport_allowed(
     role: crate::daemon::DaemonRole,
     kind: crate::config::ServiceKind,
     transport: Option<CtrlTransport>,
