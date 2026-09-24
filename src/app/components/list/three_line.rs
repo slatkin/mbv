@@ -15,7 +15,7 @@ pub enum ThreeLineRole {
     Kind,
     #[allow(dead_code)]
     Detail,
-    #[allow(dead_code)]
+    #[cfg_attr(not(test), allow(dead_code))]
     Status,
     #[allow(dead_code)]
     Accent,
@@ -29,7 +29,6 @@ pub struct ThreeLineSpan {
 }
 
 impl ThreeLineSpan {
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(text: impl Into<String>, role: ThreeLineRole) -> Self {
         Self {
             text: text.into(),
@@ -46,7 +45,6 @@ pub struct ThreeLineItem<Target> {
 }
 
 impl<Target> ThreeLineItem<Target> {
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(target: Target, lines: [Vec<ThreeLineSpan>; 3]) -> Self {
         Self { target, lines }
     }
@@ -63,7 +61,6 @@ pub struct ThreeLineFlatList<Target> {
 }
 
 impl<Target> ThreeLineFlatList<Target> {
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn new(gap: u16) -> Self {
         Self {
             items: Vec::new(),
@@ -75,12 +72,10 @@ impl<Target> ThreeLineFlatList<Target> {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn gap(&self) -> u16 {
         self.gap
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
     }
@@ -97,17 +92,14 @@ impl<Target> ThreeLineFlatList<Target> {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn items(&self) -> &[ThreeLineItem<Target>] {
         &self.items
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn selected_target(&self) -> Option<&Target> {
         self.selected.as_ref()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn set_content(&mut self, items: Vec<ThreeLineItem<Target>>)
     where
         Target: Clone + Eq,

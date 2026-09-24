@@ -54,7 +54,9 @@ pub(in crate::app) use components::playlists::{
     PlaylistsViewState,
 };
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
-pub(in crate::app) use components::sessions::render_sessions_overlay_content;
+pub(in crate::app) use components::sessions::{
+    render_sessions_overlay_content, render_sessions_scrollbar,
+};
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };

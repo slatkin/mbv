@@ -25,7 +25,6 @@ pub use self::expandable::{AggregateMarkState, Expandable};
 pub use self::marks::{MarkSelection, MarkSelectionState};
 pub use self::paint::{PaintRetained, PaintRetainedState};
 pub use self::row_flow::{Row, RowFlow};
-#[allow(unused_imports)]
 pub use self::three_line::{ThreeLineFlatList, ThreeLineItem, ThreeLineRole, ThreeLineSpan};
 pub use self::viewport::{PagingPolicy, Viewported};
 

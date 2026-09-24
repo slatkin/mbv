@@ -6,7 +6,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-#[allow(dead_code)]
 pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
     frame: &mut Frame,
     area: Rect,
@@ -44,12 +43,16 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
                 list.item(index).lines[line_index as usize]
                     .iter()
                     .map(|span| {
-                        let fg = match span.role {
-                            ThreeLineRole::Name => palette::TEXT_PRIMARY,
-                            ThreeLineRole::Kind => palette::TEXT_EMPHASIS,
-                            ThreeLineRole::Detail => palette::TEXT_MUTED,
-                            ThreeLineRole::Status => palette::STATUS_AVAILABLE,
-                            ThreeLineRole::Accent => palette::ACCENT_ACTIVE,
+                        let fg = if selected && span.role != ThreeLineRole::Accent {
+                            palette::SELECTED_ROW_FG
+                        } else {
+                            match span.role {
+                                ThreeLineRole::Name => palette::TEXT_PRIMARY,
+                                ThreeLineRole::Kind => palette::TEXT_EMPHASIS,
+                                ThreeLineRole::Detail => palette::TEXT_MUTED,
+                                ThreeLineRole::Status => palette::STATUS_AVAILABLE,
+                                ThreeLineRole::Accent => palette::ACCENT_ACTIVE,
+                            }
                         };
                         Span::styled(span.text.clone(), Style::default().fg(fg).bg(bg))
                     })
