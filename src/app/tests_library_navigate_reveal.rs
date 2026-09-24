@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::app::tests::{install_test_emby, make_app_stub, make_item};
-use crate::app::library_browse_actions::{RevealTarget, resolve_reveal_target};
+use crate::app::dispatch::library::browse::{RevealTarget, resolve_reveal_target};
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::state::types::events::NavigateLanding;
 use mbv_core::mock_http::MockHttp;

@@ -1,10 +1,10 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, DaemonLostModal, QUIT_REQUESTED};
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
 impl App {
-    pub(super) fn expire_bare_transition(&mut self, now: std::time::Instant) -> bool {
+    pub(in crate::app) fn expire_bare_transition(&mut self, now: std::time::Instant) -> bool {
         if self.player.is_remote() {
             return false;
         }
@@ -22,7 +22,7 @@ impl App {
         true
     }
 
-    pub(super) fn reset_bare_transitions(&mut self) {
+    pub(in crate::app) fn reset_bare_transitions(&mut self) {
         if !self.player.is_remote() {
             self.bare_owner.reset_local_transitions();
         }
@@ -33,7 +33,7 @@ impl App {
     /// restored on the next launch. Skipped while controlling a remote session
     /// (the remote owns its volume) and while temporarily muted (so a mute
     /// doesn't clobber the saved level with 0).
-    pub(super) fn sync_volume_from_player(&mut self) {
+    pub(in crate::app) fn sync_volume_from_player(&mut self) {
         if self.connected_session_id.is_some() {
             return;
         }
@@ -58,7 +58,7 @@ impl App {
 
     /// Handle a PlayerEvent received from the player thread.
     /// Returns true if the caller's event loop should `continue` (skip render for this tick).
-    pub(super) fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
+    pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
         match ev {
             PlayerEvent::Stopped {
                 slot_id,

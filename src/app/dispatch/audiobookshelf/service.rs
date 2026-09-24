@@ -1,5 +1,5 @@
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::App;
 use mbv_core::config::QueueState;
 use mbv_core::service_runtime::ServiceState;
 
@@ -23,7 +23,7 @@ impl App {
         }
     }
 
-    pub(super) fn clear_audiobookshelf_authentication(&mut self) -> Result<(), String> {
+    pub(in crate::app) fn clear_audiobookshelf_authentication(&mut self) -> Result<(), String> {
         let current_generation = self.audiobookshelf_runtime.generation();
         self.stop_audiobookshelf_socket();
         self.audiobookshelf_runtime
@@ -47,11 +47,11 @@ impl App {
         }
     }
 
-    pub(super) fn apply_audiobookshelf_setup_completion(
+    pub(in crate::app) fn apply_audiobookshelf_setup_completion(
         &mut self,
-        completion: super::service_startup::AudiobookshelfSetupCompletion,
+        completion: crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion,
     ) {
-        use super::notify_actions::ToastSeverity;
+        use crate::app::notify_actions::ToastSeverity;
         if !self.audiobookshelf_runtime.accepts(completion.generation) {
             return;
         }
@@ -65,7 +65,7 @@ impl App {
                     self.audiobookshelf_runtime
                         .complete(completion.generation, completion.previous_state);
                     self.pending_audiobookshelf_replacement =
-                        Some(super::service_startup::AudiobookshelfPendingReplacement {
+                        Some(crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
                             candidate,
                             previous_state: completion.previous_state,
                         });
@@ -132,7 +132,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_audiobookshelf_setup_worker_disconnect(&mut self) {
+    pub(in crate::app) fn handle_audiobookshelf_setup_worker_disconnect(&mut self) {
         let previous = self
             .audiobookshelf_setup_form
             .as_ref()
@@ -188,7 +188,7 @@ impl App {
         self.queue_dirty = false;
     }
 
-    pub(super) fn remove_audiobookshelf_confirmed(&mut self) {
+    pub(in crate::app) fn remove_audiobookshelf_confirmed(&mut self) {
         self.stop_audiobookshelf_socket();
         self.stop_active_audiobookshelf_playback();
         // Snapshot for rollback if persistence fails, mirroring Emby removal.
@@ -226,7 +226,7 @@ impl App {
         );
     }
 
-    pub(super) fn replace_audiobookshelf_confirmed(
+    pub(in crate::app) fn replace_audiobookshelf_confirmed(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
@@ -313,7 +313,7 @@ impl App {
         }
     }
 
-    pub(super) fn install_audiobookshelf_player_context(
+    pub(in crate::app) fn install_audiobookshelf_player_context(
         &self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
@@ -372,7 +372,7 @@ impl App {
 
     /// Open an Audiobookshelf Socket.IO connection for the given setup
     /// generation. Shuts down any existing socket first (for replace).
-    pub(super) fn start_audiobookshelf_socket(
+    pub(in crate::app) fn start_audiobookshelf_socket(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
@@ -380,7 +380,9 @@ impl App {
         self.stop_audiobookshelf_socket();
 
         let Some((setup, key)) =
-            super::service_startup::audiobookshelf_setup_and_key(&self.config.lock().unwrap())
+            crate::app::dispatch::session::service_startup::audiobookshelf_setup_and_key(
+                &self.config.lock().unwrap(),
+            )
         else {
             return;
         };
@@ -396,7 +398,7 @@ impl App {
 
     /// Shut down the Audiobookshelf Socket.IO connection (if any) and
     /// replace the receiver with a dummy so the drain loop has no effect.
-    pub(super) fn stop_audiobookshelf_socket(&mut self) {
+    pub(in crate::app) fn stop_audiobookshelf_socket(&mut self) {
         if let Some(tx) = self.audiobookshelf_socket_tx.take() {
             let _ = tx.send(());
         }
@@ -407,11 +409,11 @@ impl App {
 
     /// Handle a decoded socket event. The progress-merge body (task 3.1-3.3)
     /// is delegated to `apply_audiobookshelf_socket_progress`.
-    pub(super) fn handle_audiobookshelf_socket_event(
+    pub(in crate::app) fn handle_audiobookshelf_socket_event(
         &mut self,
         ev: mbv_core::audiobookshelf_socket::SocketEvent,
     ) {
-        use super::notify_actions::ToastSeverity;
+        use crate::app::notify_actions::ToastSeverity;
         match ev {
             mbv_core::audiobookshelf_socket::SocketEvent::Authenticated => {}
             mbv_core::audiobookshelf_socket::SocketEvent::InvalidToken => {
@@ -483,8 +485,9 @@ impl App {
 
         // Task 3.1: merge in place (no REST call) via the existing
         // shared reconcile path that the daemon-route ack also uses.
-        let position_ticks =
-            super::audiobookshelf_browse_actions::seconds_to_ticks(progress.current_time_seconds);
+        let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
+            progress.current_time_seconds,
+        );
         self.reconcile_audiobookshelf_progress(
             &progress.library_item_id,
             &progress.episode_id,

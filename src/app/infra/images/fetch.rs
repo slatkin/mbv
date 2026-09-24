@@ -161,7 +161,7 @@ impl App {
                     "SortName",
                     "Ascending",
                 ) {
-                    crate::app::library_browse_actions::retain_grouped_music_items(
+                    crate::app::dispatch::library::browse::retain_grouped_music_items(
                         &mut items, true,
                     );
                     let _ = tx.send(LibEvent::MusicGroupWarmupListed {

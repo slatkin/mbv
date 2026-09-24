@@ -1,16 +1,16 @@
-use super::{
-    notify_actions::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
-    FeedHomeVideoState, LibEvent, QueueScope,
-};
 use crate::app::infra::ui_util::sort_audio_tracks;
 use crate::app::state::app_struct::LevelFillState;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::state::types::events::{NavigateLanding, PendingSeriesHandoff};
+use crate::app::{
+    notify_actions::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
+    FeedHomeVideoState, LibEvent, QueueScope,
+};
 use mbv_core::api::EmbyItem;
 
 impl App {
     fn retain_grouped_music_level_items(&self, lib_idx: usize, level: &mut BrowseLevel) {
-        super::library_browse_actions::retain_grouped_music_level_items(
+        crate::app::dispatch::library::browse::retain_grouped_music_level_items(
             level,
             self.is_grouped_music_library(lib_idx),
         );
@@ -60,7 +60,10 @@ impl App {
     /// plan §5. A no-op for every subsequent load of the same level
     /// (`library_total` is already `Some`), for music/feed/podcast
     /// libraries, and for non-root levels.
-    pub(super) fn maybe_capture_library_total_and_apply_default_pill(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_capture_library_total_and_apply_default_pill(
+        &mut self,
+        lib_idx: usize,
+    ) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
@@ -83,15 +86,15 @@ impl App {
         let sort_by = level.sort_by.clone();
         let sort_order = level.sort_order.clone();
         let is_tv = lib.library.collection_type == "tvshows";
-        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
             lib.library.collection_type.as_str(),
         );
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
         }
         if is_tv {
-            let mode = super::render::resolve_tv_content_mode(total, None);
-            let large = total > super::render::LIBRARY_PILL_THRESHOLD;
+            let mode = crate::app::render::resolve_tv_content_mode(total, None);
+            let large = total > crate::app::render::LIBRARY_PILL_THRESHOLD;
             if let Some(lib) = self.libs.get_mut(lib_idx) {
                 lib.tv_content_mode = Some(mode.clone());
                 if let Some(level) = lib.nav_stack.last_mut() {
@@ -108,10 +111,10 @@ impl App {
             }
             return;
         }
-        if total <= super::render::LIBRARY_PILL_THRESHOLD {
+        if total <= crate::app::render::LIBRARY_PILL_THRESHOLD {
             return;
         }
-        let filter = super::render::LetterFilter::default_filter_for_kind(filter_kind);
+        let filter = crate::app::render::LetterFilter::default_filter_for_kind(filter_kind);
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
             last.letter_filter = Some(filter.clone());
@@ -138,7 +141,7 @@ impl App {
         let fetched_rows = items.len();
         let mut items = Some(items);
         if let Some(items) = items.as_mut() {
-            super::library_browse_actions::retain_grouped_music_items(
+            crate::app::dispatch::library::browse::retain_grouped_music_items(
                 items,
                 self.is_grouped_music_library(lib_idx),
             );
@@ -189,7 +192,7 @@ impl App {
                     .get_mut(lib_idx)
                     .and_then(|lib| lib.nav_stack.last_mut())
                 {
-                    super::library_browse_actions::retain_grouped_music_level_items(
+                    crate::app::dispatch::library::browse::retain_grouped_music_level_items(
                         level,
                         grouped_music,
                     );
@@ -270,7 +273,7 @@ impl App {
             root.library_total = library_total;
             root.tv_content_mode =
                 (self.libs[lib_idx].library.collection_type == "tvshows").then(|| {
-                    super::render::resolve_tv_content_mode(
+                    crate::app::render::resolve_tv_content_mode(
                         library_total.unwrap_or_default(),
                         requested_position
                             .levels
@@ -342,13 +345,14 @@ impl App {
         // `http=`/`parse=` timings from `get_items_sorted`.
     }
 
-    pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
+    pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
         if let LibEvent::AudiobookshelfProgressAcknowledged(update) = ev {
             if !self.audiobookshelf_runtime.accepts(update.generation) {
                 return;
             }
-            let position_ticks =
-                super::audiobookshelf_browse_actions::seconds_to_ticks(update.current_time_seconds);
+            let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
+                update.current_time_seconds,
+            );
             self.reconcile_audiobookshelf_progress(
                 &update.library_item_id,
                 &update.episode_id,
@@ -362,8 +366,9 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(update.generation) {
                 return;
             }
-            let position_ticks =
-                super::audiobookshelf_browse_actions::seconds_to_ticks(update.current_time_seconds);
+            let position_ticks = crate::app::dispatch::audiobookshelf::browse::seconds_to_ticks(
+                update.current_time_seconds,
+            );
             self.reconcile_audiobookshelf_book_progress(
                 &update.library_item_id,
                 position_ticks,
@@ -403,7 +408,7 @@ impl App {
                     self.start_audiobookshelf_book_detail(selected_detail);
                 }
                 if let Some(next_page) = next_page {
-                    super::service_startup::start_audiobookshelf_books(
+                    crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
                         self.config.lock().unwrap().clone(),
                         generation,
                         library_id,
@@ -538,7 +543,7 @@ impl App {
                 // scheduler re-arms idempotently and stays bounded (design D5).
                 self.start_audiobookshelf_podcast_fan_out(index);
                 if let Some(next_page) = next_page {
-                    super::service_startup::start_audiobookshelf_shows(
+                    crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
                         self.config.lock().unwrap().clone(),
                         generation,
                         library_id,

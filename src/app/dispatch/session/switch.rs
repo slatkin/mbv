@@ -1,12 +1,12 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, PlayerTab, QueueScope, SuspendedLocalSession};
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{App, PlayerTab, QueueScope, SuspendedLocalSession};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(super) fn switch_to_direct_remote(
+    pub(in crate::app) fn switch_to_direct_remote(
         &mut self,
         sess: &mbv_core::api::SessionInfo,
         remote: mbv_core::remote_player::RemotePlayer,
@@ -102,7 +102,7 @@ impl App {
         } else {
             self.set_queue_scope(QueueScope::Local);
         }
-        self.request_sidebar_dismiss(super::SidebarId::Sessions);
+        self.request_sidebar_dismiss(crate::app::SidebarId::Sessions);
         self.flash(
             format!("Connected directly to {}", sess.device_name),
             ToastSeverity::Success,
@@ -118,7 +118,7 @@ impl App {
     /// direct-remote flow are two independent ways to end up thin-client
     /// and must not be conflated in App state. This is a new sibling
     /// method, not a modification of `switch_to_direct_remote`.
-    pub(super) fn switch_to_library_route(
+    pub(in crate::app) fn switch_to_library_route(
         &mut self,
         library_name: &str,
         remote: mbv_core::remote_player::RemotePlayer,
@@ -221,7 +221,9 @@ impl App {
     /// Prepare a local player without changing the current attachment. A
     /// suspended player is preferred; otherwise this constructs the same
     /// local player used by `new_independent`.
-    pub(super) fn prepare_local_player(&mut self) -> Result<Option<SuspendedLocalSession>, String> {
+    pub(in crate::app) fn prepare_local_player(
+        &mut self,
+    ) -> Result<Option<SuspendedLocalSession>, String> {
         if !self.player.is_remote() && self.suspended_local.is_none() {
             return Ok(None);
         }
@@ -289,7 +291,7 @@ impl App {
 
     /// Execute a confirmed local fall-through. Local preparation happens
     /// before the current owner is stopped or the attachment is changed.
-    pub(super) fn play_pending_local_play(&mut self) {
+    pub(in crate::app) fn play_pending_local_play(&mut self) {
         let Some(action) = self.pending_local_play.take() else {
             return;
         };
@@ -323,7 +325,7 @@ impl App {
         self.execute_pending_queue_action(action);
     }
 
-    pub(super) fn restore_local_mode(&mut self, status: &str) {
+    pub(in crate::app) fn restore_local_mode(&mut self, status: &str) {
         let previous_route = self.active_route.clone();
         log::info!(target: "library_route", "restoring local playback previous_route={previous_route:?} reason={status:?}");
         if !self.player.is_remote() {
@@ -405,7 +407,7 @@ impl App {
     /// `restore_local_mode` when we were already on a *different* route
     /// and must actually swap the player back to local, not just show a
     /// warning while silently staying connected to the old route.
-    pub(super) fn apply_route_for_playback(&mut self, item: &mbv_core::api::EmbyItem) {
+    pub(in crate::app) fn apply_route_for_playback(&mut self, item: &mbv_core::api::EmbyItem) {
         let resolved = self.resolve_route_for_play(item);
         match (resolved, self.active_route.clone()) {
             (Some((name, _)), Some(current)) if name == current => {
@@ -439,7 +441,7 @@ impl App {
         }
     }
 
-    pub(super) fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
+    pub(in crate::app) fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
         // Connecting to a new target severs the current one (attachment
         // slots are mutually exclusive): tears down an active library
         // route, detaches any cast attachment, and clears a watched
@@ -489,7 +491,7 @@ impl App {
         self.remote_pos_s = sess.position_s;
         self.remote_pos_at = Instant::now();
         self.remote_api_pos_advanced_at = Instant::now();
-        self.request_sidebar_dismiss(super::SidebarId::Sessions);
+        self.request_sidebar_dismiss(crate::app::SidebarId::Sessions);
         if let Some(error) = direct_upgrade_error {
             self.flash(
                 format!("Direct mbv control failed: {error}; using attached session {name}"),

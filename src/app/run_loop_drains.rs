@@ -90,14 +90,14 @@ impl App {
                                  let book_kind = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(&library.media_type);
                                  match book_kind {
                                      crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
-                                         super::service_startup::start_audiobookshelf_shows(
+                                         crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
                                              self.config.lock().unwrap().clone(),
                                              completion.generation,
                                              library.id.clone(),
                                              0,
                                              self.lib_tx.clone(),
                                          );
-                                         super::service_startup::start_audiobookshelf_shelves(
+                                         crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
                                              self.config.lock().unwrap().clone(),
                                              completion.generation,
                                              library.id.clone(),
@@ -105,7 +105,7 @@ impl App {
                                          );
                                      }
                                      crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
-                                         super::service_startup::start_audiobookshelf_books(
+                                         crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
                                              self.config.lock().unwrap().clone(),
                                              completion.generation,
                                              library.id.clone(),

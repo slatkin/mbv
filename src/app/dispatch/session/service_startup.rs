@@ -4,41 +4,41 @@ use mbv_core::config::{load_service_secret, EmbySetup, ServiceKind};
 use mbv_core::service_runtime::{EmbyFailure, EmbyFailureClass, ServiceState, SetupGeneration};
 use std::sync::mpsc;
 
-pub(super) enum AudiobookshelfCompletionKind {
+pub(in crate::app) enum AudiobookshelfCompletionKind {
     Startup,
     Test,
 }
 
-pub(super) struct AudiobookshelfCompletion {
-    pub(super) generation: SetupGeneration,
-    pub(super) kind: AudiobookshelfCompletionKind,
-    pub(super) result: Result<
+pub(in crate::app) struct AudiobookshelfCompletion {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) kind: AudiobookshelfCompletionKind,
+    pub(in crate::app) result: Result<
         mbv_core::audiobookshelf::AudiobookshelfUser,
         mbv_core::audiobookshelf::AudiobookshelfError,
     >,
 }
 
-pub(super) struct AudiobookshelfValidatedCandidate {
-    pub(super) setup: mbv_core::config::AudiobookshelfSetup,
-    pub(super) user: mbv_core::audiobookshelf::AudiobookshelfUser,
-    pub(super) api_key: String,
+pub(in crate::app) struct AudiobookshelfValidatedCandidate {
+    pub(in crate::app) setup: mbv_core::config::AudiobookshelfSetup,
+    pub(in crate::app) user: mbv_core::audiobookshelf::AudiobookshelfUser,
+    pub(in crate::app) api_key: String,
 }
 
-pub(super) struct AudiobookshelfPendingReplacement {
-    pub(super) candidate: AudiobookshelfValidatedCandidate,
-    pub(super) previous_state: ServiceState,
+pub(in crate::app) struct AudiobookshelfPendingReplacement {
+    pub(in crate::app) candidate: AudiobookshelfValidatedCandidate,
+    pub(in crate::app) previous_state: ServiceState,
 }
 
-pub(super) struct AudiobookshelfSetupCompletion {
-    pub(super) generation: SetupGeneration,
-    pub(super) previous_state: ServiceState,
-    pub(super) result:
+pub(in crate::app) struct AudiobookshelfSetupCompletion {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) previous_state: ServiceState,
+    pub(in crate::app) result:
         Result<AudiobookshelfValidatedCandidate, mbv_core::audiobookshelf::AudiobookshelfError>,
 }
 
-pub(super) struct AudiobookshelfStartupReceiver {
-    pub(super) generation: SetupGeneration,
-    pub(super) rx: mpsc::Receiver<AudiobookshelfCompletion>,
+pub(in crate::app) struct AudiobookshelfStartupReceiver {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) rx: mpsc::Receiver<AudiobookshelfCompletion>,
 }
 
 type AudiobookshelfProgressMap =
@@ -47,9 +47,9 @@ type AudiobookshelfProgressMap =
 type AudiobookshelfBookProgressMap =
     std::collections::HashMap<String, mbv_core::audiobookshelf::AudiobookshelfBookProgress>;
 
-pub(super) struct AudiobookshelfCatalogCompletion {
-    pub(super) generation: SetupGeneration,
-    pub(super) result: Result<
+pub(in crate::app) struct AudiobookshelfCatalogCompletion {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) result: Result<
         (
             Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
             AudiobookshelfProgressMap,
@@ -59,8 +59,8 @@ pub(super) struct AudiobookshelfCatalogCompletion {
     >,
 }
 
-pub(super) struct AudiobookshelfCatalogReceiver {
-    pub(super) rx: mpsc::Receiver<AudiobookshelfCatalogCompletion>,
+pub(in crate::app) struct AudiobookshelfCatalogReceiver {
+    pub(in crate::app) rx: mpsc::Receiver<AudiobookshelfCatalogCompletion>,
 }
 
 /// Resolves the configured Audiobookshelf setup, loads its Bearer secret,
@@ -87,7 +87,7 @@ fn audiobookshelf_client(
 /// Resolves the configured Audiobookshelf setup and loads its Bearer secret
 /// without constructing a client, for call sites that early-return silently
 /// on missing setup/credentials rather than surfacing a typed error.
-pub(super) fn audiobookshelf_setup_and_key(
+pub(in crate::app) fn audiobookshelf_setup_and_key(
     config: &crate::config::Config,
 ) -> Option<(mbv_core::config::AudiobookshelfSetup, String)> {
     let setup = config.audiobookshelf_setup.clone()?;
@@ -95,7 +95,7 @@ pub(super) fn audiobookshelf_setup_and_key(
     Some((setup, key))
 }
 
-pub(super) fn start_audiobookshelf_catalog(
+pub(in crate::app) fn start_audiobookshelf_catalog(
     config: crate::config::Config,
     generation: SetupGeneration,
 ) -> AudiobookshelfCatalogReceiver {
@@ -115,7 +115,7 @@ pub(super) fn start_audiobookshelf_catalog(
     AudiobookshelfCatalogReceiver { rx }
 }
 
-pub(super) fn start_audiobookshelf_shows(
+pub(in crate::app) fn start_audiobookshelf_shows(
     config: crate::config::Config,
     generation: SetupGeneration,
     library_id: String,
@@ -145,7 +145,7 @@ pub(super) fn start_audiobookshelf_shows(
 
 /// Book-shaped sibling of `start_audiobookshelf_shows`: pages a book library's
 /// catalog through `books_bounded` and reports `LibEvent::AudiobookshelfBooksFetched`.
-pub(super) fn start_audiobookshelf_books(
+pub(in crate::app) fn start_audiobookshelf_books(
     config: crate::config::Config,
     generation: SetupGeneration,
     library_id: String,
@@ -176,7 +176,7 @@ pub(super) fn start_audiobookshelf_books(
 /// Fetches one podcast library's `/personalized` shelves and reports
 /// `LibEvent::AudiobookshelfShelfFetched`. The Podcasts destination's Latest
 /// snapshot is built from the `Newest Episodes` shelf in the result.
-pub(super) fn start_audiobookshelf_shelves(
+pub(in crate::app) fn start_audiobookshelf_shelves(
     config: crate::config::Config,
     generation: SetupGeneration,
     library_id: String,
@@ -196,7 +196,7 @@ pub(super) fn start_audiobookshelf_shelves(
     });
 }
 
-pub(super) fn start_audiobookshelf(
+pub(in crate::app) fn start_audiobookshelf(
     config: crate::config::Config,
     generation: SetupGeneration,
     kind: AudiobookshelfCompletionKind,
@@ -215,7 +215,7 @@ pub(super) fn start_audiobookshelf(
     AudiobookshelfStartupReceiver { generation, rx }
 }
 
-pub(super) fn start_audiobookshelf_setup(
+pub(in crate::app) fn start_audiobookshelf_setup(
     server_url: String,
     api_key: String,
     generation: SetupGeneration,
@@ -245,7 +245,7 @@ pub(super) fn start_audiobookshelf_setup(
     rx
 }
 
-pub(super) fn audiobookshelf_initial_state(
+pub(in crate::app) fn audiobookshelf_initial_state(
     configured: bool,
     credential_present: bool,
 ) -> ServiceState {
@@ -256,7 +256,7 @@ pub(super) fn audiobookshelf_initial_state(
     }
 }
 
-pub(super) fn classify_audiobookshelf_failure(
+pub(in crate::app) fn classify_audiobookshelf_failure(
     error: &mbv_core::audiobookshelf::AudiobookshelfError,
 ) -> ServiceState {
     match error.class {
@@ -267,24 +267,24 @@ pub(super) fn classify_audiobookshelf_failure(
     }
 }
 
-pub(super) struct Completion {
-    pub(super) generation: SetupGeneration,
-    pub(super) result: Result<Startup, EmbyFailure>,
+pub(in crate::app) struct Completion {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) result: Result<Startup, EmbyFailure>,
 }
 
-pub(super) struct Startup {
-    pub(super) client: EmbyClient,
-    pub(super) bootstrap: mbv_core::service_runtime::EmbyBootstrap,
-    pub(super) setup: EmbySetup,
+pub(in crate::app) struct Startup {
+    pub(in crate::app) client: EmbyClient,
+    pub(in crate::app) bootstrap: mbv_core::service_runtime::EmbyBootstrap,
+    pub(in crate::app) setup: EmbySetup,
 }
 
-pub(super) struct SetupCompletion {
-    pub(super) generation: SetupGeneration,
-    pub(super) previous_state: ServiceState,
-    pub(super) result: Result<Startup, String>,
+pub(in crate::app) struct SetupCompletion {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) previous_state: ServiceState,
+    pub(in crate::app) result: Result<Startup, String>,
 }
 
-pub(super) fn start_setup(
+pub(in crate::app) fn start_setup(
     config: crate::config::Config,
     server_url: String,
     username: String,
@@ -323,19 +323,22 @@ pub(super) fn start_setup(
     rx
 }
 
-pub(super) fn setup_identity_allows_commit(
+pub(in crate::app) fn setup_identity_allows_commit(
     existing: Option<&EmbySetup>,
     candidate: &EmbySetup,
 ) -> bool {
     existing.is_none_or(|existing| existing == candidate)
 }
 
-pub(super) struct StartupReceiver {
-    pub(super) generation: SetupGeneration,
-    pub(super) rx: mpsc::Receiver<Completion>,
+pub(in crate::app) struct StartupReceiver {
+    pub(in crate::app) generation: SetupGeneration,
+    pub(in crate::app) rx: mpsc::Receiver<Completion>,
 }
 
-pub(super) fn start(config: crate::config::Config, generation: SetupGeneration) -> StartupReceiver {
+pub(in crate::app) fn start(
+    config: crate::config::Config,
+    generation: SetupGeneration,
+) -> StartupReceiver {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
         let result = config
@@ -352,7 +355,7 @@ pub(super) fn start(config: crate::config::Config, generation: SetupGeneration) 
     StartupReceiver { generation, rx }
 }
 
-pub(super) fn initial_state(configured: bool, credential_present: bool) -> ServiceState {
+pub(in crate::app) fn initial_state(configured: bool, credential_present: bool) -> ServiceState {
     match (configured, credential_present) {
         (false, _) => ServiceState::NotConfigured,
         (true, true) => ServiceState::Connecting,
@@ -362,11 +365,11 @@ pub(super) fn initial_state(configured: bool, credential_present: bool) -> Servi
 
 /// Initial routing uses only validated setup and local feed subscriptions.
 /// Legacy `[server]` data is intentionally not consulted.
-pub(super) fn should_open_services(config: &crate::config::Config) -> bool {
+pub(in crate::app) fn should_open_services(config: &crate::config::Config) -> bool {
     config.emby_setup.is_none() && config.audiobookshelf_setup.is_none() && config.feeds.is_empty()
 }
 
-pub(super) fn startup_status(state: ServiceState) -> &'static str {
+pub(in crate::app) fn startup_status(state: ServiceState) -> &'static str {
     match state {
         ServiceState::NotConfigured => {
             "Emby is not configured; local and feed playback remain available"
@@ -403,7 +406,7 @@ fn authenticate(
     })
 }
 
-pub(super) fn classify_failure(error: &EmbyFailure) -> ServiceState {
+pub(in crate::app) fn classify_failure(error: &EmbyFailure) -> ServiceState {
     match error.class {
         EmbyFailureClass::AuthenticationRejected => ServiceState::NeedsAuthentication,
         EmbyFailureClass::Unavailable => ServiceState::Unavailable,

@@ -354,9 +354,9 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
     let client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     let item = make_item("Ready item", "Audio");
     // Completion computes the Continue Watching snapshot; the shell assigns it.
-    let content = app.apply_emby_completion(super::service_startup::Completion {
+    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
         generation: app.emby_runtime.generation(),
-        result: Ok(super::service_startup::Startup {
+        result: Ok(crate::app::dispatch::session::service_startup::Startup {
             client,
             bootstrap: mbv_core::service_runtime::EmbyBootstrap {
                 continue_items: vec![item],
@@ -378,7 +378,7 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
 #[test]
 fn emby_completion_classifies_current_failures_without_client() {
     let mut app = make_app_stub();
-    let content = app.apply_emby_completion(super::service_startup::Completion {
+    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
         generation: app.emby_runtime.generation(),
         result: Err(mbv_core::service_runtime::EmbyFailure {
             class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
@@ -396,7 +396,7 @@ fn emby_completion_classifies_current_failures_without_client() {
     );
 
     let mut app = make_app_stub();
-    let content = app.apply_emby_completion(super::service_startup::Completion {
+    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
         generation: app.emby_runtime.generation(),
         result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
             "connection refused",
@@ -418,9 +418,9 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
     // Home content is Model-owned (task 5.3d): a stale completion returns no
     // snapshot, so the shell leaves `home_content` untouched — the invariance
     // that used to be asserted on `app.home.continue_items` here.
-    let content = app.apply_emby_completion(super::service_startup::Completion {
+    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
         generation: stale_generation,
-        result: Ok(super::service_startup::Startup {
+        result: Ok(crate::app::dispatch::session::service_startup::Startup {
             client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
             bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
             setup: mbv_core::config::EmbySetup::default(),

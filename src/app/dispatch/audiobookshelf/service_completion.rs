@@ -1,7 +1,7 @@
-use super::App;
+use crate::app::App;
 
 impl App {
-    pub(super) fn test_audiobookshelf_connection(&mut self) {
+    pub(in crate::app) fn test_audiobookshelf_connection(&mut self) {
         if self.audiobookshelf_runtime.state
             == mbv_core::service_runtime::ServiceState::NotConfigured
         {
@@ -9,14 +9,16 @@ impl App {
         }
         let config = self.config.lock().unwrap().clone();
         let generation = self.audiobookshelf_runtime.begin_validation();
-        self.audiobookshelf_test_rx = Some(super::service_startup::start_audiobookshelf(
-            config,
-            generation,
-            super::service_startup::AudiobookshelfCompletionKind::Test,
-        ));
+        self.audiobookshelf_test_rx = Some(
+            crate::app::dispatch::session::service_startup::start_audiobookshelf(
+                config,
+                generation,
+                crate::app::dispatch::session::service_startup::AudiobookshelfCompletionKind::Test,
+            ),
+        );
     }
 
-    pub(super) fn clear_audiobookshelf_catalog(&mut self) {
+    pub(in crate::app) fn clear_audiobookshelf_catalog(&mut self) {
         self.audiobookshelf_catalog_rx = None;
         self.audiobookshelf_libraries.clear();
         self.audiobookshelf_browse.clear();
@@ -24,7 +26,7 @@ impl App {
         self.clear_audiobookshelf_images();
     }
 
-    pub(super) fn clear_audiobookshelf_images(&mut self) {
+    pub(in crate::app) fn clear_audiobookshelf_images(&mut self) {
         self.card_image_states.retain(|key, _| {
             !key.starts_with(crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
         });
@@ -41,11 +43,11 @@ impl App {
             crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX,
         );
     }
-    pub(super) fn apply_audiobookshelf_completion(
+    pub(in crate::app) fn apply_audiobookshelf_completion(
         &mut self,
-        completion: super::service_startup::AudiobookshelfCompletion,
+        completion: crate::app::dispatch::session::service_startup::AudiobookshelfCompletion,
     ) {
-        use super::notify_actions::ToastSeverity;
+        use crate::app::notify_actions::ToastSeverity;
         if !self.audiobookshelf_runtime.accepts(completion.generation) {
             log::debug!(target: "startup", "ignored stale Audiobookshelf completion");
             return;
@@ -59,14 +61,15 @@ impl App {
                     .commit_ready(completion.generation, user.clone());
                 self.start_audiobookshelf_socket(completion.generation);
                 self.install_audiobookshelf_player_context(completion.generation);
-                self.audiobookshelf_catalog_rx =
-                    Some(super::service_startup::start_audiobookshelf_catalog(
+                self.audiobookshelf_catalog_rx = Some(
+                    crate::app::dispatch::session::service_startup::start_audiobookshelf_catalog(
                         self.config.lock().unwrap().clone(),
                         completion.generation,
-                    ));
+                    ),
+                );
                 if matches!(
                     completion.kind,
-                    super::service_startup::AudiobookshelfCompletionKind::Test
+                    crate::app::dispatch::session::service_startup::AudiobookshelfCompletionKind::Test
                 ) {
                     self.flash(
                         format!(
@@ -78,7 +81,10 @@ impl App {
                 }
             }
             Err(error) => {
-                let state = super::service_startup::classify_audiobookshelf_failure(&error);
+                let state =
+                    crate::app::dispatch::session::service_startup::classify_audiobookshelf_failure(
+                        &error,
+                    );
                 self.audiobookshelf_runtime
                     .complete(completion.generation, state);
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
@@ -100,7 +106,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_audiobookshelf_worker_disconnect(
+    pub(in crate::app) fn handle_audiobookshelf_worker_disconnect(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {

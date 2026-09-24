@@ -251,17 +251,18 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     .unwrap();
     let generation = app.audiobookshelf_runtime.generation();
     app.pending_audiobookshelf_replacement = Some(
-        crate::app::service_startup::AudiobookshelfPendingReplacement {
-            candidate: crate::app::service_startup::AudiobookshelfValidatedCandidate {
-                setup: mbv_core::config::AudiobookshelfSetup::new(
-                    "https://replacement-books.example",
-                ),
-                user: mbv_core::audiobookshelf::AudiobookshelfUser {
-                    id: "reader-id".into(),
-                    username: "reader".into(),
+        crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
+            candidate:
+                crate::app::dispatch::session::service_startup::AudiobookshelfValidatedCandidate {
+                    setup: mbv_core::config::AudiobookshelfSetup::new(
+                        "https://replacement-books.example",
+                    ),
+                    user: mbv_core::audiobookshelf::AudiobookshelfUser {
+                        id: "reader-id".into(),
+                        username: "reader".into(),
+                    },
+                    api_key: "replacement-secret".into(),
                 },
-                api_key: "replacement-secret".into(),
-            },
             previous_state: mbv_core::service_runtime::ServiceState::Ready,
         },
     );

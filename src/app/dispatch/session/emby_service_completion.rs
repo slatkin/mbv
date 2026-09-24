@@ -1,22 +1,22 @@
 use mbv_core::api::EmbyClient;
 use std::sync::{mpsc, Arc, Mutex};
 
-use super::App;
 use crate::app::state::types::playback::HomeContent;
+use crate::app::App;
 
 impl App {
-    pub(super) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
+    pub(in crate::app) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
         self.emby_runtime.client.clone()
     }
 
-    pub(super) fn emby_snapshot(&self) -> Option<EmbyClient> {
+    pub(in crate::app) fn emby_snapshot(&self) -> Option<EmbyClient> {
         self.emby_client()
             .map(|client| client.lock().unwrap().clone())
     }
 
-    pub(super) fn apply_emby_completion(
+    pub(in crate::app) fn apply_emby_completion(
         &mut self,
-        completion: super::service_startup::Completion,
+        completion: crate::app::dispatch::session::service_startup::Completion,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(
             Some(completion.generation),
@@ -26,9 +26,9 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(super) fn apply_emby_completion_with_secret_deleter(
+    pub(in crate::app) fn apply_emby_completion_with_secret_deleter(
         &mut self,
-        completion: super::service_startup::Completion,
+        completion: crate::app::dispatch::session::service_startup::Completion,
         delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
         self.transition_emby_failure(Some(completion.generation), completion.result, delete)
@@ -37,10 +37,13 @@ impl App {
     fn transition_emby_failure(
         &mut self,
         generation: Option<mbv_core::service_runtime::SetupGeneration>,
-        result: Result<super::service_startup::Startup, mbv_core::service_runtime::EmbyFailure>,
+        result: Result<
+            crate::app::dispatch::session::service_startup::Startup,
+            mbv_core::service_runtime::EmbyFailure,
+        >,
         delete_secret: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
     ) -> Option<HomeContent> {
-        use super::notify_actions::ToastSeverity;
+        use crate::app::notify_actions::ToastSeverity;
         if generation.is_some_and(|generation| !self.emby_runtime.accepts(generation)) {
             log::debug!(target: "startup", "ignored stale Emby startup completion");
             return None;
@@ -90,7 +93,8 @@ impl App {
                 Some(content)
             }
             Err(error) => {
-                let state = super::service_startup::classify_failure(&error);
+                let state =
+                    crate::app::dispatch::session::service_startup::classify_failure(&error);
                 self.emby_runtime.state = state;
                 if state == mbv_core::service_runtime::ServiceState::NeedsAuthentication {
                     self.emby_runtime.client = None;
@@ -116,7 +120,7 @@ impl App {
 
     /// Central boundary for an authenticated Emby request made after startup.
     /// Only classified failures reach this path; ordinary empty results do not.
-    pub(super) fn handle_emby_runtime_failure(
+    pub(in crate::app) fn handle_emby_runtime_failure(
         &mut self,
         error: mbv_core::service_runtime::EmbyFailure,
     ) {
@@ -126,7 +130,7 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(super) fn handle_emby_runtime_failure_with_secret_deleter(
+    pub(in crate::app) fn handle_emby_runtime_failure_with_secret_deleter(
         &mut self,
         error: mbv_core::service_runtime::EmbyFailure,
         delete: impl FnOnce(mbv_core::config::ServiceKind) -> Result<(), String>,
@@ -134,7 +138,7 @@ impl App {
         self.transition_emby_failure(None, Err(error), delete);
     }
 
-    pub(super) fn handle_emby_startup_worker_disconnect(
+    pub(in crate::app) fn handle_emby_startup_worker_disconnect(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
     ) {
@@ -152,32 +156,33 @@ impl App {
             mbv_core::service_runtime::ServiceState::NotConfigured
         };
         self.flash(
-            super::service_startup::startup_status(self.emby_runtime.state).into(),
-            super::notify_actions::ToastSeverity::Warning,
+            crate::app::dispatch::session::service_startup::startup_status(self.emby_runtime.state)
+                .into(),
+            crate::app::notify_actions::ToastSeverity::Warning,
         );
     }
 
-    pub(super) fn apply_emby_setup_completion(
+    pub(in crate::app) fn apply_emby_setup_completion(
         &mut self,
-        completion: super::service_startup::SetupCompletion,
+        completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) -> Option<HomeContent> {
         self.apply_emby_setup_completion_inner(completion, true)
     }
 
     #[cfg(test)]
-    pub(super) fn apply_emby_setup_completion_without_network(
+    pub(in crate::app) fn apply_emby_setup_completion_without_network(
         &mut self,
-        completion: super::service_startup::SetupCompletion,
+        completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) -> Option<HomeContent> {
         self.apply_emby_setup_completion_inner(completion, false)
     }
 
     fn apply_emby_setup_completion_inner(
         &mut self,
-        completion: super::service_startup::SetupCompletion,
+        completion: crate::app::dispatch::session::service_startup::SetupCompletion,
         start_network: bool,
     ) -> Option<HomeContent> {
-        use super::notify_actions::ToastSeverity;
+        use crate::app::notify_actions::ToastSeverity;
         if !self.emby_runtime.accepts(completion.generation) {
             log::debug!(target: "startup", "ignored stale Emby setup completion");
             return None;
@@ -186,7 +191,10 @@ impl App {
             Ok(startup) => {
                 let existing = self.config.lock().unwrap().emby_setup.clone();
                 if existing.as_ref().is_some_and(|old| {
-                    !super::service_startup::setup_identity_allows_commit(Some(old), &startup.setup)
+                    !crate::app::dispatch::session::service_startup::setup_identity_allows_commit(
+                        Some(old),
+                        &startup.setup,
+                    )
                 }) {
                     let generation = completion.generation;
                     let mut startup = startup;
@@ -273,7 +281,7 @@ impl App {
     }
 
     /// Compute Continue Watching content from an Emby bootstrap.
-    pub(super) fn apply_emby_bootstrap(
+    pub(in crate::app) fn apply_emby_bootstrap(
         &mut self,
         bootstrap: mbv_core::service_runtime::EmbyBootstrap,
     ) -> HomeContent {

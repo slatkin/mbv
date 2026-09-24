@@ -365,16 +365,19 @@ impl App {
             config: Arc::new(Mutex::new(app_config.clone())),
             emby_runtime: {
                 let mut runtime = EmbyRuntime::new(configured);
-                runtime.state =
-                    crate::app::service_startup::initial_state(configured, credential_present);
+                runtime.state = crate::app::dispatch::session::service_startup::initial_state(
+                    configured,
+                    credential_present,
+                );
                 runtime
             },
             audiobookshelf_runtime: {
                 let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
-                runtime.state = crate::app::service_startup::audiobookshelf_initial_state(
-                    audiobookshelf_configured,
-                    audiobookshelf_credential_present,
-                );
+                runtime.state =
+                    crate::app::dispatch::session::service_startup::audiobookshelf_initial_state(
+                        audiobookshelf_configured,
+                        audiobookshelf_credential_present,
+                    );
                 runtime
             },
             emby_startup_rx: None,
@@ -424,7 +427,7 @@ impl App {
         app.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)
             .then_some((app_config.clone(), generation));
-        if crate::app::service_startup::should_open_services(&app_config) {
+        if crate::app::dispatch::session::service_startup::should_open_services(&app_config) {
             app.open_services_settings();
         }
         app
@@ -578,7 +581,7 @@ impl App {
             emby_runtime: client_arc.as_ref().map_or_else(
                 || {
                     let mut runtime = EmbyRuntime::new(emby_configured);
-                    runtime.state = crate::app::service_startup::initial_state(
+                    runtime.state = crate::app::dispatch::session::service_startup::initial_state(
                         emby_configured,
                         emby_credential_present,
                     );
@@ -588,10 +591,11 @@ impl App {
             ),
             audiobookshelf_runtime: {
                 let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
-                runtime.state = crate::app::service_startup::audiobookshelf_initial_state(
-                    audiobookshelf_configured,
-                    audiobookshelf_credential_present,
-                );
+                runtime.state =
+                    crate::app::dispatch::session::service_startup::audiobookshelf_initial_state(
+                        audiobookshelf_configured,
+                        audiobookshelf_credential_present,
+                    );
                 runtime
             },
             emby_startup_rx: None,

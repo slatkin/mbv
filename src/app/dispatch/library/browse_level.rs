@@ -1,9 +1,9 @@
-use super::{App, BrowseLevel};
 use crate::app::infra::ui_util::sort_episodes;
 use crate::app::state::types::browse::BrowseResting;
+use crate::app::{App, BrowseLevel};
 
 impl App {
-    pub(super) fn update_current_browse_level(
+    pub(in crate::app) fn update_current_browse_level(
         &mut self,
         lib_idx: usize,
         parent_id: &str,
@@ -23,7 +23,7 @@ impl App {
         true
     }
 
-    pub(super) fn normalize_current_browse_level_items(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn normalize_current_browse_level_items(&mut self, lib_idx: usize) {
         if let Some(last) = self
             .libs
             .get_mut(lib_idx)
@@ -40,7 +40,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_loaded_level(
+    pub(in crate::app) fn handle_loaded_level(
         &mut self,
         lib_idx: usize,
         parent_id: String,
@@ -55,7 +55,7 @@ impl App {
         self.start_or_supersede_music_grouping(lib_idx);
     }
 
-    pub(super) fn maybe_auto_push_tv_season_level(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_auto_push_tv_season_level(&mut self, lib_idx: usize) {
         // When a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.

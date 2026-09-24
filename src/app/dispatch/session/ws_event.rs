@@ -1,10 +1,10 @@
-use super::{notify_actions::ToastSeverity, App, LibEvent, PanelFocus};
+use crate::app::{notify_actions::ToastSeverity, App, LibEvent, PanelFocus};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;
 
 impl App {
-    pub(super) fn handle_ws_event(&mut self, ev: WsEvent) {
+    pub(in crate::app) fn handle_ws_event(&mut self, ev: WsEvent) {
         match ev {
             WsEvent::Play {
                 item_ids,

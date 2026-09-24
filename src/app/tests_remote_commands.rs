@@ -143,9 +143,9 @@ fn remote_jump_target_resolves_next_and_previous_without_tracking() {
     let mut second = app.player_tab.emby_items()[1].clone(); second.id = "a".into(); second.playback_position_ticks = 20;
     let mut third = make_item("b", "Movie"); third.id = "b".into(); third.playback_position_ticks = 30;
     app.player_tab.set_items(vec![first, second, third], 0);
-    let target = crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1);
+    let target = crate::app::dispatch::session::command::remote_jump_target(&app.player_tab, Some("a"), 1);
     assert_eq!(target, Some((1, 20)));
-    assert_eq!(crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("b"), -1), Some((1, 20)));
+    assert_eq!(crate::app::dispatch::session::command::remote_jump_target(&app.player_tab, Some("b"), -1), Some((1, 20)));
 }
 
 /// A receiver-driven track change must stamp the canonical queue's active

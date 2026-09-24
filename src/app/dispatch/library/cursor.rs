@@ -1,10 +1,12 @@
-use super::render::{effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD};
-use super::{App, SeriesDetail};
+use crate::app::render::{
+    effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD,
+};
 use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
+use crate::app::{App, SeriesDetail};
 use mbv_core::api::EmbyItem;
 
 impl App {
-    pub(super) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.library.collection_type != "music" {
             return false;
@@ -53,7 +55,7 @@ impl App {
     /// whole-library prefetch when the root is loaded but `all_items` is
     /// absent). Returns false when the miss is already final (complete
     /// corpus), which keeps the caller's flash-and-keep-tab path.
-    pub(super) fn arm_pending_series_landing(
+    pub(in crate::app) fn arm_pending_series_landing(
         &mut self,
         lib_idx: usize,
         reveal: Box<EmbyItem>,
@@ -83,7 +85,7 @@ impl App {
     /// corpus flashes and leaves the tab unchanged (task 4.2). A drain for any
     /// other library (or any level other than the library root, `parent_id`)
     /// leaves the pending untouched.
-    pub(super) fn retry_pending_series_landing(&mut self, lib_idx: usize, parent_id: &str) {
+    pub(in crate::app) fn retry_pending_series_landing(&mut self, lib_idx: usize, parent_id: &str) {
         let Some(pending) = self.pending_series_landing.take() else {
             return;
         };
@@ -126,7 +128,11 @@ impl App {
     /// marked when pills are shown -- using the search corpus already in
     /// hand, with no refetch. Returns false when the corpus doesn't hold the
     /// item; the caller keeps the ordinary folder activation.
-    pub(super) fn activate_searched_series(&mut self, lib_idx: usize, item: &EmbyItem) -> bool {
+    pub(in crate::app) fn activate_searched_series(
+        &mut self,
+        lib_idx: usize,
+        item: &EmbyItem,
+    ) -> bool {
         if item.item_type != "Series" || item.id.is_empty() {
             return false;
         }
@@ -141,11 +147,14 @@ impl App {
         // The whole-library search corpus is intentionally unfiltered, so
         // apply the same grouped-music boundary rule before projecting it
         // back into the browse level.
-        super::library_browse_actions::retain_grouped_music_items(&mut corpus, grouped_music);
+        crate::app::dispatch::library::browse::retain_grouped_music_items(
+            &mut corpus,
+            grouped_music,
+        );
         // The pill group the series sorts into (pills only exist at the
         // top level of pill-eligible libraries).
         let filter = if self.should_show_letter_pills(lib_idx) {
-            let filter_kind = super::render::LetterFilterKind::from_collection_type(
+            let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
                 self.libs[lib_idx].library.collection_type.as_str(),
             );
             LetterFilter::for_sort_key_for_kind(effective_sort_str(item), filter_kind)
@@ -191,7 +200,7 @@ impl App {
     /// the shell's hand-off opens the Wide Workspace / Narrow Library Hero
     /// overlay. Returns false when `item` is not such a placeholder, so the
     /// caller keeps the ordinary play path.
-    pub(super) fn open_series_for_unplayable_episode(
+    pub(in crate::app) fn open_series_for_unplayable_episode(
         &mut self,
         lib_idx: usize,
         item: &EmbyItem,
@@ -268,7 +277,7 @@ impl App {
     }
 
     /// Ensures the series detail is fetched for the wide TV component.
-    pub(super) fn enter_series_selection(&mut self, _lib_idx: usize, item: &EmbyItem) {
+    pub(in crate::app) fn enter_series_selection(&mut self, _lib_idx: usize, item: &EmbyItem) {
         if item.item_type != "Series" || item.id.is_empty() {
             return;
         }
@@ -276,7 +285,11 @@ impl App {
         self.fetch_series_detail(item.id.clone());
     }
 
-    pub(super) fn handle_series_detail_fetched(&mut self, series_id: String, detail: SeriesDetail) {
+    pub(in crate::app) fn handle_series_detail_fetched(
+        &mut self,
+        series_id: String,
+        detail: SeriesDetail,
+    ) {
         // A late completion must not replace a newer cached projection (for
         // example, a refresh that completed while this request was in flight).
         self.series_detail_cache
@@ -306,7 +319,7 @@ impl App {
         self.refresh_series_detail_loading(&series_id);
     }
 
-    pub(super) fn handle_series_season_episodes_fetched(
+    pub(in crate::app) fn handle_series_season_episodes_fetched(
         &mut self,
         series_id: String,
         season_id: String,
@@ -340,12 +353,12 @@ impl App {
         }
     }
 
-    pub(super) fn is_home_video_view(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn is_home_video_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         lib.library.collection_type == "homevideos"
     }
 
-    pub(super) fn snap_grouped_album_cursor_to_display_order(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn snap_grouped_album_cursor_to_display_order(&mut self, lib_idx: usize) {
         if !self.is_viewing_album_folders(lib_idx) {
             return;
         }
@@ -364,8 +377,9 @@ impl App {
         {
             if !last.items.is_empty() {
                 let mut order: Vec<usize> = (0..last.items.len()).collect();
-                order
-                    .sort_by_key(|&i| super::render::initial_group_artist_sort_key(&last.items[i]));
+                order.sort_by_key(|&i| {
+                    crate::app::render::initial_group_artist_sort_key(&last.items[i])
+                });
                 last.set_resting_cursor(order[0]);
             }
         }

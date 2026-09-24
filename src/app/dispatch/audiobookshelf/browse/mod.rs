@@ -1,7 +1,7 @@
-use super::notify_actions::ToastSeverity;
-use super::App;
+use crate::app::notify_actions::ToastSeverity;
 #[cfg(test)]
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
+use crate::app::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
 
@@ -19,7 +19,7 @@ impl App {
     ///
     /// `None` when the index is stale (library removed/replaced); the caller
     /// must stop the triggering operation, matching `normalize_stale_*`.
-    pub(super) fn audiobookshelf_kind_at(
+    pub(in crate::app) fn audiobookshelf_kind_at(
         &self,
         index: usize,
     ) -> Option<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind> {
@@ -35,13 +35,15 @@ impl App {
     /// after the Service setup and key resolve: an early return on missing
     /// setup must not leak the mark and blocklist the show for the session
     /// (reorganize-podcast-pill-navigation 3.3 carried obligation).
-    pub(super) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
+    pub(in crate::app) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
         let config_snapshot = self.config.lock().unwrap().clone();
         let Some((setup, key)) =
-            super::service_startup::audiobookshelf_setup_and_key(&config_snapshot)
+            crate::app::dispatch::session::service_startup::audiobookshelf_setup_and_key(
+                &config_snapshot,
+            )
         else {
             return;
         };
@@ -82,7 +84,7 @@ impl App {
 
     /// Fetches the selected book's chapters/audio-files detail keyed by
     /// `library_item_id`.
-    pub(super) fn start_audiobookshelf_book_detail(&mut self, library_item_id: String) {
+    pub(in crate::app) fn start_audiobookshelf_book_detail(&mut self, library_item_id: String) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -102,7 +104,9 @@ impl App {
         state.detail_loading = true;
         let config_snapshot = self.config.lock().unwrap().clone();
         let Some((setup, key)) =
-            super::service_startup::audiobookshelf_setup_and_key(&config_snapshot)
+            crate::app::dispatch::session::service_startup::audiobookshelf_setup_and_key(
+                &config_snapshot,
+            )
         else {
             return;
         };
@@ -134,7 +138,7 @@ impl App {
     /// re-arming after an arrival is idempotent; the in-flight cap bounds
     /// the batch. Only the active tab's library fans out: an inactive tab
     /// has no viewed pill to load for.
-    pub(super) fn start_audiobookshelf_podcast_fan_out(&mut self, index: usize) {
+    pub(in crate::app) fn start_audiobookshelf_podcast_fan_out(&mut self, index: usize) {
         if self.tab.audiobookshelf_index() != Some(index) {
             return;
         }
@@ -163,7 +167,7 @@ impl App {
     /// A state-pill scope commit or a state-scoped list interaction (design
     /// D5): the required shows are every listed show; arm the bounded
     /// fan-out.
-    pub(super) fn commit_audiobookshelf_podcast_state_scope(&mut self) {
+    pub(in crate::app) fn commit_audiobookshelf_podcast_state_scope(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -173,7 +177,7 @@ impl App {
         self.start_audiobookshelf_podcast_fan_out(index);
     }
 
-    pub(super) fn audiobookshelf_refresh(&mut self) {
+    pub(in crate::app) fn audiobookshelf_refresh(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -205,7 +209,7 @@ impl App {
             )
         };
         // Restart the catalog request from page 0 after clearing state.
-        super::service_startup::start_audiobookshelf_shows(
+        crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
             self.config.lock().unwrap().clone(),
             generation,
             library_id,
@@ -214,7 +218,7 @@ impl App {
         );
     }
 
-    pub(super) fn select_audiobookshelf_show(&mut self, cursor: usize) {
+    pub(in crate::app) fn select_audiobookshelf_show(&mut self, cursor: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -233,7 +237,7 @@ impl App {
         }
     }
 
-    pub(super) fn select_audiobookshelf_show_target(&mut self, target: &str) {
+    pub(in crate::app) fn select_audiobookshelf_show_target(&mut self, target: &str) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -262,7 +266,7 @@ impl App {
     /// component-owned (split-browse-state-interaction-fields task 3.2), so
     /// this seam resolves against the unfiltered (`All`) view.
     #[cfg(test)]
-    pub(super) fn activate_audiobookshelf_episode(
+    pub(in crate::app) fn activate_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
         episode_index: usize,
@@ -277,7 +281,7 @@ impl App {
     /// Resolve the episode at `episode_index` for enqueue without mutating any
     /// queue or opening a playback lifecycle (see `activate_audiobookshelf_episode`).
     #[cfg(test)]
-    pub(super) fn enqueue_audiobookshelf_episode(
+    pub(in crate::app) fn enqueue_audiobookshelf_episode(
         &mut self,
         audiobookshelf_library_index: usize,
         episode_index: usize,
@@ -294,7 +298,7 @@ impl App {
     /// 5.3d.11 U5); the App only supplies the provider-native snapshot, while
     /// canonical queue ownership and the eligible Player boundary remain here
     /// with the other ordinary actions.
-    pub(super) fn play_selected_audiobookshelf_episode_target(
+    pub(in crate::app) fn play_selected_audiobookshelf_episode_target(
         &mut self,
         index: usize,
         target: &crate::app::components::msg::PodcastEpisodeTarget,
@@ -312,7 +316,7 @@ impl App {
         self.submit_queue_item(item, true);
     }
 
-    pub(super) fn enqueue_selected_audiobookshelf_episode_target(
+    pub(in crate::app) fn enqueue_selected_audiobookshelf_episode_target(
         &mut self,
         index: usize,
         target: &crate::app::components::msg::PodcastEpisodeTarget,
@@ -334,7 +338,7 @@ impl App {
     }
 
     #[cfg(test)]
-    pub(super) fn play_selected_audiobookshelf_episode(
+    pub(in crate::app) fn play_selected_audiobookshelf_episode(
         &mut self,
         index: usize,
         episode_index: usize,
@@ -359,7 +363,7 @@ impl App {
     /// owner admission; an active or remote playback target is Bound and must
     /// be eligible.
     #[cfg(test)]
-    pub(super) fn enqueue_selected_audiobookshelf_episode(
+    pub(in crate::app) fn enqueue_selected_audiobookshelf_episode(
         &mut self,
         index: usize,
         episode_index: usize,
@@ -405,7 +409,7 @@ impl App {
         )
     }
 
-    pub(super) fn selected_audiobookshelf_queue_item_target(
+    pub(in crate::app) fn selected_audiobookshelf_queue_item_target(
         &self,
         audiobookshelf_library_index: usize,
         target: &crate::app::components::msg::PodcastEpisodeTarget,
@@ -467,7 +471,7 @@ impl App {
 
     // ---- Book browsing actions -----------------------------------------
 
-    pub(super) fn audiobookshelf_book_refresh(&mut self) {
+    pub(in crate::app) fn audiobookshelf_book_refresh(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -488,7 +492,7 @@ impl App {
                 self.audiobookshelf_runtime.generation(),
             )
         };
-        super::service_startup::start_audiobookshelf_books(
+        crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
             self.config.lock().unwrap().clone(),
             generation,
             library_id,
@@ -497,7 +501,7 @@ impl App {
         );
     }
 
-    pub(super) fn select_audiobookshelf_book(&mut self, cursor: usize) {
+    pub(in crate::app) fn select_audiobookshelf_book(&mut self, cursor: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -517,7 +521,7 @@ impl App {
         }
     }
 
-    pub(super) fn select_audiobookshelf_book_target(&mut self, target: &str) {
+    pub(in crate::app) fn select_audiobookshelf_book_target(&mut self, target: &str) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -541,7 +545,7 @@ impl App {
     /// it locally and carries the resolved row at activation time. This
     /// handler exists only so the `ChapterFocus` request stays claimed and
     /// routed (a redraw nudge); it stores nothing shell-side.
-    pub(super) fn set_audiobookshelf_book_chapter_focus(
+    pub(in crate::app) fn set_audiobookshelf_book_chapter_focus(
         &mut self,
         _selection: Option<crate::app::components::msg::BookChapterTarget>,
     ) {
@@ -551,7 +555,7 @@ impl App {
     /// the pill's click target -- the established pattern from
     /// `select_music_group`), narrowing the right-pane list to it and
     /// re-anchoring the cursor into the new bucket when it falls outside.
-    pub(super) fn select_audiobookshelf_book_bucket(&mut self, bucket_pos: usize) {
+    pub(in crate::app) fn select_audiobookshelf_book_bucket(&mut self, bucket_pos: usize) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
@@ -583,7 +587,7 @@ impl App {
     /// Chapter-row activation: one absolute seek to `chapters[].start` on the
     /// active book's merged timeline, without stopping/reopening the queue
     /// slot or session (book-playback spec).
-    pub(super) fn activate_audiobookshelf_book_row_target(
+    pub(in crate::app) fn activate_audiobookshelf_book_row_target(
         &mut self,
         target: Option<crate::app::components::msg::BookChapterTarget>,
     ) {
@@ -635,7 +639,7 @@ impl App {
         audiobookshelf_book_queue_item(state)
     }
 
-    pub(super) fn play_selected_audiobookshelf_book(&mut self, index: usize) {
+    pub(in crate::app) fn play_selected_audiobookshelf_book(&mut self, index: usize) {
         let Some(item) = self.selected_audiobookshelf_book_queue_item(index) else {
             return;
         };
@@ -687,12 +691,15 @@ impl App {
             return;
         }
         self.set_queue_scope(scope);
-        if !matches!(self.effective_panel_focus(), super::PanelFocus::Library) {
-            self.set_panel_focus(super::PanelFocus::Queue);
+        if !matches!(
+            self.effective_panel_focus(),
+            crate::app::PanelFocus::Library
+        ) {
+            self.set_panel_focus(crate::app::PanelFocus::Queue);
         }
     }
 
-    pub(super) fn enqueue_selected_audiobookshelf_book(&mut self, index: usize) {
+    pub(in crate::app) fn enqueue_selected_audiobookshelf_book(&mut self, index: usize) {
         let Some(item) = self.selected_audiobookshelf_book_queue_item(index) else {
             return;
         };
@@ -710,7 +717,7 @@ impl App {
     }
 }
 
-pub(super) fn seconds_to_ticks(seconds: f64) -> i64 {
+pub(in crate::app) fn seconds_to_ticks(seconds: f64) -> i64 {
     seconds_to_ticks_u64(seconds)
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)
@@ -768,9 +775,7 @@ fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
 }
 
 #[cfg(test)]
-#[path = "audiobookshelf_book_seek_tests.rs"]
 mod book_seek_tests;
 
 #[cfg(test)]
-#[path = "split_browse_state_book_tests.rs"]
 mod split_browse_state_book_tests;

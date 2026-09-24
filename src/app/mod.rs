@@ -1,20 +1,12 @@
 mod action;
 mod actions;
 mod actions_navigation;
-mod app_audiobookshelf_service_completion;
-mod app_emby_service_completion;
 mod audio_subtitle_actions;
-mod audiobookshelf_browse_actions;
-mod audiobookshelf_service_actions;
-mod browse_level_actions;
 mod cast_actions;
 mod cast_status_actions;
 pub mod components;
 mod consume_quit_actions;
 mod context_menu_actions;
-mod cw_library_tab_actions;
-mod daemon_restart;
-mod emby_service_actions;
 mod feed_actions;
 mod feed_tab_actions;
 mod feeds_manage_actions;
@@ -23,29 +15,15 @@ pub(crate) use self::state::home_latest::{capture_launch_window, current_launch_
 mod dispatch;
 mod infra;
 mod input;
-mod lib_cursor_actions;
-mod lib_event_actions;
-mod lib_event_actions_reconcile;
-mod library_browse_actions;
-mod library_load_actions;
-mod library_search_actions;
 mod mouse_gestures;
 mod music_actions;
 mod notify_actions;
-mod player_event;
 mod queue_actions;
 pub mod render;
 mod run_loop_drains;
 mod run_loop_events;
-mod service_startup;
-mod services_settings;
-mod session_command_actions;
-mod session_connect;
-mod session_switch;
 mod shell_draw;
-mod shuffle_folder_actions;
 pub(in crate::app) mod state;
-mod ws_event_actions;
 
 pub(in crate::app) use self::infra::layout::{
     LEFT_WIDTH_DEFAULT, LEFT_WIDTH_STEP, MINI_VIEW_THRESHOLD, SEARCH_PANEL_W, TABBAR_LEFT_RESERVE,

@@ -1,14 +1,14 @@
-use super::{
+use crate::app::state::types::playback::HomeContent;
+use crate::app::{
     notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
-use crate::app::state::types::playback::HomeContent;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use std::collections::HashMap;
 
 impl App {
-    pub(super) fn refresh_lib(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn refresh_lib(&mut self, lib_idx: usize) {
         // Defensive bounds check: the dispatch front door normalizes a stale
         // destination first, but async Service removal can invalidate the
         // matched index between normalization and this call. No-op (never
@@ -100,7 +100,7 @@ impl App {
         }
     }
 
-    pub(super) fn refresh_current_view(&mut self) {
+    pub(in crate::app) fn refresh_current_view(&mut self) {
         self.force_clear = true;
         match self.effective_panel_focus() {
             // Queue refresh is a refresh of the visible queue only and never
@@ -150,7 +150,7 @@ impl App {
         }
     }
 
-    pub(super) fn spawn_load_playlists(&mut self) {
+    pub(in crate::app) fn spawn_load_playlists(&mut self) {
         if self.playlists_loading {
             return;
         }
@@ -172,7 +172,7 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_rename_playlist(&mut self, playlist_id: String, new_name: String) {
+    pub(in crate::app) fn spawn_rename_playlist(&mut self, playlist_id: String, new_name: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -194,7 +194,7 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
+    pub(in crate::app) fn spawn_delete_playlist(&mut self, playlist_id: String, name: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -216,7 +216,7 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_open_playlist(&mut self, playlist: EmbyItem) {
+    pub(in crate::app) fn spawn_open_playlist(&mut self, playlist: EmbyItem) {
         if self.playlists_open_loading {
             return;
         }
@@ -244,16 +244,16 @@ impl App {
         });
     }
 
-    pub(super) fn open_playlists_panel(&mut self) {
-        self.request_sidebar_dismiss(super::SidebarId::Sessions);
+    pub(in crate::app) fn open_playlists_panel(&mut self) {
+        self.request_sidebar_dismiss(crate::app::SidebarId::Sessions);
         self.close_settings();
-        self.request_sidebar_open(super::SidebarId::Playlists);
+        self.request_sidebar_open(crate::app::SidebarId::Playlists);
         if self.playlists.is_empty() && !self.playlists_loading {
             self.spawn_load_playlists();
         }
     }
 
-    pub(super) fn load_and_play_playlist(&mut self, playlist_id: String) {
+    pub(in crate::app) fn load_and_play_playlist(&mut self, playlist_id: String) {
         let playlist_name = self
             .playlists
             .iter()
@@ -296,7 +296,7 @@ impl App {
         self.request_queue_replacement(action, ReplacementExecutor::Pending);
     }
 
-    pub(super) fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {
+    pub(in crate::app) fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {
         // Drain existing libs, preserving nav stacks and scroll pos so that a
         // UserDataChanged websocket refresh (fired when playback starts)
         // doesn't silently reset list scroll position.
@@ -354,17 +354,17 @@ impl App {
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
             let library_total = saved.and_then(|s| s.library_total);
             let tv_content_mode = (view.collection_type == "tvshows").then(|| {
-                super::render::resolve_tv_content_mode(
+                crate::app::render::resolve_tv_content_mode(
                     library_total.unwrap_or_default(),
                     saved.and_then(|state| state.tv_content_mode.as_ref()),
                 )
             });
-            self.libs.push(super::LibraryTab {
+            self.libs.push(crate::app::LibraryTab {
                 nav_stack: stack,
                 feed_home_video,
                 library_total,
                 tv_content_mode,
-                ..super::LibraryTab::new(view.clone())
+                ..crate::app::LibraryTab::new(view.clone())
             });
         }
 
@@ -385,7 +385,7 @@ impl App {
     /// shell assigns it to `Model.home_content` (directly for shell-side
     /// callers, via `LibEvent::HomeContentRefreshed` for App-internal ones)
     /// and preserves the Continue Watching column cursor at the assignment.
-    pub(super) fn fetch_home(&mut self) -> Result<HomeContent, String> {
+    pub(in crate::app) fn fetch_home(&mut self) -> Result<HomeContent, String> {
         let mut emby_fetched = false;
         let (continue_items, all_views) = if let Some(client) = self.emby_client() {
             emby_fetched = true;
@@ -421,7 +421,7 @@ impl App {
 
     /// The `Newest Episodes` shelf's entries as queue-able items, or an empty
     /// list when the shelf is absent (only that shelf feeds Home).
-    pub(super) fn newest_episodes_items(
+    pub(in crate::app) fn newest_episodes_items(
         shelves: Vec<mbv_core::audiobookshelf::AudiobookshelfShelf>,
     ) -> Vec<QueueItem> {
         shelves

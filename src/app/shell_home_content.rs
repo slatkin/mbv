@@ -115,7 +115,7 @@ impl Model {
 
     pub(super) fn apply_emby_completion_drain(
         &mut self,
-        completion: super::service_startup::Completion,
+        completion: crate::app::dispatch::session::service_startup::Completion,
     ) {
         if let Some(content) = self.app.apply_emby_completion(completion) {
             self.assign_home_content(content);
@@ -124,7 +124,7 @@ impl Model {
 
     pub(super) fn apply_emby_setup_completion_drain(
         &mut self,
-        completion: super::service_startup::SetupCompletion,
+        completion: crate::app::dispatch::session::service_startup::SetupCompletion,
     ) {
         if let Some(content) = self.app.apply_emby_setup_completion(completion) {
             self.assign_home_content(content);

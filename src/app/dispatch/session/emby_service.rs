@@ -1,5 +1,5 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, LibEvent};
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{App, LibEvent};
 use mbv_core::config::{QueueState, ServiceKind};
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
@@ -119,7 +119,7 @@ impl App {
         config.library_routes.clear();
     }
 
-    pub(super) fn remove_emby_confirmed(&mut self) {
+    pub(in crate::app) fn remove_emby_confirmed(&mut self) {
         let old_setup = self.config.lock().unwrap().emby_setup.clone();
         let old_token = mbv_core::config::load_service_secret(ServiceKind::Emby);
         let old_queue = mbv_core::config::load_queue_state();
@@ -143,7 +143,7 @@ impl App {
         );
     }
 
-    pub(super) fn replace_emby_confirmed(&mut self, generation: SetupGeneration) {
+    pub(in crate::app) fn replace_emby_confirmed(&mut self, generation: SetupGeneration) {
         if !self.emby_runtime.accepts(generation) {
             return;
         }

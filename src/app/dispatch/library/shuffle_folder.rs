@@ -1,6 +1,6 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::infra::ui_util::natural_sort_key;
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{App, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
 use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
@@ -17,7 +17,7 @@ impl App {
     /// level's parent is shuffled (falling back to the library id exactly as
     /// the legacy shuffle path did). The folder target comes from the supplied item,
     /// never from re-reading `BrowseLevel.cursor`.
-    pub(super) fn shuffle_play_selected(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub(in crate::app) fn shuffle_play_selected(&mut self, lib_idx: usize, item: EmbyItem) {
         let explicit_folder = item.is_folder.then_some(item.id.clone());
         self.shuffle_play_target(lib_idx, explicit_folder);
     }
@@ -27,7 +27,11 @@ impl App {
     /// item is a folder (the typed browser path supplies it from the
     /// component-resolved item); when `None`, the current browse level's
     /// parent is shuffled, falling back to the library id.
-    pub(super) fn shuffle_play_target(&mut self, lib_idx: usize, explicit_folder: Option<String>) {
+    pub(in crate::app) fn shuffle_play_target(
+        &mut self,
+        lib_idx: usize,
+        explicit_folder: Option<String>,
+    ) {
         // Defensive bounds check; the shell also
         // derives a fresh `lib_idx`, so a synchronous tab change can race in).
         if lib_idx >= self.libs.len() {
@@ -59,11 +63,11 @@ impl App {
     /// and natural track ordering as the existing folder effects; concatenating
     /// those results preserves album/tree order without replacing the queue per
     /// album.
-    pub(super) fn play_music_albums(&mut self, albums: Vec<EmbyItem>, shuffle: bool) {
+    pub(in crate::app) fn play_music_albums(&mut self, albums: Vec<EmbyItem>, shuffle: bool) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
-                super::notify_actions::ToastSeverity::Warning,
+                crate::app::notify_actions::ToastSeverity::Warning,
             );
             return;
         };
@@ -120,11 +124,11 @@ impl App {
     /// source is set inside the gated confirmed path (via the action), never
     /// here, so cancelling the prompt leaves the queue source unchanged
     /// (design D4).
-    pub(super) fn play_folder(&mut self, folder_id: &str, collection_type: String) {
+    pub(in crate::app) fn play_folder(&mut self, folder_id: &str, collection_type: String) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
-                super::notify_actions::ToastSeverity::Warning,
+                crate::app::notify_actions::ToastSeverity::Warning,
             );
             return;
         };
@@ -164,11 +168,11 @@ impl App {
     /// `execute_context_action` pass the library the folder was reached
     /// through), so this no longer reads the selected tab. Bounds-misses
     /// return false (defensive; never substitute library zero).
-    pub(super) fn active_lib_is_tvshows(&self, lib_idx: usize) -> bool {
+    pub(in crate::app) fn active_lib_is_tvshows(&self, lib_idx: usize) -> bool {
         lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)
     }
 
-    pub(super) fn shuffle_folder(&mut self, lib_idx: usize, folder_id: &str) {
+    pub(in crate::app) fn shuffle_folder(&mut self, lib_idx: usize, folder_id: &str) {
         // TV libraries shuffle from a video-only fetch (Episode/Movie/Video)
         // so a season/series shuffle can't pull in stray Audio items (e.g.
         // theme songs); every other library type keeps the broader
@@ -179,7 +183,7 @@ impl App {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
-                super::notify_actions::ToastSeverity::Warning,
+                crate::app::notify_actions::ToastSeverity::Warning,
             );
             return;
         };

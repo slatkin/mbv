@@ -1,4 +1,4 @@
-use super::{App, PanelFocus, TabSelection};
+use crate::app::{App, PanelFocus, TabSelection};
 use mbv_core::api::EmbyItem;
 use mbv_core::config::{
     AudiobookshelfBookBucket, AudiobookshelfSelectorKey, EmbyLetterBucket, EmbySelectorKey,
@@ -14,7 +14,7 @@ impl App {
     /// The tab identity is consumed here, while the complete snapshot stays
     /// pending for destination-level restoration (task 3.2). Explicit tab
     /// movement clears both levels in `apply_tab_position`.
-    pub(super) fn resolve_library_tab_pending(&mut self) {
+    pub(in crate::app) fn resolve_library_tab_pending(&mut self) {
         self.migrate_legacy_launch_state();
         // Keep the pre-launch-state numeric fallback alive for the existing
         // test seam. A legacy on-disk preference is converted above before
@@ -238,7 +238,7 @@ impl App {
     /// unchanged and returns `false`. This owns asynchronous Service
     /// removal/replacement invalidation; downstream Service helpers may
     /// still bounds-check defensively, but never choose another destination.
-    pub(super) fn normalize_stale_browse_destination(&mut self) -> bool {
+    pub(in crate::app) fn normalize_stale_browse_destination(&mut self) -> bool {
         if let Some(index) = self.tab.emby_library_index() {
             if index >= self.libs.len() {
                 self.tab = TabSelection::Home;
@@ -315,7 +315,7 @@ impl App {
 
     /// Jump directly to left-panel tab `idx` (0 = Home, 1..=libs.len() =
     /// library index `idx - 1`, or Feeds at the end when present).
-    pub(super) fn set_library_tab(&mut self, idx: usize) {
+    pub(in crate::app) fn set_library_tab(&mut self, idx: usize) {
         if idx >= self.tab_count() {
             return;
         }
@@ -323,7 +323,7 @@ impl App {
     }
 
     /// Advance the left-panel tab (wrapping); load the library if needed.
-    pub(super) fn library_tab_next(&mut self) {
+    pub(in crate::app) fn library_tab_next(&mut self) {
         let n = self.tab_count();
         let pos = self
             .tab
@@ -333,7 +333,7 @@ impl App {
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
-    pub(super) fn library_tab_prev(&mut self) {
+    pub(in crate::app) fn library_tab_prev(&mut self) {
         let n = self.tab_count();
         let pos = self
             .tab
@@ -350,18 +350,18 @@ impl App {
     // effect helper, instead of the App re-reading a (now deleted)
     // `home.continue_items`/`continue_cursor`. `continue_cursor` stays the
     // sole, unchanged authoritative target.
-    pub(super) fn cw_play(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn cw_play(&mut self, item: EmbyItem) {
         if item.is_folder {
             return;
         }
         self.play_home_cw_item(item);
     }
 
-    pub(super) fn cw_enqueue(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn cw_enqueue(&mut self, item: EmbyItem) {
         self.enqueue_home_item(item);
     }
 
-    pub(super) fn cw_toggle_watched(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn cw_toggle_watched(&mut self, item: EmbyItem) {
         self.toggle_watched_home_item(item);
     }
 }

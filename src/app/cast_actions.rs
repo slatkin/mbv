@@ -190,7 +190,8 @@ impl App {
 
     pub(super) fn audiobookshelf_cast_context(&self) -> Option<AbsCastContext> {
         let config = self.config.lock().unwrap().clone();
-        let (setup, credential) = super::service_startup::audiobookshelf_setup_and_key(&config)?;
+        let (setup, credential) =
+            crate::app::dispatch::session::service_startup::audiobookshelf_setup_and_key(&config)?;
         let client = AudiobookshelfClient::new(&setup.server_url).ok()?;
         Some(AbsCastContext {
             client,

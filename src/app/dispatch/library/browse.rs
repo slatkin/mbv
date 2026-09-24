@@ -1,7 +1,9 @@
-use super::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE};
 use crate::app::infra::ui_util::sort_episodes;
 use crate::app::state::types::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
 use crate::app::state::types::events::NavigateLanding;
+use crate::app::{
+    AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE,
+};
 use mbv_core::api::{EmbyClient, EmbyItem};
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.
@@ -10,19 +12,22 @@ use mbv_core::api::{EmbyClient, EmbyItem};
 /// drain time. An unresolvable kind is a resolve failure (task 4.2), never a
 /// silent misroute.
 #[derive(Debug, PartialEq, Eq)]
-pub(super) enum RevealTarget {
+pub(in crate::app) enum RevealTarget {
     Chain,
     Series(String),
     Album(String),
 }
 
-pub(super) fn retain_grouped_music_items(items: &mut Vec<EmbyItem>, grouped_music: bool) {
+pub(in crate::app) fn retain_grouped_music_items(items: &mut Vec<EmbyItem>, grouped_music: bool) {
     if grouped_music {
         items.retain(|item| !(item.is_folder && item.child_count == Some(0)));
     }
 }
 
-pub(super) fn retain_grouped_music_level_items(level: &mut BrowseLevel, grouped_music: bool) {
+pub(in crate::app) fn retain_grouped_music_level_items(
+    level: &mut BrowseLevel,
+    grouped_music: bool,
+) {
     let fetched_rows = level.items.len();
     retain_grouped_music_items(&mut level.items, grouped_music);
     level.fetched_rows = fetched_rows;
@@ -40,7 +45,7 @@ pub(super) fn retain_grouped_music_level_items(level: &mut BrowseLevel, grouped_
 /// test covers the item_type → reveal mapping without a server. `ancestors`
 /// is `None` when the kind's own back-reference already decided (the worker
 /// skips the round trip).
-pub(super) fn resolve_reveal_target(
+pub(in crate::app) fn resolve_reveal_target(
     item_type: &str,
     item: &EmbyItem,
     ancestors: Option<&[EmbyItem]>,
@@ -321,7 +326,7 @@ type BrowseRefresh = (
     String,
     String,
     usize,
-    Option<super::render::LetterFilter>,
+    Option<crate::app::render::LetterFilter>,
     Option<mbv_core::config::TvContentMode>,
 );
 type AlbumIndexFetch<'a> =
@@ -400,11 +405,14 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
     })
 }
 
-// Visibility bump: private -> `pub(super)`. Exercised directly by
+// Visibility bump: private -> `pub(in crate::app)`. Exercised directly by
 // `actions_tests.rs` (a submodule of `actions.rs`, so it needs an explicit
-// `crate::app::library_browse_actions::...` import once this lives outside
+// `crate::app::dispatch::library::browse::...` import once this lives outside
 // `actions.rs`'s own namespace).
-pub(super) fn recursive_album_search_eligible(collection_type: &str, levels: &[String]) -> bool {
+pub(in crate::app) fn recursive_album_search_eligible(
+    collection_type: &str,
+    levels: &[String],
+) -> bool {
     collection_type == "music"
         && levels.len() > 1
         && levels.last().is_some_and(|level| level == "album")
@@ -419,16 +427,16 @@ pub(super) fn recursive_album_search_eligible(collection_type: &str, levels: &[S
 /// miss everything outside it. `lib.library_total` (the true count captured
 /// on the library's first, unfiltered load) is the right number; `.max` is
 /// just a defensive fallback for the moment before it's been captured.
-// Visibility bump: private -> `pub(super)`. Same reason as
+// Visibility bump: private -> `pub(in crate::app)`. Same reason as
 // `recursive_album_search_eligible` above -- exercised directly by
 // `actions_tests.rs`.
-pub(super) fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> usize {
+pub(in crate::app) fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> usize {
     lib.library_total
         .unwrap_or(lvl.total_count)
         .max(lvl.total_count)
 }
 
-pub(super) fn fetch_all_album_index_items(
+pub(in crate::app) fn fetch_all_album_index_items(
     parent_id: &str,
     fetch: &mut AlbumIndexFetch<'_>,
 ) -> Result<Vec<EmbyItem>, String> {
@@ -446,10 +454,10 @@ pub(super) fn fetch_all_album_index_items(
     Ok(items)
 }
 
-// Visibility bump: private -> `pub(super)`. Same reason as
+// Visibility bump: private -> `pub(in crate::app)`. Same reason as
 // `recursive_album_search_eligible` above -- exercised directly by
 // `actions_tests.rs`.
-pub(super) fn build_album_index_with(
+pub(in crate::app) fn build_album_index_with(
     library_id: &str,
     levels: &[String],
     fetch: &mut AlbumIndexFetch<'_>,
@@ -493,7 +501,7 @@ pub(super) fn build_album_index_with(
 }
 
 impl App {
-    pub(super) fn ensure_lib_loaded_for(&mut self, idx: usize) {
+    pub(in crate::app) fn ensure_lib_loaded_for(&mut self, idx: usize) {
         if idx >= self.libs.len() {
             return;
         }
@@ -504,13 +512,13 @@ impl App {
         if self.libs[idx].nav_stack.is_empty() {
             if let Some(saved) = self.saved_library_position(idx) {
                 if let Some(root) = saved.levels.first() {
-                    let filter_kind = super::render::LetterFilterKind::from_collection_type(
+                    let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
                         self.libs[idx].library.collection_type.as_str(),
                     );
                     self.libs[idx].library_total = root.library_total;
                     self.libs[idx].tv_content_mode =
                         (self.libs[idx].library.collection_type == "tvshows").then(|| {
-                            super::render::resolve_tv_content_mode(
+                            crate::app::render::resolve_tv_content_mode(
                                 root.library_total.unwrap_or_default(),
                                 root.tv_content_mode.as_ref(),
                             )
@@ -530,12 +538,16 @@ impl App {
 
                         all_items: None,
                         letter_filter: root.letter_filter_index.and_then(|index| {
-                            if filter_kind == super::render::LetterFilterKind::Tv
-                                && index >= super::render::LetterFilter::count_for_kind(filter_kind)
+                            if filter_kind == crate::app::render::LetterFilterKind::Tv
+                                && index
+                                    >= crate::app::render::LetterFilter::count_for_kind(filter_kind)
                             {
                                 None
                             } else {
-                                super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                                crate::app::render::LetterFilter::for_index_for_kind(
+                                    index,
+                                    filter_kind,
+                                )
                             }
                         }),
                         tv_content_mode: root.tv_content_mode.clone(),
@@ -590,7 +602,7 @@ impl App {
         }
     }
 
-    pub(super) fn spawn_restore_library_position(
+    pub(in crate::app) fn spawn_restore_library_position(
         &self,
         lib_idx: usize,
         saved: crate::config::LibraryPosition,
@@ -600,21 +612,22 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
-        let filter_kind = super::render::LetterFilterKind::from_collection_type(
+        let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
             self.libs[lib_idx].library.collection_type.as_str(),
         );
         std::thread::spawn(move || {
-            let restored = super::restore_library_position_with_fetched_rows_for_kind(
+            let restored = crate::app::restore_library_position_with_fetched_rows_for_kind(
                 &saved,
                 visible_rows,
                 filter_kind,
                 |saved_level| {
-                    let tv_mode = (filter_kind == super::render::LetterFilterKind::Tv).then(|| {
-                        super::render::resolve_tv_content_mode(
-                            saved_level.library_total.unwrap_or_default(),
-                            saved_level.tv_content_mode.as_ref(),
-                        )
-                    });
+                    let tv_mode =
+                        (filter_kind == crate::app::render::LetterFilterKind::Tv).then(|| {
+                            crate::app::render::resolve_tv_content_mode(
+                                saved_level.library_total.unwrap_or_default(),
+                                saved_level.tv_content_mode.as_ref(),
+                            )
+                        });
                     if matches!(tv_mode, Some(mbv_core::config::TvContentMode::Latest)) {
                         let items = client.get_latest_episodes(&saved_level.parent_id, 30)?;
                         let total_count = items.len();
@@ -627,10 +640,10 @@ impl App {
                     }
                     let letter_filter = match tv_mode {
                         Some(mbv_core::config::TvContentMode::Range(index)) => {
-                            super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                            crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
                         }
                         _ => saved_level.letter_filter_index.and_then(|index| {
-                            super::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                            crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
                         }),
                     };
                     let (name_ge, name_lt) = letter_filter
@@ -685,7 +698,7 @@ impl App {
         });
     }
 
-    pub(super) fn refresh_after_stop(&mut self) {
+    pub(in crate::app) fn refresh_after_stop(&mut self) {
         if let Ok(content) = self.fetch_home() {
             // The fetch runs synchronously (order-sensitive side
             // effects); the computed content travels to Model-owned
@@ -800,7 +813,7 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_tv_latest(&self, lib_idx: usize, parent_id: String, title: String) {
+    pub(in crate::app) fn spawn_tv_latest(&self, lib_idx: usize, parent_id: String, title: String) {
         self.spawn_tv_content(
             lib_idx,
             parent_id,
@@ -809,7 +822,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_destination_latest_snapshot(&self, lib_idx: usize) {
+    pub(in crate::app) fn spawn_destination_latest_snapshot(&self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
@@ -822,7 +835,7 @@ impl App {
         self.spawn_emby_latest_snapshot(lib.library.id.clone(), lib.library.name.clone());
     }
 
-    pub(super) fn spawn_emby_latest_snapshot(&self, library_id: String, title: String) {
+    pub(in crate::app) fn spawn_emby_latest_snapshot(&self, library_id: String, title: String) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -844,7 +857,12 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_tv_upcoming(&self, lib_idx: usize, parent_id: String, title: String) {
+    pub(in crate::app) fn spawn_tv_upcoming(
+        &self,
+        lib_idx: usize,
+        parent_id: String,
+        title: String,
+    ) {
         self.spawn_tv_content(
             lib_idx,
             parent_id,
@@ -853,7 +871,7 @@ impl App {
         );
     }
 
-    pub(super) fn spawn_browse(
+    pub(in crate::app) fn spawn_browse(
         &self,
         lib_idx: usize,
         parent_id: String,
@@ -914,7 +932,7 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_navigate_to_item(
+    pub(in crate::app) fn spawn_navigate_to_item(
         &self,
         item_id: String,
         item_type: String,
@@ -979,7 +997,7 @@ impl App {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) fn spawn_browse_page_sized(
+    pub(in crate::app) fn spawn_browse_page_sized(
         &self,
         lib_idx: usize,
         parent_id: String,
@@ -988,7 +1006,7 @@ impl App {
         unplayed_only: bool,
         sort_by: String,
         sort_order: String,
-        letter_filter: Option<super::render::LetterFilter>,
+        letter_filter: Option<crate::app::render::LetterFilter>,
         limit: usize,
     ) {
         let Some(client) = self.emby_snapshot() else {
@@ -1026,10 +1044,10 @@ impl App {
         });
     }
 
-    // Visibility bump: private -> `pub(super)`. Called from
+    // Visibility bump: private -> `pub(in crate::app)`. Called from
     // `handle_lib_loaded`/`handle_lib_page_appended`, which stay behind in
     // `actions.rs`.
-    pub(super) fn spawn_all_items_prefetch(&self, lib_idx: usize) {
+    pub(in crate::app) fn spawn_all_items_prefetch(&self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,
@@ -1074,7 +1092,7 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_search_items_load(&self, lib_idx: usize) {
+    pub(in crate::app) fn spawn_search_items_load(&self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
         let lvl = match lib.nav_stack.last() {
             Some(l) => l,

@@ -1,12 +1,12 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, PlayerTab, QueueScope};
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{App, PlayerTab, QueueScope};
 use mbv_core::api::parse_mbv_direct_tcp_port;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(super) fn session_direct_endpoint(
+    pub(in crate::app) fn session_direct_endpoint(
         &self,
         sess: &mbv_core::api::SessionInfo,
     ) -> Option<mbv_core::remote_player::DaemonEndpoint> {
@@ -40,11 +40,11 @@ impl App {
     /// `try_auto_reconnect`'s `DirectSession` case (#236) and the F2
     /// "Library Routes" device picker (`enter_device_stage`, #256) --
     /// library-route *resolution* itself no longer calls this (#256).
-    pub(super) fn fetch_sessions_blocking(
+    pub(in crate::app) fn fetch_sessions_blocking(
         &self,
     ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
         #[cfg(test)]
-        if let Some(f) = *super::SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
+        if let Some(f) = *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
             let Some(client) = self.emby_client() else {
                 return Err("Emby is unavailable".into());
             };
@@ -57,7 +57,7 @@ impl App {
         result
     }
 
-    pub(super) fn connect_direct_endpoint(
+    pub(in crate::app) fn connect_direct_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
@@ -68,7 +68,7 @@ impl App {
         String,
     > {
         #[cfg(test)]
-        if let Some(connect) = *super::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
+        if let Some(connect) = *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
             return connect(endpoint);
         }
 
@@ -108,7 +108,7 @@ impl App {
         String,
     > {
         #[cfg(test)]
-        if let Some(connect) = *super::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
+        if let Some(connect) = *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
             return connect(endpoint);
         }
 
@@ -141,7 +141,7 @@ impl App {
     /// background timer. See the same `#[allow(dead_code)]` rationale as
     /// `connect_daemon_route_endpoint` above -- remove both attributes
     /// together when #223 adds its first call site.
-    pub(super) fn try_daemon_route_connect(
+    pub(in crate::app) fn try_daemon_route_connect(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
         route_label: &str,
@@ -174,7 +174,7 @@ impl App {
     /// Returns `true` when the player has been swapped to a live reattach and
     /// the caller must skip `restore_local_mode`. Local daemons are excluded:
     /// those already have the modal / `home_is_local_daemon` reconnect paths.
-    pub(super) fn try_reattach_remote_daemon(&mut self) -> bool {
+    pub(in crate::app) fn try_reattach_remote_daemon(&mut self) -> bool {
         self.try_reattach_remote_daemon_with_sleep(std::thread::sleep)
     }
 
@@ -182,7 +182,7 @@ impl App {
     /// backoff sequence without paying wall-clock time. The loop, attempt
     /// count, and backoff constants are identical to the shipped path — only
     /// the clock differs.
-    pub(super) fn try_reattach_remote_daemon_with_sleep(
+    pub(in crate::app) fn try_reattach_remote_daemon_with_sleep(
         &mut self,
         sleep: impl Fn(Duration),
     ) -> bool {
@@ -291,7 +291,7 @@ impl App {
     /// device not found in the current session list all fall back to (stay
     /// on) local playback, exactly like #222's per-play lazy-connect
     /// fallback rule -- never a hard failure at startup.
-    pub(super) fn try_auto_reconnect(&mut self) {
+    pub(in crate::app) fn try_auto_reconnect(&mut self) {
         if !self.config.lock().unwrap().auto_reconnect {
             log::info!(target: "auto_reconnect", "auto-reconnect disabled; staying local");
             return;

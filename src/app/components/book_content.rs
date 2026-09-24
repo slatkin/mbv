@@ -24,7 +24,7 @@ use super::msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
     ShellRequest,
 };
-use crate::app::audiobookshelf_browse_actions::audiobookshelf_book_queue_item;
+use crate::app::dispatch::audiobookshelf::browse::audiobookshelf_book_queue_item;
 use crate::app::state::types::audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
 use crate::app::ui_util::{clean_overview, fmt_duration_gutter};
 

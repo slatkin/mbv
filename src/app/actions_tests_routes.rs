@@ -1,7 +1,7 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
-use crate::app::library_browse_actions::{
+use crate::app::dispatch::library::browse::{
     build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
 };
 use crate::app::tests::{

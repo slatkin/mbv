@@ -1,24 +1,24 @@
-use super::App;
-use super::{ConfirmAction, ConfirmModal};
 use crate::app::state::types::settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
+use crate::app::App;
+use crate::app::{ConfirmAction, ConfirmModal};
 use mbv_core::service_runtime::ServiceState;
 
-pub(super) struct EmbySetupForm {
-    pub(super) fields: [String; 3],
-    pub(super) focus: usize,
-    pub(super) busy: bool,
-    pub(super) error: String,
-    pub(super) generation: Option<mbv_core::service_runtime::SetupGeneration>,
-    pub(super) previous_state: ServiceState,
+pub(in crate::app) struct EmbySetupForm {
+    pub(in crate::app) fields: [String; 3],
+    pub(in crate::app) focus: usize,
+    pub(in crate::app) busy: bool,
+    pub(in crate::app) error: String,
+    pub(in crate::app) generation: Option<mbv_core::service_runtime::SetupGeneration>,
+    pub(in crate::app) previous_state: ServiceState,
 }
 
-pub(super) struct AudiobookshelfSetupForm {
-    pub(super) fields: [String; 2],
-    pub(super) focus: usize,
-    pub(super) busy: bool,
-    pub(super) error: String,
-    pub(super) generation: Option<mbv_core::service_runtime::SetupGeneration>,
-    pub(super) previous_state: ServiceState,
+pub(in crate::app) struct AudiobookshelfSetupForm {
+    pub(in crate::app) fields: [String; 2],
+    pub(in crate::app) focus: usize,
+    pub(in crate::app) busy: bool,
+    pub(in crate::app) error: String,
+    pub(in crate::app) generation: Option<mbv_core::service_runtime::SetupGeneration>,
+    pub(in crate::app) previous_state: ServiceState,
 }
 
 impl EmbySetupForm {
@@ -44,12 +44,12 @@ impl EmbySetupForm {
 
 impl App {
     pub(crate) fn open_services_settings(&mut self) {
-        self.request_sidebar_open(super::SidebarId::Settings);
+        self.request_sidebar_open(crate::app::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Services;
     }
 
     pub(crate) fn open_keys_settings(&mut self) {
-        self.request_sidebar_open(super::SidebarId::Settings);
+        self.request_sidebar_open(crate::app::SidebarId::Settings);
         self.settings_destination = SettingsDestination::Keys;
     }
 
@@ -77,7 +77,7 @@ impl App {
         });
     }
 
-    pub(super) fn cancel_emby_setup(&mut self) {
+    pub(in crate::app) fn cancel_emby_setup(&mut self) {
         if let Some(form) = self.emby_setup_form.take() {
             if let Some(generation) = form.generation {
                 self.emby_runtime
@@ -87,7 +87,7 @@ impl App {
         self.emby_setup_rx = None;
     }
 
-    pub(super) fn cancel_audiobookshelf_setup(&mut self) {
+    pub(in crate::app) fn cancel_audiobookshelf_setup(&mut self) {
         if let Some(mut form) = self.audiobookshelf_setup_form.take() {
             form.fields[1].clear();
             if let Some(generation) = form.generation {
@@ -98,7 +98,7 @@ impl App {
         self.audiobookshelf_setup_rx = None;
     }
 
-    pub(super) fn submit_audiobookshelf_setup(&mut self) {
+    pub(in crate::app) fn submit_audiobookshelf_setup(&mut self) {
         let Some(form) = self.audiobookshelf_setup_form.as_mut() else {
             return;
         };
@@ -118,15 +118,17 @@ impl App {
         form.generation = Some(generation);
         form.busy = true;
         form.error = "Validating Audiobookshelf setup…".into();
-        self.audiobookshelf_setup_rx = Some(super::service_startup::start_audiobookshelf_setup(
-            server_url,
-            api_key,
-            generation,
-            form.previous_state,
-        ));
+        self.audiobookshelf_setup_rx = Some(
+            crate::app::dispatch::session::service_startup::start_audiobookshelf_setup(
+                server_url,
+                api_key,
+                generation,
+                form.previous_state,
+            ),
+        );
     }
 
-    pub(super) fn handle_emby_setup_worker_disconnect(&mut self) {
+    pub(in crate::app) fn handle_emby_setup_worker_disconnect(&mut self) {
         let Some(form) = self.emby_setup_form.as_mut() else {
             self.emby_setup_rx = None;
             return;
@@ -143,7 +145,7 @@ impl App {
         self.emby_setup_rx = None;
     }
 
-    pub(super) fn submit_emby_setup(&mut self) {
+    pub(in crate::app) fn submit_emby_setup(&mut self) {
         let Some(form) = self.emby_setup_form.as_mut() else {
             return;
         };
@@ -173,12 +175,12 @@ impl App {
         form.error = "Validating Emby setup…".into();
         let previous = form.previous_state;
         let config = self.config.lock().unwrap().clone();
-        self.emby_setup_rx = Some(super::service_startup::start_setup(
+        self.emby_setup_rx = Some(crate::app::dispatch::session::service_startup::start_setup(
             config, server_url, username, password, generation, previous,
         ));
     }
 
-    pub(super) fn activate_service_entry(&mut self, entry: ServiceEntry) {
+    pub(in crate::app) fn activate_service_entry(&mut self, entry: ServiceEntry) {
         let intent = match entry {
             ServiceEntry::Emby => match self.emby_runtime.state {
                 ServiceState::NotConfigured | ServiceState::NeedsAuthentication => {
@@ -201,7 +203,7 @@ impl App {
         self.route_service_action(intent);
     }
 
-    pub(super) fn route_service_action(&mut self, intent: ServiceActionIntent) {
+    pub(in crate::app) fn route_service_action(&mut self, intent: ServiceActionIntent) {
         match intent {
             ServiceActionIntent::ManageFeeds => {
                 self.pending_overlay =
@@ -217,7 +219,7 @@ impl App {
         }
     }
 
-    pub(super) fn service_entry_name(entry: ServiceEntry) -> &'static str {
+    pub(in crate::app) fn service_entry_name(entry: ServiceEntry) -> &'static str {
         match entry {
             ServiceEntry::Emby => "Emby",
             ServiceEntry::Audiobookshelf => "Audiobookshelf",
@@ -225,7 +227,7 @@ impl App {
         }
     }
 
-    pub(super) fn request_emby_removal(&mut self) {
+    pub(in crate::app) fn request_emby_removal(&mut self) {
         if self.emby_runtime.state == ServiceState::NotConfigured {
             return;
         }
@@ -237,7 +239,7 @@ impl App {
         });
     }
 
-    pub(super) fn request_audiobookshelf_removal(&mut self) {
+    pub(in crate::app) fn request_audiobookshelf_removal(&mut self) {
         if self.audiobookshelf_runtime.state == ServiceState::NotConfigured {
             return;
         }
@@ -249,7 +251,7 @@ impl App {
         });
     }
 
-    pub(super) fn service_state_label(&self, entry: ServiceEntry) -> &'static str {
+    pub(in crate::app) fn service_state_label(&self, entry: ServiceEntry) -> &'static str {
         match entry {
             ServiceEntry::Emby => service_state_label(self.emby_runtime.state),
             ServiceEntry::Audiobookshelf => service_state_label(self.audiobookshelf_runtime.state),
@@ -257,7 +259,7 @@ impl App {
         }
     }
 
-    pub(super) fn service_action_label(&self, entry: ServiceEntry) -> &'static str {
+    pub(in crate::app) fn service_action_label(&self, entry: ServiceEntry) -> &'static str {
         match entry {
             ServiceEntry::Emby => match self.emby_runtime.state {
                 ServiceState::NotConfigured | ServiceState::NeedsAuthentication => "Set up Emby",
@@ -292,10 +294,12 @@ impl App {
             return;
         }
         let generation = self.emby_runtime.begin_retry();
-        self.emby_startup_rx = Some(super::service_startup::start(config, generation));
+        self.emby_startup_rx = Some(crate::app::dispatch::session::service_startup::start(
+            config, generation,
+        ));
     }
 
-    pub(super) fn service_context(&self, entry: ServiceEntry) -> String {
+    pub(in crate::app) fn service_context(&self, entry: ServiceEntry) -> String {
         match entry {
             ServiceEntry::Feeds => match self.config.lock().unwrap().feeds.len() {
                 0 => "No subscriptions".into(),

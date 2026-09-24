@@ -1,7 +1,7 @@
-use super::{App, SessionEvent};
+use crate::app::{App, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
 impl App {
-    pub(super) fn submit_attached_sequence(
+    pub(in crate::app) fn submit_attached_sequence(
         &mut self,
         conn_id: &str,
         items: &[mbv_core::api::EmbyItem],
@@ -19,11 +19,11 @@ impl App {
 
     /// Advances whenever queue identity or state is replaced, so in-flight
     /// playlist mutations can detect stale completions.
-    pub(super) fn advance_remote_queue_lineage(&mut self) {
+    pub(in crate::app) fn advance_remote_queue_lineage(&mut self) {
         self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
     }
 
-    pub(super) fn spawn_sessions_load(&mut self) {
+    pub(in crate::app) fn spawn_sessions_load(&mut self) {
         self.sessions_loading = true;
         let Some(client) = self.emby_snapshot() else {
             return;
@@ -39,7 +39,7 @@ impl App {
         });
     }
 
-    pub(super) fn session_jump_track(
+    pub(in crate::app) fn session_jump_track(
         &mut self,
         conn_id: &str,
         delta: i64,
@@ -82,18 +82,18 @@ impl App {
     /// session-math helpers (`session_jump_track`, `do_session_command`)
     /// rather than in `action.rs`, since it's pure session-position math with
     /// no dependency on the `Action` seam itself.
-    pub(super) fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
+    pub(in crate::app) fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
         let moved = pos_s + delta as i64;
         let target = if delta < 0.0 { moved.max(0) } else { moved };
         target * TICKS_PER_SECOND
     }
 
-    pub(super) fn clear_playback_overlays(&mut self) {
+    pub(in crate::app) fn clear_playback_overlays(&mut self) {
         self.next_up_item = None;
         self.status.clear();
     }
 
-    pub(super) fn do_session_command(
+    pub(in crate::app) fn do_session_command(
         &mut self,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
@@ -121,7 +121,7 @@ impl App {
 
 /// Resolve a remote Next/Previous destination by locating the connected
 /// session's now-playing item in the visible queue and applying the delta.
-pub(super) fn remote_jump_target(
+pub(in crate::app) fn remote_jump_target(
     player_tab: &crate::app::PlayerTab,
     now_playing_item_id: Option<&str>,
     delta: i64,

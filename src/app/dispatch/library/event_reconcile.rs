@@ -1,4 +1,4 @@
-use super::App;
+use crate::app::App;
 
 impl App {
     /// Shared acknowledged-progress reconcile used by both the bare owner
@@ -10,7 +10,7 @@ impl App {
     /// Generation gating is the caller's concern: the bare owner gates on its
     /// own runtime generation, while the daemon drops stale updates before
     /// emitting, so the daemon client reconciles unconditionally.
-    pub(super) fn reconcile_audiobookshelf_progress(
+    pub(in crate::app) fn reconcile_audiobookshelf_progress(
         &mut self,
         library_item_id: &str,
         episode_id: &str,
@@ -56,7 +56,7 @@ impl App {
     /// position/completion. Every book browse state's progress map (keyed by
     /// `library_item_id` only) is updated the way the episode reconcile
     /// updates `audiobookshelf_browse`.
-    pub(super) fn reconcile_audiobookshelf_book_progress(
+    pub(in crate::app) fn reconcile_audiobookshelf_book_progress(
         &mut self,
         library_item_id: &str,
         position_ticks: i64,
