@@ -52,16 +52,16 @@
 
 ## 4. `WsEvent` dispatch
 
-- [ ] 4.1 Add a `#[rstest]` `#[case]` table to `src/app/ws_event_actions.rs` covering
+- [x] 4.1 Add a `#[rstest]` `#[case]` table to `src/app/ws_event_actions.rs` covering
   the pure command variants — `Pause`, `Unpause`, `NextTrack`, `PreviousTrack`,
   `TogglePause`, `Seek`, `SeekRelative`, `SetVolume`, `VolumeUp`, `VolumeDown`,
   `SetAudio` — asserting the exact `PlayerCommand` observed through
   `PlayerProxy::spy_on_commands()` on a `make_app_stub()` app.
-- [ ] 4.2 Cover the variants with their own state: `Stop` resets bare transitions and
+- [x] 4.2 Cover the variants with their own state: `Stop` resets bare transitions and
   stops the player; `SetMute` / `ToggleMute` update `mute_on` *and* send
   `SetMute`, with `save_prefs` landing in the test state dir (the `TestStateDirGuard`
   installed by `make_app_stub` keeps this off the developer's config).
-- [ ] 4.3 Cover `SetSub` on its own: it resolves the stream index through player status,
+- [x] 4.3 Cover `SetSub` on its own: it resolves the stream index through player status,
   so assert both the resolved-command case and the no-command case rather than forcing
   it into the 4.1 table.
 - [ ] 4.4 Cover the `Play` arm with the existing mock-Emby fixture: single-item and
