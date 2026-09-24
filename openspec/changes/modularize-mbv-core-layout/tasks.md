@@ -4,12 +4,12 @@ Every task: pure moves plus the compile-forced edits only, with no renames of ty
 
 ## 0. Preconditions
 
-- [ ] 0.1 Confirm `split-daemon-event-loop` and `tidy-repo-layout` are archived, and that `openspec list` shows no other active change editing `crates/mbv-core/src/`. Verify: `ls openspec/changes` shows neither of those two change directories outside `archive/`.
+- [x] 0.1 Confirm `split-daemon-event-loop` and `tidy-repo-layout` are archived, and that `openspec list` shows no other active change editing `crates/mbv-core/src/`. Verify: `ls openspec/changes` shows neither of those two change directories outside `archive/`.
 
 ## 1. `api/`
 
-- [ ] 1.1 Phase A: `git mv` `api.rs` → `api/mod.rs`, `api_types.rs` → `api/types.rs`, `api_types_parsing.rs` → `api/types_parsing.rs`, each `api_client_*.rs` → `api/client_*.rs`, and `api_tests_parsing.rs`, `api_tests_client.rs`, `api_failure_tests.rs` → `api/tests/{parsing,client,failure}.rs`. Update the `include!`/`#[path]` strings. Verify: gate green, and `ls crates/mbv-core/src/api_*` matches nothing.
-- [ ] 1.2 Phase B: replace every `include!`/`#[path]` in `api/` with `mod` + glob re-export (design Decision 3). Create `api/tests/mod.rs`. Verify: gate green, and `rg -n 'include!|#\[path' crates/mbv-core/src/api` is empty.
+- [x] 1.1 Phase A: `git mv` `api.rs` → `api/mod.rs`, `api_types.rs` → `api/types.rs`, `api_types_parsing.rs` → `api/types_parsing.rs`, each `api_client_*.rs` → `api/client_*.rs`, and `api_tests_parsing.rs`, `api_tests_client.rs`, `api_failure_tests.rs` → `api/tests/{parsing,client,failure}.rs`. Update the `include!`/`#[path]` strings. Verify: gate green, and `ls crates/mbv-core/src/api_*` matches nothing.
+- [x] 1.2 Phase B: replace every `include!`/`#[path]` in `api/` with `mod` + glob re-export (design Decision 3). Create `api/tests/mod.rs`. Verify: gate green, and `rg -n 'include!|#\[path' crates/mbv-core/src/api` is empty.
 
 ## 2. `config/`
 
