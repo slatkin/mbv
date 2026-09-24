@@ -19,7 +19,7 @@ impl QueueComponent {
         }
     }
 
-    fn handle_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+    pub(super) fn handle_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.handle_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
             None if matches!(
