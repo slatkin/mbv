@@ -4,11 +4,12 @@ mod state;
 pub(in crate::player) use state::*;
 mod types;
 pub(in crate::player) use types::*;
-mod queue;
-pub(in crate::player) use queue::*;
 mod commands;
+mod queue;
 pub(in crate::player) use commands::*;
 mod events;
-pub(in crate::player) use events::*;
+#[cfg(test)]
+pub(in crate::player) use events::{
+    is_clocked_audio_error, is_superseded_jump_end_file, provider_lifecycle_close_pos,
+};
 mod run;
-pub(in crate::player) use run::*;
