@@ -37,8 +37,8 @@ Rules for every task:
 
 ## 6. App-level tests
 
-- [ ] 6.1 Create `tests/` from `tests.rs` (as `tests/mod.rs`, still `pub(crate)`) and move the `tick_integration/` group, including the nested `music/`, `library_panel/` and `mouse/` children and `harness.rs`. Remove those entries from `app_test_modules.rs`. Verify: gate, the test count in `cargo nextest run -p mbv` is unchanged from before the task (record both numbers here), and `ls src/app/tests_tick_*` matches nothing.
-- [ ] 6.2 Move the remaining groups (`routing_matrix/`, `library_position/`, `queue/`, `feeds/`, `podcast/`, `route_state/`) and the loose test files into `tests/`. Delete `app_test_modules.rs` and its `include!` in `app/mod.rs`. Verify: gate, test count unchanged (record it), `ls src/app/*.rs` prints only `mod.rs` and `test_seams.rs`, and `rg -n '#\[path|include!' src/app/*.rs src/app/{shell,dispatch,state,input,infra,tests}` is empty.
+- [x] 6.1 Create `tests/` from `tests.rs` (as `tests/mod.rs`, still `pub(crate)`) and move the `tick_integration/` group, including the nested `music/`, `library_panel/` and `mouse/` children and `harness.rs`. Remove those entries from `app_test_modules.rs`. Verify: gate, the test count in `cargo nextest run -p mbv` is unchanged from before the task (record both numbers here), and `ls src/app/tests_tick_*` matches nothing. (Test count recorded: 2356 before → 2356 after.)
+- [x] 6.2 Move the remaining groups (`routing_matrix/`, `library_position/`, `queue/`, `feeds/`, `podcast/`, `route_state/`) and the loose test files into `tests/`. Delete `app_test_modules.rs` and its `include!` in `app/mod.rs`. Verify: gate, test count unchanged (record it), `ls src/app/*.rs` prints only `mod.rs` and `test_seams.rs`, and `rg -n '#\[path|include!' src/app/*.rs src/app/{shell,dispatch,state,input,infra,tests}` is empty. (Test count recorded: 2356 before → 2356 after.)
 
 ## 7. `components/` and `render/` test wiring
 
