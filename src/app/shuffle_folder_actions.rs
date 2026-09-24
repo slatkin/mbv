@@ -1,6 +1,6 @@
 use super::notify_actions::ToastSeverity;
-use super::ui_util::natural_sort_key;
 use super::{App, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
+use crate::app::infra::ui_util::natural_sort_key;
 use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 

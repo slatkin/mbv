@@ -343,7 +343,7 @@ fn selected_visualizer_background_is_the_panel_band_under_either_focus() {
         let mut app = make_queue_app(3, 2);
         app.panel_focus = focus;
         app.visualizer_enabled = true;
-        app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
+        app.visualizer_window.samples = vec![crate::app::infra::visualizer_worker::StereoSample {
             left: 1.0,
             right: 1.0,
         }];

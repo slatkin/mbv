@@ -1,5 +1,5 @@
-use super::super::super::palette;
 use super::chrome;
+use crate::app::infra::palette;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;

@@ -1,0 +1,11 @@
+pub(in crate::app) mod feed_parse;
+pub(in crate::app) mod fuzzy_match;
+pub(crate) mod images;
+pub(crate) mod layout;
+pub(crate) mod palette;
+pub(in crate::app) mod render_cadence;
+pub(in crate::app) mod resize;
+pub(in crate::app) mod text_safety;
+pub(crate) mod ui_util;
+pub(in crate::app) mod visualizer;
+pub(in crate::app) mod visualizer_worker;

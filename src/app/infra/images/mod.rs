@@ -1,5 +1,5 @@
-use super::app_struct::{LevelFillAction, LevelFillState};
-use super::{App, LibEvent, PAGE_SIZE};
+use super::super::app_struct::{LevelFillAction, LevelFillState};
+use super::super::{App, LibEvent, PAGE_SIZE};
 use crate::app::palette;
 use crate::app::render::components::widgets::RENDER_FILTER;
 use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
@@ -7,7 +7,7 @@ use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 use std::time::{Duration, Instant};
 
-pub(super) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
+pub(in crate::app) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
 
 fn wide_landscape_hero_eligible(
     artwork: &crate::app::components::library_panel::HeroArtwork,
@@ -17,24 +17,32 @@ fn wide_landscape_hero_eligible(
         && crate::app::render::wide_hero_fits(panel_area)
 }
 
-pub(super) fn mem_key(cache_key: &str, suffix: &str) -> String {
+pub(in crate::app) fn mem_key(cache_key: &str, suffix: &str) -> String {
     format!("{cache_key}@{suffix}")
 }
 
 /// Prefix shared by every Audiobookshelf-sourced cache key, used to filter
 /// or clear Audiobookshelf entries from the image caches.
-pub(super) const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";
+pub(in crate::app) const AUDIOBOOKSHELF_CACHE_KEY_PREFIX: &str = "audiobookshelf:";
 
 /// Cache key for an Audiobookshelf cover under `server`, keyed by the
 /// library item's `id` and the active protocol `suffix`.
-pub(super) fn audiobookshelf_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
+pub(in crate::app) fn audiobookshelf_cover_cache_key(
+    server: &str,
+    id: &str,
+    suffix: &str,
+) -> String {
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:cover:{id}:{suffix}")
 }
 
 /// Cache key for an Audiobookshelf book cover. Distinct from the podcast
 /// cover key (`:book:`, not `:cover:`) so a book and a podcast sharing an
 /// id never share artwork state (book-browsing spec).
-pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
+pub(in crate::app) fn audiobookshelf_book_cover_cache_key(
+    server: &str,
+    id: &str,
+    suffix: &str,
+) -> String {
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:bookcover:{id}:{suffix}")
 }
 
@@ -50,13 +58,17 @@ pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix
 /// hero fell back to the placeholder block and flashed. Emby's hero and card
 /// keys are already distinct for the same reason (`{id}:Backdrop,Primary` vs
 /// `{id}:P`).
-pub(super) fn audiobookshelf_hero_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
+pub(in crate::app) fn audiobookshelf_hero_cover_cache_key(
+    server: &str,
+    id: &str,
+    suffix: &str,
+) -> String {
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:hero:cover:{id}:{suffix}")
 }
 
 /// Hero-scoped sibling of [`audiobookshelf_book_cover_cache_key`], with the
 /// same crop-vs-plain isolation as [`audiobookshelf_hero_cover_cache_key`].
-pub(super) fn audiobookshelf_hero_book_cover_cache_key(
+pub(in crate::app) fn audiobookshelf_hero_book_cover_cache_key(
     server: &str,
     id: &str,
     suffix: &str,
@@ -87,12 +99,12 @@ const MAX_IMAGE_FETCHES: usize = 6;
 /// `card_image_states`. Never touches `card_image_loading`, so it never triggers
 /// the transient "Loading…" treatment — it is decoded synchronously from the
 /// bundled bytes the first time it's needed and then just sits in the cache.
-pub(super) const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
+pub(in crate::app) const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 
 /// Fixed steady-state placeholder shown in the queue card when no
 /// queue-card artwork is available.
 static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
-    include_bytes!("../../assets/power-card-placeholder.webp");
+    include_bytes!("../../../../assets/power-card-placeholder.webp");
 
 /// One `card_image_states` cache entry: the decoded source image (retained so
 /// it can be re-encoded with a different protocol picker without refetching —
@@ -100,7 +112,7 @@ static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
 /// encoded `ThreadProtocol` per protocol suffix (e.g. `sixel`, `halfblock`).
 /// The active suffix's protocol is built on fetch; the others are created
 /// lazily on first render under that suffix.
-pub(super) struct CachedImage {
+pub(in crate::app) struct CachedImage {
     /// `None` marks a fetch that resolved without artwork.
     pub img: Option<image::DynamicImage>,
     pub protocols: std::collections::HashMap<&'static str, ratatui_image::thread::ThreadProtocol>,
@@ -119,7 +131,7 @@ pub(super) struct CachedImage {
 impl CachedImage {
     /// An entry for a fetch that resolved with no image.
     #[cfg(test)]
-    pub(super) fn empty() -> Self {
+    pub(in crate::app) fn empty() -> Self {
         Self {
             img: None,
             protocols: std::collections::HashMap::new(),
@@ -130,7 +142,7 @@ impl CachedImage {
 }
 
 /// A pending card-image fetch, queued when the in-flight limit is reached.
-pub(super) struct ImageFetchReq {
+pub(in crate::app) struct ImageFetchReq {
     pub cache_key: String,
     pub item_id: String,
     pub series_id: String,
@@ -139,7 +151,7 @@ pub(super) struct ImageFetchReq {
 }
 
 #[derive(Debug, Clone)]
-pub(super) enum ImageSource {
+pub(in crate::app) enum ImageSource {
     Emby,
     Audiobookshelf { server_url: String, api_key: String },
 }
@@ -392,8 +404,8 @@ impl App {
     }
 }
 
-include!("image_fetch.rs");
-include!("image_protocol.rs");
+mod fetch;
+mod protocol;
 
 #[cfg(test)]
 mod tests {

@@ -1,5 +1,5 @@
-use super::ui_util::take_chars;
 use super::{App, LocalPlaybackTarget, RemotePlaybackTarget};
+use crate::app::infra::ui_util::take_chars;
 use crate::app::render::indicators::{short_resolution_label, IndicatorData};
 
 impl RemotePlaybackTarget {

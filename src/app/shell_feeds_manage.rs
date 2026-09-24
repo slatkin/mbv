@@ -139,7 +139,7 @@ impl super::shell::Model {
             title: " Remove Feed ".into(),
             message: format!(
                 "Remove subscription '{}'?",
-                super::ui_util::trunc_str(&name, 40)
+                crate::app::infra::ui_util::trunc_str(&name, 40)
             ),
             hint: "[y] Confirm    [Esc] Cancel".into(),
             on_confirm: super::ConfirmAction::RemoveFeedSubscription(index),
@@ -243,25 +243,26 @@ impl super::shell::Model {
         popup.pending_add = Some(id);
         let tx = popup.add_tx.clone();
         std::thread::spawn(move || {
-            let (resolved_url, result) = match super::feed_parse::normalize_feed_url(&url) {
-                Ok(resolved_url) => {
-                    let result = super::feed_parse::fetch_and_parse_entries(
-                        &resolved_url,
-                        kind,
-                        &resolved_url,
-                    )
-                    .and_then(|entries| {
-                        if entries.is_empty() {
-                            Err("response did not contain any valid RSS or Atom entries"
-                                .to_string())
-                        } else {
-                            Ok(())
-                        }
-                    });
-                    (resolved_url, result)
-                }
-                Err(error) => (url, Err(error)),
-            };
+            let (resolved_url, result) =
+                match crate::app::infra::feed_parse::normalize_feed_url(&url) {
+                    Ok(resolved_url) => {
+                        let result = crate::app::infra::feed_parse::fetch_and_parse_entries(
+                            &resolved_url,
+                            kind,
+                            &resolved_url,
+                        )
+                        .and_then(|entries| {
+                            if entries.is_empty() {
+                                Err("response did not contain any valid RSS or Atom entries"
+                                    .to_string())
+                            } else {
+                                Ok(())
+                            }
+                        });
+                        (resolved_url, result)
+                    }
+                    Err(error) => (url, Err(error)),
+                };
             let _ = tx.send(FeedAddResult {
                 id,
                 name,

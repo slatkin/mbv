@@ -1,3 +1,4 @@
+use super::*;
 const MAX_LEVEL_ARTIST_WARMUPS: usize = 6;
 
 impl App {
@@ -6,7 +7,7 @@ impl App {
     /// drilling in first. A simple one-shot fetch (no throttle queue) —
     /// only one album is ever highlighted at a time, so there is no fan-out
     /// to bound.
-    pub(super) fn fetch_album_tracks(&mut self, album_id: String) {
+    pub(in crate::app) fn fetch_album_tracks(&mut self, album_id: String) {
         if self.album_tracks_loading.contains(&album_id)
             || self.album_tracks_cache.contains_key(&album_id)
         {
@@ -38,7 +39,7 @@ impl App {
     /// Proactively fetches TV series detail (seasons + episodes) so the
     /// Inline series detail pane can render without the user
     /// drilling in first.
-    pub(super) fn fetch_series_detail(&mut self, series_id: String) {
+    pub(in crate::app) fn fetch_series_detail(&mut self, series_id: String) {
         if series_id.is_empty() {
             return;
         }
@@ -70,7 +71,11 @@ impl App {
 
     /// Fetches one season only after the complete ordered Series detail is in
     /// the cache. The detail event handler calls this for every uncached pill.
-    pub(super) fn fetch_series_season_episodes(&mut self, series_id: String, season_id: String) {
+    pub(in crate::app) fn fetch_series_season_episodes(
+        &mut self,
+        series_id: String,
+        season_id: String,
+    ) {
         let key = (series_id.clone(), season_id.clone());
         let Some(detail) = self.series_detail_cache.get(&series_id) else {
             if !series_id.is_empty() && !season_id.is_empty() {
@@ -132,7 +137,7 @@ impl App {
     /// in flight; design D1/D5 measured about 3.8 MB peak and 3 seconds.
     /// Re-warm only happens when the Service is replaced (`clear_emby_memory`
     /// clears level state); reconnects dedupe through `LevelFillState`.
-    pub(super) fn spawn_music_group_warmup(&mut self) {
+    pub(in crate::app) fn spawn_music_group_warmup(&mut self) {
         let library_ids = self.music_group_warmup_library_ids();
         if library_ids.is_empty() {
             return;
@@ -156,8 +161,13 @@ impl App {
                     "SortName",
                     "Ascending",
                 ) {
-                    super::library_browse_actions::retain_grouped_music_items(&mut items, true);
-                    let _ = tx.send(LibEvent::MusicGroupWarmupListed { generation, groups: items });
+                    crate::app::library_browse_actions::retain_grouped_music_items(
+                        &mut items, true,
+                    );
+                    let _ = tx.send(LibEvent::MusicGroupWarmupListed {
+                        generation,
+                        groups: items,
+                    });
                 }
                 // A failed listing fetch is silent: no level ids are known,
                 // so there is nothing to mark `Failed`.
@@ -168,7 +178,7 @@ impl App {
     /// The libraries whose group levels warm up at Service Ready (design
     /// D5): every Emby music library while the configured music levels
     /// start with `"group"` — the same gate the group view itself uses.
-    pub(super) fn music_group_warmup_library_ids(&self) -> Vec<String> {
+    pub(in crate::app) fn music_group_warmup_library_ids(&self) -> Vec<String> {
         if !self
             .music_levels
             .first()
@@ -188,13 +198,11 @@ impl App {
     /// Enqueues one background album-artist request per music level for the
     /// bounded startup warm-up. Candidate requests use
     /// `spawn_level_artist_fetch` directly and share its level-state dedupe.
-    pub(super) fn enqueue_level_artist_warmup(&mut self, level_id: String) {
+    pub(in crate::app) fn enqueue_level_artist_warmup(&mut self, level_id: String) {
         if matches!(
             LevelFillState::action_for(self.album_artist_levels.get(&level_id)),
             LevelFillAction::NoWork
-        ) || self
-            .level_artist_warmups_in_flight
-            .contains(&level_id)
+        ) || self.level_artist_warmups_in_flight.contains(&level_id)
             || self
                 .pending_level_artist_warmups
                 .iter()
@@ -210,7 +218,7 @@ impl App {
     /// `spawn_level_artist_fetch` remains the sole gate for actual requests,
     /// so a candidate that wins a race with a pending warm-up removes the
     /// pending duplicate and the drain skips already-loading levels.
-    pub(super) fn drain_level_artist_warmups(&mut self) {
+    pub(in crate::app) fn drain_level_artist_warmups(&mut self) {
         while self.level_artist_warmups_in_flight.len() < MAX_LEVEL_ARTIST_WARMUPS {
             let Some(level_id) = self.pending_level_artist_warmups.pop_front() else {
                 break;
@@ -243,7 +251,7 @@ impl App {
     /// track `ParentId` verbatim, so the one fill covers every album in
     /// the level regardless of which page was listed when it was
     /// requested.
-    pub(super) fn spawn_level_artist_fetch(
+    pub(in crate::app) fn spawn_level_artist_fetch(
         &mut self,
         level_id: String,
         albums: Vec<mbv_core::api::EmbyItem>,
@@ -295,7 +303,7 @@ impl App {
                 "{}/Items?ParentId={}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={}",
                 server_url, level_id, token
             );
-            let items: Vec<serde_json::Value> = super::feed_parse::tls_agent(None)
+            let items: Vec<serde_json::Value> = crate::app::infra::feed_parse::tls_agent(None)
                 .get(&url)
                 .call()
                 .ok()
@@ -308,7 +316,7 @@ impl App {
         });
     }
 
-    pub(super) fn fetch_card_image(
+    pub(in crate::app) fn fetch_card_image(
         &mut self,
         cache_key: String,
         item_id: String,
@@ -363,7 +371,11 @@ impl App {
     /// `item_id` — the queue card's entry. The Library hero uses the
     /// hero-scoped key instead (`App::audiobookshelf_cover_key`), because it
     /// re-encodes its entry from a cover-fit crop.
-    pub(super) fn fetch_audiobookshelf_cover(&mut self, server_url: String, item_id: String) {
+    pub(in crate::app) fn fetch_audiobookshelf_cover(
+        &mut self,
+        server_url: String,
+        item_id: String,
+    ) {
         let cache_key =
             audiobookshelf_cover_cache_key(&server_url, &item_id, self.current_protocol_suffix());
         self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
@@ -371,7 +383,11 @@ impl App {
 
     /// Book-shaped sibling of `fetch_audiobookshelf_cover` using the isolated
     /// `:bookcover:` cache key.
-    pub(super) fn fetch_audiobookshelf_book_cover(&mut self, server_url: String, item_id: String) {
+    pub(in crate::app) fn fetch_audiobookshelf_book_cover(
+        &mut self,
+        server_url: String,
+        item_id: String,
+    ) {
         let cache_key = audiobookshelf_book_cover_cache_key(
             &server_url,
             &item_id,
@@ -380,7 +396,7 @@ impl App {
         self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
     }
 
-    fn fetch_audiobookshelf_image(
+    pub(super) fn fetch_audiobookshelf_image(
         &mut self,
         cache_key: String,
         server_url: String,
@@ -421,11 +437,11 @@ impl App {
         self.last_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
     }
 
-    pub(super) fn mark_library_navigation(&mut self, at: Instant) {
+    pub(in crate::app) fn mark_library_navigation(&mut self, at: Instant) {
         self.last_library_nav_at = at;
     }
 
-    pub(super) fn fetch_list_card_image_when_idle(
+    pub(in crate::app) fn fetch_list_card_image_when_idle(
         &mut self,
         cache_key: String,
         item_id: String,
@@ -551,8 +567,7 @@ fn bucket_tracks_by_album<'a>(
     tracks: &'a [serde_json::Value],
     albums: &[mbv_core::api::EmbyItem],
 ) -> std::collections::HashMap<String, Vec<&'a serde_json::Value>> {
-    let album_ids: std::collections::HashSet<&str> =
-        albums.iter().map(|a| a.id.as_str()).collect();
+    let album_ids: std::collections::HashSet<&str> = albums.iter().map(|a| a.id.as_str()).collect();
     let album_paths: Vec<(&str, &str)> = albums
         .iter()
         .filter(|a| !a.path.is_empty())
@@ -666,7 +681,12 @@ mod album_artist_batch_tests {
     use crate::app::tests::make_item;
     use rstest::rstest;
 
-    fn track(parent: &str, path: &str, album_artist: Option<&str>, artists: &[&str]) -> serde_json::Value {
+    fn track(
+        parent: &str,
+        path: &str,
+        album_artist: Option<&str>,
+        artists: &[&str],
+    ) -> serde_json::Value {
         let mut t = serde_json::json!({ "ParentId": parent, "Path": path });
         if let Some(a) = album_artist {
             t["AlbumArtist"] = serde_json::json!(a);
@@ -797,7 +817,10 @@ mod album_artist_batch_tests {
             track("disc-1", "/m/a/Deluxe/1.flac", None, &["A"]),
             track("disc-9", "/m/a/1.flac", None, &["A"]),
         ];
-        let albums = vec![album("alb-outer", "/m/a"), album("alb-deluxe", "/m/a/Deluxe")];
+        let albums = vec![
+            album("alb-outer", "/m/a"),
+            album("alb-deluxe", "/m/a/Deluxe"),
+        ];
         let buckets = bucket_tracks_by_album(&tracks, &albums);
         assert_eq!(buckets["alb-deluxe"].len(), 1);
         assert_eq!(buckets["alb-deluxe"][0]["Path"], "/m/a/Deluxe/1.flac");

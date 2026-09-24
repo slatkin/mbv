@@ -103,7 +103,7 @@ impl App {
         let (new_mode, cfg) = {
             let mut config = self.config.lock().unwrap();
             config.subtitle_mode =
-                super::ui_util::next_subtitle_mode(&config.subtitle_mode).to_string();
+                crate::app::infra::ui_util::next_subtitle_mode(&config.subtitle_mode).to_string();
             (config.subtitle_mode.clone(), config.clone())
         };
         self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();

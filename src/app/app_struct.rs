@@ -1,8 +1,8 @@
-use super::images;
-use super::layout;
+use super::infra::resize::{ResizeRegisterTx, ResizeResponseRx};
+use super::infra::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
+use super::infra::{images, layout};
 use super::panel_targets::PanelTarget;
 use super::render;
-use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
@@ -18,7 +18,6 @@ use super::types_playback::{
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
 use super::types_tab_selection::TabSelection;
-use super::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
 use super::SidebarId;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;

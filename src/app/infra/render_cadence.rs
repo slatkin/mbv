@@ -1,20 +1,23 @@
-use super::App;
+use super::super::App;
 use std::time::{Duration, Instant};
 
 impl App {
-    pub(super) fn extrapolated_remote_position(remote_pos_s: i64, elapsed: Duration) -> i64 {
+    pub(in crate::app) fn extrapolated_remote_position(
+        remote_pos_s: i64,
+        elapsed: Duration,
+    ) -> i64 {
         remote_pos_s + elapsed.as_secs() as i64
     }
 
-    pub(super) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
+    pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {
         let indicator_style = match self.indicator_style {
-            super::render::indicators::IndicatorStyle::Brackets => "brackets",
-            super::render::indicators::IndicatorStyle::Chips => "chips",
-            super::render::indicators::IndicatorStyle::Outlined => "outlined",
-            super::render::indicators::IndicatorStyle::Dots => "dots",
-            super::render::indicators::IndicatorStyle::Pipes => "pipes",
-            super::render::indicators::IndicatorStyle::KeyValue => "keyvalue",
-            super::render::indicators::IndicatorStyle::Powerline => "powerline",
+            crate::app::render::indicators::IndicatorStyle::Brackets => "brackets",
+            crate::app::render::indicators::IndicatorStyle::Chips => "chips",
+            crate::app::render::indicators::IndicatorStyle::Outlined => "outlined",
+            crate::app::render::indicators::IndicatorStyle::Dots => "dots",
+            crate::app::render::indicators::IndicatorStyle::Pipes => "pipes",
+            crate::app::render::indicators::IndicatorStyle::KeyValue => "keyvalue",
+            crate::app::render::indicators::IndicatorStyle::Powerline => "powerline",
         };
         crate::config::UiConfig {
             image_protocol: self.image_protocol.clone(),
@@ -26,7 +29,7 @@ impl App {
     }
 
     /// Whether the run loop should touch the terminal this tick.
-    pub(super) fn wants_terminal_render(
+    pub(in crate::app) fn wants_terminal_render(
         &self,
         had_events: bool,
         last_render: Instant,
@@ -44,7 +47,7 @@ impl App {
     /// between "just started" and "just finished" with nothing in between.
     /// Falls back to a slow 1 s cadence when nothing is changing, to avoid
     /// spinning the terminal for no reason.
-    pub(super) fn render_interval(&mut self) -> Duration {
+    pub(in crate::app) fn render_interval(&mut self) -> Duration {
         if self.visualizer.is_some() {
             return Duration::from_millis(16);
         }

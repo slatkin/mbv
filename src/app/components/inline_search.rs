@@ -54,7 +54,7 @@ impl SearchPool {
         matcher: &fuzzy_matcher::skim::SkimMatcherV2,
         query: &str,
     ) -> Vec<(usize, i64)> {
-        use crate::app::fuzzy_match::word_match_score;
+        use crate::app::infra::fuzzy_match::word_match_score;
         match self {
             Self::Items(items) => items
                 .iter()

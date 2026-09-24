@@ -1,9 +1,10 @@
-use super::types_feed::IdleFeedItem;
+use super::super::types_feed::IdleFeedItem;
 use mbv_core::api::{decode_entities, TICKS_PER_SECOND};
 use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::FeedEntry;
 
-use super::feed_parse_date::parse_pub_date_secs;
+mod date;
+pub(in crate::app) use self::date::parse_pub_date_secs;
 
 fn fetch_feed_body(url: &str) -> Result<String, String> {
     tls_agent(None)
@@ -19,10 +20,10 @@ fn fetch_feed_body(url: &str) -> Result<String, String> {
 /// automatically from the `native-tls` feature flag — it must be selected
 /// explicitly on the agent's config, or `https://` requests fail with "no
 /// TLS backend is configured".
-pub(super) fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
+pub(in crate::app) fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
     mbv_core::native_tls_agent(None, global_timeout)
 }
-pub(super) fn normalize_feed_url(input: &str) -> Result<String, String> {
+pub(in crate::app) fn normalize_feed_url(input: &str) -> Result<String, String> {
     let Some((host, path_and_query)) = url_authority_and_path(input) else {
         return Ok(input.to_string());
     };
@@ -105,7 +106,7 @@ fn extract_rss_link(body: &str) -> Option<String> {
     })
 }
 
-pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
+pub(in crate::app) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String> {
     let body = fetch_feed_body(url)?;
 
     let mut items = Vec::new();
@@ -147,7 +148,7 @@ pub(super) fn fetch_and_parse_rss(url: &str) -> Result<Vec<IdleFeedItem>, String
 /// canonical fallback when enclosure MIME is absent or unrecognized.
 /// `feed_id` is the stable identity for the keyed feed-entry state store
 /// (#492); typically the normalized subscription URL.
-pub(super) fn fetch_and_parse_entries(
+pub(in crate::app) fn fetch_and_parse_entries(
     url: &str,
     subscription_kind: FeedKind,
     feed_id: &str,
@@ -243,7 +244,7 @@ fn parse_atom_entries(body: &str, subscription_kind: FeedKind, feed_id: &str) ->
 /// absent or unrecognized values default to Video. Keep in one helper so
 /// #472 can reuse it.
 #[cfg(test)]
-pub(super) fn infer_feed_kind_from_mime(mime: Option<&str>) -> FeedKind {
+pub(in crate::app) fn infer_feed_kind_from_mime(mime: Option<&str>) -> FeedKind {
     match mime.map(|m| m.trim().to_ascii_lowercase()) {
         Some(m) if m.starts_with("audio/") => FeedKind::Audio,
         _ => FeedKind::Video,
@@ -393,10 +394,9 @@ fn strip_tags_no_cdata(text: &str) -> String {
 /// text before it can reach the terminal, e.g. via an OSC 8 escape sequence.
 fn strip_control_chars(text: &str) -> String {
     text.chars()
-        .filter(|ch| !crate::app::text_safety::is_control_char(*ch))
+        .filter(|ch| !crate::app::infra::text_safety::is_control_char(*ch))
         .collect()
 }
 
 #[cfg(test)]
-#[path = "feed_parse_tests.rs"]
 mod tests;

@@ -4,10 +4,10 @@ use std::time::Duration;
 
 /// Registers a per-cache-key `ResizeRequest` receiver with the resize
 /// worker thread; see `spawn_resize_worker`.
-pub(super) type ResizeRegisterTx = mpsc::Sender<(String, mpsc::Receiver<ResizeRequest>)>;
+pub(in crate::app) type ResizeRegisterTx = mpsc::Sender<(String, mpsc::Receiver<ResizeRequest>)>;
 /// Completed off-thread resize+encode results, tagged with the
 /// `card_image_states` cache key they belong to; see `spawn_resize_worker`.
-pub(super) type ResizeResponseRx = mpsc::Receiver<(String, ResizeResponse)>;
+pub(in crate::app) type ResizeResponseRx = mpsc::Receiver<(String, ResizeResponse)>;
 
 /// Spawns the single background worker that performs
 /// `StatefulProtocol::resize_encode()` — resample + terminal-protocol encode
@@ -30,7 +30,7 @@ pub(super) type ResizeResponseRx = mpsc::Receiver<(String, ResizeResponse)>;
 /// in-flight or future resize request on this worker — only that one
 /// image's response is lost, same failure mode as the request simply never
 /// arriving.
-pub(super) fn spawn_resize_worker() -> (ResizeRegisterTx, ResizeResponseRx) {
+pub(in crate::app) fn spawn_resize_worker() -> (ResizeRegisterTx, ResizeResponseRx) {
     let (register_tx, register_rx) = mpsc::channel::<(String, mpsc::Receiver<ResizeRequest>)>();
     let (response_tx, response_rx) = mpsc::channel::<(String, ResizeResponse)>();
     std::thread::spawn(move || {

@@ -124,7 +124,7 @@ impl Model {
                         title: " Delete Playlist ".into(),
                         message: format!(
                             "Delete playlist '{}'?",
-                            super::ui_util::trunc_str(&playlist.name, 40)
+                            crate::app::infra::ui_util::trunc_str(&playlist.name, 40)
                         ),
                         hint: "[y] Confirm    [Esc] Cancel".into(),
                         on_confirm: crate::app::ConfirmAction::DeletePlaylist {

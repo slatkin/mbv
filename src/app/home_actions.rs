@@ -1,6 +1,6 @@
 use super::notify_actions::ToastSeverity;
-use super::ui_util::is_playable;
 use super::App;
+use crate::app::infra::ui_util::is_playable;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 

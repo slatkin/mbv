@@ -1,11 +1,11 @@
 use super::app_struct::LevelFillState;
 use super::types_browse::BrowseResting;
 use super::types_events::{NavigateLanding, PendingSeriesHandoff};
-use super::ui_util::sort_audio_tracks;
 use super::{
     notify_actions::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
     FeedHomeVideoState, LibEvent, QueueScope,
 };
+use crate::app::infra::ui_util::sort_audio_tracks;
 use mbv_core::api::EmbyItem;
 
 impl App {

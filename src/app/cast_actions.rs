@@ -531,7 +531,7 @@ mod tests {
         // same shape `visualizer.rs`'s `selecting_artwork_stops_capture`
         // test uses for the same reason.
         let mut app = make_app_stub();
-        app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
+        app.visualizer_window.samples = vec![crate::app::infra::visualizer_worker::StereoSample {
             left: 1.0,
             right: 1.0,
         }];

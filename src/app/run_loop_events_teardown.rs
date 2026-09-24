@@ -13,7 +13,7 @@ fn player_join_outer_bound(quit_timeout: Duration) -> Duration {
 
 fn join_visualizer_worker(handle: Option<JoinHandle<()>>) {
     if let Some(handle) = handle {
-        crate::app::visualizer_worker::join_worker(handle);
+        crate::app::infra::visualizer_worker::join_worker(handle);
     }
 }
 

@@ -53,7 +53,7 @@ pub fn fmt_publish_date_short(secs: u64) -> String {
 }
 
 /// Advance subtitle mode through the standard cycle.
-pub(super) fn next_subtitle_mode(current: &str) -> &'static str {
+pub(in crate::app) fn next_subtitle_mode(current: &str) -> &'static str {
     match current {
         "Default" | "" => "Always",
         "Always" => "Smart",
@@ -65,7 +65,7 @@ pub(super) fn next_subtitle_mode(current: &str) -> &'static str {
 }
 
 /// Advance a language preference through `["" (any)] + my_languages`.
-pub(super) fn cycle_lang(my_languages: &[String], current: &str) -> String {
+pub(in crate::app) fn cycle_lang(my_languages: &[String], current: &str) -> String {
     let cycle: Vec<&str> = std::iter::once("")
         .chain(my_languages.iter().map(String::as_str))
         .collect();
@@ -240,41 +240,4 @@ pub fn trunc_str(s: &str, max: usize) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{fmt_duration_gutter, fmt_publish_date, fmt_publish_date_short};
-
-    #[test]
-    fn gutter_duration_uses_minutes_precision_and_fits_six_columns() {
-        for (seconds, expected) in [(0, "0:00"), (90, "1:30"), (3599, "59:59")] {
-            let formatted = fmt_duration_gutter(seconds);
-            assert_eq!(formatted, expected);
-            assert!(unicode_width::UnicodeWidthStr::width(formatted.as_str()) <= 6);
-        }
-        for (seconds, expected) in [(3600, "1:00"), (3661, "1:01"), (360_000, "100:00")] {
-            let formatted = fmt_duration_gutter(seconds);
-            assert_eq!(formatted, expected);
-            assert!(unicode_width::UnicodeWidthStr::width(formatted.as_str()) <= 6);
-        }
-        assert!(fmt_duration_gutter(i64::MAX).len() <= 6);
-    }
-
-    /// The row gutter's format: day and abbreviated month, so the fixed
-    /// six-column gutter stays narrow (the hero's meta row keeps the year).
-    #[test]
-    fn short_publish_date_is_the_row_gutter_format() {
-        // 2026-09-17T00:00:00Z.
-        let secs = 1_789_603_200;
-        assert_eq!(fmt_publish_date_short(secs), "17 Sep");
-        assert_eq!(fmt_publish_date(secs), "17 Sep 2026");
-        // A single-digit day stays unpadded: the gutter right-aligns it.
-        assert_eq!(fmt_publish_date_short(secs - 14 * 86_400), "3 Sep");
-    }
-
-    /// A nonsense timestamp saturates to the epoch rather than panicking:
-    /// the formatter's `i64` conversion falls back to 0. The gutter is never
-    /// left blank or half-painted, and the row keeps its column.
-    #[test]
-    fn out_of_range_publish_dates_saturate_without_panicking() {
-        assert_eq!(fmt_publish_date_short(u64::MAX), "1 Jan");
-    }
-}
+mod tests;

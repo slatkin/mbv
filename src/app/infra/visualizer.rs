@@ -1,8 +1,8 @@
+use super::super::App;
 use super::visualizer_worker::PipeWireWorker;
-use super::App;
 
 impl App {
-    pub(super) fn sync_visualizer(&mut self) {
+    pub(in crate::app) fn sync_visualizer(&mut self) {
         if let Some(worker) = self.visualizer.as_ref() {
             match worker.take_latest_window() {
                 Ok(Some(window)) => self.visualizer_window = window,
@@ -44,14 +44,14 @@ impl App {
             && !audio_pipe_enabled
     }
 
-    pub(super) fn stop_visualizer_worker(&mut self) {
+    pub(in crate::app) fn stop_visualizer_worker(&mut self) {
         if let Some(mut worker) = self.visualizer.take() {
             worker.stop();
         }
         self.visualizer_window = Default::default();
     }
 
-    pub(super) fn toggle_visualizer(&mut self) {
+    pub(in crate::app) fn toggle_visualizer(&mut self) {
         self.visualizer_enabled = !self.visualizer_enabled;
         self.visualizer_failed = false;
         if !self.visualizer_enabled {
@@ -125,7 +125,7 @@ mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
-        app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
+        app.visualizer_window.samples = vec![crate::app::infra::visualizer_worker::StereoSample {
             left: 1.0,
             right: 1.0,
         }];

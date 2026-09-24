@@ -25,18 +25,20 @@ impl App {
     }
 
     pub(super) fn clear_audiobookshelf_images(&mut self) {
-        self.card_image_states
-            .retain(|key, _| !key.starts_with(super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX));
-        self.card_image_loading
-            .retain(|key| !key.starts_with(super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX));
+        self.card_image_states.retain(|key, _| {
+            !key.starts_with(crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
+        });
+        self.card_image_loading.retain(|key| {
+            !key.starts_with(crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX)
+        });
         self.pending_image_fetches.retain(|request| {
             !matches!(
                 request.source,
-                super::images::ImageSource::Audiobookshelf { .. }
+                crate::app::infra::images::ImageSource::Audiobookshelf { .. }
             )
         });
         crate::config::clear_image_disk_cache_prefix(
-            super::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX,
+            crate::app::infra::images::AUDIOBOOKSHELF_CACHE_KEY_PREFIX,
         );
     }
     pub(super) fn apply_audiobookshelf_completion(

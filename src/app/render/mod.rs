@@ -117,8 +117,8 @@ pub(crate) use theme::{
 // part of the wider `pub(crate)` role list above.
 pub(in crate::app) use theme::{surface_colors, Surface};
 
-use super::ui_util::natural_sort_key;
 use super::{palette, App};
+use crate::app::infra::ui_util::natural_sort_key;
 
 // Test-only: these names are otherwise unused in the production build (their
 // only production callers moved into root.rs/queue.rs under screens/, which

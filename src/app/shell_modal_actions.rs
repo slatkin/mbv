@@ -127,7 +127,7 @@ impl Model {
                 title: " Overwrite Playlist ".into(),
                 message: format!(
                     "\"{}\" already exists.",
-                    super::ui_util::trunc_str(&name, 40)
+                    crate::app::infra::ui_util::trunc_str(&name, 40)
                 ),
                 hint: "[y] Overwrite    [Esc] Back".into(),
                 on_confirm: ConfirmAction::SaveOverwritePlaylist {

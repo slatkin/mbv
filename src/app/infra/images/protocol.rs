@@ -1,3 +1,4 @@
+use super::*;
 impl App {
     /// Pre-warm nearby movie poster images for the migrated browser owner.
     /// The caller supplies the projected item window and the owner's
@@ -37,7 +38,7 @@ impl App {
         }
     }
 
-    pub(super) fn ensure_placeholder_card_image(&mut self) {
+    pub(in crate::app) fn ensure_placeholder_card_image(&mut self) {
         if self
             .card_image_states
             .contains_key(QUEUE_CARD_PLACEHOLDER_KEY)
@@ -70,7 +71,7 @@ impl App {
 
     /// The suffix of the protocol currently active: the halfblock picker's
     /// while a dimmed backdrop is up, else the configured picker's.
-    pub(super) fn current_protocol_suffix(&self) -> &'static str {
+    pub(in crate::app) fn current_protocol_suffix(&self) -> &'static str {
         self.picker_and_suffix()
             .map(|(_, s)| s)
             .unwrap_or("halfblock")
@@ -92,7 +93,7 @@ impl App {
     /// (#451), and encodes the protocol for the currently active suffix.
     /// `img: None` records a resolved-but-empty fetch (the "no art" marker
     /// renderers branch on).
-    pub(super) fn build_cached_image(
+    pub(in crate::app) fn build_cached_image(
         &self,
         bare_key: &str,
         img: Option<image::DynamicImage>,
@@ -118,7 +119,7 @@ impl App {
     /// suffix's protocol isn't cached yet (#451). The re-encode runs off the
     /// render thread (via the resize worker), so the first frame after a
     /// protocol switch still shows the placeholder while it completes.
-    pub(super) fn cached_image_protocol_mut(
+    pub(in crate::app) fn cached_image_protocol_mut(
         &mut self,
         bare_key: &str,
     ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
@@ -132,7 +133,11 @@ impl App {
             let (img, cover_box, stored_logo_key) = self
                 .card_image_states
                 .get(bare_key)
-                .and_then(|e| e.img.clone().map(|img| (img, e.cover_box, e.applied_logo_key.clone())))
+                .and_then(|e| {
+                    e.img
+                        .clone()
+                        .map(|img| (img, e.cover_box, e.applied_logo_key.clone()))
+                })
                 .expect("img present, just checked");
             let logo_key = self.ready_logo_key(stored_logo_key.as_deref());
             // A hero entry's protocols carry the cover-fit crop (task 5.10,
@@ -141,7 +146,7 @@ impl App {
             let img = match cover_box {
                 Some((w, h)) => {
                     let (px_w, px_h) = self.hero_box_pixels(w, h);
-                    super::images::cover_fill_hero_box(&img, px_w, px_h)
+                    crate::app::infra::images::cover_fill_hero_box(&img, px_w, px_h)
                 }
                 None => img,
             };
@@ -174,7 +179,7 @@ impl App {
         ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
-    pub(super) fn is_halfblock_configured(&self) -> bool {
+    pub(in crate::app) fn is_halfblock_configured(&self) -> bool {
         self.image_protocol
             .as_deref()
             .map(|s| s.eq_ignore_ascii_case("halfblocks"))
@@ -186,7 +191,7 @@ impl App {
                 .unwrap_or(false)
     }
 
-    pub(super) fn configured_protocol_name(&self) -> &'static str {
+    pub(in crate::app) fn configured_protocol_name(&self) -> &'static str {
         use ratatui_image::picker::ProtocolType;
         match self.image_picker.as_ref().map(|p| p.protocol_type()) {
             Some(ProtocolType::Sixel) => "sixel",
@@ -199,7 +204,7 @@ impl App {
     /// Spawn queued image fetches until the in-flight limit is reached. Called
     /// whenever an in-flight fetch completes and frees a slot (see the card-image
     /// receiver in `mod.rs`).
-    pub(super) fn drain_image_fetches(&mut self) {
+    pub(in crate::app) fn drain_image_fetches(&mut self) {
         while self.image_fetches_active < MAX_IMAGE_FETCHES {
             let Some(req) = self.pending_image_fetches.pop_front() else {
                 break;
@@ -208,7 +213,7 @@ impl App {
         }
     }
 
-    fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
+    pub(super) fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
         self.image_fetches_active += 1;
         let (server_url, token) = if matches!(req.source, ImageSource::Emby) {
             let Some(client) = self.emby_client() else {
@@ -270,8 +275,9 @@ impl App {
                     Some(cached)
                 } else {
                     let fetch_url = |url: &str| -> Option<Vec<u8>> {
-                        let agent =
-                            super::feed_parse::tls_agent(Some(std::time::Duration::from_secs(10)));
+                        let agent = crate::app::infra::feed_parse::tls_agent(Some(
+                            std::time::Duration::from_secs(10),
+                        ));
                         agent.get(url).call().ok().and_then(|r| {
                             let mut buf = Vec::new();
                             r.into_body()
@@ -344,7 +350,7 @@ impl App {
         });
     }
 
-    pub(super) fn images_enabled(&self) -> bool {
+    pub(in crate::app) fn images_enabled(&self) -> bool {
         self.image_protocol_enabled
     }
 
@@ -393,7 +399,7 @@ impl App {
         else {
             return img;
         };
-        super::images::composite_landscape_logo(&img, logo)
+        crate::app::infra::images::composite_landscape_logo(&img, logo)
     }
 
     /// Ensure the hero cover-fit protocol for `cache_key` matches
@@ -492,9 +498,9 @@ impl App {
 
 #[cfg(test)]
 mod protocol_tests {
-    use super::CachedImage;
-    use super::super::tests::make_app_stub;
     use super::super::App;
+    use super::CachedImage;
+    use crate::app::tests::make_app_stub;
     use ratatui_image::picker::{Picker, ProtocolType};
 
     const BASE_KEY: &str = "hero-base";

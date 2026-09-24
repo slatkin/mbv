@@ -1,5 +1,5 @@
-use super::super::super::palette;
 use super::super::super::types_context_menu::MultiSelectKind;
+use crate::app::infra::palette;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;

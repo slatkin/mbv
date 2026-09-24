@@ -1,6 +1,6 @@
 use super::types_browse::BrowseResting;
-use super::ui_util::sort_episodes;
 use super::{App, BrowseLevel};
+use crate::app::infra::ui_util::sort_episodes;
 
 impl App {
     pub(super) fn update_current_browse_level(
