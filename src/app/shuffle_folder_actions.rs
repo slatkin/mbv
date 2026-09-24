@@ -115,7 +115,12 @@ impl App {
         );
     }
 
-    pub(super) fn play_folder(&mut self, folder_id: &str) {
+    /// `collection_type` is the source library's Emby collection type; it
+    /// labels the confirmed replacement with `QueueSource::Collection`. The
+    /// source is set inside the gated confirmed path (via the action), never
+    /// here, so cancelling the prompt leaves the queue source unchanged
+    /// (design D4).
+    pub(super) fn play_folder(&mut self, folder_id: &str, collection_type: String) {
         let Some(client) = self.emby_client() else {
             self.flash(
                 "Emby is unavailable".into(),
@@ -137,7 +142,7 @@ impl App {
                     PendingQueueAction::PlayItems {
                         items,
                         start_idx: 0,
-                        source: crate::config::QueueSource::Unknown,
+                        source: crate::config::QueueSource::Collection { collection_type },
                         autostart: true,
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Folder),

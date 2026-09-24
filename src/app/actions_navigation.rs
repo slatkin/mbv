@@ -18,10 +18,7 @@ impl App {
     pub(super) fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let ct = self.libs[lib_idx].library.collection_type.clone();
-            self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Collection {
-                collection_type: ct,
-            });
-            self.play_folder(&item.id.clone());
+            self.play_folder(&item.id.clone(), ct);
         } else {
             self.select_item(lib_idx, item);
         }

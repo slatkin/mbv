@@ -131,12 +131,10 @@ impl App {
                 } else {
                     String::new()
                 };
-                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Collection {
-                    collection_type: ct,
-                });
-                // The folder replacement (and its save) is deferred into the
-                // gated confirmed path; `Folder` prep saves after playback.
-                self.play_folder(&id);
+                // The folder replacement, its Collection source, and its save
+                // are deferred into the gated confirmed path (design D4), so
+                // cancelling leaves the queue source unchanged.
+                self.play_folder(&id, ct);
             }
             Some(ContextAction::ShuffleFolder(id)) => {
                 if let Some(lib_idx) = lib_idx {

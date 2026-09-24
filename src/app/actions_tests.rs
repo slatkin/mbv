@@ -8,7 +8,7 @@ use crate::app::library_browse_actions::{
 };
 use crate::app::render::make_music_group_app_with_second_album;
 use crate::app::shell::Model;
-use crate::app::tests::{make_app_stub, make_item, make_items};
+use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
     FeedHomeVideoState, LibEvent, LibraryTab, PanelFocus, QueueScope, TabSelection,
@@ -799,6 +799,73 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
     assert!(app.pending_queue_replacement.is_none());
     assert_eq!(queued_track_ids(&app), ["existing"]);
     assert_eq!(app.playback_queue().queue_cursor, 0);
+}
+
+/// Row 3.1 cancellation / design D4: a folder play on a populated queue
+/// defers the Collection source into the confirmed path, so Esc leaves
+/// `queue_source` exactly as it was (the callers used to set it before the
+/// gate).
+#[test]
+fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let http = mbv_core::mock_http::MockHttp::new();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    // Populated target queue + a music library holding the played folder.
+    let mut existing = make_item("Existing", "Audio");
+    existing.id = "existing".into();
+    app.player_tab.set_items(vec![existing], 0);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.collection_type = "music".into();
+    app.libs.push(LibraryTab::new(library));
+    app.queue_source = crate::config::QueueSource::Album;
+
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"track-1","Name":"Track","Type":"Audio","MediaType":"Audio"}]}"#,
+    );
+    app.play_or_activate_lib_item(0, folder("album-1", "Album"));
+
+    assert!(matches!(
+        &app.pending_queue_replacement,
+        Some((
+            PendingQueueAction::PlayItems {
+                source: crate::config::QueueSource::Collection { collection_type },
+                ..
+            },
+            crate::app::types_playback::ReplacementExecutor::Routed(
+                crate::app::types_playback::RoutedReplacementPrep::Folder
+            )
+        )) if collection_type == "music"
+    ));
+    assert_eq!(app.queue_source, crate::config::QueueSource::Album);
+
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::ReplacePopulatedQueue,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Esc,
+            crossterm::event::KeyModifiers::NONE,
+        ),
+    );
+
+    assert!(app.pending_queue_replacement.is_none());
+    assert_eq!(app.queue_source, crate::config::QueueSource::Album);
 }
 
 /// Row 3.4: an album track on an empty target queue plays immediately; the
