@@ -2,8 +2,8 @@
 
 ## 1. Remove dead files
 
-- [ ] 1.1 `git rm planning.html HANDOFF-music-tree-browser.md`. Verify: `rg -l 'planning.html|HANDOFF-music-tree-browser' --glob '!openspec/changes/archive/**'` returns nothing outside this change.
-- [ ] 1.2 `git rm assets/screenshot-music.png assets/screenshot-power.png assets/abs.svg`. Verify: `rg -n 'screenshot-(music|power)|abs\.svg' --glob '!openspec/changes/archive/**' --glob '!docs/plans/**'` returns nothing, and `cargo check -p mbv` still succeeds (the `include_bytes!` assets are untouched).
+- [x] 1.1 `git rm planning.html HANDOFF-music-tree-browser.md`. Verify: `rg -l 'planning.html|HANDOFF-music-tree-browser' --glob '!openspec/changes/archive/**'` returns nothing outside this change.
+- [x] 1.2 `git rm assets/screenshot-music.png assets/screenshot-power.png assets/abs.svg`. Verify: `rg -n 'screenshot-(music|power)|abs\.svg' --glob '!openspec/changes/archive/**' --glob '!docs/plans/**'` returns nothing, and `cargo check -p mbv` still succeeds (the `include_bytes!` assets are untouched).
 
 ## 2. Separate dev scripts from shipped Lua
 
