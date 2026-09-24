@@ -262,12 +262,13 @@ fn catalog_receiver(
 /// Reads exactly `expected` library-fetch events off the shell's `lib_tx`
 /// channel. The stub config makes the spawned fetchers do no I/O — they send a
 /// single `Err` completion and exit — so every expected event arrives promptly.
-/// The timeout only bounds a regression that fails to send; it is not a
-/// synchronization sleep.
+/// The 1s timeout only bounds a regression that fails to send (failing well
+/// above the microseconds a send actually takes); it is not a synchronization
+/// sleep.
 fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
     let mut events = Vec::new();
     for _ in 0..expected {
-        match app.lib_rx.recv_timeout(std::time::Duration::from_secs(5)) {
+        match app.lib_rx.recv_timeout(std::time::Duration::from_secs(1)) {
             Ok(event) => events.push(event),
             Err(error) => panic!(
                 "expected {expected} library-fetch events, received {}: {error:?}",
