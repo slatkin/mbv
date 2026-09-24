@@ -5,6 +5,8 @@ pub(crate) mod layout;
 pub(crate) mod palette;
 pub(in crate::app) mod render_cadence;
 pub(in crate::app) mod resize;
+pub(in crate::app) mod signals;
+pub(in crate::app) mod terminal;
 pub(in crate::app) mod text_safety;
 pub(crate) mod ui_util;
 pub(in crate::app) mod visualizer;

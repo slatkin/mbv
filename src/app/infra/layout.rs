@@ -18,6 +18,30 @@
 
 use ratatui::layout::Rect;
 
+pub(in crate::app) const LEFT_WIDTH_DEFAULT: u16 = 40;
+pub(in crate::app) const LEFT_WIDTH_STEP: u16 = 5;
+/// The single wide/narrow breakpoint. Minimum list-pane / Home-pane width at
+/// which the view switches to a two-column layout. Every screen and
+/// arrangement reads this one constant instead of testing width itself; the
+/// library list's column count derives from it (`library_column_count`), not
+/// the other way around.
+pub(in crate::app) const TWO_COLUMN_THRESHOLD: u16 = 82;
+/// The narrow-terminal breakpoint below which the Power View uses the
+/// two-state "mini view" (`x` toggles library-only <-> queue-only) instead of
+/// the three-state both/queue-only/library-only cycle. Independent of and
+/// unrelated to `TWO_COLUMN_THRESHOLD` (82), which governs the library
+/// panel's internal list-column layout (see design.md).
+pub(in crate::app) const MINI_VIEW_THRESHOLD: u16 = 80;
+/// Left margin for the tab row. The control pill used to live here (hence
+/// the old, larger reservation); it now renders in the status bar (see
+/// `render_status_bar`) and the tabs are left-aligned flush with the left
+/// edge instead.
+pub(in crate::app) const TABBAR_LEFT_RESERVE: u16 = 0;
+
+pub(in crate::app) const PAGE_SIZE: usize = 100;
+pub(in crate::app) const PREFETCH_AHEAD: usize = 25;
+pub(in crate::app) const SEARCH_PANEL_W: u16 = 40;
+
 use crate::app::render::arrangements::chrome::RootFrame;
 
 /// Geometry produced by the queue card's authoritative render operation.
