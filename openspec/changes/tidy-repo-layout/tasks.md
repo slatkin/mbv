@@ -7,7 +7,7 @@
 
 ## 2. Separate dev scripts from shipped Lua
 
-- [ ] 2.1 `git mv scripts/release.sh scripts/reset-root-checkout.sh tools/`. Update every reference: `.agents/skills/safe-mbv-release/SKILL.md`, the `build.yml:11` comment, each script's own usage lines, and whatever `rg -n 'scripts/(release|reset-root-checkout)'` finds outside archived changes. Verify: that `rg` returns nothing, `ls scripts` shows only `*.lua`, and `bash -n tools/release.sh tools/reset-root-checkout.sh` passes.
+- [x] 2.1 `git mv scripts/release.sh scripts/reset-root-checkout.sh tools/`. Update every reference: `.agents/skills/safe-mbv-release/SKILL.md`, the `build.yml:11` comment, each script's own usage lines, and whatever `rg -n 'scripts/(release|reset-root-checkout)'` finds outside archived changes. Verify: that `rg` returns nothing, `ls scripts` shows only `*.lua`, and `bash -n tools/release.sh tools/reset-root-checkout.sh` passes.
 
 ## 3. One module-file style
 
