@@ -451,9 +451,9 @@ impl App {
         };
         match prep {
             RoutedReplacementPrep::Album => {
-                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Album);
+                self.set_queue_source_if_not_local_daemon(source.clone());
                 self.replace_playback_queue(items.clone(), start_idx);
-                self.play_items_routed(items, start_idx, crate::config::QueueSource::Album);
+                self.play_items_routed(items, start_idx, source);
                 if !self.has_direct_remote_queue() {
                     self.save_queue_state();
                 }
@@ -472,11 +472,11 @@ impl App {
             RoutedReplacementPrep::ShuffleFolder => {
                 self.replace_playback_queue(items.clone(), start_idx);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Shuffle);
+                self.set_queue_source_if_not_local_daemon(source.clone());
                 if !self.has_direct_remote_queue() {
                     self.save_queue_state();
                 }
-                self.play_items_routed(items, start_idx, crate::config::QueueSource::Shuffle);
+                self.play_items_routed(items, start_idx, source);
             }
             RoutedReplacementPrep::Selection => {
                 self.rebuild_queue_for_selection(&items, source.clone());

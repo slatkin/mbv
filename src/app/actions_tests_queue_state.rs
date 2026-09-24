@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::make_item;
+use crate::app::tests::{confirm_replace_queue, make_item};
 use crate::app::ContextAction;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
@@ -93,18 +93,6 @@ fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
     assert!(matches!(&items[0], QueueItem::Emby(item) if item.name == "Emby"));
     assert!(matches!(&items[1], QueueItem::Feed(item) if item.guid == "feed-entry"));
     assert!(items.iter().all(|item| !item.is_audiobookshelf_any()));
-}
-
-/// Confirm the populated-queue replacement gate the way the shell's confirm
-/// modal does, so a gated replacement executes.
-fn confirm_replace_queue(app: &mut crate::app::App) {
-    app.apply_confirm_action(
-        crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('y'),
-            crossterm::event::KeyModifiers::NONE,
-        ),
-    );
 }
 
 fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) {

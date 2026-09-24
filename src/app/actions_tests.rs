@@ -8,7 +8,9 @@ use crate::app::library_browse_actions::{
 };
 use crate::app::render::make_music_group_app_with_second_album;
 use crate::app::shell::Model;
-use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_items};
+use crate::app::tests::{
+    confirm_replace_queue, install_test_emby, make_app_stub, make_item, make_items,
+};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
     FeedHomeVideoState, LibEvent, LibraryTab, PanelFocus, QueueScope, TabSelection,
@@ -24,18 +26,6 @@ fn folder(id: &str, name: &str) -> EmbyItem {
     item.id = id.into();
     item.is_folder = true;
     item
-}
-
-/// Confirm the populated-queue replacement gate the way the shell's confirm
-/// modal does, so a gated replacement executes.
-fn confirm_replace_queue(app: &mut App) {
-    app.apply_confirm_action(
-        crate::app::ConfirmAction::ReplacePopulatedQueue,
-        crossterm::event::KeyEvent::new(
-            crossterm::event::KeyCode::Char('y'),
-            crossterm::event::KeyModifiers::NONE,
-        ),
-    );
 }
 
 #[test]
