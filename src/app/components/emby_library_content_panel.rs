@@ -3,7 +3,7 @@
 use tuirealm::event::{Key, KeyEvent};
 
 use super::EmbyLibraryContent;
-use crate::app::components::inline_search::InlineSearchHost;
+use crate::app::components::inline_search::{InlineSearch, InlineSearchHost};
 use crate::app::components::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };

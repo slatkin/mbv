@@ -33,7 +33,7 @@ impl EmbyLibraryContent {
     /// embedded carrier like every other list — a click selects, a double-click
     /// activates, a right-click resolves the row's ordinary item-based
     /// context-menu intent, and a wheel over the painted rows is claimed.
-    fn handle_search_pointer(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+    pub(super) fn handle_search_pointer(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         let search = &mut self.inline_search;
         match input {
             MediaListSurfaceInput::Wheel { at, delta } => {
@@ -116,7 +116,7 @@ impl EmbyLibraryContent {
     /// This owner's local key interpretation, forwarded by the focused panel
     /// (the embedded owner's local key-handling contract, unchanged —
     /// the router owns every global chord and keeps precedence).
-    fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+    pub(super) fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.inline_search.is_active() {
             return match self.inline_search.handle_key(key) {
                 Some(InlineSearchAction::Activate { id, item_type }) => {
