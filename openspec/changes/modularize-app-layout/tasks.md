@@ -33,7 +33,7 @@ Rules for every task:
 
 ## 5. `shell/`
 
-- [ ] 5.1 Move the `shell/` table. `shell.rs` becomes `shell/mod.rs`. Every existing `#[path]`/`include!` child (`messages`, `run/tests`, `tests`, `library/tests`, `music_workspace/…`, `overlays/{menus,modals,sidebars,tests}`, `tv_workspace/tests/…`) becomes a real file, and the redundant `#[path = "shell_library_panel.rs"]` goes away. Verify: gate, `ls src/app/shell*.rs` matches nothing, and `rg -n '#\[path|include!' src/app/shell` is empty.
+- [x] 5.1 Move the `shell/` table. `shell.rs` becomes `shell/mod.rs`. Every existing `#[path]`/`include!` child (`messages`, `run/tests`, `tests`, `library/tests`, `music_workspace/…`, `overlays/{menus,modals,sidebars,tests}`, `tv_workspace/tests/…`) becomes a real file, and the redundant `#[path = "shell_library_panel.rs"]` goes away. Verify: gate, `ls src/app/shell*.rs` matches nothing, and `rg -n '#\[path|include!' src/app/shell` is empty.
 
 ## 6. App-level tests
 
