@@ -2,13 +2,13 @@
 
 ## 1. Build hygiene: take test-support off the release path
 
-- [ ] 1.1 In the workspace-root `Cargo.toml`, drop `features = ["test-support"]` from
+- [x] 1.1 In the workspace-root `Cargo.toml`, drop `features = ["test-support"]` from
   the `[dependencies]` entry for `mbv-core` (line 42) and add
   `mbv-core = { path = "crates/mbv-core", features = ["test-support"] }` to
   `[dev-dependencies]`. Verify: `cargo build --release -p mbv` succeeds and
   `nm -C target/release/mbv | grep -E 'mock_http::|connect_stub_daemon_pair'` returns
   nothing (it currently returns 4 symbols, including a spawned thread closure).
-- [ ] 1.2 Verify the feature is still visible to the test build that needs it:
+- [x] 1.2 Verify the feature is still visible to the test build that needs it:
   `cargo nextest run -p mbv` compiles and passes, and
   `cargo tree -p mbv -e features` shows `test-support` on `mbv-core`. Do not touch
   `crates/mbv-core/Cargo.toml` (it keeps declaring the feature) or `crates/mbvd`
