@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-09-24
+# Tests plus a build-feature scope change: no product behaviour changes, and
+# all behaviour under test is already specified (local-daemon-single-instance,
+# audiobookshelf-book-playback). Precedent: right-size-tui-presentation-tests.
+skip_specs: true
