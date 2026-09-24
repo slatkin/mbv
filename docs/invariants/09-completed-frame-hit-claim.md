@@ -1,6 +1,8 @@
 # Invariant 9 — The Grouped Music tree claims a point only from the latest completed view
 
-**Scope:** `MusicTreeBrowser` (`src/app/components/music_tree.rs`), its
+**Scope:** the shared `TreeBrowser` (`src/app/components/list/tree_browser/mod.rs`)
+with the Grouped Music target (`src/app/components/music_content/tree_target.rs`),
+its
 `PanelList` adapter (`src/app/components/library_panel/panel_list.rs`), the
 Wide paint order that drives it
 (`src/app/components/library_panel/wide/mod.rs`), and the pointer consumers
@@ -19,10 +21,12 @@ Wide paint order that drives it
    frames must call `invalidate()` before the next `view()`:
    - `reconcile(entries)` — only when the projection was actually rebuilt
      (a no-op settled push keeps the completed geometry);
-   - `set_filter_matches` (via `apply_filter_query`) — only when the filter
-     rebuilds the projection; an unchanged match set/config early-returns in
-     `apply_filter_query` (`src/app/components/music_content/tree_target.rs:247`) so every
-     settled push keeps the filtered tree's completed hit rows claimable;
+   - the filter edit path (`TreeOperation::EditFilter` → `filter_edit`,
+    `src/app/components/list/tree_browser/operations.rs`) — note: the shared
+    browser now invalidates the paint on every filter edit, so no unchanged-
+    match-set early-return path exists any more (the former
+    `apply_filter_query` / `set_filter_matches` seam was removed by the
+    TreeBrowser extraction);
    - `expand_root` / `collapse_root` (and `toggle_root` through them);
    - `select_id` / `select_album_target` — the crate's `select_by_id`
      expands ancestors via `expand_to`, which can insert rows the hit map
@@ -67,9 +71,9 @@ render, so the retained geometry still matches the frame the user saw.
   `selected_row_rect` all early-return `None`/`false` on
   `!self.paint_complete`.
 - **Per-mutator invalidation.** `reconcile` (when `rebuilt`),
-  `set_filter_matches` (only when the filter actually rebuilt the projection;
-  `apply_filter_query` no-ops on an unchanged match set so a settled push
-  re-applies the filter without invalidating the completed hit rows),
+  `filter_edit` (invalidates the paint on every filter edit in the shared
+  browser; the former `apply_filter_query` unchanged-match early-return was
+  removed by the TreeBrowser extraction),
   `expand_root`, `collapse_root`, `select_id`, `select_album_target`,
   `clamp_viewport_to`, and the test seams call `invalidate()`; the
   `PanelList` adapter does the same in `set_paint_policy` and
@@ -94,7 +98,7 @@ contract, and nothing checks it:
   `select_by_id` / `expand_to` directly) that forgets `invalidate`
   regresses the property silently — no compiler error, no failing type, and
   the existing tests only cover the mutators that were remembered.
-- A future path that mutates the projection outside `MusicTreeBrowser`
+- A future path that mutates the projection outside the shared `TreeBrowser`
   (for example in `music_content.rs` through a new state accessor) would
   bypass every listed call site.
 
