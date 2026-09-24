@@ -73,19 +73,19 @@
 
 ## 5. Audiobookshelf book playback session
 
-- [ ] 5.1 Add a book playback-session fixture under
+- [x] 5.1 Add a book playback-session fixture under
   `crates/mbv-core/tests/fixtures/audiobookshelf/`, modeled on the podcast
   `play-direct.json` / `play-transcode.json` but with `media_type: "book"` and a
   non-empty `audio_tracks` array. It must satisfy every `decode_book_playback_session`
   precondition: non-empty `id`, matching `library_item_id`, `duration` and
   `current_time` finite and non-negative.
-- [ ] 5.2 Cover the book success path with the existing `mock_client` / `fixture`
+- [x] 5.2 Cover the book success path with the existing `mock_client` / `fixture`
   helpers in `audiobookshelf_playback_tests.rs`:
   `create_book_playback_session_bounded` returns a session and the decoded fields
   (source method, tracks, duration, current time) match the fixture. This drives
   `create_book_playback_session` and `decode_book_playback_session`, which are
   call-count 0 today.
-- [ ] 5.3 Cover the book decode rejections: a response with the wrong `media_type`, an
+- [x] 5.3 Cover the book decode rejections: a response with the wrong `media_type`, an
   empty `audio_tracks`, a mismatched `library_item_id`, and a negative or non-finite
   `duration` / `current_time` each return a protocol error rather than a session.
   Verify 5.1-5.3 with `cargo nextest run -p mbv-core -E 'test(book_playback)'`.
