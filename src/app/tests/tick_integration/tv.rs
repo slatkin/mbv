@@ -6,20 +6,20 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::msg::TvHit;
-use crate::app::components::tv_tree_target::TvTreeTarget;
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
+use crate::app::components::msg::TvHit;
 use crate::app::components::tv_content::TvContent;
+use crate::app::components::tv_tree_target::TvTreeTarget;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::render::make_movie_app;
-use crate::app::tests::install_test_emby;
-use crate::app::tests_tick_harness::TickHarness;
+use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::state::types::events::NavigateLanding;
 use crate::app::state::types::playback::{DestinationLatestSnapshot, DestinationLatestSource};
+use crate::app::tests::install_test_emby;
+use crate::app::tests::tick_integration::harness::TickHarness;
+use crate::app::{LibEvent, PanelFocus, PanelMode, TabSelection};
 use mbv_core::mock_http::MockHttp;
 use mbv_core::playback_queue::QueueItem;
-use crate::app::{LibEvent, PanelFocus, PanelMode, TabSelection};
 use std::time::{Duration, Instant};
 
 fn tv_harness() -> TickHarness {
@@ -182,7 +182,12 @@ fn shrunken_tv_restore_does_not_replace_latest_snapshot_with_stale_items_through
         Some(requested_position.clone()),
         "tick must not stale the pending restore guard"
     );
-    let event = harness.model().app.lib_rx.try_recv().expect("restore event");
+    let event = harness
+        .model()
+        .app
+        .lib_rx
+        .try_recv()
+        .expect("restore event");
     harness
         .model_mut()
         .handle_restored_library_position_event(event);
@@ -194,7 +199,10 @@ fn shrunken_tv_restore_does_not_replace_latest_snapshot_with_stale_items_through
     step_and_drain(&mut harness);
 
     let lib = &harness.model().app.libs[0];
-    assert_eq!(lib.tv_content_mode, Some(mbv_core::config::TvContentMode::Latest));
+    assert_eq!(
+        lib.tv_content_mode,
+        Some(mbv_core::config::TvContentMode::Latest)
+    );
     assert_eq!(lib.nav_stack[0].items[0].id, "current-latest");
     assert_ne!(lib.nav_stack[0].items[0].id, "stale-latest");
     let latest = &harness.model().tv_latest_snapshots["lib-movies"].items;
@@ -237,10 +245,9 @@ fn non_tv_library_refresh_populates_only_its_latest_snapshot_without_home() {
     library.library.id = "movies-id".into();
     library.library.name = "Movies".into();
     library.library.collection_type = "movies".into();
-    harness
-        .model_mut()
-        .tv_latest_snapshots
-        .insert("tv-id".into(), DestinationLatestSnapshot {
+    harness.model_mut().tv_latest_snapshots.insert(
+        "tv-id".into(),
+        DestinationLatestSnapshot {
             title: "TV".into(),
             source: DestinationLatestSource::Emby("tv-id".into()),
             items: vec![QueueItem::Emby(Box::new(crate::app::tests::make_item(
@@ -248,7 +255,8 @@ fn non_tv_library_refresh_populates_only_its_latest_snapshot_without_home() {
                 "Episode",
             )))],
             has_new_content: false,
-        });
+        },
+    );
     // Isolate the library-scoped Latest request from the independent current-level refresh.
     harness.model_mut().app.libs[0].nav_stack.clear();
 
@@ -286,7 +294,10 @@ fn non_tv_library_refresh_populates_only_its_latest_snapshot_without_home() {
         .filter(|request| request.contains("Items/Latest"))
         .collect();
     assert_eq!(latest_requests.len(), 1, "requests: {requests:?}");
-    assert!(latest_requests[0].contains("ParentId=movies-id"), "requests: {requests:?}");
+    assert!(
+        latest_requests[0].contains("ParentId=movies-id"),
+        "requests: {requests:?}"
+    );
     assert_eq!(
         harness.model().tv_latest_snapshots["movies-id"].items[0]
             .as_emby()
@@ -294,7 +305,13 @@ fn non_tv_library_refresh_populates_only_its_latest_snapshot_without_home() {
             .id,
         "fresh-movie"
     );
-    assert_eq!(harness.model().tv_latest_snapshots["tv-id"].items[0].as_emby().unwrap().name, "TV episode");
+    assert_eq!(
+        harness.model().tv_latest_snapshots["tv-id"].items[0]
+            .as_emby()
+            .unwrap()
+            .name,
+        "TV episode"
+    );
     assert!(harness.model().home_content.continue_items.is_empty());
 }
 
@@ -335,8 +352,7 @@ fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() 
             current: 200,
         };
     harness.model_mut().app.libs[0].library.collection_type = "tvshows".into();
-    harness.model_mut().app.libs[0].tv_content_mode =
-        Some(mbv_core::config::TvContentMode::Latest);
+    harness.model_mut().app.libs[0].tv_content_mode = Some(mbv_core::config::TvContentMode::Latest);
     harness.model_mut().app.libs[0].library_total = Some(301);
     let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
     level.tv_content_mode = Some(mbv_core::config::TvContentMode::Latest);
@@ -361,9 +377,15 @@ fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() 
         .expect("Latest refresh completion");
     let LibEvent::Loaded { level, .. } = &event else {
         if let LibEvent::Error(error) = &event {
-            panic!("Latest refresh failed: {error}; requests: {:?}", http.requests());
+            panic!(
+                "Latest refresh failed: {error}; requests: {:?}",
+                http.requests()
+            );
         }
-        panic!("expected Latest level load; requests: {:?}", http.requests());
+        panic!(
+            "expected Latest level load; requests: {:?}",
+            http.requests()
+        );
     };
     let mut items: Vec<_> = level
         .items
@@ -375,11 +397,9 @@ fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() 
         item.date_added = "1970-01-01T00:02:00Z".into();
     }
     harness.model_mut().app.handle_lib_event(event);
-    harness.model_mut().update_emby_latest_snapshot(
-        "lib-movies".into(),
-        "TV".into(),
-        items,
-    );
+    harness
+        .model_mut()
+        .update_emby_latest_snapshot("lib-movies".into(), "TV".into(), items);
     harness.model_mut().sync_mounted_surfaces();
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('j'),
@@ -504,9 +524,13 @@ fn deep_latest_library_refreshes_its_level_without_touching_shared_snapshot_thro
         "snapshot-episode"
     );
     let requests = http.requests();
-    assert!(requests.iter().any(|request| request.contains("ParentId=series-0")));
+    assert!(requests
+        .iter()
+        .any(|request| request.contains("ParentId=series-0")));
     assert!(
-        requests.iter().all(|request| !request.contains("Shows/Latest")),
+        requests
+            .iter()
+            .all(|request| !request.contains("Shows/Latest")),
         "deep refresh must not issue a Latest request: {requests:?}"
     );
 }
@@ -551,7 +575,6 @@ fn tv_latest_selection_acknowledges_the_destination_marker_through_tick() {
         .model()
         .acknowledged_home_latest_sources
         .contains(&DestinationLatestSource::Emby("lib-movies".into())));
-
 }
 
 #[test]
@@ -635,7 +658,9 @@ fn launch_reanchor_unfiltered_scope_keeps_full_tv_library() {
 
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+    assert!(harness.model().app.libs[0].nav_stack[0]
+        .letter_filter
+        .is_none());
     assert!(harness.model().app.pending_launch_state.is_none());
     assert_eq!(
         tv(&harness).launch_snapshot().1,
@@ -675,7 +700,9 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_tv_pill() {
     });
 
     harness.model_mut().sync_mounted_surfaces();
-    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+    assert!(harness.model().app.libs[0].nav_stack[0]
+        .letter_filter
+        .is_none());
     assert!(harness.model().app.pending_launch_state.is_some());
 
     let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
@@ -701,19 +728,19 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_tv_pill() {
     mbv_core::config::TvContentMode::All,
     301,
     mbv_core::config::TvContentMode::Latest,
-    "IncludeItemTypes=Episode",
+    "IncludeItemTypes=Episode"
 )]
 #[case::saved_s_z_shrunk_small(
     mbv_core::config::TvContentMode::Range(2),
     300,
     mbv_core::config::TvContentMode::All,
-    "IncludeItemTypes=Series",
+    "IncludeItemTypes=Series"
 )]
 #[case::saved_latest_shrunk_small(
     mbv_core::config::TvContentMode::Latest,
     300,
     mbv_core::config::TvContentMode::Latest,
-    "IncludeItemTypes=Episode",
+    "IncludeItemTypes=Episode"
 )]
 fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
     #[case] saved_mode: mbv_core::config::TvContentMode,
@@ -751,12 +778,14 @@ fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
         levels: vec![mbv_core::config::LibraryPositionLevel {
             parent_id: "lib-movies".into(),
             title: "TV".into(),
-            item_types: Some(match &saved_mode {
-                mbv_core::config::TvContentMode::Latest
-                | mbv_core::config::TvContentMode::Upcoming => "Episode",
-                _ => "Series",
-            }
-            .into()),
+            item_types: Some(
+                match &saved_mode {
+                    mbv_core::config::TvContentMode::Latest
+                    | mbv_core::config::TvContentMode::Upcoming => "Episode",
+                    _ => "Series",
+                }
+                .into(),
+            ),
             letter_filter_index: match &saved_mode {
                 mbv_core::config::TvContentMode::Range(index) => Some(*index),
                 _ => None,
@@ -782,10 +811,7 @@ fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
     app.activate_library_position(0);
     assert_eq!(app.libs[0].tv_content_mode, Some(expected_mode.clone()));
     assert_eq!(
-        app.saved_library_position(0)
-            .unwrap()
-            .levels[0]
-            .tv_content_mode,
+        app.saved_library_position(0).unwrap().levels[0].tv_content_mode,
         Some(expected_mode.clone()),
         "the resolved mode is saved before the restore worker fetches"
     );
@@ -834,11 +860,15 @@ fn reopening_reclamps_saved_tv_mode_before_fetch_and_tick_paint(
 
     let requests = http.requests();
     assert!(
-        requests.iter().any(|request| request.contains(expected_route)),
+        requests
+            .iter()
+            .any(|request| request.contains(expected_route)),
         "expected {expected_route} request, got {requests:?}"
     );
     if current_total <= 300 {
-        assert!(requests.iter().all(|request| !request.contains("NameStartsWith")));
+        assert!(requests
+            .iter()
+            .all(|request| !request.contains("NameStartsWith")));
     }
 }
 
@@ -1127,7 +1157,9 @@ fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
     let mut second = crate::app::tests::make_item("Upcoming Episode", "Episode");
     second.id = "upcoming-episode".into();
     second.series_id.clear();
-    harness.model_mut().app.libs[0].nav_stack[0].items.push(second);
+    harness.model_mut().app.libs[0].nav_stack[0]
+        .items
+        .push(second);
     harness.model_mut().app.terminal_width = crate::app::MINI_VIEW_THRESHOLD - 1;
     harness.model_mut().app.mini_view_focus = PanelFocus::Library;
     harness.model_mut().sync_mounted_surfaces();
@@ -1151,7 +1183,10 @@ fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
         message,
         Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 })
     )));
-    assert_eq!(tv(&harness).selected_item_id(), Some("upcoming-episode".into()));
+    assert_eq!(
+        tv(&harness).selected_item_id(),
+        Some("upcoming-episode".into())
+    );
     assert!(!tv(&harness).episode_pane_focused());
 
     harness.inject(Event::Keyboard(KeyEvent {
@@ -1163,10 +1198,10 @@ fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
         message,
         Msg::Shell(ShellRequest::TvCycleLetterPill { delta: 1 })
     )));
-    assert!(!cycle.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::TvSeasonMove { .. })
-    )));
+    assert!(!cycle
+        .messages
+        .iter()
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::TvSeasonMove { .. }))));
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Esc,
@@ -1186,8 +1221,7 @@ fn flat_episode_hero_is_painted_only_in_mini_view() {
     draw(&mut mini);
     assert!(panel(&mini).test_hero_overlay_open());
     assert_eq!(
-        mini
-            .model_mut()
+        mini.model_mut()
             .test_tv_owner_mut()
             .hero_data()
             .map(|data| data.facts.title),
@@ -1200,11 +1234,7 @@ fn flat_episode_hero_is_painted_only_in_mini_view() {
     narrow.model_mut().sync_mounted_surfaces();
     draw(&mut narrow);
     assert!(!panel(&narrow).test_hero_overlay_open());
-    assert!(narrow
-        .model_mut()
-        .test_tv_owner_mut()
-        .hero_data()
-        .is_none());
+    assert!(narrow.model_mut().test_tv_owner_mut().hero_data().is_none());
     assert!(panel(&narrow).test_overlay_geometry().is_none());
 }
 
@@ -1241,11 +1271,7 @@ fn tv_owner_retains_cursor_and_scroll_while_inactive() {
     for index in 2..20 {
         let mut item = crate::app::tests::make_item(&format!("Series {index}"), "Series");
         item.id = format!("series-{index}");
-        harness
-            .model_mut()
-            .app
-            .libs[0]
-            .nav_stack[0]
+        harness.model_mut().app.libs[0].nav_stack[0]
             .items
             .push(item);
     }
@@ -1314,12 +1340,16 @@ fn tv_wide_tick_click_resolves_season_pill() {
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
-    assert!(outcome.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::TvHitClick {
-            hit: TvHit::SeasonTab(0)
-        })
-    )), "tick messages: {:?}", outcome.messages);
+    assert!(
+        outcome.messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::TvHitClick {
+                hit: TvHit::SeasonTab(0)
+            })
+        )),
+        "tick messages: {:?}",
+        outcome.messages
+    );
 }
 
 /// Task 8.4: the episode rows live in the hero pane's Workspace box; the
@@ -1345,12 +1375,16 @@ fn tv_wide_tick_click_resolves_episode_row() {
         modifiers: KeyModifiers::NONE,
     }));
     let messages = step_without_sync(&mut harness);
-    assert!(messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::TvHitClick {
-            hit: TvHit::EpisodeRow(target)
-        }) if target == "episode-1"
-    )), "tick messages: {:?}", messages);
+    assert!(
+        messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::TvHitClick {
+                hit: TvHit::EpisodeRow(target)
+            }) if target == "episode-1"
+        )),
+        "tick messages: {:?}",
+        messages
+    );
 }
 
 fn navigated_series(id: &str, name: &str) -> Box<mbv_core::api::EmbyItem> {
@@ -1367,14 +1401,16 @@ fn navigated_series(id: &str, name: &str) -> Box<mbv_core::api::EmbyItem> {
 fn navigated_series_opens_the_wide_workspace() {
     let mut harness = tv_harness();
     // The retained owner starts on series-0; the navigation targets series-1.
-    harness.model_mut().handle_inline_search_lib_event(LibEvent::NavigateTo {
-        lib_idx: 0,
-        landing: NavigateLanding::Series {
-            reveal: navigated_series("series-1", "Second"),
-            episode_id: None,
-        },
-        switch_tab: true,
-    });
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(LibEvent::NavigateTo {
+            lib_idx: 0,
+            landing: NavigateLanding::Series {
+                reveal: navigated_series("series-1", "Second"),
+                episode_id: None,
+            },
+            switch_tab: true,
+        });
     harness.step();
 
     assert_eq!(
@@ -1406,14 +1442,16 @@ fn navigated_series_opens_the_hero_overlay_narrow() {
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
 
-    harness.model_mut().handle_inline_search_lib_event(LibEvent::NavigateTo {
-        lib_idx: 0,
-        landing: NavigateLanding::Series {
-            reveal: navigated_series("series-1", "Second"),
-            episode_id: None,
-        },
-        switch_tab: true,
-    });
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(LibEvent::NavigateTo {
+            lib_idx: 0,
+            landing: NavigateLanding::Series {
+                reveal: navigated_series("series-1", "Second"),
+                episode_id: None,
+            },
+            switch_tab: true,
+        });
     harness.step();
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
@@ -1445,10 +1483,7 @@ fn deferred_series_landing_runs_the_handoff_on_its_retry_drain() {
     {
         // A paginated root: the whole-library corpus (`all_items`) is absent,
         // so the show can still be satisfied by the prefetch drain.
-        let level = harness
-            .model_mut()
-            .app
-            .libs[0]
+        let level = harness.model_mut().app.libs[0]
             .nav_stack
             .last_mut()
             .expect("root level");
@@ -1457,14 +1492,16 @@ fn deferred_series_landing_runs_the_handoff_on_its_retry_drain() {
     }
     harness.model_mut().sync_mounted_surfaces();
 
-    harness.model_mut().handle_inline_search_lib_event(LibEvent::NavigateTo {
-        lib_idx: 0,
-        landing: NavigateLanding::Series {
-            reveal: navigated_series("series-9", "Ninth"),
-            episode_id: None,
-        },
-        switch_tab: true,
-    });
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(LibEvent::NavigateTo {
+            lib_idx: 0,
+            landing: NavigateLanding::Series {
+                reveal: navigated_series("series-9", "Ninth"),
+                episode_id: None,
+            },
+            switch_tab: true,
+        });
     assert!(
         harness.model().app.pending_series_landing.is_some(),
         "an unsaturated corpus arms the pending landing"
@@ -1514,10 +1551,8 @@ fn upcoming_placeholder_harness() -> TickHarness {
     let mut harness = tv_harness();
     let episodes = (0..3)
         .map(|index| {
-            let mut episode = crate::app::tests::make_item(
-                &format!("Upcoming Episode {index}"),
-                "Episode",
-            );
+            let mut episode =
+                crate::app::tests::make_item(&format!("Upcoming Episode {index}"), "Episode");
             episode.id.clear();
             episode.series_id = format!("series-{index}");
             episode.series_name = format!("The Show {index}");
@@ -1563,7 +1598,10 @@ fn assert_placeholder_workspace(harness: &mut TickHarness, index: usize) {
         });
     harness.step();
     assert!(harness.model().app.pending_series_landing.is_none());
-    assert_eq!(tv(harness).selected_item().map(|item| item.id), Some(expected_id));
+    assert_eq!(
+        tv(harness).selected_item().map(|item| item.id),
+        Some(expected_id)
+    );
     assert!(tv(harness).episode_pane_focused());
 }
 
@@ -1712,18 +1750,24 @@ fn tv_tree_keyboard_navigation_resolves_show_target_through_shell_sync(
     );
 
     let messages = tick_tv_key(&mut harness, Key::Down);
-    assert!(messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::TvHitClick {
-            hit: TvHit::SeriesRow(target)
-        }) if target == "series-1"
-    )), "tick must resolve the selected tree target before shell dispatch: {messages:?}");
+    assert!(
+        messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::TvHitClick {
+                hit: TvHit::SeriesRow(target)
+            }) if target == "series-1"
+        )),
+        "tick must resolve the selected tree target before shell dispatch: {messages:?}"
+    );
     assert_eq!(
         tv(&harness).selected_tree_target(),
         Some(&TvTreeTarget::Show("tv-id:8:series-1".into())),
         "the shell sync pass must preserve the resolved stable tree target"
     );
-    assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 1);
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        1
+    );
 }
 
 #[rstest]
@@ -1741,16 +1785,20 @@ fn tv_tree_show_activation_uses_the_selected_target_in_every_geometry(
     }));
     let outcome = harness.step();
     if width == 160 {
-        assert!(outcome.messages.iter().any(|message| matches!(
-            message,
-            Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
-        )), "Wide Enter must carry the selected show's stable identity: {:?}", outcome.messages);
+        assert!(
+            outcome.messages.iter().any(|message| matches!(
+                message,
+                Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
+            )),
+            "Wide Enter must carry the selected show's stable identity: {:?}",
+            outcome.messages
+        );
     } else {
         assert!(
-            !outcome.messages.iter().any(|message| matches!(
-                message,
-                Msg::Shell(ShellRequest::TvActivate { .. })
-            )),
+            !outcome
+                .messages
+                .iter()
+                .any(|message| matches!(message, Msg::Shell(ShellRequest::TvActivate { .. }))),
             "non-Wide show activation opens the Library Hero overlay"
         );
     }
@@ -1762,7 +1810,10 @@ fn tv_tree_show_activation_uses_the_selected_target_in_every_geometry(
     }
     harness.model_mut().sync_mounted_surfaces();
 
-    assert_eq!(tv(&harness).selected_tree_target(), Some(&TvTreeTarget::Show("tv-id:8:series-0".into())));
+    assert_eq!(
+        tv(&harness).selected_tree_target(),
+        Some(&TvTreeTarget::Show("tv-id:8:series-0".into()))
+    );
     if width == 160 {
         assert!(tv(&harness).episode_pane_focused());
     } else {
@@ -1888,10 +1939,13 @@ fn right_on_expanded_show_activates_its_workspace_through_tick(
     tick_tv_key(&mut harness, Key::Right);
 
     let messages = tick_tv_key(&mut harness, Key::Right);
-    assert!(messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
-    )), "Right on the expanded Show must emit its stable-target activation: {messages:?}");
+    assert!(
+        messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
+        )),
+        "Right on the expanded Show must emit its stable-target activation: {messages:?}"
+    );
     assert_eq!(
         tv(&harness).selected_tree_target(),
         Some(&TvTreeTarget::Show("tv-id:8:series-0".into())),
@@ -1921,10 +1975,12 @@ fn tv_tree_episode_activation_plays_the_resolved_episode_in_every_geometry(
     ));
     tick_tv_key(&mut harness, Key::Enter); // Expand Season 1.
     let messages = tick_tv_key(&mut harness, Key::Right);
-    assert!(!messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::TvActivate { .. })
-    )), "Right on an expanded Season must not activate its Show Workspace");
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, Msg::Shell(ShellRequest::TvActivate { .. }))),
+        "Right on an expanded Season must not activate its Show Workspace"
+    );
     tick_tv_key(&mut harness, Key::Down); // Still-visible Episode 1 proves Right did not collapse.
     assert!(matches!(
         tv(&harness).selected_tree_target(),
@@ -1933,10 +1989,13 @@ fn tv_tree_episode_activation_plays_the_resolved_episode_in_every_geometry(
     ));
 
     let messages = tick_tv_key(&mut harness, Key::Enter);
-    assert!(messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::TvEpisodeActivate { episode }) if episode.id == "episode-1"
-    )), "Enter must resolve the selected episode identity: {messages:?}");
+    assert!(
+        messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::TvEpisodeActivate { episode }) if episode.id == "episode-1"
+        )),
+        "Enter must resolve the selected episode identity: {messages:?}"
+    );
     assert_eq!(
         harness.model().app.playback_queue().emby_items()[0].id,
         "episode-1",

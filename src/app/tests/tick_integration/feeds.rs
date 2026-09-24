@@ -8,9 +8,9 @@ use tuirealm::event::{
 use crate::app::components::feeds_content::FeedsContent;
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::{ComponentId, Msg, ShellRequest, TerminalObserverEvent};
-use crate::app::tests::make_app_stub;
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::state::types::feed_tab::WatchedFilter;
+use crate::app::tests::make_app_stub;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, TabSelection};
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
@@ -344,14 +344,14 @@ fn feeds_tick_latest_selection_uses_loaded_snapshot_without_fetch_and_refreshes_
         modifiers: KeyModifiers::NONE,
     }));
     let selected = harness.step();
-    assert!(selected.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::FeedsLatestSelected)
-    )));
-    assert!(!selected.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::RefreshFeeds)
-    )));
+    assert!(selected
+        .messages
+        .iter()
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::FeedsLatestSelected))));
+    assert!(!selected
+        .messages
+        .iter()
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::RefreshFeeds))));
     assert!(feeds_owner(&harness).latest_selected());
     let mut music_resize = false;
     let mut tv_resize = false;
@@ -371,10 +371,10 @@ fn feeds_tick_latest_selection_uses_loaded_snapshot_without_fetch_and_refreshes_
         modifiers: KeyModifiers::NONE,
     }));
     let refresh = harness.step();
-    assert!(refresh.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::RefreshFeeds)
-    )));
+    assert!(refresh
+        .messages
+        .iter()
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::RefreshFeeds))));
 
     harness.model_mut().app.feed_tab.entries = vec![vec![
         entry("one", "One"),

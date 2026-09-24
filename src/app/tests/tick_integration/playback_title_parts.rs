@@ -7,8 +7,8 @@
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 use crate::app::components::{ComponentId, LibraryPlaybackPanel, QueuePlaybackPanel};
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{App, PanelFocus, PanelMode};
 use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
 
@@ -87,15 +87,26 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
     // parts, the single-part slot one.
     step_tick(&mut harness);
     assert_eq!(
-        queue_panel(&harness).transport_title_parts_for_test().as_ref(),
+        queue_panel(&harness)
+            .transport_title_parts_for_test()
+            .as_ref(),
         Some(&expected_parts("Track Two", Some("Artist B"))),
         "the two-part slot projects a title part and a context part"
     );
 
-    harness.model_mut().app.player.status.lock().unwrap().current_idx = 1;
+    harness
+        .model_mut()
+        .app
+        .player
+        .status
+        .lock()
+        .unwrap()
+        .current_idx = 1;
     step_tick(&mut harness);
     assert_eq!(
-        queue_panel(&harness).transport_title_parts_for_test().as_ref(),
+        queue_panel(&harness)
+            .transport_title_parts_for_test()
+            .as_ref(),
         Some(&expected_parts("Movie One", None)),
         "the single-part slot projects the title part alone"
     );
@@ -111,7 +122,14 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
         "the strip receives the single-part projection"
     );
 
-    harness.model_mut().app.player.status.lock().unwrap().current_idx = 0;
+    harness
+        .model_mut()
+        .app
+        .player
+        .status
+        .lock()
+        .unwrap()
+        .current_idx = 0;
     step_tick(&mut harness);
     assert_eq!(
         strip(&harness).title_parts_for_test().as_ref(),

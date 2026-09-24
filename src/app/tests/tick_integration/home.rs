@@ -1,6 +1,8 @@
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
@@ -8,8 +10,8 @@ use crate::app::components::media_list::{LibrarySelectionOrigin, SelectionOrigin
 use crate::app::components::msg::HomeRowTarget;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::palette;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
 
 fn home_harness(width: u16, height: u16, count: usize) -> TickHarness {
@@ -225,9 +227,11 @@ fn visual_mode_status_bar_click_clears_selection_through_tick() {
     }));
     let outcome = harness.step();
     assert!(
-        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
-            SelectionOrigin::Library(LibrarySelectionOrigin::Home),
-        ))),
+        outcome
+            .messages
+            .contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
+                SelectionOrigin::Library(LibrarySelectionOrigin::Home),
+            ))),
         "clear request must reach the shell: {:?}",
         outcome.messages
     );
@@ -315,10 +319,9 @@ fn clear_multi_selection_routes_by_origin_not_dispatch_focus() {
     // Give the Queue its own selection, then focus it: dispatch-time focus now
     // names the Queue while the captured origin still names the Library.
     harness.model_mut().app.player_tab.set_queue_items(
-        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
-            "Queued",
-            "Movie",
-        )))],
+        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+            make_item("Queued", "Movie"),
+        ))],
         0,
     );
     harness.model_mut().sync_mounted_surfaces();
@@ -347,9 +350,9 @@ fn clear_multi_selection_routes_by_origin_not_dispatch_focus() {
     // The captured origin still names the Library, so the clear must route
     // there rather than to the focused Queue.
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ClearMultiSelection(
-            SelectionOrigin::Library(LibrarySelectionOrigin::Home),
-        )),
+        Msg::Shell(ShellRequest::ClearMultiSelection(SelectionOrigin::Library(
+            LibrarySelectionOrigin::Home,
+        ))),
         &mut false,
         &mut false,
     );
@@ -373,10 +376,9 @@ fn status_bar_clear_with_queue_origin_clears_queue() {
     let _ = draw(&mut harness, 160, 30);
 
     harness.model_mut().app.player_tab.set_queue_items(
-        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
-            "Queued",
-            "Movie",
-        )))],
+        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+            make_item("Queued", "Movie"),
+        ))],
         0,
     );
     harness.model_mut().sync_mounted_surfaces();
@@ -425,9 +427,11 @@ fn status_bar_clear_with_queue_origin_clears_queue() {
     }));
     let outcome = harness.step();
     assert!(
-        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
-            SelectionOrigin::Queue,
-        ))),
+        outcome
+            .messages
+            .contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
+                SelectionOrigin::Queue,
+            ))),
         "clear request must carry the projected Queue origin: {:?}",
         outcome.messages
     );
@@ -493,9 +497,12 @@ fn mounted_home_latest_restore_falls_back_to_continue_only_content() {
     harness.step();
 
     let home = home_owner(&harness);
-    assert_eq!(home.launch_snapshot().0, Some(mbv_core::config::SelectorIdentity::Home {
-        key: mbv_core::config::HomeSelectorKey::Continue,
-    }));
+    assert_eq!(
+        home.launch_snapshot().0,
+        Some(mbv_core::config::SelectorIdentity::Home {
+            key: mbv_core::config::HomeSelectorKey::Continue,
+        })
+    );
     assert_eq!(
         home.test_active_rows().len(),
         3, // the Continue watching group heading plus two Continue Watching rows
@@ -503,10 +510,15 @@ fn mounted_home_latest_restore_falls_back_to_continue_only_content() {
     );
     assert_eq!(
         home.launch_snapshot().1,
-        Some(mbv_core::config::LibraryItemIdentity::Home { id: "home-1".into() })
+        Some(mbv_core::config::LibraryItemIdentity::Home {
+            id: "home-1".into()
+        })
     );
     assert!(
-        harness.model().application.get_component(&ComponentId::Library)
+        harness
+            .model()
+            .application
+            .get_component(&ComponentId::Library)
             .expect("Library panel mounted")
             .as_any()
             .downcast_ref::<LibraryPanel>()
@@ -524,10 +536,13 @@ fn home_wide_tick_navigation_keeps_the_selected_owner_row() {
     let _ = draw(&mut harness, 160, 30);
     harness.inject(key(Key::Down));
     let outcome = harness.step();
-    assert!(outcome.messages.iter().all(|message| !matches!(
-        message,
-        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::KeyClaimed)
-    )), "the fold consumes the local claim marker");
+    assert!(
+        outcome.messages.iter().all(|message| !matches!(
+            message,
+            Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::KeyClaimed)
+        )),
+        "the fold consumes the local claim marker"
+    );
 
     let _ = draw(&mut harness, 160, 30);
     assert_eq!(home_owner(&harness).cursor(), 1);
@@ -551,10 +566,10 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
-    assert!(outcome
-        .messages
-        .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::HomeRowClick { target: _ }))));
+    assert!(outcome.messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::HomeRowClick { target: _ })
+    )));
     assert_eq!(home_owner(&harness).cursor(), 2);
     let _ = draw(&mut harness, 60, 20);
     assert_eq!(home_owner(&harness).cursor(), 2);
@@ -620,7 +635,9 @@ fn home_list_row_cells(
     let buf = terminal.backend().buffer();
     let whole = format!("{context} {split_title}");
     let row_text = |y: u16| -> String {
-        (0..buf.area().width).map(|x| buf[(x, y)].symbol()).collect()
+        (0..buf.area().width)
+            .map(|x| buf[(x, y)].symbol())
+            .collect()
     };
     for y in 0..buf.area().height.saturating_sub(1) {
         let row = row_text(y);
@@ -634,9 +651,7 @@ fn home_list_row_cells(
             );
         }
     }
-    panic!(
-        "adjacent list rows for split {whole:?} and single-part {single_title:?} not painted"
-    );
+    panic!("adjacent list rows for split {whole:?} and single-part {single_title:?} not painted");
 }
 
 fn assert_home_palette_painted(
@@ -724,4 +739,3 @@ fn home_tick_render_paints_split_row_palette_and_ordinary_single_part_role() {
     let unselected = draw(&mut harness, 160, 30);
     assert_home_single_part_role(&unselected, "Wide", palette::TEXT_EMPHASIS);
 }
-

@@ -18,10 +18,10 @@ use crate::app::components::{
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
-use crate::app::tests::make_app_stub;
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::state::types::confirm::{ConfirmAction, ConfirmModal};
 use crate::app::state::types::overlay::OverlayRequest;
+use crate::app::tests::make_app_stub;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 fn key(code: Key) -> Event<UserEvent> {
@@ -100,7 +100,10 @@ fn live_tick_unhandled_space_fires_playback_on_the_press() {
     harness.inject(key(Key::Char(' ')));
     let second = harness.step();
     assert!(matches!(second.router, RouterOutcome::Deferred(_)));
-    assert!(second.deferred_fired, "a later unhandled press fires again as a first press");
+    assert!(
+        second.deferred_fired,
+        "a later unhandled press fires again as a first press"
+    );
 }
 
 /// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
@@ -118,7 +121,10 @@ fn live_tick_unhandled_escape_fires_stop_on_the_second_press() {
 
     harness.inject(key(Key::Esc));
     let second = harness.step();
-    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::dispatch::action::Command::Stop));
+    assert_eq!(
+        second.router,
+        RouterOutcome::Deferred(crate::app::dispatch::action::Command::Stop)
+    );
     assert!(second.deferred_fired);
 }
 
@@ -133,10 +139,10 @@ fn live_tick_local_mutation_precedes_root_observation() {
     let second = harness.step();
 
     assert!(matches!(second.router, RouterOutcome::FallThrough));
-    assert!(second.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::TerminalEvent(TerminalObserverEvent::Key(_))
-    )));
+    assert!(second
+        .raw_messages
+        .iter()
+        .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::Key(_)))));
     assert!(second.raw_messages.iter().any(|message| matches!(
         message,
         Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
@@ -145,13 +151,23 @@ fn live_tick_local_mutation_precedes_root_observation() {
         message,
         Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
     )));
-    assert_eq!(second.raw_messages.len(), 2, "leaf claim and root observation");
     assert_eq!(
-        search_component_mut(&mut harness).debounce_pending.as_deref(),
+        second.raw_messages.len(),
+        2,
+        "leaf claim and root observation"
+    );
+    assert_eq!(
+        search_component_mut(&mut harness)
+            .debounce_pending
+            .as_deref(),
         Some("ab"),
         "the focused search component mutated its local query before root observation"
     );
-    assert_eq!(first.raw_messages.len(), 2, "each local key yields a leaf claim and root observation");
+    assert_eq!(
+        first.raw_messages.len(),
+        2,
+        "each local key yields a leaf claim and root observation"
+    );
 }
 
 pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSidebarComponent {
@@ -168,10 +184,13 @@ pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSide
 fn arm_search_query(harness: &mut TickHarness, query: &str) {
     for c in query.chars() {
         let message = search_component_mut(harness).on(&key(Key::Char(c)));
-        assert!(matches!(
-            message,
-            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        ), "typing search chars is locally consumed");
+        assert!(
+            matches!(
+                message,
+                Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+            ),
+            "typing search chars is locally consumed"
+        );
     }
 }
 
@@ -565,20 +584,32 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
 
-    assert!(!harness
-        .model()
-        .app
-        .config
-        .lock()
-        .unwrap()
-        .mouse_support);
+    assert!(!harness.model().app.config.lock().unwrap().mouse_support);
     assert_eq!(harness.model().app.mouse_capture_pending, Some(false));
 }
 
-#[path = "tests_tick_integration_music.rs"]
-mod tests_tick_integration_music;
-#[path = "tests_tick_integration_sessions.rs"]
-mod tests_tick_integration_sessions;
+mod book;
+mod disconnect;
+mod emby_library;
+mod feeds;
+pub(crate) mod harness;
+mod home;
+mod keybinds;
+mod library_panel;
+mod library_scroll;
+mod mouse;
+mod mouse_sidebar;
+mod music;
+mod music_mouse;
+mod navigate_item;
+mod playback_title_parts;
+mod podcast;
+mod prefix_mode;
+mod queue_playback;
+mod root_frame_fill;
+mod sessions;
+mod tv;
+mod wide_split;
 
 /// A function key pressed while the Help overlay is open must dismiss Help and
 /// open its sidebar. Help stays mounted otherwise, and (painting after

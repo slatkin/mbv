@@ -70,4 +70,9 @@ use mbv_core::player::PlayerEvent;
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
+pub(crate) mod tests;
+#[cfg(test)]
+pub(crate) use self::tests::tick_integration::harness as tests_tick_harness;
+
 include!("app_test_modules.rs");

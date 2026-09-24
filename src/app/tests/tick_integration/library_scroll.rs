@@ -7,13 +7,15 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEvent
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
-use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
+use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::{PanelFocus, PanelMode};
 
 fn apply(harness: &mut TickHarness, outcome: StepOutcome) {
     let (mut music, mut tv) = (false, false);
     for message in outcome.messages {
-        harness.model_mut().handle_terminal_message(message, &mut music, &mut tv);
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music, &mut tv);
     }
     harness
         .model_mut()
@@ -73,7 +75,11 @@ fn deferred_wheel_is_drained_before_following_keyboard_cursor_move() {
         .model_mut()
         .handle_terminal_message(end, &mut music, &mut tv);
     let resting = harness.model().app.libs[0].nav_stack[0].resting();
-    assert_eq!(resting.cursor(), 1, "keyboard position must win over stale wheel state");
+    assert_eq!(
+        resting.cursor(),
+        1,
+        "keyboard position must win over stale wheel state"
+    );
 }
 
 #[test]
@@ -106,7 +112,10 @@ fn library_panel_wheel_at_loaded_edge_fetches_next_page() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { .. }))
+        matches!(
+            message,
+            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { .. })
+        )
     }));
     apply(&mut harness, outcome);
     assert!(

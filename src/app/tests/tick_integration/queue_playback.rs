@@ -5,15 +5,15 @@
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind, KeyModifiers};
+use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::msg::PlaybackRequest;
 use crate::app::components::{ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel};
-use crate::app::tests::make_app_stub;
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::state::types::playback::PlaybackState;
-use mbv_core::player::PlayerEvent;
+use crate::app::tests::make_app_stub;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
+use mbv_core::player::PlayerEvent;
 
 fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components::UserEvent> {
     tuirealm::event::Event::Mouse(MouseEvent {
@@ -44,7 +44,9 @@ fn active_app(panel_mode: PanelMode) -> crate::app::App {
     app
 }
 
-fn playback_intents(outcome: &crate::app::tests_tick_harness::StepOutcome) -> Vec<&PlaybackRequest> {
+fn playback_intents(
+    outcome: &crate::app::tests::tick_integration::harness::StepOutcome,
+) -> Vec<&PlaybackRequest> {
     outcome
         .raw_messages
         .iter()
@@ -115,7 +117,10 @@ mod strip_hits {
             .and_then(|component| component.as_any().downcast_ref::<LibraryPlaybackPanel>())
             .expect("strip mounted in a library-only layout");
         let (play_pause, seekbar) = playback.transport_hits();
-        assert!(play_pause.width > 0 && seekbar.width > 0, "strip hits retained");
+        assert!(
+            play_pause.width > 0 && seekbar.width > 0,
+            "strip hits retained"
+        );
 
         // Switch to `both`: the queue column becomes visible and the strip
         // stops painting — the D1 mount rule unmounts it, so neither the
@@ -167,14 +172,19 @@ fn sync_projects_queue_transport_area_before_draw() {
     let area = panel
         .transport_area_for_test()
         .expect("sync projects transport geometry before draw");
-    assert!(area.width > 0 && area.height > 0, "transport area is non-degenerate");
+    assert!(
+        area.width > 0 && area.height > 0,
+        "transport area is non-degenerate"
+    );
 }
 
 #[test]
 fn tick_clicks_play_pause_and_the_seekbar_in_both() {
-    let (mut harness, play_pause, seekbar) =
-        drawn_harness(active_app(PanelMode::Both), 100, 40);
-    assert!(play_pause.width > 0 && seekbar.width > 0, "transport painted");
+    let (mut harness, play_pause, seekbar) = drawn_harness(active_app(PanelMode::Both), 100, 40);
+    assert!(
+        play_pause.width > 0 && seekbar.width > 0,
+        "transport painted"
+    );
 
     harness.inject(click(play_pause.x + 1, play_pause.y));
     let outcome = harness.step();
@@ -199,7 +209,10 @@ fn tick_clicks_play_pause_and_the_seekbar_in_both() {
 fn tick_clicks_play_pause_and_the_seekbar_in_mini_view_queue_only() {
     let (mut harness, play_pause, seekbar) =
         drawn_harness(active_app(PanelMode::QueueOnly), 60, 40);
-    assert!(play_pause.width > 0 && seekbar.width > 0, "transport painted");
+    assert!(
+        play_pause.width > 0 && seekbar.width > 0,
+        "transport painted"
+    );
 
     harness.inject(click(play_pause.x + 1, play_pause.y));
     let outcome = harness.step();
@@ -246,7 +259,10 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
 
     // The rows the slot/transport would have occupied — here the panel's
     // collapsed region above the queue panel — resolve no playback intent.
-    let chrome = harness.model().app.compute_chrome_geometry(Rect::new(0, 0, 80, 40));
+    let chrome = harness
+        .model()
+        .app
+        .compute_chrome_geometry(Rect::new(0, 0, 80, 40));
     let collapsed_row = chrome.left_content.y + 1;
     harness.inject(click(chrome.left_content.x + 5, collapsed_row));
     let outcome = harness.step();
@@ -295,7 +311,9 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
             "{mode:?}: Queue playback panel mounted exactly when the queue column is visible"
         );
         assert_eq!(
-            model.application.mounted(&ComponentId::LibraryPlaybackPanel),
+            model
+                .application
+                .mounted(&ComponentId::LibraryPlaybackPanel),
             !queue_owned,
             "{mode:?}: the strip mounted exactly when the queue column is hidden"
         );
@@ -334,7 +352,8 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         for y in 0..buf.area().height {
             for x in 0..buf.area().width {
                 let cell = &buf[(x, y)];
-                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(crate::app::palette::ACCENT)
+                if cell.symbol() == "\u{2594}"
+                    && cell.style().fg == Some(crate::app::palette::ACCENT)
                 {
                     painted += 1;
                     assert!(
@@ -377,13 +396,15 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     assert!(matches!(
         &rows[0],
         crate::app::components::media_list::MediaListRow::Item {
-            semantic_state: MediaSemanticState::NowPlaying { .. }, ..
+            semantic_state: MediaSemanticState::NowPlaying { .. },
+            ..
         }
     ));
     assert!(matches!(
         &rows[1],
         crate::app::components::media_list::MediaListRow::Item {
-            semantic_state: MediaSemanticState::Ordinary, ..
+            semantic_state: MediaSemanticState::Ordinary,
+            ..
         }
     ));
 
@@ -398,10 +419,12 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
         .accept_local_transition(confirmed_transition);
     let target = harness.model().app.player_tab.slot_id_at(1).unwrap();
     let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
-    let transition = mbv_core::playback_transition::Transition::new(
-        request_id, generation, target,
-    );
-    harness.model_mut().app.bare_owner.accept_local_transition(transition);
+    let transition = mbv_core::playback_transition::Transition::new(request_id, generation, target);
+    harness
+        .model_mut()
+        .app
+        .bare_owner
+        .accept_local_transition(transition);
     harness.model_mut().app.player.status.lock().unwrap().active = false;
     harness
         .model_mut()
@@ -416,7 +439,8 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
     assert!(matches!(
         &rows[1],
         crate::app::components::media_list::MediaListRow::Item {
-            semantic_state: MediaSemanticState::Ordinary, ..
+            semantic_state: MediaSemanticState::Ordinary,
+            ..
         }
     ));
 }

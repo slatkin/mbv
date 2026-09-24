@@ -1,13 +1,15 @@
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::msg::AudiobookshelfBookMove;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests_podcast::audiobookshelf_app;
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::TabSelection;
 use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 fn harness() -> TickHarness {
     let mut app = audiobookshelf_app();
@@ -16,9 +18,10 @@ fn harness() -> TickHarness {
         name: "Books".into(),
         media_type: "book".into(),
     };
-    let mut state = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState::new(
-        library.clone(),
-    );
+    let mut state =
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState::new(
+            library.clone(),
+        );
     state.books = (0..8)
         .map(|i| AudiobookshelfBook {
             library_item_id: format!("book-{i}"),
@@ -41,7 +44,8 @@ fn harness() -> TickHarness {
             audio_files: vec![],
         })
         .collect();
-    state.buckets = crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&state.books);
+    state.buckets =
+        crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&state.books);
     state.selected_id = Some("book-0".into());
     state.detail_cache.insert(
         "book-0".into(),
@@ -119,7 +123,12 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     assert!(panel.test_hero_overlay_open());
     assert!(panel.test_overlay_geometry().is_some());
     assert!(h.model().app.audiobookshelf_book_browse[1].detail_loading);
-    assert!(h.model().test_abs_book_owner().chapter_list.rows().is_empty());
+    assert!(h
+        .model()
+        .test_abs_book_owner()
+        .chapter_list
+        .rows()
+        .is_empty());
 
     // Complete the provider request directly at its state boundary. The
     // existing owner updates its Workspace without being recreated.
@@ -132,13 +141,18 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     let browse = &mut h.model_mut().app.audiobookshelf_book_browse[1];
     browse.detail_loading = false;
     browse.detail_loading_ids.clear();
-    browse.detail_cache.insert("book-0".into(), (vec![chapter], Vec::new()));
+    browse
+        .detail_cache
+        .insert("book-0".into(), (vec![chapter], Vec::new()));
     h.model_mut().push_audiobookshelf_book_content();
     h.model_mut().sync_mounted_surfaces();
     draw_at(&mut h, 80, 24);
     assert!(!h.model().app.audiobookshelf_book_browse[1].detail_loading);
     assert_eq!(
-        h.model().test_abs_book_owner().chapter_list.selected_target(),
+        h.model()
+            .test_abs_book_owner()
+            .chapter_list
+            .selected_target(),
         Some(&0)
     );
 
@@ -147,7 +161,8 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     let browse = &mut h.model_mut().app.audiobookshelf_book_browse[1];
     browse.books.rotate_left(1);
     browse.selected_id = Some("book-1".into());
-    browse.buckets = crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&browse.books);
+    browse.buckets =
+        crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&browse.books);
     h.model_mut().push_audiobookshelf_book_content();
     h.model_mut().sync_mounted_surfaces();
     draw_at(&mut h, 80, 24);
@@ -157,21 +172,34 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
         .is_some_and(|panel| panel.test_hero_overlay_open()));
-    assert_eq!(h.model().test_abs_book_owner().selected_book_id(), Some("book-0"));
     assert_eq!(
-        h.model().test_abs_book_owner().chapter_list.selected_target(),
+        h.model().test_abs_book_owner().selected_book_id(),
+        Some("book-0")
+    );
+    assert_eq!(
+        h.model()
+            .test_abs_book_owner()
+            .chapter_list
+            .selected_target(),
         Some(&0)
     );
 
     // Empty completion clears the old child rows and leaves an explicit empty
     // detail result in the retained owner.
     let browse = &mut h.model_mut().app.audiobookshelf_book_browse[1];
-    browse.detail_cache.insert("book-0".into(), (Vec::new(), Vec::new()));
+    browse
+        .detail_cache
+        .insert("book-0".into(), (Vec::new(), Vec::new()));
     browse.detail_loading = false;
     h.model_mut().push_audiobookshelf_book_content();
     h.model_mut().sync_mounted_surfaces();
     draw_at(&mut h, 80, 24);
-    assert!(h.model().test_abs_book_owner().chapter_list.rows().is_empty());
+    assert!(h
+        .model()
+        .test_abs_book_owner()
+        .chapter_list
+        .rows()
+        .is_empty());
     assert!(h
         .model()
         .test_abs_book_owner()

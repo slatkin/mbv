@@ -6,15 +6,15 @@ use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKi
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest};
 use crate::app::render::make_music_group_app;
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
-use crate::app::tests_tick_integration::search_component_mut;
 use crate::app::state::types::confirm::{ConfirmAction, ConfirmModal};
 use crate::app::state::types::context_menu::{
     ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
 };
 use crate::app::state::types::daemon_lost::DaemonLostModal;
 use crate::app::state::types::overlay::OverlayRequest;
+use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
+use crate::app::tests::tick_integration::search_component_mut;
+use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2
@@ -209,7 +209,8 @@ fn tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide
         let mut harness = TickHarness::new(app);
         harness.model_mut().sync_mounted_surfaces();
 
-        let mut terminal = Terminal::new(TestBackend::new(terminal_width, terminal_height)).unwrap();
+        let mut terminal =
+            Terminal::new(TestBackend::new(terminal_width, terminal_height)).unwrap();
         terminal
             .draw(|f| harness.model_mut().draw_frame(f, false, false))
             .unwrap();
@@ -301,7 +302,10 @@ fn tick_mouse_hover_delivery_updates_only_the_pointed_surface_in_narrow_and_wide
             "gap hover emits no shell action: {outcome:?}"
         );
         assert_eq!(tab_panel_component(&harness).test_hovered(), None);
-        assert_eq!(library_panel_component(&harness).test_hovered_selector(), None);
+        assert_eq!(
+            library_panel_component(&harness).test_hovered_selector(),
+            None
+        );
     }
 }
 
@@ -681,5 +685,4 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
 // it (and the sync pass mounts it) only in the Both layout; queue-only and
 // library-only find it unmounted, and returning to Both remounts it.
 
-#[path = "tests_tick_integration_mouse_panels.rs"]
-mod tests_tick_integration_mouse_panels;
+mod panels;

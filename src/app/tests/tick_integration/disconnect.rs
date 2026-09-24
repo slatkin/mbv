@@ -1,5 +1,5 @@
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_items, make_local_daemon_app_stub, make_session};
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::QueueScope;
 use mbv_core::player::CONNECTION_LOST_MESSAGE;
 use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};

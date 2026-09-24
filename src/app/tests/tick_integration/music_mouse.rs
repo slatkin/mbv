@@ -1,14 +1,16 @@
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use rstest::rstest;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest, UserEvent};
 use crate::app::render::{make_music_group_app, make_music_group_app_with_second_album};
 use crate::app::tests::make_item;
-use crate::app::tests_tick_harness::TickHarness;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
 
 /// The framed Wide track table is a second canonical control in Grouped Music:
@@ -44,11 +46,13 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
     };
     let (_track_point, second_track_point) = {
         let music = harness.model().test_music_owner();
-        let content = music.track_list
+        let content = music
+            .track_list
             .current_content_rect()
             .expect("Wide track table retained its current content rect");
         let selected = music
-            .track_list.current_selected_row_rect()
+            .track_list
+            .current_selected_row_rect()
             .expect("Wide track table retained its selected row");
         (
             (selected.x, selected.y),
@@ -77,16 +81,17 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
     // activates that same stable provider target.
     harness.inject(click(second_track_point.0, second_track_point.1));
     let outcome = harness.step();
-    assert!(outcome.messages.iter().all(|message| {
-        !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
-    }));
+    assert!(outcome
+        .messages
+        .iter()
+        .all(|message| { !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. })) }));
     assert_eq!(track_state(&harness), (true, Some(1)));
     harness.inject(click(second_track_point.0, second_track_point.1));
     let outcome = harness.step();
-    assert!(outcome.messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::MusicTrackActivate { .. })
-    )));
+    assert!(outcome
+        .messages
+        .iter()
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::MusicTrackActivate { .. }))));
 
     // Right-click resolves the same retained row and translates directly to
     // the track context intent; no shell-side coordinate lookup is involved.
@@ -157,14 +162,22 @@ fn music_wide_track_modifier_clicks_toggle_range_and_plain_clear() {
     harness.inject(mouse(x, y + 1, tuirealm::event::KeyModifiers::CONTROL));
     harness.step();
     assert_eq!(
-        harness.model().test_music_owner().track_list.multi_selection(),
+        harness
+            .model()
+            .test_music_owner()
+            .track_list
+            .multi_selection(),
         &["track-1".to_string(), "track-2".to_string()]
     );
 
     harness.inject(mouse(x, y + 2, tuirealm::event::KeyModifiers::SHIFT));
     harness.step();
     assert_eq!(
-        harness.model().test_music_owner().track_list.multi_selection(),
+        harness
+            .model()
+            .test_music_owner()
+            .track_list
+            .multi_selection(),
         &[
             "track-1".to_string(),
             "track-2".to_string(),
@@ -172,11 +185,7 @@ fn music_wide_track_modifier_clicks_toggle_range_and_plain_clear() {
         ]
     );
 
-    harness.inject(mouse(
-        x,
-        y,
-        tuirealm::event::KeyModifiers::NONE,
-    ));
+    harness.inject(mouse(x, y, tuirealm::event::KeyModifiers::NONE));
     harness.step();
     assert!(harness
         .model()
@@ -195,7 +204,8 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     let mut app = make_music_group_app();
     app.panel_mode = PanelMode::Both;
     app.panel_focus = PanelFocus::Queue;
-    app.player_tab.set_items(vec![make_item("Queue Item", "Audio")], 0);
+    app.player_tab
+        .set_items(vec![make_item("Queue Item", "Audio")], 0);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -212,10 +222,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
             .first()
             .expect("tree root")
             .clone();
-        let row = music
-            .browser
-            .row_rect_for(&root)
-            .expect("painted tree row");
+        let row = music.browser.row_rect_for(&root).expect("painted tree row");
         (row.x, row.y)
     };
     let click = |column, row| {
@@ -247,7 +254,10 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
         .and_then(|panel| panel.test_list_rect())
         .expect("painted Music list area");
     assert!(list_area.contains(ratatui::layout::Position::new(tree_point.0, tree_point.1)));
-    assert!(harness.model().mouse_subscribed.contains(&ComponentId::Library));
+    assert!(harness
+        .model()
+        .mouse_subscribed
+        .contains(&ComponentId::Library));
 
     // Queue's ordinary context request remains the generic shell variant and
     // does not acquire Library focus merely because Music has a special arm.
@@ -271,21 +281,31 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
             Some((x, y)),
         )) if *x == queue_point.x && *y == queue_point.y
     )));
-    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Queue);
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Queue
+    );
 
     harness.inject(click(tree_point.0, tree_point.1));
     let outcome = harness.step();
-    assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::LibraryPanelFocus))
-            || matches!(message, Msg::Shell(ShellRequest::MusicArtistTracks { .. }))
-    }), "tree click messages: {:?}", outcome.raw_messages);
+    assert!(
+        outcome.raw_messages.iter().any(|message| {
+            matches!(message, Msg::Shell(ShellRequest::LibraryPanelFocus))
+                || matches!(message, Msg::Shell(ShellRequest::MusicArtistTracks { .. }))
+        }),
+        "tree click messages: {:?}",
+        outcome.raw_messages
+    );
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in outcome.messages {
         harness
             .model_mut()
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
-    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Library);
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Library
+    );
 
     // The click's mutation invalidated the completed frame; re-paint so the
     // right-click resolves the latest geometry.
@@ -304,7 +324,10 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
             .model_mut()
             .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
     }
-    assert_eq!(harness.model().app.effective_panel_focus(), PanelFocus::Library);
+    assert_eq!(
+        harness.model().app.effective_panel_focus(),
+        PanelFocus::Library
+    );
     harness.model_mut().sync_mounted_surfaces();
     let menu_id = ComponentId::Overlay(crate::app::components::OverlayId::ContextMenu);
     assert!(harness.model().application.mounted(&menu_id));
@@ -352,22 +375,13 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
                 .into_iter()
                 .find(|candidate| candidate.album_leaf_target() == target)
                 .expect("painted tree node");
-            let row = music
-                .browser
-                .row_rect_for(&node)
-                .expect("painted tree row");
+            let row = music.browser.row_rect_for(&node).expect("painted tree row");
             (row.x, row.y)
         };
         (point_for(None), point_for(Some("album-1")))
     };
-    assert!(list_area.contains(ratatui::layout::Position::new(
-        root_point.0,
-        root_point.1
-    )));
-    assert!(list_area.contains(ratatui::layout::Position::new(
-        album_point.0,
-        album_point.1
-    )));
+    assert!(list_area.contains(ratatui::layout::Position::new(root_point.0, root_point.1)));
+    assert!(list_area.contains(ratatui::layout::Position::new(album_point.0, album_point.1)));
 
     let click = |column, row| {
         Event::Mouse(MouseEvent {
@@ -382,9 +396,10 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     // target, so its click changes only the component-local selection.
     harness.inject(click(root_point.0, root_point.1));
     let outcome = harness.step();
-    assert!(outcome.messages.iter().all(|message| {
-        !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
-    }));
+    assert!(outcome
+        .messages
+        .iter()
+        .all(|message| { !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. })) }));
     assert!(harness.model().test_music_owner().selected_is_artist());
 
     // The root click's mutation invalidated the completed frame; re-paint so
@@ -417,9 +432,10 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
         .invalidate_paint();
     harness.inject(click(album_point.0, album_point.1));
     let outcome = harness.step();
-    assert!(outcome.messages.iter().all(|message| {
-        !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
-    }));
+    assert!(outcome
+        .messages
+        .iter()
+        .all(|message| { !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. })) }));
     assert_eq!(
         harness
             .model()
@@ -518,9 +534,7 @@ impl TreeDoubleClickNode {
             .into_iter()
             .find(|candidate| match self {
                 TreeDoubleClickNode::ArtistRoot => candidate.is_artist(),
-                TreeDoubleClickNode::AlbumLeaf => {
-                    candidate.album_leaf_target() == Some("album-1")
-                }
+                TreeDoubleClickNode::AlbumLeaf => candidate.album_leaf_target() == Some("album-1"),
             })
             .expect("the case's projected tree node")
     }
@@ -682,7 +696,12 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
             .apply(TreeOperation::EditFilter(node.filter_query().to_string()));
         draw_frame(&mut harness);
         assert!(
-            harness.model().test_music_owner().inline_search.results_len() == 0,
+            harness
+                .model()
+                .test_music_owner()
+                .inline_search
+                .results_len()
+                == 0,
             "{width}x{height}: production filtering leaves the flat carrier empty"
         );
     }
@@ -723,11 +742,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
     );
     if filtered {
         assert!(
-            harness
-                .model()
-                .test_music_owner()
-                .browser
-                .filter_active(),
+            harness.model().test_music_owner().browser.filter_active(),
             "{width}x{height}: the forced filtered projection stays until the filter closes"
         );
     }
@@ -922,9 +937,7 @@ fn tree_track_enter_follows_the_autoload_policy(
 #[rstest]
 #[case::enter(TrackActivation::Enter)]
 #[case::double_click(TrackActivation::DoubleClick)]
-fn tree_track_activation_with_an_empty_queue_plays_immediately(
-    #[case] kind: TrackActivation,
-) {
+fn tree_track_activation_with_an_empty_queue_plays_immediately(#[case] kind: TrackActivation) {
     let mut harness = expanded_music_tree_track_harness(true);
     let at = track_point(&harness, "track-2");
 

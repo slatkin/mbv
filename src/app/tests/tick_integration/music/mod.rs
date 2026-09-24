@@ -260,14 +260,14 @@ fn enter_on_inline_search_album_result_defers_to_async_activation() {
     let album = album_row("album-1", "First Album");
     harness.model_mut().app.album_indexes.insert(
         "lib-music".into(),
-        crate::app::AlbumIndexState::Ready(std::sync::Arc::new(crate::app::AlbumIndex::new(
-            vec![crate::app::AlbumSearchEntry {
+        crate::app::AlbumIndexState::Ready(std::sync::Arc::new(crate::app::AlbumIndex::new(vec![
+            crate::app::AlbumSearchEntry {
                 album: album.clone(),
                 ancestors: Vec::new(),
                 display_label: "First Album".into(),
                 search_text: "first album".into(),
-            }],
-        ))),
+            },
+        ]))),
     );
     {
         let workspace = harness.model_mut().test_music_owner_mut();
@@ -319,7 +319,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
     // "album-1", whose tracks the harness has cached).
     let nav_stack = vec![
         crate::app::BrowseLevel {
-        fetched_rows: 0,
+            fetched_rows: 0,
             parent_id: "lib-music".into(),
             title: "Music".into(),
             items: vec![album_row("group-0", "Alpha")],
@@ -336,7 +336,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
             music_grouping: None,
         },
         crate::app::BrowseLevel {
-        fetched_rows: 0,
+            fetched_rows: 0,
             parent_id: "group-0".into(),
             title: "Alpha".into(),
             items: vec![
@@ -550,10 +550,13 @@ fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
     assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Queue));
     assert!(matches!(outcome.router, RouterOutcome::FallThrough));
     assert!(
-        outcome
-            .messages
-            .iter()
-            .any(|m| matches!(m, Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Queue(_), _)))),
+        outcome.messages.iter().any(|m| matches!(
+            m,
+            Msg::Shell(ShellRequest::RowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Queue(_),
+                _
+            ))
+        )),
         "`.` falls through to the focused Queue component"
     );
 
@@ -572,15 +575,8 @@ fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
     );
 }
 
-
-#[cfg(test)]
-#[path = "tests_tick_integration_music_landing.rs"]
-mod landing;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_music_artist.rs"]
 mod artist;
-
+mod landing;
 
 /// Row 3.3: a playlist activation on a populated, dirty saved-playlist queue
 /// asks the replacement question through the production shell path; confirming
@@ -670,8 +666,9 @@ fn playlist_activation_on_a_populated_dirty_queue_asks_then_reaches_the_save_pro
 /// which care about `run_replacement`'s dismiss/focus tail rather than the
 /// key-routing path the Enter-family tests already cover.
 fn mount_playlists_sidebar(harness: &mut TickHarness) -> ComponentId {
-    harness.model_mut().app.pending_overlay =
-        Some(OverlayRequest::OpenSidebar(crate::app::SidebarId::Playlists));
+    harness.model_mut().app.pending_overlay = Some(OverlayRequest::OpenSidebar(
+        crate::app::SidebarId::Playlists,
+    ));
     harness.model_mut().sync_mounted_surfaces();
     let id = ComponentId::Overlay(OverlayId::Playlists);
     assert!(
@@ -727,9 +724,10 @@ fn playlist_load_on_empty_queue_dismisses_the_sidebar() {
         harness.model().app.pending_queue_replacement.is_none(),
         "an empty queue needs no replacement gate"
     );
-    assert!(!harness.model().application.mounted(&ComponentId::Modal(
-        ModalId::Confirm
-    )));
+    assert!(!harness
+        .model()
+        .application
+        .mounted(&ComponentId::Modal(ModalId::Confirm)));
 
     harness.model_mut().sync_mounted_surfaces();
 

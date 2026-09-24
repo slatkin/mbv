@@ -1,5 +1,7 @@
-use crate::app::state::types::settings::SettingsDestination;
 use super::*;
+use crate::app::state::types::settings::SettingsDestination;
+
+pub(crate) mod tick_integration;
 
 use ratatui::backend::TestBackend;
 
@@ -354,17 +356,18 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
     let client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     let item = make_item("Ready item", "Audio");
     // Completion computes the Continue Watching snapshot; the shell assigns it.
-    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Ok(crate::app::dispatch::session::service_startup::Startup {
-            client,
-            bootstrap: mbv_core::service_runtime::EmbyBootstrap {
-                continue_items: vec![item],
-                views: Vec::new(),
-            },
-            setup: mbv_core::config::EmbySetup::default(),
-        }),
-    })
+    let content = app
+        .apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
+            generation: app.emby_runtime.generation(),
+            result: Ok(crate::app::dispatch::session::service_startup::Startup {
+                client,
+                bootstrap: mbv_core::service_runtime::EmbyBootstrap {
+                    continue_items: vec![item],
+                    views: Vec::new(),
+                },
+                setup: mbv_core::config::EmbySetup::default(),
+            }),
+        })
         .expect("Ok startup must bootstrap the Returned Home content");
     assert_eq!(
         app.emby_runtime.state,
@@ -378,13 +381,14 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
 #[test]
 fn emby_completion_classifies_current_failures_without_client() {
     let mut app = make_app_stub();
-    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Err(mbv_core::service_runtime::EmbyFailure {
-            class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-            message: "HTTP 401 unauthorized".into(),
-        }),
-    });
+    let content =
+        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
+            generation: app.emby_runtime.generation(),
+            result: Err(mbv_core::service_runtime::EmbyFailure {
+                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
+                message: "HTTP 401 unauthorized".into(),
+            }),
+        });
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::NeedsAuthentication
@@ -396,12 +400,13 @@ fn emby_completion_classifies_current_failures_without_client() {
     );
 
     let mut app = make_app_stub();
-    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-        generation: app.emby_runtime.generation(),
-        result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
-            "connection refused",
-        )),
-    });
+    let content =
+        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
+            generation: app.emby_runtime.generation(),
+            result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
+                "connection refused",
+            )),
+        });
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Unavailable
@@ -418,14 +423,15 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
     // Home content is Model-owned (task 5.3d): a stale completion returns no
     // snapshot, so the shell leaves `home_content` untouched — the invariance
     // that used to be asserted on `app.home.continue_items` here.
-    let content = app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-        generation: stale_generation,
-        result: Ok(crate::app::dispatch::session::service_startup::Startup {
-            client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
-            bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
-            setup: mbv_core::config::EmbySetup::default(),
-        }),
-    });
+    let content =
+        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
+            generation: stale_generation,
+            result: Ok(crate::app::dispatch::session::service_startup::Startup {
+                client: mbv_core::api::EmbyClient::new(crate::config::Config::default()),
+                bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
+                setup: mbv_core::config::EmbySetup::default(),
+            }),
+        });
     assert_eq!(
         app.emby_runtime.state,
         mbv_core::service_runtime::ServiceState::Connecting

@@ -10,7 +10,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 use crate::app::components::{OverlayId, UserEvent};
 use crate::app::input::router::RouterOutcome;
 use crate::app::tests::make_app_stub;
-use crate::app::tests_tick_harness::TickHarness;
+use crate::app::tests::tick_integration::harness::TickHarness;
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -56,9 +56,12 @@ fn configured_rebind_fires_through_tick() {
         .model_mut()
         .dispatch_router_command(crate::app::dispatch::action::Command::OpenHelp);
     assert!(
-        harness.model().application.mounted(&crate::app::components::ComponentId::Overlay(
-            OverlayId::Help
-        )),
+        harness
+            .model()
+            .application
+            .mounted(&crate::app::components::ComponentId::Overlay(
+                OverlayId::Help
+            )),
         "Help must be mounted after the configured chord"
     );
 
@@ -151,11 +154,7 @@ fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
 #[test]
 fn shift_n_default_fires_next_track_through_tick() {
     let app = make_app_stub();
-    app.player
-        .status
-        .lock()
-        .unwrap()
-        .active = true;
+    app.player.status.lock().unwrap().active = true;
     let mut harness = TickHarness::new(app);
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('N'),

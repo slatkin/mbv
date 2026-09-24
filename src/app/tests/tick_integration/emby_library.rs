@@ -1,18 +1,20 @@
 use ratatui::backend::TestBackend;
 use ratatui::layout::Position;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::LibEvent;
 use crate::app::render::make_movie_app;
+use crate::app::LibEvent;
 
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{install_test_emby, make_session};
 use std::time::{Duration, Instant};
-use crate::app::tests_tick_harness::TickHarness;
 
 /// The migrated Movies/HomeVideos/Generic owner inside the mounted
 /// `LibraryPanel` (task 6.1): the panel is the library area's one event
@@ -21,7 +23,8 @@ use crate::app::tests_tick_harness::TickHarness;
 /// these kinds).
 fn browser_owner(harness: &TickHarness) -> &BrowserOwner {
     let (_, key, _) = harness
-        .model().active_emby_library_owner()
+        .model()
+        .active_emby_library_owner()
         .expect("the active library's owner has migrated");
     harness
         .model()
@@ -75,7 +78,10 @@ fn selector_click_point(harness: &TickHarness, target: usize) -> Position {
     Position::new(rect.x, rect.y)
 }
 
-fn click_selector(harness: &mut TickHarness, target: usize) -> crate::app::tests_tick_harness::StepOutcome {
+fn click_selector(
+    harness: &mut TickHarness,
+    target: usize,
+) -> crate::app::tests::tick_integration::harness::StepOutcome {
     let at = selector_click_point(harness, target);
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
@@ -155,8 +161,18 @@ fn mounted_flat_latest_populates_from_destination_fetch(
     assert!(browser_owner(&harness).latest_mode());
 
     let (library_id, items, snapshot_title) = loop {
-        match harness.model().app.lib_rx.recv().expect("destination fetch completes") {
-            LibEvent::EmbyLatestSnapshotFetched { library_id, title, items } => {
+        match harness
+            .model()
+            .app
+            .lib_rx
+            .recv()
+            .expect("destination fetch completes")
+        {
+            LibEvent::EmbyLatestSnapshotFetched {
+                library_id,
+                title,
+                items,
+            } => {
                 break (library_id, items, title);
             }
             event @ LibEvent::Loaded { .. } => harness.model_mut().app.handle_lib_event(event),
@@ -177,7 +193,10 @@ fn mounted_flat_latest_populates_from_destination_fetch(
     harness.model_mut().update_emby_latest_snapshot(
         library_id,
         snapshot_title,
-        items.into_iter().map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item))).collect(),
+        items
+            .into_iter()
+            .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+            .collect(),
     );
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
@@ -234,9 +253,7 @@ fn mounted_flat_latest_marker_acknowledges_through_async_snapshot_replacement(
     let mut item = crate::app::tests::make_item("New movie", "Movie");
     item.id = "new-movie".into();
     item.date_added = "1970-01-01T00:02:00Z".into();
-    let replacement_item = || {
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item.clone()))
-    };
+    let replacement_item = || mbv_core::playback_queue::QueueItem::Emby(Box::new(item.clone()));
     harness.model_mut().update_emby_latest_snapshot(
         "lib-movies".into(),
         title.into(),
@@ -338,10 +355,10 @@ fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16)
     let _ = draw(&mut harness, width, 30);
 
     let outcome = click_selector(&mut harness, 0);
-    assert!(outcome.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::EmbyLibraryLatestSelected)
-    )));
+    assert!(outcome
+        .raw_messages
+        .iter()
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))));
     dispatch_messages(&mut harness, outcome.messages);
     assert!(browser_owner(&harness).latest_mode());
     assert!(
@@ -363,13 +380,16 @@ fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16)
             modifiers: KeyModifiers::CONTROL,
         }));
         let outcome = harness.step();
-        assert!(outcome.raw_messages.iter().any(|message| match (message, expected_play) {
-            (Msg::Shell(ShellRequest::EmbyLibraryPlay { item }), true)
-            | (Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }), false) => {
-                item.id == "latest-movie"
-            }
-            _ => false,
-        }));
+        assert!(outcome
+            .raw_messages
+            .iter()
+            .any(|message| match (message, expected_play) {
+                (Msg::Shell(ShellRequest::EmbyLibraryPlay { item }), true)
+                | (Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }), false) => {
+                    item.id == "latest-movie"
+                }
+                _ => false,
+            }));
     }
 }
 
@@ -396,7 +416,10 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
         vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(latest))],
     );
     let mut harness = TickHarness::new(app);
-    harness.model_mut().tv_latest_snapshots.insert("lib-movies".into(), snapshot);
+    harness
+        .model_mut()
+        .tv_latest_snapshots
+        .insert("lib-movies".into(), snapshot);
     harness.model_mut().sync_mounted_surfaces();
     let _ = draw(&mut harness, 100, 30);
 
@@ -409,7 +432,9 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
         Msg::Shell(ShellRequest::EmbyLibraryLatestExit { target: usize::MAX })
     )));
     dispatch_messages(&mut harness, outcome.messages);
-    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+    assert!(harness.model().app.libs[0].nav_stack[0]
+        .letter_filter
+        .is_none());
 
     // Complete the refresh requested by the clear intent with the full
     // unfiltered result set, then verify the mounted owner navigates that set.
@@ -426,7 +451,9 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
     assert_eq!(browser_owner(&harness).cursor(), 1);
     assert_eq!(
         browser_owner(&harness).launch_snapshot().1,
-        Some(mbv_core::config::LibraryItemIdentity::Emby { id: "movie-z".into() })
+        Some(mbv_core::config::LibraryItemIdentity::Emby {
+            id: "movie-z".into()
+        })
     );
 
     // Returning to the previously active bucket still selects that bucket.
@@ -453,7 +480,9 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
         crate::app::state::types::playback::DestinationLatestSnapshot::new(
             "Movies".into(),
             crate::app::state::types::playback::DestinationLatestSource::Emby("lib-movies".into()),
-            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(bucket_latest))],
+            vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(
+                bucket_latest,
+            ))],
         ),
     );
     bucket_harness.model_mut().sync_mounted_surfaces();
@@ -525,19 +554,26 @@ fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16
         .insert("lib-movies".into(), snapshot);
     harness.model_mut().sync_mounted_surfaces();
     let _ = draw(&mut harness, width, 30);
-    assert_eq!(browser_owner(&harness).cursor(), 1, "initial group row selected");
+    assert_eq!(
+        browser_owner(&harness).cursor(),
+        1,
+        "initial group row selected"
+    );
 
     let outcome = click_selector(&mut harness, 0);
-    assert!(outcome.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::EmbyLibraryLatestSelected)
-    )));
+    assert!(outcome
+        .raw_messages
+        .iter()
+        .any(|message| matches!(message, Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))));
     dispatch_messages(&mut harness, outcome.messages);
     let state = harness.model().app.libs[0]
         .feed_home_video
         .as_ref()
         .expect("group state retained");
-    assert_eq!((state.selected_group, state.video_cursor, state.video_scroll), (1, 1, 1));
+    assert_eq!(
+        (state.selected_group, state.video_cursor, state.video_scroll),
+        (1, 1, 1)
+    );
     assert!(browser_owner(&harness).latest_mode());
 
     let _ = draw(&mut harness, width, 30);
@@ -551,7 +587,10 @@ fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16
         .feed_home_video
         .as_ref()
         .expect("group state retained after return");
-    assert_eq!((state.selected_group, state.video_cursor, state.video_scroll), (1, 1, 1));
+    assert_eq!(
+        (state.selected_group, state.video_cursor, state.video_scroll),
+        (1, 1, 1)
+    );
     assert!(!browser_owner(&harness).latest_mode());
     assert_eq!(browser_owner(&harness).cursor(), 1);
 }
@@ -573,10 +612,16 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
+        matches!(
+            message,
+            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 })
+        )
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
-    assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0
+    );
 
     let _ = draw(&mut harness, 100, 30);
 }
@@ -639,10 +684,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
         outcome
             .messages
             .iter()
-            .any(|message| matches!(
-                message,
-                Msg::Shell(ShellRequest::InlineSearchQueryStarted)
-            )),
+            .any(|message| matches!(message, Msg::Shell(ShellRequest::InlineSearchQueryStarted))),
         "the first keystroke emits the corpus-load request: {:?}",
         outcome.messages
     );
@@ -672,7 +714,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
             lib_idx: 0,
             parent_id: "lib-movies".into(),
             level: Box::new(crate::app::BrowseLevel {
-        fetched_rows: 0,
+                fetched_rows: 0,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
                 items: vec![
@@ -689,7 +731,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
                 loading: false,
                 all_items: None,
                 letter_filter: None,
-            tv_content_mode: None,
+                tv_content_mode: None,
                 music_grouping: None,
             }),
         });
@@ -790,7 +832,9 @@ fn launch_reanchor_unfiltered_scope_keeps_full_movie_library() {
 
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+    assert!(harness.model().app.libs[0].nav_stack[0]
+        .letter_filter
+        .is_none());
     assert!(harness.model().app.pending_launch_state.is_none());
     assert_eq!(
         browser_owner(&harness).launch_snapshot().1,
@@ -806,7 +850,10 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_movie_pill() {
     app.libs[0].library_total = Some(100);
     let level = &mut app.libs[0].nav_stack[0];
     level.total_count = 100;
-    level.letter_filter = crate::app::render::LetterFilter::for_index_for_kind(2, crate::app::render::LetterFilterKind::Movie);
+    level.letter_filter = crate::app::render::LetterFilter::for_index_for_kind(
+        2,
+        crate::app::render::LetterFilterKind::Movie,
+    );
     level.items = vec![crate::app::tests::make_item("Movie G", "Movie")];
     level.loading = false;
     let mut harness = TickHarness::new(app);
@@ -828,7 +875,9 @@ fn launch_reanchor_unfiltered_scope_clears_an_active_movie_pill() {
     });
 
     harness.model_mut().sync_mounted_surfaces();
-    assert!(harness.model().app.libs[0].nav_stack[0].letter_filter.is_none());
+    assert!(harness.model().app.libs[0].nav_stack[0]
+        .letter_filter
+        .is_none());
     assert!(harness.model().app.pending_launch_state.is_some());
 
     let level = &mut harness.model_mut().app.libs[0].nav_stack[0];
@@ -891,10 +940,14 @@ fn browser_narrow_tick_click_uses_retained_geometry() {
             Msg::Shell(ShellRequest::EmbyLibraryRowClick { target: Some(target) })
                 if target == "movie-focused"
         )),
-        "the painted fixed-row browser resolves to the selected row: {:?}", outcome.raw_messages
+        "the painted fixed-row browser resolves to the selected row: {:?}",
+        outcome.raw_messages
     );
     assert_eq!(browser_owner(&harness).cursor(), 0);
-    assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0
+    );
     let _ = draw(&mut harness, 60, 30);
 }
 
@@ -917,7 +970,10 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
+        matches!(
+            message,
+            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 })
+        )
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
 
@@ -979,7 +1035,11 @@ fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
     harness.model_mut().sync_mounted_surfaces();
 
     let confirm_id = ComponentId::Modal(crate::app::components::ModalId::Confirm);
-    assert!(harness.model().application.get_component(&confirm_id).is_some());
+    assert!(harness
+        .model()
+        .application
+        .get_component(&confirm_id)
+        .is_some());
     assert_eq!(harness.model().application.focus(), Some(&confirm_id));
     assert!(command_rx.try_recv().is_err(), "play stayed unsubmitted");
 
@@ -996,15 +1056,25 @@ fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
     }
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(harness.model().application.get_component(&confirm_id).is_none());
+    assert!(harness
+        .model()
+        .application
+        .get_component(&confirm_id)
+        .is_none());
     assert!(!harness.model().app.player.is_remote());
     assert!(harness.model().app.player.status.lock().unwrap().active);
     assert!(!harness.model().app.direct_remote_connected);
     assert!(harness.model().app.remote_player_tab.is_none());
-    assert_eq!(harness.model().app.queue_scope, crate::app::QueueScope::Local);
+    assert_eq!(
+        harness.model().app.queue_scope,
+        crate::app::QueueScope::Local
+    );
     let local_items = harness.model().app.player_tab.emby_items();
     assert_eq!(
-        local_items.first().expect("local playback queue is non-empty").id,
+        local_items
+            .first()
+            .expect("local playback queue is non-empty")
+            .id,
         "movie-focused"
     );
     assert!(command_rx.try_iter().any(|command| {
@@ -1048,7 +1118,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
         loading: false,
         all_items: None,
         letter_filter: None,
-            tv_content_mode: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     let mut harness = TickHarness::new(app);
@@ -1082,7 +1152,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
         loading: false,
         all_items: None,
         letter_filter: None,
-            tv_content_mode: None,
+        tv_content_mode: None,
         music_grouping: None,
     };
     harness

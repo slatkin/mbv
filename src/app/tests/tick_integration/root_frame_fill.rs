@@ -11,7 +11,7 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 
 use crate::app::render::{make_movie_app, make_queue_app};
-use crate::app::tests_tick_harness::TickHarness;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
 
 const SENTINEL: &str = "\u{2603}";

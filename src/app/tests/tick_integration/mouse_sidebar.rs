@@ -1,17 +1,15 @@
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::dispatch::action::Command;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
     ComponentId, HelpComponent, Msg, OverlayId, PlaylistsComponent, QueueComponent, ShellRequest,
     TerminalObserverEvent, UserEvent,
 };
+use crate::app::dispatch::action::Command;
+use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::PanelFocus;
 
 fn key(code: Key) -> Event<UserEvent> {
@@ -46,7 +44,10 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
         outcome.router,
         crate::app::input::router::RouterOutcome::Command(Command::OpenPlaylists)
     ));
-    assert!(outcome.messages.is_empty(), "the router consumes F4's leaf message");
+    assert!(
+        outcome.messages.is_empty(),
+        "the router consumes F4's leaf message"
+    );
     harness
         .model_mut()
         .dispatch_router_command(Command::OpenPlaylists);
@@ -124,12 +125,7 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
     assert!(outcome
         .raw_messages
         .iter()
-        .any(|msg| {
-            matches!(
-                msg,
-                Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
-            )
-        }));
+        .any(|msg| { matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)) }));
     let help = harness
         .model_mut()
         .application
@@ -164,7 +160,8 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     );
     let library_cursor_before = {
         let (_, key, _) = harness
-            .model().active_emby_library_owner()
+            .model()
+            .active_emby_library_owner()
             .expect("the Movies owner has migrated");
         let panel = harness
             .model_mut()

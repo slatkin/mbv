@@ -1,11 +1,4 @@
 #[cfg(test)]
-#[path = "tests.rs"]
-pub(crate) mod tests;
-
-
-
-
-#[cfg(test)]
 #[path = "tests_library_position.rs"]
 mod tests_library_position;
 
@@ -171,92 +164,8 @@ mod tests_routing_matrix_playback;
 mod tests_routing_matrix_globals;
 
 #[cfg(test)]
-#[path = "tests_tick_harness.rs"]
-pub(crate) mod tests_tick_harness;
-
-#[cfg(test)]
-#[path = "tests_tick_integration.rs"]
-mod tests_tick_integration;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_keybinds.rs"]
-mod tests_tick_integration_keybinds; // Configured keybinds route through the live tick (task 3.3)
-
-#[cfg(test)]
-#[path = "tests_tick_integration_prefix_mode.rs"]
-mod tests_tick_integration_prefix_mode; // Prefix mode through the live tick (tasks 6.1, 6.3)
-
-#[cfg(test)]
-#[path = "tests_tick_integration_mouse.rs"]
-mod tests_tick_integration_mouse;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_library_panel.rs"]
-mod tests_tick_integration_library_panel; // Library panel ownership tick coverage (task 5.9)
-
-#[cfg(test)]
-#[path = "tests_tick_integration_wide_split.rs"]
-mod tests_tick_integration_wide_split;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_library_scroll.rs"]
-mod tests_tick_integration_library_scroll;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_music_mouse.rs"]
-mod tests_tick_integration_music_mouse;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_home.rs"]
-mod tests_tick_integration_home; // Home ownership tick coverage
-
-#[cfg(test)]
-#[path = "tests_tick_integration_emby_library.rs"]
-mod tests_tick_integration_emby_library; // Emby library ownership tick coverage
-
-#[cfg(test)]
-#[path = "tests_tick_integration_tv.rs"]
-mod tests_tick_integration_tv; // TV ownership tick coverage
-
-#[cfg(test)]
-#[path = "tests_tick_integration_navigate_item.rs"]
-mod tests_tick_integration_navigate_item; // Queue "Go to Library" landing tick coverage
-
-#[cfg(test)]
-#[path = "tests_tick_integration_feeds.rs"]
-mod tests_tick_integration_feeds; // Feeds ownership tick coverage
-
-#[cfg(test)]
-#[path = "tests_tick_integration_podcast.rs"]
-mod tests_tick_integration_podcast; // Podcast ownership tick coverage
-
-#[cfg(test)]
-#[path = "tests_tick_integration_book.rs"]
-mod tests_tick_integration_book; // Book ownership tick coverage
-
-#[cfg(test)]
-#[path = "tests_tick_integration_mouse_sidebar.rs"]
-mod tests_tick_integration_mouse_sidebar;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_queue_playback.rs"]
-mod tests_tick_integration_queue_playback; // Queue playback panel ownership tick coverage (task 3.7)
-
-#[cfg(test)]
-#[path = "tests_tick_integration_disconnect.rs"]
-mod tests_tick_integration_disconnect; // Remote disconnect event through the tick sync pass (task 3.1)
-
-#[cfg(test)]
-#[path = "tests_tick_integration_playback_title_parts.rs"]
-mod tests_tick_integration_playback_title_parts; // Now-playing title-parts projection tick coverage (task 5.2)
-
-#[cfg(test)]
 #[path = "actions_tests_queue_state_reseat.rs"]
 mod actions_tests_queue_state_reseat;
-
-#[cfg(test)]
-#[path = "tests_tick_integration_root_frame_fill.rs"]
-mod tests_tick_integration_root_frame_fill; // RootFrame placement fill sentinel proof (task 12.2)
 
 #[cfg(test)]
 #[path = "tests_narrow_browse_migration.rs"]

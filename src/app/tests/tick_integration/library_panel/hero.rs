@@ -166,16 +166,9 @@ fn migrated_movie_with_hero(item: mbv_core::api::EmbyItem) -> TickHarness {
 /// protocol map empty makes the following real shell sync/draw pass prove the
 /// projection's one Wide protocol build and the normal Narrow lazy protocol
 /// path, rather than testing a prebuilt painter fixture.
-fn seed_cached_hero_image(
-    harness: &mut TickHarness,
-    cache_key: &str,
-    rgba: [u8; 4],
-) {
-    let image = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-        40,
-        20,
-        image::Rgba(rgba),
-    ));
+fn seed_cached_hero_image(harness: &mut TickHarness, cache_key: &str, rgba: [u8; 4]) {
+    let image =
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(40, 20, image::Rgba(rgba)));
     harness.model_mut().app.card_image_loading.remove(cache_key);
     harness.model_mut().app.card_image_states.insert(
         cache_key.to_owned(),
@@ -188,11 +181,7 @@ fn seed_cached_hero_image(
     );
 }
 
-fn draw_library_at(
-    harness: &mut TickHarness,
-    width: u16,
-    height: u16,
-) -> Terminal<TestBackend> {
+fn draw_library_at(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
@@ -238,8 +227,16 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
     let mut decorated_item = landscape_hero_item("panel-logo");
     decorated_item.image_tags.logo = "logo-tag".into();
     let mut decorated = migrated_home_with_hero(decorated_item, 160);
-    seed_cached_hero_image(&mut decorated, "panel-logo:Backdrop,Primary", [20, 40, 60, 255]);
-    seed_cached_hero_image(&mut decorated, "panel-logo:Logo:logo-tag", [220, 100, 20, 128]);
+    seed_cached_hero_image(
+        &mut decorated,
+        "panel-logo:Backdrop,Primary",
+        [20, 40, 60, 255],
+    );
+    seed_cached_hero_image(
+        &mut decorated,
+        "panel-logo:Logo:logo-tag",
+        [220, 100, 20, 128],
+    );
     let _wide_frame = settle_library_frame(&mut decorated, 160, 40);
 
     let wide_geometry = panel_of(&decorated)
@@ -297,7 +294,11 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
         decorated.model().app.card_image_states.is_empty(),
         "the real responsive resize resets image state before re-projection"
     );
-    seed_cached_hero_image(&mut decorated, "panel-logo:Backdrop,Primary", [20, 40, 60, 255]);
+    seed_cached_hero_image(
+        &mut decorated,
+        "panel-logo:Backdrop,Primary",
+        [20, 40, 60, 255],
+    );
     let fetch_calls_before = decorated.model().app.card_image_fetch_calls;
     let _narrow_frame = draw_library_at(&mut decorated, 80, 40);
     let base_entry = decorated
@@ -315,7 +316,10 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
         fetch_calls_before,
         "the non-Wide draw issues no image fetch"
     );
-    assert!(!logo_reserved(&decorated), "non-Wide does not reserve the Wide-only Logo");
+    assert!(
+        !logo_reserved(&decorated),
+        "non-Wide does not reserve the Wide-only Logo"
+    );
 
     // Explicit negative leg: a Wide Portrait Movie with a declared Logo is
     // still a single undecorated base protocol.
@@ -324,8 +328,16 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
     portrait_item.image_tags.primary = "poster-tag".into();
     portrait_item.image_tags.logo = "logo-tag".into();
     let mut portrait = migrated_home_with_hero(portrait_item, 160);
-    seed_cached_hero_image(&mut portrait, "panel-portrait:Primary,Backdrop", [20, 40, 60, 255]);
-    seed_cached_hero_image(&mut portrait, "panel-portrait:Logo:logo-tag", [220, 100, 20, 128]);
+    seed_cached_hero_image(
+        &mut portrait,
+        "panel-portrait:Primary,Backdrop",
+        [20, 40, 60, 255],
+    );
+    seed_cached_hero_image(
+        &mut portrait,
+        "panel-portrait:Logo:logo-tag",
+        [220, 100, 20, 128],
+    );
     let _portrait_frame = settle_library_frame(&mut portrait, 160, 40);
     let portrait_geometry = panel_of(&portrait)
         .and_then(|panel| panel.test_wide_geometry())
@@ -350,7 +362,10 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
         None,
         "a Wide Portrait Movie remains undecorated"
     );
-    assert!(!logo_reserved(&portrait), "a Wide Portrait Movie does not reserve a Logo");
+    assert!(
+        !logo_reserved(&portrait),
+        "a Wide Portrait Movie does not reserve a Logo"
+    );
 }
 
 #[test]
@@ -362,7 +377,11 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
     // the base still in flight reserves nothing but the base itself.
     drop(draw_frame_sized(&mut wide));
     wide.model_mut().sync_mounted_surfaces();
-    assert!(wide.model().app.card_image_loading.contains("logo-wide:Backdrop,Primary"));
+    assert!(wide
+        .model()
+        .app
+        .card_image_loading
+        .contains("logo-wide:Backdrop,Primary"));
     assert!(!logo_reserved(&wide));
     assert_eq!(wide.model().app.card_image_fetch_calls, 1);
 
@@ -370,7 +389,11 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
     // exactly its declared Logo.
     seed_cached_hero_image(&mut wide, "logo-wide:Backdrop,Primary", [20, 40, 60, 255]);
     wide.model_mut().sync_mounted_surfaces();
-    assert!(wide.model().app.card_image_loading.contains("logo-wide:Logo:logo-tag"));
+    assert!(wide
+        .model()
+        .app
+        .card_image_loading
+        .contains("logo-wide:Logo:logo-tag"));
     assert_eq!(wide.model().app.card_image_fetch_calls, 2);
 
     // A base that resolved empty can never be decorated, so it reserves no
@@ -379,14 +402,21 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
     let mut empty_base_item = landscape_hero_item("logo-empty-base");
     empty_base_item.image_tags.logo = "logo-tag".into();
     let mut empty_base = migrated_home_with_hero(empty_base_item, 160);
-    empty_base.model_mut().app.card_image_loading.remove("logo-empty-base:Backdrop,Primary");
+    empty_base
+        .model_mut()
+        .app
+        .card_image_loading
+        .remove("logo-empty-base:Backdrop,Primary");
     empty_base.model_mut().app.card_image_states.insert(
         "logo-empty-base:Backdrop,Primary".to_owned(),
         crate::app::images::CachedImage::empty(),
     );
     let empty_base_calls_before = empty_base.model().app.card_image_fetch_calls;
     let _empty_base_frame = settle_library_frame(&mut empty_base, 160, 40);
-    assert!(!logo_reserved(&empty_base), "a resolved-empty base reserves no Logo");
+    assert!(
+        !logo_reserved(&empty_base),
+        "a resolved-empty base reserves no Logo"
+    );
     assert_eq!(
         empty_base.model().app.card_image_fetch_calls,
         empty_base_calls_before,
@@ -418,7 +448,8 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
 fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
     let mut movie = crate::app::tests::make_item("Hero", "Movie");
     movie.image_tags.thumb = "tag".into();
-    movie.overview = "A deliberately long overview that occupies several lines in the hero box. ".repeat(24);
+    movie.overview =
+        "A deliberately long overview that occupies several lines in the hero box. ".repeat(24);
     movie.people = (0..20)
         .map(|index| mbv_core::api::EmbyPerson {
             name: format!("Actor {index}"),
@@ -428,17 +459,25 @@ fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
         .collect();
     let mut harness = migrated_movie_with_hero(movie);
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 70)).unwrap();
-    terminal.draw(|frame| harness.model_mut().draw_frame(frame, false, false)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     let panel = harness
         .model()
         .application
         .get_component(&ComponentId::Library)
-        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
         .expect("Library panel mounted");
     let geometry = panel.test_wide_geometry().expect("Wide geometry painted");
     assert!(geometry.hero_area.width > 0);
-    let box_rect = geometry.overview_box.expect("overflowing Movie overview box");
+    let box_rect = geometry
+        .overview_box
+        .expect("overflowing Movie overview box");
     let max_offset = geometry.overview_content_length - geometry.overview_viewport;
     assert!(max_offset > 0);
     let before = panel.test_hero_scroll_offset();
@@ -450,13 +489,20 @@ fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+        matches!(
+            message,
+            Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
+        )
     }));
     let after = harness
         .model()
         .application
         .get_component(&ComponentId::Library)
-        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
         .unwrap()
         .test_hero_scroll_offset();
     assert!(after > before);
@@ -466,13 +512,19 @@ fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
     fitting_movie.image_tags.thumb = "tag".into();
     fitting_movie.overview = "Short overview".into();
     let mut fitting = migrated_movie_with_hero(fitting_movie);
-    terminal.draw(|frame| fitting.model_mut().draw_frame(frame, false, false)).unwrap();
+    terminal
+        .draw(|frame| fitting.model_mut().draw_frame(frame, false, false))
+        .unwrap();
     fitting.model_mut().sync_mounted_surfaces();
     let fitting_box = fitting
         .model()
         .application
         .get_component(&ComponentId::Library)
-        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
         .and_then(|panel| panel.test_wide_geometry())
         .and_then(|geometry| geometry.overview_box)
         .expect("fitting Movie overview box");
@@ -484,7 +536,10 @@ fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
     }));
     let outcome = fitting.step();
     assert!(outcome.raw_messages.iter().all(|message| {
-        !matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+        !matches!(
+            message,
+            Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
+        )
     }));
 }
 

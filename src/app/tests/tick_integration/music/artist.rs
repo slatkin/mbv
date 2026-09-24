@@ -1,5 +1,7 @@
+use super::landing::{
+    draw_music_frame, mounted_music_app_at, music_panel, music_panel_mut, tick_key,
+};
 use super::*;
-use super::landing::{draw_music_frame, mounted_music_app_at, music_panel, music_panel_mut, tick_key};
 use crate::app::components::list::tree_browser::{TreeConsumed, TreeOperation};
 
 /// Tasks 6.1–6.3 correction: a Service `ArtistItems` root's Workspace rows come
@@ -102,7 +104,10 @@ fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_sel
         "the fixture focuses the Service artist root"
     );
     harness.model_mut().push_music_workspace_content();
-    harness.model_mut().test_music_owner_mut().enter_track_focus();
+    harness
+        .model_mut()
+        .test_music_owner_mut()
+        .enter_track_focus();
     assert!(harness.model().test_music_owner().track_focused());
     tick_key(&mut harness, Key::Down);
 
@@ -154,8 +159,7 @@ fn mounted_neighbour_app() -> crate::app::App {
         let level = app.libs[0].nav_stack.last_mut().expect("album level");
         level.items[0].name = "Album 1".into();
         for number in 2..=5 {
-            let mut album =
-                crate::app::tests::make_item(&format!("Album {number}"), "MusicAlbum");
+            let mut album = crate::app::tests::make_item(&format!("Album {number}"), "MusicAlbum");
             album.id = format!("album-{number}");
             album.artist = "Alpha".into();
             album.production_year = 2001;
@@ -303,7 +307,12 @@ fn enter_on_an_unfiltered_artist_root_enters_wide_workspace_without_relayout() {
         .expect("Wide geometry")
         .clone();
     assert_eq!(
-        (before.browser, before.hero, before.list_panel, before.list_area),
+        (
+            before.browser,
+            before.hero,
+            before.list_panel,
+            before.list_area
+        ),
         (after.browser, after.hero, after.list_panel, after.list_area),
         "Workspace entry preserves pane geometry"
     );
@@ -381,13 +390,11 @@ fn enter_on_a_filtered_artist_root_toggles_locally_in_wide_and_non_wide() {
             .selected_target()
             .cloned()
             .expect("artist root selected");
-        assert!(
-            harness
-                .model()
-                .test_music_owner()
-                .browser
-                .is_expanded(&root)
-        );
+        assert!(harness
+            .model()
+            .test_music_owner()
+            .browser
+            .is_expanded(&root));
 
         tick_key(&mut harness, Key::Char('/'));
         harness
@@ -480,7 +487,10 @@ fn artist_and_album_hero_workspaces_switch_atomically_in_wide() {
 fn two_artist_app() -> crate::app::App {
     let mut app = crate::app::render::make_music_group_app();
     let level = app.libs[0].nav_stack.last_mut().expect("album level");
-    for (name, id) in [("Beta Session", "album-beta-1"), ("Beta Nights", "album-beta-2")] {
+    for (name, id) in [
+        ("Beta Session", "album-beta-1"),
+        ("Beta Nights", "album-beta-2"),
+    ] {
         let mut album = crate::app::tests::make_item(name, "MusicAlbum");
         album.id = id.into();
         album.artist = "Beta".into();
@@ -688,8 +698,8 @@ fn neighbour_prefetch_payload_is_the_painted_trees_order_in_both_presentations()
                 .model()
                 .test_music_owner()
                 .browser
-            .selected_target()
-            .and_then(|target| target.album_leaf_target()),
+                .selected_target()
+                .and_then(|target| target.album_leaf_target()),
             Some("album-3"),
             "{width}x{height}: the selection survives the sync"
         );

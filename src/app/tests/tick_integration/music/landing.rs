@@ -19,7 +19,7 @@ fn landed_album_level(
         loading: false,
         all_items: None,
         letter_filter: None,
-            tv_content_mode: None,
+        tv_content_mode: None,
         music_grouping: None,
     }
 }
@@ -934,4 +934,3 @@ fn rejected_non_grouped_music_shape_flashes_and_leaves_every_committed_value_unc
         "the retained component selection is unchanged"
     );
 }
-

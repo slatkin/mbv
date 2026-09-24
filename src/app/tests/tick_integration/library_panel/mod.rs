@@ -25,11 +25,11 @@ use crate::app::components::library_panel::{
     hero_content_emby, ArtworkShape, HeroArtwork, HeroContentData, HeroFacts, LibraryKey,
 };
 use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, MediaListSurfaceInput,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
 };
 use crate::app::components::msg::{Msg, TerminalObserverEvent};
-use crate::app::components::{LibraryKind, ComponentId};
-use crate::app::tests_tick_harness::TickHarness;
+use crate::app::components::{ComponentId, LibraryKind};
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
 
 // ── Fixture content owner ───────────────────────────────────────────────
@@ -674,10 +674,10 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
     }));
     let _ = harness.step();
     assert!(
-        log.borrow()
-            .events
-            .iter()
-            .any(|event| matches!(event, LibrarySlotEvent::List(MediaListSurfaceInput::Click(_)))),
+        log.borrow().events.iter().any(|event| matches!(
+            event,
+            LibrarySlotEvent::List(MediaListSurfaceInput::Click(_))
+        )),
         "the narrow list click outside the stale Wide rect reaches the owner"
     );
 }
@@ -759,10 +759,10 @@ fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
         modifiers: tuirealm::event::KeyModifiers::NONE,
     }));
     let outcome = harness.step();
-    assert!(outcome.raw_messages.iter().any(|msg| matches!(
-        msg,
-        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
-    )));
+    assert!(outcome
+        .raw_messages
+        .iter()
+        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))));
     drop(draw_frame_sized(&mut harness));
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
@@ -793,7 +793,10 @@ fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
         }));
         let outcome = harness.step();
         assert!(outcome.raw_messages.iter().any(|message| {
-            matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            matches!(
+                message,
+                Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
+            )
         }));
     }
     assert_eq!(log.borrow().selections.last(), Some(&Some("gamma".into())));
@@ -809,8 +812,7 @@ fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
         .and_then(|panel| panel.test_overlay_workspace_box())
         .expect("the overlay's Workspace box painted");
     assert_eq!(
-        workspace_content.height,
-        1,
+        workspace_content.height, 1,
         "the Workspace viewport holds a single row"
     );
     assert_eq!(
@@ -859,7 +861,10 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
         .workspace_state();
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
     harness.model_mut().sync_mounted_surfaces();
-    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Queue));
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Queue)
+    );
     harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
         code: tuirealm::event::Key::Down,
         modifiers: tuirealm::event::KeyModifiers::NONE,
@@ -873,9 +878,12 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
         modifiers: tuirealm::event::KeyModifiers::NONE,
     }));
     let _ = harness.step();
-    assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
-        .is_some(), "Queue Esc must not dismiss Library overlay");
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "Queue Esc must not dismiss Library overlay"
+    );
     drop(draw_frame(&mut harness));
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
@@ -891,7 +899,10 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
     );
     harness.model_mut().app.panel_focus = PanelFocus::Library;
     harness.model_mut().sync_mounted_surfaces();
-    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Library));
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Library)
+    );
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
         .is_some());
@@ -935,8 +946,7 @@ fn migrated_tv_with_detail(episode_count: usize) -> TickHarness {
     season.id = "season-1".into();
     let episodes: Vec<_> = (1..=episode_count)
         .map(|index| {
-            let mut episode =
-                crate::app::tests::make_item(&format!("Episode {index}"), "Episode");
+            let mut episode = crate::app::tests::make_item(&format!("Episode {index}"), "Episode");
             episode.id = format!("episode-{index}");
             episode
         })
@@ -1022,14 +1032,13 @@ fn overlay_workspace_keys_move_the_episode_list_not_the_browser() {
             episode
         })
         .collect();
-    harness
-        .model_mut()
-        .app
-        .series_detail_cache
-        .insert("movie-focused".into(), crate::app::SeriesDetail {
+    harness.model_mut().app.series_detail_cache.insert(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
             seasons: vec![season],
             episodes: [("season-1".into(), episodes)].into_iter().collect(),
-        });
+        },
+    );
     harness.model_mut().sync_mounted_surfaces();
     assert!(
         panel_of(&harness)
@@ -1073,8 +1082,8 @@ fn overlay_workspace_click_selects_and_is_claimed() {
         .and_then(|panel| panel.test_overlay_geometry())
         .is_some());
 
-    let (x, y) = find_text(terminal.backend().buffer(), "Episode 2")
-        .expect("the Workspace row paints");
+    let (x, y) =
+        find_text(terminal.backend().buffer(), "Episode 2").expect("the Workspace row paints");
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: x,
@@ -1194,8 +1203,8 @@ fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
         "a non-Wide frame reports the overlay gate"
     );
     let terminal = draw_frame_at_model_size(&mut harness);
-    let (x, y) = find_text(terminal.backend().buffer(), "Focused Movie")
-        .expect("the browser row paints");
+    let (x, y) =
+        find_text(terminal.backend().buffer(), "Focused Movie").expect("the browser row paints");
     double_click(&mut harness, x, y);
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
@@ -1249,10 +1258,13 @@ fn non_wide_padding_click_is_not_delegated_and_a_row_flow_click_selects() {
     // The outer two columns of the painted list box: on the pane the panel
     // painted, but outside the row flow it retained as the hit rect.
     let (edge_x, edge_y) = (narrow.list_panel.x + 1, narrow.list_panel.y + 2);
-    assert!(narrow.list_panel.contains(ratatui::layout::Position {
-        x: edge_x,
-        y: edge_y,
-    }), "the click lands on the painted pane");
+    assert!(
+        narrow.list_panel.contains(ratatui::layout::Position {
+            x: edge_x,
+            y: edge_y,
+        }),
+        "the click lands on the painted pane"
+    );
     assert!(
         !narrow.list_area.contains(ratatui::layout::Position {
             x: edge_x,
@@ -1322,7 +1334,9 @@ fn non_wide_saved_geometry_agrees_with_the_painted_frame() {
     let (x, y) = find_text_in(terminal.backend().buffer(), "alpha", selected)
         .expect("the cursor row paints in the selected-row rect");
     assert_eq!(y, selected.y);
-    assert!(narrow.list_area.contains(ratatui::layout::Position { x, y }));
+    assert!(narrow
+        .list_area
+        .contains(ratatui::layout::Position { x, y }));
 }
 
 /// The Library Hero overlay paints its Workspace box from the Workspace's own
@@ -1333,7 +1347,7 @@ fn non_wide_saved_geometry_agrees_with_the_painted_frame() {
 /// `wide_tests::unfocused_workspace_hero_renders_resting_surfaces`.
 #[test]
 fn overlay_sheet_and_workspace_box_rest_at_the_hero_box_slate() {
-    use crate::app::palette::{surface_colors, SURFACE_RESTING, Surface};
+    use crate::app::palette::{surface_colors, Surface, SURFACE_RESTING};
     use tuirealm::event::{Key, KeyEvent};
 
     let mut harness = migrated_tv_with_detail(6);
@@ -1381,9 +1395,8 @@ fn overlay_sheet_and_workspace_box_rest_at_the_hero_box_slate() {
         resting_body,
         "the box's padding row rests at the hero boxes' Slate while the Workspace holds focus"
     );
-    let striped = (box_panel.top()..box_panel.bottom()).any(|y| {
-        (box_panel.left()..box_panel.right()).any(|x| buf[(x, y)].bg == SURFACE_RESTING)
-    });
+    let striped = (box_panel.top()..box_panel.bottom())
+        .any(|y| (box_panel.left()..box_panel.right()).any(|x| buf[(x, y)].bg == SURFACE_RESTING));
     assert!(
         striped,
         "the Workspace box stripes its rows with the fixed resting content Storm"
@@ -1472,10 +1485,12 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
         tv_owner_of(&harness).episode_scroll() > scroll_before,
         "the wheel scrolled the Workspace viewport past its bottom edge"
     );
-    assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
-        .is_some(),
-        "the wheel leaves the overlay open");
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "the wheel leaves the overlay open"
+    );
     assert_eq!(
         harness.model().app.libs[0].nav_stack[0].resting().cursor(),
         0,
@@ -1647,11 +1662,9 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
     }));
     let _ = harness.step();
     drop(draw_frame_at_model_size(&mut harness));
-    assert!(
-        panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
-            .is_some()
-    );
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::PageDown,
@@ -1784,9 +1797,7 @@ fn stale_overlay_bit_never_shadows_wide_keyboard_handling() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvJumpCursor {
-                to_end: false
-            })
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvJumpCursor { to_end: false })
         )),
         "the Wide workspace's Home reaches the series rail, not the overlay arms"
     );
@@ -1797,12 +1808,10 @@ fn stale_overlay_bit_never_shadows_wide_keyboard_handling() {
     );
 }
 
-
 /// A library leaving the catalog retires its owner: the catalog-retention
 /// rule (moved inside from `reconcile_destination_mounts`) runs in the sync
 /// pass.
-#[path = "tests_tick_integration_library_panel_hero.rs"]
-mod tests_tick_integration_library_panel_hero;
+mod hero;
 
 /// The overlay's focused Workspace paints its cursor: every row of the
 /// canonical list that holds focus resolves the list's own focused emphasis

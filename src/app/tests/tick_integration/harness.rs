@@ -92,15 +92,11 @@ impl TickHarness {
         // fold (ADR 0024). A keyboard tick passes the mouse fold untouched.
         let folded = fold_mouse_messages(raw_messages.clone());
         let router = self.model.router_outcome(&folded);
-        let (messages, diagnostic) = crate::app::shell::arbitrate_key(
-            folded,
-            pre_fold_focus.as_ref(),
-            &router,
-        );
-        let deferred_fired = self.model.apply_deferred_candidate(
-            &router,
-            diagnostic.leaf_disposition == "consumed",
-        );
+        let (messages, diagnostic) =
+            crate::app::shell::arbitrate_key(folded, pre_fold_focus.as_ref(), &router);
+        let deferred_fired = self
+            .model
+            .apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
         StepOutcome {
             raw_messages,
             messages,

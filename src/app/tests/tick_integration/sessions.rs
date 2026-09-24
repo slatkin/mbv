@@ -1,14 +1,16 @@
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use rstest::rstest;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
-use crate::app::dispatch::action::Command;
-use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
-use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
-use crate::app::tests::{make_app_stub, make_session};
-use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::components::SessionsComponent;
+use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
+use crate::app::dispatch::action::Command;
+use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
+use crate::app::tests::tick_integration::harness::{StepOutcome, TickHarness};
+use crate::app::tests::{make_app_stub, make_session};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -39,7 +41,10 @@ fn apply_messages(harness: &mut TickHarness, outcome: StepOutcome) {
 fn open_sessions(harness: &mut TickHarness) {
     harness.inject(key(Key::Function(3)));
     let outcome = harness.step();
-    assert_eq!(outcome.router, crate::app::input::router::RouterOutcome::Command(Command::OpenSessions));
+    assert_eq!(
+        outcome.router,
+        crate::app::input::router::RouterOutcome::Command(Command::OpenSessions)
+    );
     harness
         .model_mut()
         .dispatch_router_command(Command::OpenSessions);
@@ -110,7 +115,10 @@ fn tick_sessions_focus_selection_and_responsive_clamp(#[case] width: u16) {
             Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::KeyClaimed)
         )));
     }
-    assert_eq!(enter_request(&mut harness), SessionTargetKey::Emby("s6".into()));
+    assert_eq!(
+        enter_request(&mut harness),
+        SessionTargetKey::Emby("s6".into())
+    );
 
     // A resize reprojects the existing selection and clamps its item viewport.
     let resized_width = if width == 42 { 100 } else { 42 };
@@ -146,7 +154,9 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
         };
         assert_eq!(
             sessions_component_mut(harness).target_at_for_test(point),
-            Some(SessionTargetKey::Emby(if item == 0 { "first" } else { "second" }.into()))
+            Some(SessionTargetKey::Emby(
+                if item == 0 { "first" } else { "second" }.into()
+            ))
         );
         Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -158,13 +168,18 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
     let first_click_event = click(&mut harness, 1);
     harness.inject(first_click_event);
     let first_click = harness.step();
-    assert_eq!(first_click.pre_fold_focus, Some(ComponentId::Overlay(OverlayId::Sessions)));
-    assert!(first_click.messages.iter().all(|message| !matches!(
-        message,
-        Msg::Shell(ShellRequest::SelectSession(_))
-    )));
     assert_eq!(
-        sessions_component_mut(&mut harness).selection_and_offset_for_test().0,
+        first_click.pre_fold_focus,
+        Some(ComponentId::Overlay(OverlayId::Sessions))
+    );
+    assert!(first_click
+        .messages
+        .iter()
+        .all(|message| !matches!(message, Msg::Shell(ShellRequest::SelectSession(_)))));
+    assert_eq!(
+        sessions_component_mut(&mut harness)
+            .selection_and_offset_for_test()
+            .0,
         Some(SessionTargetKey::Emby("second".into())),
         "first click raw messages: {:?}",
         first_click.raw_messages
@@ -214,10 +229,10 @@ fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
         modifiers: KeyModifiers::NONE,
     }));
     let stale_click = harness.step();
-    assert!(stale_click.raw_messages.iter().all(|message| !matches!(
-        message,
-        Msg::Shell(ShellRequest::SelectSession(_))
-    )));
+    assert!(stale_click
+        .raw_messages
+        .iter()
+        .all(|message| !matches!(message, Msg::Shell(ShellRequest::SelectSession(_)))));
 
     draw(&mut harness, 100, 24);
     assert_eq!(
@@ -271,13 +286,15 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
     }));
     let click = harness.step();
     assert_eq!(
-        sessions_component_mut(&mut harness).selection_and_offset_for_test().0,
+        sessions_component_mut(&mut harness)
+            .selection_and_offset_for_test()
+            .0,
         Some(second)
     );
-    assert!(click.raw_messages.iter().all(|message| !matches!(
-        message,
-        Msg::Shell(ShellRequest::SelectSession(_))
-    )));
+    assert!(click
+        .raw_messages
+        .iter()
+        .all(|message| !matches!(message, Msg::Shell(ShellRequest::SelectSession(_)))));
 }
 
 #[test]
@@ -292,7 +309,9 @@ fn tick_sessions_reordered_snapshot_activates_selected_identity() {
     harness.model_mut().app.panel_targets = sessions(&["selected", "first"]);
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
-        sessions_component_mut(&mut harness).selection_and_offset_for_test().0,
+        sessions_component_mut(&mut harness)
+            .selection_and_offset_for_test()
+            .0,
         Some(SessionTargetKey::Emby("selected".into()))
     );
 
@@ -305,7 +324,10 @@ fn tick_sessions_reordered_snapshot_activates_selected_identity() {
         &mut music_resize,
         &mut tv_resize,
     );
-    assert_eq!(harness.model().app.connected_session_id.as_deref(), Some("selected"));
+    assert_eq!(
+        harness.model().app.connected_session_id.as_deref(),
+        Some("selected")
+    );
 }
 
 #[test]

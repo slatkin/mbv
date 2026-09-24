@@ -9,13 +9,13 @@
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
-use crate::app::dispatch::action::Command;
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, UserEvent};
+use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, TabSelection};
 use mbv_core::keybinds::{RawKeybinds, RawSection};
 
@@ -44,7 +44,10 @@ fn prefix_config(assignments: &[(&str, &str)]) -> crate::config::Config {
                 sections.push((section.clone(), RawSection::default()));
                 sections.len() - 1
             });
-        sections[index].1.prefix.push(((*id).into(), (*chord).into()));
+        sections[index]
+            .1
+            .prefix
+            .push(((*id).into(), (*chord).into()));
     }
     crate::config::Config {
         keybinds: mbv_core::keybinds::load(&RawKeybinds {
@@ -135,7 +138,10 @@ fn arming_consumes_the_prefix_chord() {
         "the router outcome arms prefix mode"
     );
     assert!(
-        outcome.messages.iter().all(|m| matches!(m, Msg::TerminalEvent(_))),
+        outcome
+            .messages
+            .iter()
+            .all(|m| matches!(m, Msg::TerminalEvent(_))),
         "arming discards the observer key event; nothing reaches a component"
     );
 }
@@ -223,10 +229,20 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
     harness.inject(key(Key::Down));
     let outcome = harness.step();
     assert_eq!(outcome.router, RouterOutcome::PrefixSwallow);
-    assert!(!harness.model().app.prefix_armed, "an unmapped armed chord disarms");
-    assert_eq!(home_owner(&harness).cursor(), 0, "no chord reached the component while armed");
     assert!(
-        outcome.messages.iter().all(|m| matches!(m, Msg::TerminalEvent(_))),
+        !harness.model().app.prefix_armed,
+        "an unmapped armed chord disarms"
+    );
+    assert_eq!(
+        home_owner(&harness).cursor(),
+        0,
+        "no chord reached the component while armed"
+    );
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .all(|m| matches!(m, Msg::TerminalEvent(_))),
         "an armed chord reaches no component"
     );
 
@@ -234,7 +250,11 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
     harness.inject(key(Key::Down));
     let outcome = harness.step();
     assert_eq!(outcome.router, RouterOutcome::FallThrough);
-    assert_eq!(home_owner(&harness).cursor(), 1, "disarmed, the chord reaches the component again");
+    assert_eq!(
+        home_owner(&harness).cursor(),
+        1,
+        "disarmed, the chord reaches the component again"
+    );
     assert!(!harness.model().app.prefix_armed);
 
     // Rearm and fire the mapped chord: it executes (the shell dispatches
@@ -247,7 +267,10 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
         outcome.router,
         RouterOutcome::PrefixDispatch(Command::CyclePanelMode)
     );
-    assert!(!harness.model().app.prefix_armed, "a mapped dispatch disarms");
+    assert!(
+        !harness.model().app.prefix_armed,
+        "a mapped dispatch disarms"
+    );
     harness
         .model_mut()
         .dispatch_router_command(Command::CyclePanelMode);
@@ -270,10 +293,17 @@ fn double_prefix_re_arms_through_tick() {
 
     harness.inject(key(Key::Char('b')).tap_ctrl());
     let outcome = harness.step();
-    assert_eq!(outcome.router, RouterOutcome::PrefixArm, "double prefix re-arms");
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::PrefixArm,
+        "double prefix re-arms"
+    );
     assert!(harness.model().app.prefix_armed, "prefix mode stays armed");
     assert!(
-        outcome.messages.iter().all(|m| matches!(m, Msg::TerminalEvent(_))),
+        outcome
+            .messages
+            .iter()
+            .all(|m| matches!(m, Msg::TerminalEvent(_))),
         "the re-arming chord is consumed, reaching no component"
     );
 
@@ -297,9 +327,15 @@ fn unmapped_chord_swallows_disarms_and_the_next_chord_routes_normally() {
     harness.inject(key(Key::Char('x')));
     let outcome = harness.step();
     assert_eq!(outcome.router, RouterOutcome::PrefixSwallow);
-    assert!(!harness.model().app.prefix_armed, "the unmapped chord disarms");
     assert!(
-        outcome.messages.iter().all(|m| matches!(m, Msg::TerminalEvent(_))),
+        !harness.model().app.prefix_armed,
+        "the unmapped chord disarms"
+    );
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .all(|m| matches!(m, Msg::TerminalEvent(_))),
         "the swallowed chord reaches no component"
     );
 

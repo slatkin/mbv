@@ -13,9 +13,9 @@ use crate::app::components::tv_content::TvContent;
 use crate::app::components::ContextMenuComponent;
 use crate::app::components::{ComponentId, OverlayId};
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{install_test_emby, make_app_stub, make_item};
-use crate::app::tests_tick_harness::TickHarness;
-use crate::app::{BrowseLevel, LibraryTab, LibEvent, PanelFocus, PanelMode, TabSelection};
+use crate::app::{BrowseLevel, LibEvent, LibraryTab, PanelFocus, PanelMode, TabSelection};
 use mbv_core::mock_http::MockHttp;
 
 /// App stub with a scripted in-memory Emby transport installed (same shape
@@ -45,7 +45,7 @@ fn app_with_mock_emby(http: &MockHttp) -> crate::app::App {
 fn tv_saved_position() -> crate::config::LibraryPosition {
     crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
-        fetched_rows: None,
+            fetched_rows: None,
             parent_id: "lib-tv".into(),
             title: "TV".into(),
             focused_item_id: Some("ser0".into()),
@@ -55,7 +55,7 @@ fn tv_saved_position() -> crate::config::LibraryPosition {
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
             letter_filter_index: None,
-                tv_content_mode: None,
+            tv_content_mode: None,
             library_total: Some(2),
         }],
         ..Default::default()
@@ -167,7 +167,9 @@ fn queue_go_to_library_on_an_episode_lands_through_a_restored_saved_position() {
     harness.model_mut().app.open_context_menu(false, None);
     harness.model_mut().sync_mounted_surfaces();
     let go_to_library = menu_entry_index(&harness, "Go to Library");
-    harness.model_mut().handle_context_menu_select(go_to_library);
+    harness
+        .model_mut()
+        .handle_context_menu_select(go_to_library);
 
     // The resolve worker names the owning Series; the landing arms the
     // pending landing (the library was never loaded) instead of flashing.
@@ -273,7 +275,7 @@ fn deep_selection_tv_harness(http: &MockHttp, episodes_for_season_2: &[&str]) ->
         loading: false,
         all_items: None,
         letter_filter: None,
-            tv_content_mode: None,
+        tv_content_mode: None,
         music_grouping: None,
     });
     let mut season1 = make_item("Season 1", "Season");
@@ -335,7 +337,12 @@ fn recv_season_episodes(harness: &mut TickHarness, season_id: &str) {
             std::time::Instant::now() < deadline,
             "timed out waiting for season {season_id} episodes"
         );
-        match harness.model().app.lib_rx.recv_timeout(Duration::from_millis(200)) {
+        match harness
+            .model()
+            .app
+            .lib_rx
+            .recv_timeout(Duration::from_millis(200))
+        {
             Ok(ev) => {
                 let hit = matches!(
                     &ev,
