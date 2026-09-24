@@ -28,6 +28,33 @@ fn folder(id: &str, name: &str) -> EmbyItem {
     item
 }
 
+/// A started remote-backed App (mirrors `album_playback_routes_with_album_queue_source`):
+/// `play_album_track`'s Emby-availability gate passes and the resulting queue
+/// is observable.
+fn remote_playback_app() -> App {
+    let config = crate::config::Config::default();
+    let (remote, player_rx, _cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    App::new_remote_with_config(
+        mbv_core::api::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
+    )
+}
+
+fn queued_track_ids(app: &App) -> Vec<String> {
+    let mut ids: Vec<String> = app
+        .playback_queue()
+        .emby_items()
+        .iter()
+        .map(|item| item.id.clone())
+        .collect();
+    ids.sort();
+    ids
+}
+
 /// Album, artist and grouped-track playback dispatch tests.
 #[path = "tests_album_artist_playback.rs"]
 mod album_artist_playback;
