@@ -3,6 +3,8 @@
 // daemon's canonical queue and mirror the change to the player; the tests
 // assert both the resulting canonical order and the forwarded PlayerCommand.
 
+use super::*;
+
 fn queue_op_client(token: &str) -> Arc<Mutex<crate::api::EmbyClient>> {
     let mut client = crate::api::EmbyClient::new(Config::default());
     client.token = token.to_string();
@@ -66,7 +68,7 @@ fn run_queue_cmd_with_shared(
     );
 }
 
-fn owner_with(items: Vec<QueueItem>, active: usize) -> DaemonPlayerOwner {
+pub fn owner_with(items: Vec<QueueItem>, active: usize) -> DaemonPlayerOwner {
     DaemonPlayerOwner {
         core: PlayerOwnerState::new(
             PlaybackQueue::from_queue_items(items, Some(active)),

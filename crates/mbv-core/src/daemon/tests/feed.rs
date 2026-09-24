@@ -1,3 +1,5 @@
+use super::*;
+
 fn feed_entry(guid: &str) -> FeedEntry {
     FeedEntry {
         guid: guid.into(),

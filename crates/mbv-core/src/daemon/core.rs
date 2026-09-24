@@ -105,7 +105,7 @@ struct CurrentPlaybackIntent {
 /// Keeping this separate from the player status prevents queued commands and
 /// early active flags from being mistaken for confirmed playback state.
 #[derive(Default)]
-struct PlaybackIntentState {
+pub(super) struct PlaybackIntentState {
     pub(super) current: Option<CurrentPlaybackIntent>,
 }
 
@@ -610,7 +610,7 @@ pub(super) fn broadcast_audiobookshelf_book_progress(
 /// `Player`/`EmbyClient`. Returns the bare reason (not a `CtrlEvent`) so the
 /// same string can be reused for both the server-side log line and the wire
 /// event the caller sends — one message, not two that can drift apart.
-fn audio_only_rejection<'a>(
+pub(super) fn audio_only_rejection<'a>(
     audio_only: bool,
     fetched: impl IntoIterator<Item = &'a QueueItem>,
 ) -> Option<String> {

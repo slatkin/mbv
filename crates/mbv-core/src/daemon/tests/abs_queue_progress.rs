@@ -1,3 +1,5 @@
+use super::*;
+
 fn book_qi(library_item_id: &str) -> QueueItem {
     QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
         library_item_id: library_item_id.into(),

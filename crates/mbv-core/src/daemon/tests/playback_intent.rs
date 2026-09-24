@@ -1,3 +1,5 @@
+use super::*;
+
 #[test]
 fn playback_intent_state_coalesces_startup_and_supersedes_new_play() {
     let mut state = PlaybackIntentState::default();

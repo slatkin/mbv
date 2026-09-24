@@ -1,4 +1,5 @@
-use crate::daemon::*;
+use super::*;
+
 #[test]
 fn packaged_startup_context_is_service_independent() {
     let startup = DaemonStartupContext::new(Config::default(), DaemonRole::Packaged);

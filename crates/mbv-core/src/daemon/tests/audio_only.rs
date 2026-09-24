@@ -2,6 +2,8 @@
 // `audio_only_rejection` are pure functions exercised directly, independent of
 // the socket/player harness.
 
+use super::*;
+
 #[test]
 fn all_audio_accepts_audio_items() {
     assert!(all_audio(&[
