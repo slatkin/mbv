@@ -279,6 +279,7 @@ pub(crate) fn make_app_stub() -> App {
         remote_queue_lineage: 0,
         playlist_mutations: std::collections::HashMap::new(),
         next_playlist_mutation: 1,
+        next_owner_queue_load_request: 1,
         direct_remote_connected: false,
         direct_remote_label: None,
         direct_remote_session_id: None,

@@ -8,9 +8,7 @@ use super::{
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
-use std::sync::atomic::{AtomicU64, Ordering};
 
-static NEXT_OWNER_QUEUE_LOAD_REQUEST: AtomicU64 = AtomicU64::new(1);
 #[path = "queue_actions_playlist_mutation.rs"]
 mod queue_actions_playlist_mutation;
 
@@ -456,7 +454,9 @@ impl App {
                 }
                 let direct_remote = self.has_direct_remote_queue();
                 if !autostart && self.is_local_daemon() {
-                    let request_id = NEXT_OWNER_QUEUE_LOAD_REQUEST.fetch_add(1, Ordering::Relaxed);
+                    let request_id = self.next_owner_queue_load_request;
+                    self.next_owner_queue_load_request =
+                        self.next_owner_queue_load_request.saturating_add(1);
                     let slots = items
                         .into_iter()
                         .enumerate()

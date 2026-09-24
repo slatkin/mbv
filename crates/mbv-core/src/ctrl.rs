@@ -383,6 +383,32 @@ pub enum CtrlCmd {
 }
 
 impl CtrlCmd {
+    /// Owner-role gate for commands whose acceptance depends on whether the
+    /// daemon is the Stay-alive owner (`DaemonRole::Local`). `Some(true)`
+    /// means the command is accepted only from the owner; `Some(false)`
+    /// means it is accepted only from a non-owner (e.g. a Client adopting a
+    /// cold daemon's queue); `None` means the command has no role gate.
+    pub fn requires_owner(&self) -> Option<bool> {
+        match self {
+            CtrlCmd::UnifiedQueueLoadIdle { .. } => Some(true),
+            CtrlCmd::UnifiedQueueSourceUpdate { .. } => Some(true),
+            CtrlCmd::UnifiedAdoptQueue { .. } => Some(false),
+            CtrlCmd::Hello(_)
+            | CtrlCmd::PlayerCmd(_)
+            | CtrlCmd::Stop
+            | CtrlCmd::PlaybackIntent(_)
+            | CtrlCmd::RequestShutdown
+            | CtrlCmd::ApplyServiceSetup { .. }
+            | CtrlCmd::UnifiedQueueReplace { .. }
+            | CtrlCmd::UnifiedQueueAppend { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlot { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlots { .. }
+            | CtrlCmd::UnifiedQueueMoveSlot { .. }
+            | CtrlCmd::UnifiedQueuePlaySlot { .. }
+            | CtrlCmd::UnifiedQueueClear => None,
+        }
+    }
+
     /// Builds `UnifiedQueueReplace`, deriving the legacy `items` payload from
     /// `slots` so callers don't each re-project the same list.
     pub fn unified_queue_replace(

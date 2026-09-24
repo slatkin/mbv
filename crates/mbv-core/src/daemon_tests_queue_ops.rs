@@ -19,7 +19,7 @@ fn run_queue_cmd(
     registry: &Arc<Mutex<CtrlClients>>,
 ) {
     let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-    handle_ctrl(
+    handle_ctrl_for_role(
         cmd,
         client_id,
         CtrlRequest { reply_tx },
@@ -32,6 +32,7 @@ fn run_queue_cmd(
         false,
         &merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
 }
 
@@ -48,7 +49,7 @@ fn run_queue_cmd_with_shared(
     registry: &Arc<Mutex<CtrlClients>>,
 ) {
     let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-    handle_ctrl(
+    handle_ctrl_for_role(
         cmd,
         client_id,
         CtrlRequest { reply_tx },
@@ -61,6 +62,7 @@ fn run_queue_cmd_with_shared(
         false,
         &merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
 }
 
@@ -839,7 +841,7 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
     let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
     let original_generation = player.status.lock().unwrap().sequence_generation;
 
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 51,
             slots: vec![],
@@ -857,6 +859,7 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
         false,
         &merged_tx,
         true,
+        crate::daemon::DaemonRole::Local,
     );
 
     assert!(owner.core.queue.is_empty());
@@ -886,7 +889,7 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
     let old_slot = owner.core.queue.slots()[0].slot_id;
     let old_run = (0, player.status.lock().unwrap().sequence_generation);
 
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 52,
             slots: vec![crate::ctrl::UnifiedQueueSlot {
@@ -907,6 +910,7 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         false,
         &merged_tx,
         true,
+        crate::daemon::DaemonRole::Local,
     );
 
     assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot);
@@ -984,7 +988,7 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
     }];
 
     for (request_id, id) in [(53, "first"), (54, "second")] {
-        handle_ctrl(
+        handle_ctrl_for_role(
             CtrlCmd::UnifiedQueueLoadIdle {
                 request_id,
                 slots: slots(id),
@@ -1002,12 +1006,13 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
             false,
             &merged_tx,
             true,
+            crate::daemon::DaemonRole::Local,
         );
     }
 
     assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
     assert_eq!(owner.pending_idle_load.as_ref().unwrap().slots[0].1.id(), "first");
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueClear,
         client_id,
         CtrlRequest { reply_tx: &reply_tx },
@@ -1020,6 +1025,7 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
         false,
         &merged_tx,
         true,
+        crate::daemon::DaemonRole::Local,
     );
     assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
@@ -1041,7 +1047,7 @@ fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
     let (merged_tx, _merged_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
 
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 56,
             slots: vec![],
@@ -1059,6 +1065,7 @@ fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
         false,
         &merged_tx,
         true,
+        crate::daemon::DaemonRole::Local,
     );
     let deadline = owner.pending_idle_load.as_ref().unwrap().started_at;
     assert!(crate::daemon::expire_pending_idle_queue_load(
@@ -1084,7 +1091,7 @@ fn pending_idle_load_does_not_block_request_shutdown() {
     let (merged_tx, _merged_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
 
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 57,
             slots: vec![],
@@ -1102,9 +1109,10 @@ fn pending_idle_load_does_not_block_request_shutdown() {
         false,
         &merged_tx,
         true,
+        crate::daemon::DaemonRole::Local,
     );
     player.status.lock().unwrap().sequence_generation += 1;
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::RequestShutdown,
         client_id,
         CtrlRequest { reply_tx: &reply_tx },
@@ -1117,6 +1125,7 @@ fn pending_idle_load_does_not_block_request_shutdown() {
         false,
         &merged_tx,
         true,
+        crate::daemon::DaemonRole::Local,
     );
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 57,
@@ -1139,7 +1148,7 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
     let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
     let old_slot = owner.core.queue.slots()[0].slot_id;
 
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 55,
             slots: vec![crate::ctrl::UnifiedQueueSlot { slot_id: 902, item: emby_qi("new", "Video", "Movie") }],
@@ -1157,6 +1166,7 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
         false,
         &merged_tx,
         true,
+        crate::daemon::DaemonRole::Local,
     );
     let old_run = owner.pending_idle_load.as_ref().unwrap().stopped_run;
 

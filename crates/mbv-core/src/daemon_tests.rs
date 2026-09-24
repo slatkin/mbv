@@ -1,6 +1,6 @@
 use super::{
     all_audio, apply_queue_enriched, apply_stopped_observation,
-    apply_track_completed_observation, audio_only_rejection, broadcast, handle_ctrl,
+    apply_track_completed_observation, audio_only_rejection, broadcast,
     handle_ctrl_for_role, handle_ws,
     take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
     CtrlRequest, CtrlTransport, DaemonEvent, DaemonPlayerOwner, PlaybackIntentState,
@@ -270,7 +270,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::PlayerCmd(
             WireCommand::try_from_player_command(PlayerCommand::TogglePause).unwrap(),
         ),
@@ -287,6 +287,7 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     let _queue = owner.core.queue;
 
@@ -657,7 +658,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
     };
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::PlayerCmd(WireCommand::JumpTo(1)),
         1,
         CtrlRequest {
@@ -672,6 +673,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
 
     match recv_event(&reply_rx) {
@@ -888,7 +890,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
     });
 
     // First press: nothing in flight, observed slot A -> jump to B.
-    handle_ctrl(
+    handle_ctrl_for_role(
         next_intent(1),
         client_id,
         CtrlRequest {
@@ -903,6 +905,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     assert!(
         matches!(
@@ -914,7 +917,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
 
     // Second rapid press, B still in flight: steps from B and queues C
     // behind it.
-    handle_ctrl(
+    handle_ctrl_for_role(
         next_intent(2),
         client_id,
         CtrlRequest {
@@ -929,6 +932,7 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     // The second press must not dispatch past the in-flight jump (one
     // in-flight at a time, design D4): C is held queued, not sent to the run.
@@ -997,7 +1001,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
     assert_eq!(owner.core.observed_active_slot(), None);
 
     // Next press dispatches the slot jump the active-file run will execute.
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::PlaybackIntent(PlaybackIntent {
             request_id: 1,
             generation: 1,
@@ -1016,6 +1020,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     let (jump_request_id, jump_generation) = match cmd_rx.recv().unwrap() {
         PlayerCommand::JumpTo {

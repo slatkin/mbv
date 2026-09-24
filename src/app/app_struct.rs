@@ -370,6 +370,7 @@ pub struct App {
     pub(super) remote_queue_lineage: u64,
     pub(super) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(super) next_playlist_mutation: u64,
+    pub(super) next_owner_queue_load_request: u64,
     pub(super) direct_remote_connected: bool,
     pub(super) direct_remote_label: Option<String>,
     /// Emby session id of a remote owner under Direct remote control, so the

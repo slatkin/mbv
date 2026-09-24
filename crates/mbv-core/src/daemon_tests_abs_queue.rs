@@ -166,7 +166,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
     let emby_slot_id = crate::ctrl::slot_id_to_u64(queue.slots()[1].slot_id);
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedQueuePlaySlot {
             slot_id: emby_slot_id,
         },
@@ -183,6 +183,7 @@ fn broadcast_projects_abs_slots_per_connection_capability() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Local,
     );
     let _queue = owner.core.queue;
 

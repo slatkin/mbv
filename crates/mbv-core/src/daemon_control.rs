@@ -210,6 +210,51 @@ pub(super) fn complete_pending_idle_queue_load(
     true
 }
 
+/// Sends the rejection reply for a command whose owner-role gate
+/// (`CtrlCmd::requires_owner`) failed. Reply shape/event and reason text are
+/// kept per-command, matching what each arm sent before the gate moved here.
+#[allow(clippy::too_many_arguments)]
+fn send_role_gate_rejection(
+    cmd: &CtrlCmd,
+    reply_tx: &CtrlSender,
+    ctrl_clients: &ClientRegistry,
+    client_id: CtrlClientId,
+    player: &Player,
+    queue: &PlaybackQueue,
+    source: &crate::config::QueueSource,
+    queue_lineage: crate::ctrl::QueueLineage,
+) {
+    match cmd {
+        CtrlCmd::UnifiedAdoptQueue { .. } => reject_command(
+            reply_tx,
+            ctrl_clients,
+            client_id,
+            player,
+            queue,
+            source,
+            queue_lineage,
+            "Stay-alive owner queues cannot be adopted by Clients".to_string(),
+        ),
+        CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } => send_to(
+            reply_tx,
+            &CtrlEvent::UnifiedQueueLoadResult {
+                request_id: *request_id,
+                result: crate::ctrl::QueueLoadResult::Rejected {
+                    reason: "idle queue loads are supported only by the Stay-alive owner"
+                        .to_string(),
+                },
+            },
+        ),
+        CtrlCmd::UnifiedQueueSourceUpdate { .. } => send_to(
+            reply_tx,
+            &CtrlEvent::CommandRejected(
+                "queue source updates are supported only by the Stay-alive owner".to_string(),
+            ),
+        ),
+        _ => unreachable!("send_role_gate_rejection only called for gated commands"),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn handle_ctrl_for_role(
     cmd: CtrlCmd,
@@ -253,6 +298,23 @@ fn handle_ctrl_for_role(
         queued_transition_origin,
         ..
     } = &mut *owner;
+    let role_satisfied = match cmd.requires_owner() {
+        Some(requires_local) => (role == crate::daemon::DaemonRole::Local) == requires_local,
+        None => true,
+    };
+    if !role_satisfied {
+        send_role_gate_rejection(
+            &cmd,
+            request.reply_tx,
+            ctrl_clients,
+            client_id,
+            player,
+            queue,
+            source,
+            *queue_lineage,
+        );
+        return;
+    }
     let has_emby = !client.lock().unwrap().token.is_empty();
     if matches!(cmd, CtrlCmd::RequestShutdown) {
         log::info!(target: "daemon", "RequestShutdown received from ctrl client {client_id}");
@@ -317,19 +379,6 @@ fn handle_ctrl_for_role(
             cursor,
             source: new_source,
         } => {
-            if role == crate::daemon::DaemonRole::Local {
-                reject_command(
-                    request.reply_tx,
-                    ctrl_clients,
-                    client_id,
-                    player,
-                    queue,
-                    source,
-                    *queue_lineage,
-                    "Stay-alive owner queues cannot be adopted by Clients".to_string(),
-                );
-                return;
-            }
             // Adoption only applies to a Cold daemon — one with no queue yet.
             if !queue.is_empty() {
                 log::warn!(
@@ -561,9 +610,7 @@ fn handle_ctrl_for_role(
                     clients.supports_abs_book_queue(client_id),
                 )
             };
-            let reason = if role != crate::daemon::DaemonRole::Local {
-                Some("idle queue loads are supported only by the Stay-alive owner".to_string())
-            } else if !supports_operation {
+            let reason = if !supports_operation {
                 Some("peer did not negotiate owner queue-load capability".to_string())
             } else {
                 abs_queue_transport_rejection(
@@ -642,14 +689,7 @@ fn handle_ctrl_for_role(
                 .lock()
                 .unwrap()
                 .supports_owner_queue_load(client_id);
-            if role != crate::daemon::DaemonRole::Local {
-                send_to(
-                    request.reply_tx,
-                    &CtrlEvent::CommandRejected(
-                        "queue source updates are supported only by the Stay-alive owner".to_string(),
-                    ),
-                );
-            } else if !supports_operation {
+            if !supports_operation {
                 send_to(
                     request.reply_tx,
                     &CtrlEvent::CommandRejected(
@@ -999,39 +1039,6 @@ fn handle_ctrl_for_role(
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
         }
     }
-}
-
-#[cfg(test)]
-#[allow(clippy::too_many_arguments)]
-fn handle_ctrl(
-    cmd: CtrlCmd,
-    client_id: CtrlClientId,
-    request: CtrlRequest<'_>,
-    client: &Arc<Mutex<EmbyClient>>,
-    player: &Player,
-    audio_only: bool,
-    owner: &mut DaemonPlayerOwner,
-    shared_queue: &SharedQueueState,
-    ctrl_clients: &ClientRegistry,
-    has_audiobookshelf: bool,
-    merged_tx: &mpsc::Sender<DaemonEvent>,
-    stay_alive: bool,
-) {
-    handle_ctrl_for_role(
-        cmd,
-        client_id,
-        request,
-        client,
-        player,
-        audio_only,
-        owner,
-        shared_queue,
-        ctrl_clients,
-        has_audiobookshelf,
-        merged_tx,
-        stay_alive,
-        crate::daemon::DaemonRole::Local,
-    );
 }
 
 fn owner_admin_transport_allowed(
