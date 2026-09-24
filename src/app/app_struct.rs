@@ -320,7 +320,7 @@ pub struct App {
     pub(super) sessions: Vec<mbv_core::api::SessionInfo>,
     /// Last cast discovery browse result (8.1), independent of `sessions`'s
     /// own reload cadence -- see `panel_targets::build_panel_targets`.
-    pub(super) cast_receivers: Vec<mbv_core::cast_discovery::CastReceiver>,
+    pub(super) cast_receivers: Vec<mbv_core::cast::discovery::CastReceiver>,
     /// The F3 panel's merged Emby+Cast target list, rebuilt from `sessions`/
     /// `cast_receivers` by `App::rebuild_panel_targets` (8.1/8.2).
     pub(super) panel_targets: Vec<PanelTarget>,

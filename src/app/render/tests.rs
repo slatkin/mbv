@@ -630,9 +630,9 @@ fn rendered_text(mut app: App, width: u16, height: u16) -> String {
     text
 }
 
-fn dispatched_cast_status(state: mbv_core::cast_client::CastPlaybackState) -> App {
+fn dispatched_cast_status(state: mbv_core::cast::client::CastPlaybackState) -> App {
     use crate::app::types_cast::{CastProgressTarget, DispatchedCastItem};
-    use mbv_core::cast_client::CastStatus;
+    use mbv_core::cast::client::CastStatus;
     use mbv_core::playback_queue::QueueItemContentId;
 
     let mut app = make_app_stub();
@@ -659,7 +659,7 @@ fn dispatched_cast_status(state: mbv_core::cast_client::CastPlaybackState) -> Ap
 
 #[test]
 fn cast_now_playing_title_renders_while_the_receiver_is_playing() {
-    use mbv_core::cast_client::CastPlaybackState;
+    use mbv_core::cast::client::CastPlaybackState;
     let app = dispatched_cast_status(CastPlaybackState::Playing);
     let text = rendered_text(app, 100, 20);
     assert!(
@@ -670,7 +670,7 @@ fn cast_now_playing_title_renders_while_the_receiver_is_playing() {
 
 #[test]
 fn cast_now_playing_title_is_absent_while_the_receiver_is_idle() {
-    use mbv_core::cast_client::CastPlaybackState;
+    use mbv_core::cast::client::CastPlaybackState;
     let app = dispatched_cast_status(CastPlaybackState::Idle);
     let text = rendered_text(app, 100, 20);
     assert!(
@@ -686,7 +686,7 @@ fn the_f3_panel_labels_a_mixed_emby_and_cast_target_list_by_kind() {
     // still distinguish the two rows by kind tag.
     let mut app = make_app_stub();
     app.sessions = vec![crate::app::tests::make_session("Living Room", "Emby")];
-    app.cast_receivers = vec![mbv_core::cast_discovery::CastReceiver {
+    app.cast_receivers = vec![mbv_core::cast::discovery::CastReceiver {
         id: "cast-1".to_string(),
         friendly_name: "Living Room".to_string(),
         host: "192.168.0.5".to_string(),

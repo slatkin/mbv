@@ -18,8 +18,8 @@
 // inside the same closure that spawns the worker thread, rather than
 // capturing an already-built one, is what keeps this compiling.
 
-use mbv_core::cast_client::{CastClient, CastMediaItem, CastStatus};
-use mbv_core::cast_discovery::CastReceiver;
+use mbv_core::cast::client::{CastClient, CastMediaItem, CastStatus};
+use mbv_core::cast::discovery::CastReceiver;
 use mbv_core::playback_queue::QueueItemContentId;
 use mbv_core::{EmbySessionId, MediaSourceId};
 use std::sync::mpsc::Sender;
@@ -97,7 +97,7 @@ pub(super) enum CastProgressTarget {
     /// `session_id` is the Audiobookshelf playback session opened to resolve
     /// this episode's cast URL (`create_playback_session_bounded`) -- it must
     /// be opened at dispatch time regardless of progress reporting, since
-    /// `cast_dispatch::resolve_audiobookshelf_episode_dispatch` requires an
+    /// `cast::dispatch::resolve_audiobookshelf_episode_dispatch` requires an
     /// already-resolved `AudiobookshelfAudioSource`.
     AudiobookshelfEpisode {
         session_id: String,

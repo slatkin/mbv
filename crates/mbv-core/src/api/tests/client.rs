@@ -381,8 +381,8 @@ fn get_playback_info_for_cast_direct_play_uses_the_standard_stream_url() {
         200,
         &json!({"MediaSources": [{"Id": "msid1", "SupportsDirectPlay": true}]}).to_string(),
     );
-    let profile = crate::cast_dispatch::build_cast_device_profile(
-        crate::cast_dispatch::CastSubtitleKind::None,
+    let profile = crate::cast::dispatch::build_cast_device_profile(
+        crate::cast::dispatch::CastSubtitleKind::None,
     );
     let info = client
         .get_playback_info_for_cast("item123", false, &profile)
@@ -407,8 +407,8 @@ fn get_playback_info_for_cast_transcode_uses_the_server_supplied_url() {
         }]})
         .to_string(),
     );
-    let profile = crate::cast_dispatch::build_cast_device_profile(
-        crate::cast_dispatch::CastSubtitleKind::None,
+    let profile = crate::cast::dispatch::build_cast_device_profile(
+        crate::cast::dispatch::CastSubtitleKind::None,
     );
     let info = client
         .get_playback_info_for_cast("item123", false, &profile)
@@ -424,8 +424,8 @@ fn get_playback_info_for_cast_transcode_uses_the_server_supplied_url() {
 fn get_playback_info_for_cast_failed_request_is_an_error() {
     let (client, http) = mock_client(TEST_URL);
     http.fail(std::io::ErrorKind::UnexpectedEof);
-    let profile = crate::cast_dispatch::build_cast_device_profile(
-        crate::cast_dispatch::CastSubtitleKind::None,
+    let profile = crate::cast::dispatch::build_cast_device_profile(
+        crate::cast::dispatch::CastSubtitleKind::None,
     );
     assert!(client
         .get_playback_info_for_cast("item123", false, &profile)

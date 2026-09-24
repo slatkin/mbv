@@ -13,8 +13,8 @@ use super::types_cast::{
 use super::App;
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::audiobookshelf::AudiobookshelfClient;
-use mbv_core::cast_client::CastMediaItem;
-use mbv_core::cast_dispatch::{self, build_cast_device_profile, CastSubtitleKind};
+use mbv_core::cast::client::CastMediaItem;
+use mbv_core::cast::dispatch::{self, build_cast_device_profile, CastSubtitleKind};
 use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
@@ -104,7 +104,7 @@ impl App {
     pub(super) fn spawn_cast_discovery(&mut self) {
         let tx = self.cast_tx.clone();
         std::thread::spawn(move || {
-            let receivers = mbv_core::cast_discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
+            let receivers = mbv_core::cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
             let _ = tx.send(CastEvent::DiscoveryCompleted(receivers));
         });
     }
@@ -340,10 +340,10 @@ fn resolve_and_connect_cast_receiver(
     id: &str,
     timeout: Duration,
 ) -> Result<Sender<CastJob>, String> {
-    let receiver = mbv_core::cast_discovery::resolve_cast_receiver(id, timeout)
+    let receiver = mbv_core::cast::discovery::resolve_cast_receiver(id, timeout)
         .ok_or_else(|| "receiver not found".to_string())?;
     super::types_cast::spawn_cast_worker(move || {
-        mbv_core::cast_client::CastClient::connect(&receiver.host, receiver.port)
+        mbv_core::cast::client::CastClient::connect(&receiver.host, receiver.port)
     })
 }
 
@@ -366,7 +366,7 @@ fn resolve_cast_dispatch_item(
     let content_id = item.content_id();
     let result = match item {
         QueueItem::Emby(emby_item) => resolve_emby_cast_item(emby_item, emby),
-        QueueItem::Feed(entry) => cast_dispatch::resolve_feed_dispatch(entry).map(|media| {
+        QueueItem::Feed(entry) => dispatch::resolve_feed_dispatch(entry).map(|media| {
             (
                 media,
                 CastProgressTarget::Feed {
@@ -433,7 +433,7 @@ fn resolve_abs_episode_cast_item(
         )
         .map_err(|e| format!("\"{}\" Audiobookshelf session failed: {e}", episode.title))?;
     let media =
-        cast_dispatch::resolve_audiobookshelf_episode_dispatch(&session.source, &ctx.credential)?;
+        dispatch::resolve_audiobookshelf_episode_dispatch(&session.source, &ctx.credential)?;
     Ok((
         media,
         CastProgressTarget::AudiobookshelfEpisode {
@@ -562,7 +562,7 @@ mod tests {
             .map(|s| s.item.id().to_string())
             .collect();
 
-        let receiver = mbv_core::cast_discovery::CastReceiver {
+        let receiver = mbv_core::cast::discovery::CastReceiver {
             id: "device-1".to_string(),
             friendly_name: "Living Room".to_string(),
             host: "192.168.0.5".to_string(),
@@ -596,7 +596,7 @@ mod tests {
         *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_fail);
 
         let mut app = make_app_stub();
-        let receiver = mbv_core::cast_discovery::CastReceiver {
+        let receiver = mbv_core::cast::discovery::CastReceiver {
             id: "device-1".to_string(),
             friendly_name: "Living Room".to_string(),
             host: "192.168.0.5".to_string(),
@@ -634,7 +634,7 @@ mod tests {
         app.connected_session_id = Some("sess-1".to_string());
         app.connected_session_state = Some(crate::app::tests::make_session("tv", "mbv"));
 
-        let receiver = mbv_core::cast_discovery::CastReceiver {
+        let receiver = mbv_core::cast::discovery::CastReceiver {
             id: "device-1".to_string(),
             friendly_name: "Living Room".to_string(),
             host: "192.168.0.5".to_string(),
@@ -660,7 +660,7 @@ mod tests {
         let mut app = make_app_stub();
         app.attach_cast("device-old".to_string());
 
-        let receiver = mbv_core::cast_discovery::CastReceiver {
+        let receiver = mbv_core::cast::discovery::CastReceiver {
             id: "device-1".to_string(),
             friendly_name: "Living Room".to_string(),
             host: "192.168.0.5".to_string(),
