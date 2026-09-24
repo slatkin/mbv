@@ -105,7 +105,14 @@ fn parse_item_metadata_lists() {
         ]
     }));
     assert_eq!(item.genres, vec!["Action", "Drama"]);
-    assert_eq!(item.people[0], EmbyPerson { name: "Director".into(), role: "".into(), kind: "Director".into() });
+    assert_eq!(
+        item.people[0],
+        EmbyPerson {
+            name: "Director".into(),
+            role: "".into(),
+            kind: "Director".into()
+        }
+    );
     assert_eq!(item.people[1].role, "Hero");
     assert_eq!(item.external_urls[0].name, "IMDb");
     assert_eq!(item.external_urls[1].url, "");
@@ -315,15 +322,23 @@ fn parse_item_artist_items_retained_when_present() {
     assert_eq!(
         item.artist_items,
         vec![
-            EmbyArtistRef { name: "Alpha".into(), id: "artist-1".into() },
-            EmbyArtistRef { name: "Beta".into(), id: "artist-2".into() },
+            EmbyArtistRef {
+                name: "Alpha".into(),
+                id: "artist-1".into()
+            },
+            EmbyArtistRef {
+                name: "Beta".into(),
+                id: "artist-2".into()
+            },
         ]
     );
 }
 
 #[test]
 fn parse_item_artist_items_absent_default_empty() {
-    assert!(parse_item(&json!({"Type": "MusicAlbum"})).artist_items.is_empty());
+    assert!(parse_item(&json!({"Type": "MusicAlbum"}))
+        .artist_items
+        .is_empty());
 }
 
 #[rstest]
@@ -341,7 +356,8 @@ fn parse_item_artist_items_absent_default_empty() {
     "Alpha",
     json!(null),
     None
-)]#[case::multiple_unmatched_pairs_stay_unresolved(
+)]
+#[case::multiple_unmatched_pairs_stay_unresolved(
     "Alpha",
     json!([{"Name": "Beta", "Id": "artist-2"}, {"Name": "Gamma", "Id": "artist-3"}]),
     None

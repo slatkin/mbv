@@ -1,3 +1,5 @@
+use super::*;
+
 impl EmbyClient {
     pub fn report_start(
         &self,

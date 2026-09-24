@@ -1,3 +1,6 @@
+use super::*;
+use serde_json::Value;
+
 /// The resolved cast-bound media plus the Emby session/media-source identity
 /// it was negotiated under, so progress can be reported for it later.
 pub struct CastPlaybackInfo {

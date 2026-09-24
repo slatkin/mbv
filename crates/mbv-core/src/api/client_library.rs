@@ -1,3 +1,6 @@
+use super::*;
+use serde_json::Value;
+
 /// `Fields` for `get_latest`. Must include every field its parser
 /// (`parse_item`) reads — in particular `DateCreated`, which destination
 /// Latest markers and date gutters depend on (mbv/#756).
@@ -8,7 +11,11 @@ const LATEST_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName
 const LATEST_EPISODES_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,Overview,PremiereDate,DateCreated";
 
 impl EmbyClient {
-    fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<EmbyItem>, String> {
+    pub(super) fn fetch_items(
+        &self,
+        path: &str,
+        queries: &[(&str, &str)],
+    ) -> Result<Vec<EmbyItem>, String> {
         let mut req = self.get(path);
         for (k, v) in queries {
             req = req.query(k, v);
@@ -200,13 +207,20 @@ impl EmbyClient {
     }
 
     pub fn get_latest(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items/Latest", crate::encode_path_segment(&self.user_id)))
+        let resp: Value = self
+            .get(&format!(
+                "/Users/{}/Items/Latest",
+                crate::encode_path_segment(&self.user_id)
+            ))
             .query("ParentId", parent_id)
             .query("Limit", limit.to_string())
             .query("GroupItems", "true")
             .query("Fields", LATEST_FIELDS)
-            .call().map_err(|e| e.to_string())?
-            .body_mut().read_json().map_err(|e| e.to_string())?;
+            .call()
+            .map_err(|e| e.to_string())?
+            .body_mut()
+            .read_json()
+            .map_err(|e| e.to_string())?;
         Ok(resp
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
@@ -219,16 +233,19 @@ impl EmbyClient {
         limit: usize,
     ) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
-        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
-            ("ParentId",          parent_id),
-            ("Limit",             &limit),
-            ("IncludeItemTypes",  "Episode"),
-            ("Recursive",         "true"),
-            ("SortBy",            "DateCreated"),
-            ("SortOrder",         "Descending"),
-            ("IsPlayed",          "false"),
-            ("Fields",            LATEST_EPISODES_FIELDS),
-        ])
+        self.fetch_items(
+            &format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)),
+            &[
+                ("ParentId", parent_id),
+                ("Limit", &limit),
+                ("IncludeItemTypes", "Episode"),
+                ("Recursive", "true"),
+                ("SortBy", "DateCreated"),
+                ("SortOrder", "Descending"),
+                ("IsPlayed", "false"),
+                ("Fields", LATEST_EPISODES_FIELDS),
+            ],
+        )
     }
 
     /// Fetches upcoming episodes for a library using Emby's library-scoped
@@ -236,11 +253,14 @@ impl EmbyClient {
     /// same fields as the library's Latest episode projection.
     pub fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
-        self.fetch_items("/Shows/Upcoming", &[
-            ("ParentId", parent_id),
-            ("Limit", &limit),
-            ("Fields", LATEST_EPISODES_FIELDS),
-        ])
+        self.fetch_items(
+            "/Shows/Upcoming",
+            &[
+                ("ParentId", parent_id),
+                ("Limit", &limit),
+                ("Fields", LATEST_EPISODES_FIELDS),
+            ],
+        )
     }
 
     pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {

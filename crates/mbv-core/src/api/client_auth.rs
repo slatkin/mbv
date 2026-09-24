@@ -1,3 +1,6 @@
+use super::*;
+use serde_json::Value;
+
 fn emby_agent(
     connect_timeout: std::time::Duration,
     total_timeout: std::time::Duration,
@@ -6,7 +9,10 @@ fn emby_agent(
 }
 
 impl EmbyClient {
-    fn service_failure(context: &str, error: ureq::Error) -> crate::service_runtime::EmbyFailure {
+    pub(super) fn service_failure(
+        context: &str,
+        error: ureq::Error,
+    ) -> crate::service_runtime::EmbyFailure {
         let class = match error {
             ureq::Error::StatusCode(401 | 403) => {
                 crate::service_runtime::EmbyFailureClass::AuthenticationRejected
@@ -50,7 +56,7 @@ impl EmbyClient {
         )
     }
 
-    fn auth_header(&self) -> String {
+    pub(super) fn auth_header(&self) -> String {
         format!(
             "{}, Token=\"{}\"",
             self.unauthenticated_header(),
@@ -58,21 +64,21 @@ impl EmbyClient {
         )
     }
 
-    fn get(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
+    pub(super) fn get(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
         self.agent
             .get(&self.url(path))
             .header("Authorization", &self.auth_header())
             .header("X-Emby-Token", &self.token)
     }
 
-    fn post(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithBody> {
+    pub(super) fn post(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithBody> {
         self.agent
             .post(&self.url(path))
             .header("Authorization", &self.auth_header())
             .header("X-Emby-Token", &self.token)
     }
 
-    fn with_request_timeout(&self, timeout: std::time::Duration) -> Self {
+    pub(super) fn with_request_timeout(&self, timeout: std::time::Duration) -> Self {
         let mut client = self.clone();
         if !client.mock_agent {
             client.agent = emby_agent(timeout, timeout);
@@ -87,7 +93,7 @@ impl EmbyClient {
         self
     }
 
-    fn delete(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
+    pub(super) fn delete(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {
         self.agent
             .delete(&self.url(path))
             .header("Authorization", &self.auth_header())

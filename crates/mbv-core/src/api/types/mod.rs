@@ -1,6 +1,7 @@
 use serde_json::Value;
 
-use crate::config::Config;
+pub use crate::config::Config;
+use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
 
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
 
@@ -420,7 +421,7 @@ impl EmbyItem {
         }
     }
 
-    fn folder(id: String, name: String, collection_type: String) -> Self {
+    pub(super) fn folder(id: String, name: String, collection_type: String) -> Self {
         EmbyItem {
             id,
             name,
@@ -550,14 +551,13 @@ pub fn parse_mbv_direct_tcp_port(commands: &[String]) -> Option<u16> {
     })
 }
 
-#[path = "api_types_parsing.rs"]
-mod api_types_parsing;
-pub use api_types_parsing::{
+mod types_parsing;
+pub(crate) use types_parsing::load_cached_token;
+#[cfg(test)]
+pub use types_parsing::save_cached_token;
+pub use types_parsing::{
     clear_cached_token, parse_audio_info, parse_item, parse_session_media_info, parse_video_info,
 };
-#[cfg(test)]
-pub use api_types_parsing::save_cached_token;
-pub(crate) use api_types_parsing::load_cached_token;
 
 #[derive(Clone)]
 pub struct EmbyClient {
@@ -566,8 +566,8 @@ pub struct EmbyClient {
     pub token: String,
     pub device_name: String,
     pub device_id: String,
-    agent: ureq::Agent,
+    pub(super) agent: ureq::Agent,
     /// True when tests installed an in-memory transport; never replaced by
     /// `with_request_timeout`.
-    mock_agent: bool,
+    pub(super) mock_agent: bool,
 }

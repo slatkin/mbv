@@ -1,3 +1,6 @@
+use super::*;
+use serde_json::Value;
+
 impl EmbyClient {
     /// Returns all episodes of a series starting from `from_item_id` (inclusive), in air order.
     /// Mirrors Emby Web's `getEpisodes(seriesId)` + filter pattern.

@@ -1,3 +1,7 @@
+use super::*;
+use rstest::rstest;
+use serde_json::json;
+
 // ── EmbyClient::ws_url ───────────────────────────────────────────────────
 
 use crate::mock_http::MockHttp;
@@ -111,7 +115,15 @@ fn library_items_request_includes_artist_items_field() {
     client.user_id = "user".into();
     http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
     client
-        .get_items_sorted("library", Some("MusicAlbum"), false, 0, 10, "SortName", "Ascending")
+        .get_items_sorted(
+            "library",
+            Some("MusicAlbum"),
+            false,
+            0,
+            10,
+            "SortName",
+            "Ascending",
+        )
         .unwrap();
     let request = &http.requests()[0];
     assert!(request.contains("Fields="));
@@ -223,14 +235,24 @@ fn credential_exchange_rejection_and_connectivity_commit_nothing() {
     http.fail(std::io::ErrorKind::ConnectionRefused);
     let client = EmbyClient::new(crate::config::Config::default()).with_test_agent(agent);
     assert!(client
-        .exchange_credentials_bounded(TEST_URL, "alice", "wrong", std::time::Duration::from_secs(2),)
+        .exchange_credentials_bounded(
+            TEST_URL,
+            "alice",
+            "wrong",
+            std::time::Duration::from_secs(2),
+        )
         .is_err());
     assert!(!crate::config::token_cache_path().exists());
     assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
     assert!(!crate::config::config_path().exists());
 
     assert!(client
-        .exchange_credentials_bounded(TEST_URL, "alice", "wrong", std::time::Duration::from_secs(2),)
+        .exchange_credentials_bounded(
+            TEST_URL,
+            "alice",
+            "wrong",
+            std::time::Duration::from_secs(2),
+        )
         .is_err());
     assert!(!crate::config::token_cache_path().exists());
     assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());

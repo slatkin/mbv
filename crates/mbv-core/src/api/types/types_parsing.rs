@@ -379,4 +379,3 @@ pub fn save_cached_token(server_url: &str, token: &str, user_id: &str) {
         let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
     }
 }
-

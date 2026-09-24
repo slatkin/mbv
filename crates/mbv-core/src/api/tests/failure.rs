@@ -1,3 +1,5 @@
+use crate::mock_http::MockHttp;
+
 fn emby_client(http: &MockHttp) -> super::EmbyClient {
     let config = crate::config::Config {
         server_url: "http://127.0.0.1:1".into(),
@@ -9,10 +11,7 @@ fn emby_client(http: &MockHttp) -> super::EmbyClient {
 fn audiobookshelf_response(
     status: u16,
     body: &'static str,
-) -> (
-    MockHttp,
-    crate::audiobookshelf::AudiobookshelfClient,
-) {
+) -> (MockHttp, crate::audiobookshelf::AudiobookshelfClient) {
     let http = MockHttp::new();
     let agent = http.agent();
     http.respond(status, body);
