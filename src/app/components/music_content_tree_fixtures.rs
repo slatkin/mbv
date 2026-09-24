@@ -34,7 +34,7 @@ pub(super) fn tree_owner_with_tracks(
 ) -> MusicContent {
     let mut items: Vec<EmbyItem> = Vec::new();
     let mut album_info: Vec<(String, String, String)> = Vec::new();
-    let mut artist_keys: Vec<crate::app::music_grouping::ArtistKey> = Vec::new();
+    let mut artist_keys: Vec<crate::app::state::music_grouping::ArtistKey> = Vec::new();
     for (artist, targets) in artists {
         for target in *targets {
             let mut album = make_item(target, "MusicAlbum");
@@ -49,9 +49,9 @@ pub(super) fn tree_owner_with_tracks(
                 "2001".to_string(),
                 (*target).to_string(),
             ));
-            artist_keys.push(crate::app::music_grouping::ArtistKey::Service(format!(
-                "artist-{artist}"
-            )));
+            artist_keys.push(crate::app::state::music_grouping::ArtistKey::Service(
+                format!("artist-{artist}"),
+            ));
         }
     }
     let selected = items.first().cloned();

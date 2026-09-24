@@ -173,7 +173,7 @@ pub(crate) fn make_app_stub() -> App {
         audiobookshelf_socket_generation: None,
         hidden_libraries: Vec::new(),
         library_routes: std::collections::HashMap::new(),
-        home_latest_launch_window: super::home_latest::HomeLatestLaunchWindow {
+        home_latest_launch_window: crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: None,
             current: 0,
         },

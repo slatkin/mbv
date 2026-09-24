@@ -57,7 +57,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
     let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Upcoming);
     let source = "lib-movies".to_owned();
     harness.model_mut().app.home_latest_launch_window =
-        crate::app::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: None,
             current: 200,
         };
@@ -71,7 +71,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
     assert!(!harness.model().tv_latest_snapshots[&source].has_new_content);
 
     harness.model_mut().app.home_latest_launch_window =
-        crate::app::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: Some(100),
             current: 200,
         };
@@ -106,7 +106,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
 fn preselected_latest_acknowledges_snapshot_that_arrives_later() {
     let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Latest);
     harness.model_mut().app.home_latest_launch_window =
-        crate::app::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: Some(100),
             current: 200,
         };
@@ -330,7 +330,7 @@ fn tv_latest_refresh_updates_destination_snapshot_with_one_fetch_through_tick() 
         std::sync::Arc::new(std::sync::Mutex::new(client)),
     );
     harness.model_mut().app.home_latest_launch_window =
-        crate::app::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: Some(100),
             current: 200,
         };
@@ -515,7 +515,7 @@ fn deep_latest_library_refreshes_its_level_without_touching_shared_snapshot_thro
 fn tv_latest_selection_acknowledges_the_destination_marker_through_tick() {
     let mut harness = flat_episode_harness(mbv_core::config::TvContentMode::Upcoming);
     harness.model_mut().app.home_latest_launch_window =
-        crate::app::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: Some(100),
             current: 200,
         };

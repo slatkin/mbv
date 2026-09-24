@@ -1,5 +1,5 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::search_sidebar::SearchSidebar;
+use crate::app::state::search_sidebar::SearchSidebar;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;

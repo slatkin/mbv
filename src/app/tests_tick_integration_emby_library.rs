@@ -227,7 +227,7 @@ fn mounted_flat_latest_marker_acknowledges_through_async_snapshot_replacement(
     }
     let mut harness = TickHarness::new(app);
     harness.model_mut().app.home_latest_launch_window =
-        crate::app::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: Some(100),
             current: 200,
         };
@@ -292,7 +292,7 @@ fn mounted_flat_latest_first_launch_has_no_new_content_marker() {
     app.libs[0].library_total = Some(100);
     let mut harness = TickHarness::new(app);
     harness.model_mut().app.home_latest_launch_window =
-        crate::app::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: None,
             current: 200,
         };

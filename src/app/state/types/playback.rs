@@ -1,4 +1,4 @@
-use crate::app::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
+use crate::app::state::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};

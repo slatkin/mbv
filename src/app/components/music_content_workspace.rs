@@ -39,7 +39,7 @@ fn track_row(track: &EmbyItem, index: usize) -> MediaListRow<String> {
 /// order. Duplicate titles stay distinct because rows are keyed by the
 /// tracks' own stable IDs.
 fn build_artist_track_rows(
-    detail: &crate::app::music_artist_detail::ArtistDetailProjection,
+    detail: &crate::app::state::music_artist_detail::ArtistDetailProjection,
 ) -> Vec<MediaListRow<String>> {
     let mut rows = Vec::new();
     for group in &detail.track_groups {
@@ -74,7 +74,7 @@ enum WorkspaceOwner {
 /// own album image through the same `music_album_artwork` source used by the
 /// album Hero and neighbour prefetch.
 fn artist_hero_data(
-    detail: &crate::app::music_artist_detail::ArtistDetailProjection,
+    detail: &crate::app::state::music_artist_detail::ArtistDetailProjection,
     mut artwork: HeroArtwork,
     image: HeroImageState,
 ) -> HeroContentData {
@@ -139,7 +139,7 @@ impl MusicContent {
     /// must not paint the prior root's summary, artwork, or groups.
     fn current_artist_detail(
         &self,
-    ) -> Option<&crate::app::music_artist_detail::ArtistDetailProjection> {
+    ) -> Option<&crate::app::state::music_artist_detail::ArtistDetailProjection> {
         self.context.artist_detail.as_ref().filter(|detail| {
             self.artist_detail_target()
                 .is_some_and(|target| target.same_source(&detail.target))
@@ -152,7 +152,7 @@ impl MusicContent {
     pub(in crate::app) fn artist_detail_for_target(
         &self,
         target: &MusicArtistTarget,
-    ) -> Option<&crate::app::music_artist_detail::ArtistDetailProjection> {
+    ) -> Option<&crate::app::state::music_artist_detail::ArtistDetailProjection> {
         self.current_artist_detail()
             .filter(|detail| detail.target.same_source(target))
     }
@@ -337,8 +337,8 @@ impl MusicContent {
         let artist_name = self.browser.node(selected)?.title.clone();
         Some(MusicArtistTarget {
             artist_id: match key {
-                crate::app::music_grouping::ArtistKey::Service(id) => Some(id.clone()),
-                crate::app::music_grouping::ArtistKey::Fallback(_) => None,
+                crate::app::state::music_grouping::ArtistKey::Service(id) => Some(id.clone()),
+                crate::app::state::music_grouping::ArtistKey::Fallback(_) => None,
             },
             artist_name,
             album_targets: self.selected_artist_album_targets()?,
@@ -473,7 +473,7 @@ impl MusicContent {
     /// neighbour prefetch.
     fn artist_hero_artwork(
         &self,
-        detail: &crate::app::music_artist_detail::ArtistDetailProjection,
+        detail: &crate::app::state::music_artist_detail::ArtistDetailProjection,
     ) -> HeroArtwork {
         let album_id = self
             .selected_tree_track()

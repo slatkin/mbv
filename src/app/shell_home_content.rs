@@ -161,7 +161,7 @@ impl Model {
 
 fn recompute_destination_latest_marker(
     snapshot: &mut DestinationLatestSnapshot,
-    launch_window: super::home_latest::HomeLatestLaunchWindow,
+    launch_window: crate::app::state::home_latest::HomeLatestLaunchWindow,
     acknowledged: &std::collections::HashSet<DestinationLatestSource>,
 ) {
     snapshot.recompute_new_content(launch_window);

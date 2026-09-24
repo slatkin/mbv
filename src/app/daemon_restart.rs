@@ -1,5 +1,5 @@
-use super::bootstrap::{bootstrap_legacy_queue, bootstrap_unified_queue};
 use super::{App, QueueScope};
+use crate::app::state::bootstrap::{bootstrap_legacy_queue, bootstrap_unified_queue};
 use mbv_core::player::PlayerProxy;
 use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
 

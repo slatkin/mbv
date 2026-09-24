@@ -1,11 +1,11 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, LocalPlaybackTarget};
 use crate::app::infra::ui_util::take_chars;
+use crate::app::notify_actions::ToastSeverity;
 use crate::app::render::indicators::{short_resolution_label, IndicatorData};
+use crate::app::{App, LocalPlaybackTarget};
 use mbv_core::player::PlayerCommand;
 
 impl LocalPlaybackTarget {
-    pub(super) fn toggle_play_pause(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
         if app.player.is_remote() {
             let paused = !app.player.status.lock().unwrap().paused;
             app.flash(
@@ -22,7 +22,7 @@ impl LocalPlaybackTarget {
         }
     }
 
-    pub(super) fn stop(&self, app: &mut App) {
+    pub(in crate::app) fn stop(&self, app: &mut App) {
         app.reset_bare_transitions();
         if app.player.is_remote() {
             app.flash("Stop requested".to_string(), ToastSeverity::Neutral);
@@ -30,11 +30,11 @@ impl LocalPlaybackTarget {
         app.player.stop();
     }
 
-    pub(super) fn seek_relative(&self, app: &mut App, delta: f64) {
+    pub(in crate::app) fn seek_relative(&self, app: &mut App, delta: f64) {
         app.player.send_command(PlayerCommand::Seek(delta));
     }
 
-    pub(super) fn jump_track(&self, app: &mut App, step: i64) {
+    pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64) {
         if step >= 0 {
             if app.player.is_remote() {
                 app.flash("Next requested".to_string(), ToastSeverity::Neutral);
@@ -48,13 +48,13 @@ impl LocalPlaybackTarget {
         }
     }
 
-    pub(super) fn toggle_command_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_command_mute(&self, app: &mut App) {
         app.mute_on = !app.mute_on;
         app.player.send_command(PlayerCommand::SetMute(app.mute_on));
         app.save_prefs();
     }
 
-    pub(super) fn is_audio_item(&self, app: &App) -> bool {
+    pub(in crate::app) fn is_audio_item(&self, app: &App) -> bool {
         let idx = app.player_tab.queue_cursor;
         app.player_tab
             .emby_item_at(idx)
@@ -62,7 +62,7 @@ impl LocalPlaybackTarget {
             .unwrap_or(false)
     }
 
-    pub(super) fn toggle_soft_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
         if app.ui_volume == 0 {
             if let Some(v) = app.pre_mute_volume.take() {
                 app.player.send_command(PlayerCommand::SetVolume(v as i64));
@@ -76,7 +76,7 @@ impl LocalPlaybackTarget {
         app.save_prefs();
     }
 
-    pub(super) fn cycle_audio(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
         let (tracks, current_id) = {
             let s = app.player.status.lock().unwrap();
             (s.audio_tracks.clone(), s.audio_id)
@@ -102,7 +102,7 @@ impl LocalPlaybackTarget {
         app.player.send_command(PlayerCommand::SetAudio(next_id));
     }
 
-    pub(super) fn adjust_volume(&self, app: &mut App, delta: i64) {
+    pub(in crate::app) fn adjust_volume(&self, app: &mut App, delta: i64) {
         let active = app.player.status.lock().unwrap().active;
         if active {
             let st = app.player.status.lock().unwrap();
@@ -116,7 +116,7 @@ impl LocalPlaybackTarget {
         app.save_prefs();
     }
 
-    pub(super) fn cycle_sub(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_sub(&self, app: &mut App) {
         let (active, tracks, current_id) = {
             let s = app.player.status.lock().unwrap();
             (s.active, s.sub_tracks.clone(), s.sub_id)
@@ -135,7 +135,7 @@ impl LocalPlaybackTarget {
         app.save_prefs();
     }
 
-    pub(super) fn displayed_volume(&self, app: &App) -> i64 {
+    pub(in crate::app) fn displayed_volume(&self, app: &App) -> i64 {
         let s = app.player.status.lock().unwrap();
         if s.active {
             if s.muted {
@@ -153,11 +153,11 @@ impl LocalPlaybackTarget {
         }
     }
 
-    pub(super) fn displayed_mute(&self, app: &App) -> bool {
+    pub(in crate::app) fn displayed_mute(&self, app: &App) -> bool {
         app.mute_on
     }
 
-    pub(super) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
+    pub(in crate::app) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
         let pst = app.player.status.lock().unwrap();
         if !pst.active {
             return None;

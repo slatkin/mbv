@@ -18,8 +18,8 @@ use crate::app::components::media_list::{
 };
 use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::ComponentId;
-use crate::app::music_grouping::ArtistKey;
 use crate::app::shell::Model;
+use crate::app::state::music_grouping::ArtistKey;
 use crate::app::App;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;

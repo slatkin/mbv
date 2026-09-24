@@ -18,7 +18,7 @@ use mbv_core::cast_discovery::CastReceiver;
 /// (the lint's other occurrence), which is a single per-render stack local,
 /// not a persisted collection element, so it was left unboxed there.
 #[derive(Clone)]
-pub(super) enum PanelTarget {
+pub(in crate::app) enum PanelTarget {
     Emby(Box<SessionInfo>),
     Cast(CastReceiver),
 }
@@ -31,7 +31,7 @@ pub(crate) enum SessionTargetKey {
 }
 
 impl PanelTarget {
-    pub(super) fn key(&self) -> SessionTargetKey {
+    pub(in crate::app) fn key(&self) -> SessionTargetKey {
         match self {
             Self::Emby(session) => SessionTargetKey::Emby(session.id.clone()),
             Self::Cast(receiver) => SessionTargetKey::Cast(receiver.id.clone()),
@@ -40,7 +40,7 @@ impl PanelTarget {
 }
 
 /// Resolve an activation against the latest shell-owned target snapshot.
-pub(super) fn resolve_session_target(
+pub(in crate::app) fn resolve_session_target(
     targets: &[PanelTarget],
     key: &SessionTargetKey,
 ) -> Option<PanelTarget> {
@@ -51,7 +51,7 @@ pub(super) fn resolve_session_target(
 /// Emby first: no dedup, no ordering decision beyond "which channel arrived
 /// first" (8.2). Pure and side-effect free so it is testable without a
 /// running panel or a network call (8.1).
-pub(super) fn build_panel_targets(
+pub(in crate::app) fn build_panel_targets(
     sessions: &[SessionInfo],
     cast_receivers: &[CastReceiver],
 ) -> Vec<PanelTarget> {
@@ -63,14 +63,14 @@ pub(super) fn build_panel_targets(
         .collect()
 }
 
-impl super::App {
+impl crate::app::App {
     /// Rebuilds `panel_targets` from the current `sessions`/`cast_receivers`
     /// snapshots, called independently by each channel's completion handler
     /// (`SessionEvent::Loaded`, `CastEvent::DiscoveryCompleted`) so Emby rows
     /// render as soon as they arrive without waiting on the concurrent cast
     /// browse (8.1). Preserves the panel cursor's selection by identity
     /// across the rebuild when possible, falling back to a clamp.
-    pub(super) fn rebuild_panel_targets(&mut self) {
+    pub(in crate::app) fn rebuild_panel_targets(&mut self) {
         // SessionsComponent owns the cursor. Preserve only its selected row
         // identity in the runtime snapshot; the component clamps its cursor
         // when the replacement list arrives.

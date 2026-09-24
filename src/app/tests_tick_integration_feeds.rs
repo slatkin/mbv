@@ -321,7 +321,7 @@ fn feeds_tick_watched_pill_click_changes_the_filter_through_the_panel() {
 fn feeds_tick_latest_selection_uses_loaded_snapshot_without_fetch_and_refreshes_in_place() {
     let mut harness = harness(240);
     harness.model_mut().app.home_latest_launch_window =
-        super::home_latest::HomeLatestLaunchWindow {
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: Some(10),
             current: 20,
         };

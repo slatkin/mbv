@@ -1,5 +1,5 @@
-use super::app_struct::{LevelFillAction, LevelFillState};
 use crate::app::render::{parse_album_folder_name, strip_article};
+use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
 use crate::app::ui_util::natural_sort_key;
 use crate::app::App;
 use mbv_core::api::EmbyItem;
@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 /// Monotonic counter identifying a loaded source snapshot for a music album
 /// browse level. Bumped whenever the level's items change.
-pub(super) type SourceRevision = u64;
+pub(in crate::app) type SourceRevision = u64;
 
 /// How long a resolving candidate waits for in-flight artist lookups before
 /// its remaining unresolved albums are forced to the deterministic fallback.
@@ -17,19 +17,19 @@ const SETTLE_WINDOW: Duration = Duration::from_secs(3);
 /// A resolving snapshot of a music album level. Records which album IDs
 /// still need a terminal artist identity and which have already resolved.
 #[derive(Clone)]
-pub(super) struct MusicGroupCandidate {
-    pub(super) revision: SourceRevision,
-    pub(super) parent_id: String,
-    pub(super) unresolved: HashSet<String>,
-    pub(super) resolved: HashMap<String, String>,
-    pub(super) created_at: Instant,
+pub(in crate::app) struct MusicGroupCandidate {
+    pub(in crate::app) revision: SourceRevision,
+    pub(in crate::app) parent_id: String,
+    pub(in crate::app) unresolved: HashSet<String>,
+    pub(in crate::app) resolved: HashMap<String, String>,
+    pub(in crate::app) created_at: Instant,
 }
 
 #[derive(Clone)]
-pub(super) struct GroupedAlbumEntry {
-    pub(super) album_index: usize,
-    pub(super) album_id: String,
-    pub(super) artist: String,
+pub(in crate::app) struct GroupedAlbumEntry {
+    pub(in crate::app) album_index: usize,
+    pub(in crate::app) album_id: String,
+    pub(in crate::app) artist: String,
     /// Stable artist identity for this entry's group: the `ArtistItems` ID
     /// resolved against the settled display artist, or a deterministic
     /// fallback key when no payload identity applies. Never derived from
@@ -37,10 +37,10 @@ pub(super) struct GroupedAlbumEntry {
     // Carried by task 1.3; first read by the Grouped Music tree owner
     // (task 2.1 of add-grouped-music-tree-browser).
     #[allow(dead_code)]
-    pub(super) artist_key: ArtistKey,
-    pub(super) sort_key: String,
-    pub(super) year: String,
-    pub(super) name: String,
+    pub(in crate::app) artist_key: ArtistKey,
+    pub(in crate::app) sort_key: String,
+    pub(in crate::app) year: String,
+    pub(in crate::app) name: String,
 }
 
 /// Stable identity of one settled artist group. `Service` carries the
@@ -51,7 +51,7 @@ pub(super) struct GroupedAlbumEntry {
 /// payload identity stay grouped exactly as they are today while equal
 /// display names with distinct valid IDs stay separate.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(super) enum ArtistKey {
+pub(in crate::app) enum ArtistKey {
     Service(String),
     Fallback(String),
 }
@@ -60,28 +60,28 @@ pub(super) enum ArtistKey {
 /// resolved artist identities, display metadata, precomputed sort keys,
 /// sorted album order, group boundaries, and identity lookups.
 #[derive(Clone)]
-pub(super) struct GroupedAlbumCatalog {
-    pub(super) revision: SourceRevision,
-    pub(super) parent_id: String,
+pub(in crate::app) struct GroupedAlbumCatalog {
+    pub(in crate::app) revision: SourceRevision,
+    pub(in crate::app) parent_id: String,
     /// Entries sorted by `sort_key`; `entries[i].album_index` indexes the
     /// raw `items` slice the catalog was built from.
-    pub(super) entries: Vec<GroupedAlbumEntry>,
+    pub(in crate::app) entries: Vec<GroupedAlbumEntry>,
     /// raw album index -> position in `entries`.
-    pub(super) index_to_entry: HashMap<usize, usize>,
+    pub(in crate::app) index_to_entry: HashMap<usize, usize>,
     /// album id -> position in `entries`.
-    pub(super) id_to_entry: HashMap<String, usize>,
+    pub(in crate::app) id_to_entry: HashMap<String, usize>,
 }
 
 /// Per-music-album-level grouping lifecycle state.
 #[derive(Clone)]
-pub(super) struct MusicGroupingState {
-    pub(super) revision: SourceRevision,
-    pub(super) candidate: Option<MusicGroupCandidate>,
-    pub(super) settled: Option<GroupedAlbumCatalog>,
+pub(in crate::app) struct MusicGroupingState {
+    pub(in crate::app) revision: SourceRevision,
+    pub(in crate::app) candidate: Option<MusicGroupCandidate>,
+    pub(in crate::app) settled: Option<GroupedAlbumCatalog>,
 }
 
 impl MusicGroupingState {
-    pub(super) fn new() -> Self {
+    pub(in crate::app) fn new() -> Self {
         Self {
             revision: 0,
             candidate: None,
@@ -94,7 +94,7 @@ impl MusicGroupingState {
 /// pre-settle render fallback: `item.artist` -> resolved lookup (cache or
 /// fetch result) -> folder-name parse -> literal "Unknown Artist". Never
 /// schedules artist resolution work.
-pub(super) fn derive_album_artist(item: &EmbyItem, resolved: Option<&str>) -> String {
+pub(in crate::app) fn derive_album_artist(item: &EmbyItem, resolved: Option<&str>) -> String {
     if !item.artist.is_empty() {
         return item.artist.clone();
     }
@@ -112,7 +112,7 @@ pub(super) fn derive_album_artist(item: &EmbyItem, resolved: Option<&str>) -> St
 /// Display `(year, album_name)` for an album item, mirroring the current
 /// renderer's rule: Emby-provided artist metadata selects the tagged year and
 /// display name, otherwise a folder-name parse wins.
-pub(super) fn derive_album_display_name(item: &EmbyItem) -> (String, String) {
+pub(in crate::app) fn derive_album_display_name(item: &EmbyItem) -> (String, String) {
     if !item.artist.is_empty() {
         let year_str = if item.production_year > 0 {
             item.production_year.to_string()
@@ -144,7 +144,7 @@ fn resolve_artist_key(item: &EmbyItem, display_artist: &str) -> ArtistKey {
 
 /// Builds the settled grouped catalog for a source snapshot from the raw
 /// items and a resolved artist lookup. Pure: no app state, no network.
-pub(super) fn build_grouped_album_catalog(
+pub(in crate::app) fn build_grouped_album_catalog(
     items: &[EmbyItem],
     resolved: &HashMap<String, String>,
 ) -> GroupedAlbumCatalog {
@@ -189,7 +189,7 @@ impl App {
     /// fill (design D4), deduped on the level-fill state through the single
     /// shared decision (`LevelFillState::action_for`). A prior settled
     /// catalog stays visible while the replacement resolves.
-    pub(super) fn start_or_supersede_music_grouping(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn start_or_supersede_music_grouping(&mut self, lib_idx: usize) {
         if !self.is_music_group_view(lib_idx) {
             return;
         }
@@ -277,7 +277,11 @@ impl App {
     /// Advances the current music album level's candidate with an arriving
     /// artist result. Only the candidate whose revision still matches the
     /// active browse level may commit; superseded candidates are discarded.
-    pub(super) fn advance_music_grouping_candidates(&mut self, album_id: &str, artist: &str) {
+    pub(in crate::app) fn advance_music_grouping_candidates(
+        &mut self,
+        album_id: &str,
+        artist: &str,
+    ) {
         for lib_idx in 0..self.libs.len() {
             if !self.is_music_group_view(lib_idx) {
                 continue;
@@ -312,7 +316,7 @@ impl App {
 
     /// Force-settles candidates whose lookup window expired, including the
     /// case where every lookup failed before producing an event.
-    pub(super) fn expire_music_grouping_candidates(&mut self) {
+    pub(in crate::app) fn expire_music_grouping_candidates(&mut self) {
         let mut expired = Vec::new();
         for lib_idx in 0..self.libs.len() {
             if !self.is_music_group_view(lib_idx) {

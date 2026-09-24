@@ -9,7 +9,7 @@ use super::*;
 /// `selected_album`/`album_tracks`), so row behaviours must resolve the track
 /// and its owning album from that projection, not the empty album snapshot.
 pub(super) fn artist_workspace_owner() -> MusicContent {
-    use crate::app::music_artist_detail::{
+    use crate::app::state::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 
@@ -301,7 +301,7 @@ fn wide_right_on_an_expanded_artist_root_takes_the_inline_workspace_focus() {
 /// still loading takes the focus when the rows arrive, without a second key.
 #[test]
 fn wide_right_waits_for_the_artist_rows_before_taking_the_pane_focus() {
-    use crate::app::music_artist_detail::{
+    use crate::app::state::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 
@@ -365,7 +365,7 @@ fn restored_album_selection_lands_visible_behind_many_artist_roots() {
     // 12 artists × 3 albums. Build the corpus with stable, nameable targets.
     let mut items: Vec<EmbyItem> = Vec::new();
     let mut album_info: Vec<(String, String, String)> = Vec::new();
-    let mut artist_keys: Vec<crate::app::music_grouping::ArtistKey> = Vec::new();
+    let mut artist_keys: Vec<crate::app::state::music_grouping::ArtistKey> = Vec::new();
     for artist in 0..12 {
         for album in 0..3 {
             let target = format!("a{artist}-{album}");
@@ -374,9 +374,9 @@ fn restored_album_selection_lands_visible_behind_many_artist_roots() {
             item.artist = format!("Artist {artist:02}");
             items.push(item);
             album_info.push((format!("Artist {artist:02}"), "2001".into(), target.clone()));
-            artist_keys.push(crate::app::music_grouping::ArtistKey::Service(format!(
-                "artist-{artist}"
-            )));
+            artist_keys.push(crate::app::state::music_grouping::ArtistKey::Service(
+                format!("artist-{artist}"),
+            ));
         }
     }
     let selected = items.first().cloned();
@@ -442,7 +442,7 @@ fn tree_entries_ignore_played_but_keep_live_progress() {
         Vec::new(),
         0,
         vec![("Alpha".into(), "2001".into(), "Played Album".into())],
-        vec![crate::app::music_grouping::ArtistKey::Service(
+        vec![crate::app::state::music_grouping::ArtistKey::Service(
             "artist-Alpha".into(),
         )],
         vec![0],

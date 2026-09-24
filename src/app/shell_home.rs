@@ -52,7 +52,7 @@ impl Model {
                 if targets.len() > 1 {
                     let capabilities = items
                         .iter()
-                        .map(crate::app::context_menu_capabilities::emby_item_capabilities)
+                        .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
                         .collect();
                     self.app.open_context_menu_for_selection(
                         items,

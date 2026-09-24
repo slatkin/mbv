@@ -43,13 +43,13 @@ fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_sel
                 id: "artist-alpha".into(),
             }];
         }
-        let mut catalog = crate::app::music_grouping::build_grouped_album_catalog(
+        let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
             &level.items,
             &Default::default(),
         );
         catalog.revision = 7;
         catalog.parent_id = level.parent_id.clone();
-        level.music_grouping = Some(crate::app::music_grouping::MusicGroupingState {
+        level.music_grouping = Some(crate::app::state::music_grouping::MusicGroupingState {
             revision: 7,
             candidate: None,
             settled: Some(catalog),
@@ -80,7 +80,7 @@ fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_sel
     later.album_id = "album-2".into();
     app.artist_detail_cache.insert(
         detail_key,
-        crate::app::music_artist_detail::ArtistDetailCacheEntry {
+        crate::app::state::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![first, selected, later],
             failed: false,
         },

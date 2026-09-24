@@ -1,19 +1,19 @@
-use super::{App, LocalPlaybackTarget, RemotePlaybackTarget};
 use crate::app::infra::ui_util::take_chars;
 use crate::app::render::indicators::{short_resolution_label, IndicatorData};
+use crate::app::{App, LocalPlaybackTarget, RemotePlaybackTarget};
 
 impl RemotePlaybackTarget {
-    pub(super) fn toggle_play_pause(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| c.session_transport(&session_id, "PlayPause"));
     }
 
-    pub(super) fn stop(&self, app: &mut App) {
+    pub(in crate::app) fn stop(&self, app: &mut App) {
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| c.session_transport(&session_id, "Stop"));
     }
 
-    pub(super) fn seek_relative(&self, app: &mut App, delta: f64) {
+    pub(in crate::app) fn seek_relative(&self, app: &mut App, delta: f64) {
         let pos_s = app
             .connected_session_state
             .as_ref()
@@ -24,28 +24,28 @@ impl RemotePlaybackTarget {
         app.do_session_command(move |c| c.session_seek(&session_id, target));
     }
 
-    pub(super) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
+    pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
         app.session_jump_track(&self.session_id, step, transport);
     }
 
-    pub(super) fn toggle_command_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_command_mute(&self, app: &mut App) {
         app.session_toggle_mute();
     }
 
-    pub(super) fn is_audio_item(&self, app: &App) -> bool {
+    pub(in crate::app) fn is_audio_item(&self, app: &App) -> bool {
         app.connected_session_state
             .as_ref()
             .map(|s| s.media_info.audio_only)
             .unwrap_or(false)
     }
 
-    pub(super) fn toggle_soft_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
         // No session-level mute primitive exists for `a`, so keep routing the
         // remote path through the audio-track cycle behavior.
         self.cycle_audio(app);
     }
 
-    pub(super) fn cycle_audio(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
         let remote_indexes = app.remote_audio_indexes();
         let cur = app
             .connected_session_state
@@ -72,7 +72,7 @@ impl RemotePlaybackTarget {
         app.do_session_command(move |c| c.session_set_audio_index(&session_id, next));
     }
 
-    pub(super) fn adjust_volume(&self, app: &mut App, delta: i64) {
+    pub(in crate::app) fn adjust_volume(&self, app: &mut App, delta: i64) {
         let vol = app
             .connected_session_state
             .as_ref()
@@ -83,7 +83,7 @@ impl RemotePlaybackTarget {
         app.do_session_command(move |c| c.session_set_volume(&session_id, new_vol));
     }
 
-    pub(super) fn cycle_sub(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_sub(&self, app: &mut App) {
         let remote_indexes = app.remote_subtitle_indexes();
         if remote_indexes.is_empty() {
             app.toggle_sub();
@@ -105,21 +105,21 @@ impl RemotePlaybackTarget {
         app.do_session_command(move |c| c.session_set_subtitle_index(&session_id, next));
     }
 
-    pub(super) fn displayed_volume(&self, app: &App) -> i64 {
+    pub(in crate::app) fn displayed_volume(&self, app: &App) -> i64 {
         app.connected_session_state
             .as_ref()
             .map(|s| s.volume)
             .unwrap_or_else(|| LocalPlaybackTarget.displayed_volume(app))
     }
 
-    pub(super) fn displayed_mute(&self, app: &App) -> bool {
+    pub(in crate::app) fn displayed_mute(&self, app: &App) -> bool {
         app.connected_session_state
             .as_ref()
             .map(|s| s.muted)
             .unwrap_or_else(|| LocalPlaybackTarget.displayed_mute(app))
     }
 
-    pub(super) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
+    pub(in crate::app) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
         let remote = app.connected_session_state.as_ref()?;
         let audio_label = remote
             .media_info

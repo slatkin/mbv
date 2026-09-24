@@ -1,9 +1,9 @@
-use super::context_menu_capabilities::ItemCapabilities;
 use super::notify_actions::ToastSeverity;
 use super::{
     App, ContextAction, ContextMenuAnchor, ContextMenuEntry, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
 };
+use crate::app::state::context_menu_capabilities::ItemCapabilities;
 use crate::app::state::types::context_menu::BulkRemoveTarget;
 use crate::app::state::types::context_menu::ContextMenu;
 use crate::app::state::types::overlay::OverlayRequest;
@@ -720,7 +720,8 @@ impl App {
         capabilities: Vec<ItemCapabilities>,
         remove_targets: Vec<BulkRemoveTarget>,
     ) {
-        let Some(capabilities) = crate::app::context_menu_capabilities::intersect(capabilities)
+        let Some(capabilities) =
+            crate::app::state::context_menu_capabilities::intersect(capabilities)
         else {
             return;
         };

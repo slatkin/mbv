@@ -95,7 +95,7 @@ pub struct MusicContent {
     /// artist-track request (design D7). Moving onto a different root emits;
     /// returning to the last reported one relies on the shell's projection
     /// push, which re-derives the same component-resolved target.
-    last_artist_request: Option<crate::app::music_grouping::ArtistKey>,
+    last_artist_request: Option<crate::app::state::music_grouping::ArtistKey>,
     pub(in crate::app) inline_search: InlineSearch,
     /// Stable identity of the tree/list that produced a direct artist action.
     /// The Library panel supplies it on activation. It stays absent until that
@@ -265,8 +265,10 @@ impl MusicContent {
         // detail fetches; the shell dedupes repeat identities by cache key.
         let target = self.artist_detail_target()?;
         let identity = match &target.artist_id {
-            Some(id) => crate::app::music_grouping::ArtistKey::Service(id.clone()),
-            None => crate::app::music_grouping::ArtistKey::Fallback(target.artist_name.clone()),
+            Some(id) => crate::app::state::music_grouping::ArtistKey::Service(id.clone()),
+            None => {
+                crate::app::state::music_grouping::ArtistKey::Fallback(target.artist_name.clone())
+            }
         };
         if self.last_artist_request.as_ref() == Some(&identity) {
             return None;

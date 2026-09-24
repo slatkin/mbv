@@ -161,7 +161,9 @@ impl App {
                         .tracks
                         .iter()
                         .filter(|track| {
-                            super::music_artist_detail::track_matches_album(track, album_id)
+                            crate::app::state::music_artist_detail::track_matches_album(
+                                track, album_id,
+                            )
                         })
                         .cloned()
                         .collect();

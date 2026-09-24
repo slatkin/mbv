@@ -1,20 +1,20 @@
-use super::notify_actions::ToastSeverity;
-use super::{App, RemoteSlotState};
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{App, RemoteSlotState};
 use mbv_core::remote_player::DaemonEndpoint;
 
 impl App {
-    pub(super) fn is_local_daemon(&self) -> bool {
+    pub(in crate::app) fn is_local_daemon(&self) -> bool {
         matches!(self.player_endpoint, Some(DaemonEndpoint::Local))
     }
 
-    pub(super) fn player_owner_is_on_this_machine(&self) -> bool {
+    pub(in crate::app) fn player_owner_is_on_this_machine(&self) -> bool {
         !matches!(
             self.player_endpoint,
             Some(DaemonEndpoint::Tcp(_) | DaemonEndpoint::Unix(_))
         )
     }
 
-    pub(super) fn remote_slot_state(&self) -> RemoteSlotState {
+    pub(in crate::app) fn remote_slot_state(&self) -> RemoteSlotState {
         if self.connected_session_id.is_some() {
             RemoteSlotState::AttachedSession
         } else if self.player.is_remote() {
@@ -31,7 +31,7 @@ impl App {
     /// Whether the attached Emby session advertises an audio-only playable
     /// media set. An absent or empty advertisement is unknown and therefore
     /// treated as able to play video.
-    pub(super) fn session_owner_is_audio_only(&self) -> bool {
+    pub(in crate::app) fn session_owner_is_audio_only(&self) -> bool {
         self.connected_session_id.is_some()
             && self
                 .connected_session_state
@@ -48,19 +48,19 @@ impl App {
     /// Emby session id the Sessions sidebar should mark. Session watch and
     /// Direct remote control of a remote owner both count. The Stay-alive
     /// process does not: it is not a remote session.
-    pub(super) fn sessions_panel_connected_id(&self) -> Option<&str> {
+    pub(in crate::app) fn sessions_panel_connected_id(&self) -> Option<&str> {
         self.connected_session_id
             .as_deref()
             .or(self.direct_remote_session_id.as_deref())
     }
 
-    pub(super) fn can_disconnect_remote(&self) -> bool {
+    pub(in crate::app) fn can_disconnect_remote(&self) -> bool {
         self.connected_session_id.is_some()
             || self.connected_session_state.is_some()
             || self.direct_remote_connected
     }
 
-    pub(super) fn disconnect_remote(&mut self) {
+    pub(in crate::app) fn disconnect_remote(&mut self) {
         if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
             self.connected_session_id = None;
             self.connected_session_state = None;
@@ -83,7 +83,7 @@ impl App {
     /// instead of holding both. The severed cast receiver is left as it is
     /// ("the receiver owns what it plays"); the dropped transport ends
     /// mbv's connection to it. No-op when nothing is connected.
-    pub(super) fn sever_active_connection(&mut self) {
+    pub(in crate::app) fn sever_active_connection(&mut self) {
         if self.cast_attachment.take().is_some() {
             self.stop_visualizer_worker();
         }

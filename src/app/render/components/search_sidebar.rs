@@ -1,6 +1,6 @@
 use crate::app::palette;
 use crate::app::render::components::chrome;
-use crate::app::search_sidebar::SearchSidebar;
+use crate::app::state::search_sidebar::SearchSidebar;
 use crate::app::ui_util::trunc_str;
 use crate::app::SEARCH_PANEL_W;
 use mbv_core::api::EmbyItem;

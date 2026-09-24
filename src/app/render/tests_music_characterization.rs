@@ -11,7 +11,7 @@ use super::*;
 use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::music_content::MusicContent;
 use crate::app::components::music_tree_target::MusicTreeTarget;
-use crate::app::music_grouping::ArtistKey;
+use crate::app::state::music_grouping::ArtistKey;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use rstest::rstest;

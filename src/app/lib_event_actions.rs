@@ -1,9 +1,9 @@
-use super::app_struct::LevelFillState;
 use super::{
     notify_actions::ToastSeverity, AlbumIndex, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
     FeedHomeVideoState, LibEvent, QueueScope,
 };
 use crate::app::infra::ui_util::sort_audio_tracks;
+use crate::app::state::app_struct::LevelFillState;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::state::types::events::{NavigateLanding, PendingSeriesHandoff};
 use mbv_core::api::EmbyItem;

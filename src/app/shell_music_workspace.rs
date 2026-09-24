@@ -392,13 +392,13 @@ mod tests {
                     id: "artist-alpha".into(),
                 }];
             }
-            let mut catalog = crate::app::music_grouping::build_grouped_album_catalog(
+            let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
                 &level.items,
                 &Default::default(),
             );
             catalog.revision = 7;
             catalog.parent_id = level.parent_id.clone();
-            level.music_grouping = Some(crate::app::music_grouping::MusicGroupingState {
+            level.music_grouping = Some(crate::app::state::music_grouping::MusicGroupingState {
                 revision: 7,
                 candidate: None,
                 settled: Some(catalog),
@@ -437,7 +437,7 @@ mod tests {
     fn artist_focus_dispatches_the_typed_requests_and_reuses_the_cache() {
         let destination = music_destination();
         let (mut model, generation) = artist_focused_model();
-        let key = crate::app::music_artist_detail::ArtistDetailKey {
+        let key = crate::app::state::music_artist_detail::ArtistDetailKey {
             destination: destination.clone(),
             generation: generation.value(),
             artist_id: "artist-alpha".into(),
@@ -449,7 +449,7 @@ mod tests {
         );
         assert!(
             model.app.card_image_loading.contains(
-                &crate::app::music_artist_detail::artist_artwork_cache_key(
+                &crate::app::state::music_artist_detail::artist_artwork_cache_key(
                     &destination,
                     generation.value(),
                     "artist-alpha",
@@ -476,7 +476,7 @@ mod tests {
         model.app.artist_detail_loading.remove(&key);
         model.app.artist_detail_cache.insert(
             key,
-            crate::app::music_artist_detail::ArtistDetailCacheEntry::default(),
+            crate::app::state::music_artist_detail::ArtistDetailCacheEntry::default(),
         );
         let target = model
             .test_music_owner()

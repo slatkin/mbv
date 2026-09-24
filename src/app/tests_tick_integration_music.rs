@@ -35,7 +35,7 @@ fn inline_search_warmup_event_starts_level_fills_without_opening_a_view() {
     // terminal failure state synchronously without creating a live request.
     assert_eq!(
         harness.model().app.album_artist_levels.get("group-1"),
-        Some(&crate::app::app_struct::LevelFillState::Failed)
+        Some(&crate::app::state::app_struct::LevelFillState::Failed)
     );
     assert_eq!(
         harness.model().app.libs[0].nav_stack.len(),

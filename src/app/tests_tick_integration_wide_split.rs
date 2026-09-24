@@ -50,7 +50,7 @@ fn drag_once(harness: &mut TickHarness) {
     apply(harness, outcome);
     harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x - 6, gap.y));
     let outcome = harness.step();
-    let expected = crate::app::list_pane_width::normalize_list_pane_width(
+    let expected = crate::app::state::list_pane_width::normalize_list_pane_width(
         Some(origin - (gap.x - 6)), content_width,
     )
     .expect("drag resolves a valid width");
@@ -137,7 +137,7 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
         .any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
 
     let first_column = gap.x - 2;
-    let first_expected = crate::app::list_pane_width::normalize_list_pane_width(
+    let first_expected = crate::app::state::list_pane_width::normalize_list_pane_width(
         Some(origin - first_column),
         content_width,
     )
@@ -156,7 +156,7 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
     );
 
     let final_column = gap.x - 5;
-    let expected = crate::app::list_pane_width::normalize_list_pane_width(
+    let expected = crate::app::state::list_pane_width::normalize_list_pane_width(
         Some(origin - final_column),
         content_width,
     )
@@ -266,7 +266,7 @@ fn split_drag_ignores_the_selector_band() {
         Msg::Shell(ShellRequest::ResizeListPaneLive(_))
     )));
     harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x - 5, gap.y));
-    let expected = crate::app::list_pane_width::normalize_list_pane_width(
+    let expected = crate::app::state::list_pane_width::normalize_list_pane_width(
         Some(origin - (gap.x - 5)), content_width,
     )
     .expect("content-band drag resolves a valid width");

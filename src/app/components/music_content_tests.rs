@@ -18,7 +18,7 @@ fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
         vec![make_item("Artist", "MusicArtist")],
         0,
         vec![("Artist".into(), "2024".into(), "Album".into())],
-        vec![crate::app::music_grouping::ArtistKey::Fallback(
+        vec![crate::app::state::music_grouping::ArtistKey::Fallback(
             "Artist".into(),
         )],
         vec![0],
@@ -40,7 +40,7 @@ fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
         vec![group],
         0,
         vec![("Artist".into(), "2024".into(), "Album".into())],
-        vec![crate::app::music_grouping::ArtistKey::Fallback(
+        vec![crate::app::state::music_grouping::ArtistKey::Fallback(
             "Artist".into(),
         )],
         vec![0],
@@ -84,7 +84,7 @@ fn saved_music_latest_selector_falls_back_to_normal_default() {
         vec![group],
         0,
         vec![("Artist".into(), "2024".into(), "Album".into())],
-        vec![crate::app::music_grouping::ArtistKey::Fallback(
+        vec![crate::app::state::music_grouping::ArtistKey::Fallback(
             "Artist".into(),
         )],
         vec![0],
@@ -174,8 +174,8 @@ fn grouped_music_filter_keeps_the_tree_panel_owner_and_uses_the_shared_query_edi
             ("Artist".into(), "2002".into(), "Second Album".into()),
         ],
         vec![
-            crate::app::music_grouping::ArtistKey::Fallback("Artist".into()),
-            crate::app::music_grouping::ArtistKey::Fallback("Artist".into()),
+            crate::app::state::music_grouping::ArtistKey::Fallback("Artist".into()),
+            crate::app::state::music_grouping::ArtistKey::Fallback("Artist".into()),
         ],
         vec![0, 1],
         None,
@@ -296,7 +296,7 @@ fn content_exposes_tracks_as_the_workspace() {
 
 #[test]
 fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
-    use crate::app::music_artist_detail::{
+    use crate::app::state::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 
@@ -355,7 +355,7 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
 /// as its Workspace.
 #[test]
 fn album_tracks_survive_an_artist_detail_push_for_another_album() {
-    use crate::app::music_artist_detail::{
+    use crate::app::state::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 
@@ -410,7 +410,7 @@ fn album_tracks_survive_an_artist_detail_push_for_another_album() {
 #[test]
 fn artist_root_hero_uses_the_projected_summary_and_artwork() {
     use crate::app::components::library_panel::content::ArtworkSource;
-    use crate::app::music_artist_detail::{
+    use crate::app::state::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 
@@ -481,7 +481,7 @@ fn artist_root_hero_uses_the_projected_summary_and_artwork() {
 #[test]
 fn artist_hero_switches_to_the_selected_track_album_artwork() {
     use crate::app::components::library_panel::content::ArtworkSource;
-    use crate::app::music_artist_detail::{
+    use crate::app::state::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 
@@ -562,7 +562,7 @@ fn artist_hero_switches_to_the_selected_track_album_artwork() {
 #[test]
 fn fallback_artist_hero_uses_the_first_album_artwork() {
     use crate::app::components::library_panel::content::ArtworkSource;
-    use crate::app::music_artist_detail::{ArtistDetailProjection, ArtistSummary};
+    use crate::app::state::music_artist_detail::{ArtistDetailProjection, ArtistSummary};
 
     let mut owner = MusicContent::new();
     owner.set_content(context(make_item("Album", "MusicAlbum"), ""));
@@ -612,7 +612,7 @@ fn fallback_artist_hero_uses_the_first_album_artwork() {
 /// absent rather than stale.
 #[test]
 fn a_stale_artist_detail_never_paints_under_the_new_root() {
-    use crate::app::music_artist_detail::{
+    use crate::app::state::music_artist_detail::{
         ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
     };
 

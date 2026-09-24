@@ -356,10 +356,12 @@ impl Model {
                         self.app.spawn_cast_discovery();
                     }
                     ShellRequest::SelectSession(key) => {
-                        if let Some(target) = super::super::panel_targets::resolve_session_target(
-                            &self.app.panel_targets,
-                            &key,
-                        ) {
+                        if let Some(target) =
+                            crate::app::state::panel_targets::resolve_session_target(
+                                &self.app.panel_targets,
+                                &key,
+                            )
+                        {
                             self.app.select_panel_target(target);
                         }
                     }
@@ -673,7 +675,7 @@ impl Model {
                                     let item = slot.item.as_emby().cloned();
                                     let remove = crate::app::state::types::context_menu::BulkRemoveTarget::Queue(*sid);
                                     let capability =
-                                        crate::app::context_menu_capabilities::queue_item_capabilities(
+                                        crate::app::state::context_menu_capabilities::queue_item_capabilities(
                                             &slot.item,
                                         );
                                     Some((item, remove, capability))
@@ -742,7 +744,7 @@ impl Model {
                                 if items.len() > 1 {
                                     let capabilities = items
                                         .iter()
-                                        .map(crate::app::context_menu_capabilities::emby_item_capabilities)
+                                        .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
                                         .collect();
                                     self.app.open_context_menu_for_selection(
                                         items,
@@ -785,7 +787,7 @@ impl Model {
                                     if items.len() > 1 {
                                         let capabilities = items
                                             .iter()
-                                            .map(crate::app::context_menu_capabilities::emby_item_capabilities)
+                                            .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
                                             .collect();
                                         self.app.open_context_menu_for_selection(
                                             items,
@@ -876,7 +878,7 @@ impl Model {
                     ShellRequest::ResizeListPaneLive(width) => {
                         if let Some(content_area) = self.library_panel_content_area() {
                             self.app.list_pane_width =
-                                crate::app::list_pane_width::normalize_list_pane_width(
+                                crate::app::state::list_pane_width::normalize_list_pane_width(
                                     Some(width),
                                     content_area.width,
                                 );
@@ -887,7 +889,7 @@ impl Model {
                     ShellRequest::ResizeListPaneEnd(width) => {
                         if let Some(content_area) = self.library_panel_content_area() {
                             self.app.list_pane_width =
-                                crate::app::list_pane_width::normalize_list_pane_width(
+                                crate::app::state::list_pane_width::normalize_list_pane_width(
                                     Some(width),
                                     content_area.width,
                                 );
@@ -1012,7 +1014,7 @@ mod tests {
         );
         assert_eq!(
             harness.model().app.list_pane_width,
-            crate::app::list_pane_width::normalize_list_pane_width(Some(42), content_width),
+            crate::app::state::list_pane_width::normalize_list_pane_width(Some(42), content_width),
             "Live stores the normalized in-memory split width"
         );
         assert_eq!(
@@ -1028,7 +1030,10 @@ mod tests {
         );
         assert_eq!(
             harness.model().app.list_pane_width,
-            crate::app::list_pane_width::normalize_list_pane_width(Some(u16::MAX), content_width,),
+            crate::app::state::list_pane_width::normalize_list_pane_width(
+                Some(u16::MAX),
+                content_width,
+            ),
             "End stores the normalized (clamped) in-memory split width"
         );
         assert_ne!(

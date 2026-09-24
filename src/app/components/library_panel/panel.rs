@@ -18,8 +18,8 @@ use crate::app::components::media_list::{
 };
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
-use crate::app::list_pane_width::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
+use crate::app::state::list_pane_width::normalize_list_pane_width;
 
 use super::content::{HeroImageState, PanelHeroImagePaint};
 use super::hero::HeroContentData;

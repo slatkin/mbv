@@ -79,7 +79,10 @@ impl Model {
             self.record_home_latest_acknowledgement(source.clone());
         }
         let has_new = latest.iter().any(|item| {
-            super::home_latest::is_new_in_launch_window(item, self.app.home_latest_launch_window)
+            crate::app::state::home_latest::is_new_in_launch_window(
+                item,
+                self.app.home_latest_launch_window,
+            )
         });
         let acknowledged = self.acknowledged_home_latest_sources.contains(&source);
         self.update_abs_podcast_owner(|owner| {

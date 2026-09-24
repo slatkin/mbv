@@ -6,8 +6,8 @@
 // selection uses lives here too.
 
 use super::notify_actions::ToastSeverity;
-use super::panel_targets::PanelTarget;
 use super::App;
+use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };

@@ -697,7 +697,7 @@ fn the_f3_panel_labels_a_mixed_emby_and_cast_target_list_by_kind() {
     let backend = TestBackend::new(100, 20);
     let mut terminal = Terminal::new(backend).unwrap();
     let targets =
-        crate::app::panel_targets::build_panel_targets(&app.sessions, &app.cast_receivers);
+        crate::app::state::panel_targets::build_panel_targets(&app.sessions, &app.cast_receivers);
     let mut component = crate::app::components::SessionsComponent::new();
     component.set_content(
         &targets,

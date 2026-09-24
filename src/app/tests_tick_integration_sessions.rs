@@ -5,7 +5,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 
 use crate::app::action::Command;
 use crate::app::components::{ComponentId, Msg, OverlayId, ShellRequest, UserEvent};
-use crate::app::panel_targets::{PanelTarget, SessionTargetKey};
+use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
 use crate::app::tests::{make_app_stub, make_session};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::components::SessionsComponent;

@@ -20,8 +20,8 @@ use mbv_core::service_runtime::SetupGeneration;
 
 use crate::app::components::library_panel::{LibraryKey, LibraryKind};
 use crate::app::components::msg::MusicArtistTarget;
-use crate::app::music_grouping::ArtistKey;
 use crate::app::render::MusicWideRenderCtx;
+use crate::app::state::music_grouping::ArtistKey;
 use crate::app::ui_util::sort_audio_tracks;
 use crate::app::{App, LibEvent};
 
@@ -36,25 +36,25 @@ const MAX_ARTIST_FALLBACK_TRACK_FETCHES: usize = 6;
 /// catalog, or a Service re-setup can never become the Workspace for the new
 /// source.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
-pub(super) struct ArtistDetailKey {
-    pub(super) destination: LibraryKey,
-    pub(super) generation: u64,
-    pub(super) artist_id: String,
-    pub(super) revision: u64,
+pub(in crate::app) struct ArtistDetailKey {
+    pub(in crate::app) destination: LibraryKey,
+    pub(in crate::app) generation: u64,
+    pub(in crate::app) artist_id: String,
+    pub(in crate::app) revision: u64,
 }
 
 #[derive(Debug, Clone, Default)]
-pub(super) struct ArtistDetailCacheEntry {
-    pub(super) tracks: Vec<EmbyItem>,
+pub(in crate::app) struct ArtistDetailCacheEntry {
+    pub(in crate::app) tracks: Vec<EmbyItem>,
     /// A terminal query failure (the Service rejected or does not support the
     /// `ArtistIds` query). Projection switches to the documented per-album
     /// aggregation fallback, and repeated pushes do not turn the Service
     /// error into an unbounded request loop.
-    pub(super) failed: bool,
+    pub(in crate::app) failed: bool,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(super) enum ArtistArtworkStatus {
+pub(in crate::app) enum ArtistArtworkStatus {
     Loading,
     Ready,
     None,
@@ -64,15 +64,15 @@ pub(super) enum ArtistArtworkStatus {
 /// in-scope album set, so they are available while tracks/artwork are still
 /// loading. Read by the task-6.4 Hero wiring.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) struct ArtistSummary {
-    pub(super) name: String,
-    pub(super) album_count: usize,
-    pub(super) year_start: Option<u32>,
-    pub(super) year_end: Option<u32>,
+pub(in crate::app) struct ArtistSummary {
+    pub(in crate::app) name: String,
+    pub(in crate::app) album_count: usize,
+    pub(in crate::app) year_start: Option<u32>,
+    pub(in crate::app) year_end: Option<u32>,
 }
 
 impl ArtistSummary {
-    pub(super) fn year_span(&self) -> Option<String> {
+    pub(in crate::app) fn year_span(&self) -> Option<String> {
         match (self.year_start, self.year_end) {
             (Some(start), Some(end)) if start != end => Some(format!("{start}\u{2013}{end}")),
             (Some(year), _) | (_, Some(year)) => Some(year.to_string()),
@@ -84,10 +84,10 @@ impl ArtistSummary {
 /// One settled album's slice of the artist Workspace snapshot (task 6.3):
 /// tracks of that album only, in disc/track order.
 #[derive(Clone)]
-pub(super) struct ArtistTrackGroup {
-    pub(super) album_id: String,
-    pub(super) album_title: String,
-    pub(super) tracks: Vec<EmbyItem>,
+pub(in crate::app) struct ArtistTrackGroup {
+    pub(in crate::app) album_id: String,
+    pub(in crate::app) album_title: String,
+    pub(in crate::app) tracks: Vec<EmbyItem>,
 }
 
 /// The shell-owned projection for one focused artist root. Its summary facts
@@ -96,15 +96,15 @@ pub(super) struct ArtistTrackGroup {
 /// retained for its completion machinery, but the Hero image source is now the
 /// selected album's existing artwork path.
 #[derive(Clone)]
-pub(super) struct ArtistDetailProjection {
-    pub(super) target: MusicArtistTarget,
+pub(in crate::app) struct ArtistDetailProjection {
+    pub(in crate::app) target: MusicArtistTarget,
     /// Immediate artist facts (task 6.2): the Hero's artist name, in-scope
     /// album count, and year span.
-    pub(super) summary: ArtistSummary,
-    pub(super) track_groups: Vec<ArtistTrackGroup>,
+    pub(in crate::app) summary: ArtistSummary,
+    pub(in crate::app) track_groups: Vec<ArtistTrackGroup>,
 }
 
-pub(super) fn artist_artwork_cache_key(
+pub(in crate::app) fn artist_artwork_cache_key(
     destination: &LibraryKey,
     generation: u64,
     artist_id: &str,
@@ -220,12 +220,12 @@ fn current_album_ids(
 /// admit another same-titled album's tracks as playable rows. A track the
 /// Service omitted an album ID for can still reach the Workspace through the
 /// fallback path's per-album fetches, which carry real album IDs.
-pub(super) fn track_matches_album(track: &EmbyItem, album_id: &str) -> bool {
+pub(in crate::app) fn track_matches_album(track: &EmbyItem, album_id: &str) -> bool {
     !album_id.is_empty() && track.album_id == album_id
 }
 
 impl App {
-    pub(super) fn artist_detail_key(
+    pub(in crate::app) fn artist_detail_key(
         &self,
         destination: &LibraryKey,
         target: &MusicArtistTarget,
@@ -243,7 +243,7 @@ impl App {
     /// deliberately starts no artist query and instead arms the already-
     /// supported per-album fetches the fallback aggregates from, through the
     /// bounded fallback queue rather than one request per in-scope album.
-    pub(super) fn request_artist_tracks(
+    pub(in crate::app) fn request_artist_tracks(
         &mut self,
         destination: LibraryKey,
         target: MusicArtistTarget,
@@ -304,7 +304,7 @@ impl App {
     /// are skipped, repeats dedupe against the pending queue, and the drain
     /// runs at most `MAX_ARTIST_FALLBACK_TRACK_FETCHES` at a time; each
     /// arrival arms the next album, so rows appear progressively from cache.
-    pub(super) fn enqueue_artist_album_tracks(&mut self, album_ids: Vec<String>) {
+    pub(in crate::app) fn enqueue_artist_album_tracks(&mut self, album_ids: Vec<String>) {
         for album_id in album_ids {
             if album_id.is_empty()
                 || self.album_tracks_cache.contains_key(&album_id)
@@ -325,7 +325,7 @@ impl App {
     /// `fetch_album_tracks` remains the sole gate for the actual request, so
     /// an album the selection path already armed is skipped without consuming
     /// a slot, and a request that could not start never occupies one.
-    pub(super) fn drain_artist_album_track_fetches(&mut self) {
+    pub(in crate::app) fn drain_artist_album_track_fetches(&mut self) {
         while self.artist_album_track_fetches_in_flight.len() < MAX_ARTIST_FALLBACK_TRACK_FETCHES {
             let Some(album_id) = self.pending_artist_album_track_fetches.pop_front() else {
                 break;
@@ -348,7 +348,7 @@ impl App {
     /// the image worker about Music's source identity. A fallback artist has
     /// no provider ID: the explicit no-artwork arm records that final state
     /// and never borrows a root album image.
-    pub(super) fn request_artist_artwork(
+    pub(in crate::app) fn request_artist_artwork(
         &mut self,
         destination: LibraryKey,
         target: MusicArtistTarget,
@@ -397,7 +397,7 @@ impl App {
         self.fetch_card_image(cache_key, artist_id, String::new(), &["Primary"]);
     }
 
-    pub(super) fn handle_artist_tracks_fetched(
+    pub(in crate::app) fn handle_artist_tracks_fetched(
         &mut self,
         destination: LibraryKey,
         generation: SetupGeneration,
@@ -454,7 +454,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_artist_artwork_fetched(
+    pub(in crate::app) fn handle_artist_artwork_fetched(
         &mut self,
         destination: LibraryKey,
         generation: SetupGeneration,
@@ -490,7 +490,7 @@ impl App {
     /// artist detail is added, so the tree remains the sole browser owner and
     /// the task-6.4 content switch reads one field. Album artwork is resolved
     /// later by MusicContent from the selected artist album/track group.
-    pub(super) fn project_music_artist_detail(
+    pub(in crate::app) fn project_music_artist_detail(
         &self,
         destination: &LibraryKey,
         mut context: MusicWideRenderCtx,
@@ -572,5 +572,4 @@ impl App {
 }
 
 #[cfg(test)]
-#[path = "music_artist_detail_tests.rs"]
 mod tests;

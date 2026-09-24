@@ -8,7 +8,7 @@
 //! entangled with the same suspend/restore machinery the Sessions-panel
 //! direct-remote path uses).
 
-use super::*;
+use crate::app::*;
 
 /// How long a `library_route_cache` entry (#223) stays trusted before a
 /// repeat lookup re-resolves from scratch, so a mid-session library
@@ -39,7 +39,7 @@ impl App {
     /// Consolidated from three call sites (`play_item`, `play_items_routed`,
     /// `enqueue_route_conflict`) that previously duplicated this condition
     /// verbatim.
-    pub(super) fn in_non_library_thin_client_mode(&self) -> bool {
+    pub(in crate::app) fn in_non_library_thin_client_mode(&self) -> bool {
         self.connected_session_id.is_some()
             || (self.player.is_remote() && self.active_route.is_none())
     }
@@ -53,7 +53,7 @@ impl App {
     /// the malformed case) -- it's the expected, common case of "not
     /// routed"; #222's existing fallback (stay local, no hard error)
     /// already covers it via the `None` return.
-    pub(super) fn resolve_route_for_library(
+    pub(in crate::app) fn resolve_route_for_library(
         &mut self,
         library_name: &str,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
@@ -81,7 +81,7 @@ impl App {
     /// tab, Album/Artist drill-down, in-library search) --
     /// the active library is already known from navigation state
     /// (`LibraryTab::library`), so no network call is needed (#223).
-    pub(super) fn route_for_active_library_view(
+    pub(in crate::app) fn route_for_active_library_view(
         &mut self,
         lib_idx: usize,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
@@ -99,7 +99,7 @@ impl App {
     /// *failed* lookup (transient error) is never cached, so it retries
     /// on the item's next play/enqueue attempt instead of being stuck at
     /// `None` until the process restarts (#223, post-grilling revision).
-    pub(super) fn route_for_item_via_ancestors(
+    pub(in crate::app) fn route_for_item_via_ancestors(
         &mut self,
         item_id: &str,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
@@ -183,7 +183,7 @@ impl App {
     /// otherwise resolve from the queued item itself, so a restored queue
     /// can still take its configured route when startup auto-reconnect
     /// missed a live-but-not-yet-visible target session.
-    pub(super) fn resolve_route_for_play(
+    pub(in crate::app) fn resolve_route_for_play(
         &mut self,
         item: &mbv_core::api::EmbyItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
@@ -211,7 +211,7 @@ impl App {
     /// returns no ancestor above it and a plain ancestor-lookup resolver
     /// always yields `None`. Check the item's own type first; only fall
     /// back to ancestor lookup for a non-root folder.
-    pub(super) fn resolve_route_for_enqueue_folder(
+    pub(in crate::app) fn resolve_route_for_enqueue_folder(
         &mut self,
         item: &mbv_core::api::EmbyItem,
     ) -> Option<String> {

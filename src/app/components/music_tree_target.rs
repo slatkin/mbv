@@ -6,7 +6,7 @@
 //! `src/app/components/list/tree_browser/`, so Music addresses rows through
 //! these stable targets and never through a projection position.
 
-use crate::app::music_grouping::ArtistKey;
+use crate::app::state::music_grouping::ArtistKey;
 
 /// The stable identity of one Grouped Music tree row (design D2/D6). Every arm
 /// mirrors the shared owner's interning key one-for-one, so a target is stable

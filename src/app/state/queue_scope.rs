@@ -1,5 +1,5 @@
-use super::notify_actions::ToastSeverity;
-use super::{
+use crate::app::notify_actions::ToastSeverity;
+use crate::app::{
     App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
 };
 use mbv_core::api::EmbyItem;
@@ -8,19 +8,19 @@ use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeRes
 use mbv_core::player::PlayerCommand;
 
 impl App {
-    pub(super) fn has_remote_queue(&self) -> bool {
+    pub(in crate::app) fn has_remote_queue(&self) -> bool {
         self.remote_player_tab.is_some()
     }
 
-    pub(super) fn has_direct_remote_queue(&self) -> bool {
+    pub(in crate::app) fn has_direct_remote_queue(&self) -> bool {
         self.player.is_remote() && self.has_remote_queue()
     }
 
-    pub(super) fn queue_edits_reach_owner(&self) -> bool {
+    pub(in crate::app) fn queue_edits_reach_owner(&self) -> bool {
         matches!(self.playback_target(), PlaybackTarget::Local(_))
     }
 
-    pub(super) fn stay_alive_owner_is_queue_authority(&self) -> bool {
+    pub(in crate::app) fn stay_alive_owner_is_queue_authority(&self) -> bool {
         self.is_local_daemon()
     }
 
@@ -28,7 +28,7 @@ impl App {
     /// submission. Bare mode uses a generation fence until submit; the
     /// Stay-alive owner is authoritative from its snapshots, while direct
     /// remote scope is already independently projected.
-    pub(super) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
+    pub(in crate::app) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
         if scope == QueueScope::Remote || self.stay_alive_owner_is_queue_authority() {
             return true;
         }
@@ -40,14 +40,18 @@ impl App {
     /// player as a live command. `active` is the player's current playing
     /// state (`self.player.status.lock().unwrap().active`), passed in since
     /// callers already hold it.
-    pub(super) fn queue_edit_reaches_player(&self, scope: QueueScope, active: bool) -> bool {
+    pub(in crate::app) fn queue_edit_reaches_player(
+        &self,
+        scope: QueueScope,
+        active: bool,
+    ) -> bool {
         scope == QueueScope::Remote
             || (active || self.player.is_remote())
                 && self.queue_edits_reach_owner()
                 && self.local_queue_is_owner_queue(scope)
     }
 
-    pub(super) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
+    pub(in crate::app) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
         match scope {
             QueueScope::Local => &self.player_tab,
             QueueScope::Remote => self
@@ -58,14 +62,18 @@ impl App {
     }
 
     /// Position of `slot_id` in `scope`'s queue, if present.
-    pub(super) fn slot_index(&self, scope: QueueScope, slot_id: QueueSlotId) -> Option<usize> {
+    pub(in crate::app) fn slot_index(
+        &self,
+        scope: QueueScope,
+        slot_id: QueueSlotId,
+    ) -> Option<usize> {
         self.queue_for_scope(scope)
             .slots()
             .iter()
             .position(|slot| slot.slot_id == slot_id)
     }
 
-    pub(super) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut PlayerTab {
+    pub(in crate::app) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut PlayerTab {
         match scope {
             QueueScope::Local => &mut self.player_tab,
             QueueScope::Remote => self
@@ -77,7 +85,7 @@ impl App {
 
     /// Stamps `scope`'s queue with the playback owner's current sequence
     /// generation, after a submit the owner accepted at that generation.
-    pub(super) fn stamp_queue_generation(&mut self, scope: QueueScope) {
+    pub(in crate::app) fn stamp_queue_generation(&mut self, scope: QueueScope) {
         if self.stay_alive_owner_is_queue_authority() {
             return;
         }
@@ -85,7 +93,10 @@ impl App {
         self.queue_for_scope_mut(scope).sequence_generation = generation;
     }
 
-    pub(super) fn undo_stack_for_scope_mut(&mut self, scope: QueueScope) -> &mut Vec<UndoEntry> {
+    pub(in crate::app) fn undo_stack_for_scope_mut(
+        &mut self,
+        scope: QueueScope,
+    ) -> &mut Vec<UndoEntry> {
         match scope {
             QueueScope::Local => &mut self.queue_undo_stack,
             QueueScope::Remote => &mut self.remote_queue_undo_stack,
@@ -96,11 +107,11 @@ impl App {
         QueueScopeResolution::new(self.has_direct_remote_queue(), self.queue_scope)
     }
 
-    pub(super) fn local_queue_metadata_applies(&self, scope: QueueScope) -> bool {
+    pub(in crate::app) fn local_queue_metadata_applies(&self, scope: QueueScope) -> bool {
         self.queue_scope_resolution().local_metadata_applies(scope)
     }
 
-    pub(super) fn queue_scope_is_playback(&self, scope: QueueScope) -> bool {
+    pub(in crate::app) fn queue_scope_is_playback(&self, scope: QueueScope) -> bool {
         scope == self.playing_queue_scope()
     }
 
@@ -111,11 +122,11 @@ impl App {
         }
     }
 
-    pub(super) fn action_touches_local_queue(&self, action: &PendingQueueAction) -> bool {
+    pub(in crate::app) fn action_touches_local_queue(&self, action: &PendingQueueAction) -> bool {
         self.local_queue_metadata_applies(self.action_queue_scope(action))
     }
 
-    pub(super) fn set_queue_source_if_not_local_daemon(
+    pub(in crate::app) fn set_queue_source_if_not_local_daemon(
         &mut self,
         source: crate::config::QueueSource,
     ) {
@@ -124,19 +135,19 @@ impl App {
         }
     }
 
-    pub(super) fn clear_local_queue_metadata(&mut self) {
+    pub(in crate::app) fn clear_local_queue_metadata(&mut self) {
         self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
     }
 
-    pub(super) fn persist_local_queue_state_if_needed(&mut self, scope: QueueScope) {
+    pub(in crate::app) fn persist_local_queue_state_if_needed(&mut self, scope: QueueScope) {
         if self.local_queue_metadata_applies(scope) {
             self.save_queue_state();
         }
     }
 
-    pub(super) fn sync_playback_queue_items_after_append(
+    pub(in crate::app) fn sync_playback_queue_items_after_append(
         &mut self,
         scope: QueueScope,
         items: Vec<ExecSlot>,
@@ -159,7 +170,7 @@ impl App {
         let sent = self.player.queue_append(items);
         if !sent && self.player.is_remote_disconnected() {
             self.flash(
-                super::actions::CONNECTION_LOST_MESSAGE.to_string(),
+                crate::app::actions::CONNECTION_LOST_MESSAGE.to_string(),
                 ToastSeverity::Error,
             );
             return false;
@@ -174,7 +185,7 @@ impl App {
         if !sent {
             self.flash(
                 if self.player.is_remote_disconnected() {
-                    super::actions::CONNECTION_LOST_MESSAGE
+                    crate::app::actions::CONNECTION_LOST_MESSAGE
                 } else {
                     "Playback owner rejected the queue append"
                 }
@@ -186,11 +197,11 @@ impl App {
         true
     }
 
-    pub(super) fn playing_queue_scope(&self) -> QueueScope {
+    pub(in crate::app) fn playing_queue_scope(&self) -> QueueScope {
         self.queue_scope_resolution().playback_target()
     }
 
-    pub(super) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
+    pub(in crate::app) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
         self.reset_bare_transitions();
         self.advance_remote_queue_lineage();
         let cursor = cursor.min(items.len().saturating_sub(1));
@@ -218,27 +229,27 @@ impl App {
         self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
     }
 
-    pub(super) fn viewed_queue_scope(&self) -> QueueScope {
+    pub(in crate::app) fn viewed_queue_scope(&self) -> QueueScope {
         self.queue_scope_resolution().visible_scope()
     }
 
-    pub(super) fn displayed_queue(&self) -> &PlayerTab {
+    pub(in crate::app) fn displayed_queue(&self) -> &PlayerTab {
         self.queue_for_scope(self.viewed_queue_scope())
     }
 
-    pub(super) fn displayed_queue_mut(&mut self) -> &mut PlayerTab {
+    pub(in crate::app) fn displayed_queue_mut(&mut self) -> &mut PlayerTab {
         self.queue_for_scope_mut(self.viewed_queue_scope())
     }
 
-    pub(super) fn playback_queue(&self) -> &PlayerTab {
+    pub(in crate::app) fn playback_queue(&self) -> &PlayerTab {
         self.queue_for_scope(self.playing_queue_scope())
     }
 
-    pub(super) fn playback_queue_mut(&mut self) -> &mut PlayerTab {
+    pub(in crate::app) fn playback_queue_mut(&mut self) -> &mut PlayerTab {
         self.queue_for_scope_mut(self.playing_queue_scope())
     }
 
-    pub(super) fn merge_refreshed_queue(
+    pub(in crate::app) fn merge_refreshed_queue(
         &mut self,
         scope: QueueScope,
         fetched_items: Vec<EmbyItem>,
@@ -285,7 +296,7 @@ impl App {
     /// calls `session_jump_track` unconditionally for a connected session with
     /// no boundary check. Local playback uses `PlayerStatus::previous_idx`/
     /// `next_idx`, which already fold in `active` and `queue_len`.
-    pub(super) fn transport_prev_next_available(&self) -> (bool, bool) {
+    pub(in crate::app) fn transport_prev_next_available(&self) -> (bool, bool) {
         if self.connected_session_id.is_some() {
             return (true, true);
         }
@@ -299,7 +310,11 @@ impl App {
     /// callers that act on the removal need `is_audio` afterward to route to
     /// `on_video_consumed`/`on_audio_consumed`. Resolves the audio/video
     /// flag from the queue model by slot identity instead of raw index.
-    pub(super) fn should_consume_slot(&self, slot_id: QueueSlotId, consume: bool) -> (bool, bool) {
+    pub(in crate::app) fn should_consume_slot(
+        &self,
+        slot_id: QueueSlotId,
+        consume: bool,
+    ) -> (bool, bool) {
         let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
         let is_video = item.is_some_and(|i| i.is_video());
         let is_audio = item.is_some_and(|i| i.is_audio());
@@ -320,7 +335,7 @@ impl App {
     /// Uses `consume_slot` rather than `remove_slot` so a slot that is
     /// currently marked active can still be consumed. Returns the removed
     /// item's id, or `None` if the slot no longer exists.
-    pub(super) fn consume_slot_from_active_playback_queue(
+    pub(in crate::app) fn consume_slot_from_active_playback_queue(
         &mut self,
         slot_id: QueueSlotId,
     ) -> Option<String> {
@@ -336,7 +351,7 @@ impl App {
         Some(removed.item.id().to_string())
     }
 
-    pub(super) fn set_queue_scope(&mut self, scope: QueueScope) {
+    pub(in crate::app) fn set_queue_scope(&mut self, scope: QueueScope) {
         let resolved = if scope == QueueScope::Remote && self.has_direct_remote_queue() {
             QueueScope::Remote
         } else {

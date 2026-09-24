@@ -902,7 +902,7 @@ fn podcast_latest_uses_cached_shelf_and_resolves_provider_targets_without_emby()
 #[test]
 fn podcast_latest_marker_is_visible_until_the_pill_is_selected() {
     let mut app = audiobookshelf_app();
-    app.home_latest_launch_window = crate::app::home_latest::HomeLatestLaunchWindow {
+    app.home_latest_launch_window = crate::app::state::home_latest::HomeLatestLaunchWindow {
         previous: Some(1_600_000_000), current: 1_800_000_000,
     };
     app.audiobookshelf_shelf_cache.insert("abs-podcasts".into(), vec![
@@ -913,7 +913,7 @@ fn podcast_latest_marker_is_visible_until_the_pill_is_selected() {
         }),
     ]);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().app.home_latest_launch_window = crate::app::home_latest::HomeLatestLaunchWindow {
+    harness.model_mut().app.home_latest_launch_window = crate::app::state::home_latest::HomeLatestLaunchWindow {
         previous: Some(1_600_000_000), current: 1_800_000_000,
     };
     harness.model_mut().sync_mounted_surfaces();

@@ -4,13 +4,13 @@
 // cast-protocol primitive in v1 (design.md Risks) and surface the standard
 // "command not supported" flash instead of a client call.
 
-use super::notify_actions::ToastSeverity;
-use super::{App, CastPlaybackTarget};
+use crate::app::notify_actions::ToastSeverity;
 use crate::app::render::indicators::IndicatorData;
+use crate::app::{App, CastPlaybackTarget};
 use mbv_core::cast_client::CastPlaybackState;
 
 impl CastPlaybackTarget {
-    pub(super) fn toggle_play_pause(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
         let paused = app
             .cast_attachment
             .as_ref()
@@ -23,17 +23,17 @@ impl CastPlaybackTarget {
         }
     }
 
-    pub(super) fn stop(&self, app: &mut App) {
+    pub(in crate::app) fn stop(&self, app: &mut App) {
         app.send_cast_command(|t| t.stop());
     }
 
-    pub(super) fn seek_relative(&self, app: &mut App, delta: f64) {
+    pub(in crate::app) fn seek_relative(&self, app: &mut App, delta: f64) {
         let position = app.cast_extrapolated_position_seconds().unwrap_or(0.0);
         let target = (position + delta as f32).max(0.0);
         app.send_cast_command(move |t| t.seek(target));
     }
 
-    pub(super) fn jump_track(&self, app: &mut App, step: i64) {
+    pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64) {
         if step >= 0 {
             app.send_cast_command(|t| t.skip_next());
         } else {
@@ -41,7 +41,7 @@ impl CastPlaybackTarget {
         }
     }
 
-    pub(super) fn toggle_command_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_command_mute(&self, app: &mut App) {
         let muted = !app.cast_attachment.as_ref().is_some_and(|a| a.muted);
         if let Some(attachment) = app.cast_attachment.as_mut() {
             attachment.muted = muted;
@@ -52,22 +52,22 @@ impl CastPlaybackTarget {
     /// No local audio-track cycling exists for a cast target (`cycle_audio`
     /// below flashes "not supported"), so treating every item as audio
     /// routes the `a` key to mute-toggle, which cast does support.
-    pub(super) fn is_audio_item(&self, _app: &App) -> bool {
+    pub(in crate::app) fn is_audio_item(&self, _app: &App) -> bool {
         true
     }
 
-    pub(super) fn toggle_soft_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
         self.toggle_command_mute(app);
     }
 
-    pub(super) fn cycle_audio(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
         app.flash(
             "Audio-track cycling is not supported for cast targets".to_string(),
             ToastSeverity::Warning,
         );
     }
 
-    pub(super) fn adjust_volume(&self, app: &mut App, delta: i64) {
+    pub(in crate::app) fn adjust_volume(&self, app: &mut App, delta: i64) {
         let current = app
             .cast_attachment
             .as_ref()
@@ -80,25 +80,25 @@ impl CastPlaybackTarget {
         app.send_cast_command(move |t| t.set_volume(new_volume as f32 / 100.0));
     }
 
-    pub(super) fn cycle_sub(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_sub(&self, app: &mut App) {
         app.flash(
             "Subtitles are not supported for cast targets".to_string(),
             ToastSeverity::Warning,
         );
     }
 
-    pub(super) fn displayed_volume(&self, app: &App) -> i64 {
+    pub(in crate::app) fn displayed_volume(&self, app: &App) -> i64 {
         app.cast_attachment
             .as_ref()
             .map(|a| i64::from(a.volume))
             .unwrap_or(0)
     }
 
-    pub(super) fn displayed_mute(&self, app: &App) -> bool {
+    pub(in crate::app) fn displayed_mute(&self, app: &App) -> bool {
         app.cast_attachment.as_ref().is_some_and(|a| a.muted)
     }
 
-    pub(super) fn indicator_data(&self, _app: &App) -> Option<IndicatorData> {
+    pub(in crate::app) fn indicator_data(&self, _app: &App) -> Option<IndicatorData> {
         None
     }
 }

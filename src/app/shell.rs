@@ -6,13 +6,13 @@ use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
     UiRootComponent, UserEvent,
 };
-use super::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
 use super::{App, IdleFeed, ToastSeverity};
+use crate::app::state::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
 use crate::app::state::types::feeds_manage::FeedsManagePopup;
 use crate::app::state::types::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,

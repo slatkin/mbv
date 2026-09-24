@@ -1,12 +1,12 @@
-use super::App;
 use crate::app::state::types::browse::BrowseLevel;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::state::types::feed::FeedHomeVideoState;
+use crate::app::App;
 impl App {
     /// Keeps the legacy browse snapshot current in memory for the migration
     /// reader. It deliberately never writes the legacy per-library document;
     /// launch state is serialized only by the orderly-exit snapshot path.
-    pub(super) fn persist_library_scroll(&mut self, lib_idx: usize, scroll: usize) {
+    pub(in crate::app) fn persist_library_scroll(&mut self, lib_idx: usize, scroll: usize) {
         if let Some(level) = self
             .libs
             .get_mut(lib_idx)
@@ -19,7 +19,7 @@ impl App {
 
     /// Updates the legacy snapshot only in memory. The legacy document is a
     /// startup migration source, never a live persistence target.
-    pub(super) fn save_default_library_position(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn save_default_library_position(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
@@ -33,11 +33,11 @@ impl App {
     /// Whether `lib_idx` is the library currently visible in the left
     /// panel -- used to decide whether a manual refresh/rescan should clear
     /// its saved position (see `refresh_lib`/`trigger_lib_rescan`).
-    pub(super) fn active_library_position_scope_for(&self, lib_idx: usize) -> Option<()> {
+    pub(in crate::app) fn active_library_position_scope_for(&self, lib_idx: usize) -> Option<()> {
         (self.tab.emby_library_index() == Some(lib_idx)).then_some(())
     }
 
-    pub(super) fn saved_library_position(
+    pub(in crate::app) fn saved_library_position(
         &self,
         lib_idx: usize,
     ) -> Option<crate::config::LibraryPosition> {
@@ -48,7 +48,7 @@ impl App {
             .cloned()
     }
 
-    pub(super) fn replace_saved_library_position(
+    pub(in crate::app) fn replace_saved_library_position(
         &mut self,
         lib_idx: usize,
         position: crate::config::LibraryPosition,
@@ -61,7 +61,7 @@ impl App {
             .insert(lib.library.id.clone(), position);
     }
 
-    pub(super) fn focus_queue_initial_item(&mut self) {
+    pub(in crate::app) fn focus_queue_initial_item(&mut self) {
         let playback = self.displayed_queue_playback_state();
         let queue = self.displayed_queue_mut();
         let total = queue.total_queue_len();
@@ -77,7 +77,7 @@ impl App {
         }
     }
 
-    pub(super) fn activate_library_position(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn activate_library_position(&mut self, lib_idx: usize) {
         if lib_idx >= self.libs.len() {
             return;
         }
@@ -94,10 +94,10 @@ impl App {
             .is_some_and(|root| match root.tv_content_mode.as_ref() {
                 Some(mbv_core::config::TvContentMode::All) => root
                     .library_total
-                    .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD),
+                    .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD),
                 Some(mbv_core::config::TvContentMode::Range(_)) => root
                     .library_total
-                    .is_some_and(|total| total <= super::render::LIBRARY_PILL_THRESHOLD),
+                    .is_some_and(|total| total <= crate::app::render::LIBRARY_PILL_THRESHOLD),
                 _ => false,
             });
         if current.as_ref() == saved.as_ref() && (!is_tv || !saved_mode_is_stale) {
@@ -119,7 +119,7 @@ impl App {
         if is_tv {
             if let Some(position) = saved.as_mut() {
                 if let Some(root) = position.levels.first_mut() {
-                    let mode = super::render::resolve_tv_content_mode(
+                    let mode = crate::app::render::resolve_tv_content_mode(
                         root.library_total.unwrap_or_default(),
                         root.tv_content_mode.as_ref(),
                     );
@@ -194,7 +194,7 @@ impl App {
         }
     }
 
-    pub(super) fn clear_saved_library_position(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn clear_saved_library_position(&mut self, lib_idx: usize) {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
@@ -203,7 +203,7 @@ impl App {
             .remove(&lib.library.id);
     }
 
-    pub(super) fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {
+    pub(in crate::app) fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {
         let library = self.audiobookshelf_libraries.get(index)?;
         let server = self
             .config
@@ -216,7 +216,7 @@ impl App {
         Some(format!("audiobookshelf:{server}:{}", library.id))
     }
 
-    pub(super) fn save_audiobookshelf_position(&mut self, index: usize) {
+    pub(in crate::app) fn save_audiobookshelf_position(&mut self, index: usize) {
         let Some(key) = self.audiobookshelf_position_key(index) else {
             return;
         };
@@ -250,7 +250,7 @@ impl App {
     /// Book-shaped sibling of `save_audiobookshelf_position`, keyed by the
     /// same per-library position slot (so podcast and book libraries sharing
     /// a server never collide) and carrying the book list cursor.
-    pub(super) fn save_audiobookshelf_book_position(&mut self, index: usize) {
+    pub(in crate::app) fn save_audiobookshelf_book_position(&mut self, index: usize) {
         let Some(key) = self.audiobookshelf_position_key(index) else {
             return;
         };
@@ -277,7 +277,7 @@ impl App {
         self.library_position_state.libraries.insert(key, position);
     }
 
-    pub(super) fn activate_audiobookshelf_position(&mut self, index: usize) {
+    pub(in crate::app) fn activate_audiobookshelf_position(&mut self, index: usize) {
         // A saved position names a show id under the retired show-browser
         // model; restore ignores the saved value entirely (design: no
         // migration). Tab activation is a refresh trigger (design D5): the
@@ -320,7 +320,7 @@ impl App {
     /// Book-shaped sibling of `activate_audiobookshelf_position`. A saved
     /// position's `item_types` distinguishes book from podcast slots; only a
     /// book-typed slot is honored for a book library.
-    pub(super) fn activate_audiobookshelf_book_position(&mut self, index: usize) {
+    pub(in crate::app) fn activate_audiobookshelf_book_position(&mut self, index: usize) {
         let saved = self
             .audiobookshelf_position_key(index)
             .and_then(|key| self.library_position_state.libraries.get(&key).cloned());

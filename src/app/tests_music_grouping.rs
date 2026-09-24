@@ -1,6 +1,6 @@
-use super::app_struct::LevelFillState;
+use crate::app::state::app_struct::LevelFillState;
 use super::library_browse_actions::retain_grouped_music_items;
-use super::music_grouping::{build_grouped_album_catalog, derive_album_artist, ArtistKey};
+use crate::app::state::music_grouping::{build_grouped_album_catalog, derive_album_artist, ArtistKey};
 use super::tests::{make_app_stub, make_item, make_items};
 use crate::app::state::types::events::LibEvent;
 use super::{BrowseLevel, LibraryTab, TabSelection};
@@ -573,7 +573,7 @@ fn fallback_keys_are_stable_across_rebuilds_and_input_order() {
     let reversed = build_grouped_album_catalog(&[a2.clone(), a1.clone()], &resolved);
     let again = build_grouped_album_catalog(&[a1, a2], &resolved);
 
-    let key_of = |catalog: &super::music_grouping::GroupedAlbumCatalog, album_id: &str| {
+    let key_of = |catalog: &crate::app::state::music_grouping::GroupedAlbumCatalog, album_id: &str| {
         catalog.entries[catalog.id_to_entry[album_id]].artist_key.clone()
     };
     for album_id in ["album-1", "album-2"] {

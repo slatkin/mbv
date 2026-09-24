@@ -20,7 +20,7 @@ fn tree_owner_with_stable_keys(artists: &[(&str, &str, &[&str])]) -> MusicConten
                 "2001".to_string(),
                 (*target).to_string(),
             ));
-            artist_keys.push(crate::app::music_grouping::ArtistKey::Service(
+            artist_keys.push(crate::app::state::music_grouping::ArtistKey::Service(
                 (*artist_id).to_string(),
             ));
         }

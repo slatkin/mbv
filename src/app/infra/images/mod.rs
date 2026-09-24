@@ -1,8 +1,8 @@
-use super::super::app_struct::{LevelFillAction, LevelFillState};
 use super::super::{App, LibEvent, PAGE_SIZE};
 use crate::app::palette;
 use crate::app::render::components::widgets::RENDER_FILTER;
 use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
+use crate::app::state::app_struct::{LevelFillAction, LevelFillState};
 use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 use std::time::{Duration, Instant};

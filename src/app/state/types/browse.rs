@@ -127,7 +127,8 @@ pub(in crate::app) struct BrowseLevel {
     pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
     /// Grouping lifecycle state for a music album level (candidate +
     /// settled catalog). `None` for non-music or non-album levels.
-    pub(in crate::app) music_grouping: Option<crate::app::music_grouping::MusicGroupingState>,
+    pub(in crate::app) music_grouping:
+        Option<crate::app::state::music_grouping::MusicGroupingState>,
 }
 
 impl BrowseLevel {

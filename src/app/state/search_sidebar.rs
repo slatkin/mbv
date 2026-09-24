@@ -1,15 +1,15 @@
 use mbv_core::api::EmbyItem;
 
 pub(crate) struct SearchSidebar {
-    pub(super) query: String,
-    pub(super) results: Vec<EmbyItem>,
-    pub(super) cursor: usize,
-    pub(super) scroll: usize,
-    pub(super) loading: bool,
-    pub(super) type_filter: usize,
-    pub(super) last_drain_error: Option<String>,
+    pub(in crate::app) query: String,
+    pub(in crate::app) results: Vec<EmbyItem>,
+    pub(in crate::app) cursor: usize,
+    pub(in crate::app) scroll: usize,
+    pub(in crate::app) loading: bool,
+    pub(in crate::app) type_filter: usize,
+    pub(in crate::app) last_drain_error: Option<String>,
     /// Visible list rows; written by the renderer, read by cursor movement.
-    pub(super) list_height: usize,
+    pub(in crate::app) list_height: usize,
 }
 
 fn is_navigable_type(item_type: &str) -> bool {
@@ -20,7 +20,7 @@ fn is_navigable_type(item_type: &str) -> bool {
 }
 
 impl SearchSidebar {
-    pub(super) fn new() -> Self {
+    pub(in crate::app) fn new() -> Self {
         Self {
             query: String::new(),
             results: Vec::new(),
@@ -33,7 +33,7 @@ impl SearchSidebar {
         }
     }
 
-    pub(super) fn on_query_changed(&mut self) {
+    pub(in crate::app) fn on_query_changed(&mut self) {
         self.loading = true;
         self.results.clear();
         self.cursor = 0;
@@ -42,7 +42,11 @@ impl SearchSidebar {
         self.last_drain_error = None;
     }
 
-    pub(super) fn apply_drain(&mut self, query: &str, result: Result<Vec<EmbyItem>, String>) {
+    pub(in crate::app) fn apply_drain(
+        &mut self,
+        query: &str,
+        result: Result<Vec<EmbyItem>, String>,
+    ) {
         // A faster keystroke can dispatch a newer query while an older one
         // is still in flight; responses race on arrival order, not send
         // order. Discard anything that isn't answering the live query,
@@ -69,7 +73,7 @@ impl SearchSidebar {
         }
     }
 
-    pub(super) fn available_types(&self) -> Vec<&str> {
+    pub(in crate::app) fn available_types(&self) -> Vec<&str> {
         let mut seen = std::collections::HashSet::new();
         let mut types: Vec<&str> = self
             .results
@@ -87,7 +91,7 @@ impl SearchSidebar {
         types
     }
 
-    pub(super) fn filtered_results(&self) -> Vec<&EmbyItem> {
+    pub(in crate::app) fn filtered_results(&self) -> Vec<&EmbyItem> {
         let types = self.available_types();
         let filter = if self.type_filter == 0 {
             None
@@ -100,7 +104,7 @@ impl SearchSidebar {
             .collect()
     }
 
-    pub(super) fn filtered_count(&self) -> usize {
+    pub(in crate::app) fn filtered_count(&self) -> usize {
         self.filtered_results().len()
     }
 

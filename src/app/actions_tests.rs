@@ -101,8 +101,8 @@ fn remote_playback_app() -> App {
 fn artist_cache_key(
     app: &App,
     artist_id: &str,
-) -> crate::app::music_artist_detail::ArtistDetailKey {
-    crate::app::music_artist_detail::ArtistDetailKey {
+) -> crate::app::state::music_artist_detail::ArtistDetailKey {
+    crate::app::state::music_artist_detail::ArtistDetailKey {
         destination: crate::app::components::library_panel::LibraryKey::Service {
             service: mbv_core::config::ServiceKind::Emby,
             library_id: "lib-music".into(),
@@ -139,13 +139,13 @@ fn artist_dispatch_model() -> (Model, MusicArtistTarget) {
                 id: "artist-alpha".into(),
             }];
         }
-        let mut catalog = crate::app::music_grouping::build_grouped_album_catalog(
+        let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
             &level.items,
             &Default::default(),
         );
         catalog.revision = 7;
         catalog.parent_id = level.parent_id.clone();
-        level.music_grouping = Some(crate::app::music_grouping::MusicGroupingState {
+        level.music_grouping = Some(crate::app::state::music_grouping::MusicGroupingState {
             revision: 7,
             candidate: None,
             settled: Some(catalog),
@@ -189,7 +189,7 @@ fn artist_track_dispatch_resolves_revision_rebind_and_preserves_queue_on_miss() 
     last.index_number = 3;
     model.app.artist_detail_cache.insert(
         artist_cache_key(&model.app, "artist-alpha"),
-        crate::app::music_artist_detail::ArtistDetailCacheEntry {
+        crate::app::state::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![last, first, selected],
             failed: false,
         },
@@ -254,7 +254,7 @@ fn artist_workspace_track_plays_from_the_shell_owned_artist_cache() {
     other_album.album_id = "album-2".into();
     app.artist_detail_cache.insert(
         artist_cache_key(&app, "artist-alpha"),
-        crate::app::music_artist_detail::ArtistDetailCacheEntry {
+        crate::app::state::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![first, second.clone(), other_album],
             failed: false,
         },
@@ -310,7 +310,7 @@ fn album_track_cache_still_precedes_the_artist_cache_fallback() {
     extra.album_id = "album-1".into();
     app.artist_detail_cache.insert(
         artist_cache_key(&app, "artist-alpha"),
-        crate::app::music_artist_detail::ArtistDetailCacheEntry {
+        crate::app::state::music_artist_detail::ArtistDetailCacheEntry {
             tracks: vec![only.clone(), extra],
             failed: false,
         },

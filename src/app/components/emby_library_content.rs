@@ -58,7 +58,7 @@ fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<Med
         Some(context) => (context.text, Some(parts.title.text)),
         None => (parts.title.text, None),
     };
-    let trailing = crate::app::home_latest::provider_timestamp_secs(&item)
+    let trailing = crate::app::state::home_latest::provider_timestamp_secs(&item)
         .map(crate::app::ui_util::fmt_publish_date_short)
         .filter(|date| !date.is_empty())
         .map(MediaListTrailing::Gutter);

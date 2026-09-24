@@ -5,8 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// `previous` is intentionally immutable and separate from exit-only UI state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct HomeLatestLaunchWindow {
-    pub(super) previous: Option<u64>,
-    pub(super) current: u64,
+    pub(in crate::app) previous: Option<u64>,
+    pub(in crate::app) current: u64,
 }
 
 pub(crate) fn current_launch_secs() -> u64 {
@@ -37,7 +37,7 @@ pub(crate) fn capture_launch_window(current: u64) -> HomeLatestLaunchWindow {
 }
 
 /// Normalize the provider timestamp carried by a destination Latest item.
-pub(super) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
+pub(in crate::app) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     match item {
         QueueItem::Emby(item) => {
             crate::app::infra::feed_parse::parse_pub_date_secs(&item.date_added)
@@ -48,7 +48,10 @@ pub(super) fn provider_timestamp_secs(item: &QueueItem) -> Option<u64> {
     }
 }
 
-pub(super) fn is_new_in_launch_window(item: &QueueItem, window: HomeLatestLaunchWindow) -> bool {
+pub(in crate::app) fn is_new_in_launch_window(
+    item: &QueueItem,
+    window: HomeLatestLaunchWindow,
+) -> bool {
     let Some(previous) = window.previous else {
         return false;
     };

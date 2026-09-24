@@ -14,7 +14,7 @@ fn render_sessions(width: u16, height: u16, loading: bool, has_target: bool) -> 
     if has_target {
         app.sessions = vec![make_session("Living Room", "Emby")];
     }
-    let targets = crate::app::panel_targets::build_panel_targets(&app.sessions, &[]);
+    let targets = crate::app::state::panel_targets::build_panel_targets(&app.sessions, &[]);
     let mut component = SessionsComponent::new();
     component.set_content(
         &targets,
@@ -33,7 +33,7 @@ fn render_sessions(width: u16, height: u16, loading: bool, has_target: bool) -> 
 fn sessions_none_fallback_paints_the_fullscreen_shell() {
     let mut app = make_app_stub();
     app.sessions = vec![make_session("Living Room", "Emby")];
-    let targets = crate::app::panel_targets::build_panel_targets(&app.sessions, &[]);
+    let targets = crate::app::state::panel_targets::build_panel_targets(&app.sessions, &[]);
     let width = 40;
     let height = 12;
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();

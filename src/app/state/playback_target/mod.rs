@@ -1,8 +1,12 @@
-use super::{App, PlaybackTarget};
+mod cast;
+mod local;
+mod remote;
+
 use crate::app::render::indicators::IndicatorData;
+use crate::app::{App, PlaybackTarget};
 
 impl PlaybackTarget {
-    pub(super) fn toggle_play_pause(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
         match self {
             Self::Local(target) => target.toggle_play_pause(app),
             Self::Remote(target) => target.toggle_play_pause(app),
@@ -10,7 +14,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn stop(&self, app: &mut App) {
+    pub(in crate::app) fn stop(&self, app: &mut App) {
         match self {
             Self::Local(target) => target.stop(app),
             Self::Remote(target) => target.stop(app),
@@ -18,7 +22,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn seek_relative(&self, app: &mut App, delta: f64) {
+    pub(in crate::app) fn seek_relative(&self, app: &mut App, delta: f64) {
         match self {
             Self::Local(target) => target.seek_relative(app, delta),
             Self::Remote(target) => target.seek_relative(app, delta),
@@ -26,7 +30,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
+    pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
         match self {
             Self::Local(target) => target.jump_track(app, step),
             Self::Remote(target) => target.jump_track(app, step, transport),
@@ -34,7 +38,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn toggle_command_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_command_mute(&self, app: &mut App) {
         match self {
             Self::Local(target) => target.toggle_command_mute(app),
             Self::Remote(target) => target.toggle_command_mute(app),
@@ -42,7 +46,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn is_audio_item(&self, app: &App) -> bool {
+    pub(in crate::app) fn is_audio_item(&self, app: &App) -> bool {
         match self {
             Self::Local(target) => target.is_audio_item(app),
             Self::Remote(target) => target.is_audio_item(app),
@@ -50,7 +54,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn toggle_soft_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
         match self {
             Self::Local(target) => target.toggle_soft_mute(app),
             Self::Remote(target) => target.toggle_soft_mute(app),
@@ -58,7 +62,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn cycle_audio(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
         match self {
             Self::Local(target) => target.cycle_audio(app),
             Self::Remote(target) => target.cycle_audio(app),
@@ -66,7 +70,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn adjust_volume(&self, app: &mut App, delta: i64) {
+    pub(in crate::app) fn adjust_volume(&self, app: &mut App, delta: i64) {
         match self {
             Self::Local(target) => target.adjust_volume(app, delta),
             Self::Remote(target) => target.adjust_volume(app, delta),
@@ -74,7 +78,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn cycle_sub(&self, app: &mut App) {
+    pub(in crate::app) fn cycle_sub(&self, app: &mut App) {
         match self {
             Self::Local(target) => target.cycle_sub(app),
             Self::Remote(target) => target.cycle_sub(app),
@@ -82,7 +86,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn displayed_volume(&self, app: &App) -> i64 {
+    pub(in crate::app) fn displayed_volume(&self, app: &App) -> i64 {
         match self {
             Self::Local(target) => target.displayed_volume(app),
             Self::Remote(target) => target.displayed_volume(app),
@@ -90,7 +94,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn displayed_mute(&self, app: &App) -> bool {
+    pub(in crate::app) fn displayed_mute(&self, app: &App) -> bool {
         match self {
             Self::Local(target) => target.displayed_mute(app),
             Self::Remote(target) => target.displayed_mute(app),
@@ -98,7 +102,7 @@ impl PlaybackTarget {
         }
     }
 
-    pub(super) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
+    pub(in crate::app) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
         match self {
             Self::Local(target) => target.indicator_data(app),
             Self::Remote(target) => target.indicator_data(app),
@@ -128,7 +132,7 @@ impl App {
     /// poll after the user pauses remotely). For pos-advancing clients that
     /// always report `IsPaused=true` (some Emby Web builds), the
     /// position-advance observation each poll keeps this returning false.
-    pub(super) fn playback_transport_paused(&self) -> bool {
+    pub(in crate::app) fn playback_transport_paused(&self) -> bool {
         // Same rule as `effective_playback_state`: an idle receiver's status
         // says nothing about the media actually playing; only an engaged cast
         // target owns the paused read.
@@ -144,7 +148,7 @@ impl App {
     }
 
     /// Returns the observed playback state for rendering.
-    pub(super) fn effective_playback_state(&self) -> super::PlaybackState {
+    pub(in crate::app) fn effective_playback_state(&self) -> crate::app::PlaybackState {
         // The attached cast target wins only while it actually reports (or is
         // optimistically awaiting) media. An attached receiver that is idle
         // must not shadow real playback: attach-on-selection attaches
@@ -159,7 +163,7 @@ impl App {
         }
     }
 
-    fn non_cast_playback_state(&self) -> super::PlaybackState {
+    fn non_cast_playback_state(&self) -> crate::app::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
             // The observed item is only a *local* playhead when the queue
             // holds it. A watched remote Session may be playing anything
@@ -182,7 +186,7 @@ impl App {
                 let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
                 (pos_s * mbv_core::api::TICKS_PER_SECOND as f64) as i64
             };
-            super::PlaybackState {
+            crate::app::PlaybackState {
                 active: remote.now_playing.is_some(),
                 active_idx: maybe_active_idx,
                 position_ticks: pos_ticks,
@@ -197,7 +201,7 @@ impl App {
                 .active_index()
                 .unwrap_or(s.current_idx);
             let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
-            super::PlaybackState {
+            crate::app::PlaybackState {
                 active: s.active,
                 active_idx: Some(active_idx),
                 position_ticks,
@@ -220,7 +224,9 @@ impl App {
         }
     }
 
-    pub(super) fn pending_playback_slot(&self) -> Option<mbv_core::playback_queue::QueueSlotId> {
+    pub(in crate::app) fn pending_playback_slot(
+        &self,
+    ) -> Option<mbv_core::playback_queue::QueueSlotId> {
         self.queue_for_scope(self.playing_queue_scope())
             .pending_playback_slot
             .or_else(|| self.bare_in_flight_slot())
@@ -229,7 +235,7 @@ impl App {
     /// The playback projection the queue ROWS are painted from. Bare mode
     /// blanks a queue fenced ahead of its local Player; out-of-process owner
     /// snapshots reconcile queue slots and playback coordinates together.
-    pub(super) fn queue_row_playback_state(&self) -> super::PlaybackState {
+    pub(in crate::app) fn queue_row_playback_state(&self) -> crate::app::PlaybackState {
         let mut state = self.displayed_queue_playback_state();
         if state.active && !self.local_queue_is_owner_queue(self.viewed_queue_scope()) {
             state.active = false;
@@ -241,7 +247,7 @@ impl App {
     /// while a selected slot awaits the playback owner's report -- that slot
     /// with no progress. Presentation only: authority consumers (transport
     /// gates, effects, reporting) keep `effective_playback_state`.
-    pub(super) fn displayed_playback_state(&self) -> super::PlaybackState {
+    pub(in crate::app) fn displayed_playback_state(&self) -> crate::app::PlaybackState {
         let state = self.effective_playback_state();
         let Some(index) = self.predicted_active_index() else {
             return state;
@@ -249,7 +255,7 @@ impl App {
         if state.active && state.active_idx == Some(index) {
             return state;
         }
-        super::PlaybackState {
+        crate::app::PlaybackState {
             active: true,
             active_idx: Some(index),
             // The owner is still playing the outgoing item, so its position
@@ -287,11 +293,11 @@ impl App {
         self.bare_owner.in_flight_transition_slot()
     }
 
-    pub(super) fn displayed_queue_playback_state(&self) -> super::PlaybackState {
+    pub(in crate::app) fn displayed_queue_playback_state(&self) -> crate::app::PlaybackState {
         if self.queue_scope_is_playback(self.viewed_queue_scope()) {
             self.effective_playback_state()
         } else {
-            super::PlaybackState::default()
+            crate::app::PlaybackState::default()
         }
     }
 }

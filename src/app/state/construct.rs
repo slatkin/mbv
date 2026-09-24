@@ -1,12 +1,12 @@
-use super::bootstrap::bootstrap_legacy_queue;
-use super::{
-    bootstrap_unified_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
-    SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
-};
+use crate::app::state::bootstrap::bootstrap_legacy_queue;
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crate::app::state::types::tab_selection::TabSelection;
+use crate::app::{
+    bootstrap_unified_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
+    SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
+};
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
 use mbv_core::remote_player::DaemonEndpoint;
@@ -23,9 +23,9 @@ impl App {
     /// Construct a local player and its worker channels through the ordinary
     /// startup path. The fall-through path uses this before it tears down an
     /// attached owner.
-    pub(super) fn construct_local_session(&self) -> Result<SuspendedLocalSession, String> {
+    pub(in crate::app) fn construct_local_session(&self) -> Result<SuspendedLocalSession, String> {
         #[cfg(test)]
-        if let Some(prepare) = *super::LOCAL_PLAYER_PREPARE_OVERRIDE.lock().unwrap() {
+        if let Some(prepare) = *crate::app::LOCAL_PLAYER_PREPARE_OVERRIDE.lock().unwrap() {
             prepare()?;
         }
         let config = self.config.lock().unwrap().clone();
@@ -65,7 +65,7 @@ impl App {
         })
     }
 
-    pub(super) fn build(init: AppInit) -> Self {
+    pub(in crate::app) fn build(init: AppInit) -> Self {
         // Must run before `load_prefs()`: the guard redirects `config_dir()`/
         // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
         // its path through that same lookup. Installing the guard after
@@ -131,7 +131,7 @@ impl App {
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
             library_routes: init.library_routes,
-            home_latest_launch_window: super::home_latest::HomeLatestLaunchWindow {
+            home_latest_launch_window: crate::app::state::home_latest::HomeLatestLaunchWindow {
                 previous: None,
                 current: 0,
             },
@@ -155,7 +155,7 @@ impl App {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            status_severity: super::notify_actions::ToastSeverity::default(),
+            status_severity: crate::app::notify_actions::ToastSeverity::default(),
             layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,
@@ -366,12 +366,12 @@ impl App {
             emby_runtime: {
                 let mut runtime = EmbyRuntime::new(configured);
                 runtime.state =
-                    super::service_startup::initial_state(configured, credential_present);
+                    crate::app::service_startup::initial_state(configured, credential_present);
                 runtime
             },
             audiobookshelf_runtime: {
                 let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
-                runtime.state = super::service_startup::audiobookshelf_initial_state(
+                runtime.state = crate::app::service_startup::audiobookshelf_initial_state(
                     audiobookshelf_configured,
                     audiobookshelf_credential_present,
                 );
@@ -424,7 +424,7 @@ impl App {
         app.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)
             .then_some((app_config.clone(), generation));
-        if super::service_startup::should_open_services(&app_config) {
+        if crate::app::service_startup::should_open_services(&app_config) {
             app.open_services_settings();
         }
         app
@@ -578,7 +578,7 @@ impl App {
             emby_runtime: client_arc.as_ref().map_or_else(
                 || {
                     let mut runtime = EmbyRuntime::new(emby_configured);
-                    runtime.state = super::service_startup::initial_state(
+                    runtime.state = crate::app::service_startup::initial_state(
                         emby_configured,
                         emby_credential_present,
                     );
@@ -588,7 +588,7 @@ impl App {
             ),
             audiobookshelf_runtime: {
                 let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
-                runtime.state = super::service_startup::audiobookshelf_initial_state(
+                runtime.state = crate::app::service_startup::audiobookshelf_initial_state(
                     audiobookshelf_configured,
                     audiobookshelf_credential_present,
                 );
@@ -669,7 +669,7 @@ impl App {
     /// via `Picker::from_query_stdio`, falling back to halfblocks), then
     /// apply `self.image_protocol`'s override if it names one of the known
     /// protocols. Called once at startup by `run`.
-    pub(super) fn build_image_picker(&self) -> Picker {
+    pub(in crate::app) fn build_image_picker(&self) -> Picker {
         use ratatui_image::picker::ProtocolType;
         let protocol_override = self.image_protocol.clone();
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
