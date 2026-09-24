@@ -3,6 +3,7 @@ use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
 mod types;
 pub use types::*;
 mod client_auth;
+pub mod types_parsing;
 pub use client_auth::*;
 mod client_library;
 pub use client_library::*;

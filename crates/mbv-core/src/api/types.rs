@@ -551,13 +551,16 @@ pub fn parse_mbv_direct_tcp_port(commands: &[String]) -> Option<u16> {
     })
 }
 
-mod types_parsing;
-pub(crate) use types_parsing::load_cached_token;
+// types_parsing is a sibling module now (api/types_parsing.rs) but re-exported here
+// to maintain the previous module path (api::types::types_parsing)
+pub(crate) use crate::api::types_parsing::load_cached_token;
 #[cfg(test)]
-pub use types_parsing::save_cached_token;
-pub use types_parsing::{
+pub use crate::api::types_parsing::save_cached_token;
+pub use crate::api::types_parsing::{
     clear_cached_token, parse_audio_info, parse_item, parse_session_media_info, parse_video_info,
 };
+// Re-export the types_parsing module itself to maintain the full path
+pub use crate::api::types_parsing;
 
 #[derive(Clone)]
 pub struct EmbyClient {
