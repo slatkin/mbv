@@ -1,4 +1,5 @@
 use super::super::*;
+use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_pos};
 
 impl PlaybackRun {
     // libmpv2 returns MPV_EVENT_END_FILE failures as Err(Error::Raw(...)),
