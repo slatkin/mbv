@@ -51,27 +51,6 @@ fn tv_owner_key(model: &crate::app::shell::Model) -> LibraryKey {
     }
 }
 
-/// Seed the TV owner's authoritative selection directly (mirrors
-/// `set_browser_cursor_for_test`; task 8.4: the owner is addressed through
-/// the mounted panel's `LibraryKey`, not a `ComponentId`).
-pub fn set_tv_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
-    model.sync_mounted_surfaces();
-    let key = tv_owner_key(model);
-    model
-        .application
-        .get_component_mut(&ComponentId::Library)
-        .expect("library panel mounted")
-        .as_any_mut()
-        .downcast_mut::<LibraryPanel>()
-        .expect("LibraryPanel")
-        .owner_mut(&key)
-        .expect("tv owner installed")
-        .as_any_mut()
-        .downcast_mut::<TvContent>()
-        .expect("TvContent")
-        .set_cursor_for_test(cursor);
-}
-
 pub fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
     let buf = term.backend().buffer();
     let area = *buf.area();
