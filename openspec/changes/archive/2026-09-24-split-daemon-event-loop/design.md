@@ -32,6 +32,7 @@ Open items resolved from the code:
 - **Each `continue` becomes `return LoopFlow::Continue`.** That skips persistence for the pass, which is the same as today.
 - **Stopped arm:** `if let PlayerEvent::Stopped { slot_id, run_identity, position_ticks, played, error, .. } = &pe` is bound once, and the pending-match, cancel, apply, commit and broadcast logic uses those bindings. This removes the `unreachable!()`.
 - **Test location:** new `daemon_loop_tests.rs`, so `daemon_tests.rs` (1071 lines) doesn't grow. A `test_loop()` builder combines `cold_player()`, an empty `CtrlClients`, `role = Local` and a recording store.
+- **Idle-load install persists through the loop-pass store.** `install_idle_queue_load` (`daemon_control.rs`) is reached from `handle_ctrl_for_role` and from `complete_pending_idle_queue_load` on a committed pending idle load. Both callers arrive from an arm that marks the owner queue dirty (`UnifiedQueueLoadIdle` via `CtrlCmd::mutates_owner_queue`, a committed pending load via the Stopped arm), so the install's own `persist_stay_alive_owner_queue` call was redundant: it double-wrote the same snapshot through the production store and bypassed the injected seam. The inline call was removed, leaving the loop-pass persist as the single writer through `DaemonLoop.store`; §3's idle-load test asserts exactly one snapshot via that seam (row 3.3 "persists once").
 
 ## Risks / Trade-offs
 

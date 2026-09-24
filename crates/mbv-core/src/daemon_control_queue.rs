@@ -1,11 +1,13 @@
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
-/// Used for coordinated shutdown persistence.
+/// Used for coordinated shutdown persistence. The snapshot is handed to the
+/// injected `store`, so tests can observe it without touching real state.
 fn persist_stay_alive_owner_queue(
     owner: &DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
+    store: &mut dyn FnMut(&crate::config::StayAliveQueueState) -> Result<(), String>,
 ) -> Result<(), String> {
-    crate::config::save_stay_alive_queue_state(&crate::config::StayAliveQueueState {
+    store(&crate::config::StayAliveQueueState {
         queue: project_queue_state(
             &owner.core.queue,
             &owner.core.source,
