@@ -1,3 +1,5 @@
+use super::*;
+
 /// ── Legacy Emby token migration tests ──────────────────────────────
 
 #[test]

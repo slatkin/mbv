@@ -1,3 +1,5 @@
+use super::*;
+
 #[cfg(test)]
 #[test]
 fn parse_full_config() {
@@ -32,9 +34,21 @@ fn parse_empty_string_returns_default() {
 fn parse_video_cache_settings_and_save_round_trip() {
     let cases = [
         ("", 50, 100),
-        ("video_cache_forward_mb = 75\nvideo_cache_back_mb = 125", 75, 125),
-        ("video_cache_forward_mb = \"75\"\nvideo_cache_back_mb = 0", 50, 100),
-        ("video_cache_forward_mb = 0\nvideo_cache_back_mb = -1", 50, 100),
+        (
+            "video_cache_forward_mb = 75\nvideo_cache_back_mb = 125",
+            75,
+            125,
+        ),
+        (
+            "video_cache_forward_mb = \"75\"\nvideo_cache_back_mb = 0",
+            50,
+            100,
+        ),
+        (
+            "video_cache_forward_mb = 0\nvideo_cache_back_mb = -1",
+            50,
+            100,
+        ),
         (
             "video_cache_forward_mb = -1\nvideo_cache_back_mb = 9223372036854775807",
             50,
@@ -50,7 +64,10 @@ fn parse_video_cache_settings_and_save_round_trip() {
     let _g = SYS_ENV_LOCK.lock().unwrap();
     let dir = std::env::temp_dir().join(format!(
         "mbv-config-test-{}",
-        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
     ));
     std::fs::create_dir_all(dir.join("mbv")).unwrap();
     std::env::set_var("XDG_CONFIG_HOME", &dir);

@@ -1,4 +1,6 @@
-fn save_audiobookshelf_setup_at(
+use super::*;
+
+pub(super) fn save_audiobookshelf_setup_at(
     setup: &AudiobookshelfSetup,
     path: &std::path::Path,
 ) -> Result<(), String> {
@@ -51,7 +53,7 @@ fn clear_audiobookshelf_setup_at(path: &std::path::Path) -> Result<(), String> {
     write_config_text_at(path, &text)
 }
 
-fn audiobookshelf_transaction<F>(operation: F) -> Result<(), String>
+pub(super) fn audiobookshelf_transaction<F>(operation: F) -> Result<(), String>
 where
     F: FnOnce(&std::path::Path, &std::path::Path) -> Result<(), String>,
 {

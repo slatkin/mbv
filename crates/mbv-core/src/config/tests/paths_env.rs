@@ -1,3 +1,5 @@
+use super::*;
+
 // Path-routing and save/load error-path tests. Included into `config::tests`
 // (see `config.rs`).
 

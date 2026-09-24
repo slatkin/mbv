@@ -1,3 +1,5 @@
+use super::*;
+
 // Hermetic tests for the mpv overlay script/font source resolution
 // (openspec change fix-next-up-accept-and-mpv-script-source, B1-B3).
 // Resolution is a pure function over injected candidates; these tests
@@ -136,6 +138,10 @@ fn checkout_run_resolves_the_checkout_entry_script() {
 #[test]
 fn checkout_fonts_dir_exists_in_this_checkout() {
     let fonts = checkout_fonts_dir();
-    assert!(fonts.exists(), "checkout fonts dir {} missing", fonts.display());
+    assert!(
+        fonts.exists(),
+        "checkout fonts dir {} missing",
+        fonts.display()
+    );
     assert!(fonts.ends_with("fonts"));
 }

@@ -1,3 +1,5 @@
+use super::*;
+
 pub fn load_config() -> Result<Config, String> {
     let path = config_path();
     let text = match std::fs::read_to_string(&path) {

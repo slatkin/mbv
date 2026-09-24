@@ -21,7 +21,8 @@
 // Queue item, a nested Workspace selector, overlays/sidebars, search,
 // multi-selection, scroll offsets, loading/error state, or paint geometry.
 
-use std::path::Path;
+use super::*;
+use std::path::{Path, PathBuf};
 
 /// Current on-disk format version. The loader accepts only this version and
 /// returns `None` for anything else, so a newer file never mis-resolves into
@@ -301,7 +302,7 @@ pub fn save_tui_launch_state(state: &TuiLaunchState) -> Result<(), TuiLaunchStat
     save_tui_launch_state_at(&tui_launch_state_path(), state)
 }
 
-fn save_tui_launch_state_at(
+pub(super) fn save_tui_launch_state_at(
     path: &Path,
     state: &TuiLaunchState,
 ) -> Result<(), TuiLaunchStateError> {
@@ -327,7 +328,7 @@ pub fn load_tui_launch_state() -> Option<TuiLaunchState> {
     load_tui_launch_state_at(&tui_launch_state_path())
 }
 
-fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
+pub(super) fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
     let text = std::fs::read_to_string(path).ok()?;
     match serde_json::from_str::<TuiLaunchState>(&text) {
         Ok(state) if state.version == TUI_LAUNCH_STATE_VERSION => Some(state),
@@ -352,7 +353,7 @@ fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
 /// Process-unique sibling path for the atomic replace: same directory (so
 /// the rename stays atomic), qualified by pid and a fresh uuid so two
 /// Clients writing concurrently never share a pathname.
-fn tui_launch_state_tmp_path(path: &Path) -> PathBuf {
+pub(super) fn tui_launch_state_tmp_path(path: &Path) -> PathBuf {
     let file_name = path
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())

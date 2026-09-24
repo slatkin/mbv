@@ -1,3 +1,5 @@
+use super::*;
+
 #[test]
 fn emby_setup_normalizes_server_and_starts_at_revision_one() {
     let setup = EmbySetup::new("  https://emby.example/// ", " user-1 ");

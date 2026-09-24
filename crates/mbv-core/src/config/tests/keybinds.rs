@@ -1,3 +1,5 @@
+use super::*;
+
 // ── `[keys]` config parse + save (change add-configurable-keybinds, U2) ──
 //
 // Parse routes every entry through the registry validator
@@ -70,7 +72,10 @@ help_open = "F9"
     );
     // A rebound action no longer fires its declared default chord.
     let next_tab = crate::keybinds::action_by_id("next_library_tab").unwrap();
-    assert!(!cfg.keybinds.router_chords(next_tab).contains(&crate::keybinds::Chord::parse("Tab").unwrap()));
+    assert!(!cfg
+        .keybinds
+        .router_chords(next_tab)
+        .contains(&crate::keybinds::Chord::parse("Tab").unwrap()));
 }
 
 #[test]
@@ -132,7 +137,10 @@ search_open = "s"
     // The whole `[keys]` shape survives, entry for entry.
     let reparsed = parse_config(&saved).unwrap();
     assert_eq!(reparsed.keybinds, cfg.keybinds);
-    assert_eq!(reparsed.keybinds.prefix, Some(crate::keybinds::Chord::parse("Ctrl+b").unwrap()));
+    assert_eq!(
+        reparsed.keybinds.prefix,
+        Some(crate::keybinds::Chord::parse("Ctrl+b").unwrap())
+    );
     assert_eq!(
         reparsed.keybinds.router_override("help_open"),
         Some(crate::keybinds::Chord::parse("F9").unwrap())
@@ -158,7 +166,10 @@ fn keys_default_configuration_prunes_the_keys_table() {
     };
     save_config_settings(&cfg).unwrap();
     let saved = std::fs::read_to_string(config_path()).unwrap();
-    assert!(!saved.contains("[keys"), "pruned table must be gone: {saved}");
+    assert!(
+        !saved.contains("[keys"),
+        "pruned table must be gone: {saved}"
+    );
     let reparsed = parse_config(&saved).unwrap();
     assert_eq!(reparsed.keybinds, crate::keybinds::Keybinds::default());
 }
@@ -169,10 +180,13 @@ fn keys_saved_section_names_are_lowercase_file_shape() {
     let cfg = Config {
         keybinds: crate::keybinds::load(&crate::keybinds::RawKeybinds {
             prefix: Some("Ctrl+b".into()),
-            sections: vec![("GLOBAL".into(), crate::keybinds::RawSection {
-                router: vec![("help_open".into(), "F9".into())],
-                prefix: vec![],
-            })],
+            sections: vec![(
+                "GLOBAL".into(),
+                crate::keybinds::RawSection {
+                    router: vec![("help_open".into(), "F9".into())],
+                    prefix: vec![],
+                },
+            )],
         })
         .unwrap(),
         ..Default::default()
@@ -194,10 +208,7 @@ mod keys_rejections {
     /// the registry's message naming the offending entry (both entries for
     /// the collision classes).
     #[rstest]
-    #[case::unknown_section(
-        "[keys.bogus]\nhelp_open = \"F9\"\n",
-        "unknown section `keys.bogus`"
-    )]
+    #[case::unknown_section("[keys.bogus]\nhelp_open = \"F9\"\n", "unknown section `keys.bogus`")]
     #[case::case_variant_duplicate_section(
         "[keys.Library]\nprevious_library_tab = \"Shift+Tab\"\n\n[keys.library]\nnext_library_tab = \"n\"\n",
         "same section under different spellings"
@@ -222,10 +233,7 @@ mod keys_rejections {
         "[keys]\nprefix = \"Ctrl+q\"\n",
         "chord `Ctrl+q` in `keys.prefix` is reserved"
     )]
-    #[case::prefix_collides_with_default(
-        "[keys]\nprefix = \"F1\"\n",
-        "prefix chord `F1` collides"
-    )]
+    #[case::prefix_collides_with_default("[keys]\nprefix = \"F1\"\n", "prefix chord `F1` collides")]
     #[case::prefix_collides_with_configured(
         "[keys]\nprefix = \"F9\"\n\n[keys.global]\nhelp_open = \"F9\"\n",
         "prefix chord `F9` collides"
@@ -243,7 +251,10 @@ mod keys_rejections {
         "not prefix-addressable"
     )]
     #[case::prefix_entry_not_a_string("[keys]\nprefix = 7\n", "keys.prefix must be a string chord")]
-    #[case::section_entry_not_a_table("[keys]\nhelp_open = \"F9\"\n", "keys.help_open must be a table")]
+    #[case::section_entry_not_a_table(
+        "[keys]\nhelp_open = \"F9\"\n",
+        "keys.help_open must be a table"
+    )]
     fn keys_rejection_surfaces(#[case] toml: &str, #[case] expected: &str) {
         let err = parse_config(toml).unwrap_err();
         assert!(

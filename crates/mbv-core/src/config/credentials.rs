@@ -1,6 +1,7 @@
 // Per-Service secret files and the Local-daemon Control credential.
-// Included via `include!("config_credentials.rs")` in config.rs, so all
-// items share the same module scope as the other config_*.rs files.
+
+use super::*;
+use std::path::PathBuf;
 
 /// ── Per-Service secrets ──────────────────────────────────────────────
 /// Each configured Remote Service gets its own mode-0600 secret file
@@ -21,7 +22,7 @@ pub fn save_service_secret(kind: ServiceKind, secret: &str) -> Result<(), String
     save_service_secret_at(secret, &service_secret_path(kind))
 }
 
-fn save_service_secret_at(secret: &str, path: &std::path::Path) -> Result<(), String> {
+pub(super) fn save_service_secret_at(secret: &str, path: &std::path::Path) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("create secrets directory {}: {e}", dir.display()))?;
@@ -86,7 +87,10 @@ pub fn control_credential_path() -> PathBuf {
     state_dir().join("control_credential.json")
 }
 
-fn write_control_credential_temp(secret: &str, path: &std::path::Path) -> Result<PathBuf, String> {
+pub(super) fn write_control_credential_temp(
+    secret: &str,
+    path: &std::path::Path,
+) -> Result<PathBuf, String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .map_err(|e| format!("create directory {}: {e}", dir.display()))?;

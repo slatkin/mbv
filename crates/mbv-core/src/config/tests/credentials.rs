@@ -1,3 +1,5 @@
+use super::*;
+
 // ── Service-independent startup tests (tasks 1.2–1.4) ────────────────
 #[test]
 fn service_secret_write_and_read_round_trips() {

@@ -1,6 +1,7 @@
 // Emby setup persistence: legacy token migration and transactional
-// setup+secret writes. Included via `include!("config_emby_admin.rs")`
-// in config.rs, so all items share the same module scope.
+// setup+secret writes.
+
+use super::*;
 
 /// ── Legacy Emby token migration ──────────────────────────────────────
 /// One-time migration from the legacy flat `token.json` (server_url +
@@ -132,7 +133,7 @@ fn clear_emby_setup_at(path: &std::path::Path) -> Result<(), String> {
         .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))
 }
 
-fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> Result<(), String> {
+pub(super) fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> Result<(), String> {
     if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
         return Err("Emby setup requires a server URL and user ID".to_string());
     }
@@ -247,7 +248,7 @@ pub fn remove_emby_setup_and_secret() -> Result<(), String> {
     Ok(())
 }
 
-fn persist_emby_setup_and_secret_at<FS, FT>(
+pub(super) fn persist_emby_setup_and_secret_at<FS, FT>(
     setup: &EmbySetup,
     token: &str,
     config: &std::path::Path,

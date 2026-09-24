@@ -1,3 +1,5 @@
+use super::*;
+
 /// A restorable snapshot of the files owned by Emby setup administration.
 ///
 /// The bytes are retained rather than decoded and reconstructed so a failed

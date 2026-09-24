@@ -1,4 +1,6 @@
-fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), String> {
+use super::*;
+
+pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), String> {
     let mut doc: toml::Value = match std::fs::read_to_string(path) {
         Ok(text) => toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -382,7 +384,7 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
     write_config_text_at(path, &s)
 }
 
-fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), String> {
+pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .map_err(|e| format!("create directory {}: {e}", parent.display()))?;

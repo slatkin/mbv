@@ -1,3 +1,5 @@
+use super::*;
+
 #[test]
 fn parse_music_levels_group_album() {
     let toml = "[server]\nurl = \"http://host\"\n[library.music]\nlevels = [\"group\", \"album\"]";

@@ -1,33 +1,31 @@
-include!("config_types_paths.rs");
-include!("config_types_setup.rs");
-include!("config_types_queue_state.rs");
-include!("config_launch_state.rs");
-include!("config_test_support.rs");
-include!("config_types_feed.rs");
-include!("config_paths.rs");
-include!("config_state.rs");
-include!("config_credentials.rs");
-include!("config_emby_admin.rs");
-include!("config_parse.rs");
-include!("config_save.rs");
-include!("config_audiobookshelf_lifecycle.rs");
-include!("config_emby_lifecycle.rs");
+mod types_paths;
+pub use types_paths::*;
+mod types_setup;
+pub use types_setup::*;
+mod types_queue_state;
+pub use types_queue_state::*;
+mod launch_state;
+pub use launch_state::*;
+mod test_support;
+pub use test_support::*;
+mod types_feed;
+pub use types_feed::*;
+mod paths;
+pub use paths::*;
+mod state;
+pub use state::*;
+mod credentials;
+pub use credentials::*;
+mod emby_admin;
+pub use emby_admin::*;
+mod parse;
+pub use parse::*;
+mod save;
+pub use save::*;
+mod audiobookshelf_lifecycle;
+pub use audiobookshelf_lifecycle::*;
+mod emby_lifecycle;
+pub use emby_lifecycle::*;
 
 #[cfg(any(test, feature = "test-support"))]
-pub mod tests {
-    #[cfg(any(test, feature = "test-support"))]
-    use super::*;
-    #[cfg(any(test, feature = "test-support"))]
-    #[allow(unused_imports)]
-    use std::time::{SystemTime, UNIX_EPOCH};
-    include!("config_tests_settings.rs");
-    include!("config_tests_keybinds.rs");
-    include!("config_tests_library.rs");
-    include!("config_tests_paths.rs");
-    include!("config_tests_paths_env.rs");
-    include!("config_tests_credentials.rs");
-    include!("config_tests_paths_migration.rs");
-    include!("config_tests_script_source.rs");
-    include!("config_tests_emby_admin.rs");
-    include!("config_tests_launch_state.rs");
-}
+pub mod tests;

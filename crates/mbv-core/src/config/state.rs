@@ -1,6 +1,7 @@
 // Queue, library-position, and last-remote-connection state persistence.
-// Included via `include!("config_state.rs")` in config.rs, so all items
-// share the same module scope as the other config_*.rs files.
+
+use super::*;
+use std::path::PathBuf;
 
 pub fn save_queue_state(state: &QueueState) -> Result<(), String> {
     save_json_atomic(&queue_state_path(), state, "queue state")
@@ -10,7 +11,7 @@ pub fn load_queue_state() -> Option<QueueState> {
     load_json(&queue_state_path(), "queue_state.json")
 }
 
-fn save_json_atomic<T: serde::Serialize>(
+pub(super) fn save_json_atomic<T: serde::Serialize>(
     path: &std::path::Path,
     state: &T,
     what: &str,
@@ -26,7 +27,10 @@ fn save_json_atomic<T: serde::Serialize>(
         .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
 }
 
-fn load_json<T: serde::de::DeserializeOwned>(path: &std::path::Path, what: &str) -> Option<T> {
+pub(super) fn load_json<T: serde::de::DeserializeOwned>(
+    path: &std::path::Path,
+    what: &str,
+) -> Option<T> {
     let text = std::fs::read_to_string(path).ok()?;
     match serde_json::from_str(&text) {
         Ok(state) => Some(state),
@@ -54,7 +58,9 @@ pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), St
     save_stay_alive_queue_state_at(&stay_alive_queue_state_path(), state)
 }
 
-pub(crate) fn load_stay_alive_queue_state_at(path: &std::path::Path) -> Option<StayAliveQueueState> {
+pub(crate) fn load_stay_alive_queue_state_at(
+    path: &std::path::Path,
+) -> Option<StayAliveQueueState> {
     load_json(path, "owner queue state")
 }
 
@@ -92,7 +98,10 @@ struct HomeLatestLaunchState {
     launch_secs: u64,
 }
 
-fn save_home_latest_launch_at(path: &std::path::Path, launch_secs: u64) -> Result<(), String> {
+pub(super) fn save_home_latest_launch_at(
+    path: &std::path::Path,
+    launch_secs: u64,
+) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)
             .map_err(|error| format!("create directory {}: {error}", dir.display()))?;
@@ -116,7 +125,7 @@ pub fn save_home_latest_launch(launch_secs: u64) -> Result<(), String> {
     save_home_latest_launch_at(&home_latest_launch_path(), launch_secs)
 }
 
-fn load_home_latest_launch_at(path: &std::path::Path) -> Option<u64> {
+pub(super) fn load_home_latest_launch_at(path: &std::path::Path) -> Option<u64> {
     let text = std::fs::read_to_string(path).ok()?;
     let state: HomeLatestLaunchState = serde_json::from_str(&text).ok()?;
     (state.version == HOME_LATEST_LAUNCH_STATE_VERSION).then_some(state.launch_secs)
@@ -149,7 +158,7 @@ pub enum LastRemoteConnection {
     DirectSession { device_name: String },
 }
 
-fn last_remote_connection_path() -> PathBuf {
+pub(super) fn last_remote_connection_path() -> PathBuf {
     state_dir().join("last_remote_connection.json")
 }
 
@@ -157,7 +166,7 @@ fn last_remote_connection_path() -> PathBuf {
 /// Called from `App::teardown` only when `auto_reconnect` is
 /// enabled -- when the feature is off, this file is never written or
 /// read, by design (Task 1's `Global Constraints`).
-fn save_last_remote_connection_at(
+pub(super) fn save_last_remote_connection_at(
     path: &std::path::Path,
     conn: Option<&LastRemoteConnection>,
 ) -> Result<(), String> {
@@ -184,7 +193,7 @@ pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) -> Resul
     save_last_remote_connection_at(&last_remote_connection_path(), conn)
 }
 
-fn load_last_remote_connection_at(
+pub(super) fn load_last_remote_connection_at(
     path: &std::path::Path,
 ) -> Result<Option<LastRemoteConnection>, String> {
     let text = match std::fs::read_to_string(path) {

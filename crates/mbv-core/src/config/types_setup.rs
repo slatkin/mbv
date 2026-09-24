@@ -1,3 +1,5 @@
+use super::*;
+
 // Service setup types for `Config`. Included into `config`'s module scope
 // (see `config.rs`), so callers reach them as `crate::config::…`.
 

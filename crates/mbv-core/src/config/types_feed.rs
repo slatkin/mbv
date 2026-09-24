@@ -1,3 +1,5 @@
+use super::*;
+
 /// Media kind of a feed subscription, declared by the user in
 /// `[[feeds]]` config entries. The stored kind is the default for the
 /// subscription; per-entry kind can be refined from the enclosure MIME

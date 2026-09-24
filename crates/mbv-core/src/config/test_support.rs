@@ -2,6 +2,8 @@
 // (see `config.rs`) so callers reach it as `crate::config::TestTempDir`, next
 // to `TestStateDirGuard` in `config_types_paths.rs`.
 
+use std::path::PathBuf;
+
 /// Scratch directory for tests that must exercise a real filesystem path.
 ///
 /// Removes itself on drop -- including when the test panics -- so a failing
@@ -101,7 +103,7 @@ fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
 // required. See `TestStateDirGuard` and issue #106.
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
-    static TEST_STATE_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+    pub(super) static TEST_STATE_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -116,12 +118,12 @@ thread_local! {
 // built in a test binary via `_test_state_dir_guard`) gets both for free.
 #[cfg(any(test, feature = "test-support"))]
 thread_local! {
-    static TEST_CONFIG_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+    pub(super) static TEST_CONFIG_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
         const { std::cell::RefCell::new(None) };
 }
 
 #[cfg(test)]
-static TEST_DEFAULT_STATE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+pub(super) static TEST_DEFAULT_STATE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
 #[cfg(any(test, feature = "test-support"))]
 pub struct TestStateDirGuard;

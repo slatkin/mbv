@@ -1,3 +1,5 @@
+use super::*;
+
 // Focused filesystem tests for the TUI launch-state snapshot
 // (`config_launch_state.rs`). Hermetic by construction: every test writes
 // through the explicit-path `_at` variants into fresh `TestTempDir`
@@ -127,10 +129,7 @@ fn tui_launch_state_existing_selector_identity_still_loads() {
     )
     .unwrap();
 
-    assert_eq!(
-        load_tui_launch_state_at(&path),
-        Some(launch_state_sample())
-    );
+    assert_eq!(load_tui_launch_state_at(&path), Some(launch_state_sample()));
 }
 
 #[test]

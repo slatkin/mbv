@@ -1,7 +1,9 @@
 // Path helper functions extracted from config_types_paths.rs.
-// Included via `include!("config_paths.rs")` in config.rs, so all
-// items share the same module scope. Types and config_dir/cache_dir/
-// state_dir/is_system_instance come from config_types_paths.rs.
+// Types and config_dir/cache_dir/state_dir/is_system_instance come from config_types_paths.rs.
+
+use super::*;
+use std::env;
+use std::path::PathBuf;
 
 pub fn data_dir_system_or_local() -> PathBuf {
     if is_system_instance() {
@@ -33,7 +35,7 @@ pub fn home_latest_launch_path() -> PathBuf {
 }
 
 /// Visibility/size of the now-playing panel, cycled with `h` and remembered across restarts.
-fn migrate_to_state(filename: &str) -> PathBuf {
+pub(super) fn migrate_to_state(filename: &str) -> PathBuf {
     let dest = state_dir().join(filename);
     if dest.exists() {
         return dest;
@@ -65,11 +67,7 @@ pub struct ScriptSource {
 /// when it exists, else the packaged path. `legacy` is never a candidate;
 /// it is only reported when it exists so startup can warn that a
 /// removed-installer copy is being ignored. No environment is read.
-pub fn resolve_script_source(
-    checkout: PathBuf,
-    package: PathBuf,
-    legacy: PathBuf,
-) -> ScriptSource {
+pub fn resolve_script_source(checkout: PathBuf, package: PathBuf, legacy: PathBuf) -> ScriptSource {
     let chosen = if checkout.exists() { checkout } else { package };
     let unused_legacy = if legacy.exists() { Some(legacy) } else { None };
     ScriptSource {
@@ -81,11 +79,14 @@ pub fn resolve_script_source(
 /// Compile-time checkout root, derived from the manifest directory
 /// (`<checkout>/crates/mbv-core`). Absent on installed systems, so the
 /// packaged copy wins there.
-fn checkout_scripts_entry() -> PathBuf {
-    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/mbv.lua"))
+pub(super) fn checkout_scripts_entry() -> PathBuf {
+    PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../scripts/mbv.lua"
+    ))
 }
 
-fn checkout_fonts_dir() -> PathBuf {
+pub(super) fn checkout_fonts_dir() -> PathBuf {
     PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fonts"))
 }
 
@@ -113,7 +114,7 @@ pub fn osc_fonts_dir() -> PathBuf {
     osc_fonts_source().chosen
 }
 
-fn runtime_dir() -> String {
+pub(super) fn runtime_dir() -> String {
     if is_system_instance() {
         return "/run/mbv".to_string();
     }
