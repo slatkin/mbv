@@ -797,6 +797,4 @@ pub enum DisconnectReason {
 }
 
 #[cfg(test)]
-mod tests {
-    include!("ctrl_tests.rs");
-}
+mod tests;

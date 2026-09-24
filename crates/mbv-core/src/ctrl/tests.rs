@@ -435,7 +435,10 @@ fn unified_queue_replace_cmd_round_trips() {
             .iter()
             .cloned()
             .enumerate()
-            .map(|(index, item)| UnifiedQueueSlot { slot_id: (index + 7) as u64, item })
+            .map(|(index, item)| UnifiedQueueSlot {
+                slot_id: (index + 7) as u64,
+                item,
+            })
             .collect(),
         items,
         start_idx: Some(0),
@@ -444,10 +447,18 @@ fn unified_queue_replace_cmd_round_trips() {
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::UnifiedQueueReplace { items, slots, start_idx, source } => {
+        CtrlCmd::UnifiedQueueReplace {
+            items,
+            slots,
+            start_idx,
+            source,
+        } => {
             assert_eq!(items.len(), 2);
             assert_eq!(source, QueueSource::Album);
-            assert_eq!(slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), vec![7, 8]);
+            assert_eq!(
+                slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
+                vec![7, 8]
+            );
             assert_eq!(start_idx, Some(0));
         }
         _ => panic!("expected UnifiedQueueReplace"),
@@ -465,8 +476,12 @@ fn unified_queue_replace_cmd_round_trips() {
         .and_then(serde_json::Value::as_object_mut)
         .unwrap()
         .remove("source");
-    let CtrlCmd::UnifiedQueueReplace { items, slots, start_idx, source } =
-        serde_json::from_value(legacy).unwrap()
+    let CtrlCmd::UnifiedQueueReplace {
+        items,
+        slots,
+        start_idx,
+        source,
+    } = serde_json::from_value(legacy).unwrap()
     else {
         panic!("expected legacy UnifiedQueueReplace")
     };
@@ -488,20 +503,39 @@ fn idle_queue_load_and_result_round_trip_with_request_identity() {
         source: QueueSource::Album,
     };
     let decoded: CtrlCmd = serde_json::from_str(&serde_json::to_string(&command).unwrap()).unwrap();
-    assert!(matches!(decoded, CtrlCmd::UnifiedQueueLoadIdle { request_id: 77, cursor: 0, source: QueueSource::Album, .. }));
+    assert!(matches!(
+        decoded,
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 77,
+            cursor: 0,
+            source: QueueSource::Album,
+            ..
+        }
+    ));
 
     let event = CtrlEvent::UnifiedQueueLoadResult {
         request_id: 77,
-        result: QueueLoadResult::Rejected { reason: "unsupported".to_string() },
+        result: QueueLoadResult::Rejected {
+            reason: "unsupported".to_string(),
+        },
     };
     let decoded: CtrlEvent = serde_json::from_str(&serde_json::to_string(&event).unwrap()).unwrap();
-    assert!(matches!(decoded, CtrlEvent::UnifiedQueueLoadResult { request_id: 77, result: QueueLoadResult::Rejected { reason } } if reason == "unsupported"));
+    assert!(
+        matches!(decoded, CtrlEvent::UnifiedQueueLoadResult { request_id: 77, result: QueueLoadResult::Rejected { reason } } if reason == "unsupported")
+    );
     let accepted = CtrlEvent::UnifiedQueueLoadResult {
         request_id: 78,
         result: QueueLoadResult::Accepted,
     };
-    let decoded: CtrlEvent = serde_json::from_str(&serde_json::to_string(&accepted).unwrap()).unwrap();
-    assert!(matches!(decoded, CtrlEvent::UnifiedQueueLoadResult { request_id: 78, result: QueueLoadResult::Accepted }));
+    let decoded: CtrlEvent =
+        serde_json::from_str(&serde_json::to_string(&accepted).unwrap()).unwrap();
+    assert!(matches!(
+        decoded,
+        CtrlEvent::UnifiedQueueLoadResult {
+            request_id: 78,
+            result: QueueLoadResult::Accepted
+        }
+    ));
 }
 
 #[test]
@@ -511,7 +545,13 @@ fn source_only_update_round_trips_queue_lineage() {
         lineage: QueueLineage(42),
     };
     let decoded: CtrlCmd = serde_json::from_str(&serde_json::to_string(&command).unwrap()).unwrap();
-    assert!(matches!(decoded, CtrlCmd::UnifiedQueueSourceUpdate { source: QueueSource::Album, lineage: QueueLineage(42) }));
+    assert!(matches!(
+        decoded,
+        CtrlCmd::UnifiedQueueSourceUpdate {
+            source: QueueSource::Album,
+            lineage: QueueLineage(42)
+        }
+    ));
 }
 
 #[test]

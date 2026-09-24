@@ -1026,6 +1026,4 @@ fn parse_configured(chord: &str, entry: &str, reserved: &[Chord]) -> Result<Chor
 }
 
 #[cfg(test)]
-mod tests {
-    include!("keybinds_tests.rs");
-}
+mod tests;

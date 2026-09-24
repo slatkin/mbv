@@ -4,15 +4,7 @@ use super::*;
 
 /// Mirrors `SETTING_SECTIONS`' names and order (design D4) plus `Global`.
 const EXPECTED_SECTIONS: &[&str] = &[
-    "Services",
-    "Playback",
-    "Display",
-    "Session",
-    "Library",
-    "Queue",
-    "Mpv",
-    "Feeds",
-    "Actions",
+    "Services", "Playback", "Display", "Session", "Library", "Queue", "Mpv", "Feeds", "Actions",
     "Global",
 ];
 
@@ -58,8 +50,11 @@ const TRANSPORT_ACTION_IDS: &[&str] = &[
 /// Policy entries that are not configurable actions: the blocking swallow
 /// guard and the non-global, non-transport entries, which keep their literal
 /// matches.
-const EXCLUDED_POLICY_NAMES: &[&str] =
-    &["alt_swallow", "queue_column_width", "sessions_sidebar_escape"];
+const EXCLUDED_POLICY_NAMES: &[&str] = &[
+    "alt_swallow",
+    "queue_column_width",
+    "sessions_sidebar_escape",
+];
 
 #[test]
 fn action_ids_are_unique() {
@@ -98,7 +93,10 @@ fn every_declared_section_is_a_key_section() {
             action.id,
             action.section.name()
         );
-        assert_eq!(KeySection::from_name(action.section.name()), Some(action.section));
+        assert_eq!(
+            KeySection::from_name(action.section.name()),
+            Some(action.section)
+        );
     }
 }
 
@@ -123,7 +121,11 @@ fn transport_actions_carry_the_playback_gate_and_policy() {
 #[test]
 fn every_declared_action_is_rebindable_and_exclusions_stay_out() {
     for action in KEYBIND_ACTIONS {
-        assert!(action.rebindable, "action `{}` must be rebindable", action.id);
+        assert!(
+            action.rebindable,
+            "action `{}` must be rebindable",
+            action.id
+        );
         assert!(!action.default_chords.is_empty());
         assert!(!action.id.is_empty());
         assert!(!action.policy.is_empty());
@@ -178,28 +180,121 @@ fn non_prefix_addressable_actions_are_the_documented_exceptions() {
 #[test]
 fn parser_accepts_canonical_and_reordered_forms() {
     let cases: &[(&str, Chord)] = &[
-        ("Ctrl+b", Chord { mods: KeyMods::CTRL, key: Key::Char('b') }),
-        ("F8", Chord { mods: KeyMods::NONE, key: Key::F(8) }),
-        ("Shift+Left", Chord { mods: KeyMods::SHIFT, key: Key::Left }),
-        ("Shift+Ctrl+b", Chord { mods: KeyMods::CTRL.union(KeyMods::SHIFT), key: Key::Char('b') }),
-        ("Alt+Ctrl+Shift+x", Chord { mods: KeyMods::CTRL.union(KeyMods::SHIFT).union(KeyMods::ALT), key: Key::Char('x') }),
-        ("control+alt+del", Chord { mods: KeyMods::CTRL.union(KeyMods::ALT), key: Key::Delete }),
-        ("Escape", Chord { mods: KeyMods::NONE, key: Key::Esc }),
-        ("BackTab", Chord { mods: KeyMods::NONE, key: Key::BackTab }),
-        ("Space", Chord { mods: KeyMods::NONE, key: Key::Char(' ') }),
-        ("+", Chord { mods: KeyMods::NONE, key: Key::Char('+') }),
-        ("-", Chord { mods: KeyMods::NONE, key: Key::Char('-') }),
-        ("<", Chord { mods: KeyMods::NONE, key: Key::Char('<') }),
-        ("Ctrl+=", Chord { mods: KeyMods::CTRL, key: Key::Char('=') }),
-        ("q", Chord { mods: KeyMods::NONE, key: Key::Char('q') }),
-        ("N", Chord { mods: KeyMods::NONE, key: Key::Char('N') }),
+        (
+            "Ctrl+b",
+            Chord {
+                mods: KeyMods::CTRL,
+                key: Key::Char('b'),
+            },
+        ),
+        (
+            "F8",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::F(8),
+            },
+        ),
+        (
+            "Shift+Left",
+            Chord {
+                mods: KeyMods::SHIFT,
+                key: Key::Left,
+            },
+        ),
+        (
+            "Shift+Ctrl+b",
+            Chord {
+                mods: KeyMods::CTRL.union(KeyMods::SHIFT),
+                key: Key::Char('b'),
+            },
+        ),
+        (
+            "Alt+Ctrl+Shift+x",
+            Chord {
+                mods: KeyMods::CTRL.union(KeyMods::SHIFT).union(KeyMods::ALT),
+                key: Key::Char('x'),
+            },
+        ),
+        (
+            "control+alt+del",
+            Chord {
+                mods: KeyMods::CTRL.union(KeyMods::ALT),
+                key: Key::Delete,
+            },
+        ),
+        (
+            "Escape",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::Esc,
+            },
+        ),
+        (
+            "BackTab",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::BackTab,
+            },
+        ),
+        (
+            "Space",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::Char(' '),
+            },
+        ),
+        (
+            "+",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::Char('+'),
+            },
+        ),
+        (
+            "-",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::Char('-'),
+            },
+        ),
+        (
+            "<",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::Char('<'),
+            },
+        ),
+        (
+            "Ctrl+=",
+            Chord {
+                mods: KeyMods::CTRL,
+                key: Key::Char('='),
+            },
+        ),
+        (
+            "q",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::Char('q'),
+            },
+        ),
+        (
+            "N",
+            Chord {
+                mods: KeyMods::NONE,
+                key: Key::Char('N'),
+            },
+        ),
     ];
     for (input, expected) in cases {
         assert_eq!(&Chord::parse(input), &Ok(*expected), "parsing `{input}`");
     }
     // Modifier order is not significant.
     assert_eq!(Chord::parse("Shift+Ctrl+b"), Chord::parse("Ctrl+Shift+b"));
-    assert_eq!(Chord::parse("Shift+Alt+Ctrl+x"), Chord::parse("Ctrl+Shift+Alt+x"));
+    assert_eq!(
+        Chord::parse("Shift+Alt+Ctrl+x"),
+        Chord::parse("Ctrl+Shift+Alt+x")
+    );
 }
 
 #[test]
@@ -247,7 +342,10 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("search_open", &["Ctrl+/", "Ctrl+_"]),
     ("next_library_tab", &["Tab"]),
     ("previous_library_tab", &["BackTab"]),
-    ("library_tab_jump", &["1", "2", "3", "4", "5", "6", "7", "8", "9"]),
+    (
+        "library_tab_jump",
+        &["1", "2", "3", "4", "5", "6", "7", "8", "9"],
+    ),
     ("f5_refresh", &["F5"]),
     ("alt_next_library_tab", &["Alt+Down"]),
     ("alt_previous_library_tab", &["Alt+Up"]),
@@ -306,17 +404,20 @@ fn partial_override_patches_only_the_configured_action() {
         },
     ));
     let rebound = action_by_id("help_open").unwrap();
-    assert_eq!(keybinds.router_chords(rebound), vec![Chord::parse("F9").unwrap()]);
+    assert_eq!(
+        keybinds.router_chords(rebound),
+        vec![Chord::parse("F9").unwrap()]
+    );
     let untouched = action_by_id("settings_open").unwrap();
-    assert_eq!(keybinds.router_chord(untouched), Chord::parse("F2").unwrap());
+    assert_eq!(
+        keybinds.router_chord(untouched),
+        Chord::parse("F2").unwrap()
+    );
 }
 
 // ── Task 1.3: load-time validation ──────────────────────────────────────
 
-fn raw_router(
-    section: &str,
-    entries: &[(&str, &str)],
-) -> (String, RawSection) {
+fn raw_router(section: &str, entries: &[(&str, &str)]) -> (String, RawSection) {
     (
         section.to_string(),
         RawSection {
@@ -329,10 +430,7 @@ fn raw_router(
     )
 }
 
-fn raw_prefix(
-    section: &str,
-    entries: &[(&str, &str)],
-) -> (String, RawSection) {
+fn raw_prefix(section: &str, entries: &[(&str, &str)]) -> (String, RawSection) {
     (
         section.to_string(),
         RawSection {
@@ -669,5 +767,9 @@ fn override_count_counts_distinct_overridden_action_ids() {
             prefix: Vec::new(),
         },
     ));
-    assert_eq!(keybinds.override_count(), 2, "distinct ids: toggle_play_pause + help_open");
+    assert_eq!(
+        keybinds.override_count(),
+        2,
+        "distinct ids: toggle_play_pause + help_open"
+    );
 }
