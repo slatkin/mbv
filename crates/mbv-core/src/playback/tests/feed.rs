@@ -1,5 +1,12 @@
+use super::*;
+
 #[rstest::rstest]
-#[case::returns_enclosure("g1", Some("https://enc.mp3"), Some("https://link.html"), Some("https://enc.mp3"))]
+#[case::returns_enclosure(
+    "g1",
+    Some("https://enc.mp3"),
+    Some("https://link.html"),
+    Some("https://enc.mp3")
+)]
 #[case::falls_back_to_link("g2", None, Some("https://link.html"), Some("https://link.html"))]
 #[case::none_when_empty("g3", None, None, None)]
 fn feed_entry_primary_source(
@@ -29,9 +36,30 @@ fn feed_entry_primary_source(
 // ---------------------------------------------------------------------------
 
 #[rstest::rstest]
-#[case::uses_mime_when_present("g1", Some("audio/mpeg"), crate::config::FeedKind::Video, "Audio", true, false)]
-#[case::falls_back_to_feed_kind_when_mime_absent("g2", None, crate::config::FeedKind::Video, "video", false, true)]
-#[case::falls_back_to_feed_kind_for_unrecognized_mime("g3", Some("application/octet-stream"), crate::config::FeedKind::Audio, "audio", true, false)]
+#[case::uses_mime_when_present(
+    "g1",
+    Some("audio/mpeg"),
+    crate::config::FeedKind::Video,
+    "Audio",
+    true,
+    false
+)]
+#[case::falls_back_to_feed_kind_when_mime_absent(
+    "g2",
+    None,
+    crate::config::FeedKind::Video,
+    "video",
+    false,
+    true
+)]
+#[case::falls_back_to_feed_kind_for_unrecognized_mime(
+    "g3",
+    Some("application/octet-stream"),
+    crate::config::FeedKind::Audio,
+    "audio",
+    true,
+    false
+)]
 fn feed_media_kind(
     #[case] guid: &str,
     #[case] mime_type: Option<&str>,

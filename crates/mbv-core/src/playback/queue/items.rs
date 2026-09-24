@@ -1,3 +1,5 @@
+use super::*;
+
 // ---------------------------------------------------------------------------
 // Content identity — typed provider-qualified identity, avoiding formatted
 // string matching like `format!("abs:{}:{}", lib, ep)`.

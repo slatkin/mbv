@@ -5,7 +5,14 @@
 // part.
 // ---------------------------------------------------------------------------
 
-fn emby_item_of_type(id: &str, item_type: &str, media_type: &str, name: &str) -> EmbyItem {
+use super::*;
+
+pub(super) fn emby_item_of_type(
+    id: &str,
+    item_type: &str,
+    media_type: &str,
+    name: &str,
+) -> EmbyItem {
     let mut e = item(id);
     e.item_type = item_type.to_string();
     e.media_type = media_type.to_string();
@@ -17,7 +24,9 @@ fn emby_item_of_type(id: &str, item_type: &str, media_type: &str, name: &str) ->
 
 fn title_parts_queue_item(kind: &str) -> QueueItem {
     match kind {
-        "emby_movie" => QueueItem::Emby(Box::new(emby_item_of_type("m1", "Movie", "Video", "The Film"))),
+        "emby_movie" => QueueItem::Emby(Box::new(emby_item_of_type(
+            "m1", "Movie", "Video", "The Film",
+        ))),
         "emby_episode" => {
             let mut e = emby_item_of_type("e1", "Episode", "Video", "Pilot");
             e.series_name = "Series Name".to_string();
@@ -28,10 +37,18 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
             a.artist = "Artist Name".to_string();
             QueueItem::Emby(Box::new(a))
         }
-        "emby_home_video" => QueueItem::Emby(Box::new(emby_item_of_type("v1", "Video", "Video", "Home Clip"))),
-        "emby_audio_track_without_artist" => {
-            QueueItem::Emby(Box::new(emby_item_of_type("a1", "Audio", "Audio", "Track Name")))
-        }
+        "emby_home_video" => QueueItem::Emby(Box::new(emby_item_of_type(
+            "v1",
+            "Video",
+            "Video",
+            "Home Clip",
+        ))),
+        "emby_audio_track_without_artist" => QueueItem::Emby(Box::new(emby_item_of_type(
+            "a1",
+            "Audio",
+            "Audio",
+            "Track Name",
+        ))),
         "abs_podcast_episode" => QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
             title: "Episode Five".into(),
             show_title: Some("Show Title".into()),
@@ -58,7 +75,12 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
 #[rstest::rstest]
 #[case::emby_movie("emby_movie", Some("Sub Name"), "The Film", None)]
 #[case::emby_episode("emby_episode", Some("Sub Name"), "Pilot", Some("Series Name"))]
-#[case::emby_audio_track("emby_audio_track", Some("Sub Name"), "Track Name", Some("Artist Name"))]
+#[case::emby_audio_track(
+    "emby_audio_track",
+    Some("Sub Name"),
+    "Track Name",
+    Some("Artist Name")
+)]
 #[case::emby_home_video("emby_home_video", Some("Sub Name"), "Home Clip", None)]
 #[case::audiobookshelf_podcast_episode(
     "abs_podcast_episode",
@@ -66,13 +88,28 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
     "Episode Five",
     Some("Show Title")
 )]
-#[case::feed_entry_with_subscription("feed_entry", Some("Sub Name"), "Entry Title", Some("Sub Name"))]
+#[case::feed_entry_with_subscription(
+    "feed_entry",
+    Some("Sub Name"),
+    "Entry Title",
+    Some("Sub Name")
+)]
 // Degradation cases: exactly one part, no context part.
-#[case::abs_podcast_episode_without_show("abs_podcast_episode_without_show", Some("Sub Name"), "Episode Five", None)]
+#[case::abs_podcast_episode_without_show(
+    "abs_podcast_episode_without_show",
+    Some("Sub Name"),
+    "Episode Five",
+    None
+)]
 #[case::feed_entry_without_matching_subscription("feed_entry", None, "Entry Title", None)]
 #[case::feed_entry_without_feed_id("feed_entry_without_feed_id", None, "Entry Title", None)]
 #[case::abs_book("abs_book", Some("Sub Name"), "ABS book", None)]
-#[case::emby_audio_track_without_artist("emby_audio_track_without_artist", Some("Sub Name"), "Track Name", None)]
+#[case::emby_audio_track_without_artist(
+    "emby_audio_track_without_artist",
+    Some("Sub Name"),
+    "Track Name",
+    None
+)]
 fn queue_item_playback_title_parts(
     #[case] kind: &str,
     #[case] feed_subscription_name: Option<&str>,
@@ -114,9 +151,9 @@ fn queue_item_playback_title_parts(
             assert_eq!(part.text, expected);
             assert_eq!(part.role, PlaybackTitlePartRole::Context);
         }
-        (expected, actual) => panic!(
-            "context part mismatch: expected {expected:?}, got {actual:?}"
-        ),
+        (expected, actual) => {
+            panic!("context part mismatch: expected {expected:?}, got {actual:?}")
+        }
     }
 }
 
@@ -124,7 +161,9 @@ fn queue_item_playback_title_parts(
 fn non_feed_items_ignore_the_feed_subscription_name() {
     // The explicit optional input is read only for feed items; a movie must
     // not pick it up as a context part.
-    let movie = QueueItem::Emby(Box::new(emby_item_of_type("m1", "Movie", "Video", "The Film")));
+    let movie = QueueItem::Emby(Box::new(emby_item_of_type(
+        "m1", "Movie", "Video", "The Film",
+    )));
     let parts = movie.playback_title_parts(Some("Sub Name"));
     assert!(parts.context.is_none());
     assert_eq!(parts.title.text, "The Film");

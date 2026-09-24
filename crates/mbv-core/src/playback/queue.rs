@@ -7,8 +7,8 @@ const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
 // FeedEntry and QueueItem — the two item kinds a playback queue slot can
 // hold, plus QueueItem's custom (kind-tagged, legacy-fallback) Deserialize.
-// Split out to keep this file under the repo's line cap.
-include!("queue_items.rs");
+mod items;
+pub use items::*;
 
 // serde derives so the owner-assigned slot identity can travel on
 // `PlayerEvent` / `PlayerCommand` across the ctrl seam; a newtype over `u64`
@@ -749,7 +749,3 @@ fn group_fetched_items_by_item_id(
 fn should_protect_missing_slot(slot: &QueueSlot, active_slot_id: Option<QueueSlotId>) -> bool {
     active_slot_id == Some(slot.slot_id) || slot.progress_state.pending_sync.is_some()
 }
-
-#[cfg(test)]
-#[path = "tests/playback_queue_tests.rs"]
-mod tests;

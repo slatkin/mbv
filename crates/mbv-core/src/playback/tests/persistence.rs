@@ -1,3 +1,4 @@
+use super::*;
 
 #[test]
 fn queue_item_serializes_tagged() {
@@ -229,4 +230,3 @@ fn queue_state_legacy_bare_items_load_as_emby() {
     assert_eq!(restored.len(), 1);
     assert!(matches!(&restored[0], QueueItem::Emby(e) if e.id == "old-1"));
 }
-

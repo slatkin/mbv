@@ -1,4 +1,6 @@
 use super::*;
+use crate::api::{EmbyItem, TICKS_PER_SECOND};
+use title_parts::emby_item_of_type;
 
 fn item(id: &str) -> EmbyItem {
     EmbyItem {
@@ -589,7 +591,7 @@ fn structural_mutations_bump_revision() {
     assert!(queue.revision() > after_move);
 }
 
-include!("playback_queue_tests_persistence.rs");
+mod persistence;
 fn feed(guid: &str) -> FeedEntry {
     FeedEntry {
         guid: guid.to_string(),
@@ -638,8 +640,8 @@ fn feed_slot_participates_in_queue_ordering_and_survives_refresh() {
     ));
 }
 
-include!("playback_queue_tests_feed.rs");
-include!("playback_queue_tests_title_parts.rs");
+mod feed;
+mod title_parts;
 
 // ---------------------------------------------------------------------------
 // PlaybackQueue operation tests (task 1.2)
