@@ -28,11 +28,11 @@
 
 ## 3. Loop-step drains
 
-- [ ] 3.1 Cover `App::drain_notif_actions` in `src/app/shell_run_tests.rs`: `"clear:yes"`
+- [x] 3.1 Cover `App::drain_notif_actions` in `src/app/shell_run_tests.rs`: `"clear:yes"`
   dismisses and routes the clear-queue action, `"__notif_failed__"` sets
   `notif_failed`, an unrecognised string and an empty channel both produce no action.
   Assert the returned `produced` value in each case.
-- [ ] 3.2 Cover `App::drain_session_events`: a queued `SessionEvent` is dispatched and
+- [x] 3.2 Cover `App::drain_session_events`: a queued `SessionEvent` is dispatched and
   `produced` is true; an empty channel leaves `produced` false.
 - [ ] 3.3 Cover `App::drain_audiobookshelf_events` receiver bookkeeping: an `Empty`
   startup/test receiver is put back in place, a `Disconnected` receiver drives
