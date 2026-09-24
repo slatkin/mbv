@@ -287,7 +287,7 @@ impl App {
         );
         self.last_played_item_id = state.last_played_item_id;
         self.last_played_completed = state.last_played_completed;
-        self.queue_source = state.source;
+        self.set_queue_source_if_not_local_daemon(state.source);
         self.player_tab.set_queue_items(queue_items, cursor);
         self.queue_dirty = false;
         log::info!(target: "queue", "restore: restored {restored_count} item(s), cursor={cursor}");

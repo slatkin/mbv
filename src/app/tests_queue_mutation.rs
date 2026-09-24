@@ -691,6 +691,43 @@ fn local_daemon_owner_broadcast_replaces_client_queue_and_source() {
 }
 
 #[test]
+fn local_daemon_play_waits_for_owner_snapshot_to_adopt_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, _) = make_local_daemon_app_stub_with_cmd_rx(make_items(2));
+    let previous_source = crate::config::QueueSource::Album;
+    app.queue_source = previous_source.clone();
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(3),
+        start_idx: 1,
+        source: crate::config::QueueSource::Shuffle,
+        autostart: true,
+    });
+
+    assert_eq!(app.queue_source, previous_source, "play must not predict owner source");
+    let mut owner = emby_unified_state(&app.player_tab.emby_items(), 1);
+    owner.source = crate::config::QueueSource::Shuffle;
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(owner)));
+    assert_eq!(app.queue_source, crate::config::QueueSource::Shuffle);
+}
+
+#[test]
+fn local_daemon_clear_waits_for_owner_snapshot_to_adopt_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_local_daemon_app_stub(make_items(2));
+    let previous_source = crate::config::QueueSource::Album;
+    app.queue_source = previous_source.clone();
+
+    app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
+
+    assert_eq!(app.queue_source, previous_source, "clear must not predict owner source");
+    let mut owner = emby_unified_state(&[], 0);
+    owner.source = crate::config::QueueSource::Unknown;
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(owner)));
+    assert_eq!(app.queue_source, crate::config::QueueSource::Unknown);
+}
+
+#[test]
 fn local_daemon_queue_broadcast_adopts_owner_source() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_local_daemon_app_stub(make_items(4));

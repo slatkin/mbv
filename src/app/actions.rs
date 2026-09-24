@@ -201,7 +201,7 @@ impl App {
         if !sent && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
         }
-        if sent {
+        if sent && !self.is_local_daemon() {
             self.player.set_queue_source(self.queue_source.clone());
         }
         if sent && matches!(scope, super::QueueScope::Local) && !self.player.is_remote() {
@@ -328,7 +328,7 @@ impl App {
         if !direct_remote {
             self.on_queue_replace_silent();
         }
-        self.queue_source = queue_source;
+        self.set_queue_source_if_not_local_daemon(queue_source);
         self.set_queue_scope(self.playing_queue_scope());
         // Keep library focus when playing from the library panel.
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -435,7 +435,7 @@ impl App {
                     self.on_queue_replace_silent();
                 }
                 self.replace_playback_queue(episodes.clone(), 0);
-                self.queue_source = crate::config::QueueSource::Series;
+                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Series);
                 self.submit_tab_queue(self.playing_queue_scope(), 0);
                 self.player
                     .send_command(PlayerCommand::SetMute(self.mute_on));

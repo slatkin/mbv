@@ -111,9 +111,9 @@ impl App {
                 } else {
                     String::new()
                 };
-                self.queue_source = crate::config::QueueSource::Collection {
+                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Collection {
                     collection_type: ct,
-                };
+                });
                 self.play_folder(&id);
                 self.save_queue_state();
             }
@@ -190,7 +190,7 @@ impl App {
         if rebuild_local_queue {
             self.replace_playback_queue(items.to_vec(), 0);
         }
-        self.queue_source = source;
+        self.set_queue_source_if_not_local_daemon(source);
         if rebuild_local_queue {
             self.save_queue_state();
         }

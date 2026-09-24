@@ -347,7 +347,7 @@ impl App {
 
     pub(super) fn on_queue_replace_silent(&mut self) {
         self.reset_bare_transitions();
-        self.queue_source = crate::config::QueueSource::Unknown;
+        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         self.queue_dirty = false;
     }
 
@@ -484,7 +484,7 @@ impl App {
                     return;
                 }
                 if self.local_queue_metadata_applies(self.playing_queue_scope()) {
-                    self.queue_source = source;
+                    self.set_queue_source_if_not_local_daemon(source);
                 }
                 if !autostart {
                     // Playlist Enter populates the queue; Space/Enter starts it.

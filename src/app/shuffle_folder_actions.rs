@@ -184,7 +184,7 @@ impl App {
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
                 self.set_panel_focus(PanelFocus::Queue);
-                self.queue_source = crate::config::QueueSource::Shuffle;
+                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Shuffle);
                 if !self.has_direct_remote_queue() {
                     self.save_queue_state();
                 }

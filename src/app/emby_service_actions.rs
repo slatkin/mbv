@@ -57,7 +57,7 @@ impl App {
                 .collect::<Vec<_>>();
             queue.set_queue_items(non_emby_items, 0);
         }
-        self.queue_source = crate::config::QueueSource::Unknown;
+        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
         self.remote_queue_undo_stack.clear();

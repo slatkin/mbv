@@ -111,8 +111,17 @@ impl App {
         self.local_queue_metadata_applies(self.action_queue_scope(action))
     }
 
+    pub(super) fn set_queue_source_if_not_local_daemon(
+        &mut self,
+        source: crate::config::QueueSource,
+    ) {
+        if !self.is_local_daemon() {
+            self.queue_source = source;
+        }
+    }
+
     pub(super) fn clear_local_queue_metadata(&mut self) {
-        self.queue_source = crate::config::QueueSource::Unknown;
+        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Unknown);
         self.queue_dirty = false;
         self.queue_undo_stack.clear();
     }

@@ -198,8 +198,9 @@ impl App {
             } => {
                 match result {
                     Ok(id) if queue_lineage == self.remote_queue_lineage => {
-                        self.queue_source =
-                            crate::config::QueueSource::Playlist { id: Some(id), name };
+                        self.set_queue_source_if_not_local_daemon(
+                            crate::config::QueueSource::Playlist { id: Some(id), name },
+                        );
                         self.queue_dirty = false;
                         // The queue now identifies the replacement playlist; its
                         // items must not retain entry identities from a previously
@@ -231,10 +232,12 @@ impl App {
                         if queue_lineage == self.remote_queue_lineage
                             && self.queue_playlist_id() == source_playlist_id.as_deref() =>
                     {
-                        self.queue_source = crate::config::QueueSource::Playlist {
-                            id: Some(id),
-                            name: name.clone(),
-                        };
+                        self.set_queue_source_if_not_local_daemon(
+                            crate::config::QueueSource::Playlist {
+                                id: Some(id),
+                                name: name.clone(),
+                            },
+                        );
                         self.queue_dirty = false;
                         // The new source must never retain entry identities
                         // from the old playlist.
