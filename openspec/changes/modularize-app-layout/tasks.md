@@ -10,7 +10,7 @@ Rules for every task:
 
 ## 0. Preconditions
 
-- [ ] 0.1 Confirm `tidy-repo-layout` is archived and `openspec list` shows no active change that edits `src/app/`. As of planning, `gate-all-queue-replacements`, `coverage-quick-wins` and `three-line-flat-list` must be archived first; `modularize-mbv-core-layout` should preferably be archived too. Verify: `ls openspec/changes` lists none of them outside `archive/`.
+- [x] 0.1 Confirm `tidy-repo-layout` is archived and `openspec list` shows no active change that edits `src/app/`. As of planning, `gate-all-queue-replacements`, `coverage-quick-wins` and `three-line-flat-list` must be archived first; `modularize-mbv-core-layout` should preferably be archived too. Verify: `ls openspec/changes` lists none of them outside `archive/`.
 
 ## 1. `infra/` and a thin `app/mod.rs`
 
