@@ -174,6 +174,12 @@ coverage.
   dev-dependency); `#[case]` is never a mechanism for generating many thin tests,
   and conversions are opportunistic and file-by-file.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
+* **No lint suppression without explicit user approval, per instance.** Never add
+  `#[allow(...)]`, `#[expect(...)]`, `#![allow(...)]`, `#[cfg_attr(..., allow(...))]`,
+  or loosen `clippy.toml`/`[lints]` thresholds to silence a warning. A lint is a
+  code-quality signal: fix the cause (params struct, delete dead code and the
+  tests that only exercise it, remove the unused import). If you believe a
+  suppression is genuinely warranted, stop and ask.
 * format: `cargo fmt`
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
 * module layout: one file per module via `mod`, never `include!`/`#[path]` to splice a module across files (removed entirely by modularize-mbv-core-layout); a family with tests gets a directory with `mod.rs` plus `tests/` alongside it
