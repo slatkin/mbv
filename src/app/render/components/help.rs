@@ -1,5 +1,5 @@
-use super::super::super::palette;
 use super::chrome;
+use crate::app::infra::palette;
 use crate::app::{PanelFocus, TabSelection};
 use mbv_core::keybinds::{action_by_id, KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
 use ratatui::style::{Modifier, Style};

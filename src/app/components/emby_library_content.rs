@@ -7,7 +7,7 @@
 //! Search session. It produces the panel's [`LibraryPanelContent`] per frame
 //! and translates the panel's slot events and forwarded chords into the same
 //! typed `Msg`s the former BrowserComponent emitted for these three kinds
-//! (`shell_emby_library.rs::handle_emby_library_request` and `shell_messages.rs`'s
+//! (`shell/emby_library.rs::handle_emby_library_request` and `shell/messages.rs`'s
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
 //!
@@ -58,7 +58,7 @@ fn latest_row_projection(item: &EmbyItem) -> (String, Option<String>, Option<Med
         Some(context) => (context.text, Some(parts.title.text)),
         None => (parts.title.text, None),
     };
-    let trailing = crate::app::home_latest::provider_timestamp_secs(&item)
+    let trailing = crate::app::state::home_latest::provider_timestamp_secs(&item)
         .map(crate::app::ui_util::fmt_publish_date_short)
         .filter(|date| !date.is_empty())
         .map(MediaListTrailing::Gutter);
@@ -451,9 +451,9 @@ impl EmbyLibraryContent {
                 match outcome.external_intent {
                     Some(RowIntent::Context(target)) => {
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Browser(vec![
-                                target,
-                            ]),
+                            crate::app::state::types::context_menu::ContextMenuTargets::Browser(
+                                vec![target],
+                            ),
                             None,
                         )))
                     }
@@ -570,11 +570,13 @@ impl EmbyLibraryContent {
                 .external_intent
             {
                 Some(RowIntent::ContextSelection(targets)) => Some(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                    crate::app::state::types::context_menu::ContextMenuTargets::Browser(targets),
                     None,
                 )),
                 Some(RowIntent::Context(target)) => Some(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Browser(vec![target]),
+                    crate::app::state::types::context_menu::ContextMenuTargets::Browser(vec![
+                        target,
+                    ]),
                     None,
                 )),
                 _ => None,
@@ -770,7 +772,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                         // The resolved wheel echo drives the shell's
                         // `video_cursor`/resting-cursor write and pagination
                         // through the same typed arm as keyboard movement
-                        // (`shell_emby_library.rs::handle_emby_library_request`).
+                        // (`shell/emby_library.rs::handle_emby_library_request`).
                         self.carrier
                             .delegate_operation(MediaListOperation::Move(match input {
                                 MediaListSurfaceInput::Wheel { delta, .. } => delta,
@@ -810,7 +812,9 @@ impl LibraryContentOwner for EmbyLibraryContent {
                             _ => vec![target],
                         };
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                            crate::app::state::types::context_menu::ContextMenuTargets::Browser(
+                                targets,
+                            ),
                             Some((at.x, at.y)),
                         )))
                     }

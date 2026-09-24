@@ -5,7 +5,7 @@
 / `apply_to_item`, `PlaybackQueue::{apply_progress,
 mark_progress_sync_pending, merge_refresh, merge_fetched_slot,
 update_slot_item}`, the `PlayerEvent → mark_progress_sync_pending` coupling in
-`src/app/player_event.rs` (`Stopped`, `TrackCompleted`), and `SessionReporter`
+`src/app/dispatch/session/player_event.rs` (`Stopped`, `TrackCompleted`), and `SessionReporter`
 (`crates/mbv-core/src/player_runtime.rs:210+`, `report_stopped*`).
 
 ## The invariant
@@ -55,7 +55,7 @@ equality exists because position-within-3s with a flipped watched flag is
   sets `pending_sync` speculatively widens the leak.
 - **`local`/item desync.** Readers are split: some read
   `slot.progress_state.local`, others read `slot.item.playback_position_ticks`
-  (e.g. `player_event.rs` falls back to the item when `position_ticks == 0`).
+  (e.g. `dispatch/session/player_event.rs` falls back to the item when `position_ticks == 0`).
   If a mutation updates one but not the other, adjacent reads disagree about
   where the user is.
 

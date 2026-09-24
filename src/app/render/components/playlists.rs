@@ -1,8 +1,8 @@
-use super::super::super::palette;
-use super::super::super::ui_util::trunc_str;
 #[cfg(test)]
 use super::super::super::App;
 use super::chrome;
+use crate::app::infra::palette;
+use crate::app::infra::ui_util::trunc_str;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use mbv_core::api::EmbyItem;
 use ratatui::layout::Rect;

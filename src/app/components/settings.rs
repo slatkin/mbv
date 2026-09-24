@@ -13,7 +13,7 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
-use crate::app::types_settings::SettingsDestination;
+use crate::app::state::types::settings::SettingsDestination;
 
 /// The Esc/F3/F4/q intent shared by every Settings destination.
 fn settings_intent_for_key(code: Key) -> Option<SettingsIntent> {

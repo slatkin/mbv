@@ -9,7 +9,7 @@
 `crates/mbv-core/src/player_run_events.rs:637`,
 `crates/mbv-core/src/daemon_reconciliation.rs:173,199,234`,
 `crates/mbv-core/src/config_state.rs:273`,
-`src/app/audiobookshelf_service_actions.rs:44,161,175`.
+`src/app/dispatch/audiobookshelf/service.rs:44,161,175`.
 
 ## The invariant
 
@@ -57,7 +57,7 @@ retention — with no compiler complaint, because both are just enum variants.
   (daemon_reconciliation.rs:173,199), `finalize_active_audiobookshelf`
   (:234), `QueueState::without_audiobookshelf` (config_state.rs:273), and the
   app's `stop_active_audiobookshelf_playback` /
-  `clear_audiobookshelf_queue_memory` (service_actions:44,161,175) all match
+  `clear_audiobookshelf_queue_memory` (dispatch/audiobookshelf/service.rs:44,161,175) all match
   episode-only. Removing/replacing the service while a book is queued leaves
   book slots in the live queue **and** the persisted `QueueState` (resurrects
   on restart), and an actively-playing book keeps its orphaned server session

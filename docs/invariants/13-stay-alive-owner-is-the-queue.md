@@ -3,8 +3,8 @@
 **Scope:** every path that loads, edits, saves, clears, or reconciles the
 Stay-alive owner's queue — the owner side in `src/local_daemon.rs` /
 `crates/mbvd`-adjacent local-daemon code and the Client side in
-`src/app/shell*.rs`, `src/app/queue_actions.rs`, and the
-`player_event.rs` adoption arms.
+`src/app/shell/`, `src/app/dispatch/queue/mod.rs`, and the
+`dispatch/session/player_event.rs` adoption arms.
 
 ## The invariant
 
@@ -61,7 +61,7 @@ every other attached terminal.
 
 - Owner snapshots are authoritative for adoption: the Client adopts
   unfenced owner state including source on attach and after every
-  accepted load/replace/edit/clear (`player_event.rs` `UnifiedQueueUpdated`
+  accepted load/replace/edit/clear (`dispatch/session/player_event.rs` `UnifiedQueueUpdated`
   arm), with the Bare-mode fence byte-identical to the pre-change
   behaviour so direct/bare scopes are untouched.
 - All Client source writers route through one shared guard

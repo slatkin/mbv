@@ -30,14 +30,14 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 
 ## Repository map
 
-* `src/app/shell*.rs` — interactive shell + TuiRealm `Model`: `App`, mount/focus,
+* `src/app/shell/` — interactive shell + TuiRealm `Model`: `App`, mount/focus,
   runtime lifecycle, projections, dispatch, effects, and the single tick/draw
-  path (`shell_run.rs`, `shell_draw.rs`).
+  path (`shell/run/mod.rs`, `shell/draw.rs`).
 * `src/app/components/` — Interactive Components + typed `Msg`s; `media_list/`
   embedded list controls; `mouse/` pointer primitives.
 * `src/app/render/` — `screens/` prepare content, `arrangements/` place it,
   `components/` paint it, `theme/` semantic roles.
-* `src/app/router.rs`, `key_policy.rs`, and `input_resolver.rs` — the central
+* `src/app/input/router.rs`, `input/key_policy.rs`, and `input/resolver.rs` — the central
   keyboard policy and chord resolution; do not add another routing site.
 * `src/local_daemon.rs` — Local-daemon bootstrap; rest of `src/` = TUI binary.
 * `crates/mbv-core/` — runtime, Services, providers, config, protocols, canonical
@@ -121,8 +121,8 @@ painter. Contract: `openspec/specs/canonical-media-lists/spec.md`.
 
 ## Input and rendering boundaries
 
-* Keyboard precedence only in `src/app/router.rs`, ordered policy in
-  `src/app/key_policy.rs`, and chord conversion in `input_resolver.rs`:
+* Keyboard precedence only in `src/app/input/router.rs`, ordered policy in
+  `src/app/input/key_policy.rs`, and chord conversion in `input/resolver.rs`:
   `UiRoot` picks `Command`/`Swallow`/`FallThrough`; focused components handle
   local semantic chords. Shell compatibility/fall-through handlers may remain
   for explicitly unmigrated commands, but they do not become a second router
@@ -187,7 +187,7 @@ verification.
 
 TUI changes: narrowest component/state + buffer tests. Mounting/focus/
 subscription/routing changes need real `Application::tick()` integration tests
-(`src/app/tests_tick_integration*.rs`) through the shell sync pass — direct
+(`src/app/tests/tick_integration/`) through the shell sync pass — direct
 `Component::on` tests do not verify composition. Also check relevant
 Narrow and Wide presentations, one-painter ownership, and hit geometry when
 painting moves. Prove each Panel paints its own complete placement and that

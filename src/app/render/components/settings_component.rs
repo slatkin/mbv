@@ -1,6 +1,6 @@
 use crate::app::components::settings::{ServiceRow, SettingsRow, SetupDraft};
 use crate::app::palette;
-use crate::app::types_settings::SettingsDestination;
+use crate::app::state::types::settings::SettingsDestination;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};

@@ -1,7 +1,6 @@
 pub(super) mod artwork_placeholder;
 
 #[cfg(test)]
-#[path = "artwork_placeholder_tests.rs"]
 mod artwork_placeholder_tests;
 pub(super) mod audiobookshelf_book;
 
@@ -42,7 +41,6 @@ pub(super) mod settings;
 pub(super) mod settings_component;
 pub(super) mod three_line_flat_list;
 #[cfg(test)]
-#[path = "three_line_flat_list_tests.rs"]
 mod three_line_flat_list_tests;
 pub(super) mod tree_browser;
 pub(super) mod tv_wide;
@@ -50,5 +48,4 @@ pub(super) mod visualizer;
 pub(in crate::app) mod widgets;
 
 #[cfg(test)]
-#[path = "home_video_tests.rs"]
 mod home_video_tests;

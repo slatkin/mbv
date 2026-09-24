@@ -1,7 +1,7 @@
 # Invariant 12 — Submission-time queue items must carry current progress, never a cached snapshot
 
 **Scope:** every code path that materializes a `QueueItem` for play or
-enqueue — in particular `src/app/audiobookshelf_browse_actions.rs`'s
+enqueue — in particular `src/app/dispatch/audiobookshelf/browse/mod.rs`'s
 `selected_audiobookshelf_queue_item_target` (both its shelf-cache-hit branch
 and its build-from-episode fallback), and the cache sources those paths read
 (`audiobookshelf_shelf_cache`; `AudiobookshelfQueueItem` construction in

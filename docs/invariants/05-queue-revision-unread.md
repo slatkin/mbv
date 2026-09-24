@@ -4,7 +4,7 @@
 `UnifiedQueueStateData.revision` (`crates/mbv-core/src/ctrl.rs:233`),
 `unified_queue_state_for_peer` / `broadcast_queue_state`
 (`daemon_control_queue.rs:67,101`), `PlayerTab::from_unified_state`
-(`src/app/types_player_tab.rs:26`), `apply_unified_queue_state`
+(`src/app/state/types/player_tab.rs:26`), `apply_unified_queue_state`
 (`remote_player_connect.rs:390`), and every `CtrlCmd::UnifiedQueue*` handler
 (`daemon_control.rs:330+`).
 
@@ -47,7 +47,7 @@ not hypotheticals:
   faithfully restores `QueueRevision::from_raw(state.revision)` — the value
   survives the trip and is then never read. The only non-test reader of any
   `.revision` in the app is that constructor itself (verified by search:
-  `types_player_tab.rs:38` is the sole survivor after excluding setup
+  `state/types/player_tab.rs:38` is the sole survivor after excluding setup
   revisions, shared-doc revisions, and music-grouping revisions).
 - **Daemon handlers don't need it (yet) — which hides the gap.**
   `UnifiedQueueRemoveSlot/MoveSlot/PlaySlot` re-check existence against the

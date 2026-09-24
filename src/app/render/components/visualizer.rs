@@ -1,5 +1,5 @@
 use super::super::{palette, App};
-use crate::app::visualizer_worker::StereoSample;
+use crate::app::infra::visualizer_worker::StereoSample;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::Frame;

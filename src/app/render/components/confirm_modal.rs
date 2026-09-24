@@ -26,8 +26,8 @@ pub(in crate::app) fn render_confirm_modal_content(
         title,
         60,
         7,
-        super::super::super::palette::surface_colors(
-            super::super::super::palette::Surface::PopupFrame,
+        crate::app::infra::palette::surface_colors(
+            crate::app::infra::palette::Surface::PopupFrame,
             false,
         )
         .fill,
@@ -36,7 +36,7 @@ pub(in crate::app) fn render_confirm_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             message,
-            Style::default().fg(super::super::super::palette::TEXT_STRONG),
+            Style::default().fg(crate::app::infra::palette::TEXT_STRONG),
         )),
         Rect {
             x: inner.x + 1,
@@ -48,7 +48,7 @@ pub(in crate::app) fn render_confirm_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             hint,
-            Style::default().fg(super::super::super::palette::TEXT_SECONDARY),
+            Style::default().fg(crate::app::infra::palette::TEXT_SECONDARY),
         )),
         Rect {
             x: inner.x + 1,

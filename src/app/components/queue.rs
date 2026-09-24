@@ -26,8 +26,8 @@ use crate::app::render::arrangements::queue::{
 use crate::app::render::components::queue::{render_queue_status, QueueTitleModel};
 use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};
-use crate::app::types_context_menu::ContextMenuTargets;
-use crate::app::types_playback::{PlaybackState, QueueScope};
+use crate::app::state::types::context_menu::ContextMenuTargets;
+use crate::app::state::types::playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::fmt_duration_short;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{QueueItem, QueueSlot, QueueSlotId};

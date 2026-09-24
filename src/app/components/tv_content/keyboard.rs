@@ -299,7 +299,7 @@ impl TvContent {
                     .filter_map(|target| self.show_item_for_tree_target(target))
                     .collect();
                 (!items.is_empty()).then_some(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                     None,
                 ))
             }

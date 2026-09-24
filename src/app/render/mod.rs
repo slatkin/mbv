@@ -117,13 +117,10 @@ pub(crate) use theme::{
 // part of the wider `pub(crate)` role list above.
 pub(in crate::app) use theme::{surface_colors, Surface};
 
-use super::ui_util::natural_sort_key;
 use super::{palette, App};
+use crate::app::infra::ui_util::natural_sort_key;
 
-// Test-only: these names are otherwise unused in the production build (their
-// only production callers moved into root.rs/queue.rs under screens/, which
-// import them directly), but render/tests.rs and friends still reach them via
-// `use super::*`.
+// Test-only modules and shared render fixtures.
 #[cfg(test)]
 use components::widgets::right_panel_content_area;
 #[cfg(test)]
@@ -132,101 +129,10 @@ use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
 #[cfg(test)]
 use unicode_width::UnicodeWidthStr;
-
 #[cfg(test)]
-#[path = "tests_confirm_modal.rs"]
-mod confirm_modal_tests;
-#[cfg(test)]
-#[path = "tests_context_menu.rs"]
-mod context_menu_tests;
-#[cfg(test)]
-#[path = "tests_daemon_lost_modal.rs"]
-mod daemon_lost_modal_tests;
-#[cfg(test)]
-#[path = "tests_feeds_manage_popup.rs"]
-mod feeds_manage_popup_tests;
-#[cfg(test)]
-#[path = "tests_help.rs"]
-mod help_tests;
-#[cfg(test)]
-#[path = "tests_home_characterization.rs"]
-mod home_characterization_tests;
-#[cfg(test)]
-#[path = "tests_library_characterization.rs"]
-mod library_characterization_tests;
-#[cfg(test)]
-#[path = "tests_library_routes_popup.rs"]
-mod library_routes_popup_tests;
-#[cfg(test)]
-#[path = "tests_multiselect.rs"]
-mod multiselect_tests;
-#[cfg(test)]
-#[path = "tests_music_characterization.rs"]
-mod music_characterization_tests;
-#[cfg(test)]
-#[path = "tests_music_groups.rs"]
-mod music_group_tests;
-#[cfg(test)]
-#[path = "tests_music_tree_gutter.rs"]
-mod music_tree_gutter_tests;
-#[cfg(test)]
-#[path = "tests_music_tree_marquee.rs"]
-mod music_tree_marquee_tests;
-#[cfg(test)]
-#[path = "tests_music_tree_rows.rs"]
-mod music_tree_rows_tests;
-#[cfg(test)]
-#[path = "tests_music_tree_states.rs"]
-mod music_tree_states_tests;
-#[cfg(test)]
-#[path = "tests_non_music.rs"]
-mod non_music_tests;
-#[cfg(test)]
-#[path = "tests_panel.rs"]
-mod panel_tests;
-#[cfg(test)]
-#[path = "tests_playlists.rs"]
-mod playlists_tests;
-#[cfg(test)]
-#[path = "tests_queue.rs"]
-mod queue_tests;
-#[cfg(test)]
-#[cfg(test)]
-#[path = "tests_scroll_pills.rs"]
-mod scroll_pills_tests;
-#[cfg(test)]
-#[path = "tests_search_sidebar.rs"]
-mod search_sidebar_tests;
-#[cfg(test)]
-#[path = "tests_sessions.rs"]
-mod sessions_tests;
-#[cfg(test)]
-#[path = "tests_settings.rs"]
-mod settings_tests;
-#[cfg(test)]
-#[path = "test_helpers.rs"]
-mod test_helpers;
-#[cfg(test)]
-#[path = "tests_tree_browser_structural.rs"]
-mod tree_browser_structural_tests;
-#[cfg(test)]
-pub(crate) use test_helpers::{
-    make_movie_app, make_music_group_app, make_music_group_app_with_second_album, make_queue_app,
-};
-#[cfg(test)]
-#[path = "tests.rs"]
 mod tests;
 #[cfg(test)]
-mod tests_conformance_matrix;
-#[cfg(test)]
-mod tests_feeds;
-#[cfg(test)]
-mod tests_podcast_panel;
-#[cfg(test)]
-mod tests_surface_conformance;
-#[cfg(test)]
-mod tests_surface_conformance_component_views;
-#[cfg(test)]
-mod tests_wide_hero_pane_characterization;
-#[cfg(test)]
-mod tests_wide_hero_split_override;
+pub(crate) use tests::test_helpers::{
+    buffer_to_string, make_movie_app, make_music_group_app, make_music_group_app_with_second_album,
+    make_queue_app,
+};

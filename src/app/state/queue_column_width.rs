@@ -1,0 +1,19 @@
+use crate::app::{App, LEFT_WIDTH_DEFAULT};
+
+pub(crate) fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u16 {
+    width.clamp(
+        LEFT_WIDTH_DEFAULT,
+        LEFT_WIDTH_DEFAULT.max(terminal_width.saturating_mul(3) / 5),
+    )
+}
+
+impl App {
+    pub(in crate::app) fn clamp_queue_column_width(&mut self) -> bool {
+        let normalized = normalize_queue_column_width(self.queue_column_width, self.terminal_width);
+        if normalized == self.queue_column_width {
+            return false;
+        }
+        self.queue_column_width = normalized;
+        true
+    }
+}

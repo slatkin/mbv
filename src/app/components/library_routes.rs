@@ -13,7 +13,7 @@ use super::mouse::hit::HitRegions;
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_library_routes_content, LibraryRoutesRenderModel};
-use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
+use crate::app::state::types::context_menu::{LibraryRoutePopup, LibraryRouteStage};
 
 pub struct LibraryRoutesComponent {
     stage: Option<LibraryRouteStage>,

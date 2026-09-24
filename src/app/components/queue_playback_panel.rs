@@ -74,7 +74,7 @@ impl QueuePlaybackPanel {
             host: String::new(),
             host_is_remote: false,
             transport: PlaybackProjection {
-                state: crate::app::types_playback::PlaybackState::default(),
+                state: crate::app::state::types::playback::PlaybackState::default(),
                 show_controls: false,
                 panel: TRANSPORT_SURFACE,
                 panel_focused: false,

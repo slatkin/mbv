@@ -1,5 +1,5 @@
 use super::home_video::render_home_video_item;
-use crate::app::render::test_helpers::buffer_to_string;
+use crate::app::render::buffer_to_string;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;

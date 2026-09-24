@@ -1,8 +1,8 @@
 # Invariant 1 — Slot identity is stable; position is not
 
 **Scope:** `PlaybackQueue` (`crates/mbv-core/src/playback_queue.rs`) and its
-two index-translation clients: the app model (`src/app/types_player_tab.rs`,
-`src/app/queue_scope.rs`, `src/app/player_event.rs`) and the daemon/player
+two index-translation clients: the app model (`src/app/state/types/player_tab.rs`,
+`src/app/state/queue_scope.rs`, `src/app/dispatch/session/player_event.rs`) and the daemon/player
 mirror (`crates/mbv-core/src/daemon_control.rs`,
 `crates/mbv-core/src/player_run_*.rs`).
 
@@ -44,7 +44,7 @@ returns `None` and the player advances from a stale `current_idx`.
 ## What breaks if it is violated
 
 - **Progress applied to the wrong slot.** `handle_player_event` resolves
-  `idx → slot_id` immediately (`player_event.rs`, `Stopped` /
+  `idx → slot_id` immediately (`dispatch/session/player_event.rs`, `Stopped` /
   `TrackCompleted` arms) precisely so later consume/removal can't shift the
   target. Index-arithmetic instead of that resolution would misattribute
   position when a consume lands first.
@@ -56,7 +56,7 @@ returns `None` and the player advances from a stale `current_idx`.
 - **Cursor parked on an unrelated slot.** The local and remote `PlayerTab`
   queues each allocate slot ids from 1, so ids **collide across scopes**.
   `set_queue_scope` documents this and re-anchors to the new scope's own
-  follow position instead of reconciling by identity (`queue_scope.rs:305+`).
+  follow position instead of reconciling by identity (`state/queue_scope.rs:305+`).
   Any future cross-scope `slot_id` comparison reintroduces the collision.
 - **Stale-queue detection blind.** Anything comparing `revision` to skip work
   misses changes that didn't bump (see below), or does redundant work on
@@ -78,10 +78,10 @@ returns `None` and the player advances from a stale `current_idx`.
 - **Index→identity at every boundary:** `TrackChanged` resolves the incoming
   mpv index to a slot **before** draining the deferred consume, then
   re-resolves the post-removal position by identity
-  (`player_event.rs`, `TrackChanged` arm); `merge_refreshed_queue` snapshots
+  (`dispatch/session/player_event.rs`, `TrackChanged` arm); `merge_refreshed_queue` snapshots
   pre-refresh `slot_id → index`, prunes by identity, and emits
   `QueueRemove` for the recorded indices in descending order
-  (`queue_scope.rs:188+`); `JumpTo` pins `forced_slot_id` before asking mpv
+  (`state/queue_scope.rs:188+`); `JumpTo` pins `forced_slot_id` before asking mpv
   to move so the resulting `playlist-pos` event can be attributed.
 - **Bump discipline (mostly):** `insert`/`append`/`replace`/`clear`/
   `truncate_slots`/`move_slot`/`remove_active_slot_confirmed`/

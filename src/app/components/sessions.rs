@@ -16,7 +16,7 @@ use super::list::{ThreeLineFlatList, ThreeLineItem, ThreeLineRole, ThreeLineSpan
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
-use crate::app::panel_targets::{PanelTarget, SessionTargetKey};
+use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
 
 /// The Interactive Component for the Sessions sidebar.
 pub struct SessionsComponent {

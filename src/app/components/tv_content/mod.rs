@@ -133,7 +133,7 @@ pub(super) fn build_latest_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListR
                 Some(context) => (context.text, Some(parts.title.text)),
                 None => (parts.title.text, None),
             };
-            let trailing = crate::app::home_latest::provider_timestamp_secs(&item)
+            let trailing = crate::app::state::home_latest::provider_timestamp_secs(&item)
                 .map(fmt_publish_date_short)
                 .filter(|date| !date.is_empty())
                 .map(MediaListTrailing::Gutter);
@@ -1022,7 +1022,7 @@ impl TvContent {
         Some((series_id, season_id))
     }
 }
-include!("interaction.rs");
+mod interaction;
 impl Default for TvContent {
     fn default() -> Self {
         Self::new()

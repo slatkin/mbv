@@ -1,0 +1,627 @@
+use crate::app::components::QueueRequest;
+use crate::app::tests::*;
+use rstest::{fixture, rstest};
+
+#[test]
+fn move_to_matches_two_keyboard_moves_and_records_one_undo() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let items = make_items(3);
+
+    let mut keyboard = make_app_stub();
+    keyboard.player_tab.set_items(items.clone(), 0);
+    keyboard.move_queue_item_down(0);
+    keyboard.move_queue_item_down(1);
+    let expected = keyboard
+        .player_tab
+        .emby_items()
+        .iter()
+        .map(|item| item.id.clone())
+        .collect::<Vec<_>>();
+
+    let mut model = Model::new({
+        let mut app = make_app_stub();
+        app.player_tab.set_items(items, 0);
+        app
+    });
+    let slot_id = model.app.player_tab.slot_id_at(0).unwrap();
+    let onto = model.app.player_tab.slot_id_at(2).unwrap();
+    model.handle_queue_request(QueueRequest::MoveTo {
+        scope: QueueScope::Local,
+        slot_id,
+        onto,
+    });
+
+    assert_eq!(
+        model
+            .app
+            .player_tab
+            .emby_items()
+            .iter()
+            .map(|item| item.id.clone())
+            .collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(model.app.queue_undo_stack.len(), 1);
+    assert_eq!(keyboard.queue_undo_stack.len(), 2);
+}
+
+#[rstest]
+#[case::move_queue_item_up_swaps_items_and_cursor_follows(true, 1, 0, [1, 0, 2], true)]
+#[case::move_queue_item_down_swaps_items_and_cursor_follows(false, 1, 2, [0, 2, 1], true)]
+#[case::move_queue_item_up_is_noop_at_start_of_queue(true, 0, 0, [0, 1, 2], false)]
+#[case::move_queue_item_down_is_noop_at_end_of_queue(false, 2, 2, [0, 1, 2], false)]
+fn move_queue_item(
+    #[case] up: bool,
+    #[case] initial_cursor: usize,
+    #[case] expected_cursor: usize,
+    #[case] order: [usize; 3],
+    #[case] records_undo: bool,
+) {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let items = make_items(3);
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(items.clone(), app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = initial_cursor;
+
+    if up {
+        app.move_queue_item_up(app.player_tab.queue_cursor);
+    } else {
+        app.move_queue_item_down(app.player_tab.queue_cursor);
+    }
+
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        order
+            .iter()
+            .map(|&index| items[index].id.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(app.player_tab.queue_cursor, expected_cursor);
+    if records_undo {
+        assert_eq!(app.queue_undo_stack.len(), 1);
+    } else {
+        assert!(app.queue_undo_stack.is_empty());
+    }
+}
+
+#[test]
+fn undo_reverses_a_move_and_cursor_follows_back() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let items = make_items(3);
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(items.clone(), app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = 1;
+
+    app.move_queue_item_up(app.player_tab.queue_cursor);
+    assert_eq!(app.player_tab.queue_cursor, 0);
+
+    app.undo_last_queue_edit(QueueScope::Local);
+
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
+    );
+    assert_eq!(app.player_tab.queue_cursor, 1);
+    assert!(app.queue_undo_stack.is_empty());
+}
+
+#[test]
+fn undo_of_move_does_not_disturb_prior_removal_undo_history() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let items = make_items(3);
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(items.clone(), app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = 0;
+
+    // A removal, then a move -- undoing once should only reverse the move.
+    app.remove_from_queue(0);
+    app.player_tab.queue_cursor = 0;
+    app.move_queue_item_down(app.player_tab.queue_cursor);
+    assert_eq!(app.queue_undo_stack.len(), 2);
+
+    app.undo_last_queue_edit(QueueScope::Local);
+
+    assert_eq!(app.queue_undo_stack.len(), 1);
+    assert!(matches!(
+        app.queue_undo_stack.last(),
+        Some(UndoEntry::Remove(0, _))
+    ));
+}
+
+#[test]
+fn undo_of_move_is_refused_if_the_moved_item_is_no_longer_at_to() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let items = make_items(3);
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(items.clone(), app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = 0;
+
+    app.move_queue_item_down(app.player_tab.queue_cursor); // items[0] now sits at index 1
+    assert_eq!(app.queue_undo_stack.len(), 1);
+
+    // Something untracked by this undo stack happens to the queue
+    // afterwards (e.g. a natural consume) removing the item that's now
+    // at index 1, so the undo entry's `to` position no longer holds the
+    // item that was actually moved.
+    app.player_tab.remove_slot_at(1);
+
+    app.undo_last_queue_edit(QueueScope::Local);
+
+    // Refused rather than blindly swapping whatever now sits at 0/1.
+    assert_eq!(app.status, "Can't undo move: queue changed since then");
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![items[1].id.as_str(), items[2].id.as_str()]
+    );
+}
+
+#[test]
+fn undo_of_move_is_refused_when_duplicate_id_masks_changed_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut items = make_items(3);
+    items[0].id = "duplicate".into();
+    items[0].name = "First duplicate".into();
+    items[0].playlist_item_id = "slot-a".into();
+    items[1].id = "duplicate".into();
+    items[1].name = "Second duplicate".into();
+    items[1].playlist_item_id = "slot-b".into();
+    let mut app = make_app_stub();
+    app.player_tab.set_items(items.clone(), 0);
+    app.player_tab.queue_cursor = 0;
+
+    app.move_queue_item_down(app.player_tab.queue_cursor); // First duplicate now sits at index 1.
+    assert_eq!(app.queue_undo_stack.len(), 1);
+
+    // Remove the moved item and insert the second duplicate at index 1.
+    app.player_tab.remove_slot_at(1);
+    let mut current = app.player_tab.emby_items();
+    current.insert(1, items[1].clone());
+    app.player_tab.set_items(current, 0);
+
+    app.undo_last_queue_edit(QueueScope::Local);
+
+    assert_eq!(app.status, "Can't undo move: queue changed since then");
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Second duplicate", "Second duplicate", "Item 2"]
+    );
+}
+
+#[test]
+fn queue_move_preserves_observed_playback_until_owner_observes_change() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(5), app.player_tab.queue_cursor);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 2;
+        status.queue_len = 5;
+    }
+
+    assert!(app.apply_queue_move(QueueScope::Local, 1, 2));
+    assert_eq!(app.effective_playback_state().active_idx, Some(2));
+    assert_eq!(app.player.status.lock().unwrap().current_idx, 2);
+}
+
+#[test]
+fn playback_state_reads_observed_status_without_projection() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(5), app.player_tab.queue_cursor);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 2;
+        status.queue_len = 5;
+        status.position_ticks = 18_000_000_000;
+        status.runtime_ticks = 24_000_000_000;
+    }
+    let playback = app.effective_playback_state();
+    assert_eq!(playback.active_idx, Some(2));
+    assert_eq!(playback.position_ticks, 18_000_000_000);
+    assert_eq!(playback.runtime_ticks, 24_000_000_000);
+}
+
+#[test]
+fn queue_play_cursor_keeps_observed_progress_until_player_ack() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(5), app.player_tab.queue_cursor);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+        status.queue_len = 5;
+        status.position_ticks = 18_000_000_000;
+        status.runtime_ticks = 24_000_000_000;
+    }
+    app.panel_focus = crate::app::state::types::settings::PanelFocus::Queue;
+    app.player_tab.queue_cursor = 2;
+    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(2));
+    let observed = app.effective_playback_state();
+    assert_eq!(observed.active_idx, Some(0));
+    assert_eq!(observed.position_ticks, 18_000_000_000);
+}
+
+#[test]
+fn rejected_remote_queue_selection_keeps_observed_playhead() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_remote_app_stub(Vec::new(), make_items(3));
+    app.set_queue_scope(QueueScope::Remote);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+        status.queue_len = 3;
+        status.position_ticks = 18_000_000_000;
+        status.runtime_ticks = 24_000_000_000;
+    }
+    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(2));
+    let playback = app.effective_playback_state();
+    assert_eq!(playback.active_idx, Some(0));
+    assert_eq!(playback.position_ticks, 18_000_000_000);
+    assert_eq!(app.status, "Playback owner rejected the queue selection");
+}
+
+#[test]
+fn resolve_slot_at_maps_index_to_slot_and_rejects_out_of_range() {
+    let tab = PlayerTab::from_emby_items(make_items(3), 0);
+    let s0 = tab.queue.slots()[0].slot_id;
+    let s2 = tab.queue.slots()[2].slot_id;
+    assert_eq!(tab.resolve_slot_at(0), Some(s0));
+    assert_eq!(tab.resolve_slot_at(2), Some(s2));
+    assert_eq!(tab.resolve_slot_at(3), None);
+}
+
+#[test]
+fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let local_items = make_items(3);
+    let remote_items = make_items(3);
+    let (mut app, cmd_rx) =
+        make_remote_app_stub_with_cmd_rx(local_items.clone(), remote_items.clone());
+    app.set_queue_scope(QueueScope::Remote);
+    app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+    app.move_queue_item_up(app.remote_player_tab.as_ref().unwrap().queue_cursor);
+
+    assert_eq!(
+        app.remote_player_tab
+            .as_ref()
+            .unwrap()
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            remote_items[1].id.as_str(),
+            remote_items[0].id.as_str(),
+            remote_items[2].id.as_str()
+        ]
+    );
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        local_items
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert!(!app.queue_dirty);
+    assert_eq!(app.queue_undo_stack.len(), 0);
+    assert_eq!(app.remote_queue_undo_stack.len(), 1);
+    // Unified-capable remote peer: move is sent as UnifiedQueueMoveSlot.
+    let cmd = cmd_rx.try_recv().unwrap();
+    assert!(
+        matches!(
+            cmd,
+            mbv_core::ctrl::CtrlCmd::UnifiedQueueMoveSlot { to_index: 0, .. }
+        ),
+        "expected UnifiedQueueMoveSlot {{ to_index: 0 }}"
+    );
+}
+
+#[test]
+fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let local_items = make_items(2);
+    let remote_items = make_items(3);
+    let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
+    let updated_remote = vec![
+        remote_items[2].clone(),
+        remote_items[0].clone(),
+        remote_items[1].clone(),
+    ];
+
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(&updated_remote, 2),
+    )));
+
+    assert_eq!(
+        app.remote_player_tab
+            .as_ref()
+            .unwrap()
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        updated_remote
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        local_items
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let local_items = make_items(2);
+    let remote_items = make_items(3);
+    let (mut app, _cmd_rx) =
+        make_remote_app_stub_with_cmd_rx(local_items.clone(), remote_items.clone());
+    app.set_queue_scope(QueueScope::Remote);
+    app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+    app.move_queue_item_up(app.remote_player_tab.as_ref().unwrap().queue_cursor);
+
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(
+            &[
+                remote_items[1].clone(),
+                remote_items[0].clone(),
+                remote_items[2].clone(),
+            ],
+            1,
+        ),
+    )));
+
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        local_items
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let local_items = make_items(2);
+    let mut remote_items = make_items(3);
+    remote_items[1].id = remote_items[0].id.clone();
+    let (mut app, _cmd_rx) =
+        make_remote_app_stub_with_cmd_rx(local_items.clone(), remote_items.clone());
+    app.set_queue_scope(QueueScope::Remote);
+    app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+    app.move_queue_item_down(app.remote_player_tab.as_ref().unwrap().queue_cursor);
+
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(
+        emby_unified_state(
+            &[
+                remote_items[0].clone(),
+                remote_items[2].clone(),
+                remote_items[1].clone(),
+            ],
+            0,
+        ),
+    )));
+
+    assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        local_items
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn moving_now_playing_item_keeps_cursor_on_it() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    // `PlayerProxy::stub` (used by `make_app_stub`) has no live cmd channel to
+    // assert against, so this only covers the app-side item/cursor bookkeeping;
+    // `player::tests` covers the mpv-side PlaylistMove handling directly.
+    let items = make_items(3);
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(items.clone(), app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = 1;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.current_idx = 1;
+    }
+
+    app.move_queue_item_down(app.player_tab.queue_cursor);
+
+    assert_eq!(
+        app.player_tab
+            .emby_items()
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            items[0].id.as_str(),
+            items[2].id.as_str(),
+            items[1].id.as_str()
+        ]
+    );
+    assert_eq!(app.player_tab.queue_cursor, 2);
+}
+
+// ── Feed-slot preservation in queue sync ───────────────────────────────────
+
+#[fixture]
+fn make_feed_entry() -> mbv_core::playback_queue::FeedEntry {
+    mbv_core::playback_queue::FeedEntry {
+        guid: "f1".into(),
+        title: "Feed f1".into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: Some(mbv_core::config::FeedKind::Audio),
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    }
+}
+
+/// `slot_id_at` must resolve a Feed-tail index without dropping slots.
+#[rstest]
+fn slot_id_at_resolves_feed_slot_without_destruction(
+    make_feed_entry: mbv_core::playback_queue::FeedEntry,
+) {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
+
+    let feed_sid = app
+        .player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry));
+    assert_eq!(app.player_tab.queue.slots().len(), 3);
+
+    let resolved = app.player_tab.slot_id_at(2);
+    assert_eq!(resolved, Some(feed_sid));
+    assert_eq!(
+        app.player_tab.queue.slots().len(),
+        3,
+        "slot_id_at must not drop Feed slots"
+    );
+}
+
+/// Shift+Up on a Feed cursor now moves it — the Emby-only guard has
+/// been removed so either kind may move across the other.
+#[rstest]
+fn move_up_on_feed_cursor_preserves_feed_slots(
+    make_feed_entry: mbv_core::playback_queue::FeedEntry,
+) {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab
+        .set_items(make_items(2), app.player_tab.queue_cursor);
+
+    app.player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry));
+    // Cursor on the Feed slot (index 2, past the 2 Emby items).
+    app.player_tab.queue_cursor = 2;
+
+    app.move_queue_item_up(app.player_tab.queue_cursor);
+
+    assert_eq!(
+        app.player_tab.queue.slots().len(),
+        3,
+        "Shift+Up on a Feed cursor must not drop Feed slots"
+    );
+    // Feed slot moved from index 2 to index 1 (across the Emby items).
+    assert!(
+        matches!(
+            app.player_tab.queue.slots()[1].item,
+            mbv_core::playback_queue::QueueItem::Feed(_)
+        ),
+        "Feed slot should now be at index 1 after moving up"
+    );
+}
+
+#[rstest]
+fn unified_queue_event_preserves_owner_slot_ids_and_source(
+    make_feed_entry: mbv_core::playback_queue::FeedEntry,
+) {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    // The shell's queue source is authoritative; the owner snapshot's copy
+    // can be stale (Save As / non-playing loads never resubmit it) and must
+    // not overwrite it.
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("pl-1".into()),
+        name: "Taskmaster".into(),
+    };
+    let state = mbv_core::ctrl::UnifiedQueueStateData {
+        status: Default::default(),
+        slots: vec![
+            mbv_core::ctrl::UnifiedQueueSlot {
+                slot_id: 41,
+                item: mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item("e0", "Video"))),
+            },
+            mbv_core::ctrl::UnifiedQueueSlot {
+                slot_id: 97,
+                item: mbv_core::playback_queue::QueueItem::Feed(make_feed_entry),
+            },
+        ],
+        active_slot: Some(97),
+        revision: 12,
+        source: crate::config::QueueSource::Remote,
+        lineage: mbv_core::ctrl::QueueLineage::default(),
+        in_flight_transition: None,
+        queued_latest_transition: None,
+    };
+
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(state)));
+
+    assert_eq!(app.player_tab.queue_cursor, 1);
+    assert_eq!(app.player_tab.slot_id_at(0).unwrap().raw(), 41);
+    assert_eq!(app.player_tab.slot_id_at(1).unwrap().raw(), 97);
+    assert_eq!(
+        app.queue_source,
+        crate::config::QueueSource::Playlist {
+            id: Some("pl-1".into()),
+            name: "Taskmaster".into(),
+        }
+    );
+}
