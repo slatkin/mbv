@@ -62,10 +62,6 @@ struct CtrlClient {
 
 pub(crate) type ClientRegistry = Arc<Mutex<CtrlClients>>;
 
-pub(crate) struct CtrlRequest<'a> {
-    pub(crate) reply_tx: &'a CtrlSender,
-}
-
 /// Send an event to a single ctrl-socket client, rather than every connected
 /// TUI. Used for per-request responses like a command rejection (#90).
 pub(crate) fn send_to(client: &CtrlSender, event: &CtrlEvent) {

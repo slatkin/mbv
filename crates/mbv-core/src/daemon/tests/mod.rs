@@ -28,7 +28,7 @@ use crate::daemon::{
     all_audio, apply_audiobookshelf_book_progress, apply_audiobookshelf_progress,
     apply_queue_enriched, apply_stopped_observation, apply_track_completed_observation,
     audio_only_rejection, broadcast, handle_ctrl_for_role, handle_ws,
-    take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlRequest, CtrlTransport,
+    take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlContext, CtrlTransport,
     DaemonEvent, DaemonLoop, DaemonPlayerOwner, LoopFlow, PendingIdleQueueLoad,
     PlaybackIntentState, SharedQueueState,
 };

@@ -111,20 +111,20 @@ fn replace_queue_succeeds_unconditionally() {
             start_idx: Some(0),
             source: QueueSource::Album,
         },
-        sender_id,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &reply_tx,
+            client_id: sender_id,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared_queue_state(),
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Local,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared_queue_state(),
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Local,
     );
     let queue = owner.core.queue;
 

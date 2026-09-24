@@ -5,7 +5,7 @@ use crate::ctrl::{
     CtrlCmd, CtrlEvent, DisconnectReason, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome,
 };
-use crate::daemon::ctrl::{send_to, ClientRegistry, CtrlRequest};
+use crate::daemon::ctrl::{send_to, ClientRegistry};
 use crate::playback_queue::QueueItem;
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use std::sync::mpsc;
@@ -539,20 +539,20 @@ impl DaemonLoop {
                 let persist_after_command = cmd.mutates_owner_queue();
                 handle_ctrl_for_role(
                     cmd,
-                    client_id,
-                    CtrlRequest {
+                    CtrlContext {
                         reply_tx: &reply_tx,
+                        client_id,
+                        client: &self.client,
+                        player: &self.player,
+                        audio_only: self.audio_only,
+                        owner: &mut self.owner,
+                        shared_queue: &self.shared_queue,
+                        ctrl_clients: &self.ctrl_clients,
+                        has_audiobookshelf: self.audiobookshelf_runtime.is_some(),
+                        merged_tx: &self.merged_tx,
+                        stay_alive: self.stay_alive,
+                        role: self.role,
                     },
-                    &self.client,
-                    &self.player,
-                    self.audio_only,
-                    &mut self.owner,
-                    &self.shared_queue,
-                    &self.ctrl_clients,
-                    self.audiobookshelf_runtime.is_some(),
-                    &self.merged_tx,
-                    self.stay_alive,
-                    self.role,
                 );
                 if persist_after_command && self.owner.pending_idle_load.is_none() {
                     owner_queue_dirty = true;

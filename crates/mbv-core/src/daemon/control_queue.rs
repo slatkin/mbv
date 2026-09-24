@@ -319,38 +319,3 @@ pub(crate) fn abs_queue_transport_rejection<'a>(
         None
     }
 }
-
-/// Rejects a queue command with `reason` and echoes the daemon's
-/// authoritative state back to the requester.
-pub(crate) fn reject_command(
-    reply_tx: &CtrlSender,
-    ctrl_clients: &ClientRegistry,
-    client_id: CtrlClientId,
-    player: &Player,
-    queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
-    lineage: crate::ctrl::QueueLineage,
-    reason: String,
-) {
-    send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
-    let status = player.status.lock().unwrap().clone();
-    let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
-    let supports_abs_book_queue = ctrl_clients
-        .lock()
-        .unwrap()
-        .supports_abs_book_queue(client_id);
-    send_to(
-        reply_tx,
-        &unified_queue_state_for_peer(
-            &status,
-            queue,
-            source,
-            lineage,
-            queue.active_slot_id(),
-            None,
-            None,
-            supports_abs_queue,
-            supports_abs_book_queue,
-        ),
-    );
-}

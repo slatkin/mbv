@@ -256,20 +256,20 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
         CtrlCmd::PlayerCmd(
             WireCommand::try_from_player_command(PlayerCommand::TogglePause).unwrap(),
         ),
-        1,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &reply_tx,
+            client_id: 1,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared_queue_state(),
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Local,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared_queue_state(),
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Local,
     );
     let _queue = owner.core.queue;
 
@@ -307,20 +307,20 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
             cursor: 0,
             source: QueueSource::Remote,
         },
-        1,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &reply_tx,
+            client_id: 1,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared_queue_state(),
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Packaged,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared_queue_state(),
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Packaged,
     );
     assert!(
         dummy_merged_rx.try_recv().is_err(),
@@ -562,20 +562,20 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
             cursor: 0,
             source: QueueSource::Unknown,
         },
-        1,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &reply_tx,
+            client_id: 1,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared_queue_state(),
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Packaged,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared_queue_state(),
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 
@@ -650,20 +650,20 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
 
     handle_ctrl_for_role(
         CtrlCmd::PlayerCmd(WireCommand::JumpTo(1)),
-        1,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &reply_tx,
+            client_id: 1,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared_queue_state(),
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Local,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared_queue_state(),
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Local,
     );
 
     match recv_event(&reply_rx) {
@@ -948,20 +948,20 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
     // First press: nothing in flight, observed slot A -> jump to B.
     handle_ctrl_for_role(
         next_intent(1),
-        client_id,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &(mpsc::channel().0),
+            client_id,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared,
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Local,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared,
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Local,
     );
     assert!(
         matches!(
@@ -975,20 +975,20 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
     // behind it.
     handle_ctrl_for_role(
         next_intent(2),
-        client_id,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &(mpsc::channel().0),
+            client_id,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared,
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Local,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared,
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Local,
     );
     // The second press must not dispatch past the in-flight jump (one
     // in-flight at a time, design D4): C is held queued, not sent to the run.
@@ -1066,20 +1066,20 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
             generation: 1,
             action: PlaybackIntentAction::Next,
         }),
-        client_id,
-        CtrlRequest {
+        CtrlContext {
             reply_tx: &(mpsc::channel().0),
+            client_id,
+            client: &client,
+            player: &player,
+            audio_only: false,
+            owner: &mut owner,
+            shared_queue: &shared,
+            ctrl_clients: &registry,
+            has_audiobookshelf: false,
+            merged_tx: &dummy_merged_tx,
+            stay_alive: false,
+            role: crate::daemon::DaemonRole::Local,
         },
-        &client,
-        &player,
-        false,
-        &mut owner,
-        &shared,
-        &registry,
-        false,
-        &dummy_merged_tx,
-        false,
-        crate::daemon::DaemonRole::Local,
     );
     let (jump_request_id, jump_generation) = match cmd_rx.recv().unwrap() {
         PlayerCommand::JumpTo {
