@@ -7,7 +7,7 @@ use crate::player::Player;
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence. The snapshot is handed to the
 /// injected `store`, so tests can observe it without touching real state.
-pub(crate) fn persist_stay_alive_owner_queue(
+pub(in crate::daemon) fn persist_stay_alive_owner_queue(
     owner: &DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,

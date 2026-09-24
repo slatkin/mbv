@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) fn spawn_ctrl_client(
+pub(in crate::daemon) fn spawn_ctrl_client(
     stream: SocketStream,
     transport: CtrlTransport,
     merged_tx: mpsc::Sender<DaemonEvent>,
