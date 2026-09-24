@@ -664,6 +664,7 @@ pub(crate) fn emby_unified_state(
         slots,
         revision: 1,
         source: crate::config::QueueSource::Remote,
+        lineage: mbv_core::ctrl::QueueLineage::default(),
         in_flight_transition: None,
         queued_latest_transition: None,
     }
