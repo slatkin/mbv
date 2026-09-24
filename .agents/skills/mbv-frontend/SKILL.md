@@ -19,6 +19,7 @@ skill and `CONTEXT.md` ever disagree.
 | `theme/` | semantic roles (public) | expose raw `Color` primitives (private) |
 
 Dependency order: `screens -> arrangements -> render/components -> Ratatui`.
+Rendering never performs Service/image/playback/persistence effects.
 Throughout this section, a bare `components/` means `src/app/render/components/`;
 the TuiRealm Interactive Components in `src/app/components/` are a separate tree,
 described below.
@@ -83,7 +84,24 @@ one canonical fixed-row browser active across every geometry; its
 changes clamp the viewport in place. In non-Wide geometry, a hero-bearing
 browser opens a Library Hero overlay on demand. The Panel derives the skeleton
 from shared geometry and Hero header shape from content policy; destinations do
-not choose either.
+not choose either. The Queue and playback Panels own their corresponding surfaces.
+
+### Embedded canonical media lists
+
+Contract: `openspec/specs/canonical-media-lists/spec.md`.
+
+- `MediaList<Target>` owns each logical media-row flow: provider-neutral rows,
+  stable-target selection, cursor/scroll, row-local behavior, and retained
+  geometry. It is embedded — never mounted, focused, subscribed, or given a
+  `ComponentId`; the destination retains Service content and typed translation.
+- `WideMediaList<Target>` is the fixed-row one-column presentation over that
+  owner, including Queue. Geometry transitions reuse the owner and clamp the
+  viewport in place; ordinary refresh preserves and clamps local state.
+- Rows are provider-neutral selectable `Item`s with stable opaque targets plus
+  non-selectable `Heading`/`Spacer`; parents retain provider content,
+  workspaces, effects, persistence, and message translation.
+- One owner, one painter per surface per breakpoint; no second loop or fallback
+  painter.
 
 Workflow: identify the root-composed Panel; project content into its typed slots;
 let the Panel arrange and paint; retain pointer geometry in the painter; and
@@ -94,9 +112,12 @@ surface at Wide and Narrow, including absent Panels in each Panel mode.
 
 There is exactly one keyboard resolution site: `src/app/input/router.rs`, with its
 ordered policy in `src/app/input/key_policy.rs`, folded into the tick in
-`shell/run/mod.rs`. It returns ADR 0002's `Command` / `Swallow` / `FallThrough` from
-a plain-data `RouterSnapshot`. A component interprets only its own local chords
-and emits a semantic intent.
+`shell/run/mod.rs`, with chord conversion in `src/app/input/resolver.rs`. `UiRoot`
+returns ADR 0002's `Command` / `Swallow` / `FallThrough` from a plain-data
+`RouterSnapshot`. A component interprets only its own local chords and emits a
+semantic intent. Shell compatibility/fall-through handlers may remain for
+explicitly unmigrated commands, but they do not become a second router or
+precedence policy.
 
 Two approaches that look reasonable and are not:
 
@@ -131,7 +152,9 @@ latest frame (or topmost overlay). The mounted parent owns gesture state and
 resolves only geometry it painted; embedded lists resolve their own rows. No
 separate mouse loop, no global hit map/router, and never discard a losing message
 after its component mutated — the framework mutates a component before it returns
-a message, so a discarded message does not undo the mutation.
+a message, so a discarded message does not undo the mutation. `TabPanel` owns and
+resolves the tab regions it paints; the shell supplies no second
+component-surface routing path.
 
 ## Version scope
 
@@ -282,6 +305,12 @@ abstraction. Semantic glyph assertions remain only in the owning painter test
 when the glyph is that painter's own semantic output; remove glyphs used as
 locators. Do not use whole-frame equality or snapshots: use focused
 buffer/content checks, with `buffer_to_string` only for focused checks.
+
+Mounting/focus/subscription/routing changes need real `Application::tick()`
+integration tests (`src/app/tests/tick_integration/`) through the shell sync
+pass — direct `Component::on` tests do not verify composition. Prove each Panel
+paints its own complete placement and that absent Panels are not mounted with
+empty areas.
 
 Mounted tick and mouse tests use the real composition path, but assert only
 mounting, focus, subscriptions, routing, gesture/latest-frame delivery,
