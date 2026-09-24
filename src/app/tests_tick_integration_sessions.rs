@@ -182,6 +182,105 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
 }
 
 #[test]
+fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
+    let mut app = make_app_stub();
+    app.panel_targets = sessions(&["removed", "kept"]);
+    let mut harness = TickHarness::new(app);
+    open_sessions(&mut harness);
+
+    let old_point = {
+        let content = sessions_component_mut(&mut harness)
+            .content_area_for_test()
+            .expect("painted content geometry");
+        ratatui::layout::Position::new(content.x + 1, content.y)
+    };
+    assert_eq!(
+        sessions_component_mut(&mut harness).target_at_for_test(old_point),
+        Some(SessionTargetKey::Emby("removed".into()))
+    );
+
+    harness.model_mut().app.panel_targets = sessions(&["replacement", "kept"]);
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        sessions_component_mut(&mut harness).target_at_for_test(old_point),
+        None,
+        "changed target keys invalidate the previously painted hit before repaint"
+    );
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: old_point.x,
+        row: old_point.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let stale_click = harness.step();
+    assert!(stale_click.raw_messages.iter().all(|message| !matches!(
+        message,
+        Msg::Shell(ShellRequest::SelectSession(_))
+    )));
+
+    draw(&mut harness, 100, 24);
+    assert_eq!(
+        sessions_component_mut(&mut harness).target_at_for_test(old_point),
+        Some(SessionTargetKey::Emby("replacement".into())),
+        "repaint publishes geometry for the new snapshot"
+    );
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: old_point.x,
+        row: old_point.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let repainted_click = harness.step();
+    assert!(repainted_click.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::SelectSession(SessionTargetKey::Emby(id))) if id == "replacement"
+    )));
+}
+
+#[test]
+fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
+    let mut app = make_app_stub();
+    app.panel_targets = sessions(&["first", "second"]);
+    let mut harness = TickHarness::new(app);
+    open_sessions(&mut harness);
+
+    let point = {
+        let content = sessions_component_mut(&mut harness)
+            .content_area_for_test()
+            .expect("painted content geometry");
+        ratatui::layout::Position::new(content.x + 1, content.y + 4)
+    };
+    let second = SessionTargetKey::Emby("second".into());
+    assert_eq!(
+        sessions_component_mut(&mut harness).target_at_for_test(point),
+        Some(second.clone())
+    );
+
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        sessions_component_mut(&mut harness).target_at_for_test(point),
+        Some(second.clone()),
+        "an unchanged shell sync must retain the last painted hit"
+    );
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: point.x,
+        row: point.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let click = harness.step();
+    assert_eq!(
+        sessions_component_mut(&mut harness).selection_and_offset_for_test().0,
+        Some(second)
+    );
+    assert!(click.raw_messages.iter().all(|message| !matches!(
+        message,
+        Msg::Shell(ShellRequest::SelectSession(_))
+    )));
+}
+
+#[test]
 fn tick_sessions_reordered_snapshot_activates_selected_identity() {
     let mut app = make_app_stub();
     app.panel_targets = sessions(&["first", "selected"]);
