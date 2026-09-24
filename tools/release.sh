@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Usage: scripts/release.sh <version> "<summary>"
-# Example: scripts/release.sh 0.8.9 "add keyboard shortcuts for playback speed"
+# Usage: tools/release.sh <version> "<summary>"
+# Example: tools/release.sh 0.8.9 "add keyboard shortcuts for playback speed"
 #
 # Runs tests + clippy, bumps Cargo.toml + PKGBUILD, updates Cargo.lock,
 # commits, and pushes. On main: pushes, tags, and pushes the tag. On a branch:
@@ -9,8 +9,8 @@
 # after building the release tarball.
 set -euo pipefail
 
-VERSION="${1?Usage: scripts/release.sh <version> \"<summary>\"}"
-SUMMARY="${2?Usage: scripts/release.sh <version> \"<summary>\"}"
+VERSION="${1?Usage: tools/release.sh <version> \"<summary>\"}"
+SUMMARY="${2?Usage: tools/release.sh <version> \"<summary>\"}"
 
 # Normalize: strip leading 'v' for Cargo.toml; v-prefix for tag and commit message
 VERSION="${VERSION#v}"
