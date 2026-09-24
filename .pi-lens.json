@@ -1,10 +1,24 @@
 {
-  "format": { "enabled": false },
-  "autofix": { "enabled": false },
+  "ignore": [
+    "**/tests/**",
+    "**/tests.rs",
+    "**/*_tests.rs",
+    "**/test_*.rs"
+  ],
+  "format": {
+    "enabled": false
+  },
+  "autofix": {
+    "enabled": false
+  },
   "actionableWarnings": {
-    "autoFix": { "enabled": false }
+    "autoFix": {
+      "enabled": false
+    }
   },
   "lsp": {
-    "disabledServers": ["typos"]
+    "disabledServers": [
+      "typos"
+    ]
   }
 }
