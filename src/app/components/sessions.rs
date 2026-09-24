@@ -16,7 +16,7 @@ use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
-use crate::app::panel_targets::PanelTarget;
+use crate::app::panel_targets::{PanelTarget, SessionTargetKey};
 
 /// The Interactive Component for the Sessions sidebar.
 pub struct SessionsComponent {
@@ -64,15 +64,11 @@ impl SessionsComponent {
         can_disconnect: bool,
         panel_area: Option<Rect>,
     ) {
-        let selected_key = self.targets.get(self.cursor).map(target_key);
+        let selected_key = self.selected_target_key();
         self.targets = targets.to_vec();
         self.loading = loading;
         self.cursor = selected_key
-            .and_then(|key| {
-                self.targets
-                    .iter()
-                    .position(|target| target_key(target) == key)
-            })
+            .and_then(|key| self.targets.iter().position(|target| target.key() == key))
             .unwrap_or_else(|| self.cursor.min(self.targets.len().saturating_sub(1)));
         self.connected_session_id = connected_session_id.map(str::to_owned);
         self.cast_attachment_id = cast_attachment_id.map(str::to_owned);
@@ -97,7 +93,9 @@ impl SessionsComponent {
                 None
             }
             Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshSessions)),
-            Key::Enter => Some(Msg::Shell(ShellRequest::SelectSession(self.cursor))),
+            Key::Enter => self
+                .selected_target_key()
+                .map(|key| Msg::Shell(ShellRequest::SelectSession(key))),
             Key::Char('d') if self.can_disconnect || self.cast_attachment_id.is_some() => {
                 Some(Msg::Shell(ShellRequest::DetachSessions))
             }
@@ -133,7 +131,10 @@ impl SessionsComponent {
                 }
                 if let Some(&index) = self.hit_rows.resolve(at) {
                     if self.cursor == index {
-                        return Some(Msg::Shell(ShellRequest::SelectSession(index)));
+                        return self
+                            .targets
+                            .get(index)
+                            .map(|target| Msg::Shell(ShellRequest::SelectSession(target.key())));
                     }
                     self.cursor = index;
                 }
@@ -141,6 +142,10 @@ impl SessionsComponent {
             }
             _ => None,
         }
+    }
+
+    fn selected_target_key(&self) -> Option<SessionTargetKey> {
+        self.targets.get(self.cursor).map(PanelTarget::key)
     }
 
     #[cfg(test)]
@@ -153,19 +158,6 @@ impl SessionsComponent {
     #[cfg(test)]
     pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
         self.mouse_gestures.reset_for_test();
-    }
-}
-
-#[derive(Clone, PartialEq, Eq)]
-enum TargetKey {
-    Emby(String),
-    Cast(String),
-}
-
-fn target_key(target: &PanelTarget) -> TargetKey {
-    match target {
-        PanelTarget::Emby(session) => TargetKey::Emby(session.id.clone()),
-        PanelTarget::Cast(receiver) => TargetKey::Cast(receiver.id.clone()),
     }
 }
 
@@ -275,19 +267,20 @@ mod tests {
             component.handle_key(&key(Key::Char('r'))),
             Some(Msg::Shell(ShellRequest::RefreshSessions))
         );
-        assert_eq!(
-            component.handle_key(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::SelectSession(0)))
-        );
+        assert_eq!(component.handle_key(&key(Key::Enter)), None);
     }
 
     // --- Mouse (task 5.2): primitives delivery with unchanged behaviour ---
 
     fn painted_component() -> SessionsComponent {
         use crate::app::tests::make_session;
+        let mut first = make_session("a", "mbv");
+        first.id = "a".to_string();
+        let mut second = make_session("b", "mbv");
+        second.id = "b".to_string();
         let targets = vec![
-            PanelTarget::Emby(Box::new(make_session("a", "mbv"))),
-            PanelTarget::Emby(Box::new(make_session("b", "mbv"))),
+            PanelTarget::Emby(Box::new(first)),
+            PanelTarget::Emby(Box::new(second)),
         ];
         let mut component = SessionsComponent::new();
         component.set_content(
@@ -320,7 +313,9 @@ mod tests {
         let (rect, _) = component.test_rows().regions()[0];
         assert_eq!(
             component.handle_mouse(&left_down(rect.x, rect.y)),
-            Some(Msg::Shell(ShellRequest::SelectSession(0)))
+            Some(Msg::Shell(ShellRequest::SelectSession(
+                SessionTargetKey::Emby("a".to_string())
+            )))
         );
     }
 
@@ -334,7 +329,9 @@ mod tests {
         // The second click on the same row — a double click — connects.
         assert_eq!(
             component.handle_mouse(&left_down(rect.x, rect.y)),
-            Some(Msg::Shell(ShellRequest::SelectSession(index)))
+            Some(Msg::Shell(ShellRequest::SelectSession(
+                SessionTargetKey::Emby("b".to_string())
+            )))
         );
     }
 
