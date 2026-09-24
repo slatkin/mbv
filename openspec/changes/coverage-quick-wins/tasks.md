@@ -16,11 +16,11 @@
 
 ## 2. `single_instance` resolution
 
-- [ ] 2.1 Add a test module to `src/single_instance.rs` covering `Resolution::Fresh`
+- [x] 2.1 Add a test module to `src/single_instance.rs` covering `Resolution::Fresh`
   and the PID round-trip: `resolve` against a lock path in a temp dir returns `Fresh`,
   and `write_pid` then `read_pid` returns the process id. Verify with
   `cargo nextest run -p mbv -E 'test(single_instance)'`.
-- [ ] 2.2 Cover the held-lock arms in the same module: with a guard from a first
+- [x] 2.2 Cover the held-lock arms in the same module: with a guard from a first
   `resolve` still alive, a second `resolve` returns `Refuse` when the socket path has
   no listener, and `Attach` when a `UnixListener` is bound at that path. Verify the
   same nextest filter, and confirm `read_pid` on a missing/garbage lock file returns
