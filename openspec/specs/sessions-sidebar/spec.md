@@ -7,7 +7,7 @@ The F3 Sessions sidebar presents Emby Sessions and discovered Cast receivers as 
 ## Requirements
 
 ### Requirement: F3 presents three-line targets through a flat list
-The F3 Sessions sidebar SHALL show each Emby Session and Cast receiver as a three-line flat-list item, with one blank separator line between items for now. It SHALL preserve the existing target order, kind labels, Emby device/client/user/host and playback details, and Cast receiver name/address details; a Cast item without a third detail line SHALL leave that line blank. Existing loading, empty-state, footer, refresh, dismiss, and detach behavior SHALL remain available. Its mounted sidebar SHALL remain the sole focus and gesture boundary; the embedded list SHALL not become an independently mounted surface.
+The F3 Sessions sidebar SHALL show each Emby Session and Cast receiver as a three-line flat-list item, with items adjacent by default and the list's separator gap currently zero (no blank separator rows in F3). It SHALL preserve the existing target order, kind labels, Emby device/client/user/host and playback details, and Cast receiver name/address details; a Cast item without a third detail line SHALL leave that line blank. Existing loading, empty-state, footer, refresh, dismiss, and detach behavior SHALL remain available. Its mounted sidebar SHALL remain the sole focus and gesture boundary; the embedded list SHALL not become an independently mounted surface.
 
 #### Scenario: Both discovery channels report the same device
 - **WHEN** a device appears as an Emby Session and a Cast receiver
