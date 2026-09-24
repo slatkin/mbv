@@ -88,6 +88,11 @@ impl PlaybackRun {
                         self.current_idx,
                         self.queue_len(),
                     );
+                    if self.forced_jump_from_idle {
+                        if let Err(error) = mpv.command("playlist-play-index", &[&idx.to_string()]) {
+                            log::warn!(target: "player", "jump-to playlist-play-index={idx} failed: {}", mpv_err_str(&error));
+                        }
+                    }
                     // Selecting a track should always start it playing, even if
                     // mpv was paused on the previous track — otherwise the new
                     // track loads silently "stuck" paused (see issue: Enter on a

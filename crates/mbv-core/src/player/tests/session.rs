@@ -108,6 +108,22 @@ fn idle_jump_settles_from_playback_restart_and_emits_the_transition_observation(
 }
 
 #[test]
+fn idle_jump_to_removed_slot_clears_the_pending_transition() {
+    let (mut session, _status, _events) = make_queue_session_for_pos_tests_with_events(0);
+    let missing = QueueSlotId::from_raw(u64::MAX);
+    let transition = crate::playback_transition::Transition::new(42, 7, missing);
+    session.forced_jump_from_idle = true;
+    session.forced_slot_id = Some(missing);
+    session.forced_transition = Some(transition);
+
+    assert_eq!(session.settle_idle_jump_on_restart(0), None);
+
+    assert!(!session.forced_jump_from_idle);
+    assert_eq!(session.forced_slot_id, None);
+    assert_eq!(session.forced_transition, None);
+}
+
+#[test]
 fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
     let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
     session.pending_initial_playlist_layout = false;

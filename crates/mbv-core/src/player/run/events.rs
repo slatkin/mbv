@@ -238,8 +238,16 @@ impl PlaybackRun {
         if !self.forced_jump_from_idle {
             return None;
         }
-        let slot_id = self.forced_slot_id.take()?;
-        let index = self.queue.slot_index(slot_id)?;
+        let Some(slot_id) = self.forced_slot_id.take() else {
+            self.forced_jump_from_idle = false;
+            self.forced_transition = None;
+            return None;
+        };
+        let Some(index) = self.queue.slot_index(slot_id) else {
+            self.forced_jump_from_idle = false;
+            self.forced_transition = None;
+            return None;
+        };
         let transition = self.forced_transition.take();
         self.forced_jump_from_idle = false;
         if !self.set_active_index(index) {
