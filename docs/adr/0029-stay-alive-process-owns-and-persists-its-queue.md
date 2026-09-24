@@ -37,6 +37,25 @@ Packaged `mbvd` keeps its current behavior — it is not reinterpreted as
 this model, and direct-remote and Bare mode are unchanged (a Client in
 Bare mode owns its queue and persists it as before).
 
+## Shared PlaybackRun boundary
+
+The idle-load operation and its queue-ownership semantics are specific to the
+Stay-alive process, but implementing the owner's cold-start and idle-jump path
+also changed shared playback mechanics:
+
+- The shared PlaybackRun settles an idle `JumpTo` on `PlaybackRestart`, using
+  forced-jump state to retain the owner-assigned slot and transition until
+  playback actually restarts.
+- Shared queue submission explicitly issues `playlist-play-index` and checks
+  the playlist layout with idle-aware reassertion. This makes a cold load start
+  the requested slot even when mpv's position write alone is a no-op.
+- These mechanics are not gated on `DaemonRole::Local`: packaged `mbvd` and
+  Bare runs use them too when loading a queue or receiving an idle `JumpTo`.
+  Their load semantics remain unchanged; the Stay-alive process alone uses
+  owner adoption. This honors the design's Non-Goal while recording that the
+  shared PlaybackRun load-start robustness and idle-jump settlement apply to
+  every mode when those paths occur.
+
 ## Consequences
 
 - All queue-changing operations are owner-accepted before a Client reports
