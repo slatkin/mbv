@@ -110,7 +110,7 @@ struct PlaybackIntentState {
 }
 
 impl PlaybackIntentState {
-    fn is_current(
+    pub(super) fn is_current(
         &self,
         connection_id: CtrlClientId,
         request_id: PlaybackRequestId,
@@ -123,7 +123,7 @@ impl PlaybackIntentState {
         })
     }
 
-    fn accept(
+    pub(super) fn accept(
         &mut self,
         connection_id: CtrlClientId,
         intent: PlaybackIntent,
@@ -198,7 +198,7 @@ impl PlaybackIntentState {
         vec![event]
     }
 
-    fn mark_resolving(&mut self, request_id: PlaybackRequestId) {
+    pub(super) fn mark_resolving(&mut self, request_id: PlaybackRequestId) {
         if let Some(current) = &mut self.current {
             if current.request_id == request_id {
                 current.phase = PlaybackIntentPhase::Resolving;
@@ -206,7 +206,7 @@ impl PlaybackIntentState {
         }
     }
 
-    fn mark_starting(&mut self, request_id: PlaybackRequestId) {
+    pub(super) fn mark_starting(&mut self, request_id: PlaybackRequestId) {
         if let Some(current) = &mut self.current {
             if current.request_id == request_id {
                 current.phase = PlaybackIntentPhase::PlayerOpening;
@@ -214,7 +214,7 @@ impl PlaybackIntentState {
         }
     }
 
-    fn pipe_status(&self) -> Option<crate::ctrl::PipePlaybackStatus> {
+    pub(super) fn pipe_status(&self) -> Option<crate::ctrl::PipePlaybackStatus> {
         use crate::ctrl::PipePlaybackPhase;
         let current = self.current.as_ref()?;
         if !current.pipe_output {
@@ -243,7 +243,7 @@ impl PlaybackIntentState {
         })
     }
 
-    fn output_started_if_current(
+    pub(super) fn output_started_if_current(
         &mut self,
         delay: Option<Duration>,
     ) -> Option<(CtrlClientId, crate::ctrl::PipePlaybackStatus)> {
@@ -276,7 +276,7 @@ impl PlaybackIntentState {
         ))
     }
 
-    fn settle_buffering_if_due(&mut self) -> Option<(CtrlClientId, PlaybackIntentEvent)> {
+    pub(super) fn settle_buffering_if_due(&mut self) -> Option<(CtrlClientId, PlaybackIntentEvent)> {
         let current = self.current.as_mut()?;
         if current.phase != PlaybackIntentPhase::OutputBuffering
             || current
@@ -297,7 +297,7 @@ impl PlaybackIntentState {
         ))
     }
 
-    fn applied_if_current(
+    pub(super) fn applied_if_current(
         &mut self,
         connection_id: CtrlClientId,
         request_id: PlaybackRequestId,
@@ -318,7 +318,7 @@ impl PlaybackIntentState {
         })
     }
 
-    fn rejected_if_current(
+    pub(super) fn rejected_if_current(
         &mut self,
         connection_id: CtrlClientId,
         request_id: PlaybackRequestId,
@@ -340,7 +340,7 @@ impl PlaybackIntentState {
         })
     }
 
-    fn invalidate_connection(&mut self, connection_id: CtrlClientId) {
+    pub(super) fn invalidate_connection(&mut self, connection_id: CtrlClientId) {
         if self
             .current
             .as_ref()
