@@ -1,0 +1,25 @@
+{
+  "id": "<SESSION_ID>",
+  "userId": "<USER_ID>",
+  "libraryId": "<LIBRARY_ID>",
+  "libraryItemId": "<LIBRARY_ITEM_ID>",
+  "mediaType": "book",
+  "duration": 3054.336,
+  "playMethod": 0,
+  "mediaPlayer": "<MEDIA_PLAYER>",
+  "currentTime": 1,
+  "audioTracks": [{
+    "index": 1,
+    "startOffset": 0,
+    "duration": 1500.0,
+    "contentUrl": "<DIRECT_PATH_1>",
+    "mimeType": "audio/mpeg"
+  }, {
+    "index": 2,
+    "startOffset": 1500.0,
+    "duration": 1554.336,
+    "contentUrl": "<DIRECT_PATH_2>",
+    "mimeType": "audio/mpeg"
+  }],
+  "serverVersion": "2.36.0"
+}
