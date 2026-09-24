@@ -2,7 +2,7 @@ use super::*;
 
 // ── Task 2.3: the tree is the one Grouped Music browser owner and painter ──
 
-pub(super) fn music_panel(
+pub(in super::super) fn music_panel(
     harness: &TickHarness,
 ) -> &crate::app::components::library_panel::LibraryPanel {
     harness
@@ -16,7 +16,7 @@ pub(super) fn music_panel(
 }
 
 /// Draw one frame at the model's own terminal size (the live paint path).
-pub(super) fn draw_music_frame(harness: &mut TickHarness) {
+pub(in super::super) fn draw_music_frame(harness: &mut TickHarness) {
     let width = harness.model().app.terminal_width;
     let height = harness.model().app.terminal_height;
     let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test terminal");
@@ -32,7 +32,7 @@ fn mounted_music_at(width: u16, height: u16) -> (TickHarness, ComponentId) {
 
 /// The mounted Music app for a supplied fixture at one Panel-mode geometry,
 /// drawn once.
-pub(super) fn mounted_music_app_at(
+pub(in super::super) fn mounted_music_app_at(
     mut app: crate::app::App,
     width: u16,
     height: u16,
@@ -51,7 +51,7 @@ pub(super) fn mounted_music_app_at(
     (harness, ComponentId::Library)
 }
 
-pub(super) fn music_panel_mut(
+pub(in super::super) fn music_panel_mut(
     harness: &mut TickHarness,
 ) -> &mut crate::app::components::library_panel::LibraryPanel {
     harness
@@ -247,7 +247,7 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
 
 /// Inject one key through the real router, dispatch every surviving message
 /// through the shell, and re-run the production sync pass.
-pub(super) fn tick_key(harness: &mut TickHarness, code: Key) {
+pub(in super::super) fn tick_key(harness: &mut TickHarness, code: Key) {
     harness.inject(key(code));
     let outcome = harness.step();
     let (mut music_resize, mut tv_resize) = (false, false);
