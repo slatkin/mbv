@@ -1,8 +1,5 @@
 #[cfg(test)]
-mod tests {
-    use std::net::SocketAddr;
-    include!("../tests.rs");
-}
+mod tests;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};

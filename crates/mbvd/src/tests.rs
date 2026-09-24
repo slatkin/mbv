@@ -1,3 +1,5 @@
+use super::*;
+
 #[test]
 fn log_level_flag_accepts_supported_values_and_rejects_invalid_values() {
     for (value, expected) in [

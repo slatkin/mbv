@@ -1,6 +1,7 @@
 use super::*;
 use crate::config::QueueSource;
 use crate::playback_queue::QueueItem;
+use std::net::SocketAddr;
 
 fn make_media_item(id: &str) -> EmbyItem {
     EmbyItem {
@@ -50,11 +51,7 @@ fn status_with_idx_and_len(current_idx: usize, queue_len: usize) -> PlayerStatus
     RemotePlayer::stub_status(current_idx, queue_len)
 }
 
-fn connected_pair_for_disconnect_test() -> (
-    RemotePlayer,
-    mpsc::Receiver<PlayerEvent>,
-    UnixStream,
-) {
+fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerEvent>, UnixStream) {
     use std::io::{BufRead, BufReader, Write};
 
     let (client, daemon) = UnixStream::pair().unwrap();
@@ -87,18 +84,14 @@ fn connected_pair_for_disconnect_test() -> (
 
 #[test]
 fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
-    let (remote, _events, commands) = RemotePlayer::stub_with_command_rx(
-        vec![make_media_item("confirmed")],
-        0,
-    );
-    let result = remote.load_queue_idle(
-        9,
-        vec![],
-        0,
-        QueueSource::Album,
-    );
+    let (remote, _events, commands) =
+        RemotePlayer::stub_with_command_rx(vec![make_media_item("confirmed")], 0);
+    let result = remote.load_queue_idle(9, vec![], 0, QueueSource::Album);
     assert!(result.is_err());
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
     assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
     assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
     assert_eq!(remote.status.lock().unwrap().queue_len, 1);
@@ -106,15 +99,16 @@ fn unsupported_idle_queue_load_is_rejected_without_staging_local_queue() {
 
 #[test]
 fn supported_idle_queue_load_sends_correlated_request_without_staging_queue() {
-    let (mut remote, _events, commands) = RemotePlayer::stub_with_command_rx(
-        vec![make_media_item("confirmed")],
-        0,
-    );
+    let (mut remote, _events, commands) =
+        RemotePlayer::stub_with_command_rx(vec![make_media_item("confirmed")], 0);
     remote.ctrl_compatibility.supports_owner_queue_load = true;
     remote
         .load_queue_idle(31, vec![], 0, QueueSource::Album)
         .unwrap();
-    assert!(matches!(commands.try_recv(), Ok(CtrlCmd::UnifiedQueueLoadIdle { request_id: 31, .. })));
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(CtrlCmd::UnifiedQueueLoadIdle { request_id: 31, .. })
+    ));
     assert_eq!(remote.items.lock().unwrap()[0].id, "confirmed");
     assert_eq!(*remote.queue_source.lock().unwrap(), QueueSource::Unknown);
     assert_eq!(remote.status.lock().unwrap().queue_len, 1);
@@ -255,9 +249,16 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
         let mut writer = daemon.try_clone().unwrap();
         let mut reader = BufReader::new(daemon);
         let mut hello = CtrlHello::current();
-        hello.capabilities.push(crate::ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
+        hello
+            .capabilities
+            .push(crate::ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
         hello.capabilities.push("future-capability".to_string());
-        writeln!(writer, "{}", serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()).unwrap();
+        writeln!(
+            writer,
+            "{}",
+            serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+        )
+        .unwrap();
         let mut client_hello = String::new();
         reader.read_line(&mut client_hello).unwrap();
         let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
@@ -273,11 +274,8 @@ fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });
 
-    let (_reader, _state, compatibility) = perform_handshake(
-        SocketStream::Unix(client),
-        || Ok("unused".to_string()),
-    )
-    .unwrap();
+    let (_reader, _state, compatibility) =
+        perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(compatibility.supports_audio_only);
     peer.join().unwrap();
 }
@@ -308,11 +306,8 @@ fn handshake_without_audio_only_capability_defaults_to_video_capable() {
         writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
     });
 
-    let (_reader, _state, compatibility) = perform_handshake(
-        SocketStream::Unix(client),
-        || Ok("unused".to_string()),
-    )
-    .unwrap();
+    let (_reader, _state, compatibility) =
+        perform_handshake(SocketStream::Unix(client), || Ok("unused".to_string())).unwrap();
     assert!(!compatibility.supports_audio_only);
     peer.join().unwrap();
 }
@@ -482,7 +477,14 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
     };
 
     assert_eq!(stored.revision, 9);
-    assert_eq!(stored.slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), vec![11, 22]);
+    assert_eq!(
+        stored
+            .slots
+            .iter()
+            .map(|slot| slot.slot_id)
+            .collect::<Vec<_>>(),
+        vec![11, 22]
+    );
     assert_eq!(stored.active_slot, Some(22));
     assert_eq!(stored.status.current_idx, 1);
     assert_eq!(stored.status.queue_len, 2);
@@ -490,7 +492,14 @@ fn reconnect_replaces_queue_and_status_from_one_playback_snapshot() {
     assert_eq!(status.queue_len, stored.status.queue_len);
     assert_eq!(status.active, stored.status.active);
     assert_eq!(event_snapshot.revision, stored.revision);
-    assert_eq!(event_snapshot.slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), vec![11, 22]);
+    assert_eq!(
+        event_snapshot
+            .slots
+            .iter()
+            .map(|slot| slot.slot_id)
+            .collect::<Vec<_>>(),
+        vec![11, 22]
+    );
     assert_eq!(event_snapshot.active_slot, stored.active_slot);
     assert_eq!(event_snapshot.status.current_idx, status.current_idx);
 }
