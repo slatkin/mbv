@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::LibEvent;
 
 fn wide_music_harness() -> (TickHarness, ComponentId) {
     let mut app = crate::app::render::make_music_group_app();
