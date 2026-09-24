@@ -153,3 +153,156 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_app_stub;
+    use mbv_core::player::{PlayerCommand, PlayerStatus};
+    use rstest::rstest;
+    use std::sync::mpsc::Receiver;
+
+    /// `PlayerCommand` carries no `PartialEq`, so compare structurally through
+    /// its `Serialize` impl — exact variant and payload, not a hand-written
+    /// field check per case.
+    fn command_json(cmd: &PlayerCommand) -> serde_json::Value {
+        serde_json::to_value(cmd).expect("PlayerCommand is serializable")
+    }
+
+    fn sent(rx: &Receiver<PlayerCommand>) -> PlayerCommand {
+        rx.try_recv()
+            .expect("the handler must send exactly one PlayerCommand")
+    }
+
+    fn set_status(app: &crate::app::App, f: impl FnOnce(&mut PlayerStatus)) {
+        f(&mut app.player.status.lock().unwrap());
+    }
+
+    /// The pure command variants: fixture is the status the handler reads and
+    /// the expected command is the exact payload it must emit. `Pause`/`Unpause`
+    /// reach `TogglePause` only when the status is on the other side of the
+    /// toggle, so `paused` is part of the fixture, not decoration.
+    #[rstest]
+    #[case::pause(false, 100, WsEvent::Pause, PlayerCommand::TogglePause)]
+    #[case::unpause(true, 100, WsEvent::Unpause, PlayerCommand::TogglePause)]
+    #[case::next_track(false, 100, WsEvent::NextTrack, PlayerCommand::Next)]
+    #[case::previous_track(false, 100, WsEvent::PreviousTrack, PlayerCommand::Previous)]
+    #[case::toggle_pause(false, 100, WsEvent::TogglePause, PlayerCommand::TogglePause)]
+    #[case::seek_absolute(false, 100, WsEvent::Seek(30 * TICKS_PER_SECOND), PlayerCommand::SeekAbsolute(30.0))]
+    #[case::seek_relative(false, 100, WsEvent::SeekRelative(2.5), PlayerCommand::Seek(2.5))]
+    #[case::set_volume(false, 100, WsEvent::SetVolume(40), PlayerCommand::SetVolume(40))]
+    #[case::set_volume_clamps_high(
+        false,
+        100,
+        WsEvent::SetVolume(150),
+        PlayerCommand::SetVolume(100)
+    )]
+    #[case::set_volume_clamps_low(false, 100, WsEvent::SetVolume(-5), PlayerCommand::SetVolume(0))]
+    #[case::volume_up(false, 50, WsEvent::VolumeUp, PlayerCommand::SetVolume(55))]
+    #[case::volume_up_clamps_at_max(false, 100, WsEvent::VolumeUp, PlayerCommand::SetVolume(100))]
+    #[case::volume_down(false, 50, WsEvent::VolumeDown, PlayerCommand::SetVolume(45))]
+    #[case::volume_down_to_zero(false, 5, WsEvent::VolumeDown, PlayerCommand::SetVolume(0))]
+    #[case::set_audio(false, 100, WsEvent::SetAudio(3), PlayerCommand::SetAudio(3))]
+    fn pure_command_variants_send_the_exact_command(
+        #[case] paused: bool,
+        #[case] volume: i64,
+        #[case] ev: WsEvent,
+        #[case] expected: PlayerCommand,
+    ) {
+        let mut app = make_app_stub();
+        set_status(&app, |st| {
+            st.paused = paused;
+            st.volume = volume;
+        });
+        let rx = app.player.spy_on_commands();
+
+        app.handle_ws_event(ev);
+
+        assert_eq!(command_json(&sent(&rx)), command_json(&expected));
+    }
+
+    #[test]
+    fn stop_resets_bare_transitions_and_sends_no_transport_command() {
+        use mbv_core::playback_queue::QueueSlotId;
+        use mbv_core::playback_transition::Transition;
+
+        let mut app = make_app_stub();
+        let (request_id, generation) = app.bare_owner.mint_local_transition();
+        app.bare_owner.accept_local_transition(Transition::new(
+            request_id,
+            generation,
+            QueueSlotId::from_raw(1),
+        ));
+        assert!(
+            app.bare_owner.in_flight_transition_slot().is_some(),
+            "fixture must leave a bare transition in flight for Stop to drop"
+        );
+        let rx = app.player.spy_on_commands();
+
+        app.handle_ws_event(WsEvent::Stop);
+
+        assert!(
+            app.bare_owner.in_flight_transition_slot().is_none(),
+            "Stop must reset the bare owner's in-flight transition"
+        );
+        assert!(
+            rx.try_recv().is_err(),
+            "Stop is a teardown, not an mpv transport command"
+        );
+    }
+
+    #[rstest]
+    #[case::set_mute_on(false, WsEvent::SetMute(true), true, PlayerCommand::SetMute(true))]
+    #[case::set_mute_off(false, WsEvent::SetMute(false), false, PlayerCommand::SetMute(false))]
+    #[case::toggle_from_unmuted(false, WsEvent::ToggleMute, true, PlayerCommand::SetMute(true))]
+    #[case::toggle_from_muted(true, WsEvent::ToggleMute, false, PlayerCommand::SetMute(false))]
+    fn mute_variants_update_state_send_command_and_persist_prefs(
+        #[case] status_muted: bool,
+        #[case] ev: WsEvent,
+        #[case] expected_mute_on: bool,
+        #[case] expected: PlayerCommand,
+    ) {
+        let mut app = make_app_stub();
+        set_status(&app, |st| st.muted = status_muted);
+        let rx = app.player.spy_on_commands();
+
+        app.handle_ws_event(ev);
+
+        assert_eq!(app.mute_on, expected_mute_on);
+        assert_eq!(command_json(&sent(&rx)), command_json(&expected));
+        // `make_app_stub` installs a `TestStateDirGuard`, so this write lands in
+        // the thread-local tempdir, never the developer's config.
+        let prefs: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(crate::config::prefs_path())
+                .expect("mute must persist prefs into the test state dir"),
+        )
+        .expect("prefs file must stay valid JSON");
+        assert_eq!(prefs["mute_on"].as_bool(), Some(expected_mute_on));
+    }
+
+    /// `SetSub` derives its target from player status: a stream index present in
+    /// the map resolves to that mpv id, a negative index means "off", and an
+    /// index the status cannot resolve legitimately sends nothing.
+    #[rstest]
+    #[case::resolved_stream_index(2, Some(PlayerCommand::SetSub(1)))]
+    #[case::negative_index_sends_off(-1, Some(PlayerCommand::SetSub(0)))]
+    #[case::unknown_stream_index_sends_nothing(5, None)]
+    fn set_sub_resolves_through_player_status(
+        #[case] index: i64,
+        #[case] expected: Option<PlayerCommand>,
+    ) {
+        let mut app = make_app_stub();
+        set_status(&app, |st| st.sub_track_stream_indexes = vec![(1, 2)]);
+        let rx = app.player.spy_on_commands();
+
+        app.handle_ws_event(WsEvent::SetSub(index));
+
+        match expected {
+            Some(expected) => assert_eq!(command_json(&sent(&rx)), command_json(&expected)),
+            None => assert!(
+                rx.try_recv().is_err(),
+                "an unresolvable stream index must not force a SetSub"
+            ),
+        }
+    }
+}
