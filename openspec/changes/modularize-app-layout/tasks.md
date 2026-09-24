@@ -28,8 +28,8 @@ Rules for every task:
 
 ## 4. `dispatch/`
 
-- [ ] 4.1 Move `dispatch/library/*`, `dispatch/session/*` and `dispatch/audiobookshelf/*` (including `audiobookshelf_browse_actions`' two `#[path]` test children). Verify: gate, and the old paths for those rows don't exist.
-- [ ] 4.2 Move the rest of the `dispatch/` table: `action/`, `actions/` (7 `#[path]` test children → `actions/<mod name>.rs`), `navigation`, the loose `*_actions`, `mouse_gestures`, `queue/`, `feeds/`, `run_loop/`. Verify: gate, `ls src/app/*_actions*.rs src/app/run_loop_* src/app/action*.rs` matches nothing, and `rg -n '#\[path' src/app/dispatch` is empty.
+- [x] 4.1 Move `dispatch/library/*`, `dispatch/session/*` and `dispatch/audiobookshelf/*` (including `audiobookshelf_browse_actions`' two `#[path]` test children). Verify: gate, and the old paths for those rows don't exist.
+- [x] 4.2 Move the rest of the `dispatch/` table: `action/`, `actions/` (7 `#[path]` test children → `actions/<mod name>.rs`), `navigation`, the loose `*_actions`, `mouse_gestures`, `queue/`, `feeds/`, `run_loop/`. Verify: gate, `ls src/app/*_actions*.rs src/app/run_loop_* src/app/action*.rs` matches nothing, and `rg -n '#\[path' src/app/dispatch` is empty.
 
 ## 5. `shell/`
 
