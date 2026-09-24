@@ -39,7 +39,7 @@ name = "mbv"
 path = "src/main.rs"
 
 [dependencies]
-mbv-core = { path = "crates/mbv-core", features = ["test-support"] }
+mbv-core = { path = "crates/mbv-core" }
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"
@@ -66,6 +66,7 @@ time = { version = "0.3", features = ["parsing"] }
 pipewire.workspace = true
 
 [dev-dependencies]
+mbv-core = { path = "crates/mbv-core", features = ["test-support"] }
 uuid.workspace = true
 rstest.workspace = true
 

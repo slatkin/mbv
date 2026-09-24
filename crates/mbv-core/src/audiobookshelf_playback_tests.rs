@@ -1,6 +1,8 @@
 use super::*;
 use std::time::{Duration, Instant};
 
+use rstest::rstest;
+
 use crate::mock_http::MockHttp;
 
 fn fixture(name: &str) -> String {
@@ -33,6 +35,22 @@ fn session_error(
             "device",
             "<LIBRARY_ITEM_ID>",
             "<EPISODE_ID>",
+            false,
+            hard_bound,
+        )
+        .unwrap_err()
+}
+
+fn book_session_error(
+    client: &AudiobookshelfClient,
+    api_key: &str,
+    hard_bound: Duration,
+) -> AudiobookshelfError {
+    client
+        .create_book_playback_session_bounded(
+            api_key,
+            "device",
+            "<LIBRARY_ITEM_ID>",
             false,
             hard_bound,
         )
@@ -223,4 +241,93 @@ fn late_success_after_create_bound_is_closed_on_loopback() {
         std::thread::sleep(Duration::from_millis(5));
     };
     assert!(close.starts_with("POST /api/session/%3CSESSION_ID%3E/close HTTP/1.1"));
+}
+
+#[test]
+fn book_playback_session_decodes_sources_and_timings() {
+    let body = fixture("play-book.json")
+        .replace("<DIRECT_PATH_1>", "/book/track1.mp3")
+        .replace("<DIRECT_PATH_2>", "/book/track2.mp3");
+    let (client, http) = mock_client(vec![(200, body)]);
+    let session = client
+        .create_book_playback_session_bounded(
+            "secret",
+            "device",
+            "<LIBRARY_ITEM_ID>",
+            false,
+            Duration::from_secs(1),
+        )
+        .unwrap();
+
+    assert_eq!(session.id, "<SESSION_ID>");
+    assert_eq!(session.library_item_id, "<LIBRARY_ITEM_ID>");
+    assert_eq!(session.duration_seconds, 3054.336);
+    assert_eq!(session.current_time_seconds, 1.0);
+    assert_eq!(session.sources.len(), 2);
+    for (source, (path, duration)) in session
+        .sources
+        .iter()
+        .zip([("/book/track1.mp3", 1500.0), ("/book/track2.mp3", 1554.336)])
+    {
+        assert_eq!(source.method, AudiobookshelfSourceMethod::Direct);
+        assert_eq!(source.mime_type, "audio/mpeg");
+        assert_eq!(source.url, format!("http://127.0.0.1:1{path}"));
+        assert_eq!(source.duration_seconds, duration);
+    }
+    assert_eq!(http.requests().len(), 1);
+    assert!(http.requests()[0].starts_with("POST /api/items/%3CLIBRARY_ITEM_ID%3E/play HTTP/1.1"));
+}
+
+fn book_body() -> serde_json::Value {
+    serde_json::from_str(&fixture("play-book.json")).unwrap()
+}
+
+fn wrong_media_type(value: &mut serde_json::Value) {
+    value["mediaType"] = serde_json::json!("podcast");
+}
+
+fn empty_audio_tracks(value: &mut serde_json::Value) {
+    value["audioTracks"] = serde_json::json!([]);
+}
+
+fn mismatched_library_item(value: &mut serde_json::Value) {
+    value["libraryItemId"] = serde_json::json!("other");
+}
+
+fn blank_id(value: &mut serde_json::Value) {
+    value["id"] = serde_json::json!("  ");
+}
+
+fn unknown_play_method(value: &mut serde_json::Value) {
+    value["playMethod"] = serde_json::json!(7);
+}
+
+fn negative_duration(value: &mut serde_json::Value) {
+    value["duration"] = serde_json::json!(-1.0);
+}
+
+fn negative_current_time(value: &mut serde_json::Value) {
+    value["currentTime"] = serde_json::json!(-1.0);
+}
+
+// Non-finite `duration`/`currentTime` are rejected by `decode_book_playback_session`
+// too, but JSON cannot carry them: serde_json rejects an out-of-range literal
+// (`1e400`) as a malformed number before the decode runs, so only the negative
+// half of that precondition is reachable over the HTTP boundary.
+#[rstest]
+#[case::wrong_media_type(wrong_media_type)]
+#[case::empty_audio_tracks(empty_audio_tracks)]
+#[case::mismatched_library_item(mismatched_library_item)]
+#[case::blank_id(blank_id)]
+#[case::unknown_play_method(unknown_play_method)]
+#[case::negative_duration(negative_duration)]
+#[case::negative_current_time(negative_current_time)]
+fn book_playback_decode_rejections_are_protocol_errors(#[case] mutate: fn(&mut serde_json::Value)) {
+    let mut value = book_body();
+    mutate(&mut value);
+    let body = serde_json::to_string(&value).unwrap();
+    // The second response serves the cleanup close the failed create sends.
+    let (client, _) = mock_client(vec![(200, body), (200, "{}".into())]);
+    let error = book_session_error(&client, "secret", Duration::from_secs(1));
+    assert_eq!(error.class, AudiobookshelfFailureClass::Protocol);
 }
