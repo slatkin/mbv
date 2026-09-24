@@ -1,8 +1,8 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
+use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::types_browse::BrowseResting;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::backend::TestBackend;

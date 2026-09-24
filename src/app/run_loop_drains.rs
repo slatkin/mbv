@@ -1,4 +1,4 @@
-use super::types_playback::PendingQueueAction;
+use crate::app::state::types::playback::PendingQueueAction;
 
 use super::App;
 
@@ -59,37 +59,37 @@ impl App {
                                  .audiobookshelf_libraries
                                  .iter()
                                  .cloned()
-                                 .map(super::types_audiobookshelf_browse::AudiobookshelfBrowseState::new)
+                                 .map(crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new)
                                  .collect();
                              self.audiobookshelf_book_browse = self
                                  .audiobookshelf_libraries
                                  .iter()
                                  .cloned()
-                                 .map(super::types_audiobookshelf_browse::AudiobookshelfBookBrowseState::new)
+                                 .map(crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState::new)
                                  .collect();
                              for index in 0..self.audiobookshelf_browse.len() {
                                  self.activate_audiobookshelf_position(index);
                                  self.activate_audiobookshelf_book_position(index);
                              }
                              for index in 0..self.audiobookshelf_browse.len() {
-                                 let book_kind = super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
+                                 let book_kind = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
                                      &self.audiobookshelf_libraries[index].media_type,
                                  );
                                  // Podcast libraries reconcile the episode progress
                                  // map; book libraries the book progress map.
                                  match book_kind {
-                                     super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
+                                     crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
                                          self.audiobookshelf_browse[index].progress = progress.clone();
                                      }
-                                     super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
+                                     crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
                                          self.audiobookshelf_book_browse[index].progress = book_progress.clone();
                                      }
                                  }
                              }
                              for library in &self.audiobookshelf_libraries {
-                                 let book_kind = super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(&library.media_type);
+                                 let book_kind = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(&library.media_type);
                                  match book_kind {
-                                     super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
+                                     crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Podcast => {
                                          super::service_startup::start_audiobookshelf_shows(
                                              self.config.lock().unwrap().clone(),
                                              completion.generation,
@@ -104,7 +104,7 @@ impl App {
                                              self.lib_tx.clone(),
                                          );
                                      }
-                                     super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
+                                     crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
                                          super::service_startup::start_audiobookshelf_books(
                                              self.config.lock().unwrap().clone(),
                                              completion.generation,

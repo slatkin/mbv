@@ -119,7 +119,7 @@ fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
     app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
-        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
         _ => panic!("context menu should open"),
     };
     let actions: Vec<_> = menu
@@ -162,7 +162,7 @@ fn context_menu_for_focused_track_offers_track_scoped_actions_not_folder_actions
     model.app.open_context_menu_for(track);
 
     let menu = match model.app.pending_overlay.as_ref() {
-        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
         _ => panic!("context menu should open"),
     };
     let actions: Vec<_> = menu

@@ -1,4 +1,4 @@
-use super::super::types_feed::IdleFeedItem;
+use crate::app::state::types::feed::IdleFeedItem;
 use mbv_core::api::{decode_entities, TICKS_PER_SECOND};
 use mbv_core::config::FeedKind;
 use mbv_core::playback_queue::FeedEntry;

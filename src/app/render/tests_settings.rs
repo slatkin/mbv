@@ -1,7 +1,7 @@
 use crate::app::components::settings::SettingsRow;
 use crate::app::palette;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
-use crate::app::types_settings::SettingsDestination;
+use crate::app::state::types::settings::SettingsDestination;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;

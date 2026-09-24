@@ -1,7 +1,7 @@
-use super::types_events::{LibEvent, SessionEvent};
-use super::types_feed::IdleFeed;
-use super::types_playback::QueueScope;
-use super::types_player_tab::PlayerTab;
+use crate::app::state::types::events::{LibEvent, SessionEvent};
+use crate::app::state::types::feed::IdleFeed;
+use crate::app::state::types::playback::QueueScope;
+use crate::app::state::types::player_tab::PlayerTab;
 use mbv_core::api::EmbyItem;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};

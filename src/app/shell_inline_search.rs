@@ -251,7 +251,7 @@ impl Model {
         // the shell hand-off (task 3.1/3.2) subsumes it.
         if let super::LibEvent::NavigateTo {
             lib_idx,
-            landing: super::types_events::NavigateLanding::Chain { ref nav_stack },
+            landing: crate::app::state::types::events::NavigateLanding::Chain { ref nav_stack },
             switch_tab: true,
         } = ev
         {

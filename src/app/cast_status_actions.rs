@@ -2,8 +2,10 @@
 // extrapolation (6.3, 6.4), matching a reported entry to a dispatched item
 // (6.5), and progress reporting to that item's provider (6.6).
 
-use super::types_cast::{CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem};
 use super::App;
+use crate::app::state::types::cast::{
+    CastAttachment, CastEvent, CastProgressTarget, DispatchedCastItem,
+};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::{AudiobookshelfClient, AudiobookshelfPlaybackProgress};
 use mbv_core::cast_client::{CastPlaybackState, CastStatus};
@@ -284,8 +286,8 @@ fn cast_progress_for_status<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::state::types::cast::CastProgressTarget as ProgressTarget;
     use crate::app::tests::make_app_stub;
-    use crate::app::types_cast::CastProgressTarget as ProgressTarget;
     use mbv_core::cast_client::CastStatus;
     use mbv_core::playback_queue::QueueItemContentId;
 
@@ -444,7 +446,7 @@ mod tests {
 
     #[test]
     fn spawn_cast_status_poll_calls_keep_alive_and_status_on_the_transport() {
-        use super::super::types_cast::{spawn_fake_cast_worker, FakeCastTransport};
+        use crate::app::state::types::cast::{spawn_fake_cast_worker, FakeCastTransport};
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
         let (job_tx, calls) = spawn_fake_cast_worker(FakeCastTransport {
@@ -469,8 +471,8 @@ mod tests {
         let items = crate::app::tests::make_items(2);
         app.player_tab.set_items(items.clone(), 0);
         app.attach_cast("device-1".to_string());
-        let (job_tx, _calls) = super::super::types_cast::spawn_fake_cast_worker(
-            super::super::types_cast::FakeCastTransport::default(),
+        let (job_tx, _calls) = crate::app::state::types::cast::spawn_fake_cast_worker(
+            crate::app::state::types::cast::FakeCastTransport::default(),
         );
         app.set_cast_client("device-1", job_tx);
 

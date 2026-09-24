@@ -1,6 +1,6 @@
-use super::types_settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
 use super::App;
 use super::{ConfirmAction, ConfirmModal};
+use crate::app::state::types::settings::{ServiceActionIntent, ServiceEntry, SettingsDestination};
 use mbv_core::service_runtime::ServiceState;
 
 pub(super) struct EmbySetupForm {
@@ -204,7 +204,8 @@ impl App {
     pub(super) fn route_service_action(&mut self, intent: ServiceActionIntent) {
         match intent {
             ServiceActionIntent::ManageFeeds => {
-                self.pending_overlay = Some(super::types_overlay::OverlayRequest::OpenFeedsManage);
+                self.pending_overlay =
+                    Some(crate::app::state::types::overlay::OverlayRequest::OpenFeedsManage);
             }
             ServiceActionIntent::SetupAudiobookshelf => self.open_audiobookshelf_setup(),
             ServiceActionIntent::TestAudiobookshelf => self.test_audiobookshelf_connection(),

@@ -1,5 +1,5 @@
-use super::types_feed_tab::FeedTabRefreshResult;
-use super::types_feeds_manage::{
+use crate::app::state::types::feed_tab::FeedTabRefreshResult;
+use crate::app::state::types::feeds_manage::{
     FeedAddResult, FeedForm, FeedFormField, FeedsManagePopup, FeedsManageStage,
 };
 use super::*;

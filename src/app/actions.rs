@@ -109,11 +109,11 @@ impl App {
             .or_else(|| self.direct_remote_label.clone())
             .or_else(|| self.player_endpoint.as_ref().map(daemon_endpoint_name))
             .unwrap_or_else(|| "this owner".into());
-        self.ask_confirm(crate::app::types_confirm::ConfirmModal {
+        self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
             title: format!(" Play locally instead of {owner} "),
             message: format!("Play \"{label}\" on this machine instead?"),
             hint: "[y] Play here    [n] Cancel".into(),
-            on_confirm: crate::app::types_confirm::ConfirmAction::PlayLocallyInstead,
+            on_confirm: crate::app::state::types::confirm::ConfirmAction::PlayLocallyInstead,
         });
     }
 

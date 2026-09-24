@@ -261,7 +261,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 title: "Music".into(),
                 items: vec![group],
                 total_count: 1,
-                resting: crate::app::types_browse::BrowseResting::new(0, 0),
+                resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -278,7 +278,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 title: "Alpha".into(),
                 items: albums,
                 total_count: 3,
-                resting: crate::app::types_browse::BrowseResting::new(0, 0),
+                resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -358,7 +358,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         title: "Tracks".into(),
         items: vec![track],
         total_count: 1,
-        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -614,7 +614,7 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
         modifiers: KeyModifiers::NONE,
     });
     let Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-        crate::app::types_context_menu::ContextMenuTargets::Emby(mut items),
+        crate::app::state::types::context_menu::ContextMenuTargets::Emby(mut items),
         anchor,
     ))) = message
     else {
@@ -626,7 +626,7 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
         Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
             None,
         )),
         &mut music_resize,
@@ -634,7 +634,7 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
     );
     assert!(matches!(
         model.app.pending_overlay,
-        Some(crate::app::types_overlay::OverlayRequest::ContextMenu(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
     ));
 
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
@@ -736,7 +736,7 @@ fn album_row_right_click_requests_the_album_context_menu() {
     assert!(matches!(
         message,
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(_),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(_),
             Some(_),
         )))
     ));

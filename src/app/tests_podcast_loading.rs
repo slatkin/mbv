@@ -24,7 +24,7 @@ fn unfetched_podcast_app(shows: usize) -> App {
         media_type: "podcast".into(),
     };
     let mut state =
-        super::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
     let shows: Vec<mbv_core::audiobookshelf::AudiobookshelfShow> = (0..shows)
         .map(|i| mbv_core::audiobookshelf::AudiobookshelfShow {
             library_item_id: format!("show-{i}"),
@@ -42,7 +42,7 @@ fn unfetched_podcast_app(shows: usize) -> App {
     app
 }
 
-fn loading(state: &crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState) -> Vec<String> {
+fn loading(state: &crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState) -> Vec<String> {
     let mut ids: Vec<String> = state.detail_loading_ids.keys().cloned().collect();
     ids.sort();
     ids
@@ -69,7 +69,7 @@ fn start_detail_without_service_setup_does_not_leak_the_in_flight_mark() {
         media_type: "podcast".into(),
     });
     app.audiobookshelf_browse.push(
-        super::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
             mbv_core::audiobookshelf::AudiobookshelfLibrary {
                 id: "abs-podcasts".into(),
                 name: "ABS Podcasts".into(),

@@ -2,7 +2,7 @@
 
 use super::tests_routing_matrix_support::*;
 use crate::app::components::{ComponentId, Msg, QueueRequest, ShellRequest};
-use crate::app::types_playback::QueueScope;
+use crate::app::state::types::playback::QueueScope;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
@@ -149,7 +149,7 @@ fn panel_focus_switches_on_the_ctrl_arrows_only() {
     // so the focused leaf's own message stands.
     let mut library = idle_snapshot();
     library.panel_focus = crate::app::PanelFocus::Library;
-    library.panel_mode = crate::app::types_settings::PanelMode::Both;
+    library.panel_mode = crate::app::state::types::settings::PanelMode::Both;
     assert_eq!(
         fold_tick(leaf.clone(), ctrl_right, Some(ComponentId::Library), library).len(),
         1,

@@ -1,7 +1,7 @@
-use super::super::super::types_feeds_manage::{FeedFormField, FeedsManageStage};
 use crate::app::infra::palette;
 use crate::app::infra::ui_util::trunc_str;
 use crate::app::render::components::modal_frame::render_modal_frame;
+use crate::app::state::types::feeds_manage::{FeedFormField, FeedsManageStage};
 use mbv_core::config::{FeedKind, FeedSubscription};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -153,7 +153,7 @@ fn render_feeds_manage_list(
 fn render_feeds_manage_form(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
-    form: &super::super::super::types_feeds_manage::FeedForm,
+    form: &crate::app::state::types::feeds_manage::FeedForm,
     pending_add: Option<u64>,
 ) -> FeedsManageRenderGeometry {
     let editing = form.editing_index.is_some();

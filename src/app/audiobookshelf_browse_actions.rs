@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
-#[cfg(test)]
-use super::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use super::App;
+#[cfg(test)]
+use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
 
@@ -22,9 +22,9 @@ impl App {
     pub(super) fn audiobookshelf_kind_at(
         &self,
         index: usize,
-    ) -> Option<super::types_audiobookshelf_browse::AudiobookshelfBrowseKind> {
+    ) -> Option<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind> {
         self.audiobookshelf_libraries.get(index).map(|library| {
-            super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
+            crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::from_media_type(
                 &library.media_type,
             )
         })
@@ -69,12 +69,14 @@ impl App {
                         mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
                     )
                 });
-            let _ = tx.send(super::types_events::LibEvent::AudiobookshelfDetailFetched {
-                generation,
-                request,
-                library_item_id,
-                result,
-            });
+            let _ = tx.send(
+                crate::app::state::types::events::LibEvent::AudiobookshelfDetailFetched {
+                    generation,
+                    request,
+                    library_item_id,
+                    result,
+                },
+            );
         });
     }
 
@@ -116,7 +118,7 @@ impl App {
                     )
                 });
             let _ = tx.send(
-                super::types_events::LibEvent::AudiobookshelfBookDetailFetched {
+                crate::app::state::types::events::LibEvent::AudiobookshelfBookDetailFetched {
                     generation,
                     library_item_id,
                     result,
@@ -720,7 +722,7 @@ pub(super) fn seconds_to_ticks(seconds: f64) -> i64 {
 /// tab's selection path and Home's queue-item path feed the one hero
 /// producer through this single conversion).
 pub(in crate::app) fn audiobookshelf_book_queue_item(
-    state: &super::types_audiobookshelf_browse::AudiobookshelfBookBrowseState,
+    state: &crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState,
 ) -> Option<QueueItem> {
     let book = state.selected_id.as_ref()?;
     let book = state

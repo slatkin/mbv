@@ -1,4 +1,4 @@
-use super::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
+use crate::app::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -8,37 +8,37 @@ use std::sync::mpsc;
 
 /// Shared local-vs-remote playback seam for the TUI action layer.
 #[derive(Clone, Copy)]
-pub(super) struct LocalPlaybackTarget;
+pub(in crate::app) struct LocalPlaybackTarget;
 
 #[derive(Clone)]
-pub(super) struct RemotePlaybackTarget {
-    pub(super) session_id: String,
+pub(in crate::app) struct RemotePlaybackTarget {
+    pub(in crate::app) session_id: String,
 }
 
 /// Reads/writes `app.cast_attachment` directly, the same way
 /// `LocalPlaybackTarget` reads `app.player` -- see `playback_target_cast.rs`.
 #[derive(Clone, Copy)]
-pub(super) struct CastPlaybackTarget;
+pub(in crate::app) struct CastPlaybackTarget;
 
 #[derive(Clone)]
-pub(super) enum PlaybackTarget {
+pub(in crate::app) enum PlaybackTarget {
     Local(LocalPlaybackTarget),
     Remote(RemotePlaybackTarget),
     Cast(CastPlaybackTarget),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct PlaybackState {
+pub(in crate::app) struct PlaybackState {
     /// Whether a transport is active, on any target. A watched remote
     /// Session playing foreign content is active without a local slot.
-    pub(super) active: bool,
+    pub(in crate::app) active: bool,
     /// The playhead's slot in the queue this state was read from. `None`
     /// while a watched remote Session plays something the local queue does
     /// not hold: the transport is active, but no row backs it.
-    pub(super) active_idx: Option<usize>,
-    pub(super) position_ticks: i64,
-    pub(super) runtime_ticks: i64,
-    pub(super) paused: bool,
+    pub(in crate::app) active_idx: Option<usize>,
+    pub(in crate::app) position_ticks: i64,
+    pub(in crate::app) runtime_ticks: i64,
+    pub(in crate::app) paused: bool,
 }
 
 /// Which queue an operation refers to.
@@ -64,20 +64,23 @@ pub(crate) enum QueueScope {
 ///   queue exists, but applies to any effective scope when no direct remote
 ///   queue exists because all queue state is local then.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) struct QueueScopeResolution {
-    pub(super) has_direct_remote_queue: bool,
-    pub(super) requested_visible_scope: QueueScope,
+pub(in crate::app) struct QueueScopeResolution {
+    pub(in crate::app) has_direct_remote_queue: bool,
+    pub(in crate::app) requested_visible_scope: QueueScope,
 }
 
 impl QueueScopeResolution {
-    pub(super) fn new(has_direct_remote_queue: bool, requested_visible_scope: QueueScope) -> Self {
+    pub(in crate::app) fn new(
+        has_direct_remote_queue: bool,
+        requested_visible_scope: QueueScope,
+    ) -> Self {
         Self {
             has_direct_remote_queue,
             requested_visible_scope,
         }
     }
 
-    pub(super) fn playback_target(self) -> QueueScope {
+    pub(in crate::app) fn playback_target(self) -> QueueScope {
         if self.has_direct_remote_queue {
             QueueScope::Remote
         } else {
@@ -85,7 +88,7 @@ impl QueueScopeResolution {
         }
     }
 
-    pub(super) fn visible_scope(self) -> QueueScope {
+    pub(in crate::app) fn visible_scope(self) -> QueueScope {
         if self.has_direct_remote_queue && self.requested_visible_scope == QueueScope::Remote {
             QueueScope::Remote
         } else {
@@ -93,7 +96,7 @@ impl QueueScopeResolution {
         }
     }
 
-    pub(super) fn local_metadata_applies(self, scope: QueueScope) -> bool {
+    pub(in crate::app) fn local_metadata_applies(self, scope: QueueScope) -> bool {
         scope == QueueScope::Local || !self.has_direct_remote_queue
     }
 }
@@ -103,7 +106,7 @@ impl QueueScopeResolution {
 /// queue occurrence that landed at `to`, checked at undo time so a queue edit
 /// made after the move is refused instead of swapping the wrong items.
 #[derive(Debug)]
-pub(super) enum UndoEntry {
+pub(in crate::app) enum UndoEntry {
     Remove(usize, QueueItem),
     Move {
         from: usize,
@@ -113,7 +116,7 @@ pub(super) enum UndoEntry {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum RemoteSlotState {
+pub(in crate::app) enum RemoteSlotState {
     Off,
     AttachedSession,
     DirectRemote,
@@ -122,7 +125,7 @@ pub(super) enum RemoteSlotState {
 
 /// Identity of a destination Latest surface for its independent marker state.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub(super) enum DestinationLatestSource {
+pub(in crate::app) enum DestinationLatestSource {
     Emby(String),
     Audiobookshelf(String),
     Feeds,
@@ -131,16 +134,16 @@ pub(super) enum DestinationLatestSource {
 /// The shell-owned snapshot of one destination's Latest items. Its new-content
 /// marker is evaluated against the frozen launch window, never by the component.
 #[derive(Clone, Debug)]
-pub(super) struct DestinationLatestSnapshot {
-    pub(super) title: String,
-    pub(super) source: DestinationLatestSource,
-    pub(super) items: Vec<QueueItem>,
-    pub(super) has_new_content: bool,
+pub(in crate::app) struct DestinationLatestSnapshot {
+    pub(in crate::app) title: String,
+    pub(in crate::app) source: DestinationLatestSource,
+    pub(in crate::app) items: Vec<QueueItem>,
+    pub(in crate::app) has_new_content: bool,
 }
 
 impl DestinationLatestSnapshot {
     #[cfg(test)]
-    pub(super) fn new(
+    pub(in crate::app) fn new(
         title: String,
         source: DestinationLatestSource,
         items: Vec<QueueItem>,
@@ -156,7 +159,7 @@ impl DestinationLatestSnapshot {
         )
     }
 
-    pub(super) fn new_with_launch_window(
+    pub(in crate::app) fn new_with_launch_window(
         title: String,
         source: DestinationLatestSource,
         items: Vec<QueueItem>,
@@ -173,7 +176,7 @@ impl DestinationLatestSnapshot {
         }
     }
 
-    pub(super) fn recompute_new_content(&mut self, window: HomeLatestLaunchWindow) {
+    pub(in crate::app) fn recompute_new_content(&mut self, window: HomeLatestLaunchWindow) {
         self.has_new_content = self
             .items
             .iter()
@@ -186,16 +189,16 @@ impl DestinationLatestSnapshot {
 /// `App.home` (`HomePane`) + `App.home_loading`; `loading` mirrors the old
 /// `home_loading` flag (true from startup until the first fetch completes,
 /// then set false synchronously after every content computation). The
-pub(super) struct HomeContent {
-    pub(super) continue_items: Vec<EmbyItem>,
-    pub(super) loading: bool,
+pub(in crate::app) struct HomeContent {
+    pub(in crate::app) continue_items: Vec<EmbyItem>,
+    pub(in crate::app) loading: bool,
 }
 
 impl HomeContent {
     /// Default Home state at shell construction: no items and `loading`
     /// true — the startup skeleton, mirroring the deleted
     /// `App.home_loading`/`construct` state.
-    pub(super) fn new() -> Self {
+    pub(in crate::app) fn new() -> Self {
         Self {
             continue_items: Vec::new(),
             loading: true,
@@ -203,18 +206,19 @@ impl HomeContent {
     }
 }
 
-pub(super) struct SuspendedLocalSession {
-    pub(super) player: PlayerProxy,
-    pub(super) player_rx: mpsc::Receiver<PlayerEvent>,
-    pub(super) ws_rx: mpsc::Receiver<WsEvent>,
-    pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
-    pub(super) audiobookshelf_socket_rx:
+pub(in crate::app) struct SuspendedLocalSession {
+    pub(in crate::app) player: PlayerProxy,
+    pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
+    pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
+    pub(in crate::app) ws_send_tx: Option<mbv_core::ws::WsSender>,
+    pub(in crate::app) audiobookshelf_socket_rx:
         mpsc::Receiver<mbv_core::audiobookshelf_socket::SocketEvent>,
-    pub(super) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
-    pub(super) audiobookshelf_socket_generation: Option<mbv_core::service_runtime::SetupGeneration>,
+    pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,
+    pub(in crate::app) audiobookshelf_socket_generation:
+        Option<mbv_core::service_runtime::SetupGeneration>,
 }
 
-pub(super) enum PendingQueueAction {
+pub(in crate::app) enum PendingQueueAction {
     PlayItems {
         items: Vec<EmbyItem>,
         start_idx: usize,
@@ -232,7 +236,7 @@ pub(super) enum PendingQueueAction {
 /// pre-play prep, because `play_items_routed` never replaces the playback
 /// queue itself — every routed caller does its own mutation around it, and
 /// they differ.
-pub(super) enum ReplacementExecutor {
+pub(in crate::app) enum ReplacementExecutor {
     Routed(RoutedReplacementPrep),
     Pending,
 }
@@ -242,7 +246,7 @@ pub(super) enum ReplacementExecutor {
 /// gated routed entry point exactly: when the playback queue is rebuilt, when
 /// queue state is persisted, and whether the Queue panel takes focus.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) enum RoutedReplacementPrep {
+pub(in crate::app) enum RoutedReplacementPrep {
     /// Album/artist track (`replace_and_route_album_queue`): Album source,
     /// rebuild always, save unless a direct-remote owner holds the queue,
     /// routed default focus.
@@ -262,7 +266,7 @@ pub(super) enum RoutedReplacementPrep {
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum PlaylistMutation {
+pub(in crate::app) enum PlaylistMutation {
     Save {
         mutation_id: u64,
         queue_lineage: u64,
@@ -287,7 +291,7 @@ pub(super) enum PlaylistMutation {
 }
 
 impl PlaylistMutation {
-    pub(super) fn mutation_id(&self) -> u64 {
+    pub(in crate::app) fn mutation_id(&self) -> u64 {
         match self {
             Self::Save { mutation_id, .. }
             | Self::CreateAs { mutation_id, .. }
@@ -297,7 +301,7 @@ impl PlaylistMutation {
 }
 
 #[derive(Clone, Debug, Default)]
-pub(super) struct PlaylistMutationState {
-    pub(super) active: Option<PlaylistMutation>,
-    pub(super) queued: VecDeque<PlaylistMutation>,
+pub(in crate::app) struct PlaylistMutationState {
+    pub(in crate::app) active: Option<PlaylistMutation>,
+    pub(in crate::app) queued: VecDeque<PlaylistMutation>,
 }

@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 /// renderers/input handlers branch on this value and never re-read
 /// `media_type` per action (service-browse-dispatch capability).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum AudiobookshelfBrowseKind {
+pub(in crate::app) enum AudiobookshelfBrowseKind {
     Podcast,
     Book,
 }
@@ -19,7 +19,7 @@ pub(super) enum AudiobookshelfBrowseKind {
 impl AudiobookshelfBrowseKind {
     /// `media_type` values other than `"book"` resolve to Podcast, matching
     /// the pre-book behavior for the only two media types ABS exposes.
-    pub(super) fn from_media_type(media_type: &str) -> Self {
+    pub(in crate::app) fn from_media_type(media_type: &str) -> Self {
         if media_type == "book" {
             Self::Book
         } else {
@@ -31,7 +31,7 @@ impl AudiobookshelfBrowseKind {
 /// The podcast tab's state pills, in the painted pill-bar order (spec: the
 /// state pills `All` / `Unplayed` / `Played` precede the show pills).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(super) enum AudiobookshelfEpisodeFilter {
+pub(in crate::app) enum AudiobookshelfEpisodeFilter {
     #[default]
     All,
     Unplayed,
@@ -39,9 +39,9 @@ pub(super) enum AudiobookshelfEpisodeFilter {
 }
 
 impl AudiobookshelfEpisodeFilter {
-    pub(super) const ALL: [Self; 3] = [Self::All, Self::Unplayed, Self::Played];
+    pub(in crate::app) const ALL: [Self; 3] = [Self::All, Self::Unplayed, Self::Played];
 
-    pub(super) fn label(self) -> &'static str {
+    pub(in crate::app) fn label(self) -> &'static str {
         match self {
             Self::All => "All",
             Self::Played => "Played",
@@ -66,7 +66,7 @@ pub(in crate::app) enum PillSelection {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct AudiobookshelfBrowseState {
+pub(in crate::app) struct AudiobookshelfBrowseState {
     pub library: AudiobookshelfLibrary,
     /// The paged show list; it feeds the podcast pill bar (one pill per
     /// show). Page arrivals append at most once per show and sort by title.
@@ -285,7 +285,7 @@ const SURNAME_BUCKET_UPPER: [char; 8] = ['c', 'f', 'i', 'l', 'o', 'r', 'u', 'z']
 /// its label and the `[start, end)` indices it covers in the
 /// surname-sorted `books` list.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) struct SurnameBucket {
+pub(in crate::app) struct SurnameBucket {
     /// Position in the fixed label/range table, independent of the populated
     /// buckets vec's position after empty ranges are omitted.
     pub index: usize,
@@ -314,7 +314,7 @@ fn surname_bucket_key(sort_key: &str) -> char {
 /// bucket"). Pure: no app state, mirrors `music_grouping::build_grouped_album_catalog`'s
 /// shape without sharing code — the grouping unit differs (fixed ranges, not
 /// runs of identical artist).
-pub(super) fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<SurnameBucket> {
+pub(in crate::app) fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<SurnameBucket> {
     let mut buckets = Vec::with_capacity(SURNAME_BUCKET_LABELS.len());
     let mut start = 0;
     for (i, &upper) in SURNAME_BUCKET_UPPER.iter().enumerate() {
@@ -342,7 +342,7 @@ pub(super) fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<Surname
 /// `library_item_id` only. Parallel to `AudiobookshelfBrowseState`; which one
 /// a library tab uses is decided once by `AudiobookshelfBrowseKind`.
 #[derive(Debug, Clone)]
-pub(super) struct AudiobookshelfBookBrowseState {
+pub(in crate::app) struct AudiobookshelfBookBrowseState {
     pub library: AudiobookshelfLibrary,
     pub books: Vec<AudiobookshelfBook>,
     pub total: usize,
@@ -494,7 +494,7 @@ impl AudiobookshelfBookBrowseState {
 /// range on the merged timeline) or an audio file (used when chapters are
 /// absent). Both carry provider-native identity; neither is an episode shape.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum BookRow {
+pub(in crate::app) enum BookRow {
     /// `id` is the Service chapter number: the stable row discriminator that
     /// survives a refresh re-composing the visible rows (design.md D4).
     Chapter {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::types_settings::ServiceEntry;
+use crate::app::state::types::settings::ServiceEntry;
 use crate::config::TestStateDirGuard;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::config::{EmbySetup, FeedKind, FeedSubscription};
@@ -329,7 +329,7 @@ fn ready_emby_repair_opens_the_transactional_setup_form() {
     assert!(app.emby_setup_form.is_some());
     assert!(!matches!(
         app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(_))
     ));
 }
 
@@ -372,7 +372,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     assert!(app.pending_emby_replacement.is_some());
     assert!(matches!(
         app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(_))
     ));
     assert_eq!(app.config.lock().unwrap().emby_setup, Some(old_setup));
     assert_eq!(
@@ -380,7 +380,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
         Some("old-token".into())
     );
     let action = match app.pending_overlay.as_ref() {
-        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
         _ => panic!("confirmation request missing"),
     };
     app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
@@ -405,7 +405,7 @@ fn emby_removal_cancel_is_non_destructive() {
     app.open_services_settings();
     app.request_emby_removal();
     let action = match app.pending_overlay.as_ref() {
-        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
         _ => panic!("confirmation request missing"),
     };
     app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));

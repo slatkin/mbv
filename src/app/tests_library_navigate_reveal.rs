@@ -6,8 +6,8 @@
 use super::*;
 use crate::app::tests::{install_test_emby, make_app_stub, make_item};
 use crate::app::library_browse_actions::{RevealTarget, resolve_reveal_target};
-use crate::app::types_browse::BrowseResting;
-use crate::app::types_events::NavigateLanding;
+use crate::app::state::types::browse::BrowseResting;
+use crate::app::state::types::events::NavigateLanding;
 use mbv_core::mock_http::MockHttp;
 use rstest::rstest;
 use std::time::Duration;
@@ -950,7 +950,7 @@ fn pending_series_landing_survives_a_foreign_library_drain() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = app_with_paginated_tv_library();
     app.tab = TabSelection::Home;
-    app.pending_series_landing = Some(crate::app::types_events::PendingSeriesLanding {
+    app.pending_series_landing = Some(crate::app::state::types::events::PendingSeriesLanding {
         lib_idx: 0,
         reveal: Box::new(series_item("ser1", "The Show")),
         switch_tab: true,
@@ -997,7 +997,7 @@ fn completed_series_landing_handoff_survives_an_unrelated_error_drain() {
         "the completed landing armed the hand-off"
     );
     // A second, still-unresolved landing: the error drain must drop it.
-    app.pending_series_landing = Some(crate::app::types_events::PendingSeriesLanding {
+    app.pending_series_landing = Some(crate::app::state::types::events::PendingSeriesLanding {
         lib_idx: 0,
         reveal: Box::new(series_item("ser2", "Third Show")),
         switch_tab: true,

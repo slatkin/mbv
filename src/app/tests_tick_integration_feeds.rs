@@ -10,7 +10,7 @@ use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::{ComponentId, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::types_feed_tab::WatchedFilter;
+use crate::app::state::types::feed_tab::WatchedFilter;
 use crate::app::{PanelFocus, TabSelection};
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;

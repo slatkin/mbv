@@ -2,9 +2,9 @@ use super::components::{
     ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsIntent,
     SettingsRow, SettingsSnapshot, SetupDraft,
 };
-use super::settings;
 use super::shell::Model;
-use super::types_settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
+use crate::app::state::types::settings;
+use crate::app::state::types::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use mbv_core::keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use ratatui::layout::Rect;
 
@@ -68,7 +68,8 @@ impl Model {
             }
         }
         rows.push(SettingsRow {
-            label: settings::setting_label(super::types_settings::SettingKey::LogOut).into(),
+            label: settings::setting_label(crate::app::state::types::settings::SettingKey::LogOut)
+                .into(),
             value: String::new(),
             section: false,
             cursor: Some(cursor),
@@ -92,7 +93,10 @@ impl Model {
                             action
                         )
                     },
-                    muted: matches!(*entry, super::types_settings::ServiceEntry::Audiobookshelf),
+                    muted: matches!(
+                        *entry,
+                        crate::app::state::types::settings::ServiceEntry::Audiobookshelf
+                    ),
                 }
             })
             .collect();
@@ -202,7 +206,7 @@ impl Model {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.route_service_action(
-                    super::types_settings::ServiceActionIntent::ReplaceAudiobookshelf,
+                    crate::app::state::types::settings::ServiceActionIntent::ReplaceAudiobookshelf,
                 );
                 false
             }
@@ -210,7 +214,7 @@ impl Model {
                 self.mount_sidebar(super::SidebarId::Settings);
                 self.app.settings_destination = SettingsDestination::Services;
                 self.app.route_service_action(
-                    super::types_settings::ServiceActionIntent::RemoveAudiobookshelf,
+                    crate::app::state::types::settings::ServiceActionIntent::RemoveAudiobookshelf,
                 );
                 false
             }
@@ -288,8 +292,9 @@ impl Model {
             }
             SettingsIntent::Quit => self.app.try_quit(),
             SettingsIntent::Activate(cursor) => {
-                self.app
-                    .handle_settings_activate(super::settings::settings_cursor_to_key(cursor));
+                self.app.handle_settings_activate(
+                    crate::app::state::types::settings::settings_cursor_to_key(cursor),
+                );
                 false
             }
         }
@@ -327,7 +332,8 @@ mod tests {
     /// actions whose router binding deviates from the declared default.
     #[test]
     fn keys_row_summary_follows_the_loaded_configuration() {
-        use crate::app::{settings, SettingKey};
+        use crate::app::state::types::settings;
+        use crate::app::SettingKey;
         let app = super::super::tests::make_app_stub();
         let cfg = app.config.lock().unwrap().clone();
         let ui = app.ui_config_snapshot();

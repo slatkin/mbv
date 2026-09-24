@@ -88,7 +88,7 @@ impl Model {
                         .position(|item| item.id == selected_id)
                         .unwrap_or(0);
                     self.app.request_queue_replacement(
-                        super::types_playback::PendingQueueAction::PlayItems {
+                        crate::app::state::types::playback::PendingQueueAction::PlayItems {
                             items,
                             start_idx,
                             source: crate::config::QueueSource::Playlist {
@@ -97,7 +97,7 @@ impl Model {
                             },
                             autostart: false,
                         },
-                        super::types_playback::ReplacementExecutor::Pending,
+                        crate::app::state::types::playback::ReplacementExecutor::Pending,
                     );
                     // No sidebar dismiss here: `run_replacement` raises it once
                     // the replacement actually runs (immediately on an empty
@@ -166,9 +166,11 @@ mod tests {
     #[test]
     fn playlists_shell_mounts_and_routes_component() {
         let mut app = make_app_stub();
-        app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
-            crate::app::SidebarId::Playlists,
-        ));
+        app.pending_overlay = Some(
+            crate::app::state::types::overlay::OverlayRequest::OpenSidebar(
+                crate::app::SidebarId::Playlists,
+            ),
+        );
         let mut model = Model::new(app);
         model.sync_modal_requests();
         let id = ComponentId::Overlay(OverlayId::Playlists);
@@ -189,13 +191,17 @@ mod tests {
     #[test]
     fn opening_a_sidebar_unmounts_the_previous_sidebar() {
         let mut model = Model::new(make_app_stub());
-        model.app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
-            crate::app::SidebarId::Settings,
-        ));
+        model.app.pending_overlay = Some(
+            crate::app::state::types::overlay::OverlayRequest::OpenSidebar(
+                crate::app::SidebarId::Settings,
+            ),
+        );
         model.sync_modal_requests();
-        model.app.pending_overlay = Some(crate::app::types_overlay::OverlayRequest::OpenSidebar(
-            crate::app::SidebarId::Playlists,
-        ));
+        model.app.pending_overlay = Some(
+            crate::app::state::types::overlay::OverlayRequest::OpenSidebar(
+                crate::app::SidebarId::Playlists,
+            ),
+        );
         model.sync_modal_requests();
 
         assert!(!model

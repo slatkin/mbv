@@ -1,7 +1,7 @@
 use super::media_list::{MediaListRow, MediaSemanticState};
 use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueRequest, ShellRequest};
 use super::queue::{queue_media_rows, QueueComponent, QueueCursorUpdate};
-use crate::app::types_playback::{PlaybackState, QueueScope};
+use crate::app::state::types::playback::{PlaybackState, QueueScope};
 use mbv_core::playback_queue::{FeedEntry, PlaybackQueue, QueueItem};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -242,7 +242,7 @@ fn queue_right_click_uses_the_rendered_slot_target() {
     }));
     assert!(
         matches!(message, Some(Msg::Shell(super::msg::ShellRequest::RowContextMenu(
-        crate::app::types_context_menu::ContextMenuTargets::Queue(ids), Some(_)
+        crate::app::state::types::context_menu::ContextMenuTargets::Queue(ids), Some(_)
     ))) if ids == vec![second])
     );
 }
@@ -262,7 +262,7 @@ fn queue_dot_opens_the_context_menu_for_the_selected_row() {
     assert!(matches!(
         component.on(&Event::Keyboard(key(Key::Char('.')))),
         Some(Msg::Shell(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Queue(ids), None
+            crate::app::state::types::context_menu::ContextMenuTargets::Queue(ids), None
         ))) if ids == vec![first]
     ));
 }

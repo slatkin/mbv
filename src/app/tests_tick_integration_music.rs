@@ -324,7 +324,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
             title: "Music".into(),
             items: vec![album_row("group-0", "Alpha")],
             total_count: 1,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -344,7 +344,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
                 album_row("album-1", "First Album"),
             ],
             total_count: 2,
-            resting: crate::app::types_browse::BrowseResting::new(1, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(1, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -553,7 +553,7 @@ fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
         outcome
             .messages
             .iter()
-            .any(|m| matches!(m, Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Queue(_), _)))),
+            .any(|m| matches!(m, Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Queue(_), _)))),
         "`.` falls through to the focused Queue component"
     );
 

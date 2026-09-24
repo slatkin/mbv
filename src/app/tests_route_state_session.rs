@@ -38,7 +38,7 @@ fn local_daemon_remote_disconnect_raises_recovery_modal_without_restoring() {
     assert!(app.player.is_remote());
     assert!(matches!(
         app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::DaemonLost(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::DaemonLost(_))
     ));
 }
 
@@ -170,7 +170,7 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
     assert!(!QUIT_REQUESTED.load(std::sync::atomic::Ordering::Relaxed));
     assert!(!matches!(
         app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::DaemonLost(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::DaemonLost(_))
     ));
     assert!(
         app.is_local_daemon(),

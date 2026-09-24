@@ -1,8 +1,8 @@
-use super::super::super::types_overlay::OverlayRequest;
-use super::super::super::types_settings::SettingsDestination;
 use super::super::super::App;
 use super::super::super::{MultiSelectKind, SettingKey};
 use crate::app::infra::ui_util::{cycle_lang, next_subtitle_mode};
+use crate::app::state::types::overlay::OverlayRequest;
+use crate::app::state::types::settings::SettingsDestination;
 use std::time::{Duration, Instant};
 
 impl App {

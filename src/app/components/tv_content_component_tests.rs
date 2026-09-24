@@ -308,7 +308,7 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     let right = panel.on(&mouse(MouseEventKind::Down(MouseButton::Right), col, row));
     assert!(matches!(
         right,
-        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(ref items), _))) if items.len() == 1 && items[0].id == "id"
+        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(ref items), _))) if items.len() == 1 && items[0].id == "id"
     ));
 }
 
@@ -334,7 +334,7 @@ fn tv_keyboard_context_menu_uses_all_selected_rows_and_single_row_without_select
     assert!(matches!(
         down(&mut selected, Key::Char('.')),
         Some(Msg::Shell(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             None
         ))) if items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>() == vec!["series-a", "series-b"]
     ));
@@ -344,7 +344,7 @@ fn tv_keyboard_context_menu_uses_all_selected_rows_and_single_row_without_select
     assert!(matches!(
         down(&mut single, Key::Char('.')),
         Some(Msg::Shell(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             None
         ))) if items.len() == 1 && items[0].id == "series-a"
     ));
@@ -881,7 +881,7 @@ fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
         assert!(matches!(
             owner.on_key(&key(Key::Char('.'))),
             Some(Msg::Shell(ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Emby(items), None
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
             ))) if items.len() == 1 && items[0].id == show.id
         ));
         assert!(matches!(
@@ -897,7 +897,7 @@ fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
         assert!(matches!(
             owner.on_key(&key(Key::Char('.'))),
             Some(Msg::Shell(ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Emby(items), None
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
             ))) if items.len() == 1 && items[0].id == season.id
         ));
         assert!(matches!(
@@ -923,7 +923,7 @@ fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
         assert!(matches!(
             owner.on_key(&key(Key::Char('.'))),
             Some(Msg::Shell(ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Emby(items), None
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
             ))) if items.len() == 1 && items[0].id == episode.id
         ));
         owner.on_key(&key(Key::Home));

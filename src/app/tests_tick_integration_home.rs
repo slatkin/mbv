@@ -254,7 +254,7 @@ fn home_bulk_context_action_clears_home_multi_selection() {
 
     harness.model_mut().handle_terminal_message(
         Msg::Shell(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Home(vec![
+            crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![
                 HomeRowTarget {
                     item_id: Some("home-0".into()),
                     source: None,
@@ -272,7 +272,7 @@ fn home_bulk_context_action_clears_home_multi_selection() {
         &mut false,
     );
     let idx = {
-        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
+        let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(ref menu)) =
             harness.model().app.pending_overlay
         else {
             panic!("Home bulk selection must open a context menu");

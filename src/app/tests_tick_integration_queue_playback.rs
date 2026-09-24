@@ -11,7 +11,7 @@ use crate::app::components::msg::PlaybackRequest;
 use crate::app::components::{ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel};
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::types_playback::PlaybackState;
+use crate::app::state::types::playback::PlaybackState;
 use mbv_core::player::PlayerEvent;
 use crate::app::{PanelFocus, PanelMode};
 

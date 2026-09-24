@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
-use super::types_feed_tab::FeedTabRefreshResult;
 use super::App;
 use crate::app::infra::feed_parse::fetch_and_parse_entries;
+use crate::app::state::types::feed_tab::FeedTabRefreshResult;
 use mbv_core::feed_entry_state::FeedEntryState;
 use mbv_core::playback_queue::{FeedEntry, QueueItem};
 use std::collections::HashMap;

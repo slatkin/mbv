@@ -28,7 +28,7 @@ use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
-use crate::app::types_playback::PlaybackState;
+use crate::app::state::types::playback::PlaybackState;
 use mbv_core::playback_queue::PlaybackTitleParts;
 
 #[derive(Clone, Debug, PartialEq)]

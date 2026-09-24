@@ -1,8 +1,8 @@
 use mbv_core::api::EmbyClient;
 use std::sync::{mpsc, Arc, Mutex};
 
-use super::types_playback::HomeContent;
 use super::App;
+use crate::app::state::types::playback::HomeContent;
 
 impl App {
     pub(super) fn emby_client(&self) -> Option<Arc<Mutex<EmbyClient>>> {
@@ -196,11 +196,11 @@ impl App {
                     self.emby_runtime.state = completion.previous_state;
                     self.pending_emby_replacement = Some(startup);
                     self.emby_setup_form = None;
-                    self.ask_confirm(super::types_confirm::ConfirmModal {
+                    self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
                         title: " Replace Emby ".into(),
                         message: "Replace Emby? The previous server's queues, positions, routes, caches, and credential will be cleared.".into(),
                         hint: "[y/Enter] Replace    [Esc] Cancel".into(),
-                        on_confirm: super::types_confirm::ConfirmAction::ReplaceEmby(generation),
+                        on_confirm: crate::app::state::types::confirm::ConfirmAction::ReplaceEmby(generation),
                     });
                     return None;
                 }

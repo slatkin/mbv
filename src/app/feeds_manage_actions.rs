@@ -1,6 +1,6 @@
 use super::notify_actions::ToastSeverity;
-use super::types_tab_selection::TabSelection;
 use super::App;
+use crate::app::state::types::tab_selection::TabSelection;
 use mbv_core::config::FeedSubscription;
 
 impl App {

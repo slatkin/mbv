@@ -1,5 +1,5 @@
-use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel};
+use crate::app::state::types::browse::BrowseResting;
 
 /// The shared eligibility gate for the grouped Music owner, consumed by
 /// `is_music_group_view` and grouped landing validation. Keep this in sync

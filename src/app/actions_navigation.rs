@@ -1,6 +1,6 @@
-use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::infra::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
+use crate::app::state::types::browse::BrowseResting;
 use mbv_core::api::EmbyItem;
 
 use super::notify_actions::ToastSeverity;

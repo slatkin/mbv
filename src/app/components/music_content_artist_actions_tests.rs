@@ -77,7 +77,7 @@ fn artist_action_ids(owner: &mut MusicContent, code: Key) -> Vec<String> {
             items
         }
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             _,
         ))) => {
             assert!(

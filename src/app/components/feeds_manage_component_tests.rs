@@ -5,7 +5,7 @@
 
 use super::feeds_manage::FeedsManageComponent;
 use super::msg::{FeedsManageIntent, Msg, ShellRequest};
-use crate::app::types_feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
+use crate::app::state::types::feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
 use mbv_core::config::{FeedKind, FeedSubscription};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;

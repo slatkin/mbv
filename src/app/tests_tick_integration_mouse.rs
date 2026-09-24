@@ -9,12 +9,12 @@ use crate::app::render::make_music_group_app;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::tests_tick_integration::search_component_mut;
-use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
-use crate::app::types_context_menu::{
+use crate::app::state::types::confirm::{ConfirmAction, ConfirmModal};
+use crate::app::state::types::context_menu::{
     ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
 };
-use crate::app::types_daemon_lost::DaemonLostModal;
-use crate::app::types_overlay::OverlayRequest;
+use crate::app::state::types::daemon_lost::DaemonLostModal;
+use crate::app::state::types::overlay::OverlayRequest;
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2

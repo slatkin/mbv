@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
-use super::types_browse::BrowseResting;
 use super::{App, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, PAGE_SIZE};
 use crate::app::infra::feed_parse::fetch_and_parse_rss;
+use crate::app::state::types::browse::BrowseResting;
 use mbv_core::api::EmbyItem;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;

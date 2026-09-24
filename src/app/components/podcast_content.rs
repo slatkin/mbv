@@ -30,7 +30,7 @@ use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
 };
 use crate::app::render::current_time_secs;
-use crate::app::types_audiobookshelf_browse::{
+use crate::app::state::types::audiobookshelf_browse::{
     podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
     PodcastDisplayRow,
 };

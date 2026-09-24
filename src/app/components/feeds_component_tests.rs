@@ -8,7 +8,7 @@ use super::feeds_content::{FeedsContent, FeedsOwnerPush};
 use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
-use crate::app::types_feed_tab::WatchedFilter;
+use crate::app::state::types::feed_tab::WatchedFilter;
 use mbv_core::config::{
     FeedGroupKey, FeedKind, FeedSubscription, FeedsFilter, FeedsSelectorKey, LibraryItemIdentity,
     SelectorIdentity,
@@ -711,7 +711,7 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
     assert!(matches!(
         click(&mut panel, list.x, row, MouseEventKind::Down(MouseButton::Right)),
         Some(Msg::Shell(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Feeds(entries),
+            crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
             Some(_),
         ))) if entries.len() == 1
     ));

@@ -11,7 +11,7 @@
 
 use super::*;
 use crate::app::tests::*;
-use crate::app::types_browse::BrowseResting;
+use crate::app::state::types::browse::BrowseResting;
 
 fn movie_level(items: Vec<EmbyItem>, total_count: usize, cursor: usize) -> BrowseLevel {
     let fetched_rows = items.len();

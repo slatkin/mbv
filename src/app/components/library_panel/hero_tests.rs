@@ -603,7 +603,7 @@ fn feed_producer_rows_and_policy_shape() {
 #[test]
 fn home_path_and_books_tab_produce_identical_content_for_one_book() {
     use crate::app::audiobookshelf_browse_actions::audiobookshelf_book_queue_item;
-    use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
+    use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
     use mbv_core::audiobookshelf::{
         AudiobookshelfAudioFile, AudiobookshelfBookProgress, AudiobookshelfLibrary,
     };

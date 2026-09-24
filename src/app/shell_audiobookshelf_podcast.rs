@@ -3,8 +3,8 @@ use super::components::msg::PodcastEpisodeIntent;
 use super::components::podcast_content::PodcastContent;
 use super::components::LibraryKind;
 use super::shell::Model;
-use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::TabSelection;
+use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -72,8 +72,9 @@ impl Model {
             .and_then(|panel| panel.owner(&key))
             .and_then(|owner| owner.as_any().downcast_ref::<PodcastContent>())
             .is_some_and(PodcastContent::latest_selected);
-        let source =
-            super::types_playback::DestinationLatestSource::Audiobookshelf(library_id.clone());
+        let source = crate::app::state::types::playback::DestinationLatestSource::Audiobookshelf(
+            library_id.clone(),
+        );
         if selected_latest && !self.acknowledged_home_latest_sources.contains(&source) {
             self.record_home_latest_acknowledgement(source.clone());
         }

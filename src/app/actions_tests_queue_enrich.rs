@@ -1,5 +1,5 @@
 use super::queue_state_tests::XdgHomeGuard;
-use crate::app::types_browse::BrowseResting;
+use crate::app::state::types::browse::BrowseResting;
 use crate::app::{BrowseLevel, FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection};
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;

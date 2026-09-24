@@ -148,7 +148,7 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
             album_0_at
         ))),
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             Some((x, y)),
         ))) if items.len() == 1 && items[0].id == "a-0" && (x, y) == (album_0_at.x, album_0_at.y)
     ));
@@ -162,7 +162,7 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
             root_at
         ))),
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             Some((x, y)),
         ))) if items.len() == 1
             && items[0].id == "a-0"
@@ -512,7 +512,7 @@ fn tree_context_click_outside_selection_clears_only_tree_marks() {
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(b0_at))),
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             _,
         ))) if items.len() == 1 && items[0].id == "b-0"
     ));

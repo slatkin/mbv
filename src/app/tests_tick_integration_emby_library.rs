@@ -206,7 +206,7 @@ fn mounted_flat_latest_marker_acknowledges_through_async_snapshot_replacement(
     app.libs[0].library.name = if feed_view { "Movies" } else { title }.into();
     app.libs[0].library_total = Some(100);
     if feed_view {
-        use crate::app::types_feed::{FeedHomeVideoGroup, FeedHomeVideoState};
+        use crate::app::state::types::feed::{FeedHomeVideoGroup, FeedHomeVideoState};
 
         app.config.lock().unwrap().feed_view_libraries = vec!["movies".into()];
         let mut folder = crate::app::tests::make_item("Group One", "Folder");
@@ -258,7 +258,7 @@ fn mounted_flat_latest_marker_acknowledges_through_async_snapshot_replacement(
     assert!(browser_owner(&harness).latest_mode());
     assert!(!library_panel(&harness).test_selector_markers()[0]);
     assert!(harness.model().acknowledged_home_latest_sources.contains(
-        &crate::app::types_playback::DestinationLatestSource::Emby("lib-movies".into())
+        &crate::app::state::types::playback::DestinationLatestSource::Emby("lib-movies".into())
     ));
 
     // Model an asynchronous refresh completing with another launch-window item.
@@ -314,7 +314,7 @@ fn mounted_flat_latest_first_launch_has_no_new_content_marker() {
 #[case::wide(100)]
 #[case::narrow(60)]
 fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16) {
-    use crate::app::types_playback::{DestinationLatestSnapshot, DestinationLatestSource};
+    use crate::app::state::types::playback::{DestinationLatestSnapshot, DestinationLatestSource};
     use mbv_core::playback_queue::QueueItem;
 
     let mut app = make_movie_app();
@@ -390,9 +390,9 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
 
     let mut latest = crate::app::tests::make_item("Latest Movie", "Movie");
     latest.id = "latest-movie".into();
-    let snapshot = crate::app::types_playback::DestinationLatestSnapshot::new(
+    let snapshot = crate::app::state::types::playback::DestinationLatestSnapshot::new(
         "Movies".into(),
-        crate::app::types_playback::DestinationLatestSource::Emby("lib-movies".into()),
+        crate::app::state::types::playback::DestinationLatestSource::Emby("lib-movies".into()),
         vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(latest))],
     );
     let mut harness = TickHarness::new(app);
@@ -450,9 +450,9 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
     let mut bucket_harness = TickHarness::new(bucket_app);
     bucket_harness.model_mut().tv_latest_snapshots.insert(
         "lib-movies".into(),
-        crate::app::types_playback::DestinationLatestSnapshot::new(
+        crate::app::state::types::playback::DestinationLatestSnapshot::new(
             "Movies".into(),
-            crate::app::types_playback::DestinationLatestSource::Emby("lib-movies".into()),
+            crate::app::state::types::playback::DestinationLatestSource::Emby("lib-movies".into()),
             vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(bucket_latest))],
         ),
     );
@@ -480,8 +480,8 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
 #[case::wide(100)]
 #[case::narrow(60)]
 fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16) {
-    use crate::app::types_feed::{FeedHomeVideoGroup, FeedHomeVideoState};
-    use crate::app::types_playback::{DestinationLatestSnapshot, DestinationLatestSource};
+    use crate::app::state::types::feed::{FeedHomeVideoGroup, FeedHomeVideoState};
+    use crate::app::state::types::playback::{DestinationLatestSnapshot, DestinationLatestSource};
     use mbv_core::playback_queue::QueueItem;
 
     let mut app = make_movie_app();
@@ -681,7 +681,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
                     crate::app::tests::make_item("Another Two", "Movie"),
                 ],
                 total_count: 3,
-                resting: crate::app::types_browse::BrowseResting::new(0, 0),
+                resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
                 item_types: None,
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -1022,7 +1022,7 @@ fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
 /// shell drain and the `Application::tick()` sync pass.
 #[test]
 fn navigated_movie_reanchors_the_retained_browser_cursor() {
-    use crate::app::types_events::NavigateLanding;
+    use crate::app::state::types::events::NavigateLanding;
     use crate::app::{BrowseLevel, LibEvent};
 
     let mut app = make_movie_app();
@@ -1040,7 +1040,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
         title: "Folder".into(),
         items: vec![inside],
         total_count: 1,
-        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -1074,7 +1074,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
             third,
         ],
         total_count: 3,
-        resting: crate::app::types_browse::BrowseResting::new(2, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(2, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),

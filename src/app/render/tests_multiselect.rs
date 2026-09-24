@@ -1,6 +1,6 @@
 use super::test_helpers::buffer_to_string;
 use super::{render_multiselect_content, MultiSelectRenderModel};
-use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
+use crate::app::state::types::context_menu::{MultiSelectKind, MultiSelectPopup};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 

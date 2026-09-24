@@ -6,7 +6,7 @@
 
 use super::action::{idle_feed_command_for_key, Command, VOLUME_STEP};
 use super::input_resolver::KeyChord;
-use super::types_settings::{PanelFocus, PanelMode};
+use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::keybinds::{action_by_id, Keybinds};
 

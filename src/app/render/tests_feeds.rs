@@ -8,7 +8,7 @@
 use super::test_helpers::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
-use crate::app::types_feed_tab::WatchedFilter;
+use crate::app::state::types::feed_tab::WatchedFilter;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;

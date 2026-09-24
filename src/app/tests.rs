@@ -1,4 +1,4 @@
-use super::types_settings::SettingsDestination;
+use crate::app::state::types::settings::SettingsDestination;
 use super::*;
 
 use ratatui::backend::TestBackend;
@@ -341,7 +341,7 @@ pub(crate) fn make_app_stub() -> App {
         home_is_local_daemon: false,
         idle_feed: None,
         feed_seek_pending_slot: None,
-        feed_tab: super::types_feed_tab::FeedTabState::default(),
+        feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
         feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::default(),
         card_image_fetch_calls: 0,
         image_protocol_builds: std::cell::Cell::new(0),

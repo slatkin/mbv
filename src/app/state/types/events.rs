@@ -1,6 +1,6 @@
-use super::types_browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
-use super::types_feed::FeedHomeVideoGroup;
-use super::types_playback::HomeContent;
+use crate::app::state::types::browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
+use crate::app::state::types::feed::FeedHomeVideoGroup;
+use crate::app::state::types::playback::HomeContent;
 use mbv_core::api::EmbyItem;
 use mbv_core::service_runtime::SetupGeneration;
 
@@ -11,7 +11,7 @@ use mbv_core::service_runtime::SetupGeneration;
 /// folder chain between the library root and it (what the recursive album
 /// activation consumes). Each kind is an explicit variant so every dispatch
 /// site resolves the landing exhaustively.
-pub(super) enum NavigateLanding {
+pub(in crate::app) enum NavigateLanding {
     /// Movie/generic video: the ancestor-chain nav stack with the cursor
     /// resting on the item (the pre-change shape, kept verbatim).
     Chain { nav_stack: Vec<BrowseLevel> },
@@ -48,12 +48,12 @@ pub(super) enum NavigateLanding {
 /// Cleared by the retry on success (land, save, switch per D4) or on a miss
 /// against a complete corpus (flash, tab unchanged), by `LibEvent::Error`,
 /// and by any manual tab change.
-pub(super) struct PendingSeriesLanding {
-    pub(super) lib_idx: usize,
-    pub(super) reveal: Box<EmbyItem>,
-    pub(super) switch_tab: bool,
+pub(in crate::app) struct PendingSeriesLanding {
+    pub(in crate::app) lib_idx: usize,
+    pub(in crate::app) reveal: Box<EmbyItem>,
+    pub(in crate::app) switch_tab: bool,
     /// Deep selection carried through the deferred landing (task 6.1).
-    pub(super) episode_id: Option<String>,
+    pub(in crate::app) episode_id: Option<String>,
 }
 
 /// A completed `NavigateLanding::Series` that still owes the shell's detail
@@ -68,14 +68,14 @@ pub(super) struct PendingSeriesLanding {
 /// not swallow the owed workspace/overlay open); it survives to the next sync
 /// pass. A manual tab change in between discards it silently, without
 /// surfacing an error.
-pub(super) struct PendingSeriesHandoff {
-    pub(super) lib_idx: usize,
-    pub(super) reveal: Box<EmbyItem>,
+pub(in crate::app) struct PendingSeriesHandoff {
+    pub(in crate::app) lib_idx: usize,
+    pub(in crate::app) reveal: Box<EmbyItem>,
     /// Deep selection carried through the hand-off (task 6.1, design D6).
-    pub(super) episode_id: Option<String>,
+    pub(in crate::app) episode_id: Option<String>,
 }
 
-pub(super) enum LibEvent {
+pub(in crate::app) enum LibEvent {
     Loaded {
         lib_idx: usize,
         parent_id: String,
@@ -283,7 +283,7 @@ pub(super) enum LibEvent {
     Error(String),
 }
 
-pub(super) enum SessionEvent {
+pub(in crate::app) enum SessionEvent {
     Loaded {
         sessions: Vec<mbv_core::api::SessionInfo>,
     },

@@ -2,7 +2,7 @@ use super::components::{
     ComponentId, ContextMenuComponent, Msg, QueueComponent, ShellRequest,
 };
 use super::tests::{make_built_app, make_item};
-use super::types_context_menu::{ContextMenu, ContextMenuAnchor};
+use crate::app::state::types::context_menu::{ContextMenu, ContextMenuAnchor};
 use super::{PanelFocus, QueueScope};
 use crate::app::shell::Model;
 use ratatui::backend::TestBackend;
@@ -103,7 +103,7 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
     let queue_selected = mounted_queue_selected_row(&model);
     assert!(queue_selected.y > queue_panel_content_area(&model).y);
     let message = Msg::Shell(ShellRequest::RowContextMenu(
-        crate::app::types_context_menu::ContextMenuTargets::Queue(vec![]),
+        crate::app::state::types::context_menu::ContextMenuTargets::Queue(vec![]),
         None,
     ));
     model.handle_terminal_message(message, &mut resize_music, &mut resize_tv);

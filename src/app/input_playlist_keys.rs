@@ -1,5 +1,5 @@
-use super::types_playback::PlaylistMutation;
 use super::App;
+use crate::app::state::types::playback::PlaylistMutation;
 
 impl App {
     /// Effect for `ConfirmAction::SaveOverwritePlaylist`'s "yes" answer

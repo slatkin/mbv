@@ -12,7 +12,7 @@ use super::test_helpers::buffer_to_string;
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::podcast_content::PodcastContent;
 use crate::app::components::LibraryKind;
-use crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState;
+use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState;
 use mbv_core::audiobookshelf::{
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfShow,
 };

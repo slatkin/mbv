@@ -6,7 +6,7 @@
 /// synthetic tab appended after libraries when feed subscriptions exist
 /// (#471).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum TabSelection {
+pub(in crate::app) enum TabSelection {
     Home,
     EmbyLibrary(usize),
     AudiobookshelfLibrary(usize),
@@ -15,18 +15,18 @@ pub(super) enum TabSelection {
 
 impl TabSelection {
     /// `true` when the Home / Continue Watching tab is selected.
-    pub(super) fn is_home(self) -> bool {
+    pub(in crate::app) fn is_home(self) -> bool {
         matches!(self, Self::Home)
     }
 
     /// `true` when the Feeds tab is selected.
-    pub(super) fn is_feeds(self) -> bool {
+    pub(in crate::app) fn is_feeds(self) -> bool {
         matches!(self, Self::Feeds)
     }
 
     /// The 0-based Emby library index, or `None` on Home,
     /// Audiobookshelf, and Feeds.
-    pub(super) fn emby_library_index(self) -> Option<usize> {
+    pub(in crate::app) fn emby_library_index(self) -> Option<usize> {
         match self {
             Self::Home | Self::Feeds => None,
             Self::EmbyLibrary(i) => Some(i),
@@ -34,14 +34,14 @@ impl TabSelection {
         }
     }
 
-    pub(super) fn audiobookshelf_index(self) -> Option<usize> {
+    pub(in crate::app) fn audiobookshelf_index(self) -> Option<usize> {
         match self {
             Self::AudiobookshelfLibrary(i) => Some(i),
             _ => None,
         }
     }
 
-    pub(super) fn from_position_with_counts(
+    pub(in crate::app) fn from_position_with_counts(
         pos: usize,
         emby: usize,
         audio: usize,
@@ -60,7 +60,11 @@ impl TabSelection {
         }
     }
 
-    pub(super) fn to_position_with_counts(self, emby: usize, feeds_pos: Option<usize>) -> usize {
+    pub(in crate::app) fn to_position_with_counts(
+        self,
+        emby: usize,
+        feeds_pos: Option<usize>,
+    ) -> usize {
         match self {
             Self::Home => 0,
             Self::EmbyLibrary(i) => i + 1,

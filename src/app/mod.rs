@@ -71,26 +71,9 @@ mod services_settings;
 mod session_command_actions;
 mod session_connect;
 mod session_switch;
-mod settings;
 mod shell_draw;
 mod shuffle_folder_actions;
-mod types_audiobookshelf_browse;
-mod types_browse;
-mod types_cast;
-mod types_confirm;
-mod types_context_menu;
-mod types_daemon_lost;
-mod types_events;
-mod types_feed;
-mod types_feed_tab;
-mod types_feeds_manage;
-mod types_library_tab;
-mod types_overlay;
-mod types_playback;
-mod types_player_tab;
-mod types_settings;
-mod types_sidebar;
-mod types_tab_selection;
+mod state;
 mod ws_event_actions;
 
 pub use self::app_struct::App;
@@ -144,32 +127,32 @@ use self::infra::resize::spawn_resize_worker;
 use self::notify_actions::ToastSeverity;
 pub(in crate::app) use self::playback_target::NowPlayingStatus;
 #[cfg(test)]
-use self::types_browse::restore_library_position;
-use self::types_browse::{
+use self::state::types::browse::restore_library_position;
+use self::state::types::browse::{
     restore_library_position_with_fetched_rows_for_kind, AlbumIndex, AlbumIndexState,
     AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
 };
-use self::types_confirm::{ConfirmAction, ConfirmModal};
+use self::state::types::confirm::{ConfirmAction, ConfirmModal};
 #[cfg(test)]
-use self::types_context_menu::LibraryRoutePopup;
-use self::types_context_menu::{
+use self::state::types::context_menu::LibraryRoutePopup;
+use self::state::types::context_menu::{
     ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage, MultiSelectKind,
 };
-use self::types_daemon_lost::DaemonLostModal;
-use self::types_events::{LibEvent, SessionEvent};
-use self::types_feed::{
+use self::state::types::daemon_lost::DaemonLostModal;
+use self::state::types::events::{LibEvent, SessionEvent};
+use self::state::types::feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
-use self::types_library_tab::LibraryTab;
-use self::types_playback::{
+use self::state::types::library_tab::LibraryTab;
+use self::state::types::playback::{
     CastPlaybackTarget, DestinationLatestSource, LocalPlaybackTarget, PendingQueueAction,
     PlaybackState, PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget,
     RemoteSlotState, ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
-use self::types_player_tab::PlayerTab;
-use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};
-pub(crate) use self::types_sidebar::SidebarId;
-use self::types_tab_selection::TabSelection;
+use self::state::types::player_tab::PlayerTab;
+use self::state::types::settings::{PanelFocus, PanelMode, SettingKey};
+pub(crate) use self::state::types::sidebar::SidebarId;
+use self::state::types::tab_selection::TabSelection;
 #[cfg(test)]
 use mbv_core::api::EmbyItem;
 #[cfg(test)]

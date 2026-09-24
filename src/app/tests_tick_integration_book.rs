@@ -16,7 +16,7 @@ fn harness() -> TickHarness {
         name: "Books".into(),
         media_type: "book".into(),
     };
-    let mut state = crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState::new(
+    let mut state = crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState::new(
         library.clone(),
     );
     state.books = (0..8)
@@ -41,7 +41,7 @@ fn harness() -> TickHarness {
             audio_files: vec![],
         })
         .collect();
-    state.buckets = crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
+    state.buckets = crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&state.books);
     state.selected_id = Some("book-0".into());
     state.detail_cache.insert(
         "book-0".into(),
@@ -57,7 +57,7 @@ fn harness() -> TickHarness {
     );
     app.audiobookshelf_libraries.push(library);
     app.audiobookshelf_book_browse.push(
-        crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState::new(
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState::new(
             AudiobookshelfLibrary {
                 id: "unused".into(),
                 name: "Unused".into(),
@@ -147,7 +147,7 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     let browse = &mut h.model_mut().app.audiobookshelf_book_browse[1];
     browse.books.rotate_left(1);
     browse.selected_id = Some("book-1".into());
-    browse.buckets = crate::app::types_audiobookshelf_browse::build_surname_buckets(&browse.books);
+    browse.buckets = crate::app::state::types::audiobookshelf_browse::build_surname_buckets(&browse.books);
     h.model_mut().push_audiobookshelf_book_content();
     h.model_mut().sync_mounted_surfaces();
     draw_at(&mut h, 80, 24);

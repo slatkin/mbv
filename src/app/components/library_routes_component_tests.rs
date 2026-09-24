@@ -4,7 +4,7 @@
 
 use super::library_routes::LibraryRoutesComponent;
 use super::msg::{Msg, ShellRequest};
-use crate::app::types_context_menu::LibraryRoutePopup;
+use crate::app::state::types::context_menu::LibraryRoutePopup;
 use mbv_core::remote_player::DaemonEndpoint;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -38,7 +38,7 @@ fn draw(component: &mut LibraryRoutesComponent) {
 
 fn library_popup() -> LibraryRoutePopup {
     LibraryRoutePopup {
-        stage: crate::app::types_context_menu::LibraryRouteStage::PickLibrary {
+        stage: crate::app::state::types::context_menu::LibraryRouteStage::PickLibrary {
             items: vec![
                 ("movies".into(), "Movies".into(), None),
                 ("music".into(), "Music".into(), None),
@@ -98,7 +98,7 @@ fn library_routes_outside_click_follows_the_esc_path() {
 fn library_routes_pick_device_rows_skip_the_info_lines() {
     let mut component = LibraryRoutesComponent::new();
     component.set_content(&LibraryRoutePopup {
-        stage: crate::app::types_context_menu::LibraryRouteStage::PickDevice {
+        stage: crate::app::state::types::context_menu::LibraryRouteStage::PickDevice {
             library_lower: "music".into(),
             library_display: "Music".into(),
             devices: vec![(

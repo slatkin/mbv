@@ -34,7 +34,7 @@ fn make_drilled_library_app() -> App {
             title: "Movies".into(),
             items: vec![movie],
             total_count: 1,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),

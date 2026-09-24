@@ -1,8 +1,8 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
+use crate::app::state::types::playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::tests::*;
-use crate::app::types_playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::EmbyItem;
 
@@ -33,14 +33,16 @@ fn key(code: KeyCode) -> KeyEvent {
 fn confirm_pending(app: &App) -> bool {
     matches!(
         app.pending_overlay,
-        Some(super::super::types_overlay::OverlayRequest::Confirm(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
+            _
+        ))
     )
 }
 
 /// The pending overlay's confirm action, when a confirm modal is up.
 fn pending_confirm_action(app: &App) -> Option<ConfirmAction> {
     match &app.pending_overlay {
-        Some(super::super::types_overlay::OverlayRequest::Confirm(modal)) => {
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(modal)) => {
             Some(modal.on_confirm.clone())
         }
         _ => None,

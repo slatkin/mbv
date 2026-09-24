@@ -266,7 +266,7 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
     assert!(
         matches!(
             message,
-            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Browser(ref items), _)))
+            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Browser(ref items), _)))
                 if items.len() == 1 && items[0] == "id"
         ),
         "a right click on a result row opens its context menu: {message:?}"

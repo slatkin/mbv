@@ -10,7 +10,9 @@ use super::components::library_panel::LibraryPanel;
 use super::components::ComponentId;
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
-use super::types_playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
+use crate::app::state::types::playback::{
+    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
+};
 use mbv_core::playback_queue::QueueItem;
 use std::time::Instant;
 

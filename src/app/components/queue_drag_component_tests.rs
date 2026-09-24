@@ -1,6 +1,6 @@
 use super::msg::{Msg, QueueRequest};
 use super::queue::{QueueComponent, QueueCursorUpdate};
-use crate::app::types_playback::{PlaybackState, QueueScope};
+use crate::app::state::types::playback::{PlaybackState, QueueScope};
 use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;

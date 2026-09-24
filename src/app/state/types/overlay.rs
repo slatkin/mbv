@@ -1,12 +1,12 @@
-use super::types_confirm::ConfirmModal;
-use super::types_context_menu::{ContextMenu, MultiSelectKind};
-use super::types_daemon_lost::DaemonLostModal;
-use super::types_feed::SavePlaylistDialog;
-use super::SidebarId;
+use crate::app::state::types::confirm::ConfirmModal;
+use crate::app::state::types::context_menu::{ContextMenu, MultiSelectKind};
+use crate::app::state::types::daemon_lost::DaemonLostModal;
+use crate::app::state::types::feed::SavePlaylistDialog;
+use crate::app::state::types::sidebar::SidebarId;
 
 /// Shell handoffs used while App action code is still called below Model.
 /// These are requests, not a second copy of component interaction state.
-pub(super) enum OverlayRequest {
+pub(in crate::app) enum OverlayRequest {
     OpenSidebar(SidebarId),
     DismissSidebar(SidebarId),
     ToggleSidebar(SidebarId),

@@ -31,7 +31,7 @@ use std::time::Instant;
 /// `CastClient` so tests can substitute a recording fake instead of a live
 /// receiver connection. No `Send` bound: see the threading-model note above
 /// -- a `CastTransport` never crosses a thread boundary after construction.
-pub(super) trait CastTransport {
+pub(in crate::app) trait CastTransport {
     fn load_queue(&mut self, items: &[CastMediaItem], start_index: u16) -> Result<(), String>;
     fn play(&mut self) -> Result<(), String>;
     fn pause(&mut self) -> Result<(), String>;
@@ -83,7 +83,7 @@ impl CastTransport for CastClient {
 
 /// Where a dispatched item's progress is reported (6.6), one variant per
 /// provider `cast_dispatch` resolves items for.
-pub(super) enum CastProgressTarget {
+pub(in crate::app) enum CastProgressTarget {
     Emby {
         item_id: String,
         media_source_id: MediaSourceId,
@@ -108,11 +108,11 @@ pub(super) enum CastProgressTarget {
 /// One item dispatched to the receiver's queue: enough identity to match a
 /// reported `playing_content_id` back to it (6.5) and to report its
 /// provider progress (6.6).
-pub(super) struct DispatchedCastItem {
-    pub(super) url: String,
-    pub(super) content_id: QueueItemContentId,
-    pub(super) title: String,
-    pub(super) report: CastProgressTarget,
+pub(in crate::app) struct DispatchedCastItem {
+    pub(in crate::app) url: String,
+    pub(in crate::app) content_id: QueueItemContentId,
+    pub(in crate::app) title: String,
+    pub(in crate::app) report: CastProgressTarget,
 }
 
 /// One unit of work submitted to a cast worker thread. Runs on that thread,
@@ -120,7 +120,7 @@ pub(super) struct DispatchedCastItem {
 /// threading-model note above. Any response it needs to produce (typically a
 /// `CastEvent`) is sent from inside the closure itself, since the job's
 /// return value is discarded.
-pub(super) type CastJob = Box<dyn FnOnce(&mut dyn CastTransport) + Send>;
+pub(in crate::app) type CastJob = Box<dyn FnOnce(&mut dyn CastTransport) + Send>;
 
 /// Spawns the worker thread that owns a live `CastTransport` for the
 /// lifetime of one cast attachment, and returns the `Sender` App state holds
@@ -139,7 +139,7 @@ pub(super) type CastJob = Box<dyn FnOnce(&mut dyn CastTransport) + Send>;
 /// every caller that must not block its own thread (all of them so far)
 /// invokes this from a background thread of its own, the way
 /// `App::connect_cast_receiver` does.
-pub(super) fn spawn_cast_worker<T, F>(build: F) -> Result<Sender<CastJob>, String>
+pub(in crate::app) fn spawn_cast_worker<T, F>(build: F) -> Result<Sender<CastJob>, String>
 where
     T: CastTransport,
     F: FnOnce() -> Result<T, String> + Send + 'static,
@@ -168,28 +168,28 @@ where
 /// mbv's attachment to a Google Cast receiver. `client` starts `None` on
 /// attach (5.1) and is filled in once an async connect completes (stage 4,
 /// task 8.3) -- see `App::attach_cast`/`App::set_cast_client`.
-pub(super) struct CastAttachment {
-    pub(super) receiver_id: String,
-    pub(super) client: Option<Sender<CastJob>>,
-    pub(super) dispatched: Vec<DispatchedCastItem>,
-    pub(super) status: Option<CastStatus>,
-    pub(super) status_at: Instant,
+pub(in crate::app) struct CastAttachment {
+    pub(in crate::app) receiver_id: String,
+    pub(in crate::app) client: Option<Sender<CastJob>>,
+    pub(in crate::app) dispatched: Vec<DispatchedCastItem>,
+    pub(in crate::app) status: Option<CastStatus>,
+    pub(in crate::app) status_at: Instant,
     /// `CastClient` exposes only `set_volume`/`set_muted`, never a getter --
     /// rust_cast 0.21 has no volume-status read separate from the receiver
     /// status channel this stage doesn't parse. Tracked optimistically here,
     /// the same way local playback tracks `ui_volume` while inactive.
-    pub(super) volume: u8,
-    pub(super) muted: bool,
+    pub(in crate::app) volume: u8,
+    pub(in crate::app) muted: bool,
     /// Set once a status poll reports a connection failure (7.6). `client`
     /// is cleared in the same step so no further poll jobs are submitted;
     /// this flag drives presenting the target as disconnected without
     /// discarding `dispatched` or touching mbv's queue.
-    pub(super) disconnected: bool,
+    pub(in crate::app) disconnected: bool,
 }
 
 /// Results of background work against the attached receiver, reported back
 /// to the main thread over `App::cast_tx`/`cast_rx`.
-pub(super) enum CastEvent {
+pub(in crate::app) enum CastEvent {
     Dispatched {
         receiver_id: String,
         outcome: Result<Vec<DispatchedCastItem>, String>,
@@ -224,13 +224,13 @@ pub(super) enum CastEvent {
 /// `cast_actions`/`playback_target_cast`/`cast_status_actions` tests to
 /// verify which command was sent without a real Chromecast.
 #[cfg(test)]
-pub(super) struct FakeCastTransport {
+pub(in crate::app) struct FakeCastTransport {
     // Shared (not owned) so a test can keep reading `calls` after the
     // transport itself has been moved into a worker thread by
     // `spawn_fake_cast_worker` -- matching the real `CastTransport`'s
     // never-leaves-its-thread shape.
-    pub(super) calls: Arc<std::sync::Mutex<Vec<String>>>,
-    pub(super) status: Result<CastStatus, String>,
+    pub(in crate::app) calls: Arc<std::sync::Mutex<Vec<String>>>,
+    pub(in crate::app) status: Result<CastStatus, String>,
 }
 
 #[cfg(test)]
@@ -306,7 +306,7 @@ impl CastTransport for FakeCastTransport {
 /// App state holds plus a handle to the call log, still readable from the
 /// test thread after `transport` itself has moved.
 #[cfg(test)]
-pub(super) fn spawn_fake_cast_worker(
+pub(in crate::app) fn spawn_fake_cast_worker(
     transport: FakeCastTransport,
 ) -> (Sender<CastJob>, Arc<std::sync::Mutex<Vec<String>>>) {
     let calls = transport.calls.clone();

@@ -5,7 +5,7 @@ use std::sync::mpsc;
 /// Watched-state filter for the Feeds tab. Cycles
 /// `All -> Watched -> Unwatched -> All` on unmodified `w`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) enum WatchedFilter {
+pub(in crate::app) enum WatchedFilter {
     #[default]
     All,
     Watched,
@@ -52,7 +52,7 @@ impl WatchedFilter {
         }
     }
 
-    pub(super) fn matches(self, played: bool) -> bool {
+    pub(in crate::app) fn matches(self, played: bool) -> bool {
         match self {
             Self::All => true,
             Self::Watched => played,
@@ -62,14 +62,14 @@ impl WatchedFilter {
 }
 
 /// Result sent from a background fetch thread back to the Feeds tab.
-pub(super) struct FeedTabRefreshResult {
+pub(in crate::app) struct FeedTabRefreshResult {
     pub feed_id: String,
     pub subscription_index: usize,
     pub entries: Result<Vec<FeedEntry>, String>,
 }
 
 /// Mutable state held by the Feeds tab.
-pub(super) struct FeedTabState {
+pub(in crate::app) struct FeedTabState {
     /// Configured subscriptions copied from `Config.feeds` at startup.
     pub subscriptions: Vec<FeedSubscription>,
     /// All fetched entries, one vec per subscription (indexed by

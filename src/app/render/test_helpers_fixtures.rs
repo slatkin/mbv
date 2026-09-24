@@ -3,8 +3,8 @@
 use super::super::*;
 use crate::app::layout::AppLayout;
 use crate::app::shell::Model;
+use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::types_browse::BrowseResting;
 use crate::app::{App, PanelFocus};
 use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState, TabSelection};
 use crate::config::Config;

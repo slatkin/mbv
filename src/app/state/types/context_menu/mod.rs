@@ -2,7 +2,7 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{FeedEntry, QueueSlotId};
 
 #[derive(Clone, Debug)]
-pub(super) enum BulkRemoveTarget {
+pub(in crate::app) enum BulkRemoveTarget {
     ContinueWatching(Box<EmbyItem>),
     Queue(QueueSlotId),
 }
@@ -30,13 +30,13 @@ pub(crate) enum ContextMenuTargets {
 }
 use unicode_width::UnicodeWidthStr;
 
-use super::PanelFocus;
+use crate::app::state::types::settings::PanelFocus;
 
 /// How a context menu's position is anchored. A keyboard-opened menu keeps a
 /// selected-item anchor resolved from each fresh frame's layout; a
 /// mouse-opened menu keeps its click point and is independent of selection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum ContextMenuAnchor {
+pub(in crate::app) enum ContextMenuAnchor {
     /// Keyboard opening: anchor to the focused panel's selected item.
     SelectedItem(PanelFocus),
     /// Mouse opening: anchor to the click point.
@@ -46,7 +46,7 @@ pub(super) enum ContextMenuAnchor {
 /// The containing panel a context menu is clamped inside. The library panel
 /// and the queue panel are distinct surfaces with distinct geometry.
 #[derive(Clone, Debug)]
-pub(super) enum ContextAction {
+pub(in crate::app) enum ContextAction {
     Play,
     PlaySelection(Vec<EmbyItem>),
     ShuffleSelection(Vec<EmbyItem>),
@@ -75,12 +75,12 @@ pub(super) enum ContextAction {
 }
 
 #[derive(Clone)]
-pub(super) struct ContextMenuEntry {
-    pub(super) label: &'static str,
-    pub(super) action: Option<ContextAction>,
+pub(in crate::app) struct ContextMenuEntry {
+    pub(in crate::app) label: &'static str,
+    pub(in crate::app) action: Option<ContextAction>,
 }
 
-pub(super) fn is_bulk_action(action: &Option<ContextAction>) -> bool {
+pub(in crate::app) fn is_bulk_action(action: &Option<ContextAction>) -> bool {
     matches!(
         action,
         Some(
@@ -105,10 +105,10 @@ pub(crate) enum MultiSelectKind {
 }
 
 #[derive(Clone)]
-pub(super) struct MultiSelectPopup {
-    pub(super) kind: MultiSelectKind,
-    pub(super) items: Vec<MultiSelectItem>,
-    pub(super) cursor: usize,
+pub(in crate::app) struct MultiSelectPopup {
+    pub(in crate::app) kind: MultiSelectKind,
+    pub(in crate::app) items: Vec<MultiSelectItem>,
+    pub(in crate::app) cursor: usize,
 }
 
 #[derive(Clone)]
@@ -133,18 +133,18 @@ pub(crate) enum LibraryRouteStage {
 }
 
 pub(crate) struct LibraryRoutePopup {
-    pub(super) stage: LibraryRouteStage,
-    pub(super) cursor: usize,
+    pub(in crate::app) stage: LibraryRouteStage,
+    pub(in crate::app) cursor: usize,
 }
 
-pub(super) struct ContextMenu {
-    pub(super) anchor: ContextMenuAnchor,
-    pub(super) entries: Vec<ContextMenuEntry>,
-    pub(super) cursor: usize,
+pub(in crate::app) struct ContextMenu {
+    pub(in crate::app) anchor: ContextMenuAnchor,
+    pub(in crate::app) entries: Vec<ContextMenuEntry>,
+    pub(in crate::app) cursor: usize,
 }
 
 impl ContextMenu {
-    pub(super) fn first_selectable(entries: &[ContextMenuEntry]) -> usize {
+    pub(in crate::app) fn first_selectable(entries: &[ContextMenuEntry]) -> usize {
         entries
             .iter()
             .position(|entry| entry.action.is_some())
@@ -154,7 +154,7 @@ impl ContextMenu {
     /// Rendered menu size: widest entry label + 4 (2 leading + 2 trailing
     /// spaces, matching `render_context_menu`'s `" {} "` item format), and
     /// `entries.len() + 2` rows (one blank top/bottom border row each).
-    pub(super) fn rendered_size(entries: &[ContextMenuEntry]) -> (u16, u16) {
+    pub(in crate::app) fn rendered_size(entries: &[ContextMenuEntry]) -> (u16, u16) {
         let width = (entries
             .iter()
             .map(|entry| UnicodeWidthStr::width(entry.label))
@@ -179,7 +179,7 @@ impl ContextMenu {
     /// the panel. Exact anchor alignment wins when compatible with
     /// visibility; panel bounds win otherwise. When the menu exceeds a panel
     /// dimension, that panel edge wins and the terminal renderer may clip.
-    pub(super) fn place(
+    pub(in crate::app) fn place(
         panel: Rect,
         size: (u16, u16),
         anchor: Option<&Rect>,
@@ -217,5 +217,4 @@ impl ContextMenu {
 }
 
 #[cfg(test)]
-#[path = "types_context_menu_tests.rs"]
 mod tests;

@@ -69,8 +69,8 @@ fn podcast_owner_is_registered_and_starts_on_the_first_episode() {
     // first episode row.
     assert!(matches!(
         podcast(&mut harness).pill(),
-        crate::app::types_audiobookshelf_browse::PillSelection::State(
-            crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All
+        crate::app::state::types::audiobookshelf_browse::PillSelection::State(
+            crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All
         )
     ));
     let target = podcast(&mut harness)
@@ -112,8 +112,8 @@ fn podcast_panel_mouse_pill_click_commits_the_state_selection() {
     let outcome = harness.step();
     assert!(matches!(
         podcast(&mut harness).pill(),
-        crate::app::types_audiobookshelf_browse::PillSelection::State(
-            crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played
+        crate::app::state::types::audiobookshelf_browse::PillSelection::State(
+            crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played
         )
     ));
     assert!(outcome.raw_messages.iter().any(|message| matches!(message, Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { library_item_id: None }))));
@@ -346,7 +346,7 @@ fn launch_reanchor_restores_podcast_show_pill_before_detail_arrival() {
     harness.model_mut().sync_mounted_surfaces();
 
     assert!(harness.model().app.pending_launch_state.is_some());
-    assert_eq!(podcast(&mut harness).pill(), &crate::app::types_audiobookshelf_browse::PillSelection::Show("show-a".into()));
+    assert_eq!(podcast(&mut harness).pill(), &crate::app::state::types::audiobookshelf_browse::PillSelection::Show("show-a".into()));
     assert!(podcast(&mut harness).selected_episode_target().is_none());
     let selector = podcast(&mut harness).content().selector.expect("podcast selector");
     assert_eq!(selector.active, Some(4), "the saved show pill is the active painted selector");
@@ -391,8 +391,8 @@ fn launch_reanchor_restores_podcast_filter_pill_on_cold_start() {
     assert!(harness.model().app.pending_launch_state.is_none());
     assert_eq!(
         podcast(&mut harness).pill(),
-        &crate::app::types_audiobookshelf_browse::PillSelection::State(
-            crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Unplayed,
+        &crate::app::state::types::audiobookshelf_browse::PillSelection::State(
+            crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::Unplayed,
         )
     );
     assert_eq!(
@@ -847,7 +847,7 @@ fn podcast_latest_uses_cached_shelf_and_resolves_provider_targets_without_emby()
     // Latest remains selectable while its cached shelf is empty.
     harness.inject(Event::Keyboard(KeyEvent { code: Key::Char('['), modifiers: KeyModifiers::NONE }));
     harness.step();
-    assert_eq!(podcast(&mut harness).pill(), &crate::app::types_audiobookshelf_browse::PillSelection::Latest);
+    assert_eq!(podcast(&mut harness).pill(), &crate::app::state::types::audiobookshelf_browse::PillSelection::Latest);
     assert!(podcast(&mut harness).episode_rows().is_empty());
 
     // Deliver the existing shelf-fetch completion; the normal shell projection
@@ -870,7 +870,7 @@ fn podcast_latest_uses_cached_shelf_and_resolves_provider_targets_without_emby()
     });
     harness.model_mut().push_audiobookshelf_podcast_content();
     draw(&mut harness, 80);
-    assert_eq!(podcast(&mut harness).pill(), &crate::app::types_audiobookshelf_browse::PillSelection::Latest);
+    assert_eq!(podcast(&mut harness).pill(), &crate::app::state::types::audiobookshelf_browse::PillSelection::Latest);
     assert!(!podcast(&mut harness).content().selector.unwrap().markers[0], "selection before async completion acknowledges the Latest marker");
     let target = podcast(&mut harness).selected_episode_target().expect("shelf target selected");
     assert_eq!((target.library_item_id(), target.episode_id()), ("shelf-show", "shelf-episode"));
@@ -934,7 +934,7 @@ fn podcast_latest_launch_snapshot_is_selected_tab_only() {
     let second = mbv_core::audiobookshelf::AudiobookshelfLibrary {
         id: "abs-podcasts-2".into(), name: "Second podcast library".into(), media_type: "podcast".into(),
     };
-    app.audiobookshelf_browse.push(crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(second.clone()));
+    app.audiobookshelf_browse.push(crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(second.clone()));
     app.audiobookshelf_libraries.push(second);
     app.pending_launch_tab_resolved = true;
     app.pending_launch_state = Some(mbv_core::config::TuiLaunchState {
@@ -946,12 +946,12 @@ fn podcast_latest_launch_snapshot_is_selected_tab_only() {
     });
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    assert_eq!(podcast(&mut harness).pill(), &crate::app::types_audiobookshelf_browse::PillSelection::Latest);
+    assert_eq!(podcast(&mut harness).pill(), &crate::app::state::types::audiobookshelf_browse::PillSelection::Latest);
     let (selector, _) = podcast(&mut harness).launch_snapshot();
     assert_eq!(selector, Some(mbv_core::config::SelectorIdentity::Audiobookshelf { key: mbv_core::config::AudiobookshelfSelectorKey::Latest }));
 
     harness.model_mut().app.tab = crate::app::TabSelection::AudiobookshelfLibrary(1);
     harness.model_mut().sync_mounted_surfaces();
-    assert!(matches!(podcast_for(&mut harness, "abs-podcasts-2").pill(), crate::app::types_audiobookshelf_browse::PillSelection::State(
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All)));
+    assert!(matches!(podcast_for(&mut harness, "abs-podcasts-2").pill(), crate::app::state::types::audiobookshelf_browse::PillSelection::State(
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All)));
 }

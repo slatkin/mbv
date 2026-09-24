@@ -6,10 +6,10 @@
 //!   2. the selected surname bucket re-anchors to the selected book when a
 //!      page append shifts book indices.
 
-use super::super::types_audiobookshelf_browse::{
+use crate::app::state::types::audiobookshelf_browse::{
     build_surname_buckets, AudiobookshelfBookBrowseState,
 };
-use super::super::types_tab_selection::TabSelection;
+use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::tests::make_app_stub;
 use mbv_core::config::AudiobookshelfSetup;
 

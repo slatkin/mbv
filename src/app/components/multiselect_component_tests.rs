@@ -5,7 +5,7 @@
 
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::multiselect::MultiselectComponent;
-use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
+use crate::app::state::types::context_menu::{MultiSelectKind, MultiSelectPopup};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};

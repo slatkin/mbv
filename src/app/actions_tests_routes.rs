@@ -365,7 +365,7 @@ fn routed_wholly_unplayable_play_is_deferred_without_queue_replacement() {
     assert!(app.player_tab.emby_items().is_empty());
     assert!(matches!(
         app.pending_overlay,
-        Some(crate::app::types_overlay::OverlayRequest::Confirm(ref modal))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(ref modal))
             if modal.message.contains("item-1")
                 && modal.title.contains("audio-owner")
     ));
@@ -806,7 +806,7 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
             items: vec![anchor.clone()],
             fetched_rows: 1,
             total_count: 1,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
             item_types: None,
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -839,7 +839,9 @@ fn library_autoplay_on_a_populated_queue_does_not_raise_the_replace_modal() {
     assert!(
         !matches!(
             app.pending_overlay,
-            Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
+            Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
+                _
+            ))
         ),
         "library autoplay is never gated"
     );

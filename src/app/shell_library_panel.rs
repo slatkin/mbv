@@ -17,8 +17,8 @@ use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
 use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::shell::Model;
-use super::types_playback::DestinationLatestSource;
 use super::{PanelFocus, PanelMode, TabSelection};
+use crate::app::state::types::playback::DestinationLatestSource;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -580,4 +580,4 @@ impl Model {
     }
 }
 
-use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
+use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;

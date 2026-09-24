@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::tests::*;
-use crate::app::types_browse::BrowseResting;
+use crate::app::state::types::browse::BrowseResting;
 
 #[test]
 fn feed_home_video_group_view_requires_homevideos_and_feed_config() {

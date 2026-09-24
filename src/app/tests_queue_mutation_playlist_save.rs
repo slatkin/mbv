@@ -87,7 +87,7 @@ fn manual_save_overwrite_and_save_on_quit_share_per_playlist_ordering() {
         .expect("manual save keyed by playlist");
     assert!(matches!(
         state.active,
-        Some(crate::app::types_playback::PlaylistMutation::Save { mutation_id: 1, .. })
+        Some(crate::app::state::types::playback::PlaylistMutation::Save { mutation_id: 1, .. })
     ));
     assert_eq!(
         state.queued.len(),
@@ -101,7 +101,7 @@ fn manual_save_overwrite_and_save_on_quit_share_per_playlist_ordering() {
         app.playlist_mutations
             .get("pl-2")
             .and_then(|s| s.active.as_ref()),
-        Some(crate::app::types_playback::PlaylistMutation::Replace { .. })
+        Some(crate::app::state::types::playback::PlaylistMutation::Replace { .. })
     ));
     assert_eq!(
         app.playlist_mutations.get("pl-1").unwrap().queued.len(),
@@ -214,7 +214,7 @@ fn complete_stay_alive_save_as(app: &mut App) {
     let mutation_id = app.next_playlist_mutation - 1;
     let coordinator_key = format!("create:{mutation_id}");
     let owner_queue_lineage = match app.playlist_mutations[&coordinator_key].active.as_ref().unwrap() {
-        crate::app::types_playback::PlaylistMutation::CreateAs {
+        crate::app::state::types::playback::PlaylistMutation::CreateAs {
             owner_queue_lineage, ..
         } => *owner_queue_lineage,
         _ => panic!("expected Save As mutation"),
@@ -253,7 +253,7 @@ fn rejected_stay_alive_save_as_leaves_dirty_queue_for_quit_save() {
     assert!(app.try_quit());
     assert!(matches!(
         app.playlist_mutations.get("pl-1").and_then(|state| state.active.as_ref()),
-        Some(crate::app::types_playback::PlaylistMutation::Save { .. })
+        Some(crate::app::state::types::playback::PlaylistMutation::Save { .. })
     ));
 }
 

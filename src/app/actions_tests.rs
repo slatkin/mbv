@@ -666,7 +666,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         title: "Group A".into(),
         items: vec![folder("artist-a", "Artist A")],
         total_count: 1,
-        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -687,7 +687,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         title: "Artist C".into(),
         items: vec![album("album-1", "Record")],
         total_count: 1,
-        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -740,15 +740,15 @@ fn populated_queue_album_track_asks_then_plays_the_routed_replacement() {
 
     assert!(matches!(
         &app.pending_overlay,
-        Some(crate::app::types_overlay::OverlayRequest::Confirm(modal))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(modal))
             if modal.on_confirm == crate::app::ConfirmAction::ReplacePopulatedQueue
     ));
     assert!(matches!(
         app.pending_queue_replacement,
         Some((
             _,
-            crate::app::types_playback::ReplacementExecutor::Routed(
-                crate::app::types_playback::RoutedReplacementPrep::Album
+            crate::app::state::types::playback::ReplacementExecutor::Routed(
+                crate::app::state::types::playback::RoutedReplacementPrep::Album
             )
         ))
     ));
@@ -839,8 +839,8 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
                 source: crate::config::QueueSource::Collection { collection_type },
                 ..
             },
-            crate::app::types_playback::ReplacementExecutor::Routed(
-                crate::app::types_playback::RoutedReplacementPrep::Folder
+            crate::app::state::types::playback::ReplacementExecutor::Routed(
+                crate::app::state::types::playback::RoutedReplacementPrep::Folder
             )
         )) if collection_type == "music"
     ));
@@ -873,7 +873,9 @@ fn empty_queue_album_track_needs_no_replacement_confirmation() {
     assert!(app.pending_queue_replacement.is_none());
     assert!(!matches!(
         app.pending_overlay,
-        Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
+            _
+        ))
     ));
     assert_eq!(queued_track_ids(&app), ["track-1"]);
 }

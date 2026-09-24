@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::types_settings::PanelFocus;
+use crate::app::state::types::settings::PanelFocus;
 use std::time::Instant;
 
 impl Model {
@@ -324,8 +324,9 @@ impl Model {
                         self.push_active_emby_library_owner_content();
                     }
                     ShellRequest::ContextMenuDismiss => {
-                        self.app.pending_overlay =
-                            Some(super::super::types_overlay::OverlayRequest::DismissContextMenu);
+                        self.app.pending_overlay = Some(
+                            crate::app::state::types::overlay::OverlayRequest::DismissContextMenu,
+                        );
                     }
                     // Search sidebar: dismiss (Esc/Backspace-on-empty).
                     // The component owns the state; the shell unmounts it.
@@ -626,7 +627,7 @@ impl Model {
                     request @ (ShellRequest::HomePlay(_)
                     | ShellRequest::HomeEnqueue(_)
                     | ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Home(_),
+                        crate::app::state::types::context_menu::ContextMenuTargets::Home(_),
                         _,
                     )
                     | ShellRequest::HomeDelete(_)
@@ -644,16 +645,16 @@ impl Model {
                         self.queue_click_reproject();
                     }
                     ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Queue(slot_ids),
+                        crate::app::state::types::context_menu::ContextMenuTargets::Queue(slot_ids),
                         anchor,
                     ) => {
                         self.context_menu_origin =
                             Some(crate::app::components::media_list::SelectionOrigin::Queue);
                         self.context_action_snapshot =
-                            Some(crate::app::types_context_menu::ContextActionSnapshot {
+                            Some(crate::app::state::types::context_menu::ContextActionSnapshot {
                                 origin: crate::app::components::media_list::SelectionOrigin::Queue,
                                 values: vec![
-                                    crate::app::types_context_menu::ContextMenuTargets::Queue(
+                                    crate::app::state::types::context_menu::ContextMenuTargets::Queue(
                                         slot_ids.clone(),
                                     ),
                                 ],
@@ -670,7 +671,7 @@ impl Model {
                                         .iter()
                                         .find(|s| s.slot_id == *sid)?;
                                     let item = slot.item.as_emby().cloned();
-                                    let remove = crate::app::types_context_menu::BulkRemoveTarget::Queue(*sid);
+                                    let remove = crate::app::state::types::context_menu::BulkRemoveTarget::Queue(*sid);
                                     let capability =
                                         crate::app::context_menu_capabilities::queue_item_capabilities(
                                             &slot.item,
@@ -727,14 +728,17 @@ impl Model {
                         // was opened from, not the dispatch-time focus.
                         if let Some(origin) = self.active_library_selection_origin() {
                             self.context_menu_origin = Some(origin.clone());
-                            self.context_action_snapshot =
-                                Some(crate::app::types_context_menu::ContextActionSnapshot {
+                            self.context_action_snapshot = Some(
+                                crate::app::state::types::context_menu::ContextActionSnapshot {
                                     origin,
                                     values: vec![targets.clone()],
-                                });
+                                },
+                            );
                         }
                         match targets {
-                            crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {
+                            crate::app::state::types::context_menu::ContextMenuTargets::Emby(
+                                mut items,
+                            ) => {
                                 if items.len() > 1 {
                                     let capabilities = items
                                         .iter()
@@ -756,7 +760,7 @@ impl Model {
                                     }
                                 }
                             }
-                            crate::app::types_context_menu::ContextMenuTargets::Browser(
+                            crate::app::state::types::context_menu::ContextMenuTargets::Browser(
                                 targets,
                             ) => {
                                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
@@ -800,7 +804,9 @@ impl Model {
                                     }
                                 }
                             }
-                            crate::app::types_context_menu::ContextMenuTargets::Feeds(entries) => {
+                            crate::app::state::types::context_menu::ContextMenuTargets::Feeds(
+                                entries,
+                            ) => {
                                 self.app.open_feeds_context_menu(entries, anchor);
                             }
                             _ => {}

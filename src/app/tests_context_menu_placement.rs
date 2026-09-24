@@ -40,7 +40,7 @@ fn add_emby_tv_library(app: &mut App) {
             title: "Shows".into(),
             items: vec![make_item("The Series", "Series")],
             total_count: 1,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
             item_types: Some("Series".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -116,7 +116,7 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
 /// so the poisoned legacy copies stay stale for the whole placement.
 #[test]
 fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
-    use crate::app::types_context_menu::ContextMenu;
+    use crate::app::state::types::context_menu::ContextMenu;
     let _guard = crate::config::TestStateDirGuard::new();
 
     let mut model = crate::app::shell::Model::new(make_app_stub());
@@ -124,7 +124,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
     model.handle_terminal_message(Msg::Shell(crate::app::components::ShellRequest::RowContextMenu(
-        crate::app::types_context_menu::ContextMenuTargets::Home(vec![crate::app::components::msg::HomeRowTarget {
+        crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![crate::app::components::msg::HomeRowTarget {
             item_id: Some("id0".into()),
             source: None,
             from_continue_watching: true,
@@ -134,7 +134,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     assert!(
         matches!(
             model.app.pending_overlay,
-            Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+            Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
         ),
         "'.' should open the context menu"
     );
@@ -218,7 +218,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
 /// still anchors to the panel's own Narrow-painted geometry.
 #[test]
 fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow() {
-    use crate::app::types_context_menu::ContextMenu;
+    use crate::app::state::types::context_menu::ContextMenu;
     let _guard = crate::config::TestStateDirGuard::new();
 
     let mut model = crate::app::shell::Model::new(make_app_stub());
@@ -226,7 +226,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
     model.handle_terminal_message(Msg::Shell(crate::app::components::ShellRequest::RowContextMenu(
-        crate::app::types_context_menu::ContextMenuTargets::Home(vec![crate::app::components::msg::HomeRowTarget {
+        crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![crate::app::components::msg::HomeRowTarget {
             item_id: Some("id0".into()),
             source: None,
             from_continue_watching: true,
@@ -236,7 +236,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     assert!(
         matches!(
             model.app.pending_overlay,
-            Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+            Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
         ),
         "'.' should open the context menu"
     );
@@ -370,7 +370,7 @@ fn context_menu_entries_render_below_the_reserved_top_row() {
 /// the branch decision — not the geometry it happens to land on.
 #[test]
 fn pointer_anchor_selects_wide_tv_branch_on_resize_tick_before_repaint() {
-    use crate::app::types_context_menu::ContextMenu;
+    use crate::app::state::types::context_menu::ContextMenu;
 
     let mut app = make_app_stub();
     add_emby_tv_library(&mut app);
@@ -461,7 +461,7 @@ fn pointer_anchor_selects_wide_tv_branch_on_resize_tick_before_repaint() {
 #[test]
 fn migrated_music_pointer_menu_stays_in_painted_list_pane_not_queue_column() {
     use crate::app::render::make_music_group_app;
-    use crate::app::types_context_menu::ContextMenu;
+    use crate::app::state::types::context_menu::ContextMenu;
 
     let mut app = make_music_group_app();
     app.panel_focus = PanelFocus::Library;

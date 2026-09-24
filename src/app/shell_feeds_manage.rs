@@ -9,7 +9,9 @@
 
 use super::components::msg::FeedsManageIntent;
 use super::components::{ComponentId, FeedsManageComponent, PopupId};
-use super::types_feeds_manage::{FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage};
+use crate::app::state::types::feeds_manage::{
+    FeedAddResult, FeedForm, FeedsManagePopup, FeedsManageStage,
+};
 use mbv_core::config::FeedSubscription;
 
 impl super::shell::Model {

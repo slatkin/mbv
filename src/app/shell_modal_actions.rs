@@ -3,7 +3,7 @@ use super::components::{
     ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, SavePlaylistComponent,
 };
 use super::shell::Model;
-use super::types_confirm::ConfirmAction;
+use crate::app::state::types::confirm::ConfirmAction;
 use crossterm::event::{KeyCode, KeyEvent};
 
 impl Model {

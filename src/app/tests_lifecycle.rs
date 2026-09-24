@@ -3,6 +3,7 @@ use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::msg::{HomeRowTarget, Msg, ShellRequest};
 use crate::app::components::{ComponentId, LibraryKey};
+use crate::app::state::types::settings;
 use mbv_core::config::{FeedKind, FeedSubscription, ServiceKind};
 use mbv_core::playback_queue::FeedEntry;
 use crate::app::tests::*;
@@ -721,7 +722,7 @@ fn teardown_issues_no_stop_for_an_attached_cast_target() {
     let mut app = make_app_stub();
     app.attach_cast("device-1".to_string());
     let (job_tx, calls) =
-        super::types_cast::spawn_fake_cast_worker(super::types_cast::FakeCastTransport::default());
+        crate::app::state::types::cast::spawn_fake_cast_worker(crate::app::state::types::cast::FakeCastTransport::default());
     app.set_cast_client("device-1", job_tx);
 
     app.teardown(Duration::from_secs(1), None);

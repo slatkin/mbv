@@ -1,12 +1,12 @@
 use super::bootstrap::bootstrap_legacy_queue;
-use super::types_playback::QueueScope;
-use super::types_player_tab::PlayerTab;
-use super::types_settings::{PanelFocus, PanelMode};
-use super::types_tab_selection::TabSelection;
 use super::{
     bootstrap_unified_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
     SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
+use crate::app::state::types::playback::QueueScope;
+use crate::app::state::types::player_tab::PlayerTab;
+use crate::app::state::types::settings::{PanelFocus, PanelMode};
+use crate::app::state::types::tab_selection::TabSelection;
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
 use mbv_core::remote_player::DaemonEndpoint;
@@ -226,7 +226,7 @@ impl App {
             halfblock_picker: None,
             dim_backdrop_active: false,
             image_cache_size_total: init.image_cache_size.saturating_mul(2),
-            settings_destination: super::types_settings::SettingsDestination::Main,
+            settings_destination: crate::app::state::types::settings::SettingsDestination::Main,
             settings_save_at: None,
             mouse_capture_pending: None,
             confirm_logout: false,
@@ -308,7 +308,7 @@ impl App {
             home_is_local_daemon: false,
             idle_feed: init.idle_feed,
             feed_seek_pending_slot: None,
-            feed_tab: super::types_feed_tab::FeedTabState::default(),
+            feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
             feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::load(),
             #[cfg(test)]
             card_image_fetch_calls: 0,

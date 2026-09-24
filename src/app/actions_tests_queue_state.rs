@@ -195,7 +195,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     )
     .unwrap();
     app.player_tab.set_queue_items(mixed.clone(), 2);
-    app.remote_player_tab = Some(crate::app::types_player_tab::PlayerTab::new(
+    app.remote_player_tab = Some(crate::app::state::types::player_tab::PlayerTab::new(
         mixed.clone(),
         3,
     ));
@@ -235,7 +235,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         mbv_core::playback_queue::QueueMutationResult::Applied(())
     ));
     app.player.status.lock().unwrap().active = true;
-    app.remote_player_tab = Some(crate::app::types_player_tab::PlayerTab::new(
+    app.remote_player_tab = Some(crate::app::state::types::player_tab::PlayerTab::new(
         mixed.clone(),
         3,
     ));

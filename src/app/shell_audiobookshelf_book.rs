@@ -3,8 +3,8 @@ use super::components::library_panel::LibraryKey;
 use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
 use super::components::LibraryKind;
 use super::shell::Model;
-use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::TabSelection;
+use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind;
 use mbv_core::config::ServiceKind;
 
 impl Model {

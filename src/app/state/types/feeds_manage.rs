@@ -3,7 +3,7 @@ use std::sync::mpsc;
 
 /// Which field of the add/edit form currently has keyboard focus.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum FeedFormField {
+pub(in crate::app) enum FeedFormField {
     Name,
     Url,
     Kind,
@@ -14,7 +14,7 @@ pub(super) enum FeedFormField {
 /// and kind, and a URL change requires removing the subscription and
 /// adding a new one (design.md decision 10).
 #[derive(Clone)]
-pub(super) struct FeedForm {
+pub(in crate::app) struct FeedForm {
     pub name: String,
     pub url: String,
     pub kind: FeedKind,
@@ -23,7 +23,7 @@ pub(super) struct FeedForm {
 }
 
 impl FeedForm {
-    pub(super) fn new_add() -> Self {
+    pub(in crate::app) fn new_add() -> Self {
         Self {
             name: String::new(),
             url: String::new(),
@@ -33,7 +33,7 @@ impl FeedForm {
         }
     }
 
-    pub(super) fn new_edit(index: usize, sub: &FeedSubscription) -> Self {
+    pub(in crate::app) fn new_edit(index: usize, sub: &FeedSubscription) -> Self {
         Self {
             name: sub.name.clone(),
             url: sub.url.clone(),
@@ -46,7 +46,7 @@ impl FeedForm {
 
 /// Which sub-view of the management overlay is active.
 #[derive(Clone)]
-pub(super) enum FeedsManageStage {
+pub(in crate::app) enum FeedsManageStage {
     List,
     Form(FeedForm),
 }
@@ -55,7 +55,7 @@ pub(super) enum FeedsManageStage {
 /// submitting attempt's id so a stale/cancelled result -- the add was
 /// cancelled, or superseded by a later submission before this one arrived
 /// -- can be told apart from the still-current one.
-pub(super) struct FeedAddResult {
+pub(in crate::app) struct FeedAddResult {
     pub id: u64,
     pub name: String,
     pub url: String,
@@ -68,7 +68,7 @@ pub(super) struct FeedAddResult {
 /// edits); this holds only the background add-feed channel, the in-flight
 /// add marker and the add-attempt id counter — the piece that cannot live in
 /// the component (task 5.3d).
-pub(super) struct FeedsManagePopup {
+pub(in crate::app) struct FeedsManagePopup {
     /// The id of an in-flight add submission, or `None` when nothing is
     /// being fetched. Set on submit, cleared on cancel (Esc) or once its
     /// result is applied/discarded by `drain_feed_add_results`.
@@ -79,7 +79,7 @@ pub(super) struct FeedsManagePopup {
 }
 
 impl FeedsManagePopup {
-    pub(super) fn new() -> Self {
+    pub(in crate::app) fn new() -> Self {
         let (add_tx, add_rx) = mpsc::channel();
         Self {
             pending_add: None,

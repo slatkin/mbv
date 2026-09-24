@@ -70,15 +70,16 @@ impl App {
                             previous_state: completion.previous_state,
                         });
                     self.audiobookshelf_setup_form = None;
-                    self.ask_confirm(super::types_confirm::ConfirmModal {
+                    self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
                         title: " Replace Audiobookshelf ".into(),
                         message:
                             "Replace Audiobookshelf? Service-owned setup and state will be cleared."
                                 .into(),
                         hint: "[y/Enter] Replace    [Esc] Cancel".into(),
-                        on_confirm: super::types_confirm::ConfirmAction::ReplaceAudiobookshelf(
-                            completion.generation,
-                        ),
+                        on_confirm:
+                            crate::app::state::types::confirm::ConfirmAction::ReplaceAudiobookshelf(
+                                completion.generation,
+                            ),
                     });
                     return;
                 }
@@ -334,7 +335,7 @@ impl App {
                     std::thread::spawn(move || {
                         for update in receiver {
                             if lib_tx
-                            .send(super::types_events::LibEvent::AudiobookshelfProgressAcknowledged(
+                            .send(crate::app::state::types::events::LibEvent::AudiobookshelfProgressAcknowledged(
                                 update,
                             ))
                             .is_err()
@@ -351,7 +352,7 @@ impl App {
                         for update in book_receiver {
                             if lib_tx
                             .send(
-                                super::types_events::LibEvent::AudiobookshelfBookProgressAcknowledged(
+                                crate::app::state::types::events::LibEvent::AudiobookshelfBookProgressAcknowledged(
                                     update,
                                 ),
                             )

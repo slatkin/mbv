@@ -106,8 +106,8 @@ impl CastPlaybackTarget {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::state::types::cast::{spawn_fake_cast_worker, FakeCastTransport};
     use crate::app::tests::make_app_stub;
-    use crate::app::types_cast::{spawn_fake_cast_worker, FakeCastTransport};
     use std::sync::{Arc, Mutex};
 
     fn attached_app_with_fake_transport() -> (App, Arc<Mutex<Vec<String>>>) {

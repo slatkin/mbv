@@ -4,7 +4,7 @@
 /// the shell's confirm-action dispatcher instead of a bespoke bool/option
 /// field per confirmation.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum ConfirmAction {
+pub(in crate::app) enum ConfirmAction {
     ClearQueue,
     RemoveActiveQueueItem(usize),
     RescanLibrary(usize),
@@ -37,9 +37,9 @@ pub(super) enum ConfirmAction {
 /// be active at a time (`App::confirm_modal: Option<ConfirmModal>`); setting
 /// a new one replaces whatever was showing.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct ConfirmModal {
-    pub(super) title: String,
-    pub(super) message: String,
-    pub(super) hint: String,
-    pub(super) on_confirm: ConfirmAction,
+pub(in crate::app) struct ConfirmModal {
+    pub(in crate::app) title: String,
+    pub(in crate::app) message: String,
+    pub(in crate::app) hint: String,
+    pub(in crate::app) on_confirm: ConfirmAction,
 }

@@ -1,7 +1,7 @@
-use super::types_browse::{AlbumIndex, AlbumIndexState, BrowseResting};
-use super::types_events::NavigateLanding;
 use super::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE};
 use crate::app::infra::ui_util::sort_episodes;
+use crate::app::state::types::browse::{AlbumIndex, AlbumIndexState, BrowseResting};
+use crate::app::state::types::events::NavigateLanding;
 use mbv_core::api::{EmbyClient, EmbyItem};
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.

@@ -364,14 +364,14 @@ impl LibraryContentOwner for MusicContent {
                             .filter_map(|target| self.workspace_track_item(&target))
                             .collect();
                         (!items.is_empty()).then_some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                             None,
                         )))
                     }
                     Some(RowIntent::Context(target)) => {
                         self.workspace_track_item(&target).map(|track| {
                             Msg::Shell(ShellRequest::MusicRowContextMenu(
-                                crate::app::types_context_menu::ContextMenuTargets::Emby(vec![
+                                crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
                                     track,
                                 ]),
                                 None,
@@ -388,13 +388,13 @@ impl LibraryContentOwner for MusicContent {
                         return None;
                     }
                     Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                         None,
                     )))
                 } else {
                     self.selected_item().map(|item| {
                         Msg::Shell(ShellRequest::MusicRowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
                             None,
                         ))
                     })

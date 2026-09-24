@@ -265,7 +265,7 @@ fn deep_selection_tv_harness(http: &MockHttp, episodes_for_season_2: &[&str]) ->
         title: "TV".into(),
         items: vec![ser0, ser1.clone()],
         total_count: 2,
-        resting: crate::app::types_browse::BrowseResting::new(1, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(1, 0),
         item_types: Some("Series".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -319,7 +319,7 @@ fn series_reveal() -> Box<mbv_core::api::EmbyItem> {
 fn episode_navigate(episode_id: Option<String>) -> LibEvent {
     LibEvent::NavigateTo {
         lib_idx: 0,
-        landing: crate::app::types_events::NavigateLanding::Series {
+        landing: crate::app::state::types::events::NavigateLanding::Series {
             reveal: series_reveal(),
             episode_id,
         },

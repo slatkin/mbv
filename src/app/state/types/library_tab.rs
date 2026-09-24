@@ -1,24 +1,24 @@
-use super::types_browse::BrowseLevel;
-use super::types_feed::FeedHomeVideoState;
+use crate::app::state::types::browse::BrowseLevel;
+use crate::app::state::types::feed::FeedHomeVideoState;
 use mbv_core::api::EmbyItem;
 
-pub(super) struct LibraryTab {
-    pub(super) library: EmbyItem,
-    pub(super) nav_stack: Vec<BrowseLevel>,
-    pub(super) feed_home_video: Option<FeedHomeVideoState>,
+pub(in crate::app) struct LibraryTab {
+    pub(in crate::app) library: EmbyItem,
+    pub(in crate::app) nav_stack: Vec<BrowseLevel>,
+    pub(in crate::app) feed_home_video: Option<FeedHomeVideoState>,
     /// The library's TRUE unfiltered `TotalRecordCount`, captured from the
     /// first unfiltered fetch of the library's top level. `None` until that
     /// first load completes. Used to gate the letter pill row and per-letter
     /// header grouping so a scoped (small) fetch doesn't look "small" to the
     /// UI. See `LIBRARY_PILL_THRESHOLD`.
-    pub(super) library_total: Option<usize>,
+    pub(in crate::app) library_total: Option<usize>,
     /// Selected top-level TV content mode. `None` is unresolved until the
     /// library total is known; non-TV libraries leave this unset.
-    pub(super) tv_content_mode: Option<mbv_core::config::TvContentMode>,
+    pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
 }
 
 impl LibraryTab {
-    pub(super) fn new(library: EmbyItem) -> Self {
+    pub(in crate::app) fn new(library: EmbyItem) -> Self {
         Self {
             library,
             nav_stack: Vec::new(),
@@ -28,7 +28,7 @@ impl LibraryTab {
         }
     }
 
-    pub(super) fn library_position_snapshot(&self) -> crate::config::LibraryPosition {
+    pub(in crate::app) fn library_position_snapshot(&self) -> crate::config::LibraryPosition {
         let (feed_selected_group, feed_video_cursor, feed_video_scroll) = self
             .feed_home_video
             .as_ref()
@@ -54,7 +54,7 @@ impl LibraryTab {
         }
     }
 
-    pub(super) fn apply_library_position(
+    pub(in crate::app) fn apply_library_position(
         &mut self,
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,

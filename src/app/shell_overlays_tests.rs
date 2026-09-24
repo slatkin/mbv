@@ -6,8 +6,8 @@ mod tests {
         UserEvent,
     };
     use crate::app::tests::make_app_stub;
-    use crate::app::types_context_menu::{LibraryRoutePopup, LibraryRouteStage};
-    use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
+    use crate::app::state::types::context_menu::{LibraryRoutePopup, LibraryRouteStage};
+    use crate::app::state::types::context_menu::{MultiSelectKind, MultiSelectPopup};
     use tuirealm::component::AppComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn context_menu_click_select_executes_and_closes_the_menu() {
         use crate::app::components::ContextMenuComponent;
-        use crate::app::types_context_menu::{
+        use crate::app::state::types::context_menu::{
             ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry,
         };
         use ratatui::layout::Rect;
@@ -265,7 +265,7 @@ mod tests {
 
         let mut model = Model::new(make_app_stub());
         model.app.pending_overlay = Some(
-            crate::app::types_overlay::OverlayRequest::ContextMenu(ContextMenu {
+            crate::app::state::types::overlay::OverlayRequest::ContextMenu(ContextMenu {
                 anchor: ContextMenuAnchor::SelectedItem(crate::app::PanelFocus::Library),
                 entries: vec![ContextMenuEntry {
                     label: "Play",

@@ -120,7 +120,7 @@ pub(super) fn start_audiobookshelf_shows(
     generation: SetupGeneration,
     library_id: String,
     page: usize,
-    tx: mpsc::Sender<super::types_events::LibEvent>,
+    tx: mpsc::Sender<crate::app::state::types::events::LibEvent>,
 ) {
     const PAGE_LIMIT: usize = 20;
     std::thread::spawn(move || {
@@ -133,11 +133,13 @@ pub(super) fn start_audiobookshelf_shows(
                 AudiobookshelfClient::REQUEST_HARD_BOUND,
             )
         });
-        let _ = tx.send(super::types_events::LibEvent::AudiobookshelfShowsFetched {
-            generation,
-            library_id,
-            result,
-        });
+        let _ = tx.send(
+            crate::app::state::types::events::LibEvent::AudiobookshelfShowsFetched {
+                generation,
+                library_id,
+                result,
+            },
+        );
     });
 }
 
@@ -148,7 +150,7 @@ pub(super) fn start_audiobookshelf_books(
     generation: SetupGeneration,
     library_id: String,
     page: usize,
-    tx: mpsc::Sender<super::types_events::LibEvent>,
+    tx: mpsc::Sender<crate::app::state::types::events::LibEvent>,
 ) {
     const PAGE_LIMIT: usize = 20;
     std::thread::spawn(move || {
@@ -161,11 +163,13 @@ pub(super) fn start_audiobookshelf_books(
                 AudiobookshelfClient::REQUEST_HARD_BOUND,
             )
         });
-        let _ = tx.send(super::types_events::LibEvent::AudiobookshelfBooksFetched {
-            generation,
-            library_id,
-            result,
-        });
+        let _ = tx.send(
+            crate::app::state::types::events::LibEvent::AudiobookshelfBooksFetched {
+                generation,
+                library_id,
+                result,
+            },
+        );
     });
 }
 
@@ -176,17 +180,19 @@ pub(super) fn start_audiobookshelf_shelves(
     config: crate::config::Config,
     generation: SetupGeneration,
     library_id: String,
-    tx: mpsc::Sender<super::types_events::LibEvent>,
+    tx: mpsc::Sender<crate::app::state::types::events::LibEvent>,
 ) {
     std::thread::spawn(move || {
         let result = audiobookshelf_client(&config).and_then(|(client, key)| {
             client.shelves_bounded(&key, &library_id, AudiobookshelfClient::REQUEST_HARD_BOUND)
         });
-        let _ = tx.send(super::types_events::LibEvent::AudiobookshelfShelfFetched {
-            generation,
-            library_id,
-            result,
-        });
+        let _ = tx.send(
+            crate::app::state::types::events::LibEvent::AudiobookshelfShelfFetched {
+                generation,
+                library_id,
+                result,
+            },
+        );
     });
 }
 

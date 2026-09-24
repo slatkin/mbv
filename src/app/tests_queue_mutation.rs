@@ -529,7 +529,7 @@ fn clear_queue_prompt_opens_for_direct_remote_daemon_queue() {
     assert!(
         matches!(
             app.pending_overlay,
-            Some(super::types_overlay::OverlayRequest::Confirm(_))
+            Some(crate::app::state::types::overlay::OverlayRequest::Confirm(_))
         ),
         "clear-queue confirmation must open for a direct-remote daemon queue"
     );
@@ -548,7 +548,7 @@ fn clear_queue_prompt_refused_for_connected_session_queue() {
 
     assert!(!matches!(
         app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(_))
     ));
 }
 
@@ -790,7 +790,7 @@ fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
 
     assert!(!matches!(
         app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
+        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(_))
     ));
     assert!(app.pending_queue_action.is_none());
     assert!(app
@@ -815,7 +815,7 @@ fn context_menu_remove_targets_displayed_remote_queue() {
     app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
-        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
         _ => panic!("context menu"),
     };
     let action = menu
@@ -855,7 +855,7 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     app.open_context_menu(false, None);
 
     let menu = match app.pending_overlay.as_ref() {
-        Some(super::types_overlay::OverlayRequest::ContextMenu(menu)) => menu,
+        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
         _ => panic!("context menu"),
     };
     let action = menu

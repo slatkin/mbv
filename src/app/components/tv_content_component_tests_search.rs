@@ -79,7 +79,7 @@ fn dot_emits_library_context_menu() {
     ));
     assert!(matches!(
         owner.on_key(&KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE }),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), _))) if items.len() == 1 && items[0].name == "Series"
+        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), _))) if items.len() == 1 && items[0].name == "Series"
     ));
 }
 
@@ -230,7 +230,7 @@ fn wide_tv_search_right_click_on_result_opens_context_menu() {
     assert!(
         matches!(
             message,
-            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(ref items), _)))
+            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(ref items), _)))
                 if items.len() == 1 && items[0].name == "Search Result Alpha"
         ),
         "right click on a result row opens its context menu: {message:?}"
@@ -266,7 +266,7 @@ fn dot_with_episode_focus_targets_series() {
     });
     assert!(matches!(
         owner.on_key(&KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE }),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), _)))
+        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), _)))
             if items.len() == 1 && items[0].id == "series-id" && items[0].item_type == "Series"
     ));
 }

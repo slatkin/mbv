@@ -638,15 +638,15 @@ impl App {
                 .item_at(idx)
                 .map(|item| item.title().to_string())
         };
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DaemonLost(
-            DaemonLostModal {
+        self.pending_overlay = Some(
+            crate::app::state::types::overlay::OverlayRequest::DaemonLost(DaemonLostModal {
                 last_playing_title,
                 daemon_log_path: crate::state_dir()
                     .join("local-daemon.log")
                     .display()
                     .to_string(),
                 restart_error: None,
-            },
-        ));
+            }),
+        );
     }
 }

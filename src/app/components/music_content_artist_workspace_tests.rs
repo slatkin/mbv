@@ -145,7 +145,7 @@ fn artist_workspace_track_context_menu_resolves_projected_groups() {
 
     match press(&mut owner, Key::Char('.')) {
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             None,
         ))) => {
             assert_eq!(items.len(), 1, "the focused artist track is a real target");
@@ -166,7 +166,7 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
     ));
     match message {
         Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             Some((0, 1)),
         ))) => {
             assert_eq!(items.len(), 1);

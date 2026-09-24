@@ -7,10 +7,10 @@
 
 use super::notify_actions::ToastSeverity;
 use super::panel_targets::PanelTarget;
-use super::types_cast::{
+use super::App;
+use crate::app::state::types::cast::{
     CastAttachment, CastEvent, CastJob, CastProgressTarget, CastTransport, DispatchedCastItem,
 };
-use super::App;
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::audiobookshelf::AudiobookshelfClient;
 use mbv_core::cast_client::CastMediaItem;
@@ -201,7 +201,7 @@ impl App {
 
     /// Resolves `id`'s current address via a fresh discovery browse,
     /// connects, and hands the connected transport to a new cast worker
-    /// (`types_cast::spawn_cast_worker`), reporting the outcome back over
+    /// (`state::types::cast::spawn_cast_worker`), reporting the outcome back over
     /// `cast_tx` as `CastEvent::Connected`/`ConnectFailed`. Runs entirely on
     /// a background thread: both the discovery browse and `CastClient::connect`
     /// are blocking network calls (mirrors `try_daemon_route_connect`'s
@@ -311,7 +311,7 @@ impl App {
     /// (5.5): `CastClient`'s operations are blocking network calls, so
     /// running them on the caller's thread would freeze the UI loop for the
     /// round trip -- the job runs on the dedicated worker instead (see
-    /// `types_cast::spawn_cast_worker`). A no-op when nothing is attached or
+    /// `state::types::cast::spawn_cast_worker`). A no-op when nothing is attached or
     /// the transport hasn't connected yet.
     pub(super) fn send_cast_command(
         &self,
@@ -342,7 +342,7 @@ fn resolve_and_connect_cast_receiver(
 ) -> Result<Sender<CastJob>, String> {
     let receiver = mbv_core::cast_discovery::resolve_cast_receiver(id, timeout)
         .ok_or_else(|| "receiver not found".to_string())?;
-    super::types_cast::spawn_cast_worker(move || {
+    crate::app::state::types::cast::spawn_cast_worker(move || {
         mbv_core::cast_client::CastClient::connect(&receiver.host, receiver.port)
     })
 }
@@ -725,7 +725,7 @@ mod tests {
 
     #[test]
     fn dispatch_to_cast_issues_no_local_player_command_and_flashes_uncastable_reason() {
-        use super::super::types_cast::{spawn_fake_cast_worker, FakeCastTransport};
+        use crate::app::state::types::cast::{spawn_fake_cast_worker, FakeCastTransport};
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
         let (job_tx, _calls) = spawn_fake_cast_worker(FakeCastTransport::default());

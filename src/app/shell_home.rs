@@ -20,26 +20,29 @@ impl Model {
                 }
             }
             ShellRequest::RowContextMenu(
-                crate::app::types_context_menu::ContextMenuTargets::Home(targets),
+                crate::app::state::types::context_menu::ContextMenuTargets::Home(targets),
                 anchor,
             ) => {
                 let origin = crate::app::components::media_list::SelectionOrigin::Library(
                     crate::app::components::media_list::LibrarySelectionOrigin::Home,
                 );
                 self.context_menu_origin = Some(origin.clone());
-                self.context_action_snapshot =
-                    Some(crate::app::types_context_menu::ContextActionSnapshot {
+                self.context_action_snapshot = Some(
+                    crate::app::state::types::context_menu::ContextActionSnapshot {
                         origin,
-                        values: vec![crate::app::types_context_menu::ContextMenuTargets::Home(
-                            targets.clone(),
-                        )],
-                    });
+                        values: vec![
+                            crate::app::state::types::context_menu::ContextMenuTargets::Home(
+                                targets.clone(),
+                            ),
+                        ],
+                    },
+                );
                 let mut items = Vec::new();
                 let mut removes = Vec::new();
                 for target in &targets {
                     if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(target) {
                         removes.push(
-                            crate::app::types_context_menu::BulkRemoveTarget::ContinueWatching(
+                            crate::app::state::types::context_menu::BulkRemoveTarget::ContinueWatching(
                                 item.clone(),
                             ),
                         );
@@ -144,10 +147,12 @@ mod tests {
         let item = make_item("cw-target", "Movie");
         model.home_content.continue_items = vec![item.clone()];
         model.handle_home_request(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Home(vec![target(&item.id)]),
+            crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![target(
+                &item.id,
+            )]),
             None,
         ));
-        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
+        let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {
             panic!("Home context-menu request must open a menu");

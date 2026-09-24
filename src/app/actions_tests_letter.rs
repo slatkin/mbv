@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_imports)]
-use crate::app::types_browse::BrowseResting;
+use crate::app::state::types::browse::BrowseResting;
 
 use super::*;
 use crate::app::library_browse_actions::{

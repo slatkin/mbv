@@ -6,8 +6,8 @@ use crate::app::service_startup::{
     AudiobookshelfCatalogCompletion, AudiobookshelfCatalogReceiver, AudiobookshelfSetupCompletion,
     AudiobookshelfStartupReceiver,
 };
+use crate::app::state::types::events::LibEvent;
 use crate::app::tests::{make_app_stub, make_session};
-use crate::app::types_events::LibEvent;
 use crate::app::SessionEvent;
 use mbv_core::audiobookshelf::{
     AudiobookshelfBookProgress, AudiobookshelfError, AudiobookshelfFailureClass,
@@ -146,7 +146,7 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     assert!(
         matches!(
             app.pending_overlay,
-            Some(crate::app::types_overlay::OverlayRequest::DismissConfirm)
+            Some(crate::app::state::types::overlay::OverlayRequest::DismissConfirm)
         ),
         "clear:yes must dismiss the confirmation modal"
     );

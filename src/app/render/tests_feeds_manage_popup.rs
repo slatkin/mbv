@@ -1,6 +1,6 @@
 use super::test_helpers::buffer_to_string;
 use super::{render_feeds_manage_content, FeedsManageRenderModel};
-use crate::app::types_feeds_manage::{FeedsManagePopup, FeedsManageStage};
+use crate::app::state::types::feeds_manage::{FeedsManagePopup, FeedsManageStage};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 

@@ -9,12 +9,14 @@ use super::components::{
 use super::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
-use super::types_feeds_manage::FeedsManagePopup;
-use super::types_playback::{DestinationLatestSnapshot, DestinationLatestSource, HomeContent};
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
 use super::{App, IdleFeed, ToastSeverity};
+use crate::app::state::types::feeds_manage::FeedsManagePopup;
+use crate::app::state::types::playback::{
+    DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
+};
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -142,11 +144,11 @@ pub struct Model {
     /// progress-% bucket + paused + the title model.
     pub(super) last_queue_projection: Option<super::shell_queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
-    pub(super) visual_selection: Option<(super::types_settings::PanelFocus, usize)>,
+    pub(super) visual_selection: Option<(crate::app::state::types::settings::PanelFocus, usize)>,
     pub(super) context_menu_origin: Option<crate::app::components::media_list::SelectionOrigin>,
     pub(super) context_action_snapshot: Option<
-        crate::app::types_context_menu::ContextActionSnapshot<
-            crate::app::types_context_menu::ContextMenuTargets,
+        crate::app::state::types::context_menu::ContextActionSnapshot<
+            crate::app::state::types::context_menu::ContextMenuTargets,
         >,
     >,
     /// The last Esc press, for the double-Esc playback stop. Shell-owned

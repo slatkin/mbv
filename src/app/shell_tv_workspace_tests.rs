@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::make_movie_app;
-use crate::app::types_browse::BrowseResting;
+use crate::app::state::types::browse::BrowseResting;
 use mbv_core::mock_http::MockHttp;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;

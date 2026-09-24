@@ -1,10 +1,10 @@
 use super::notify_actions::ToastSeverity;
-use super::types_playback::PlaylistMutation;
 use super::{
     App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
     ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
 };
 use crate::app::infra::ui_util::is_playable;
+use crate::app::state::types::playback::PlaylistMutation;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;

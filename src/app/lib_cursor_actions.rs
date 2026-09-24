@@ -1,6 +1,6 @@
 use super::render::{effective_sort_str, LetterFilter, LetterFilterKind, LIBRARY_PILL_THRESHOLD};
-use super::types_events::{PendingSeriesHandoff, PendingSeriesLanding};
 use super::{App, SeriesDetail};
+use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use mbv_core::api::EmbyItem;
 
 impl App {

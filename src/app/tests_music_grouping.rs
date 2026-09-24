@@ -2,9 +2,9 @@ use super::app_struct::LevelFillState;
 use super::library_browse_actions::retain_grouped_music_items;
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist, ArtistKey};
 use super::tests::{make_app_stub, make_item, make_items};
-use super::types_events::LibEvent;
+use crate::app::state::types::events::LibEvent;
 use super::{BrowseLevel, LibraryTab, TabSelection};
-use crate::app::types_browse::BrowseResting;
+use crate::app::state::types::browse::BrowseResting;
 use mbv_core::api::EmbyItem;
 use serde_json::json;
 use std::collections::HashMap;
@@ -146,7 +146,7 @@ fn grouped_chain_landing_filters_every_level_and_preserves_server_rows() {
 
     app.handle_lib_event(LibEvent::NavigateTo {
         lib_idx: 0,
-        landing: super::types_events::NavigateLanding::Chain {
+        landing: crate::app::state::types::events::NavigateLanding::Chain {
             nav_stack: vec![root, child],
         },
         switch_tab: false,

@@ -3,7 +3,7 @@ use super::super::components::{
     SavePlaylistComponent,
 };
 use super::super::shell::Model;
-use super::super::types_overlay::OverlayRequest;
+use crate::app::state::types::overlay::OverlayRequest;
 
 impl Model {
     fn confirm_id() -> ComponentId {

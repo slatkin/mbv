@@ -1,7 +1,7 @@
-use super::types_browse::BrowseLevel;
-use super::types_browse::BrowseResting;
-use super::types_feed::FeedHomeVideoState;
 use super::App;
+use crate::app::state::types::browse::BrowseLevel;
+use crate::app::state::types::browse::BrowseResting;
+use crate::app::state::types::feed::FeedHomeVideoState;
 impl App {
     /// Keeps the legacy browse snapshot current in memory for the migration
     /// reader. It deliberately never writes the legacy per-library document;

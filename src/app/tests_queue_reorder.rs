@@ -253,7 +253,7 @@ fn queue_play_cursor_keeps_observed_progress_until_player_ack() {
         status.position_ticks = 18_000_000_000;
         status.runtime_ticks = 24_000_000_000;
     }
-    app.panel_focus = super::types_settings::PanelFocus::Queue;
+    app.panel_focus = crate::app::state::types::settings::PanelFocus::Queue;
     app.player_tab.queue_cursor = 2;
     app.dispatch(crate::app::action::Command::QueuePlayCursor(2));
     let observed = app.effective_playback_state();

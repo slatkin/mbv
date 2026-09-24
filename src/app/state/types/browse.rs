@@ -3,17 +3,17 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct AlbumPathPart {
-    pub(super) id: String,
-    pub(super) name: String,
+pub(in crate::app) struct AlbumPathPart {
+    pub(in crate::app) id: String,
+    pub(in crate::app) name: String,
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct AlbumSearchEntry {
-    pub(super) album: EmbyItem,
-    pub(super) ancestors: Vec<AlbumPathPart>,
-    pub(super) display_label: String,
-    pub(super) search_text: String,
+pub(in crate::app) struct AlbumSearchEntry {
+    pub(in crate::app) album: EmbyItem,
+    pub(in crate::app) ancestors: Vec<AlbumPathPart>,
+    pub(in crate::app) display_label: String,
+    pub(in crate::app) search_text: String,
 }
 
 impl AlbumSearchEntry {
@@ -23,7 +23,7 @@ impl AlbumSearchEntry {
     /// mirrors the label so search matches what row rendering shows. The
     /// shared word-local search rule keeps each query word inside one of the
     /// label's words, so the chain never matches as a single string.
-    pub(super) fn from_chain(album: EmbyItem, ancestors: Vec<AlbumPathPart>) -> Self {
+    pub(in crate::app) fn from_chain(album: EmbyItem, ancestors: Vec<AlbumPathPart>) -> Self {
         let display_label = ancestors
             .iter()
             .map(|part| part.name.clone())
@@ -40,13 +40,13 @@ impl AlbumSearchEntry {
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct AlbumIndex {
-    pub(super) entries: Vec<AlbumSearchEntry>,
+pub(in crate::app) struct AlbumIndex {
+    pub(in crate::app) entries: Vec<AlbumSearchEntry>,
     positions: HashMap<String, usize>,
 }
 
 impl AlbumIndex {
-    pub(super) fn new(entries: Vec<AlbumSearchEntry>) -> Self {
+    pub(in crate::app) fn new(entries: Vec<AlbumSearchEntry>) -> Self {
         let mut positions = HashMap::with_capacity(entries.len());
         for (index, entry) in entries.iter().enumerate() {
             positions.entry(entry.album.id.clone()).or_insert(index);
@@ -54,7 +54,7 @@ impl AlbumIndex {
         Self { entries, positions }
     }
 
-    pub(super) fn get(&self, album_id: &str) -> Option<&AlbumSearchEntry> {
+    pub(in crate::app) fn get(&self, album_id: &str) -> Option<&AlbumSearchEntry> {
         self.positions
             .get(album_id)
             .and_then(|index| self.entries.get(*index))
@@ -62,7 +62,7 @@ impl AlbumIndex {
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum AlbumIndexState {
+pub(in crate::app) enum AlbumIndexState {
     Unavailable,
     Loading { rebuild_pending: bool },
     Ready(Arc<AlbumIndex>),
@@ -72,9 +72,9 @@ pub(super) enum AlbumIndexState {
 /// When a Series is selected, we proactively fetch seasons and episodes
 /// so the inline detail pane can render without drilling in.
 #[derive(Clone, Debug)]
-pub(super) struct SeriesDetail {
-    pub(super) seasons: Vec<EmbyItem>,
-    pub(super) episodes: std::collections::HashMap<String, Vec<EmbyItem>>,
+pub(in crate::app) struct SeriesDetail {
+    pub(in crate::app) seasons: Vec<EmbyItem>,
+    pub(in crate::app) episodes: std::collections::HashMap<String, Vec<EmbyItem>>,
 }
 
 /// Where a browse level rests when it is *not* the visible one: the cursor and
@@ -87,57 +87,57 @@ pub(super) struct SeriesDetail {
 /// The resting values are owned directly by each `BrowseLevel` and are used
 /// for persistence and re-entry when the level is not visible.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(super) struct BrowseResting {
+pub(in crate::app) struct BrowseResting {
     cursor: usize,
     scroll: usize,
 }
 
 impl BrowseResting {
-    pub(super) fn new(cursor: usize, scroll: usize) -> Self {
+    pub(in crate::app) fn new(cursor: usize, scroll: usize) -> Self {
         Self { cursor, scroll }
     }
 
-    pub(super) fn cursor(&self) -> usize {
+    pub(in crate::app) fn cursor(&self) -> usize {
         self.cursor
     }
 
-    pub(super) fn scroll(&self) -> usize {
+    pub(in crate::app) fn scroll(&self) -> usize {
         self.scroll
     }
 }
 
-pub(super) struct BrowseLevel {
-    pub(super) parent_id: String,
-    pub(super) title: String,
-    pub(super) items: Vec<EmbyItem>,
+pub(in crate::app) struct BrowseLevel {
+    pub(in crate::app) parent_id: String,
+    pub(in crate::app) title: String,
+    pub(in crate::app) items: Vec<EmbyItem>,
     /// Number of server rows consumed, including rows omitted from `items`.
-    pub(super) fetched_rows: usize,
-    pub(super) total_count: usize,
-    pub(super) resting: BrowseResting,
-    pub(super) item_types: Option<String>,
-    pub(super) unplayed_only: bool,
-    pub(super) sort_by: String,
-    pub(super) sort_order: String,
-    pub(super) loading: bool,
-    pub(super) all_items: Option<Vec<EmbyItem>>, // prefetched full list for instant search
+    pub(in crate::app) fetched_rows: usize,
+    pub(in crate::app) total_count: usize,
+    pub(in crate::app) resting: BrowseResting,
+    pub(in crate::app) item_types: Option<String>,
+    pub(in crate::app) unplayed_only: bool,
+    pub(in crate::app) sort_by: String,
+    pub(in crate::app) sort_order: String,
+    pub(in crate::app) loading: bool,
+    pub(in crate::app) all_items: Option<Vec<EmbyItem>>, // prefetched full list for instant search
     /// Active letter-range pill scope for a large non-TV library.
-    pub(super) letter_filter: Option<crate::app::render::LetterFilter>,
+    pub(in crate::app) letter_filter: Option<crate::app::render::LetterFilter>,
     /// Selected top-level TV content mode; absent means resolve the size
     /// default after the unfiltered capture load.
-    pub(super) tv_content_mode: Option<mbv_core::config::TvContentMode>,
+    pub(in crate::app) tv_content_mode: Option<mbv_core::config::TvContentMode>,
     /// Grouping lifecycle state for a music album level (candidate +
     /// settled catalog). `None` for non-music or non-album levels.
-    pub(super) music_grouping: Option<super::music_grouping::MusicGroupingState>,
+    pub(in crate::app) music_grouping: Option<crate::app::music_grouping::MusicGroupingState>,
 }
 
 impl BrowseLevel {
     /// Whether every server row for this level has been consumed.
-    pub(super) fn is_fully_loaded(&self) -> bool {
+    pub(in crate::app) fn is_fully_loaded(&self) -> bool {
         self.fetched_rows >= self.total_count
     }
 
     #[cfg(test)]
-    pub(super) fn from_position_level(
+    pub(in crate::app) fn from_position_level(
         saved: &crate::config::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
@@ -153,7 +153,7 @@ impl BrowseLevel {
         )
     }
 
-    pub(super) fn from_position_level_with_fetched_rows_for_kind(
+    pub(in crate::app) fn from_position_level_with_fetched_rows_for_kind(
         saved: &crate::config::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
@@ -202,19 +202,19 @@ impl BrowseLevel {
 
     /// The level's resting cursor/scroll — the persistence-facing view of its
     /// position, distinct from the live component cursor (`design.md` D1).
-    pub(super) fn resting(&self) -> BrowseResting {
+    pub(in crate::app) fn resting(&self) -> BrowseResting {
         self.resting
     }
 
-    pub(super) fn set_resting_cursor(&mut self, cursor: usize) {
+    pub(in crate::app) fn set_resting_cursor(&mut self, cursor: usize) {
         self.resting.cursor = cursor;
     }
 
-    pub(super) fn set_resting_scroll(&mut self, scroll: usize) {
+    pub(in crate::app) fn set_resting_scroll(&mut self, scroll: usize) {
         self.resting.scroll = scroll;
     }
 
-    pub(super) fn to_position_level(&self) -> crate::config::LibraryPositionLevel {
+    pub(in crate::app) fn to_position_level(&self) -> crate::config::LibraryPositionLevel {
         let resting = self.resting();
         crate::config::LibraryPositionLevel {
             parent_id: self.parent_id.clone(),
@@ -239,7 +239,7 @@ impl BrowseLevel {
         }
     }
 
-    pub(super) fn scroll_for_cursor(cursor: usize, visible_rows: usize) -> usize {
+    pub(in crate::app) fn scroll_for_cursor(cursor: usize, visible_rows: usize) -> usize {
         if visible_rows == 0 || cursor < visible_rows {
             0
         } else {
@@ -249,7 +249,7 @@ impl BrowseLevel {
 }
 
 #[cfg(test)]
-pub(super) fn restore_library_position<F>(
+pub(in crate::app) fn restore_library_position<F>(
     saved: &crate::config::LibraryPosition,
     visible_rows: usize,
     mut fetch_level: F,
@@ -270,7 +270,7 @@ where
     )
 }
 
-pub(super) fn restore_library_position_with_fetched_rows_for_kind<F>(
+pub(in crate::app) fn restore_library_position_with_fetched_rows_for_kind<F>(
     saved: &crate::config::LibraryPosition,
     visible_rows: usize,
     filter_kind: crate::app::render::LetterFilterKind,

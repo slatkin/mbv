@@ -27,7 +27,7 @@ fn audiobookshelf_play_selects_canonical_slot_and_submits_to_eligible_owner() {
     app.play_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     assert_eq!(app.player_tab.total_queue_len(), 1);
@@ -50,7 +50,7 @@ fn audiobookshelf_enqueue_mutates_composed_queue_without_starting() {
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     assert_eq!(app.player_tab.total_queue_len(), 1);
@@ -71,7 +71,7 @@ fn audiobookshelf_enqueue_mutates_eligible_bound_queue_without_starting() {
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     assert_eq!(app.player_tab.total_queue_len(), 1);
@@ -95,12 +95,12 @@ fn audiobookshelf_ordinary_actions_reject_unsupported_owner_without_side_effects
     app.play_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     assert_eq!(app.player_tab.total_queue_len(), 0);
@@ -124,12 +124,12 @@ fn audiobookshelf_unavailable_episode_row_has_no_queue_or_playback_side_effects(
     app.play_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     assert_eq!(app.player_tab.total_queue_len(), 0);
@@ -142,7 +142,7 @@ fn audiobookshelf_progress_ack_updates_local_queue_when_remote_queue_is_target()
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
@@ -202,7 +202,7 @@ fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
     let before_queue = app
         .player_tab
@@ -284,12 +284,12 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     app.play_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
     app.enqueue_selected_audiobookshelf_episode(
         0,
         1,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     let generation = app.audiobookshelf_runtime.generation();
@@ -336,7 +336,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     assert!(
         app.audiobookshelf_browse[0]
             .visible_episodes(
-                super::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Unplayed
+                crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::Unplayed
             )
             .iter()
             .all(|ep| ep.episode_id != "episode-a"),
@@ -377,7 +377,7 @@ fn socket_progress_updates_matching_inactive_queued_episode(
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
 
     // Activate a different slot so episode-a is inactive.
@@ -444,7 +444,7 @@ fn socket_progress_skips_active_slot(make_socket_merge_ready_app: App) {
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
-        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter::All,
     );
     let slot_id = app.player_tab.queue.slots()[0].slot_id;
     let _ = app.player_tab.queue.set_active_slot(slot_id); // episode-a is active

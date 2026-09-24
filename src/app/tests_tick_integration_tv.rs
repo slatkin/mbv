@@ -15,8 +15,8 @@ use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::render::make_movie_app;
 use crate::app::tests::install_test_emby;
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::types_events::NavigateLanding;
-use crate::app::types_playback::{DestinationLatestSnapshot, DestinationLatestSource};
+use crate::app::state::types::events::NavigateLanding;
+use crate::app::state::types::playback::{DestinationLatestSnapshot, DestinationLatestSource};
 use mbv_core::mock_http::MockHttp;
 use mbv_core::playback_queue::QueueItem;
 use crate::app::{LibEvent, PanelFocus, PanelMode, TabSelection};
@@ -462,7 +462,7 @@ fn deep_latest_library_refreshes_its_level_without_touching_shared_snapshot_thro
         title: "Series One".into(),
         items: vec![old_episode],
         total_count: 1,
-        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
         item_types: Some("Episode".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),

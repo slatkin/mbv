@@ -16,7 +16,7 @@ fn mixed_services_app() -> App {
             title: "Movies".into(),
             items: make_items(1),
             total_count: 1,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -35,7 +35,7 @@ fn mixed_services_app() -> App {
         media_type: "podcast".into(),
     };
     let mut abs_state =
-        super::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(abs_library.clone());
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(abs_library.clone());
     abs_state.append_page(
         0,
         20,
@@ -203,7 +203,7 @@ fn two_emby_libraries_app() -> App {
             title: title.into(),
             items: make_items(2),
             total_count: 2,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

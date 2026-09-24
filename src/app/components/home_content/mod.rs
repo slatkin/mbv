@@ -22,7 +22,7 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
     MediaListTransition, MediaSemanticState, RowIntent,
 };
-use crate::app::types_context_menu::ContextMenuTargets;
+use crate::app::state::types::context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use mbv_core::config::{LibraryItemIdentity, SelectorIdentity};

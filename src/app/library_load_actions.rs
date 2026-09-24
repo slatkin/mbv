@@ -1,8 +1,8 @@
-use super::types_playback::HomeContent;
 use super::{
     notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
     PendingQueueAction, ReplacementExecutor, TabSelection,
 };
+use crate::app::state::types::playback::HomeContent;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use std::collections::HashMap;
@@ -139,7 +139,7 @@ impl App {
                     TabSelection::AudiobookshelfLibrary(index) => {
                         match self.audiobookshelf_kind_at(index) {
                             Some(
-                                super::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
+                                crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book,
                             ) => self.audiobookshelf_book_refresh(),
                             _ => self.audiobookshelf_refresh(),
                         }

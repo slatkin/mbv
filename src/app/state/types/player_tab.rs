@@ -6,18 +6,18 @@ use mbv_core::playback_queue::{
 };
 
 #[derive(Clone, Default)]
-pub(super) struct PlayerTab {
-    pub(super) queue_cursor: usize,
-    pub(super) queue: PlaybackQueue,
+pub(in crate::app) struct PlayerTab {
+    pub(in crate::app) queue_cursor: usize,
+    pub(in crate::app) queue: PlaybackQueue,
     /// The newest desired playback slot from the owner snapshot, if any.
-    pub(super) pending_playback_slot: Option<QueueSlotId>,
+    pub(in crate::app) pending_playback_slot: Option<QueueSlotId>,
     /// Generation of the queue represented by this tab. Bare mode compares
     /// it with Player status before issuing slot-addressed playback commands.
-    pub(super) sequence_generation: u64,
+    pub(in crate::app) sequence_generation: u64,
 }
 
 impl PlayerTab {
-    pub(super) fn new(items: Vec<QueueItem>, queue_cursor: usize) -> Self {
+    pub(in crate::app) fn new(items: Vec<QueueItem>, queue_cursor: usize) -> Self {
         let queue_cursor = queue_cursor.min(items.len().saturating_sub(1));
         // The cursor is presentation state; construction is not a playback
         // event, so the active slot starts unset.  Playback events and
@@ -31,7 +31,9 @@ impl PlayerTab {
         }
     }
 
-    pub(super) fn from_unified_state(state: &mbv_core::ctrl::UnifiedQueueStateData) -> Self {
+    pub(in crate::app) fn from_unified_state(
+        state: &mbv_core::ctrl::UnifiedQueueStateData,
+    ) -> Self {
         let active_index = state
             .active_slot
             .and_then(|slot_id| state.slots.iter().position(|slot| slot.slot_id == slot_id));
@@ -60,7 +62,7 @@ impl PlayerTab {
     /// Creates a `PlayerTab` from a legacy `Vec<EmbyItem>`, wrapping each
     /// as `QueueItem::Emby`. Kept for callers that start from Emby-only
     /// sources (library browse, remote projection).
-    pub(super) fn from_emby_items(items: Vec<EmbyItem>, queue_cursor: usize) -> Self {
+    pub(in crate::app) fn from_emby_items(items: Vec<EmbyItem>, queue_cursor: usize) -> Self {
         let queue_items: Vec<QueueItem> = items
             .into_iter()
             .map(|i| QueueItem::Emby(Box::new(i)))
@@ -68,7 +70,7 @@ impl PlayerTab {
         Self::new(queue_items, queue_cursor)
     }
 
-    pub(super) fn set_items(&mut self, items: Vec<EmbyItem>, queue_cursor: usize) {
+    pub(in crate::app) fn set_items(&mut self, items: Vec<EmbyItem>, queue_cursor: usize) {
         let queue_items = items
             .into_iter()
             .map(|item| QueueItem::Emby(Box::new(item)))
@@ -80,7 +82,7 @@ impl PlayerTab {
     /// or mixed) and resets the cursor. Use this when restoring or adopting a
     /// persisted queue that may contain Feed entries — `set_items` would
     /// silently drop them.
-    pub(super) fn set_queue_items(&mut self, items: Vec<QueueItem>, queue_cursor: usize) {
+    pub(in crate::app) fn set_queue_items(&mut self, items: Vec<QueueItem>, queue_cursor: usize) {
         // Replace in place so PlaybackQueue's allocator remains monotonic;
         // a new queue must never reuse an old occurrence's slot identity.
         self.queue.replace(items);
@@ -89,7 +91,7 @@ impl PlayerTab {
         self.clamp_cursor();
     }
 
-    pub(super) fn set_unified_state(
+    pub(in crate::app) fn set_unified_state(
         &mut self,
         state: &mbv_core::ctrl::UnifiedQueueStateData,
         queue_cursor: usize,
@@ -99,7 +101,7 @@ impl PlayerTab {
         self.clamp_cursor();
     }
 
-    pub(super) fn sync_active_slot(&mut self, active_index: Option<usize>) {
+    pub(in crate::app) fn sync_active_slot(&mut self, active_index: Option<usize>) {
         let active_slot_id = active_index.and_then(|index| self.resolve_slot_at(index));
         if let Some(slot_id) = active_slot_id {
             let _ = self.queue.set_active_slot(slot_id);
@@ -108,7 +110,10 @@ impl PlayerTab {
         }
     }
 
-    pub(super) fn merge_refresh(&mut self, fetched_items: Vec<EmbyItem>) -> RefreshMergeResult {
+    pub(in crate::app) fn merge_refresh(
+        &mut self,
+        fetched_items: Vec<EmbyItem>,
+    ) -> RefreshMergeResult {
         let result = self.queue.merge_refresh(fetched_items);
         self.clamp_cursor();
         result
@@ -116,11 +121,11 @@ impl PlayerTab {
 
     /// Canonical queue length: the number of slots in the playback queue,
     /// regardless of item kind.
-    pub(super) fn total_queue_len(&self) -> usize {
+    pub(in crate::app) fn total_queue_len(&self) -> usize {
         self.queue.slots().len()
     }
 
-    pub(super) fn clamp_cursor(&mut self) {
+    pub(in crate::app) fn clamp_cursor(&mut self) {
         let total = self.total_queue_len();
         if total == 0 {
             self.queue_cursor = 0;
@@ -129,24 +134,24 @@ impl PlayerTab {
         }
     }
 
-    pub(super) fn slot_id_at(&self, index: usize) -> Option<QueueSlotId> {
+    pub(in crate::app) fn slot_id_at(&self, index: usize) -> Option<QueueSlotId> {
         self.queue.slots().get(index).map(|slot| slot.slot_id)
     }
 
     /// Read-only resolution of a display index to the slot currently at that
     /// position.
-    pub(super) fn resolve_slot_at(&self, index: usize) -> Option<QueueSlotId> {
+    pub(in crate::app) fn resolve_slot_at(&self, index: usize) -> Option<QueueSlotId> {
         self.queue.slots().get(index).map(|slot| slot.slot_id)
     }
 
-    pub(super) fn slot_id_matches_at(&self, index: usize, slot_id: QueueSlotId) -> bool {
+    pub(in crate::app) fn slot_id_matches_at(&self, index: usize, slot_id: QueueSlotId) -> bool {
         self.queue
             .slots()
             .get(index)
             .is_some_and(|slot| slot.slot_id == slot_id)
     }
 
-    pub(super) fn remove_slot_at(&mut self, index: usize) -> Option<QueueItem> {
+    pub(in crate::app) fn remove_slot_at(&mut self, index: usize) -> Option<QueueItem> {
         let slot_id = self.slot_id_at(index)?;
         let removed = match self.queue.remove_slot(slot_id) {
             RemoveSlotResult::Removed(slot) => slot.item,
@@ -158,7 +163,7 @@ impl PlayerTab {
         Some(removed)
     }
 
-    pub(super) fn insert_item_at(&mut self, index: usize, item: QueueItem) {
+    pub(in crate::app) fn insert_item_at(&mut self, index: usize, item: QueueItem) {
         self.queue.insert(index, item);
         // Cursor clamp uses the canonical queue length, not an Emby-only shadow.
         self.queue_cursor = index.min(self.total_queue_len().saturating_sub(1));
@@ -166,19 +171,19 @@ impl PlayerTab {
 
     /// Append one item to the canonical queue and return the slot identity the
     /// owner must see alongside it, so callers never re-derive the pair.
-    pub(super) fn append_item(&mut self, item: QueueItem) -> ExecSlot {
+    pub(in crate::app) fn append_item(&mut self, item: QueueItem) -> ExecSlot {
         let slot_id = self.queue.append(item.clone());
         ExecSlot { slot_id, item }
     }
 
-    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<ExecSlot> {
+    pub(in crate::app) fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<ExecSlot> {
         items
             .into_iter()
             .map(|item| self.append_item(QueueItem::Emby(Box::new(item))))
             .collect()
     }
 
-    pub(super) fn move_slot(&mut self, slot_id: QueueSlotId, to: usize) -> bool {
+    pub(in crate::app) fn move_slot(&mut self, slot_id: QueueSlotId, to: usize) -> bool {
         if !matches!(
             self.queue.move_slot(slot_id, to),
             QueueMutationResult::Applied(())
@@ -190,35 +195,35 @@ impl PlayerTab {
         true
     }
 
-    pub(super) fn clear(&mut self) {
+    pub(in crate::app) fn clear(&mut self) {
         self.set_items(Vec::new(), 0);
     }
 
     /// Extract a slice of all `QueueSlot`s from the canonical queue.
-    pub(super) fn slots(&self) -> &[QueueSlot] {
+    pub(in crate::app) fn slots(&self) -> &[QueueSlot] {
         self.queue.slots()
     }
 
     /// Canonical queue revision, bumped on every structural queue mutation.
-    pub(super) fn revision(&self) -> mbv_core::playback_queue::QueueRevision {
+    pub(in crate::app) fn revision(&self) -> mbv_core::playback_queue::QueueRevision {
         self.queue.revision()
     }
 
     /// Extract the `QueueItem` at the given slot index, if any.
-    pub(super) fn item_at(&self, index: usize) -> Option<&QueueItem> {
+    pub(in crate::app) fn item_at(&self, index: usize) -> Option<&QueueItem> {
         self.queue.slots().get(index).map(|slot| &slot.item)
     }
 
     /// Extract the `EmbyItem` at the given slot index, if the slot holds an
     /// Emby variant.
-    pub(super) fn emby_item_at(&self, index: usize) -> Option<&EmbyItem> {
+    pub(in crate::app) fn emby_item_at(&self, index: usize) -> Option<&EmbyItem> {
         self.item_at(index).and_then(|item| item.as_emby())
     }
 
     /// Collect all Emby items from the queue in slot order. Used by callers
     /// that need `Vec<EmbyItem>` for legacy APIs (session play, player
     /// submission, persistence).
-    pub(super) fn emby_items(&self) -> Vec<EmbyItem> {
+    pub(in crate::app) fn emby_items(&self) -> Vec<EmbyItem> {
         self.queue
             .slots()
             .iter()
@@ -227,14 +232,14 @@ impl PlayerTab {
     }
 
     /// Clone the `EmbyItem` at the given slot index, if present.
-    pub(super) fn clone_emby_item_at(&self, index: usize) -> Option<EmbyItem> {
+    pub(in crate::app) fn clone_emby_item_at(&self, index: usize) -> Option<EmbyItem> {
         self.emby_item_at(index).cloned()
     }
 
     /// Collect all items from the canonical queue as `QueueItem`s in slot
     /// order.  Used when submitting the full queue to the player so that
     /// mixed Emby + Feed queues are preserved end-to-end.
-    pub(super) fn all_queue_items(&self) -> Vec<QueueItem> {
+    pub(in crate::app) fn all_queue_items(&self) -> Vec<QueueItem> {
         self.queue
             .slots()
             .iter()
@@ -242,7 +247,7 @@ impl PlayerTab {
             .collect()
     }
 
-    pub(super) fn all_queue_slots(&self) -> Vec<ExecSlot> {
+    pub(in crate::app) fn all_queue_slots(&self) -> Vec<ExecSlot> {
         self.queue.slot_pairs()
     }
 
@@ -250,14 +255,14 @@ impl PlayerTab {
     /// This simulates playback progress without going through the full
     /// player event path. Only affects Emby slots; Feed slots are a no-op.
     #[cfg(test)]
-    pub(super) fn set_slot_progress_at(&mut self, index: usize, position_ticks: i64) {
+    pub(in crate::app) fn set_slot_progress_at(&mut self, index: usize, position_ticks: i64) {
         self.queue.set_slot_progress_by_index(index, position_ticks);
     }
 
     /// Test helper: replace the item at a specific index. Used by tests
     /// that need to modify queue items after construction.
     #[cfg(test)]
-    pub(super) fn set_item_at(&mut self, index: usize, item: QueueItem) {
+    pub(in crate::app) fn set_item_at(&mut self, index: usize, item: QueueItem) {
         if let Some(slot_id) = self.queue.slots().get(index).map(|slot| slot.slot_id) {
             let _ = self.queue.update_slot_item(slot_id, item);
         }

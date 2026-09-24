@@ -116,7 +116,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     );
 
     let queue_only_idle = RouterSnapshot {
-        panel_mode: crate::app::types_settings::PanelMode::QueueOnly,
+        panel_mode: crate::app::state::types::settings::PanelMode::QueueOnly,
         queue_only_idle: true,
         ..snapshot
     };
@@ -128,7 +128,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     // The gate follows the panel's presence, not the mode: the same panel
     // present + idle fact in the two-panel layout is suppressed too.
     let both_idle = RouterSnapshot {
-        panel_mode: crate::app::types_settings::PanelMode::Both,
+        panel_mode: crate::app::state::types::settings::PanelMode::Both,
         queue_only_idle: true,
         ..snapshot
     };
@@ -140,7 +140,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     // Library-only idle: the Queue playback panel is unmounted (the strip
     // displays the feed), so the link opens.
     let library_only_idle = RouterSnapshot {
-        panel_mode: crate::app::types_settings::PanelMode::LibraryOnly,
+        panel_mode: crate::app::state::types::settings::PanelMode::LibraryOnly,
         queue_only_idle: false,
         ..snapshot
     };

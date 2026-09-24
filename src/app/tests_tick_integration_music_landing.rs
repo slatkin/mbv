@@ -11,7 +11,7 @@ fn landed_album_level(
         title: title.into(),
         total_count: items.len(),
         items,
-        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
         item_types: None,
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -355,7 +355,7 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
     let outcome = harness.step();
     let context_items = outcome.messages.iter().find_map(|message| match message {
         Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             _,
         )) => Some(items),
         _ => None,

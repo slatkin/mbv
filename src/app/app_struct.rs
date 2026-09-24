@@ -3,22 +3,24 @@ use super::infra::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
 use super::infra::{images, layout};
 use super::panel_targets::PanelTarget;
 use super::render;
-use super::types_browse::{AlbumIndexState, SeriesDetail};
-use super::types_cast::{CastAttachment, CastEvent};
-use super::types_confirm::ConfirmModal;
-use super::types_events::{LibEvent, PendingSeriesHandoff, PendingSeriesLanding, SessionEvent};
-use super::types_feed::IdleFeed;
-use super::types_feed::SavePlaylistDialog;
-use super::types_feed_tab::FeedTabState;
-use super::types_library_tab::LibraryTab;
-use super::types_playback::{
+use super::SidebarId;
+use crate::app::state::types::browse::{AlbumIndexState, SeriesDetail};
+use crate::app::state::types::cast::{CastAttachment, CastEvent};
+use crate::app::state::types::confirm::ConfirmModal;
+use crate::app::state::types::events::{
+    LibEvent, PendingSeriesHandoff, PendingSeriesLanding, SessionEvent,
+};
+use crate::app::state::types::feed::IdleFeed;
+use crate::app::state::types::feed::SavePlaylistDialog;
+use crate::app::state::types::feed_tab::FeedTabState;
+use crate::app::state::types::library_tab::LibraryTab;
+use crate::app::state::types::playback::{
     PendingQueueAction, PlaylistMutationState, QueueScope, ReplacementExecutor,
     SuspendedLocalSession, UndoEntry,
 };
-use super::types_player_tab::PlayerTab;
-use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
-use super::types_tab_selection::TabSelection;
-use super::SidebarId;
+use crate::app::state::types::player_tab::PlayerTab;
+use crate::app::state::types::settings::{PanelFocus, PanelMode, SettingsDestination};
+use crate::app::state::types::tab_selection::TabSelection;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -99,9 +101,9 @@ pub struct App {
     pub(super) audiobookshelf_shelf_cache:
         std::collections::HashMap<String, Vec<mbv_core::playback_queue::QueueItem>>,
     pub(super) audiobookshelf_browse:
-        Vec<super::types_audiobookshelf_browse::AudiobookshelfBrowseState>,
+        Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(super) audiobookshelf_book_browse:
-        Vec<super::types_audiobookshelf_browse::AudiobookshelfBookBrowseState>,
+        Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState>,
     pub(super) audiobookshelf_test_rx:
         Option<super::service_startup::AudiobookshelfStartupReceiver>,
     pub(super) audiobookshelf_setup_rx:
@@ -182,7 +184,7 @@ pub struct App {
     pub(super) terminal_height: u16,
     /// Shell handoff for a modal raised by App-owned effects. The mounted
     /// component owns the modal after the next Model tick.
-    pub(super) pending_overlay: Option<super::types_overlay::OverlayRequest>,
+    pub(super) pending_overlay: Option<crate::app::state::types::overlay::OverlayRequest>,
     /// Set right before requesting a clean exit on an announced daemon
     /// shutdown (task 7.2); printed once by `run()` after the terminal is
     /// restored, since anything written while still in the alternate screen
@@ -533,36 +535,43 @@ pub struct App {
 
 impl App {
     pub(super) fn request_sidebar_open(&mut self, sidebar: SidebarId) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::OpenSidebar(sidebar));
+        self.pending_overlay =
+            Some(crate::app::state::types::overlay::OverlayRequest::OpenSidebar(sidebar));
     }
 
     pub(super) fn request_sidebar_dismiss(&mut self, sidebar: SidebarId) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSidebar(
-            sidebar,
-        ));
+        self.pending_overlay =
+            Some(crate::app::state::types::overlay::OverlayRequest::DismissSidebar(sidebar));
     }
 
     pub(super) fn request_sidebar_toggle(&mut self, sidebar: SidebarId) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::ToggleSidebar(sidebar));
+        self.pending_overlay =
+            Some(crate::app::state::types::overlay::OverlayRequest::ToggleSidebar(sidebar));
     }
 
     pub(super) fn ask_confirm(&mut self, modal: ConfirmModal) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::Confirm(modal));
+        self.pending_overlay = Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
+            modal,
+        ));
     }
 
     pub(super) fn open_save_playlist_dialog(&mut self, dialog: SavePlaylistDialog) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::SavePlaylist(dialog));
+        self.pending_overlay =
+            Some(crate::app::state::types::overlay::OverlayRequest::SavePlaylist(dialog));
     }
 
     pub(super) fn dismiss_confirm(&mut self) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissConfirm);
+        self.pending_overlay =
+            Some(crate::app::state::types::overlay::OverlayRequest::DismissConfirm);
     }
 
     pub(super) fn dismiss_daemon_lost(&mut self) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissDaemonLost);
+        self.pending_overlay =
+            Some(crate::app::state::types::overlay::OverlayRequest::DismissDaemonLost);
     }
 
     pub(super) fn dismiss_save_playlist(&mut self) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSavePlaylist);
+        self.pending_overlay =
+            Some(crate::app::state::types::overlay::OverlayRequest::DismissSavePlaylist);
     }
 }

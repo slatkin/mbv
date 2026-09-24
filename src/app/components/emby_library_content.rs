@@ -451,9 +451,9 @@ impl EmbyLibraryContent {
                 match outcome.external_intent {
                     Some(RowIntent::Context(target)) => {
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Browser(vec![
-                                target,
-                            ]),
+                            crate::app::state::types::context_menu::ContextMenuTargets::Browser(
+                                vec![target],
+                            ),
                             None,
                         )))
                     }
@@ -570,11 +570,13 @@ impl EmbyLibraryContent {
                 .external_intent
             {
                 Some(RowIntent::ContextSelection(targets)) => Some(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                    crate::app::state::types::context_menu::ContextMenuTargets::Browser(targets),
                     None,
                 )),
                 Some(RowIntent::Context(target)) => Some(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Browser(vec![target]),
+                    crate::app::state::types::context_menu::ContextMenuTargets::Browser(vec![
+                        target,
+                    ]),
                     None,
                 )),
                 _ => None,
@@ -810,7 +812,9 @@ impl LibraryContentOwner for EmbyLibraryContent {
                             _ => vec![target],
                         };
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                            crate::app::state::types::context_menu::ContextMenuTargets::Browser(
+                                targets,
+                            ),
                             Some((at.x, at.y)),
                         )))
                     }

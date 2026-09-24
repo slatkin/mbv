@@ -2,11 +2,11 @@ use super::library_browse_actions::{
     build_album_index_with, fetch_all_album_index_items, recursive_album_search_eligible,
     retain_grouped_music_level_items,
 };
-use super::types_browse::BrowseResting;
 use super::{
     AlbumIndexState, AlbumSearchEntry, App, BrowseLevel, LibEvent, SidebarId, PAGE_SIZE,
     PREFETCH_AHEAD,
 };
+use crate::app::state::types::browse::BrowseResting;
 impl App {
     /// Open the global search sidebar. Sets the flag; the shell Model mounts
     /// the `SearchSidebarComponent` when it syncs after this call (task 3.2).

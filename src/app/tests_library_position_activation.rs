@@ -148,7 +148,7 @@ fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
             title: "Power restored".into(),
             items: make_items(2),
             total_count: 2,
-            resting: crate::app::types_browse::BrowseResting::new(1, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -244,7 +244,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
         title: "Movies".into(),
         items: make_items(5),
         total_count: 5,
-        resting: crate::app::types_browse::BrowseResting::new(3, 0),
+        resting: crate::app::state::types::browse::BrowseResting::new(3, 0),
         item_types: Some("Movie".into()),
         unplayed_only: false,
         sort_by: "SortName".into(),
@@ -257,7 +257,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
     };
     app.handle_lib_event(LibEvent::NavigateTo {
         lib_idx: 0,
-        landing: crate::app::types_events::NavigateLanding::Chain {
+        landing: crate::app::state::types::events::NavigateLanding::Chain {
             nav_stack: vec![navigated],
         },
         switch_tab: true,
@@ -311,7 +311,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
             title: "Stale restore".into(),
             items: make_items(2),
             total_count: 2,
-            resting: crate::app::types_browse::BrowseResting::new(1, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),
@@ -381,7 +381,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
             title: "Power restored".into(),
             items: make_items(2),
             total_count: 2,
-            resting: crate::app::types_browse::BrowseResting::new(1, 0),
+            resting: crate::app::state::types::browse::BrowseResting::new(1, 0),
             item_types: Some("Movie".into()),
             unplayed_only: false,
             sort_by: "SortName".into(),

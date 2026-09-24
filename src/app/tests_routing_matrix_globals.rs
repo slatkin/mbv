@@ -385,7 +385,7 @@ fn confirm_accept_re_encodes_to_y_chord() {
     assert!(
         matches!(
             app.pending_overlay,
-            Some(crate::app::types_overlay::OverlayRequest::Confirm(_))
+            Some(crate::app::state::types::overlay::OverlayRequest::Confirm(_))
         ),
         "removing the active queue item asks for confirmation"
     );

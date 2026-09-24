@@ -202,7 +202,7 @@ fn title_row_paints_the_nerd_font_next_control() {
 #[test]
 fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
     let mut app = make_movie_app();
-    app.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
+    app.panel_mode = crate::app::state::types::settings::PanelMode::LibraryOnly;
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
@@ -290,7 +290,7 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
 /// the title row.
 #[test]
 fn queue_panel_puts_title_progress_and_time_above_the_controls_row() {
-    use crate::app::types_settings::PanelMode;
+    use crate::app::state::types::settings::PanelMode;
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::QueueOnly;
     app.use_nerd_fonts = false;
@@ -397,7 +397,7 @@ fn library_strip_keeps_the_single_title_row() {
 /// a title that still does not fit scrolls instead of overlapping the time.
 #[test]
 fn queue_title_row_marquees_a_title_that_does_not_fit() {
-    use crate::app::types_settings::PanelMode;
+    use crate::app::state::types::settings::PanelMode;
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::QueueOnly;
     app.use_nerd_fonts = false;
@@ -448,7 +448,7 @@ fn queue_title_row_marquees_a_title_that_does_not_fit() {
 
 #[test]
 fn idle_feed_title_marquees_instead_of_truncating() {
-    use crate::app::types_feed::{IdleFeed, IdleFeedItem};
+    use crate::app::state::types::feed::{IdleFeed, IdleFeedItem};
     use std::sync::mpsc;
 
     let mut app = make_app_stub();
@@ -604,7 +604,7 @@ fn rendered_text(mut app: App, width: u16, height: u16) -> String {
     // 4.1): the right column of a queue-hidden layout. Render in library-only,
     // the layout that shows the strip, through the shell path that syncs and
     // paints it.
-    app.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
+    app.panel_mode = crate::app::state::types::settings::PanelMode::LibraryOnly;
     let mut model = crate::app::shell::Model::new(app);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
@@ -631,7 +631,7 @@ fn rendered_text(mut app: App, width: u16, height: u16) -> String {
 }
 
 fn dispatched_cast_status(state: mbv_core::cast_client::CastPlaybackState) -> App {
-    use crate::app::types_cast::{CastProgressTarget, DispatchedCastItem};
+    use crate::app::state::types::cast::{CastProgressTarget, DispatchedCastItem};
     use mbv_core::cast_client::CastStatus;
     use mbv_core::playback_queue::QueueItemContentId;
 

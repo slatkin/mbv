@@ -267,7 +267,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
         Msg::Shell(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Queue(_),
+            crate::app::state::types::context_menu::ContextMenuTargets::Queue(_),
             Some((x, y)),
         )) if *x == queue_point.x && *y == queue_point.y
     )));

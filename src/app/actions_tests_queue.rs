@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_imports)]
-use crate::app::types_browse::BrowseResting;
+use crate::app::state::types::browse::BrowseResting;
 
 use super::*;
 use crate::app::library_browse_actions::{
@@ -83,8 +83,8 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
 #[test]
 fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
     use crate::app::action::Command;
+    use crate::app::state::types::overlay::OverlayRequest;
     use crate::app::tests::make_item;
-    use crate::app::types_overlay::OverlayRequest;
     use crate::player::PlayerCommand;
 
     // The queue menu's Play action must retain the index resolved when the
