@@ -3,10 +3,14 @@
 
 use super::super::*;
 use super::{DaemonLoop, EventOutcome};
-use crate::ctrl::{CtrlEvent, PlaybackGeneration, PlaybackIntentAction, PlaybackRequestId};
+use crate::ctrl::{
+    CtrlEvent, PlaybackGeneration, PlaybackIntentAction, PlaybackIntentEvent,
+    PlaybackIntentOutcome, PlaybackRequestId,
+};
 use crate::id_types::ItemId;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{PlayerCommand, PlayerEvent};
+use std::time::Duration;
 
 impl DaemonLoop {
     /// `PlayerEvent::TrackChanged`: resolve the reported slot against the

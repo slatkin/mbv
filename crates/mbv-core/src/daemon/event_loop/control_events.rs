@@ -4,11 +4,9 @@
 use super::super::*;
 use super::{DaemonLoop, EventOutcome};
 use crate::api::EmbyItem;
-use crate::ctrl::{CtrlEvent, PlaybackGeneration, PlaybackIntentAction, PlaybackRequestId};
-use crate::ctrl::{DisconnectReason, PlaybackIntentEvent, PlaybackIntentOutcome};
+use crate::ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
 use crate::daemon::ctrl::send_to;
-use crate::playback_queue::{QueueItem, QueueSlotId};
-use crate::player::PlayerEvent;
+use crate::playback_queue::QueueItem;
 
 impl DaemonLoop {
     /// `DaemonEvent::Ctrl`: apply a service-setup reconcile inline, otherwise
