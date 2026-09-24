@@ -113,7 +113,12 @@ fn install_idle_queue_load(
         &owner.core.source,
         &owner.core.transitions,
     );
-    if let Err(error) = persist_stay_alive_owner_queue(owner, player, shared_queue) {
+    if let Err(error) = persist_stay_alive_owner_queue(
+        owner,
+        player,
+        shared_queue,
+        &mut crate::config::save_stay_alive_queue_state,
+    ) {
         log::error!(target: "queue", "failed to persist accepted Stay-alive queue load: {error}");
     }
     send_to(

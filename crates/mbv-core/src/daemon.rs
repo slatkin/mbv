@@ -2,6 +2,7 @@ include!("daemon_context.rs");
 include!("daemon_core.rs");
 include!("daemon_run_shutdown.rs");
 include!("daemon_run.rs");
+include!("daemon_loop.rs");
 include!("daemon_audiobookshelf.rs");
 include!("daemon_control.rs");
 include!("daemon_ws.rs");
