@@ -1,5 +1,4 @@
 use super::level_artists::{bucket_tracks_by_album, level_artists_from_items, vote_album_artist};
-use super::*;
 use crate::app::tests::make_item;
 use rstest::rstest;
 fn track(
