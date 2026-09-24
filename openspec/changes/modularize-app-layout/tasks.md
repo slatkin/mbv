@@ -42,8 +42,8 @@ Rules for every task:
 
 ## 7. `components/` and `render/` test wiring
 
-- [ ] 7.1 `components/`: move the 12 `#[path]` test modules into `components/tests/`, make `music_content` a directory (4 `include!`s → `mod`s, tests → `music_content/tests/`), replace the `tv_content/mod.rs` `include!("interaction.rs")` with `mod interaction;`, and turn `library_panel/`'s 7 `#[path]` children into real files (design "components/ and render/"). Verify: gate, test count unchanged, and `rg -n '#\[path|include!' src/app/components` is empty.
-- [ ] 7.2 `render/`: move the 26 `#[path]` test modules plus `test_helpers*` under `render/tests/` (with `render/tests.rs` → `render/tests/mod.rs`), and turn `render/components/`'s 6 `#[path]` children into real files. Verify: gate, test count unchanged, and `rg -n '#\[path|include!' src` is empty.
+- [x] 7.1 `components/`: move the 12 `#[path]` test modules into `components/tests/`, make `music_content` a directory (4 `include!`s → `mod`s, tests → `music_content/tests/`), replace the `tv_content/mod.rs` `include!("interaction.rs")` with `mod interaction;`, and turn `library_panel/`'s 7 `#[path]` children into real files (design "components/ and render/"). Verify: gate, test count unchanged, and `rg -n '#\[path|include!' src/app/components` is empty.
+- [x] 7.2 `render/`: move the 26 `#[path]` test modules plus `test_helpers*` under `render/tests/` (with `render/tests.rs` → `render/tests/mod.rs`), and turn `render/components/`'s 6 `#[path]` children into real files. Verify: gate, test count unchanged, and `rg -n '#\[path|include!' src` is empty. (Deviation: the whole-`src` form of that last check reports exactly one pre-existing, out-of-scope site, `src/mpris.rs:562`; `src/app` is clean. Reviewer-confirmed out of scope. Test count 2356 → 2356.)
 
 ## 8. Final gates
 
