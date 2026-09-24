@@ -34,15 +34,15 @@
   Assert the returned `produced` value in each case.
 - [x] 3.2 Cover `App::drain_session_events`: a queued `SessionEvent` is dispatched and
   `produced` is true; an empty channel leaves `produced` false.
-- [ ] 3.3 Cover `App::drain_audiobookshelf_events` receiver bookkeeping: an `Empty`
+- [x] 3.3 Cover `App::drain_audiobookshelf_events` receiver bookkeeping: an `Empty`
   startup/test receiver is put back in place, a `Disconnected` receiver drives
   `handle_audiobookshelf_worker_disconnect` and reports `produced`, and the setup and
   catalog receivers behave the same for their own disconnect handlers.
-- [ ] 3.4 Cover the catalog completion gate and failures: a completion whose generation
+- [x] 3.4 Cover the catalog completion gate and failures: a completion whose generation
   is not accepted is dropped without touching browse state, an
   `AuthenticationRejected` completion moves the runtime to `NeedsAuthentication` and
   clears credentials, and a generic error leaves browse state untouched.
-- [ ] 3.5 Cover the catalog success path under the stub config (`Config::default()`, no
+- [x] 3.5 Cover the catalog success path under the stub config (`Config::default()`, no
   Audiobookshelf setup, so the spawned fetchers do no I/O and exit): `catalog_ready`
   is set, `audiobookshelf_browse` / `audiobookshelf_book_browse` are built for every
   library, and podcast versus book progress lands in the matching map. Additionally
