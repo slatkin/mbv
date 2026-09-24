@@ -40,6 +40,10 @@ pub(super) mod search_sidebar;
 pub(super) mod sessions;
 pub(super) mod settings;
 pub(super) mod settings_component;
+pub(super) mod three_line_flat_list;
+#[cfg(test)]
+#[path = "three_line_flat_list_tests.rs"]
+mod three_line_flat_list_tests;
 pub(super) mod tree_browser;
 pub(super) mod tv_wide;
 pub(super) mod visualizer;

@@ -696,24 +696,19 @@ fn the_f3_panel_labels_a_mixed_emby_and_cast_target_list_by_kind() {
 
     let backend = TestBackend::new(100, 20);
     let mut terminal = Terminal::new(backend).unwrap();
+    let targets =
+        crate::app::panel_targets::build_panel_targets(&app.sessions, &app.cast_receivers);
+    let mut component = crate::app::components::SessionsComponent::new();
+    component.set_content(
+        &targets,
+        false,
+        None,
+        None,
+        false,
+        Some(Rect::new(0, 0, 100, 20)),
+    );
     terminal
-        .draw(|f| {
-            let mut cursor = 0;
-            let mut scroll = 0;
-            let targets =
-                crate::app::panel_targets::build_panel_targets(&app.sessions, &app.cast_receivers);
-            crate::app::render::render_sessions_overlay_content(
-                f,
-                Some(Rect::new(0, 0, 100, 20)),
-                &targets,
-                false,
-                &mut cursor,
-                &mut scroll,
-                None,
-                None,
-                false,
-            );
-        })
+        .draw(|f| tuirealm::component::Component::view(&mut component, f, f.area()))
         .unwrap();
     let text = buffer_to_string(&terminal);
 

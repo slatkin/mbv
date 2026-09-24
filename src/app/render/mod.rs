@@ -54,10 +54,13 @@ pub(in crate::app) use components::playlists::{
     PlaylistsViewState,
 };
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
-pub(in crate::app) use components::sessions::render_sessions_overlay_content;
+pub(in crate::app) use components::sessions::{
+    render_sessions_overlay_content, render_sessions_scrollbar,
+};
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
+pub(in crate::app) use components::three_line_flat_list::render_three_line_flat_list;
 pub(in crate::app) use components::tree_browser::{render_tree_browser, tree_row_is_full_width};
 pub(in crate::app) use components::tv_wide::TvWideRenderCtx;
 pub(in crate::app) use components::widgets::{
@@ -94,11 +97,11 @@ pub(crate) use theme::{
     HINT_PILL_FILLS, INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_OVERFLOW_FG,
     PILL_SELECTED_FG, PLAYBACK_CONTEXT_FG, PLAYBACK_META_FG, PLAYBACK_TITLE_FG, PLAYBACK_VALUE_FG,
     PLAYLIST_LOADED_FG, PLAYLIST_STRIPE_BG, PROGRESS_PERCENT, PROGRESS_TRACK, SCROLLBAR,
-    SELECTED_ROW_BG, SELECTED_ROW_FG, SELECTED_ROW_PROGRESS_FG, SETTINGS_STRIPE_BG,
-    SIDEBAR_SCROLLBAR, SPLIT_ROW_CONTEXT_FG, SPLIT_ROW_TITLE_FG, STATUS_AVAILABLE, STATUS_ERROR,
-    SURFACE_RESTING, TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE,
-    TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
-    WORKSPACE_HEADER_FG,
+    SELECTED_ROW_BG, SELECTED_ROW_FG, SELECTED_ROW_PROGRESS_FG, SESSIONS_STRIPE_BG,
+    SETTINGS_STRIPE_BG, SIDEBAR_SCROLLBAR, SPLIT_ROW_CONTEXT_FG, SPLIT_ROW_TITLE_FG,
+    STATUS_AVAILABLE, STATUS_ERROR, SURFACE_RESTING, TEXT_ACCENT_MUTED, TEXT_EMPHASIS,
+    TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY,
+    TEXT_SECONDARY, TEXT_STRONG, WORKSPACE_HEADER_FG,
 };
 // Task 4.2: the retired role names and the value-aliased resolver survive only
 // as test-fed re-exports — each is pinned by a frozen pre-existing test file

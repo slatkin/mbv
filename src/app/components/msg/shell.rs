@@ -178,8 +178,8 @@ pub enum ShellRequest {
     DismissSessions,
     /// Refresh the Emby session and Cast receiver snapshots.
     RefreshSessions,
-    /// Activate the session/cast row at the component-owned cursor.
-    SelectSession(usize),
+    /// Activate the selected session/cast target by kind-qualified identity.
+    SelectSession(crate::app::panel_targets::SessionTargetKey),
     /// Detach the current session/cast playback target.
     DetachSessions,
     /// Refresh the Feeds subscriptions through the shell-owned worker.

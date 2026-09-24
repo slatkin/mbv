@@ -354,8 +354,11 @@ impl Model {
                         self.app.spawn_sessions_load();
                         self.app.spawn_cast_discovery();
                     }
-                    ShellRequest::SelectSession(index) => {
-                        if let Some(target) = self.app.panel_targets.get(index).cloned() {
+                    ShellRequest::SelectSession(key) => {
+                        if let Some(target) = super::super::panel_targets::resolve_session_target(
+                            &self.app.panel_targets,
+                            &key,
+                        ) {
                             self.app.select_panel_target(target);
                         }
                     }

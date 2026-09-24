@@ -536,6 +536,14 @@ Session dispatches transport actions without conferring queue or occurrence
 identity on that Session.
 _Avoid_: play target, output target, active player
 
+**Kind-qualified target**:
+The stable identity a Sessions-sidebar activation names — Emby(id) or Cast(id) — resolved against the shell's current target snapshot at dispatch time, so independent Emby and Cast discovery refreshes cannot redirect an outstanding selection to a replacement at the old position; an absent key is a no-op. Distinct from a display index or row number.
+_Avoid_: display index, row number, session index
+
+**Three-line flat list**:
+The reusable embedded flat presentation over the shared ordered Row flow that paints one selectable item as a single three-line unit. A flow position denotes an item, not a terminal line: visible capacity derives from `stride = 3 + separator gap`, and only fully visible items publish hit geometry. All three lines form one stripe and selected-row-bar unit; separator lines keep the surrounding surface fill, carry no target, and never resolve clicks. It stays embedded in its mounted parent, which retains gesture recognition, chrome, and translation of target-bearing intents; the F3 Sessions sidebar is its first consumer.
+_Avoid_: session card, three-line card, card list, index-based card list
+
 ## Panels and surfaces
 
 **Panel**:

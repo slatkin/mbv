@@ -577,6 +577,8 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
 
 #[path = "tests_tick_integration_music.rs"]
 mod tests_tick_integration_music;
+#[path = "tests_tick_integration_sessions.rs"]
+mod tests_tick_integration_sessions;
 
 /// A function key pressed while the Help overlay is open must dismiss Help and
 /// open its sidebar. Help stays mounted otherwise, and (painting after

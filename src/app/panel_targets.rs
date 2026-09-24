@@ -23,6 +23,30 @@ pub(super) enum PanelTarget {
     Cast(CastReceiver),
 }
 
+/// Stable identity for one F3 target, qualified by its control channel.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum SessionTargetKey {
+    Emby(String),
+    Cast(String),
+}
+
+impl PanelTarget {
+    pub(super) fn key(&self) -> SessionTargetKey {
+        match self {
+            Self::Emby(session) => SessionTargetKey::Emby(session.id.clone()),
+            Self::Cast(receiver) => SessionTargetKey::Cast(receiver.id.clone()),
+        }
+    }
+}
+
+/// Resolve an activation against the latest shell-owned target snapshot.
+pub(super) fn resolve_session_target(
+    targets: &[PanelTarget],
+    key: &SessionTargetKey,
+) -> Option<PanelTarget> {
+    targets.iter().find(|target| target.key() == *key).cloned()
+}
+
 /// Concatenates Emby sessions and discovered cast receivers into one list,
 /// Emby first: no dedup, no ordering decision beyond "which channel arrived
 /// first" (8.2). Pure and side-effect free so it is testable without a
@@ -107,5 +131,28 @@ mod tests {
         assert_eq!(targets.len(), 2);
         assert!(matches!(targets[0], PanelTarget::Emby(ref s) if s.id == "shared"));
         assert!(matches!(targets[1], PanelTarget::Cast(ref r) if r.id == "shared"));
+    }
+
+    #[test]
+    fn session_activation_missing_key_resolves_no_target() {
+        let targets = build_panel_targets(&[session("current")], &[]);
+        assert!(resolve_session_target(&targets, &SessionTargetKey::Emby("gone".into())).is_none());
+    }
+
+    #[test]
+    fn session_activation_reordered_snapshot_keeps_target_identity() {
+        let targets = build_panel_targets(&[session("other"), session("selected")], &[]);
+        let selected =
+            resolve_session_target(&targets, &SessionTargetKey::Emby("selected".into())).unwrap();
+        assert!(matches!(selected, PanelTarget::Emby(ref session) if session.id == "selected"));
+    }
+
+    #[test]
+    fn session_activation_equal_channel_ids_resolve_independently() {
+        let targets = build_panel_targets(&[session("shared")], &[receiver("shared")]);
+        let emby = resolve_session_target(&targets, &SessionTargetKey::Emby("shared".into()));
+        let cast = resolve_session_target(&targets, &SessionTargetKey::Cast("shared".into()));
+        assert!(matches!(emby, Some(PanelTarget::Emby(session)) if session.id == "shared"));
+        assert!(matches!(cast, Some(PanelTarget::Cast(receiver)) if receiver.id == "shared"));
     }
 }
