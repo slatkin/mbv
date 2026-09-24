@@ -110,6 +110,9 @@ fn install_idle_queue_load(
         &owner.core.source,
         &owner.core.transitions,
     );
+    if let Err(error) = persist_stay_alive_owner_queue(owner, player) {
+        log::error!(target: "queue", "failed to persist accepted Stay-alive queue load: {error}");
+    }
     send_to(
         reply_tx,
         &CtrlEvent::UnifiedQueueLoadResult {
@@ -277,7 +280,7 @@ fn handle_ctrl_for_role(
         let player_status = player.status.lock().unwrap().clone();
         let mut queue_state = project_queue_state(queue, source, &player_status);
 
-        if queue_state.items.is_empty() {
+        if role != crate::daemon::DaemonRole::Local && queue_state.items.is_empty() {
             if let Some(existing) = crate::config::load_queue_state() {
                 if !existing.items.is_empty() {
                     queue_state = existing;
@@ -314,6 +317,19 @@ fn handle_ctrl_for_role(
             cursor,
             source: new_source,
         } => {
+            if role == crate::daemon::DaemonRole::Local {
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    *queue_lineage,
+                    "Stay-alive owner queues cannot be adopted by Clients".to_string(),
+                );
+                return;
+            }
             // Adoption only applies to a Cold daemon — one with no queue yet.
             if !queue.is_empty() {
                 log::warn!(

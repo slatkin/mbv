@@ -504,6 +504,157 @@ fn unified_queue_remove_last_slot_clears_the_player_queue() {
 }
 
 #[test]
+fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
+    let _scratch = crate::config::TestTempDir::new().as_xdg_home();
+    let player = cold_player();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let (merged_tx, merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("packaged", "Video", "Movie")], 0);
+    owner.core.source = QueueSource::Album;
+
+    handle_ctrl_for_role(
+        CtrlCmd::RequestShutdown,
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &merged_tx,
+        false,
+        crate::daemon::DaemonRole::Packaged,
+    );
+
+    let saved = crate::config::load_queue_state().unwrap();
+    assert_eq!(saved.items[0].id(), "packaged");
+    assert_eq!(saved.source, QueueSource::Album);
+    assert!(!crate::config::stay_alive_queue_state_path().exists());
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownAccepted));
+    assert!(matches!(merged_rx.try_recv(), Ok(DaemonEvent::Shutdown)));
+}
+
+#[test]
+fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
+    let path = std::env::temp_dir().join(format!("mbv-owner-queue-{}.json", uuid::Uuid::new_v4()));
+    let state = crate::config::StayAliveQueueState {
+        queue: crate::config::QueueState {
+            items: vec![emby_qi("persisted", "Video", "Movie")],
+            cursor: 0,
+            source: QueueSource::Album,
+            last_played_content_id: None,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        },
+        lineage: crate::ctrl::QueueLineage(42),
+    };
+    crate::config::save_stay_alive_queue_state_at(&path, &state).unwrap();
+    let restored = crate::config::load_stay_alive_queue_state_at(&path).unwrap();
+    assert_eq!(restored.queue.items[0].id(), "persisted");
+    assert_eq!(restored.queue.source, QueueSource::Album);
+    assert_eq!(restored.lineage, crate::ctrl::QueueLineage(42));
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
+    let path = std::env::temp_dir().join(format!("mbv-takeover-owner-{}.json", uuid::Uuid::new_v4()));
+    let legacy = crate::config::QueueState {
+        items: vec![emby_qi("legacy", "Video", "Movie")],
+        cursor: 0,
+        source: QueueSource::Series,
+        last_played_content_id: None,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    };
+    let takeover = crate::config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).unwrap();
+    assert_eq!(takeover.lineage, crate::ctrl::QueueLineage::default());
+    crate::config::save_stay_alive_queue_state_at(&path, &takeover).unwrap();
+    assert!(crate::config::legacy_queue_for_owner_if_absent(
+        &path,
+        Some(crate::config::QueueState {
+            items: vec![emby_qi("stale", "Video", "Movie")],
+            cursor: 0,
+            source: QueueSource::Unknown,
+            last_played_content_id: None,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        }),
+    )
+    .is_none());
+    assert_eq!(crate::config::load_stay_alive_queue_state_at(&path).unwrap().queue.items[0].id(), "legacy");
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
+    let path = std::env::temp_dir().join(format!("mbv-empty-owner-{}.json", uuid::Uuid::new_v4()));
+    let state = crate::config::StayAliveQueueState {
+        queue: crate::config::QueueState {
+            items: vec![],
+            cursor: 0,
+            source: QueueSource::Unknown,
+            last_played_content_id: None,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        },
+        lineage: crate::ctrl::QueueLineage(7),
+    };
+    crate::config::save_stay_alive_queue_state_at(&path, &state).unwrap();
+    let legacy = crate::config::QueueState {
+        items: vec![emby_qi("stale", "Video", "Movie")],
+        cursor: 0,
+        source: QueueSource::Playlist { id: None, name: "old".to_string() },
+        last_played_content_id: None,
+        last_played_item_id: None,
+        last_played_completed: false,
+        positions: Default::default(),
+    };
+    assert!(crate::config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).is_none());
+    assert!(crate::config::load_stay_alive_queue_state_at(&path).unwrap().queue.items.is_empty());
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn stay_alive_owner_refuses_client_queue_adoption() {
+    let player = cold_player();
+    let commands = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("owner", "Video", "Movie")], 0);
+    let lineage = owner.queue_lineage;
+    run_queue_cmd(
+        CtrlCmd::UnifiedAdoptQueue {
+            items: vec![emby_qi("client", "Video", "Movie")],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &registry,
+    );
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "owner");
+    assert_eq!(owner.queue_lineage, lineage);
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("cannot be adopted")));
+    assert!(commands.try_recv().is_err());
+}
+
+#[test]
 fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
     let player = cold_player();
     let cmd_rx = player.spy_on_commands();

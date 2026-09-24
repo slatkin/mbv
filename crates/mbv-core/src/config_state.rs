@@ -26,6 +26,59 @@ pub fn load_queue_state() -> Option<QueueState> {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct StayAliveQueueState {
+    pub queue: QueueState,
+    pub lineage: crate::ctrl::QueueLineage,
+}
+
+pub(crate) fn save_stay_alive_queue_state_at(
+    path: &std::path::Path,
+    state: &StayAliveQueueState,
+) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|error| format!("create directory {}: {error}", dir.display()))?;
+    }
+    let json = serde_json::to_string(state).map_err(|error| format!("serialize owner queue: {error}"))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, json).map_err(|error| format!("write {}: {error}", tmp.display()))?;
+    std::fs::rename(&tmp, &path)
+        .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))
+}
+
+pub fn save_stay_alive_queue_state(state: &StayAliveQueueState) -> Result<(), String> {
+    save_stay_alive_queue_state_at(&stay_alive_queue_state_path(), state)
+}
+
+pub(crate) fn load_stay_alive_queue_state_at(path: &std::path::Path) -> Option<StayAliveQueueState> {
+    let text = std::fs::read_to_string(path).ok()?;
+    match serde_json::from_str(&text) {
+        Ok(state) => Some(state),
+        Err(error) => {
+            log::warn!(target: "queue", "owner queue state failed to parse, queue not restored: {error}");
+            None
+        }
+    }
+}
+
+pub fn load_stay_alive_queue_state() -> Option<StayAliveQueueState> {
+    load_stay_alive_queue_state_at(&stay_alive_queue_state_path())
+}
+
+pub(crate) fn legacy_queue_for_owner_if_absent(
+    owner_path: &std::path::Path,
+    legacy: Option<QueueState>,
+) -> Option<StayAliveQueueState> {
+    if owner_path.exists() {
+        return None;
+    }
+    legacy.map(|queue| StayAliveQueueState {
+        queue,
+        lineage: crate::ctrl::QueueLineage::default(),
+    })
+}
+
 pub fn clear_queue_state() -> Result<(), String> {
     let path = queue_state_path();
     match std::fs::remove_file(&path) {

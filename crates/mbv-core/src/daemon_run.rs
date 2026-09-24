@@ -205,10 +205,58 @@ pub fn run_with_options(
 
     // Shared state for ctrl socket initial-state snapshots — stores the
     // canonical queue so all ctrl peers are seeded from one source.
+    let owner_state = if role == DaemonRole::Local {
+        let owner_path = crate::config::stay_alive_queue_state_path();
+        crate::config::load_stay_alive_queue_state().or_else(|| {
+            (!owner_path.exists()).then(crate::config::load_queue_state).flatten()
+                .and_then(|queue| {
+                    crate::config::legacy_queue_for_owner_if_absent(&owner_path, Some(queue))
+                })
+        })
+    } else {
+        None
+    };
+    let (initial_queue, initial_source, initial_lineage) = owner_state
+        .map(|state| {
+            let queue = PlaybackQueue::from_queue_items(
+                state.queue.items,
+                Some(state.queue.cursor),
+            );
+            (queue, state.queue.source, state.lineage)
+        })
+        .unwrap_or_else(|| {
+            (
+                PlaybackQueue::default(),
+                crate::config::QueueSource::Unknown,
+                crate::ctrl::QueueLineage::default(),
+            )
+        });
+    if role == DaemonRole::Local {
+        if let Err(error) = crate::config::save_stay_alive_queue_state(
+            &crate::config::StayAliveQueueState {
+                queue: project_queue_state(
+                    &initial_queue,
+                    &initial_source,
+                    &player.status.lock().unwrap(),
+                ),
+                lineage: initial_lineage,
+            },
+        ) {
+            log::error!(target: "queue", "failed to initialize Stay-alive queue state: {error}");
+        }
+        player.set_initial_queue(
+            &initial_queue
+                .slots()
+                .iter()
+                .map(|slot| slot.item.clone())
+                .collect::<Vec<_>>(),
+            initial_queue.active_index().unwrap_or(0),
+        );
+    }
     let shared_queue = SharedQueueState {
-        queue: Arc::new(Mutex::new(PlaybackQueue::default())),
-        source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
-        lineage: Arc::new(Mutex::new(crate::ctrl::QueueLineage::default())),
+        queue: Arc::new(Mutex::new(initial_queue.clone())),
+        source: Arc::new(Mutex::new(initial_source.clone())),
+        lineage: Arc::new(Mutex::new(initial_lineage)),
         observed_active_slot: Arc::new(Mutex::new(None)),
     };
     let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -328,7 +376,11 @@ pub fn run_with_options(
     }
 
     // ── Canonical queue authority — single source of truth ──────────────
-    let mut owner = DaemonPlayerOwner::default();
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(initial_queue, initial_source),
+        queue_lineage: initial_lineage,
+        ..Default::default()
+    };
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
 
@@ -564,6 +616,11 @@ pub fn run_with_options(
                     &owner.core.transitions,
                 );
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
+                if role == DaemonRole::Local {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                        log::error!(target: "queue", "failed to persist Stay-alive queue progress: {error}");
+                    }
+                }
             }
             DaemonEvent::Player(pe) => {
                 if let PlayerEvent::Stopped { run_identity, .. } = &pe {
@@ -694,6 +751,11 @@ pub fn run_with_options(
                     }
                 }
                 broadcast_player_event_if_not_replaced(&ctrl_clients, pe, replacement_committed);
+                if role == DaemonRole::Local && (stopped_queue_updated || replacement_committed) {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                        log::error!(target: "queue", "failed to persist Stay-alive stopped queue: {error}");
+                    }
+                }
             }
             DaemonEvent::Ws { generation, event } => {
                 if emby_runtime
@@ -711,6 +773,11 @@ pub fn run_with_options(
                         &shared_queue,
                         &ctrl_clients,
                     );
+                    if role == DaemonRole::Local {
+                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                            log::error!(target: "queue", "failed to persist Stay-alive queue after server update: {error}");
+                        }
+                    }
                 }
             }
             DaemonEvent::QueueEnriched(items) => {
@@ -800,6 +867,17 @@ pub fn run_with_options(
                     }
                     continue;
                 }
+                let persist_after_command = matches!(
+                    &cmd,
+                    CtrlCmd::UnifiedQueueLoadIdle { .. }
+                        | CtrlCmd::UnifiedQueueSourceUpdate { .. }
+                        | CtrlCmd::UnifiedQueueReplace { .. }
+                        | CtrlCmd::UnifiedQueueAppend { .. }
+                        | CtrlCmd::UnifiedQueueRemoveSlot { .. }
+                        | CtrlCmd::UnifiedQueueRemoveSlots { .. }
+                        | CtrlCmd::UnifiedQueueMoveSlot { .. }
+                        | CtrlCmd::UnifiedQueueClear
+                );
                 handle_ctrl_for_role(
                     cmd,
                     client_id,
@@ -817,6 +895,14 @@ pub fn run_with_options(
                     config.stay_alive,
                     role,
                 );
+                if role == DaemonRole::Local
+                    && persist_after_command
+                    && owner.pending_idle_load.is_none()
+                {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                        log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
+                    }
+                }
             }
             DaemonEvent::PlaybackResolved {
                 start_idx,
@@ -907,6 +993,11 @@ pub fn run_with_options(
                         &mut owner.queue_lineage,
                         &owner.core.transitions,
                     );
+                    if role == DaemonRole::Local {
+                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                            log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
+                        }
+                    }
                 }
             }
             DaemonEvent::CtrlDisconnected(client_id) => {
@@ -915,6 +1006,11 @@ pub fn run_with_options(
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
+                if role == DaemonRole::Local {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                        log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
+                    }
+                }
                 // Announce the deliberate shutdown to every connected client
                 // before closing their connections, so they exit cleanly
                 // instead of treating this as an unannounced crash.

@@ -1,5 +1,19 @@
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence.
+fn persist_stay_alive_owner_queue(
+    owner: &DaemonPlayerOwner,
+    player: &Player,
+) -> Result<(), String> {
+    crate::config::save_stay_alive_queue_state(&crate::config::StayAliveQueueState {
+        queue: project_queue_state(
+            &owner.core.queue,
+            &owner.core.source,
+            &player.status.lock().unwrap(),
+        ),
+        lineage: owner.queue_lineage,
+    })
+}
+
 fn project_queue_state(
     queue: &PlaybackQueue,
     source: &crate::config::QueueSource,

@@ -224,7 +224,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
             cursor: 0,
@@ -243,6 +243,7 @@ fn old_peer_submitting_abs_items_is_transport_rejected() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 
@@ -285,7 +286,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
             cursor: 0,
@@ -304,6 +305,7 @@ fn capable_peer_abs_item_is_admission_ineligible_with_no_queue_mutation() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 
@@ -338,7 +340,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1")],
             cursor: 0,
@@ -357,6 +359,7 @@ fn capable_peer_submitting_abs_items_passes_transport_gate() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let _queue = owner.core.queue;
 
@@ -392,7 +395,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
     let source = QueueSource::Unknown;
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![abs_qi("li_1", "ep_1"), emby_qi("movie1", "Video", "Movie")],
             cursor: 0,
@@ -411,6 +414,7 @@ fn capable_peer_abs_item_is_admitted_with_installed_runtime() {
         true,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 

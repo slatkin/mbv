@@ -315,7 +315,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let (dummy_merged_tx, dummy_merged_rx) = mpsc::channel::<DaemonEvent>();
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("adopted", "Video", "Movie")],
             cursor: 0,
@@ -334,6 +334,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     assert!(
         dummy_merged_rx.try_recv().is_err(),
@@ -564,7 +565,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
     let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
-    handle_ctrl(
+    handle_ctrl_for_role(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("stale", "Video", "Movie")],
             cursor: 0,
@@ -583,6 +584,7 @@ fn unified_adopt_queue_rejection_sends_authoritative_state_to_sole_client() {
         false,
         &dummy_merged_tx,
         false,
+        crate::daemon::DaemonRole::Packaged,
     );
     let queue = owner.core.queue;
 
