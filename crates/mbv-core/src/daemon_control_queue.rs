@@ -3,6 +3,7 @@
 fn persist_stay_alive_owner_queue(
     owner: &DaemonPlayerOwner,
     player: &Player,
+    shared_queue: &SharedQueueState,
 ) -> Result<(), String> {
     crate::config::save_stay_alive_queue_state(&crate::config::StayAliveQueueState {
         queue: project_queue_state(
@@ -10,7 +11,7 @@ fn persist_stay_alive_owner_queue(
             &owner.core.source,
             &player.status.lock().unwrap(),
         ),
-        lineage: owner.queue_lineage,
+        lineage: *shared_queue.lineage.lock().unwrap(),
     })
 }
 

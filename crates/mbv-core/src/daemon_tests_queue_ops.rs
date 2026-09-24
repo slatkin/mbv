@@ -653,8 +653,9 @@ fn stay_alive_owner_refuses_client_queue_adoption() {
     let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
     let (reply_tx, reply_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("owner", "Video", "Movie")], 0);
-    let lineage = owner.queue_lineage;
-    run_queue_cmd(
+    let shared_queue = shared_queue_state();
+    let lineage = *shared_queue.lineage.lock().unwrap();
+    run_queue_cmd_with_shared(
         CtrlCmd::UnifiedAdoptQueue {
             items: vec![emby_qi("client", "Video", "Movie")],
             cursor: 0,
@@ -665,10 +666,11 @@ fn stay_alive_owner_refuses_client_queue_adoption() {
         &client,
         &player,
         &mut owner,
+        &shared_queue,
         &registry,
     );
     assert_eq!(owner.core.queue.slots()[0].item.id(), "owner");
-    assert_eq!(owner.queue_lineage, lineage);
+    assert_eq!(*shared_queue.lineage.lock().unwrap(), lineage);
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
         if reason.contains("cannot be adopted")));
     assert!(commands.try_recv().is_err());
@@ -690,19 +692,21 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
         ],
         0,
     );
-    run_queue_cmd(
+    let shared_queue = shared_queue_state();
+    run_queue_cmd_with_shared(
         CtrlCmd::UnifiedQueueClear,
         client_id,
         &reply_tx,
         &client,
         &player,
         &mut owner,
+        &shared_queue,
         &registry,
     );
 
     assert!(owner.core.queue.is_empty());
     assert_eq!(owner.core.source, QueueSource::Unknown);
-    assert_eq!(owner.queue_lineage, crate::ctrl::QueueLineage(1));
+    assert_eq!(*shared_queue.lineage.lock().unwrap(), crate::ctrl::QueueLineage(1));
     match cmd_rx.recv().unwrap() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert!(items.is_empty());
@@ -1335,7 +1339,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         request_id: 71,
         result: crate::ctrl::QueueLoadResult::Accepted,
     }));
-    let lineage = owner.queue_lineage;
+    let lineage = *shared_queue.lineage.lock().unwrap();
     let slots_before: Vec<_> = owner
         .core
         .queue
@@ -1374,7 +1378,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
     let CtrlEvent::UnifiedQueueState(snapshot) = recv_event(&client_rx) else {
         panic!("source-only update must publish the owner snapshot");
     };
-    assert_eq!(owner.queue_lineage, lineage);
+    assert_eq!(*shared_queue.lineage.lock().unwrap(), lineage);
     assert_eq!(snapshot.lineage, lineage);
     assert_eq!(snapshot.source, owner.core.source);
     assert_eq!(snapshot.source, QueueSource::Playlist {
@@ -1442,7 +1446,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
         } if got == request_id));
     }
     let stale_lineage = crate::ctrl::QueueLineage(1);
-    assert_eq!(owner.queue_lineage, crate::ctrl::QueueLineage(2));
+    assert_eq!(*shared_queue.lineage.lock().unwrap(), crate::ctrl::QueueLineage(2));
     // Drain both replacement broadcasts before asserting the rejection result.
     for rx in [&rx_a, &rx_b] {
         let _ = recv_event(rx);
@@ -1484,7 +1488,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueState(snapshot)
         if snapshot.lineage == crate::ctrl::QueueLineage(2) && snapshot.source == source_before));
     assert_eq!(owner.core.source, source_before);
-    assert_eq!(owner.queue_lineage, crate::ctrl::QueueLineage(2));
+    assert_eq!(*shared_queue.lineage.lock().unwrap(), crate::ctrl::QueueLineage(2));
     assert_eq!(
         owner.core.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect::<Vec<_>>(),
         slots_before,

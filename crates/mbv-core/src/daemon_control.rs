@@ -37,7 +37,6 @@ fn play_resolved_items(
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
-    lineage: &mut crate::ctrl::QueueLineage,
     transitions: &crate::playback_transition::OwnerTransitionState,
 ) {
     let queue_items: Vec<QueueItem> = fetched
@@ -48,7 +47,7 @@ fn play_resolved_items(
     let start_idx = start_idx.min(queue_items.len().saturating_sub(1));
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
     *source = new_source;
-    mint_queue_lineage(lineage, shared_queue);
+    mint_queue_lineage(shared_queue);
     broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
     if fetched.len() == 1 {
         let mut play_item = fetched[0].clone();
@@ -67,9 +66,13 @@ fn play_resolved_items(
     }
 }
 
-fn mint_queue_lineage(lineage: &mut crate::ctrl::QueueLineage, shared_queue: &SharedQueueState) {
+/// Mints the next queue lineage into `SharedQueueState.lineage`, the single
+/// source of truth for queue lineage (needed by other threads that seed
+/// newly-connecting ctrl clients off `SharedQueueState`), and returns it.
+fn mint_queue_lineage(shared_queue: &SharedQueueState) -> crate::ctrl::QueueLineage {
+    let mut lineage = shared_queue.lineage.lock().unwrap();
     lineage.0 = lineage.0.checked_add(1).expect("owner queue lineage exhausted");
-    *shared_queue.lineage.lock().unwrap() = *lineage;
+    *lineage
 }
 
 fn install_idle_queue_load(
@@ -99,7 +102,7 @@ fn install_idle_queue_load(
         crate::playback_queue::QueueRevision::default(),
     );
     owner.core.source = source;
-    mint_queue_lineage(&mut owner.queue_lineage, shared_queue);
+    mint_queue_lineage(shared_queue);
     owner.core.note_observed_active_slot(None);
     *shared_queue.observed_active_slot.lock().unwrap() = None;
     broadcast_queue_state(
@@ -110,7 +113,7 @@ fn install_idle_queue_load(
         &owner.core.source,
         &owner.core.transitions,
     );
-    if let Err(error) = persist_stay_alive_owner_queue(owner, player) {
+    if let Err(error) = persist_stay_alive_owner_queue(owner, player, shared_queue) {
         log::error!(target: "queue", "failed to persist accepted Stay-alive queue load: {error}");
     }
     send_to(
@@ -293,11 +296,16 @@ fn handle_ctrl_for_role(
     }
     let DaemonPlayerOwner {
         core: PlayerOwnerState { queue, source, transitions, .. },
-        queue_lineage,
         intents: playback_intents,
         queued_transition_origin,
         ..
     } = &mut *owner;
+    // `SharedQueueState.lineage` is the single source of truth (other
+    // threads read it for cold ctrl-client snapshots); this is a
+    // function-local snapshot so hot-path comparisons below don't
+    // re-lock per read; `mint_queue_lineage` below writes the new value
+    // straight to `shared_queue.lineage` for the next command's read.
+    let queue_lineage = *shared_queue.lineage.lock().unwrap();
     let role_satisfied = match cmd.requires_owner() {
         Some(requires_local) => (role == crate::daemon::DaemonRole::Local) == requires_local,
         None => true,
@@ -311,7 +319,7 @@ fn handle_ctrl_for_role(
             player,
             queue,
             source,
-            *queue_lineage,
+            queue_lineage,
         );
         return;
     }
@@ -393,7 +401,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     "daemon already has a queue; adoption skipped".to_string(),
                 );
                 return;
@@ -406,7 +414,7 @@ fn handle_ctrl_for_role(
             if let Some(reason) =
                 abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
             {
-                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, *queue_lineage, reason);
+                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, queue_lineage, reason);
                 return;
             }
             let (items, next_cursor) = admit_queue_items(
@@ -420,7 +428,7 @@ fn handle_ctrl_for_role(
             reset_slot_jumps(transitions, queued_transition_origin);
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
-            mint_queue_lineage(queue_lineage, shared_queue);
+            mint_queue_lineage(shared_queue);
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
 
             let adopted_slots: Vec<(QueueSlotId, String)> = queue
@@ -696,7 +704,7 @@ fn handle_ctrl_for_role(
                         "peer did not negotiate owner queue-load capability".to_string(),
                     ),
                 );
-            } else if lineage != *queue_lineage {
+            } else if lineage != queue_lineage {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -704,7 +712,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     "queue source update rejected: owner queue lineage changed".to_string(),
                 );
             } else {
@@ -737,7 +745,7 @@ fn handle_ctrl_for_role(
                 supports_abs_queue,
                 supports_abs_book_queue,
             ) {
-                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, *queue_lineage, reason);
+                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, queue_lineage, reason);
                 return;
             }
             let (slots, next_cursor) = admit_queue_slots(
@@ -755,7 +763,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     "Playback owner rejected the queue replacement".to_string(),
                 );
                 return;
@@ -772,7 +780,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     reason,
                 );
                 return;
@@ -784,7 +792,7 @@ fn handle_ctrl_for_role(
                 crate::playback_queue::QueueRevision::default(),
             );
             *source = new_source;
-            mint_queue_lineage(queue_lineage, shared_queue);
+            mint_queue_lineage(shared_queue);
             reset_slot_jumps(transitions, queued_transition_origin);
             // A new queue invalidates the previous playback observation (design
             // D2): clear it on both the shared snapshot and the owner core so
@@ -836,7 +844,7 @@ fn handle_ctrl_for_role(
             if let Some(reason) =
                 abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
             {
-                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, *queue_lineage, reason);
+                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, queue_lineage, reason);
                 return;
             }
             let mut items = items;
@@ -849,7 +857,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     "Playback owner rejected the queue append".to_string(),
                 );
                 return;
@@ -863,7 +871,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     reason,
                 );
                 return;
@@ -896,7 +904,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     "slot not found; remove skipped".to_string(),
                 );
             } else if queue.active_slot_id() == Some(sid) {
@@ -981,7 +989,7 @@ fn handle_ctrl_for_role(
                     player,
                     queue,
                     source,
-                    *queue_lineage,
+                    queue_lineage,
                     "slot not found; move skipped".to_string(),
                 );
             } else {
@@ -1019,7 +1027,7 @@ fn handle_ctrl_for_role(
                         player,
                         queue,
                         source,
-                        *queue_lineage,
+                        queue_lineage,
                         "slot not found; play skipped".to_string(),
                     );
                 }
@@ -1028,7 +1036,7 @@ fn handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueClear => {
             queue.clear();
             *source = crate::config::QueueSource::Unknown;
-            mint_queue_lineage(queue_lineage, shared_queue);
+            mint_queue_lineage(shared_queue);
             player.advance_sequence_generation();
             player.send_command(PlayerCommand::SubmitQueue {
                 items: Vec::new(),

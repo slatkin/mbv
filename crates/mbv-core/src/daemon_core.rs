@@ -357,7 +357,6 @@ use crate::player::PlayerOwnerState;
 #[derive(Default)]
 pub(super) struct DaemonPlayerOwner {
     core: PlayerOwnerState,
-    queue_lineage: crate::ctrl::QueueLineage,
     pending_idle_load: Option<PendingIdleQueueLoad>,
     /// Guarded direct-playback lifecycle coordinator. Retained functionally
     /// as-is (task 3.2 folds its single `current` into the core `transitions`);

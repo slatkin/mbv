@@ -378,7 +378,6 @@ pub fn run_with_options(
     // ── Canonical queue authority — single source of truth ──────────────
     let mut owner = DaemonPlayerOwner {
         core: PlayerOwnerState::new(initial_queue, initial_source),
-        queue_lineage: initial_lineage,
         ..Default::default()
     };
     let mut last_keepalive = Instant::now();
@@ -617,7 +616,7 @@ pub fn run_with_options(
                 );
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
                 if role == DaemonRole::Local {
-                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
                         log::error!(target: "queue", "failed to persist Stay-alive queue progress: {error}");
                     }
                 }
@@ -752,7 +751,7 @@ pub fn run_with_options(
                 }
                 broadcast_player_event_if_not_replaced(&ctrl_clients, pe, replacement_committed);
                 if role == DaemonRole::Local && (stopped_queue_updated || replacement_committed) {
-                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
                         log::error!(target: "queue", "failed to persist Stay-alive stopped queue: {error}");
                     }
                 }
@@ -774,7 +773,7 @@ pub fn run_with_options(
                         &ctrl_clients,
                     );
                     if role == DaemonRole::Local {
-                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
                             log::error!(target: "queue", "failed to persist Stay-alive queue after server update: {error}");
                         }
                     }
@@ -899,7 +898,7 @@ pub fn run_with_options(
                     && persist_after_command
                     && owner.pending_idle_load.is_none()
                 {
-                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
                         log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
                     }
                 }
@@ -990,11 +989,10 @@ pub fn run_with_options(
                         &mut owner.core.source,
                         &shared_queue,
                         &ctrl_clients,
-                        &mut owner.queue_lineage,
                         &owner.core.transitions,
                     );
                     if role == DaemonRole::Local {
-                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                        if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
                             log::error!(target: "queue", "failed to persist Stay-alive queue: {error}");
                         }
                     }
@@ -1007,7 +1005,7 @@ pub fn run_with_options(
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
                 if role == DaemonRole::Local {
-                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player) {
+                    if let Err(error) = persist_stay_alive_owner_queue(&owner, &player, &shared_queue) {
                         log::error!(target: "queue", "failed to persist Stay-alive queue on shutdown: {error}");
                     }
                 }
