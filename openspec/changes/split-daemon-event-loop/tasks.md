@@ -23,4 +23,4 @@
 
 ## 4. Gates
 
-- [ ] 4.1 `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-core` all clean.
+- [x] 4.1 `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv-core` all clean.
