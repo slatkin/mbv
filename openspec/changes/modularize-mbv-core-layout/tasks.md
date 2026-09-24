@@ -46,4 +46,4 @@ Every task: pure moves plus the compile-forced edits only, with no renames of ty
 
 ## 9. Docs
 
-- [ ] 9.1 Update `mbv-core` file-path citations to the new paths: `rg -n 'crates/mbv-core/src/(api|config|daemon|audiobookshelf|cast|ctrl|keybinds)[_a-z]*\.rs' AGENTS.md CONTEXT.md docs openspec/specs .agents openspec/changes --glob '!openspec/changes/archive/**'`. Don't edit archived changes. Verify: that `rg` returns only paths that exist (`test -e` each hit), then commit.
+- [x] 9.1 Update `mbv-core` file-path citations to the new paths: `rg -n 'crates/mbv-core/src/(api|config|daemon|audiobookshelf|cast|ctrl|keybinds)[_a-z]*\.rs' AGENTS.md CONTEXT.md docs openspec/specs .agents openspec/changes --glob '!openspec/changes/archive/**'`. Don't edit archived changes. Verify: that `rg` returns only paths that exist (`test -e` each hit), then commit.
