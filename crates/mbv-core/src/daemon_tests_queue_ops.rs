@@ -541,11 +541,16 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
 
 #[test]
 fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
-    let path = std::env::temp_dir().join(format!("mbv-owner-queue-{}.json", uuid::Uuid::new_v4()));
+    let temp = crate::config::TestTempDir::new();
+    let path = temp.join("stay_alive_queue_state.json");
     let state = crate::config::StayAliveQueueState {
         queue: crate::config::QueueState {
-            items: vec![emby_qi("persisted", "Video", "Movie")],
-            cursor: 0,
+            // Duplicate content still occupies two distinct queue slots.
+            items: vec![
+                emby_qi("persisted", "Video", "Movie"),
+                emby_qi("persisted", "Video", "Movie"),
+            ],
+            cursor: 1,
             source: QueueSource::Album,
             last_played_content_id: None,
             last_played_item_id: None,
@@ -555,11 +560,16 @@ fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
         lineage: crate::ctrl::QueueLineage(42),
     };
     crate::config::save_stay_alive_queue_state_at(&path, &state).unwrap();
+
+    // A daemon restart loads a fresh owner state from the state file.
     let restored = crate::config::load_stay_alive_queue_state_at(&path).unwrap();
-    assert_eq!(restored.queue.items[0].id(), "persisted");
+    let queue = PlaybackQueue::from_queue_items(restored.queue.items, Some(restored.queue.cursor));
+    assert_eq!(queue.len(), 2);
+    assert_eq!(queue.slots()[0].item.id(), "persisted");
+    assert_eq!(queue.slots()[1].item.id(), "persisted");
+    assert_eq!(queue.active_index(), Some(1));
     assert_eq!(restored.queue.source, QueueSource::Album);
     assert_eq!(restored.lineage, crate::ctrl::QueueLineage(42));
-    std::fs::remove_file(path).unwrap();
 }
 
 #[test]
@@ -596,7 +606,8 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
 
 #[test]
 fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
-    let path = std::env::temp_dir().join(format!("mbv-empty-owner-{}.json", uuid::Uuid::new_v4()));
+    let temp = crate::config::TestTempDir::new();
+    let path = temp.join("stay_alive_queue_state.json");
     let state = crate::config::StayAliveQueueState {
         queue: crate::config::QueueState {
             items: vec![],
@@ -620,8 +631,15 @@ fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
         positions: Default::default(),
     };
     assert!(crate::config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).is_none());
-    assert!(crate::config::load_stay_alive_queue_state_at(&path).unwrap().queue.items.is_empty());
-    std::fs::remove_file(path).unwrap();
+
+    // Restart still loads the explicitly saved empty queue, not the stale
+    // per-user snapshot; repeated startup cannot turn empty into populated.
+    for _restart in 0..2 {
+        let restored = crate::config::load_stay_alive_queue_state_at(&path).unwrap();
+        assert!(restored.queue.items.is_empty());
+        assert_eq!(restored.lineage, crate::ctrl::QueueLineage(7));
+        assert!(crate::config::legacy_queue_for_owner_if_absent(&path, None).is_none());
+    }
 }
 
 #[test]

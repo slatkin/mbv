@@ -554,4 +554,9 @@ fn quit_preserves_saved_playlist_source_for_restart_restore() {
         "shutdown persistence must keep the saved-playlist association so \
          a restart can still autosave/consume against the playlist"
     );
+
+    let mut restarted = crate::app::tests::make_app_stub();
+    restarted.restore_queue_state();
+    assert_eq!(restarted.player_tab.emby_items().len(), 2);
+    assert_eq!(restarted.queue_source, state.source);
 }

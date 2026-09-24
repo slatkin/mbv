@@ -35,8 +35,8 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
     );
     crate::config::save_queue_state(&saved).expect("save queue state");
 
-    let (remote, player_rx, _cmd_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    let (remote, player_rx, command_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(Vec::new(), 0);
     *remote.unified_queue.lock().unwrap() = Some(emby_unified_state(&[], 0));
     let config = crate::config::Config::default();
     let mut app = App::new_remote_with_config(
@@ -54,6 +54,13 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
     app.player_tab.set_items(make_items(2), 0);
     app.save_queue_state();
     app.save_queue_state_no_clear();
+    let commands: Vec<_> = command_rx.try_iter().collect();
+    assert!(
+        !commands
+            .iter()
+            .any(|command| matches!(command, mbv_core::ctrl::CtrlCmd::UnifiedAdoptQueue { .. })),
+        "Client must not send queue adoption"
+    );
     let restored = crate::config::load_queue_state().expect("saved snapshot remains");
     assert_eq!(restored.items.len(), saved.items.len());
     assert_eq!(restored.items[0].content_id(), saved.items[0].content_id());
