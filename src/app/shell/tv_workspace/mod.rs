@@ -1,5 +1,5 @@
 //! Shell wiring for the TV embedded content owner (`TvContent`, tasks
-//! 8.1–8.4, design D2/D12). Mirrors `shell_emby_library_content.rs`: the owner
+//! 8.1–8.4, design D2/D12). Mirrors `shell/emby_library_content.rs`: the owner
 //! lives inside the mounted `LibraryPanel`, addressed by
 //! `LibraryKey::Service(LibraryKey{TvShows})`, and the shell projects
 //! Model-owned browse snapshots into it. Task 8.4 deleted the last mounted TV
@@ -110,7 +110,7 @@ impl Model {
                     self.push_tv_workspace_content();
                 }
             }
-            // unreachable: shell_messages.rs routes only the Tv* group
+            // unreachable: shell/messages.rs routes only the Tv* group
             // (TreeExpand/MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
             // CycleLetterPill/EpisodeMove/SeasonMove) into handle_tv_request;
             // every one has an arm above.

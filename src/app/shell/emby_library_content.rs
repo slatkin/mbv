@@ -1,8 +1,8 @@
 //! Shell wiring for the Movies/HomeVideos/Generic embedded content owner
-//! (`EmbyLibraryContent`, task 6.1, design D2). Mirrors `shell_home_content.rs`'s
+//! (`EmbyLibraryContent`, task 6.1, design D2). Mirrors `shell/home_content.rs`'s
 //! shape: the owner lives inside the mounted `LibraryPanel`, addressed by
 //! `LibraryKey::Service { .. }`, and the shell projects Model-owned
-//! browse snapshots into it at the same writer seams `shell_emby_library.rs`
+//! browse snapshots into it at the same writer seams `shell/emby_library.rs`
 //! already calls for TV's embedded `TvContent`
 //! (the former standalone browser lifecycle) — this file supplies the
 //! three functions take for the three migrated kinds, so every existing
@@ -10,8 +10,8 @@
 //!
 //! Typed effects need no new dispatch: this owner emits the same
 //! `ShellRequest::Browser*`/`EmbyLibrary*` messages the mounted
-//! `EmbyLibraryContent` did, and `shell_emby_library.rs::handle_emby_library_request` /
-//! `shell_messages.rs`'s dispatch are keyed only by the active tab, not by
+//! `EmbyLibraryContent` did, and `shell/emby_library.rs::handle_emby_library_request` /
+//! `shell/messages.rs`'s dispatch are keyed only by the active tab, not by
 //! which component or owner sent the message.
 
 use super::components::emby_library_content::EmbyLibraryIdentity;
@@ -62,7 +62,7 @@ impl Model {
     }
 
     /// The browse identity of library `index`'s current level (mirrors
-    /// `shell_emby_library.rs::browse_identity`, reused verbatim as the shared
+    /// `shell/emby_library.rs::browse_identity`, reused verbatim as the shared
     /// `EmbyLibraryIdentity` shape).
     fn emby_library_owner_identity(&self, index: usize) -> EmbyLibraryIdentity {
         let lib = &self.app.libs[index];

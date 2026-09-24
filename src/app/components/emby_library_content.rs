@@ -7,7 +7,7 @@
 //! Search session. It produces the panel's [`LibraryPanelContent`] per frame
 //! and translates the panel's slot events and forwarded chords into the same
 //! typed `Msg`s the former BrowserComponent emitted for these three kinds
-//! (`shell_emby_library.rs::handle_emby_library_request` and `shell_messages.rs`'s
+//! (`shell/emby_library.rs::handle_emby_library_request` and `shell/messages.rs`'s
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
 //!
@@ -772,7 +772,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                         // The resolved wheel echo drives the shell's
                         // `video_cursor`/resting-cursor write and pagination
                         // through the same typed arm as keyboard movement
-                        // (`shell_emby_library.rs::handle_emby_library_request`).
+                        // (`shell/emby_library.rs::handle_emby_library_request`).
                         self.carrier
                             .delegate_operation(MediaListOperation::Move(match input {
                                 MediaListSurfaceInput::Wheel { delta, .. } => delta,

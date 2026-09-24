@@ -358,7 +358,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
     ];
 
     // Drive the production `LibEvent::RecursiveAlbumActivated` arm
-    // (shell_run.rs): App installs the path, then the shell arms the re-anchor
+    // (shell/run/mod.rs): App installs the path, then the shell arms the re-anchor
     // + track-focus one-shots and re-projects the workspace.
     harness
         .model_mut()

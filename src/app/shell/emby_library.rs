@@ -129,7 +129,7 @@ impl Model {
                     self.app.maybe_fetch_next_page(lib_idx, index);
                 }
             }
-            // unreachable: shell_messages.rs top-level dispatch routes only the
+            // unreachable: shell/messages.rs top-level dispatch routes only the
             // EmbyLibrary* activate/effect group plus
             // EmbyLibraryCursorIndex into handle_emby_library_request; every one has
             // an arm above.

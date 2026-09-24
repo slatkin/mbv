@@ -108,7 +108,7 @@ fn live_tick_unhandled_space_fires_playback_on_the_press() {
 
 /// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
 /// through (the leaf's own consumption — e.g. the playback panel's `Stop` —
-/// claims first; see the Visual-mode records in `tests_tick_integration_home.rs`),
+/// claims first; see the Visual-mode records in `tests/tick_integration/home.rs`),
 /// and the second press inside the window fires the stop candidate.
 #[test]
 fn live_tick_unhandled_escape_fires_stop_on_the_second_press() {

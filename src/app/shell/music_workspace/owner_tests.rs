@@ -1,12 +1,9 @@
 //! Task 9.4: the Music component tests re-pointed at the panel-embedded
 //! `MusicContent` owner and `LibraryPanel` (replacing the retired mounted
 //! `MusicWorkspaceComponent`/`music_workspace_id` shape these tests used to
-//! exercise). Ported from the orphaned `shell_music_workspace_cursor_tests.rs`
-//! / `shell_music_workspace_mouse_tests.rs` / `shell_music_workspace_tests.rs`
-//! (deleted alongside this file's introduction) wherever their assertion was
-//! not already covered by `tests_tick_integration_music_mouse.rs`,
-//! `tests_tick_integration.rs`, `shell_destination_mounts.rs`, or
-//! `render/tests_music_narrow.rs`.
+//! exercise). Consolidated from the retired flat Music workspace cursor and
+//! mouse tests wherever their assertion was not already covered by the current
+//! tick-integration or render tests.
 
 use super::*;
 use crate::app::components::library_panel::owner::LibraryContentOwner;
@@ -700,7 +697,7 @@ fn narrow_heading_click_resolves_to_nothing() {
 
 /// Right-click on a painted album row emits the album-level context-menu
 /// request (distinct from the track table's own right-click, already
-/// covered by `tests_tick_integration_music_mouse.rs`).
+/// covered by `tests/tick_integration/music_mouse.rs`).
 #[test]
 fn album_row_right_click_requests_the_album_context_menu() {
     let mut model = Model::new(make_music_group_app());

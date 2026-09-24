@@ -419,7 +419,7 @@ impl Model {
         match request {
             ShellRequest::LibraryRoutesEnter => self.handle_library_routes_enter(),
             ShellRequest::LibraryRoutesEsc => self.handle_library_routes_esc(),
-            // unreachable: shell_messages.rs routes only LibraryRoutesEnter /
+            // unreachable: shell/messages.rs routes only LibraryRoutesEnter /
             // LibraryRoutesEsc here; both have an arm above.
             _ => {}
         }

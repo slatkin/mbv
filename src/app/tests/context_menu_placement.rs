@@ -367,7 +367,7 @@ fn context_menu_entries_render_below_the_reserved_top_row() {
 }
 
 /// Task 3.5 (replace-wide-paint-inference): the pointer-anchor branch at
-/// `shell_overlays_menus.rs`'s `context_menu_rect` gates on
+/// `shell/overlays/menus.rs`'s `context_menu_rect` gates on
 /// `App::wide_tv_library_area`, a paint-free predicate driven solely by the
 /// terminal size (not by the previous frame's `AppLayout` paint). This must
 /// select the wide-TV branch on the very tick a resize lands — before

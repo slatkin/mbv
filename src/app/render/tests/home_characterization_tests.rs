@@ -39,7 +39,7 @@ fn startup_frame_paints_loading_affordances_not_blank_panes() {
     app.terminal_height = 30;
     let mut model = crate::app::shell::Model::new(app);
     // The precondition `Model::run` sets before its first `terminal.draw`
-    // (`src/app/shell_run.rs`): the Home destination is still loading.
+    // (`src/app/shell/run/mod.rs`): the Home destination is still loading.
     model.home_content.loading = true;
     model.push_home_content();
     model.sync_mounted_surfaces();

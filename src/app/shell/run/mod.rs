@@ -723,7 +723,7 @@ impl Model {
                 break 'outer;
             }
 
-            // Keep in sync with tests_tick_harness.rs, the other caller of this shared pass.
+            // Keep in sync with tests/tick_integration/harness.rs, the other caller of this shared pass.
             self.sync_mounted_surfaces();
 
             self.app.expire_music_grouping_candidates();

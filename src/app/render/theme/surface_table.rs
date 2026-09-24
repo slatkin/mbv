@@ -44,7 +44,7 @@
 //!     the two match arms to the one bool it effectively computes (D3(d)).
 //!
 //! One appearance main has that the normal-mode panel pair cannot express is
-//! the Queue-only playback strip (`shell_draw.rs:285,296,315`): with no right
+//! the Queue-only playback strip (`shell/draw.rs`): with no right
 //! column on screen, the panel body and its recess rows paint `SURFACE_CHROME`
 //! in both bool states. That is a mode-driven appearance, not a focus-driven
 //! one, so it is its own fixed identity (`QueueOnlyPlaybackPanel`) rather than
@@ -75,7 +75,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: SURFACE_RESTING,
         },
         // The right column's whole gutter and body: the shell paints it in
-        // `shell_library_panel.rs`'s `library_body_fill`, which passes the
+        // `shell/library_panel.rs`'s `library_body_fill`, which passes the
         // panel's own focus bit, so the column lightens to the level's
         // `SURFACE_FOCUSED` fill while the library panel holds focus. Resting
         // it keeps the app backdrop the column has always painted (declared
@@ -188,7 +188,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: SURFACE_RESTING,
         },
         // The now-playing panel body: the projection at
-        // `shell_playback.rs:47-51` and the pre-sync default at
+        // `shell/playback.rs` and the pre-sync default at
         // `components/playback.rs:55`.
         Surface::PlaybackPanel => Row {
             level: Level::ContentBody,
@@ -196,7 +196,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // The Queue-only playback strip (`shell_draw.rs:285,296,315`): with no
+        // The Queue-only playback strip (`shell/draw.rs`): with no
         // right column on screen, the shell paints the panel body and its
         // recess rows as a chrome band in every frame — the recess rects take
         // the value through the panel context (`ctx.panel_bg`), not from their

@@ -136,7 +136,7 @@ fn settings_popup_feeds_manage_shell_syncs_and_routes_escape() {
 /// component's `handle_clock`-via-unit-test shortcut. The shell's
 /// `tick_search_clock` sweep calls the component's `tick_clock(Instant::
 /// now())`, and any emitted `Msg` flows through `handle_service_request`
-/// — exactly mirroring the main-loop wiring at `shell_run.rs`'s
+/// — exactly mirroring the main-loop wiring at `shell/run/mod.rs`'s
 /// `drain_search_results` block.
 ///
 /// The component anchors `debounce_deadline` to `Instant::now()` at

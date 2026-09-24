@@ -1,6 +1,6 @@
 //! Table-driven production-style routing matrix (task 2.2).
 //!
-//! `tests_tick_harness.rs` now injects events into a live `Application::tick()`
+//! `tests/tick_integration/harness.rs` now injects events into a live `Application::tick()`
 //! via `EventListenerCfg::add_port`; this matrix remains because the cheap
 //! table rows cover precedence combinations that would be wasteful to exercise
 //! through the live harness. It drives the exact seam where routing happens —
