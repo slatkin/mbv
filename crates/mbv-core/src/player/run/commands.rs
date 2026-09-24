@@ -1,11 +1,13 @@
-fn reject_stale_jump(event_tx: &mpsc::Sender<PlayerEvent>, slot_id: QueueSlotId) {
+use super::*;
+
+pub(super) fn reject_stale_jump(event_tx: &mpsc::Sender<PlayerEvent>, slot_id: QueueSlotId) {
     let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
     log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
     let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
 }
 
 impl PlaybackRun {
-    fn handle_command(
+    pub(super) fn handle_command(
         &mut self,
         cmd: PlayerCommand,
         mpv: &Mpv,
@@ -316,7 +318,7 @@ impl PlaybackRun {
         }
     }
 
-    fn append_items_to_queue(&mut self, items: Vec<ExecSlot>) {
+    pub(super) fn append_items_to_queue(&mut self, items: Vec<ExecSlot>) {
         for slot in items {
             self.queue.append_with_id(slot.slot_id, slot.item);
         }
@@ -727,7 +729,7 @@ impl PlaybackRun {
 /// - Feed: the enclosure/link URL handed directly to mpv.
 /// - Audiobookshelf: not yet playable; returns empty (will fail visibly
 ///   rather than crash; owner admission will reject before this path).
-fn mpv_url_for_queue_item(item: &QueueItem, server_url: &str, token: &str) -> String {
+pub(super) fn mpv_url_for_queue_item(item: &QueueItem, server_url: &str, token: &str) -> String {
     match item {
         QueueItem::Emby(emby) => {
             let ep = if emby.is_audio() { "Audio" } else { "Videos" };

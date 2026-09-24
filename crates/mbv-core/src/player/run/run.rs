@@ -1,3 +1,5 @@
+use super::*;
+
 use std::os::unix::io::RawFd;
 
 fn command_quit_async(mpv: &Mpv) {
@@ -44,7 +46,7 @@ impl PlaybackRun {
     // the caller (Player::play/play_queue). -1 means pipe(2) creation failed;
     // the loop falls back to a bounded sleep so it still makes progress, just
     // without the immediate wakeup.
-    fn run(
+    pub(super) fn run(
         mut self,
         mut mpv: Mpv,
         stop_rx: mpsc::Receiver<()>,
