@@ -24,7 +24,7 @@ Rules for every task:
 
 ## 3. `input/`
 
-- [ ] 3.1 Move the `input/` table, including `router.rs` and `key_policy.rs`. `input.rs`'s two `#[path]` children become `input/<mod name>.rs`, and `input_confirm_keys` becomes a directory with `tests.rs`. Verify: gate, `ls src/app/input_* src/app/router.rs src/app/key_policy.rs` matches nothing, and `rg -n '#\[path' src/app/input` is empty.
+- [x] 3.1 Move the `input/` table, including `router.rs` and `key_policy.rs`. `input.rs`'s two `#[path]` children become `input/<mod name>.rs`, and `input_confirm_keys` becomes a directory with `tests.rs`. Verify: gate, `ls src/app/input_* src/app/router.rs src/app/key_policy.rs` matches nothing, and `rg -n '#\[path' src/app/input` is empty.
 
 ## 4. `dispatch/`
 
