@@ -24,7 +24,7 @@ See proposal.md for why this change exists. Current wiring, verified 2026-09-24:
 
 ## Decisions
 
-1. **Target tree.** Drop the family prefix, keep the rest of each file name, and use the `mod.rs` style (see `tidy-repo-layout`, decision 4).
+1. **Target tree.** Drop the family prefix, keep the rest of each file name, and use the `mod.rs` style (see `tidy-repo-layout`, Decision 3).
    ```
    api/            mod.rs types.rs types_parsing.rs client_{auth,library,playlists,reporting,sessions}.rs
                    tests/{mod,parsing,client,failure}.rs
