@@ -860,17 +860,7 @@ pub fn run_with_options(
                     }
                     continue;
                 }
-                let persist_after_command = matches!(
-                    &cmd,
-                    CtrlCmd::UnifiedQueueLoadIdle { .. }
-                        | CtrlCmd::UnifiedQueueSourceUpdate { .. }
-                        | CtrlCmd::UnifiedQueueReplace { .. }
-                        | CtrlCmd::UnifiedQueueAppend { .. }
-                        | CtrlCmd::UnifiedQueueRemoveSlot { .. }
-                        | CtrlCmd::UnifiedQueueRemoveSlots { .. }
-                        | CtrlCmd::UnifiedQueueMoveSlot { .. }
-                        | CtrlCmd::UnifiedQueueClear
-                );
+                let persist_after_command = cmd.mutates_owner_queue();
                 handle_ctrl_for_role(
                     cmd,
                     client_id,

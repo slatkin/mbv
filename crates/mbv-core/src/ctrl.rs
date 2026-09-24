@@ -436,6 +436,30 @@ impl CtrlCmd {
         }
     }
 
+    /// Whether the owner must persist its queue after handling this command.
+    /// Exhaustive so a new queue-editing command cannot silently skip
+    /// persistence.
+    pub fn mutates_owner_queue(&self) -> bool {
+        match self {
+            CtrlCmd::UnifiedQueueLoadIdle { .. }
+            | CtrlCmd::UnifiedQueueSourceUpdate { .. }
+            | CtrlCmd::UnifiedQueueReplace { .. }
+            | CtrlCmd::UnifiedQueueAppend { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlot { .. }
+            | CtrlCmd::UnifiedQueueRemoveSlots { .. }
+            | CtrlCmd::UnifiedQueueMoveSlot { .. }
+            | CtrlCmd::UnifiedQueueClear => true,
+            CtrlCmd::Hello(_)
+            | CtrlCmd::PlayerCmd(_)
+            | CtrlCmd::Stop
+            | CtrlCmd::PlaybackIntent(_)
+            | CtrlCmd::RequestShutdown
+            | CtrlCmd::ApplyServiceSetup { .. }
+            | CtrlCmd::UnifiedQueuePlaySlot { .. }
+            | CtrlCmd::UnifiedAdoptQueue { .. } => false,
+        }
+    }
+
     /// Builds `UnifiedQueueReplace`, deriving the legacy `items` payload from
     /// `slots` so callers don't each re-project the same list.
     pub fn unified_queue_replace(

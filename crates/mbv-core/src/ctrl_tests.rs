@@ -774,3 +774,15 @@ fn local_only_command_is_refused_without_delivery_or_termination() {
         "refused command must not be delivered"
     );
 }
+
+#[rstest::rstest]
+#[case::remove_slot(CtrlCmd::UnifiedQueueRemoveSlot { slot_id: 1 }, true)]
+#[case::remove_slots(CtrlCmd::UnifiedQueueRemoveSlots { slot_ids: vec![1, 2] }, true)]
+#[case::move_slot(CtrlCmd::UnifiedQueueMoveSlot { slot_id: 1, to_index: 0 }, true)]
+#[case::clear(CtrlCmd::UnifiedQueueClear, true)]
+#[case::play_slot(CtrlCmd::UnifiedQueuePlaySlot { slot_id: 1 }, false)]
+#[case::stop(CtrlCmd::Stop, false)]
+#[case::shutdown(CtrlCmd::RequestShutdown, false)]
+fn owner_persists_only_after_queue_edits(#[case] cmd: CtrlCmd, #[case] persists: bool) {
+    assert_eq!(cmd.mutates_owner_queue(), persists);
+}
