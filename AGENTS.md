@@ -175,6 +175,7 @@ coverage.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
 * format: `cargo fmt`
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
+* module layout: one file per module via `mod`, never `include!`/`#[path]` to splice a module across files (removed entirely by modularize-mbv-core-layout); a family with tests gets a directory with `mod.rs` plus `tests/` alongside it
 * async: sync-first; `tokio` is edge-only (`src/mpris.rs`, `zbus`) — do not spread it
 * sharing: prefer owned data + `Msg` identities over new `Arc`/`Rc`; shell owns domain state, components own local UI state
 * anything web related: `ketch` not curl
