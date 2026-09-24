@@ -1,11 +1,8 @@
-use super::{
-    TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation, TreeReconciliationError,
-};
+use super::{TreeBrowser, TreeMarkPolicy, TreeNode};
 use crate::app::components::media_list::MediaSemanticState;
 use ratatui::backend::TestBackend;
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 use ratatui::Terminal;
-use rstest::rstest;
 use std::hash::Hash;
 use tuirealm::component::Component;
 

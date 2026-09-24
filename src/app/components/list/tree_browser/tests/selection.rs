@@ -1,6 +1,6 @@
-use super::super::{TreeBrowser, TreeMarkPolicy, TreeOperation};
+use super::super::{TreeBrowser, TreeMarkPolicy};
 use super::{named_node, node, paint, Target};
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 #[test]
 fn apply_owns_clamped_tree_navigation_and_parent_child_traversal() {
     let mut browser = TreeBrowser::new();

@@ -1,7 +1,7 @@
-use super::super::{TreeBrowser, TreeEntry, TreeMarkPolicy};
+use super::super::{TreeBrowser, TreeEntry, TreeMarkPolicy, TreeOperation};
 use super::{named_node, node, Target};
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use tuirealm::component::Component;
 #[test]
