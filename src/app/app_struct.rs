@@ -12,7 +12,8 @@ use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    PendingQueueAction, PlaylistMutationState, QueueScope, SuspendedLocalSession, UndoEntry,
+    PendingQueueAction, PlaylistMutationState, QueueScope, ReplacementExecutor,
+    SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
@@ -343,11 +344,14 @@ pub struct App {
     /// the notification/quit auto-save routes).
     pub(super) pending_queue_action: Option<PendingQueueAction>,
     /// A resolved, not-yet-confirmed queue replacement held by the D6
-    /// populated-queue gate (`ConfirmAction::ReplacePopulatedQueue`). This is
-    /// the gate's own slot: its only reader is that confirmation arm, so the
-    /// save-deferral boundary (`SessionEvent::PlaylistMutationComplete`) can
-    /// never pick a gated payload up and execute it unconfirmed.
-    pub(super) pending_queue_replacement: Option<PendingQueueAction>,
+    /// populated-queue gate (`ConfirmAction::ReplacePopulatedQueue`). The
+    /// tuple pairs the action with the executor that runs it once confirmed,
+    /// so a `Routed` entry point replays its own prep instead of the wrong
+    /// path. This is the gate's own slot: its only reader is that confirmation
+    /// arm, so the save-deferral boundary
+    /// (`SessionEvent::PlaylistMutationComplete`) can never pick a gated
+    /// payload up and execute it unconfirmed.
+    pub(super) pending_queue_replacement: Option<(PendingQueueAction, ReplacementExecutor)>,
     /// Deferred explicit play awaiting the section-5 local fall-through prompt.
     pub(super) pending_local_play: Option<PendingQueueAction>,
     pub(super) use_nerd_fonts: bool,

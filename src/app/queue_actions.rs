@@ -2,8 +2,8 @@ use super::notify_actions::ToastSeverity;
 use super::types_playback::PlaylistMutation;
 use super::ui_util::is_playable;
 use super::{
-    App, ConfirmAction, ConfirmModal, LibEvent, PendingQueueAction, QueueScope, SessionEvent,
-    UndoEntry,
+    App, ConfirmAction, ConfirmModal, LibEvent, PanelFocus, PendingQueueAction, QueueScope,
+    ReplacementExecutor, RoutedReplacementPrep, SessionEvent, SidebarId, UndoEntry,
 };
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
@@ -388,9 +388,13 @@ impl App {
     /// `ReplacePopulatedQueue` confirmation arm reads it, so an in-flight
     /// playlist save (whose completion consumes the shared deferral slot)
     /// cannot fire a replacement the user never confirmed.
-    pub(super) fn request_queue_replacement(&mut self, action: PendingQueueAction) {
+    pub(super) fn request_queue_replacement(
+        &mut self,
+        action: PendingQueueAction,
+        via: ReplacementExecutor,
+    ) {
         if self.queue_replacement_needs_confirmation(&action) {
-            self.pending_queue_replacement = Some(action);
+            self.pending_queue_replacement = Some((action, via));
             self.ask_confirm(ConfirmModal {
                 title: " Replace Queue ".into(),
                 message: "Replace the current queue?".into(),
@@ -398,7 +402,86 @@ impl App {
                 on_confirm: ConfirmAction::ReplacePopulatedQueue,
             });
         } else {
-            self.execute_queue_replacement(action);
+            self.run_replacement(action, via);
+        }
+    }
+
+    /// Runs one already-confirmed (or gate-free) queue replacement through the
+    /// executor its entry point selected. Both the empty-queue path and the
+    /// `ReplacePopulatedQueue` confirmation arm call this, so a gated payload
+    /// replays exactly what an ungated one would have.
+    pub(super) fn run_replacement(&mut self, action: PendingQueueAction, via: ReplacementExecutor) {
+        match via {
+            ReplacementExecutor::Pending => {
+                let playlist_load = matches!(
+                    &action,
+                    PendingQueueAction::PlayItems {
+                        source: crate::config::QueueSource::Playlist { .. },
+                        ..
+                    }
+                );
+                self.execute_queue_replacement(action);
+                // A playlist load from the Playlists sidebar closes it so the
+                // queue it just loaded is visible. Done here rather than at
+                // the call site so a gated load still dismisses on confirm
+                // while a cancelled one leaves the sidebar alone. A raised
+                // save/discard prompt keeps the sidebar (existing behaviour).
+                if playlist_load && self.pending_overlay.is_none() {
+                    self.request_sidebar_dismiss(SidebarId::Playlists);
+                    self.set_panel_focus(PanelFocus::Queue);
+                }
+            }
+            ReplacementExecutor::Routed(prep) => self.run_routed_replacement(action, prep),
+        }
+    }
+
+    /// Replays one routed entry point's pre-play prep, then runs the shared
+    /// `play_items_routed` executor. The prep is the site policy carried by
+    /// `ReplacementExecutor::Routed`; `play_items_routed` itself never
+    /// replaces the queue.
+    fn run_routed_replacement(&mut self, action: PendingQueueAction, prep: RoutedReplacementPrep) {
+        let PendingQueueAction::PlayItems {
+            items,
+            start_idx,
+            source,
+            autostart: _,
+        } = action
+        else {
+            return;
+        };
+        match prep {
+            RoutedReplacementPrep::Album => {
+                self.set_queue_source_if_not_local_daemon(source.clone());
+                self.replace_playback_queue(items.clone(), start_idx);
+                self.play_items_routed(items, start_idx, source);
+                if !self.has_direct_remote_queue() {
+                    self.save_queue_state();
+                }
+            }
+            RoutedReplacementPrep::MusicAlbums => {
+                self.replace_playback_queue(items.clone(), start_idx);
+                self.play_items_routed(items, start_idx, source);
+                self.save_queue_state();
+            }
+            RoutedReplacementPrep::Folder => {
+                self.replace_playback_queue(items.clone(), start_idx);
+                self.set_panel_focus(PanelFocus::Queue);
+                self.play_items_routed(items, start_idx, source);
+                self.save_queue_state();
+            }
+            RoutedReplacementPrep::ShuffleFolder => {
+                self.replace_playback_queue(items.clone(), start_idx);
+                self.set_panel_focus(PanelFocus::Queue);
+                self.set_queue_source_if_not_local_daemon(source.clone());
+                if !self.has_direct_remote_queue() {
+                    self.save_queue_state();
+                }
+                self.play_items_routed(items, start_idx, source);
+            }
+            RoutedReplacementPrep::Selection => {
+                self.rebuild_queue_for_selection(&items, source.clone());
+                self.play_items_routed(items, start_idx, source);
+            }
         }
     }
 

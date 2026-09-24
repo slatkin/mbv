@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::tests::make_item;
+use crate::app::tests::{confirm_replace_queue, make_item};
 use crate::app::ContextAction;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
@@ -106,6 +106,9 @@ fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) 
         QueueItem::Emby(Box::new(make_item("stale-2", "Movie"))),
     );
     app.execute_context_action(Some(action), None);
+    // The target queue is populated, so the selection is held behind the
+    // replacement gate; confirming runs its rebuild + submission.
+    confirm_replace_queue(&mut app);
 
     let slots = app.player_tab.queue.slots();
     assert_eq!(slots.len(), 2);

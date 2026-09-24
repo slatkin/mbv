@@ -155,7 +155,7 @@ use self::types_library_tab::LibraryTab;
 use self::types_playback::{
     CastPlaybackTarget, DestinationLatestSource, LocalPlaybackTarget, PendingQueueAction,
     PlaybackState, PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget,
-    RemoteSlotState, SuspendedLocalSession, UndoEntry,
+    RemoteSlotState, ReplacementExecutor, RoutedReplacementPrep, SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
 use self::types_settings::{PanelFocus, PanelMode, SettingKey, SETTING_SECTIONS};

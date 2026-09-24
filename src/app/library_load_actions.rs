@@ -1,7 +1,7 @@
 use super::types_playback::HomeContent;
 use super::{
     notify_actions::ToastSeverity, App, BrowseLevel, FeedHomeVideoState, LibEvent, PanelFocus,
-    PendingQueueAction, TabSelection,
+    PendingQueueAction, ReplacementExecutor, TabSelection,
 };
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
@@ -289,11 +289,11 @@ impl App {
             },
             autostart: false,
         };
-        self.replace_queue_or_prompt(action);
-        if self.pending_overlay.is_none() {
-            self.request_sidebar_dismiss(super::SidebarId::Playlists);
-            self.set_panel_focus(PanelFocus::Queue);
-        }
+        // The populated-queue gate defers the replacement; `run_replacement`
+        // raises the Playlists sidebar dismiss (and Queue focus) once it runs
+        // — immediately on an empty queue, after confirmation on a populated
+        // one — so a cancelled load leaves the sidebar open.
+        self.request_queue_replacement(action, ReplacementExecutor::Pending);
     }
 
     pub(super) fn rebuild_library_tabs_from_views(&mut self, all_views: &[EmbyItem]) {

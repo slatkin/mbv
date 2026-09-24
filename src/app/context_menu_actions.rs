@@ -3,7 +3,10 @@ use super::notify_actions::ToastSeverity;
 use super::types_context_menu::BulkRemoveTarget;
 use super::types_context_menu::ContextMenu;
 use super::types_overlay::OverlayRequest;
-use super::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, LibEvent, PanelFocus};
+use super::{
+    App, ContextAction, ContextMenuAnchor, ContextMenuEntry, LibEvent, PanelFocus,
+    PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep,
+};
 use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
@@ -50,13 +53,30 @@ impl App {
                 }
             }
             Some(ContextAction::PlaySelection(items)) => {
-                self.rebuild_queue_for_selection(&items, crate::config::QueueSource::Unknown);
-                self.play_items_routed(items, 0, crate::config::QueueSource::Unknown);
+                // The selection's queue rebuild is deferred into the gated
+                // confirmed path (`run_routed_replacement`), so cancelling the
+                // replacement leaves the queue untouched (design D4).
+                self.request_queue_replacement(
+                    PendingQueueAction::PlayItems {
+                        items,
+                        start_idx: 0,
+                        source: crate::config::QueueSource::Unknown,
+                        autostart: true,
+                    },
+                    ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
+                );
             }
             Some(ContextAction::ShuffleSelection(mut items)) => {
                 items.shuffle(&mut rand::rng());
-                self.rebuild_queue_for_selection(&items, crate::config::QueueSource::Shuffle);
-                self.play_items_routed(items, 0, crate::config::QueueSource::Shuffle);
+                self.request_queue_replacement(
+                    PendingQueueAction::PlayItems {
+                        items,
+                        start_idx: 0,
+                        source: crate::config::QueueSource::Shuffle,
+                        autostart: true,
+                    },
+                    ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
+                );
             }
             Some(ContextAction::EnqueueSelection(items)) => {
                 if let Some(lib_idx) = lib_idx {
@@ -111,11 +131,10 @@ impl App {
                 } else {
                     String::new()
                 };
-                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Collection {
-                    collection_type: ct,
-                });
-                self.play_folder(&id);
-                self.save_queue_state();
+                // The folder replacement, its Collection source, and its save
+                // are deferred into the gated confirmed path (design D4), so
+                // cancelling leaves the queue source unchanged.
+                self.play_folder(&id, ct);
             }
             Some(ContextAction::ShuffleFolder(id)) => {
                 if let Some(lib_idx) = lib_idx {
@@ -179,8 +198,9 @@ impl App {
     /// Rebuild the local canonical queue from a context-menu selection only
     /// when this process owns playback. A direct remote queue rebuilds its own
     /// queue on submission, while an attached Session must leave the local
-    /// Composed queue untouched. Shared by `PlaySelection`/`ShuffleSelection`.
-    fn rebuild_queue_for_selection(
+    /// Composed queue untouched. Replayed by `run_routed_replacement` for the
+    /// gated `PlaySelection`/`ShuffleSelection` sites.
+    pub(super) fn rebuild_queue_for_selection(
         &mut self,
         items: &[EmbyItem],
         source: crate::config::QueueSource,

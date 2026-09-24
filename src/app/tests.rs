@@ -71,6 +71,18 @@ pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_core::api::Se
 
 // ── test helpers ─────────────────────────────────────────────────────────
 
+/// Confirm the populated-queue replacement gate the way the shell's confirm
+/// modal does, so a gated replacement executes.
+pub(crate) fn confirm_replace_queue(app: &mut App) {
+    app.apply_confirm_action(
+        crate::app::ConfirmAction::ReplacePopulatedQueue,
+        crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('y'),
+            crossterm::event::KeyModifiers::NONE,
+        ),
+    );
+}
+
 pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {
     (0..n)
         .map(|i| {

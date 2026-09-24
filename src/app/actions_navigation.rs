@@ -1,6 +1,6 @@
 use super::types_browse::BrowseResting;
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks};
-use super::{App, BrowseLevel, PendingQueueAction};
+use super::{App, BrowseLevel, PendingQueueAction, ReplacementExecutor, RoutedReplacementPrep};
 use mbv_core::api::EmbyItem;
 
 use super::notify_actions::ToastSeverity;
@@ -18,11 +18,7 @@ impl App {
     pub(super) fn play_or_activate_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
             let ct = self.libs[lib_idx].library.collection_type.clone();
-            self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Collection {
-                collection_type: ct,
-            });
-            self.play_folder(&item.id.clone());
-            self.save_queue_state();
+            self.play_folder(&item.id.clone(), ct);
         } else {
             self.select_item(lib_idx, item);
         }
@@ -192,7 +188,7 @@ impl App {
         // gate ahead of the executor cannot drift into a second playback
         // path: an empty target queue executes immediately, a populated one
         // asks before replacement and runs the stored action on confirmation.
-        self.request_queue_replacement(action);
+        self.request_queue_replacement(action, ReplacementExecutor::Pending);
         true
     }
 
@@ -230,12 +226,19 @@ impl App {
             self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
             return false;
         }
-        self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Album);
-        self.replace_playback_queue(tracks.clone(), start_idx);
-        self.play_items_routed(tracks, start_idx, crate::config::QueueSource::Album);
-        if !self.has_direct_remote_queue() {
-            self.save_queue_state();
-        }
+        // The queue replacement is deferred behind the populated-queue gate;
+        // its per-site prep (Album source, rebuild, conditional save) runs in
+        // `run_routed_replacement` once the user confirms.
+        let action = PendingQueueAction::PlayItems {
+            items: tracks,
+            start_idx,
+            source: crate::config::QueueSource::Album,
+            autostart: true,
+        };
+        self.request_queue_replacement(
+            action,
+            ReplacementExecutor::Routed(RoutedReplacementPrep::Album),
+        );
         true
     }
 

@@ -87,7 +87,7 @@ impl Model {
                         .iter()
                         .position(|item| item.id == selected_id)
                         .unwrap_or(0);
-                    self.app.replace_queue_or_prompt(
+                    self.app.request_queue_replacement(
                         super::types_playback::PendingQueueAction::PlayItems {
                             items,
                             start_idx,
@@ -97,11 +97,12 @@ impl Model {
                             },
                             autostart: false,
                         },
+                        super::types_playback::ReplacementExecutor::Pending,
                     );
-                    if self.app.pending_overlay.is_none() {
-                        self.dismiss_sidebar(super::SidebarId::Playlists);
-                        self.app.set_panel_focus(super::PanelFocus::Queue);
-                    }
+                    // No sidebar dismiss here: `run_replacement` raises it once
+                    // the replacement actually runs (immediately on an empty
+                    // queue, after confirmation on a populated one), so a
+                    // cancelled load leaves the sidebar open.
                 } else if let Some(playlist) = self.app.playlists.get(index).cloned() {
                     self.app.load_and_play_playlist(playlist.id);
                 }

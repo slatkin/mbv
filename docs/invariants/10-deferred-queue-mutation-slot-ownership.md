@@ -1,14 +1,16 @@
 # Invariant 10 — A deferred queue mutation executes only through its owning boundary, from a slot exactly one writer and one reader own
 
-**Scope:** `App::pending_queue_action` (`src/app/app_struct.rs:331`) and its
+**Scope:** `App::pending_queue_action` (`src/app/app_struct.rs:345`) and its
 save/discard writer and `SessionEvent::PlaylistMutationComplete` reader
-(`src/app/run_loop_events_session.rs:183`), versus the D6 gate's
-`App::pending_queue_replacement` (`src/app/app_struct.rs:332`), written only
-by `App::request_queue_replacement` (`src/app/queue_actions.rs:288`) and
+(`src/app/run_loop_events_session.rs:191-194`), versus the D6 gate's
+`App::pending_queue_replacement`
+(`src/app/app_struct.rs:354`, typed
+`Option<(PendingQueueAction, ReplacementExecutor)>`), written only by
+`App::request_queue_replacement` (`src/app/queue_actions.rs:391`) and
 read/taken only by the `ConfirmAction::ReplacePopulatedQueue` arm
 (`src/app/input_confirm_keys.rs:178` take-on-confirm, `:183`
-clear-on-cancel-or-dismiss, both handing the payload to
-`execute_queue_replacement`).
+clear-on-cancel-or-dismiss, both handing the `(action, executor)` payload to
+`run_replacement`, which dispatches to the executor the entry point chose).
 
 ## The invariant
 
@@ -28,15 +30,20 @@ clear-on-cancel-or-dismiss, both handing the payload to
 
 ## Why it matters
 
-No type enforces this: both slots hold the same `Option<PendingQueueAction>`
-type, so nothing in the compiler distinguishes a save-deferral payload from
-a gated replacement payload. If the two share a slot, the boundaries can
-execute each other's payloads: commit 519583ea fixed exactly this defect,
-where a populated-queue replacement the user had *never confirmed* sat in
-the shared `pending_queue_action` slot and was fired by the
-`PlaylistMutationComplete` boundary when an unrelated playlist save
-completed — playback the user never asked for, started by a boundary that
-had no business reading the gate's payload.
+No type fully enforces this. The save-deferral slot holds
+`Option<PendingQueueAction>`; the gate slot now holds
+`Option<(PendingQueueAction, ReplacementExecutor)>`, whose payload also
+carries which executor runs on confirm — so a cross-boundary read is no
+longer type-identical, and code that swaps one payload for the other no
+longer compiles by accident. That distinction is an additional barrier, not
+a replacement for the ownership discipline: the invariant still rests on the
+same one-writer, one-reader rule it always has, held by comments and
+convention rather than the compiler. The defect it guards against is real:
+commit 519583ea fixed exactly it, where a populated-queue replacement the
+user had *never confirmed* sat in the shared `pending_queue_action` slot and
+was fired by the `PlaylistMutationComplete` boundary when an unrelated
+playlist save completed — playback the user never asked for, started by a
+boundary that had no business reading the gate's payload.
 
 The failure has a second face. A deferred payload that is *dropped* — its
 slot cleared by a reader that cannot execute it, or overwritten by a
@@ -47,25 +54,30 @@ playback, because there is no signal at all.
 ## How the code maintains it today
 
 - **Two slots, two lifecycles.** `pending_queue_replacement` is written
-  only in `request_queue_replacement` (`queue_actions.rs:288`) when the
-  gate decides confirmation is needed; the `ReplacePopulatedQueue` arm in
-  `input_confirm_keys.rs` takes it on confirm (`y`/`Y`/`Enter`) and hands
-  it straight to `execute_queue_replacement`, and clears it on every other
-  key (cancel or dismiss), so no executable payload survives a closed
-  modal. `pending_queue_action` is written by the save/discard flow and
-  consumed only at the `PlaylistMutationComplete` boundary
-  (`run_loop_events_session.rs:183-187`), which executes it only after
+  only in `request_queue_replacement` (`queue_actions.rs:391`) when the
+  gate decides confirmation is needed, as an `(action, executor)` tuple
+  whose executor is the entry point's `ReplacementExecutor`. The
+  `ReplacePopulatedQueue` arm in `input_confirm_keys.rs` takes it on
+  confirm (`y`/`Y`/`Enter`) and hands it to `run_replacement`, which
+  dispatches `Routed(prep)` through `run_routed_replacement` (that entry
+  point's pre-play prep, then `play_items_routed`) and `Pending` through
+  `execute_queue_replacement`; every other key (cancel or dismiss) clears
+  the slot, so no executable payload survives a closed modal.
+  `pending_queue_action` is written by the save/discard flow and consumed
+  only at the `PlaylistMutationComplete` boundary
+  (`run_loop_events_session.rs:191-194`), which executes it only after
   lineage and playlist-identity checks.
 - **Comment-anchored intent.** Both sites state the exclusivity in place:
-  `types_confirm.rs:28` documents that the gate uses its own
+  `types_confirm.rs:32` documents that the gate uses its own
   `pending_queue_replacement` slot so the save-deferral slot stays with its
   own callers, and `queue_actions.rs` documents why the shared deferral
   slot must not carry a gated replacement. These comments are the only
   barrier against a future "simplification" back into one slot.
 - **Tests.** `input_confirm_keys_tests.rs` pins both slots' independence
   (confirm/cancel paths assert `pending_queue_replacement` alone moves) and
-  `tests_tick_integration_music_mouse.rs:879-986` drives the gate through
-  real `tick()` composition, asserting the slot is taken exactly once.
+  (`src/app/tests_tick_integration_music_mouse.rs:947-998` drives the gate
+  through real `tick()` composition, asserting the slot is taken exactly
+  once.
 
 ## Where it still fails / what to watch
 
@@ -84,7 +96,11 @@ playback, because there is no signal at all.
   fits" — `Option<PendingQueueAction>` fitting is exactly what caused the
   original defect.
 
-**Known strengthening (not done here):** type the slots apart (distinct
-payload types per deferral kind, or a single enum whose variants name their
-executing boundary) so that a cross-boundary read fails to compile instead
+**Known strengthening (partially done):** the gate slot's payload is now
+distinguishable at the type level — its
+`Option<(PendingQueueAction, ReplacementExecutor)>` cannot be confused with
+the save-deferral slot's `Option<PendingQueueAction>`, and it names the
+executor that runs. The general strengthening remains open: typing each
+save/discard deferral payload apart (or a single enum whose variants name
+their executing boundary) so a cross-boundary read fails to compile instead
 of relying on comments and convention.

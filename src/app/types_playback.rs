@@ -226,6 +226,41 @@ pub(super) enum PendingQueueAction {
     ClearQueue,
 }
 
+/// Which of the two existing queue-replacement executors runs once the
+/// populated-queue gate is confirmed. `Pending` is the existing
+/// `execute_queue_replacement` path; `Routed` carries its entry point's
+/// pre-play prep, because `play_items_routed` never replaces the playback
+/// queue itself — every routed caller does its own mutation around it, and
+/// they differ.
+pub(super) enum ReplacementExecutor {
+    Routed(RoutedReplacementPrep),
+    Pending,
+}
+
+/// The per-entry-point pre-play prep a `Routed` replacement replays before
+/// handing the resolved items to `play_items_routed`. Each variant mirrors one
+/// gated routed entry point exactly: when the playback queue is rebuilt, when
+/// queue state is persisted, and whether the Queue panel takes focus.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum RoutedReplacementPrep {
+    /// Album/artist track (`replace_and_route_album_queue`): Album source,
+    /// rebuild always, save unless a direct-remote owner holds the queue,
+    /// routed default focus.
+    Album,
+    /// `play_music_albums`: rebuild and save always, keep the Library focused.
+    MusicAlbums,
+    /// `play_folder`: rebuild always, force Queue focus, save always (the
+    /// folder-play callers used to save after `play_folder` returned).
+    Folder,
+    /// `shuffle_folder`: rebuild always, force Queue focus, save unless a
+    /// direct-remote owner holds the queue.
+    ShuffleFolder,
+    /// Context-menu Play/Shuffle selection: rebuild and save only when this
+    /// process owns the local queue (no direct remote, no attached session),
+    /// routed default focus.
+    Selection,
+}
+
 #[derive(Clone, Debug)]
 pub(super) enum PlaylistMutation {
     Save {
