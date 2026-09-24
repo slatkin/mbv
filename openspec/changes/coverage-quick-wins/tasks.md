@@ -64,10 +64,10 @@
 - [x] 4.3 Cover `SetSub` on its own: it resolves the stream index through player status,
   so assert both the resolved-command case and the no-command case rather than forcing
   it into the 4.1 table.
-- [ ] 4.4 Cover the `Play` arm with the existing mock-Emby fixture: single-item and
+- [x] 4.4 Cover the `Play` arm with the existing mock-Emby fixture: single-item and
   multi-item plays assert the queue replacement, the `Remote` queue source, the
   honoured `start_position_ticks`, and the persisted queue state.
-- [ ] 4.5 Cover `UserDataChanged`: a successful home fetch sends
+- [x] 4.5 Cover `UserDataChanged`: a successful home fetch sends
   `LibEvent::HomeContentRefreshed` on `lib_tx`, and a failed fetch sends nothing.
   Verify 4.1-4.5 with `cargo nextest run -p mbv -E 'test(ws_event)'`.
 
