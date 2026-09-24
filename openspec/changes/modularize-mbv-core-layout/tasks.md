@@ -13,8 +13,8 @@ Every task: pure moves plus the compile-forced edits only, with no renames of ty
 
 ## 2. `config/`
 
-- [ ] 2.1 Phase A: `git mv` `config.rs` → `config/mod.rs`, the 14 included `config_*.rs` → `config/<name without prefix>.rs` (`config_test_support.rs` → `config/test_support.rs`), and the 10 `config_tests_*.rs` → `config/tests/<suffix>.rs`. Update the `include!` strings. Verify: gate green, and `ls crates/mbv-core/src/config_*` matches nothing.
-- [ ] 2.2 Phase B: convert to `mod`s. `config::tests` stays `pub` under `cfg(any(test, feature = "test-support"))`. Also check the "Included via include!" header comments in `config_state.rs`, `config_paths.rs`, `config_credentials.rs` and `config_emby_admin.rs`: they are now false, so delete them. Verify: gate green, `cargo nextest run -p mbv` green (the app uses `config::tests`), and `rg -n 'include!|#\[path|Included via' crates/mbv-core/src/config` is empty.
+- [x] 2.1 Phase A: `git mv` `config.rs` → `config/mod.rs`, the 14 included `config_*.rs` → `config/<name without prefix>.rs` (`config_test_support.rs` → `config/test_support.rs`), and the 10 `config_tests_*.rs` → `config/tests/<suffix>.rs`. Update the `include!` strings. Verify: gate green, and `ls crates/mbv-core/src/config_*` matches nothing.
+- [x] 2.2 Phase B: convert to `mod`s. `config::tests` stays `pub` under `cfg(any(test, feature = "test-support"))`. Also check the "Included via include!" header comments in `config_state.rs`, `config_paths.rs`, `config_credentials.rs` and `config_emby_admin.rs`: they are now false, so delete them. Verify: gate green, `cargo nextest run -p mbv` green (the app uses `config::tests`), and `rg -n 'include!|#\[path|Included via' crates/mbv-core/src/config` is empty.
 
 ## 3. `daemon/`
 
