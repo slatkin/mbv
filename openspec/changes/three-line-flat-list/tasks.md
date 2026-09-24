@@ -6,8 +6,8 @@
 
 ## 2. F3 Target Boundary
 
-- [ ] 2.1 Define a kind-qualified stable F3 target key and replace index-based `SelectSession` request/dispatch with current-snapshot identity lookup; verify a missing/reordered key cannot connect a different target, including equal Emby/Cast ids (`cargo nextest run -p mbv -E 'test(session)'`).
-- [ ] 2.2 Embed the three-line control in `SessionsComponent`, project existing Emby/Cast text and aqua `✚`, and delegate key/mouse selection and hit resolution; remove its numeric cursor/scroll/row hit map and old populated-card painter while retaining sidebar chrome, empty/loading, refresh/detach/dismiss, and existing wheel behavior. Update existing focused component/buffer tests for the selected-row bar, aqua badge, item-based zebra, and unfilled separators; verify `cargo nextest run -p mbv -E 'test(session)'`.
+- [x] 2.1 Define a kind-qualified stable F3 target key and replace index-based `SelectSession` request/dispatch with current-snapshot identity lookup; verify a missing/reordered key cannot connect a different target, including equal Emby/Cast ids (`cargo nextest run -p mbv -E 'test(session)'`).
+- [x] 2.2 Embed the three-line control in `SessionsComponent`, project existing Emby/Cast text and aqua `✚`, and delegate key/mouse selection and hit resolution; remove its numeric cursor/scroll/row hit map and old populated-card painter while retaining sidebar chrome, empty/loading, refresh/detach/dismiss, and existing wheel behavior. Update existing focused component/buffer tests for the selected-row bar, aqua badge, item-based zebra, and unfilled separators; verify `cargo nextest run -p mbv -E 'test(session)'`.
 
 ## 3. Integration and Acceptance
 
