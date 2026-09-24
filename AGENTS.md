@@ -27,6 +27,7 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * Change source-of-truth types before callers; ask only about material
   design/product choices.
 * Commit or undo your changes; never leave a dirty worktree.
+* Do NOT modify ~/.config/mbv/config.toml unless asked by the user.
 
 ## Repository map
 
