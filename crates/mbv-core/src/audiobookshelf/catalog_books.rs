@@ -1,3 +1,4 @@
+use super::catalog::ProgressResponse;
 use super::{AudiobookshelfClient, AudiobookshelfError};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -320,7 +321,7 @@ impl AudiobookshelfClient {
         &self,
         key: &str,
     ) -> Result<HashMap<String, AudiobookshelfBookProgress>, AudiobookshelfError> {
-        let response: super::ProgressResponse = self
+        let response: ProgressResponse = self
             .get(key, "/api/me/progress")?
             .body_mut()
             .read_json()

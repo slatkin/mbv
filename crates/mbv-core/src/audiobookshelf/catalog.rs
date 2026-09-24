@@ -5,10 +5,6 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::time::Duration;
 
-#[path = "catalog_books.rs"]
-mod catalog_books;
-pub use catalog_books::*;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AudiobookshelfLibrary {
     pub id: String,
@@ -306,7 +302,7 @@ impl AudiobookshelfClient {
     /// Runs `f` against a cloned client on a bounded worker thread. All
     /// `*_bounded` wrappers below differ only in the args they capture and
     /// the method they call, so they share this dispatch.
-    fn bounded<T>(
+    pub(super) fn bounded<T>(
         &self,
         bound: Duration,
         f: impl FnOnce(Self) -> Result<T, AudiobookshelfError> + Send + 'static,

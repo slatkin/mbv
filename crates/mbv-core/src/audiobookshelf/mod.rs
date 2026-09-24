@@ -3,6 +3,8 @@ use std::time::Duration;
 
 mod catalog;
 pub use catalog::*;
+mod catalog_books;
+pub use catalog_books::*;
 mod playback;
 pub use playback::*;
 pub mod socket;

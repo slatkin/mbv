@@ -55,5 +55,4 @@ mod queue_ops;
 // Re-export helper from queue_ops
 pub use queue_ops::owner_with;
 
-#[path = "loop.rs"]
 mod r#loop;

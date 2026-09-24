@@ -1,4 +1,11 @@
-use super::*;
+use super::control_queue::unified_queue_state_for_peer;
+use super::core::{DaemonEvent, SharedQueueState};
+use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello};
+use crate::daemon::ctrl::{ClientRegistry, CtrlOutbound, CtrlTransport};
+use crate::stream::SocketStream;
+use std::io::{BufRead, BufReader, Write};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 
 pub(in crate::daemon) fn spawn_ctrl_client(
     stream: SocketStream,

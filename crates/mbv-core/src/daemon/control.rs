@@ -10,9 +10,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-#[path = "control_queue.rs"]
-mod control_queue;
-pub use control_queue::*;
+use super::control_queue::*;
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the
 /// result through `tx` as a `DaemonEvent`, built by `to_event`. Shared by

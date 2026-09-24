@@ -1,24 +1,19 @@
-use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use super::control::{broadcast_queue_state, unified_queue_state_for_peer};
+use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
 use crate::api::EmbyItem;
 use crate::ctrl::{
-    AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello,
+    AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackRequestId,
 };
-pub use crate::daemon::ctrl::CtrlTransport;
-use crate::daemon::ctrl::{
-    serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlOutbound, CtrlSender,
-};
+use crate::daemon::ctrl::{serialize_ctrl_event, ClientRegistry, CtrlClientId, CtrlSender};
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
-use crate::stream::SocketStream;
 use crate::ws::WsEvent;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
@@ -633,7 +628,3 @@ pub(super) fn audio_only_rejection<'a>(
         None
     }
 }
-
-#[path = "core_ctrl_spawn.rs"]
-mod core_ctrl_spawn;
-pub use core_ctrl_spawn::*;
