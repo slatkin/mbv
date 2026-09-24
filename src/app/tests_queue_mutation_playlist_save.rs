@@ -163,10 +163,15 @@ fn save_as_success_clears_old_playlist_entry_ids() {
     ));
 }
 
-#[test]
-fn stay_alive_save_as_sends_source_update_with_observed_owner_lineage() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let items = make_items(2);
+fn local_daemon_save_as_fixture() -> (
+    App,
+    std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>,
+    mbv_core::ctrl::UnifiedQueueStateData,
+) {
+    let mut items = make_items(2);
+    for (index, item) in items.iter_mut().enumerate() {
+        item.playlist_item_id = format!("entry-{index}");
+    }
     let config = crate::config::Config {
         stay_alive: true,
         ..Default::default()
@@ -184,13 +189,12 @@ fn stay_alive_save_as_sends_source_update_with_observed_owner_lineage() {
         config,
     );
     while commands.try_recv().is_ok() {}
-    let old_source = crate::config::QueueSource::Playlist {
+    let mut snapshot = emby_unified_state(&items, 0);
+    snapshot.status.active = true;
+    snapshot.source = crate::config::QueueSource::Playlist {
         id: Some("pl-1".into()),
         name: "A".into(),
     };
-    let mut snapshot = emby_unified_state(&items, 0);
-    snapshot.status.active = true;
-    snapshot.source = old_source.clone();
     snapshot.lineage = mbv_core::ctrl::QueueLineage(11);
     app.player
         .as_remote()
@@ -200,62 +204,87 @@ fn stay_alive_save_as_sends_source_update_with_observed_owner_lineage() {
         .unwrap()
         .replace(snapshot.clone());
     app.handle_player_event(mbv_core::player::PlayerEvent::UnifiedQueueUpdated(Box::new(
-        snapshot,
+        snapshot.clone(),
     )));
-    let slots_before: Vec<_> = app
-        .player_tab
-        .queue
-        .slots()
-        .iter()
-        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
-        .collect();
-    let status_before = {
-        let status = app.player.status.lock().unwrap();
-        (status.active, status.sequence_generation, status.current_idx, status.queue_len)
-    };
+    (app, commands, snapshot)
+}
 
+fn complete_stay_alive_save_as(app: &mut App) {
     app.save_queue_as_playlist("B".into());
     let mutation_id = app.next_playlist_mutation - 1;
     let coordinator_key = format!("create:{mutation_id}");
-    let owner_lineage = match app.playlist_mutations[&coordinator_key].active.as_ref().unwrap() {
+    let owner_queue_lineage = match app.playlist_mutations[&coordinator_key].active.as_ref().unwrap() {
         crate::app::types_playback::PlaylistMutation::CreateAs {
             owner_queue_lineage, ..
         } => *owner_queue_lineage,
         _ => panic!("expected Save As mutation"),
     };
-    assert_eq!(owner_lineage, Some(mbv_core::ctrl::QueueLineage(11)));
-
     app.handle_session_event(SessionEvent::PlaylistCreateComplete {
         mutation_id,
         coordinator_key,
         name: "B".into(),
         queue_lineage: app.remote_queue_lineage,
         source_playlist_id: Some("pl-1".into()),
-        owner_queue_lineage: owner_lineage,
+        owner_queue_lineage,
         result: Ok("pl-2".into()),
     });
+}
 
-    assert!(matches!(commands.try_recv(), Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueSourceUpdate {
-        source: crate::config::QueueSource::Playlist { id: Some(ref id), .. },
-        lineage: mbv_core::ctrl::QueueLineage(11),
-    }) if id == "pl-2"));
-    assert_eq!(app.queue_source, old_source, "the Client waits for the owner's snapshot");
-    assert_eq!(
-        app.player_tab.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect::<Vec<_>>(),
-        slots_before,
-    );
-    {
-        let status = app.player.status.lock().unwrap();
-        assert_eq!(
-            (status.active, status.sequence_generation, status.current_idx, status.queue_len),
-            status_before,
-        );
-    }
+#[test]
+fn rejected_stay_alive_save_as_leaves_dirty_queue_for_quit_save() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands, mut snapshot) = local_daemon_save_as_fixture();
+    let old_source = snapshot.source.clone();
+    app.queue_dirty = true;
+    complete_stay_alive_save_as(&mut app);
 
+    assert!(matches!(commands.try_recv(), Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueSourceUpdate { .. })));
+    assert!(app.queue_dirty, "enqueueing the owner update is not acceptance");
     app.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
         "queue source update rejected: owner queue lineage changed".into(),
     ));
-    assert_eq!(app.queue_source, old_source, "owner rejection must not rename locally");
+    snapshot.lineage = mbv_core::ctrl::QueueLineage(12);
+    app.handle_player_event(mbv_core::player::PlayerEvent::UnifiedQueueUpdated(Box::new(snapshot)));
+    assert_eq!(app.queue_source, old_source);
+    assert!(app.queue_dirty, "rejection must preserve quit-save eligibility");
+
+    app.config.lock().unwrap().save_playlist_on_quit = true;
+    app.config.lock().unwrap().quit_timeout_secs = 0;
+    assert!(app.try_quit());
+    assert!(matches!(
+        app.playlist_mutations.get("pl-1").and_then(|state| state.active.as_ref()),
+        Some(crate::app::types_playback::PlaylistMutation::Save { .. })
+    ));
+}
+
+#[test]
+fn accepted_stay_alive_save_as_cleans_and_persists_on_owner_snapshot_once() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands, snapshot) = local_daemon_save_as_fixture();
+    app.queue_dirty = true;
+    complete_stay_alive_save_as(&mut app);
+    assert!(matches!(commands.try_recv(), Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueSourceUpdate { .. })));
+    assert!(app.queue_dirty, "wait for the accepted owner snapshot");
+
+    let accepted_source = crate::config::QueueSource::Playlist {
+        id: Some("pl-2".into()),
+        name: "B".into(),
+    };
+    let mut accepted = snapshot.clone();
+    accepted.source = accepted_source.clone();
+    app.handle_player_event(mbv_core::player::PlayerEvent::UnifiedQueueUpdated(Box::new(
+        accepted.clone(),
+    )));
+    assert_eq!(app.queue_source, accepted_source);
+    assert!(!app.queue_dirty);
+    assert!(app.player_tab.emby_items().iter().all(|item| item.playlist_item_id.is_empty()));
+    let persisted = crate::config::load_queue_state().expect("accepted source persisted");
+    assert_eq!(persisted.source, accepted_source);
+    assert!(persisted.emby_items().iter().all(|item| item.playlist_item_id.is_empty()));
+
+    app.queue_dirty = true;
+    app.handle_player_event(mbv_core::player::PlayerEvent::UnifiedQueueUpdated(Box::new(accepted)));
+    assert!(app.queue_dirty, "a duplicate snapshot must not repeat Save As cleanup");
 }
 
 #[test]

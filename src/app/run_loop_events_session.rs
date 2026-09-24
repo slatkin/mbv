@@ -238,11 +238,17 @@ impl App {
                             name: name.clone(),
                         };
                         if self.is_local_daemon() {
-                            let sent = owner_queue_lineage
-                                .zip(self.player.as_remote())
-                                .is_some_and(|(lineage, remote)| {
-                                    remote.update_queue_source(source.clone(), lineage).is_ok()
-                                });
+                            let Some(lineage) = owner_queue_lineage else {
+                                self.flash(
+                                    "Could not update the Stay-alive queue source".into(),
+                                    ToastSeverity::Error,
+                                );
+                                self.finish_playlist_mutation(&coordinator_key, mutation_id);
+                                return;
+                            };
+                            let sent = self.player.as_remote().is_some_and(|remote| {
+                                remote.update_queue_source(source.clone(), lineage).is_ok()
+                            });
                             if !sent {
                                 self.flash(
                                     "Could not update the Stay-alive queue source".into(),
@@ -251,15 +257,14 @@ impl App {
                                 self.finish_playlist_mutation(&coordinator_key, mutation_id);
                                 return;
                             }
+                            self.pending_owner_source_update = Some((source, lineage));
                         } else {
                             self.set_queue_source_if_not_local_daemon(source);
-                        }
-                        self.queue_dirty = false;
-                        // The new source must never retain entry identities
-                        // from the old playlist.
-                        self.clear_local_playlist_entry_ids();
-                        self.save_queue_state();
-                        if !self.is_local_daemon() {
+                            self.queue_dirty = false;
+                            // The new source must never retain entry identities
+                            // from the old playlist.
+                            self.clear_local_playlist_entry_ids();
+                            self.save_queue_state();
                             self.flash(
                                 format!("Saved as playlist \"{name}\""),
                                 ToastSeverity::Success,

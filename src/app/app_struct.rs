@@ -335,6 +335,8 @@ pub struct App {
     pub(super) playlists_open_loading: bool,
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
+    pub(super) pending_owner_source_update:
+        Option<(crate::config::QueueSource, mbv_core::ctrl::QueueLineage)>,
     /// Deferred queue replacement awaiting the save/discard answer, then the
     /// `PlaylistMutationComplete` boundary. Owned by `replace_queue_or_prompt`
     /// and its existing callers (`ClearQueue`, the album/artist track paths,

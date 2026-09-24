@@ -435,6 +435,16 @@ impl App {
                 queue.set_unified_state(&unified, cursor);
                 if self.is_local_daemon() {
                     self.queue_source = unified.source.clone();
+                    if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
+                        if unified.lineage != lineage {
+                            self.pending_owner_source_update = None;
+                        } else if unified.source == source {
+                            self.pending_owner_source_update = None;
+                            self.queue_dirty = false;
+                            self.clear_local_playlist_entry_ids();
+                            self.save_queue_state();
+                        }
+                    }
                 }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {

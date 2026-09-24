@@ -245,6 +245,7 @@ impl App {
             playlists_open_loading: false,
             queue_source: crate::config::QueueSource::Unknown,
             queue_dirty: false,
+            pending_owner_source_update: None,
             pending_queue_action: None,
             pending_queue_replacement: None,
             pending_local_play: None,
