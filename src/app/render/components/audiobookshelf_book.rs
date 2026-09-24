@@ -1,7 +1,7 @@
 use crate::app::components::media_list::{
     MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
 };
-use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
+use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
 use crate::app::ui_util::fmt_duration_gutter;
 
 /// Canonical row projection for the book catalog: one selectable `Item` per

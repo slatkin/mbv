@@ -1,7 +1,7 @@
-use crate::app::music_grouping::{
+use crate::app::render::{natural_sort_key, strip_article};
+use crate::app::state::music_grouping::{
     derive_album_artist, derive_album_display_name, ArtistKey, GroupedAlbumCatalog,
 };
-use crate::app::render::{natural_sort_key, strip_article};
 use std::collections::HashMap;
 
 /// Sorted album display order for a set of `(artist, year, name)` info

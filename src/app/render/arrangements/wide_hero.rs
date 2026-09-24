@@ -155,16 +155,18 @@ pub(in crate::app::render) fn wide_hero_split(
     content_area: Rect,
     override_width: Option<u16>,
 ) -> (Rect, Rect) {
-    let browser_w =
-        crate::app::list_pane_width::normalize_list_pane_width(override_width, content_area.width)
-            .unwrap_or_else(|| (content_area.width as u32 * 2 / 5) as u16)
-            .max(WIDE_HERO_MIN_PANE_WIDTH)
-            .min(
-                content_area
-                    .width
-                    .saturating_sub(WIDE_HERO_MIN_PANE_WIDTH)
-                    .saturating_sub(WIDE_HERO_PANE_GAP),
-            );
+    let browser_w = crate::app::state::list_pane_width::normalize_list_pane_width(
+        override_width,
+        content_area.width,
+    )
+    .unwrap_or_else(|| (content_area.width as u32 * 2 / 5) as u16)
+    .max(WIDE_HERO_MIN_PANE_WIDTH)
+    .min(
+        content_area
+            .width
+            .saturating_sub(WIDE_HERO_MIN_PANE_WIDTH)
+            .saturating_sub(WIDE_HERO_PANE_GAP),
+    );
     let hero_w = content_area
         .width
         .saturating_sub(browser_w)

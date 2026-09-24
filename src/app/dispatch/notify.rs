@@ -1,0 +1,110 @@
+use crate::app::App;
+use std::time::{Duration, Instant};
+
+/// Severity class for toast notifications. Neutral and Success display for 2 s;
+/// Warning and Error display for 5 s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ToastSeverity {
+    /// Progress, information, lifecycle events.
+    #[default]
+    Neutral,
+    /// A user-requested action completed.
+    Success,
+    /// An operation failed but recovered through a working fallback.
+    Warning,
+    /// An operation failed without recovery.
+    Error,
+}
+
+impl ToastSeverity {
+    pub fn ttl(&self) -> Duration {
+        match self {
+            ToastSeverity::Neutral | ToastSeverity::Success => Duration::from_secs(2),
+            ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
+        }
+    }
+}
+
+impl App {
+    fn notify_system(&self, msg: &str) {
+        if self.system_notifications {
+            let tx = self.notif_action_tx.clone();
+            let mut cmd = std::process::Command::new("notify-send");
+            cmd.arg("--app-name=mbv")
+                .arg("mbv")
+                .arg(msg)
+                .stderr(std::process::Stdio::null());
+            std::thread::spawn(move || {
+                if !cmd.output().map(|o| o.status.success()).unwrap_or(false) {
+                    let _ = tx.send("__notif_failed__".into());
+                }
+            });
+        }
+    }
+
+    pub(in crate::app) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+        self.clear_saved_library_position(lib_idx);
+        let Some(client) = self.emby_snapshot() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return;
+        };
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let name = self.libs[lib_idx].library.name.clone();
+        std::thread::spawn(move || {
+            let _ = client.post_library_refresh(&library_id);
+        });
+        self.flash(format!("Scanning '{name}'..."), ToastSeverity::Neutral);
+    }
+
+    /// Display a toast classified by `severity`. Duration derives from severity
+    /// (Neutral/Success → 2 s, Warning/Error → 5 s). Never rings the terminal
+    /// bell. Desktop notification is attempted only when severity is not Neutral
+    /// (preserving the existing `system_notifications` gating and the
+    /// hide-on-success behavior in the render path).
+    pub(in crate::app) fn flash(&mut self, msg: String, severity: ToastSeverity) {
+        if severity != ToastSeverity::Neutral {
+            self.notify_system(&msg);
+        }
+        self.status = msg;
+        self.status_severity = severity;
+        self.status_expires = Some(Instant::now() + severity.ttl());
+    }
+
+    /// Shorthand for the common `flash(format!("Error: {e}"), ToastSeverity::Error)` case.
+    pub(in crate::app) fn flash_error(&mut self, e: impl std::fmt::Display) {
+        self.flash(format!("Error: {e}"), ToastSeverity::Error);
+    }
+
+    /// Enforces #223's queue-route invariant: an item whose resolved
+    /// route differs from the queue's current route (`active_route`) is
+    /// rejected with a toast instead of being appended or silently
+    /// swapping the player. Returns `true` if the enqueue was rejected --
+    /// the caller must abort without mutating the queue.
+    ///
+    /// Short-circuits `false` (no conflict) whenever the app is currently
+    /// in a thin-client mode that has nothing to do with library routing
+    /// (a Sessions-panel attached session, or a non-library-route direct
+    /// remote / local-daemon connection) -- both leave `active_route` at
+    /// `None`, so without this check any item resolving to a configured
+    /// `library_routes` entry would be wrongly rejected for a reason
+    /// unrelated to library routing. Mirrors the same condition Task 9
+    /// uses to gate `apply_route_for_playback`.
+    pub(in crate::app) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
+        if self.in_non_library_thin_client_mode() {
+            log::info!(
+                target: "library_route",
+                "route conflict check skipped: non-library thin-client owns playback"
+            );
+            return false;
+        }
+        if resolved_name != self.active_route {
+            self.flash(
+                "Can't mix libraries in a routed queue -- clear queue first".to_string(),
+                ToastSeverity::Error,
+            );
+            true
+        } else {
+            false
+        }
+    }
+}

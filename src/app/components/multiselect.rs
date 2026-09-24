@@ -13,7 +13,7 @@ use super::mouse::hit::HitRegions;
 use super::msg::{LeafKeyResult, Msg};
 use super::user_event::UserEvent;
 use crate::app::render::{render_multiselect_content, MultiSelectRenderModel};
-use crate::app::types_context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
+use crate::app::state::types::context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
 
 pub struct MultiselectComponent {
     kind: Option<MultiSelectKind>,

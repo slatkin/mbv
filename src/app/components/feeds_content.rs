@@ -39,7 +39,7 @@ use super::media_list::{
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{current_time_secs, feed_display_rows, FeedDisplayRow};
-use crate::app::types_feed_tab::WatchedFilter;
+use crate::app::state::types::feed_tab::WatchedFilter;
 use crate::app::ui_util::trunc_str;
 
 /// Max feed-group pill label length. The Feeds owner and the podcast tab's
@@ -336,7 +336,7 @@ impl FeedsContent {
                     _ => vec![self.entry_for_target(&target)?.clone()],
                 };
                 Some(Msg::Shell(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Feeds(entries),
+                    crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
                     None,
                 )))
             }
@@ -397,7 +397,7 @@ impl FeedsContent {
                             None => (parts.title.text, None),
                         };
                         let trailing =
-                            crate::app::home_latest::provider_timestamp_secs(&queue_item)
+                            crate::app::state::home_latest::provider_timestamp_secs(&queue_item)
                                 .map(crate::app::ui_util::fmt_publish_date_short)
                                 .filter(|date| !date.is_empty())
                                 .map(MediaListTrailing::Gutter);
@@ -701,7 +701,7 @@ impl LibraryContentOwner for FeedsContent {
                         _ => vec![self.entry_for_target(&target)?.clone()],
                     };
                     Some(Msg::Shell(ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Feeds(entries),
+                        crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
                         Some((at.x, at.y)),
                     )))
                 }

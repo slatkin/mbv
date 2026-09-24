@@ -55,7 +55,7 @@ configuration, Player handles, channels, or raw terminal events. Destinations
 translate slot messages into typed shell requests.
 
 Keyboard chords are resolved only by `UiRoot`'s Keyboard Router in
-`src/app/router.rs` using `src/app/key_policy.rs`; local components interpret
+`src/app/input/router.rs` using `src/app/input/key_policy.rs`; local components interpret
 only local semantic chords. Mouse eligibility is derived during shell sync from
 currently painted Panels; eligible components subscribe and resolve only their
 own retained geometry. No global hit map or coordinate re-resolution exists.

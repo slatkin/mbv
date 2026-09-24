@@ -3,7 +3,7 @@
 **Scope:** `src/app/render/theme/` — the value tier (the `Palette` enum in
 `palette.rs`, landed by `palette-enum`), the role tier (`mod.rs`, 51 role
 consts), and the surface tier (`surface.rs` level fills, `surface_table.rs`
-rows, `surface_resolve.rs`) — plus the re-export bridge `src/app/palette.rs`
+rows, `surface_resolve.rs`) — plus the re-export bridge in `src/app/mod.rs` (`use self::infra::{… palette …}`)
 and every `palette::` consumer.
 
 ## The invariant

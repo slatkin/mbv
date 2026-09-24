@@ -12,37 +12,37 @@ use mbv_core::playback_queue::QueueSlotId;
 #[derive(Debug, Clone, PartialEq)]
 pub enum QueueRequest {
     Cursor {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
         slot_id: QueueSlotId,
     },
-    Scope(crate::app::types_playback::QueueScope),
+    Scope(crate::app::state::types::playback::QueueScope),
     Play {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
         slot_id: QueueSlotId,
     },
     Remove {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
         slot_id: QueueSlotId,
     },
     /// Remove the selected queue slots, resolving each slot position when the
     /// shell executes the request because the queue may have changed since it
     /// was painted.
     RemoveSelection {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
         slot_ids: Vec<QueueSlotId>,
     },
     Move {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
         slot_id: QueueSlotId,
         direction: QueueMove,
     },
     MoveTo {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
         slot_id: QueueSlotId,
         onto: QueueSlotId,
     },
     Undo {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
     },
     ResizeColumnLive(u16),
     ResizeColumnEnd(u16),
@@ -58,7 +58,7 @@ pub enum QueueMove {
 pub enum QueueIntent {
     Clear,
     Navigate {
-        scope: crate::app::types_playback::QueueScope,
+        scope: crate::app::state::types::playback::QueueScope,
         slot_id: QueueSlotId,
     },
     PlayNow,

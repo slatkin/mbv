@@ -128,7 +128,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .iter()
             .filter_map(|id| self.arena.get(id))
             .filter(|entry| {
-                crate::app::fuzzy_match::word_match_score(
+                crate::app::infra::fuzzy_match::word_match_score(
                     &matcher,
                     &entry.node.search_text,
                     &self.filter_query,

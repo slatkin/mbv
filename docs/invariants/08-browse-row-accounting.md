@@ -1,8 +1,8 @@
 # Invariant 8 — Server-row accounting is distinct from retained browse items
 
-**Scope:** `BrowseLevel` pagination and exhaustion (`src/app/types_browse.rs`,
-`src/app/lib_event_actions.rs`, `src/app/library_browse_actions.rs`, and
-`src/app/library_search_actions.rs`).
+**Scope:** `BrowseLevel` pagination and exhaustion (`src/app/state/types/browse.rs`,
+`src/app/dispatch/library/event.rs`, `src/app/dispatch/library/browse.rs`, and
+`src/app/dispatch/library/search.rs`).
 
 ## The invariant
 
@@ -29,7 +29,7 @@ search/prefetch decisions and can make a complete music level appear to grow.
 
 ## How the code maintains it today
 
-`lib_event_actions.rs` records each page's pre-filter length in `fetched_rows`
+`dispatch/library/event.rs` records each page's pre-filter length in `fetched_rows`
 before grouped-music filtering and adds that count to the level. The browse
 page helper keeps the same server-row accounting, and pagination uses the
 resulting value for its next offset and exhaustion checks. Restored positions

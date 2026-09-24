@@ -82,38 +82,4 @@ pub use self::tab_panel::TabPanel;
 pub use self::user_event::UserEvent;
 
 #[cfg(test)]
-#[path = "emby_library_inline_search_tests.rs"]
-mod emby_library_inline_search_tests;
-#[cfg(test)]
-#[path = "feeds_component_tests.rs"]
-mod feeds_component_tests;
-#[cfg(test)]
-#[path = "feeds_manage_component_tests.rs"]
-mod feeds_manage_component_tests;
-#[cfg(test)]
-#[path = "library_routes_component_tests.rs"]
-mod library_routes_component_tests;
-#[cfg(test)]
-#[path = "multiselect_component_tests.rs"]
-mod multiselect_component_tests;
-#[cfg(test)]
-#[path = "playlists_component_tests.rs"]
-mod playlists_component_tests;
-#[cfg(test)]
-#[path = "queue_boundary_component_tests.rs"]
-mod queue_boundary_component_tests;
-#[cfg(test)]
-#[path = "queue_component_tests.rs"]
-mod queue_component_tests;
-#[cfg(test)]
-#[path = "queue_drag_component_tests.rs"]
-mod queue_drag_component_tests;
-#[cfg(test)]
-#[path = "save_playlist_component_tests.rs"]
-mod save_playlist_component_tests;
-#[cfg(test)]
-#[path = "search_sidebar_component_tests.rs"]
-mod search_sidebar_component_tests;
-#[cfg(test)]
-#[path = "tv_content_component_tests.rs"]
-mod tv_content_component_tests;
+mod tests;

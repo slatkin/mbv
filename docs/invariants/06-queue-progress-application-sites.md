@@ -3,11 +3,11 @@
 **Scope:** the daemon's canonical Bound queue (`PlayerOwnerState.queue`,
 `crates/mbv-core/src/player/owner_state.rs`), the Playback run's own queue
 mirror (`ExecutionSequence`, `crates/mbv-core/src/playback/execution_sequence.rs`),
-each connected shell's `PlaybackQueue` mirror (`src/app/player_event.rs`), the
+each connected shell's `PlaybackQueue` mirror (`src/app/dispatch/session/player_event.rs`), the
 shared write path (`crate::playback::queue::apply_progress_to_queue_item`),
 resume resolution (`crate::player::resume_start_pos` /
 `resume_ticks_for_item` / `resume_ticks_for_slot`, `crates/mbv-core/src/player/mod.rs`),
-jump dispatch (`crates/mbv-core/src/daemon_core.rs`, `src/app/action.rs`,
+jump dispatch (`crates/mbv-core/src/daemon_core.rs`, `src/app/dispatch/action/mod.rs`,
 `crates/mbv-core/src/playback/transition.rs`), and the Playback run's
 forced-jump/re-seek state (`crates/mbv-core/src/player/run/{types,commands,events,queue}.rs`).
 
@@ -98,7 +98,7 @@ back to an entry regardless of what was actually watched.
   installed, via a non-`PlayerEvent` path (`daemon_control.rs`'s
   `UnifiedAdoptQueue` post-adopt fetch → `DaemonEvent::QueueEnriched` →
   `apply_queue_enriched` in `daemon_run.rs`, merged in-place by
-  `PlaybackQueue::merge_refresh_for_slots`). `src/app/player_event.rs`'s
+  `PlaybackQueue::merge_refresh_for_slots`). `src/app/dispatch/session/player_event.rs`'s
   `Stopped`/`TrackCompleted` arms apply to the shell's own mirror; `events.rs`'s
   `on_end_file` applies to the run's own `ExecutionSequence` via
   `ExecutionSequence::apply_progress`, at the same point it computes
@@ -116,7 +116,7 @@ back to an entry regardless of what was actually watched.
   `ExecutionSequence::apply_progress` call through it, so the *mechanics* of
   writing cannot diverge. The *decision* of what to write (the
   meaningful-progress gate) is still duplicated by hand in `daemon_run.rs`
-  (x2) and `src/app/player_event.rs` (x2).
+  (x2) and `src/app/dispatch/session/player_event.rs` (x2).
 - **One resume gate, reused both ways.** `resume_start_pos`/
   `resume_ticks_for_item`/`resume_ticks_for_slot` (`player/mod.rs`) are the
   same gate `mpv_load_opts` bakes into a fresh `loadfile`'s `start=` option,
@@ -125,7 +125,7 @@ back to an entry regardless of what was actually watched.
 - **`JumpTo` carries its own resume value.** `PlayerCommand::JumpTo` has a
   `resume_ticks: Option<i64>` field, resolved by the dispatcher
   (`daemon_core.rs`'s `dispatch_slot_jump`/`settle_and_redispatch`/
-  `expire_and_redispatch`, `src/app/action.rs`'s `dispatch_jump` for Bare
+  `expire_and_redispatch`, `src/app/dispatch/action/mod.rs`'s `dispatch_jump` for Bare
   mode) from the *canonical* queue — never from `PlaybackRun`'s own copy.
 - **`forced_resume_ticks` lifecycle.** Armed alongside `forced_slot_id` in
   `commands.rs`'s `JumpTo` and `step_to_index` handlers; taken and applied as
@@ -139,7 +139,7 @@ back to an entry regardless of what was actually watched.
 ## Where it currently fails
 
 1. **The meaningful-progress gate is triplicated by hand** (`daemon_run.rs`
-   x2, `player_event.rs` x2) with no shared function and no compiler check
+   x2, `dispatch/session/player_event.rs` x2) with no shared function and no compiler check
    that a future edit to one copy keeps the others in step. Only the
    `TrackCompleted` pair's *threshold* is shared today
    (`crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS`, extracted after a
@@ -169,7 +169,7 @@ back to an entry regardless of what was actually watched.
 
 - Lift each gate's *full logic* (not just its threshold constant) into one
   `pub` function per event kind in `mbv-core` that both `daemon_run.rs` and
-  `src/app/player_event.rs` call, so the daemon and the shell cannot drift on
+  `src/app/dispatch/session/player_event.rs` call, so the daemon and the shell cannot drift on
   what counts as "worth recording" — today only the `TrackCompleted` pair's
   numeric floor is shared; the branching itself is still copy-pasted four
   times.

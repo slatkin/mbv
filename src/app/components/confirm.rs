@@ -16,7 +16,7 @@ use tuirealm::state::State;
 use super::msg::{ConfirmIntent, LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_confirm_modal_content;
-use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
+use crate::app::state::types::confirm::{ConfirmAction, ConfirmModal};
 
 /// The Interactive Component for the Confirm modal.
 ///

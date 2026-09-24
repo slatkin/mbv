@@ -50,8 +50,8 @@ accordingly.
 
 An Interactive Component owns its private presentation state, event
 interpretation, local updates, rendering, viewport, and render-derived hit
-geometry. It emits a typed `Msg` (`src/app/components/msg.rs`) for anything
-crossing that boundary. The shell `Model` (`src/app/shell*.rs`) owns `App`,
+geometry. It emits a typed `Msg` (`src/app/components/msg/`) for anything
+crossing that boundary. The shell `Model` (`src/app/shell/`) owns `App`,
 terminal/Service/worker lifecycle, Player and canonical queue authority,
 persistence, and external effects.
 
@@ -92,9 +92,9 @@ surface at Wide and Narrow, including absent Panels in each Panel mode.
 
 ## Keyboard routing (ADR 0023)
 
-There is exactly one keyboard resolution site: `src/app/router.rs`, with its
-ordered policy in `src/app/key_policy.rs`, folded into the tick in
-`shell_run.rs`. It returns ADR 0002's `Command` / `Swallow` / `FallThrough` from
+There is exactly one keyboard resolution site: `src/app/input/router.rs`, with its
+ordered policy in `src/app/input/key_policy.rs`, folded into the tick in
+`shell/run/mod.rs`. It returns ADR 0002's `Command` / `Swallow` / `FallThrough` from
 a plain-data `RouterSnapshot`. A component interprets only its own local chords
 and emits a semantic intent.
 
@@ -304,7 +304,7 @@ Before reporting a TUI change complete:
   to painting.)
 - [ ] **Component boundary** — no `App`, Service client, `PlayerProxy`, `Config`, or mpsc
   reached a component; anything crossing the boundary went out as a typed `Msg`.
-- [ ] **One router** — no chord is resolved outside `router.rs`/`key_policy.rs`,
+- [ ] **One router** — no chord is resolved outside `input/router.rs`/`input/key_policy.rs`,
   and no new caller of `GlobalViewKey`, a raw `*Key` request, `CONTEXT_STACK`, or
   `handle_legacy_key` was added.
 - [ ] **Presentation-test ownership** — each assertion belongs to the Arrangement,

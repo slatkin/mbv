@@ -18,8 +18,8 @@ use super::intents::{
 };
 use super::queue::QueueIntent;
 use crate::app::components::media_list::SelectionOrigin;
-use crate::app::types_context_menu::ContextMenuTargets;
-use crate::app::types_playback::QueueScope;
+use crate::app::state::types::context_menu::ContextMenuTargets;
+use crate::app::state::types::playback::QueueScope;
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
 // focus, toast) as overlay routing converts (task 5.2).
@@ -179,7 +179,7 @@ pub enum ShellRequest {
     /// Refresh the Emby session and Cast receiver snapshots.
     RefreshSessions,
     /// Activate the selected session/cast target by kind-qualified identity.
-    SelectSession(crate::app::panel_targets::SessionTargetKey),
+    SelectSession(crate::app::state::panel_targets::SessionTargetKey),
     /// Detach the current session/cast playback target.
     DetachSessions,
     /// Refresh the Feeds subscriptions through the shell-owned worker.
@@ -198,7 +198,7 @@ pub enum ShellRequest {
     /// Commit the component-owned Multiselect choices through the legacy App
     /// action path.
     MultiselectCommit {
-        kind: crate::app::types_context_menu::MultiSelectKind,
+        kind: crate::app::state::types::context_menu::MultiSelectKind,
         items: Vec<(String, String, bool)>,
     },
     /// Advance or leave the nested Library-routes picker through App's

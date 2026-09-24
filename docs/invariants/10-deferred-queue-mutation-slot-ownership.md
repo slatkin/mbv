@@ -1,14 +1,14 @@
 # Invariant 10 — A deferred queue mutation executes only through its owning boundary, from a slot exactly one writer and one reader own
 
-**Scope:** `App::pending_queue_action` (`src/app/app_struct.rs:345`) and its
+**Scope:** `App::pending_queue_action` (`src/app/state/app_struct.rs:345`) and its
 save/discard writer and `SessionEvent::PlaylistMutationComplete` reader
-(`src/app/run_loop_events_session.rs:191-194`), versus the D6 gate's
+(`src/app/dispatch/run_loop/session.rs:191-194`), versus the D6 gate's
 `App::pending_queue_replacement`
-(`src/app/app_struct.rs:354`, typed
+(`src/app/state/app_struct.rs:354`, typed
 `Option<(PendingQueueAction, ReplacementExecutor)>`), written only by
-`App::request_queue_replacement` (`src/app/queue_actions.rs:391`) and
+`App::request_queue_replacement` (`src/app/dispatch/queue/mod.rs:391`) and
 read/taken only by the `ConfirmAction::ReplacePopulatedQueue` arm
-(`src/app/input_confirm_keys.rs:178` take-on-confirm, `:183`
+(`src/app/input/confirm_keys/mod.rs:178` take-on-confirm, `:183`
 clear-on-cancel-or-dismiss, both handing the `(action, executor)` payload to
 `run_replacement`, which dispatches to the executor the entry point chose).
 
@@ -54,10 +54,10 @@ playback, because there is no signal at all.
 ## How the code maintains it today
 
 - **Two slots, two lifecycles.** `pending_queue_replacement` is written
-  only in `request_queue_replacement` (`queue_actions.rs:391`) when the
+  only in `request_queue_replacement` (`dispatch/queue/mod.rs:391`) when the
   gate decides confirmation is needed, as an `(action, executor)` tuple
   whose executor is the entry point's `ReplacementExecutor`. The
-  `ReplacePopulatedQueue` arm in `input_confirm_keys.rs` takes it on
+  `ReplacePopulatedQueue` arm in `input/confirm_keys/mod.rs` takes it on
   confirm (`y`/`Y`/`Enter`) and hands it to `run_replacement`, which
   dispatches `Routed(prep)` through `run_routed_replacement` (that entry
   point's pre-play prep, then `play_items_routed`) and `Pending` through
@@ -68,14 +68,14 @@ playback, because there is no signal at all.
   (`run_loop_events_session.rs:191-194`), which executes it only after
   lineage and playlist-identity checks.
 - **Comment-anchored intent.** Both sites state the exclusivity in place:
-  `types_confirm.rs:32` documents that the gate uses its own
+  `state/types/confirm.rs:32` documents that the gate uses its own
   `pending_queue_replacement` slot so the save-deferral slot stays with its
-  own callers, and `queue_actions.rs` documents why the shared deferral
+  own callers, and `dispatch/queue/mod.rs` documents why the shared deferral
   slot must not carry a gated replacement. These comments are the only
   barrier against a future "simplification" back into one slot.
-- **Tests.** `input_confirm_keys_tests.rs` pins both slots' independence
+- **Tests.** `input/confirm_keys/tests.rs` pins both slots' independence
   (confirm/cancel paths assert `pending_queue_replacement` alone moves) and
-  (`src/app/tests_tick_integration_music_mouse.rs:947-998` drives the gate
+  (`src/app/tests/tick_integration/music_mouse.rs:947-998` drives the gate
   through real `tick()` composition, asserting the slot is taken exactly
   once.
 

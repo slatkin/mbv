@@ -24,7 +24,7 @@ use tuirealm::state::State;
 use super::media_list::SelectionOrigin;
 use super::msg::{Msg, PlaybackRequest, ShellRequest};
 use super::user_event::UserEvent;
-use crate::app::action::VOLUME_STEP;
+use crate::app::dispatch::action::VOLUME_STEP;
 use crate::app::render::{render_status_bar, StatusBarModel, StatusBarRegions};
 
 /// The status row panel: paints the status row where `RootFrame` places it
