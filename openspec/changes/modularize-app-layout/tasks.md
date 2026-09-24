@@ -51,4 +51,4 @@ Rules for every task:
 
 ## 9. Docs
 
-- [ ] 9.1 Update path citations for the moved files in `AGENTS.md` (repository map; router/key_policy/input_resolver; `tests_tick_integration*.rs`), `.agents/skills/mbv-frontend/SKILL.md`, `docs/architecture/`, `docs/invariants/`, `CONTEXT.md` and `openspec/specs/**`. Find them with `rg -n 'src/app/[a-z_]+\.rs' AGENTS.md CONTEXT.md docs .agents openspec/specs` and leave archived changes alone. Verify: every `src/app/…` path cited in those files exists (`test -e`), then commit.
+- [x] 9.1 Update path citations for the moved files in `AGENTS.md` (repository map; router/key_policy/input_resolver; `tests_tick_integration*.rs`), `.agents/skills/mbv-frontend/SKILL.md`, `docs/architecture/`, `docs/invariants/`, `CONTEXT.md` and `openspec/specs/**`. Find them with `rg -n 'src/app/[a-z_]+\.rs' AGENTS.md CONTEXT.md docs .agents openspec/specs` and leave archived changes alone. Verify: every `src/app/…` path cited in those files exists (`test -e`), then commit. (Impl `a8da996e` 16 docs files + correction `378169a6` invariant 09 music_tree→TreeBrowser/filter_edit; reviewer Approve with 1 Nit.)
