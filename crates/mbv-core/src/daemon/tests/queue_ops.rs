@@ -105,17 +105,27 @@ fn unified_queue_append_adds_slots_and_forwards_to_player() {
 
     let queue = owner.core.queue;
     assert_eq!(
-        queue.slots().iter().map(|s| s.item.id()).collect::<Vec<_>>(),
+        queue
+            .slots()
+            .iter()
+            .map(|s| s.item.id())
+            .collect::<Vec<_>>(),
         vec!["a", "b", "c"],
     );
     match cmd_rx.recv().unwrap() {
         PlayerCommand::QueueAppend { items } => {
-            let ids: Vec<_> = items.iter().map(|slot| slot.item.id().to_string()).collect();
+            let ids: Vec<_> = items
+                .iter()
+                .map(|slot| slot.item.id().to_string())
+                .collect();
             assert_eq!(ids, vec!["b", "c"]);
             // The daemon allocates the canonical slot ids and hands the same
             // ids to the player run.
             let canonical: Vec<_> = queue.slots()[1..].iter().map(|s| s.slot_id).collect();
-            assert_eq!(items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), canonical);
+            assert_eq!(
+                items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
+                canonical
+            );
         }
         _ => panic!("expected QueueAppend"),
     }
@@ -307,7 +317,11 @@ fn unified_queue_remove_non_active_slot_keeps_active_and_forwards_removal() {
             .collect::<Vec<_>>(),
         vec!["a"],
     );
-    assert_eq!(owner.core.queue.active_slot_id(), active, "active slot unchanged");
+    assert_eq!(
+        owner.core.queue.active_slot_id(),
+        active,
+        "active slot unchanged"
+    );
     match cmd_rx.recv().unwrap() {
         PlayerCommand::QueueRemove(sid) => assert_eq!(sid, b_slot),
         _ => panic!("expected QueueRemove"),
@@ -359,7 +373,11 @@ fn unified_queue_remove_slots_applies_the_range_and_publishes_one_snapshot() {
             .collect::<Vec<_>>(),
         vec!["a"],
     );
-    assert_eq!(owner.core.queue.active_slot_id(), active, "active slot unchanged");
+    assert_eq!(
+        owner.core.queue.active_slot_id(),
+        active,
+        "active slot unchanged"
+    );
     // The whole range is one published snapshot, not one per removed slot.
     match recv_event(&client_rx) {
         CtrlEvent::UnifiedQueueState(state) => assert_eq!(state.slots.len(), 1),
@@ -401,15 +419,15 @@ fn unified_queue_remove_slots_skips_unknown_ids_and_no_ops_when_empty() {
     );
     assert_eq!(owner.core.queue.len(), 1);
     assert!(cmd_rx.try_recv().is_err());
-    assert!(client_rx.try_recv().is_err(), "no snapshot for a no-op batch");
+    assert!(
+        client_rx.try_recv().is_err(),
+        "no snapshot for a no-op batch"
+    );
 
     // An active slot in the batch is removed with the rest.
     run_queue_cmd(
         CtrlCmd::UnifiedQueueRemoveSlots {
-            slot_ids: vec![
-                crate::ctrl::slot_id_to_u64(a_slot),
-                999_999,
-            ],
+            slot_ids: vec![crate::ctrl::slot_id_to_u64(a_slot), 999_999],
         },
         client_id,
         &reply_tx,
@@ -522,7 +540,9 @@ fn packaged_owner_keeps_per_user_queue_persistence_on_shutdown() {
     handle_ctrl_for_role(
         CtrlCmd::RequestShutdown,
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -578,7 +598,8 @@ fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
 
 #[test]
 fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
-    let path = std::env::temp_dir().join(format!("mbv-takeover-owner-{}.json", uuid::Uuid::new_v4()));
+    let path =
+        std::env::temp_dir().join(format!("mbv-takeover-owner-{}.json", uuid::Uuid::new_v4()));
     let legacy = crate::config::QueueState {
         items: vec![emby_qi("legacy", "Video", "Movie")],
         cursor: 0,
@@ -604,7 +625,14 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
         }),
     )
     .is_none());
-    assert_eq!(crate::config::load_stay_alive_queue_state_at(&path).unwrap().queue.items[0].id(), "legacy");
+    assert_eq!(
+        crate::config::load_stay_alive_queue_state_at(&path)
+            .unwrap()
+            .queue
+            .items[0]
+            .id(),
+        "legacy"
+    );
     std::fs::remove_file(path).unwrap();
 }
 
@@ -628,7 +656,10 @@ fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
     let legacy = crate::config::QueueState {
         items: vec![emby_qi("stale", "Video", "Movie")],
         cursor: 0,
-        source: QueueSource::Playlist { id: None, name: "old".to_string() },
+        source: QueueSource::Playlist {
+            id: None,
+            name: "old".to_string(),
+        },
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
@@ -673,8 +704,10 @@ fn stay_alive_owner_refuses_client_queue_adoption() {
     );
     assert_eq!(owner.core.queue.slots()[0].item.id(), "owner");
     assert_eq!(*shared_queue.lineage.lock().unwrap(), lineage);
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
-        if reason.contains("cannot be adopted")));
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("cannot be adopted"))
+    );
     assert!(commands.try_recv().is_err());
 }
 
@@ -708,7 +741,10 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
 
     assert!(owner.core.queue.is_empty());
     assert_eq!(owner.core.source, QueueSource::Unknown);
-    assert_eq!(*shared_queue.lineage.lock().unwrap(), crate::ctrl::QueueLineage(1));
+    assert_eq!(
+        *shared_queue.lineage.lock().unwrap(),
+        crate::ctrl::QueueLineage(1)
+    );
     match cmd_rx.recv().unwrap() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert!(items.is_empty());
@@ -738,7 +774,9 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -753,11 +791,16 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
 
     assert_eq!(owner.core.queue.slots()[0].slot_id, original_slot);
     assert_eq!(owner.core.source, QueueSource::Unknown);
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 19,
         result: crate::ctrl::QueueLoadResult::Rejected { reason },
-    } if reason.contains("only by the Stay-alive owner")));
+    } if reason.contains("only by the Stay-alive owner"))
+    );
 
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueSourceUpdate {
@@ -765,7 +808,9 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
             lineage: crate::ctrl::QueueLineage(3),
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -778,8 +823,10 @@ fn packaged_role_rejects_idle_queue_load_without_staging_it() {
         crate::daemon::DaemonRole::Packaged,
     );
     assert_eq!(owner.core.source, QueueSource::Unknown);
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
-        if reason.contains("only by the Stay-alive owner")));
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("only by the Stay-alive owner"))
+    );
 }
 
 #[test]
@@ -811,7 +858,9 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -826,12 +875,20 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
 
     assert_eq!(owner.core.queue.slots()[0].slot_id, original_slot);
     assert_eq!(owner.core.source, QueueSource::Unknown);
-    assert!(player.status.lock().unwrap().active, "rejection leaves the old run active");
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+    assert!(
+        player.status.lock().unwrap().active,
+        "rejection leaves the old run active"
+    );
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 21,
         result: crate::ctrl::QueueLoadResult::Rejected { reason },
-    } if reason.contains("did not negotiate")));
+    } if reason.contains("did not negotiate"))
+    );
 }
 
 #[test]
@@ -855,7 +912,9 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -870,14 +929,25 @@ fn idle_queue_load_without_active_run_publishes_one_stopped_snapshot_and_accepts
 
     assert!(owner.core.queue.is_empty());
     assert_eq!(owner.core.source, QueueSource::Album);
-    assert_eq!(player.status.lock().unwrap().sequence_generation, original_generation + 1);
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
-    assert!(matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
-        if state.slots.is_empty() && state.active_slot.is_none() && !state.status.active));
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
-        request_id: 51,
-        result: crate::ctrl::QueueLoadResult::Accepted,
-    }));
+    assert_eq!(
+        player.status.lock().unwrap().sequence_generation,
+        original_generation + 1
+    );
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
+    assert!(
+        matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
+        if state.slots.is_empty() && state.active_slot.is_none() && !state.status.active)
+    );
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::UnifiedQueueLoadResult {
+            request_id: 51,
+            result: crate::ctrl::QueueLoadResult::Accepted,
+        }
+    ));
 }
 
 #[test]
@@ -906,7 +976,9 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -921,8 +993,14 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
 
     assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot);
     assert!(owner.pending_idle_load.is_some());
-    assert!(matches!(reply_rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(
+        reply_rx.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
 
     assert!(crate::daemon::complete_pending_idle_queue_load(
         old_run,
@@ -936,7 +1014,10 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
     assert_eq!(owner.core.source, QueueSource::Album);
     assert!(owner.core.observed_active_slot().is_none());
     assert!(!player.status.lock().unwrap().active);
-    assert!(!crate::daemon::playback_run_identity_is_current(old_run.into(), &player));
+    assert!(!crate::daemon::playback_run_identity_is_current(
+        old_run.into(),
+        &player
+    ));
     assert_eq!(
         crate::daemon::apply_stopped_observation(
             &mut owner,
@@ -950,12 +1031,21 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         "late old-run observations are ignored after replacement",
     );
     assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
-    assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot, "replacement reuses the old slot id");
-    assert_eq!(owner.core.queue.slots()[0].item.playback_position_ticks(), 0);
+    assert_eq!(
+        owner.core.queue.slots()[0].slot_id,
+        old_slot,
+        "replacement reuses the old slot id"
+    );
+    assert_eq!(
+        owner.core.queue.slots()[0].item.playback_position_ticks(),
+        0
+    );
     assert!(!owner.core.queue.slots()[0].item.played());
-    assert!(matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
+    assert!(
+        matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
         if state.slots.len() == 1 && state.slots[0].item.id() == "new"
-            && state.active_slot.is_none() && !state.status.active));
+            && state.active_slot.is_none() && !state.status.active)
+    );
     crate::daemon::broadcast_player_event_if_not_replaced(
         &registry,
         PlayerEvent::Stopped {
@@ -969,12 +1059,21 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         },
         true,
     );
-    assert!(client_rx.try_recv().is_err(), "committing stop is not rebroadcast raw");
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
-        request_id: 52,
-        result: crate::ctrl::QueueLoadResult::Accepted,
-    }));
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(
+        client_rx.try_recv().is_err(),
+        "committing stop is not rebroadcast raw"
+    );
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::UnifiedQueueLoadResult {
+            request_id: 52,
+            result: crate::ctrl::QueueLoadResult::Accepted,
+        }
+    ));
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
 }
 
 #[test]
@@ -988,10 +1087,12 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
     let shared_queue = shared_queue_state();
     let (merged_tx, _merged_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
-    let slots = |id: &str| vec![crate::ctrl::UnifiedQueueSlot {
-        slot_id: 901,
-        item: emby_qi(id, "Video", "Movie"),
-    }];
+    let slots = |id: &str| {
+        vec![crate::ctrl::UnifiedQueueSlot {
+            slot_id: 901,
+            item: emby_qi(id, "Video", "Movie"),
+        }]
+    };
 
     for (request_id, id) in [(53, "first"), (54, "second")] {
         handle_ctrl_for_role(
@@ -1002,7 +1103,9 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
                 source: QueueSource::Album,
             },
             client_id,
-            CtrlRequest { reply_tx: &reply_tx },
+            CtrlRequest {
+                reply_tx: &reply_tx,
+            },
             &client,
             &player,
             false,
@@ -1017,11 +1120,16 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
     }
 
     assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
-    assert_eq!(owner.pending_idle_load.as_ref().unwrap().slots[0].1.id(), "first");
+    assert_eq!(
+        owner.pending_idle_load.as_ref().unwrap().slots[0].1.id(),
+        "first"
+    );
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueClear,
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1034,12 +1142,16 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
         crate::daemon::DaemonRole::Local,
     );
     assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 54,
         result: crate::ctrl::QueueLoadResult::Rejected { reason },
-    } if reason.contains("another idle queue load is pending")));
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
-        if reason.contains("finalizing an idle queue load")));
+    } if reason.contains("another idle queue load is pending"))
+    );
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("finalizing an idle queue load"))
+    );
 }
 
 #[test]
@@ -1061,7 +1173,9 @@ fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1080,10 +1194,12 @@ fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
     ));
     assert!(owner.pending_idle_load.is_none());
     assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 56,
         result: crate::ctrl::QueueLoadResult::Rejected { reason },
-    } if reason.contains("timed out")));
+    } if reason.contains("timed out"))
+    );
 }
 
 #[test]
@@ -1105,7 +1221,9 @@ fn pending_idle_load_does_not_block_request_shutdown() {
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1121,7 +1239,9 @@ fn pending_idle_load_does_not_block_request_shutdown() {
     handle_ctrl_for_role(
         CtrlCmd::RequestShutdown,
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1133,12 +1253,17 @@ fn pending_idle_load_does_not_block_request_shutdown() {
         true,
         crate::daemon::DaemonRole::Local,
     );
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 57,
         result: crate::ctrl::QueueLoadResult::Rejected { reason },
-    } if reason.contains("run changed")));
+    } if reason.contains("run changed"))
+    );
     assert!(owner.pending_idle_load.is_none());
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownRejected { .. }));
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::ShutdownRejected { .. }
+    ));
 }
 
 #[test]
@@ -1157,12 +1282,17 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 55,
-            slots: vec![crate::ctrl::UnifiedQueueSlot { slot_id: 902, item: emby_qi("new", "Video", "Movie") }],
+            slots: vec![crate::ctrl::UnifiedQueueSlot {
+                slot_id: 902,
+                item: emby_qi("new", "Video", "Movie"),
+            }],
             cursor: 0,
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1186,10 +1316,12 @@ fn failed_stop_finalization_rejects_load_and_keeps_old_queue_and_source() {
     ));
     assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot);
     assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 55,
         result: crate::ctrl::QueueLoadResult::Rejected { reason },
-    } if reason == "stop finalization failed"));
+    } if reason == "stop finalization failed")
+    );
 }
 
 #[test]
@@ -1324,7 +1456,9 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
             source: QueueSource::Album,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1336,11 +1470,17 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         true,
         crate::daemon::DaemonRole::Local,
     );
-    assert!(matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(_)));
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
-        request_id: 71,
-        result: crate::ctrl::QueueLoadResult::Accepted,
-    }));
+    assert!(matches!(
+        recv_event(&client_rx),
+        CtrlEvent::UnifiedQueueState(_)
+    ));
+    assert!(matches!(
+        recv_event(&reply_rx),
+        CtrlEvent::UnifiedQueueLoadResult {
+            request_id: 71,
+            result: crate::ctrl::QueueLoadResult::Accepted,
+        }
+    ));
     let lineage = *shared_queue.lineage.lock().unwrap();
     let slots_before: Vec<_> = owner
         .core
@@ -1352,7 +1492,12 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
     player.status.lock().unwrap().active = true;
     let status_before = {
         let status = player.status.lock().unwrap();
-        (status.active, status.sequence_generation, status.current_idx, status.queue_len)
+        (
+            status.active,
+            status.sequence_generation,
+            status.current_idx,
+            status.queue_len,
+        )
     };
 
     handle_ctrl_for_role(
@@ -1364,7 +1509,9 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
             lineage,
         },
         client_id,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1383,20 +1530,37 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
     assert_eq!(*shared_queue.lineage.lock().unwrap(), lineage);
     assert_eq!(snapshot.lineage, lineage);
     assert_eq!(snapshot.source, owner.core.source);
-    assert_eq!(snapshot.source, QueueSource::Playlist {
-        id: Some("playlist-1".to_string()),
-        name: "Saved playlist".to_string(),
-    });
     assert_eq!(
-        owner.core.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect::<Vec<_>>(),
+        snapshot.source,
+        QueueSource::Playlist {
+            id: Some("playlist-1".to_string()),
+            name: "Saved playlist".to_string(),
+        }
+    );
+    assert_eq!(
+        owner
+            .core
+            .queue
+            .slots()
+            .iter()
+            .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+            .collect::<Vec<_>>(),
         slots_before,
     );
     let status = player.status.lock().unwrap();
     assert_eq!(
-        (status.active, status.sequence_generation, status.current_idx, status.queue_len),
+        (
+            status.active,
+            status.sequence_generation,
+            status.current_idx,
+            status.queue_len
+        ),
         status_before,
     );
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
 }
 
 #[test]
@@ -1430,7 +1594,9 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
                 },
             },
             client_id,
-            CtrlRequest { reply_tx: &reply_tx },
+            CtrlRequest {
+                reply_tx: &reply_tx,
+            },
             &client,
             &player,
             false,
@@ -1442,13 +1608,18 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
             true,
             crate::daemon::DaemonRole::Local,
         );
-        assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        assert!(
+            matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
             request_id: got,
             result: crate::ctrl::QueueLoadResult::Accepted,
-        } if got == request_id));
+        } if got == request_id)
+        );
     }
     let stale_lineage = crate::ctrl::QueueLineage(1);
-    assert_eq!(*shared_queue.lineage.lock().unwrap(), crate::ctrl::QueueLineage(2));
+    assert_eq!(
+        *shared_queue.lineage.lock().unwrap(),
+        crate::ctrl::QueueLineage(2)
+    );
     // Drain both replacement broadcasts before asserting the rejection result.
     for rx in [&rx_a, &rx_b] {
         let _ = recv_event(rx);
@@ -1472,7 +1643,9 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
             lineage: stale_lineage,
         },
         client_a,
-        CtrlRequest { reply_tx: &reply_tx },
+        CtrlRequest {
+            reply_tx: &reply_tx,
+        },
         &client,
         &player,
         false,
@@ -1485,15 +1658,31 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
         crate::daemon::DaemonRole::Local,
     );
 
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
-        if reason.contains("lineage changed")));
-    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueState(snapshot)
-        if snapshot.lineage == crate::ctrl::QueueLineage(2) && snapshot.source == source_before));
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        if reason.contains("lineage changed"))
+    );
+    assert!(
+        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueState(snapshot)
+        if snapshot.lineage == crate::ctrl::QueueLineage(2) && snapshot.source == source_before)
+    );
     assert_eq!(owner.core.source, source_before);
-    assert_eq!(*shared_queue.lineage.lock().unwrap(), crate::ctrl::QueueLineage(2));
     assert_eq!(
-        owner.core.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect::<Vec<_>>(),
+        *shared_queue.lineage.lock().unwrap(),
+        crate::ctrl::QueueLineage(2)
+    );
+    assert_eq!(
+        owner
+            .core
+            .queue
+            .slots()
+            .iter()
+            .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+            .collect::<Vec<_>>(),
         slots_before,
     );
-    assert!(matches!(commands.try_recv(), Err(mpsc::TryRecvError::Empty)));
+    assert!(matches!(
+        commands.try_recv(),
+        Err(mpsc::TryRecvError::Empty)
+    ));
 }

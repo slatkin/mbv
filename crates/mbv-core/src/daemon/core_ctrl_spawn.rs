@@ -143,9 +143,9 @@ pub(crate) fn spawn_ctrl_client(
                         "unparsable ctrl line from client {client_id} ({} bytes): {e}",
                         line.len(),
                     );
-                    if let Ok(json) = serde_json::to_string(&CtrlEvent::CommandRejected(
-                        format!("mbvd ignored an unparsable control command: {e}"),
-                    )) {
+                    if let Ok(json) = serde_json::to_string(&CtrlEvent::CommandRejected(format!(
+                        "mbvd ignored an unparsable control command: {e}"
+                    ))) {
                         reply_tx.send(CtrlOutbound::Event(json)).ok();
                     }
                 }

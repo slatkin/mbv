@@ -1,15 +1,16 @@
+use super::core::{bind_ctrl_listener, broadcast, DaemonEvent};
 use super::*;
-use super::core::{broadcast, bind_ctrl_listener, DaemonEvent};
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc;
-use std::net::TcpListener;
-use crate::api::{EmbyClient, EmbyItem, mbv_direct_tcp_port_command};
+use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
+use crate::ctrl::{CtrlEvent, PlaybackGeneration, PlaybackRequestId};
 use crate::daemon::ctrl::{ClientRegistry, CtrlClients};
-use crate::player::{Player, PlayerEvent, PlayerOwnerState};
-use crate::playback_queue::QueueSlotId;
 use crate::playback::PlaybackQueue;
+use crate::playback_queue::QueueSlotId;
+use crate::player::{Player, PlayerEvent, PlayerOwnerState};
 use crate::stream::SocketStream;
-use crate::ctrl::{CtrlEvent, PlaybackRequestId, PlaybackGeneration};
+use std::net::TcpListener;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 pub(crate) fn broadcast_player_event_if_not_replaced(
     ctrl_clients: &ClientRegistry,
@@ -74,9 +75,14 @@ pub(crate) fn apply_track_completed_observation(
         } else {
             slot.item.playback_position_ticks()
         };
-        owner.core.apply_completion_progress(slot_id, position, played);
+        owner
+            .core
+            .apply_completion_progress(slot_id, position, played);
     }
-    if owner.core.consume_completed_slot(slot_id, consume, consume_videos, consume_audio) {
+    if owner
+        .core
+        .consume_completed_slot(slot_id, consume, consume_videos, consume_audio)
+    {
         log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
     }
     *shared_queue.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
@@ -107,7 +113,9 @@ pub(crate) fn apply_stopped_observation(
     } else {
         slot.item.playback_position_ticks()
     };
-    owner.core.apply_completion_progress(slot_id, position, played);
+    owner
+        .core
+        .apply_completion_progress(slot_id, position, played);
     Some(true)
 }
 
@@ -242,7 +250,9 @@ pub fn run_with_options(
     let owner_state = if role == DaemonRole::Local {
         let owner_path = crate::config::stay_alive_queue_state_path();
         crate::config::load_stay_alive_queue_state().or_else(|| {
-            (!owner_path.exists()).then(crate::config::load_queue_state).flatten()
+            (!owner_path.exists())
+                .then(crate::config::load_queue_state)
+                .flatten()
                 .and_then(|queue| {
                     crate::config::legacy_queue_for_owner_if_absent(&owner_path, Some(queue))
                 })
@@ -252,10 +262,8 @@ pub fn run_with_options(
     };
     let (initial_queue, initial_source, initial_lineage) = owner_state
         .map(|state| {
-            let queue = PlaybackQueue::from_queue_items(
-                state.queue.items,
-                Some(state.queue.cursor),
-            );
+            let queue =
+                PlaybackQueue::from_queue_items(state.queue.items, Some(state.queue.cursor));
             (queue, state.queue.source, state.lineage)
         })
         .unwrap_or_else(|| {
@@ -266,16 +274,16 @@ pub fn run_with_options(
             )
         });
     if role == DaemonRole::Local {
-        if let Err(error) = crate::config::save_stay_alive_queue_state(
-            &crate::config::StayAliveQueueState {
+        if let Err(error) =
+            crate::config::save_stay_alive_queue_state(&crate::config::StayAliveQueueState {
                 queue: project_queue_state(
                     &initial_queue,
                     &initial_source,
                     &player.status.lock().unwrap(),
                 ),
                 lineage: initial_lineage,
-            },
-        ) {
+            })
+        {
             log::error!(target: "queue", "failed to initialize Stay-alive queue state: {error}");
         }
         player.set_initial_queue(

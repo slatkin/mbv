@@ -5,24 +5,24 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use super::control::{broadcast_queue_state, unified_queue_state_for_peer};
+use super::ws::all_audio;
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
-use crate::daemon::ctrl::{
-    serialize_ctrl_event, send_to, take_authority_for_emby_remote, AuthorityHolder,
-    ClientRegistry, CtrlClientId, CtrlClients, CtrlOutbound, CtrlRequest, CtrlSender,
-};
-pub use crate::daemon::ctrl::CtrlTransport;
 use crate::ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent, CtrlHello,
     DisconnectReason, PlaybackGeneration, PlaybackIntent, PlaybackIntentAction,
     PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
 };
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+pub use crate::daemon::ctrl::CtrlTransport;
+use crate::daemon::ctrl::{
+    send_to, serialize_ctrl_event, take_authority_for_emby_remote, AuthorityHolder, ClientRegistry,
+    CtrlClientId, CtrlClients, CtrlOutbound, CtrlRequest, CtrlSender,
+};
 use crate::playback_execution_sequence::ExecSlot;
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::stream::SocketStream;
 use crate::ws::WsEvent;
-use super::control::{broadcast_queue_state, unified_queue_state_for_peer};
-use super::ws::all_audio;
 
 pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
     let path = crate::config::control_socket_path();
@@ -79,9 +79,8 @@ pub(super) enum DaemonEvent {
     Shutdown,
 }
 
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PlaybackIntentPhase {
+pub(super) enum PlaybackIntentPhase {
     Accepted,
     Resolving,
     PlayerOpening,
@@ -90,7 +89,7 @@ enum PlaybackIntentPhase {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct CurrentPlaybackIntent {
+pub(super) struct CurrentPlaybackIntent {
     pub(super) connection_id: CtrlClientId,
     pub(super) request_id: PlaybackRequestId,
     pub(super) generation: PlaybackGeneration,
@@ -276,7 +275,9 @@ impl PlaybackIntentState {
         ))
     }
 
-    pub(super) fn settle_buffering_if_due(&mut self) -> Option<(CtrlClientId, PlaybackIntentEvent)> {
+    pub(super) fn settle_buffering_if_due(
+        &mut self,
+    ) -> Option<(CtrlClientId, PlaybackIntentEvent)> {
         let current = self.current.as_mut()?;
         if current.phase != PlaybackIntentPhase::OutputBuffering
             || current
@@ -420,7 +421,8 @@ pub(super) fn dispatch_slot_jump(
                 transition_request_id,
                 transition_generation,
             );
-            if let (Some(s), Some((origin_request_id, origin_client))) = (superseded, *queued_origin)
+            if let (Some(s), Some((origin_request_id, origin_client))) =
+                (superseded, *queued_origin)
             {
                 if origin_request_id == s.request_id {
                     ctrl_clients.lock().unwrap().send_to_client(
@@ -439,7 +441,14 @@ pub(super) fn dispatch_slot_jump(
     // Accepting a transition mutates desired playback state (in_flight /
     // queued_latest); publish the coherent snapshot so Clients can render the
     // pending slot before it settles (task 4.1, design D5).
-    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+    broadcast_queue_state(
+        ctrl_clients,
+        player,
+        shared_queue,
+        queue,
+        source,
+        transitions,
+    );
 }
 
 /// Drop any in-flight/queued transition: the caller is issuing a
@@ -514,7 +523,13 @@ pub(super) fn expire_and_redispatch(
         .current
         .as_ref()
         .filter(|current| current.request_id == expired.request_id)
-        .map(|current| (current.connection_id, current.request_id, current.generation))
+        .map(|current| {
+            (
+                current.connection_id,
+                current.request_id,
+                current.generation,
+            )
+        })
     {
         if let Some(event) = owner.intents.rejected_if_current(
             connection_id,
@@ -580,11 +595,13 @@ pub(super) fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
     clients.lock().unwrap().broadcast_to_all(json);
 }
 
-
 /// Fans out redacted Audiobookshelf progress to peers that negotiated
 /// `abs-progress`. Called from the daemon event loop after the acknowledged
 /// update has been applied to the canonical Bound queue.
-pub(super) fn broadcast_audiobookshelf_progress(clients: &ClientRegistry, event: AudiobookshelfProgressEvent) {
+pub(super) fn broadcast_audiobookshelf_progress(
+    clients: &ClientRegistry,
+    event: AudiobookshelfProgressEvent,
+) {
     let Some(json) = serialize_ctrl_event(&CtrlEvent::AudiobookshelfProgress(event)) else {
         return;
     };
@@ -602,7 +619,6 @@ pub(super) fn broadcast_audiobookshelf_book_progress(
     };
     clients.lock().unwrap().broadcast_book_progress_gated(json);
 }
-
 
 /// A reason a ctrl-socket command is not acted on, computed server-side.
 /// Currently the only case is audio-only mode rejecting a non-audio play

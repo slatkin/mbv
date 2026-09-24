@@ -1,15 +1,20 @@
-use super::*;
 use super::core::DaemonEvent;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
-use crate::ctrl::{CtrlEvent, PlaybackIntentAction, CtrlCmd, PlaybackIntentOutcome, DisconnectReason, PlaybackIntentEvent};
-use crate::daemon::ctrl::{CtrlClientId, CtrlSender, CtrlRequest, ClientRegistry, send_to, take_authority_for_emby_remote};
-use crate::player::{PlayerEvent, PlayerCommand, Player};
-use crate::playback_queue::{QueueItem, QueueSlotId, PlaybackQueue};
+use super::*;
+use crate::api::{EmbyClient, EmbyItem};
+use crate::ctrl::{
+    CtrlCmd, CtrlEvent, DisconnectReason, PlaybackIntentAction, PlaybackIntentEvent,
+    PlaybackIntentOutcome,
+};
+use crate::daemon::ctrl::{
+    send_to, take_authority_for_emby_remote, ClientRegistry, CtrlClientId, CtrlRequest, CtrlSender,
+};
 use crate::playback_execution_sequence::ExecSlot;
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
-use crate::api::EmbyItem;
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum LoopFlow {
@@ -96,7 +101,10 @@ impl DaemonLoop {
         let mut owner_queue_dirty = false;
 
         match ev {
-            DaemonEvent::Player(PlayerEvent::TrackChanged { slot_id, transition }) => {
+            DaemonEvent::Player(PlayerEvent::TrackChanged {
+                slot_id,
+                transition,
+            }) => {
                 // Resolve the reported slot against the canonical queue. A
                 // report naming a slot the daemon no longer holds carries no
                 // evidence about which surviving slot was intended, so it is
@@ -132,32 +140,32 @@ impl DaemonLoop {
                     self.owner.core.observed_active_slot();
                 self.broadcast_owner_queue_state();
                 // Settle playback intent if the reported slot matches.
-                if let Some((connection_id, request_id, generation)) = self.owner.intents
-                    .current
-                    .as_ref()
-                    .filter(|current| match &current.action {
-                        PlaybackIntentAction::Play { item_ids, .. } => self
-                            .owner
-                            .core
-                            .queue
-                            .slots()
-                            .get(observed_idx)
-                            .is_some_and(|slot| item_ids.iter().any(|id| id == slot.item.id())),
-                        _ => false,
-                    })
-                    .map(|current| {
-                        (
-                            current.connection_id,
-                            current.request_id,
-                            current.generation,
-                        )
-                    })
+                if let Some((connection_id, request_id, generation)) =
+                    self.owner
+                        .intents
+                        .current
+                        .as_ref()
+                        .filter(|current| match &current.action {
+                            PlaybackIntentAction::Play { item_ids, .. } => {
+                                self.owner.core.queue.slots().get(observed_idx).is_some_and(
+                                    |slot| item_ids.iter().any(|id| id == slot.item.id()),
+                                )
+                            }
+                            _ => false,
+                        })
+                        .map(|current| {
+                            (
+                                current.connection_id,
+                                current.request_id,
+                                current.generation,
+                            )
+                        })
                 {
-                    if let Some(event) = self.owner.intents.applied_if_current(
-                        connection_id,
-                        request_id,
-                        generation,
-                    ) {
+                    if let Some(event) =
+                        self.owner
+                            .intents
+                            .applied_if_current(connection_id, request_id, generation)
+                    {
                         self.ctrl_clients
                             .lock()
                             .unwrap()
@@ -245,14 +253,16 @@ impl DaemonLoop {
                 // here so their now-playing highlight lands on the right row.
                 self.broadcast_owner_queue_state();
             }
-            DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted {
-                slot_id,
-                run_identity,
-                position_ticks,
-                played,
-                consume,
-                ..
-            }) => {
+            DaemonEvent::Player(
+                pe @ PlayerEvent::TrackCompleted {
+                    slot_id,
+                    run_identity,
+                    position_ticks,
+                    played,
+                    consume,
+                    ..
+                },
+            ) => {
                 let (consume_videos, consume_audio) = {
                     let cfg = self.client.lock().unwrap();
                     (cfg.config.consume_videos, cfg.config.consume_audio)
@@ -285,15 +295,22 @@ impl DaemonLoop {
                     ..
                 } = &pe
                 {
-                    Some((*slot_id, *run_identity, *position_ticks, *played, error.clone()))
+                    Some((
+                        *slot_id,
+                        *run_identity,
+                        *position_ticks,
+                        *played,
+                        error.clone(),
+                    ))
                 } else {
                     None
                 };
                 let stopped_run = stopped.as_ref().map(|(_, run_identity, ..)| *run_identity);
                 if stopped_run.is_some_and(|run_identity| {
-                    self.owner.pending_idle_load.as_ref().is_some_and(|pending| {
-                        pending.stopped_run != run_identity
-                    })
+                    self.owner
+                        .pending_idle_load
+                        .as_ref()
+                        .is_some_and(|pending| pending.stopped_run != run_identity)
                 }) {
                     cancel_pending_idle_queue_load(
                         &mut self.owner,
@@ -346,20 +363,20 @@ impl DaemonLoop {
                     self.broadcast_owner_queue_state();
                 }
                 if let PlayerEvent::PausedChanged(paused) = &pe {
-                    if let Some((connection_id, request_id, generation)) = self.owner.intents
-                        .current
-                        .as_ref()
-                        .and_then(|current| match &current.action {
-                            PlaybackIntentAction::SetPaused { paused: desired }
-                                if desired == paused =>
-                            {
-                                Some((
-                                    current.connection_id,
-                                    current.request_id,
-                                    current.generation,
-                                ))
+                    if let Some((connection_id, request_id, generation)) =
+                        self.owner.intents.current.as_ref().and_then(|current| {
+                            match &current.action {
+                                PlaybackIntentAction::SetPaused { paused: desired }
+                                    if desired == paused =>
+                                {
+                                    Some((
+                                        current.connection_id,
+                                        current.request_id,
+                                        current.generation,
+                                    ))
+                                }
+                                _ => None,
                             }
-                            _ => None,
                         })
                     {
                         if let Some(event) = self.owner.intents.applied_if_current(
@@ -375,7 +392,9 @@ impl DaemonLoop {
                     }
                 }
                 if matches!(pe, PlayerEvent::Stopped { .. }) {
-                    if let Some((connection_id, request_id, generation)) = self.owner.intents
+                    if let Some((connection_id, request_id, generation)) = self
+                        .owner
+                        .intents
                         .current
                         .as_ref()
                         .filter(|current| matches!(current.action, PlaybackIntentAction::Stop))
@@ -556,7 +575,11 @@ impl DaemonLoop {
                     self.owner.intents.invalidate_connection(client_id);
                     return LoopFlow::Continue;
                 }
-                if !self.owner.intents.is_current(client_id, request_id, generation) {
+                if !self
+                    .owner
+                    .intents
+                    .is_current(client_id, request_id, generation)
+                {
                     return LoopFlow::Continue;
                 }
                 if let Err(error) = &fetched {
@@ -592,7 +615,9 @@ impl DaemonLoop {
                         None
                     };
                     if let Some(reason) = rejection {
-                        if let Some(event) = self.owner.intents
+                        if let Some(event) = self
+                            .owner
+                            .intents
                             .rejected_if_current(client_id, request_id, generation, reason)
                         {
                             self.ctrl_clients
@@ -657,7 +682,8 @@ impl DaemonLoop {
                     .unwrap()
                     .flush_writers(std::time::Duration::from_secs(1));
                 self.player.stop();
-                self.player.join_or_timeout(std::time::Duration::from_secs(5));
+                self.player
+                    .join_or_timeout(std::time::Duration::from_secs(5));
                 return LoopFlow::Shutdown;
             }
         }

@@ -1,10 +1,14 @@
-use super::*;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc;
-use crate::api::EmbyClient;
-use crate::player::Player;
-use crate::api::EmbyItem;
 use super::core::DaemonEvent;
+use super::*;
+use crate::api::EmbyClient;
+use crate::api::EmbyItem;
+use crate::ctrl::{CtrlCmd, CtrlEvent, PlaybackIntent, PlaybackIntentAction};
+use crate::playback_execution_sequence::ExecSlot;
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::player::{Player, PlayerCommand, PlayerOwnerState};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 #[path = "control_queue.rs"]
 mod control_queue;
@@ -58,7 +62,14 @@ pub(crate) fn play_resolved_items(
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
     *source = new_source;
     mint_queue_lineage(shared_queue);
-    broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+    broadcast_queue_state(
+        ctrl_clients,
+        player,
+        shared_queue,
+        queue,
+        source,
+        transitions,
+    );
     if fetched.len() == 1 {
         let mut play_item = fetched[0].clone();
         if start_ticks > 0 {
@@ -81,7 +92,10 @@ pub(crate) fn play_resolved_items(
 /// newly-connecting ctrl clients off `SharedQueueState`), and returns it.
 fn mint_queue_lineage(shared_queue: &SharedQueueState) -> crate::ctrl::QueueLineage {
     let mut lineage = shared_queue.lineage.lock().unwrap();
-    lineage.0 = lineage.0.checked_add(1).expect("owner queue lineage exhausted");
+    lineage.0 = lineage
+        .0
+        .checked_add(1)
+        .expect("owner queue lineage exhausted");
     *lineage
 }
 
@@ -99,7 +113,10 @@ fn install_idle_queue_load(
     let active_slot = slots.get(cursor).map(|(slot_id, _)| *slot_id);
     player.advance_sequence_generation();
     player.set_initial_queue(
-        &slots.iter().map(|(_, item)| item.clone()).collect::<Vec<_>>(),
+        &slots
+            .iter()
+            .map(|(_, item)| item.clone())
+            .collect::<Vec<_>>(),
         cursor,
     );
     reset_slot_jumps(
@@ -136,7 +153,11 @@ fn install_idle_queue_load(
     );
 }
 
-fn reject_queue_load(reply_tx: &CtrlSender, request_id: crate::ctrl::QueueLoadRequestId, reason: String) {
+fn reject_queue_load(
+    reply_tx: &CtrlSender,
+    request_id: crate::ctrl::QueueLoadRequestId,
+    reason: String,
+) {
     send_to(
         reply_tx,
         &CtrlEvent::UnifiedQueueLoadResult {
@@ -171,10 +192,7 @@ pub(crate) fn cancel_pending_idle_queue_load_if_run_changed(
     false
 }
 
-pub(crate) fn expire_pending_idle_queue_load(
-    owner: &mut DaemonPlayerOwner,
-    now: Instant,
-) -> bool {
+pub(crate) fn expire_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, now: Instant) -> bool {
     if owner.pending_idle_load.as_ref().is_some_and(|pending| {
         now.duration_since(pending.started_at) >= IDLE_QUEUE_LOAD_STOP_TIMEOUT
     }) {
@@ -187,7 +205,10 @@ pub(crate) fn expire_pending_idle_queue_load(
 }
 
 pub(crate) fn complete_pending_idle_queue_load(
-    run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+    run_identity: (
+        crate::ctrl::PlaybackRequestId,
+        crate::ctrl::PlaybackGeneration,
+    ),
     failure: Option<String>,
     owner: &mut DaemonPlayerOwner,
     player: &Player,
@@ -306,7 +327,13 @@ pub(crate) fn handle_ctrl_for_role(
         return;
     }
     let DaemonPlayerOwner {
-        core: PlayerOwnerState { queue, source, transitions, .. },
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
         intents: playback_intents,
         queued_transition_origin,
         ..
@@ -318,7 +345,9 @@ pub(crate) fn handle_ctrl_for_role(
     // straight to `shared_queue.lineage` for the next command's read.
     let queue_lineage = *shared_queue.lineage.lock().unwrap();
     match cmd.requires_owner() {
-        crate::ctrl::OwnerGate::OwnerOnly(rejection) if role != crate::daemon::DaemonRole::Local => {
+        crate::ctrl::OwnerGate::OwnerOnly(rejection)
+            if role != crate::daemon::DaemonRole::Local =>
+        {
             send_role_gate_rejection(
                 rejection,
                 RoleGateContext {
@@ -333,7 +362,9 @@ pub(crate) fn handle_ctrl_for_role(
             );
             return;
         }
-        crate::ctrl::OwnerGate::NonOwnerOnly(rejection) if role == crate::daemon::DaemonRole::Local => {
+        crate::ctrl::OwnerGate::NonOwnerOnly(rejection)
+            if role == crate::daemon::DaemonRole::Local =>
+        {
             send_role_gate_rejection(
                 rejection,
                 RoleGateContext {
@@ -441,7 +472,16 @@ pub(crate) fn handle_ctrl_for_role(
             if let Some(reason) =
                 abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
             {
-                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, queue_lineage, reason);
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    queue_lineage,
+                    reason,
+                );
                 return;
             }
             let (items, next_cursor) = admit_queue_items(
@@ -456,7 +496,14 @@ pub(crate) fn handle_ctrl_for_role(
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
             mint_queue_lineage(shared_queue);
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                queue,
+                source,
+                transitions,
+            );
 
             let adopted_slots: Vec<(QueueSlotId, String)> = queue
                 .slots()
@@ -474,12 +521,17 @@ pub(crate) fn handle_ctrl_for_role(
                     .collect();
                 spawn_item_lookup(client, merged_tx, item_ids, move |result| match result {
                     Ok(items) => {
-                        let items_by_id: std::collections::HashMap<String, EmbyItem> =
-                            items.into_iter().map(|item| (item.id.clone(), item)).collect();
+                        let items_by_id: std::collections::HashMap<String, EmbyItem> = items
+                            .into_iter()
+                            .map(|item| (item.id.clone(), item))
+                            .collect();
                         let enriched = adopted_slots
                             .into_iter()
                             .filter_map(|(slot_id, item_id)| {
-                                items_by_id.get(&item_id).cloned().map(|item| (slot_id, item))
+                                items_by_id
+                                    .get(&item_id)
+                                    .cloned()
+                                    .map(|item| (slot_id, item))
                             })
                             .collect();
                         Some(DaemonEvent::QueueEnriched(enriched))
@@ -506,7 +558,7 @@ pub(crate) fn handle_ctrl_for_role(
         }
         CtrlCmd::PlayerCmd(pc) => {
             player.send_command(PlayerCommand::from(pc));
-        },
+        }
         CtrlCmd::Stop => {
             player.stop();
             reset_slot_jumps(transitions, queued_transition_origin);
@@ -707,7 +759,10 @@ pub(crate) fn handle_ctrl_for_role(
                 ctrl_clients,
             );
         }
-        CtrlCmd::UnifiedQueueSourceUpdate { source: new_source, lineage } => {
+        CtrlCmd::UnifiedQueueSourceUpdate {
+            source: new_source,
+            lineage,
+        } => {
             let supports_operation = ctrl_clients
                 .lock()
                 .unwrap()
@@ -732,24 +787,50 @@ pub(crate) fn handle_ctrl_for_role(
                 );
             } else {
                 *source = new_source;
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+                broadcast_queue_state(
+                    ctrl_clients,
+                    player,
+                    shared_queue,
+                    queue,
+                    source,
+                    transitions,
+                );
             }
         }
         // ── Unified queue commands ──────────────────────────────────────
-        CtrlCmd::UnifiedQueueReplace { items, slots, start_idx, source: new_source } => {
-            let submitted_slots: Vec<(crate::playback_queue::QueueSlotId, QueueItem)> = if slots.is_empty() {
-                items
-                    .into_iter()
-                    .enumerate()
-                    .map(|(index, item)| (crate::playback_queue::QueueSlotId::from_raw((index + 1) as u64), item))
-                    .collect()
-            } else {
-                slots
-                    .into_iter()
-                    .map(|slot| (crate::playback_queue::QueueSlotId::from_raw(slot.slot_id), slot.item))
-                    .collect()
-            };
-            let submitted_items: Vec<QueueItem> = submitted_slots.iter().map(|(_, item)| item.clone()).collect();
+        CtrlCmd::UnifiedQueueReplace {
+            items,
+            slots,
+            start_idx,
+            source: new_source,
+        } => {
+            let submitted_slots: Vec<(crate::playback_queue::QueueSlotId, QueueItem)> =
+                if slots.is_empty() {
+                    items
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, item)| {
+                            (
+                                crate::playback_queue::QueueSlotId::from_raw((index + 1) as u64),
+                                item,
+                            )
+                        })
+                        .collect()
+                } else {
+                    slots
+                        .into_iter()
+                        .map(|slot| {
+                            (
+                                crate::playback_queue::QueueSlotId::from_raw(slot.slot_id),
+                                slot.item,
+                            )
+                        })
+                        .collect()
+                };
+            let submitted_items: Vec<QueueItem> = submitted_slots
+                .iter()
+                .map(|(_, item)| item.clone())
+                .collect();
             let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
             let supports_abs_book_queue = ctrl_clients
                 .lock()
@@ -760,7 +841,16 @@ pub(crate) fn handle_ctrl_for_role(
                 supports_abs_queue,
                 supports_abs_book_queue,
             ) {
-                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, queue_lineage, reason);
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    queue_lineage,
+                    reason,
+                );
                 return;
             }
             let (slots, next_cursor) = admit_queue_slots(
@@ -859,7 +949,16 @@ pub(crate) fn handle_ctrl_for_role(
             if let Some(reason) =
                 abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
             {
-                reject_command(request.reply_tx, ctrl_clients, client_id, player, queue, source, queue_lineage, reason);
+                reject_command(
+                    request.reply_tx,
+                    ctrl_clients,
+                    client_id,
+                    player,
+                    queue,
+                    source,
+                    queue_lineage,
+                    reason,
+                );
                 return;
             }
             let mut items = items;
@@ -897,13 +996,17 @@ pub(crate) fn handle_ctrl_for_role(
                 .into_iter()
                 .map(|item| {
                     let slot_id = queue.append(item.clone());
-                    ExecSlot {
-                        slot_id,
-                        item,
-                    }
+                    ExecSlot { slot_id, item }
                 })
                 .collect();
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                queue,
+                source,
+                transitions,
+            );
             // Append to the player's queue rather than replacing the whole queue.
             player.send_command(PlayerCommand::QueueAppend {
                 items: items_for_player,
@@ -924,7 +1027,14 @@ pub(crate) fn handle_ctrl_for_role(
                 );
             } else if queue.active_slot_id() == Some(sid) {
                 queue.remove_active_slot_confirmed(sid);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+                broadcast_queue_state(
+                    ctrl_clients,
+                    player,
+                    shared_queue,
+                    queue,
+                    source,
+                    transitions,
+                );
                 if queue.is_empty() {
                     // Clear the player's queue and stop.
                     player.advance_sequence_generation();
@@ -943,7 +1053,14 @@ pub(crate) fn handle_ctrl_for_role(
                 }
             } else {
                 queue.remove_slot(sid);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+                broadcast_queue_state(
+                    ctrl_clients,
+                    player,
+                    shared_queue,
+                    queue,
+                    source,
+                    transitions,
+                );
                 player.send_command(PlayerCommand::QueueRemove(sid));
             }
         }
@@ -969,7 +1086,14 @@ pub(crate) fn handle_ctrl_for_role(
             if removed.is_empty() {
                 return;
             }
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                queue,
+                source,
+                transitions,
+            );
             if removed_active {
                 // Removing the playing slot forces a track change that carries
                 // no awaited transition identity, so anything in flight can
@@ -1009,7 +1133,14 @@ pub(crate) fn handle_ctrl_for_role(
                 );
             } else {
                 queue.move_slot(sid, to_index);
-                broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+                broadcast_queue_state(
+                    ctrl_clients,
+                    player,
+                    shared_queue,
+                    queue,
+                    source,
+                    transitions,
+                );
                 player.send_command(PlayerCommand::QueueMove(sid, to_index));
             }
         }
@@ -1059,7 +1190,14 @@ pub(crate) fn handle_ctrl_for_role(
             });
             player.stop();
             reset_slot_jumps(transitions, queued_transition_origin);
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                queue,
+                source,
+                transitions,
+            );
         }
     }
 }

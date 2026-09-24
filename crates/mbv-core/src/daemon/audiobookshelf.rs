@@ -1,7 +1,8 @@
-use super::*;
-use std::sync::mpsc;
-use crate::player::Player;
 use super::core::DaemonEvent;
+use super::*;
+use crate::playback_queue::PlaybackQueue;
+use crate::player::Player;
+use std::sync::mpsc;
 
 /// Install (or clear) the daemon player's Audiobookshelf context from the
 /// owner runtime, wiring the player's acknowledged-progress sender into the

@@ -1,9 +1,9 @@
 use super::*;
-use std::sync::{Arc, Mutex};
-use crate::ws::WsEvent;
 use crate::api::EmbyClient;
-use crate::player::Player;
-use crate::playback_queue::PlaybackQueue;
+use crate::playback_queue::{PlaybackQueue, QueueItem};
+use crate::player::{Player, PlayerCommand};
+use crate::ws::WsEvent;
+use std::sync::{Arc, Mutex};
 
 pub(crate) fn handle_ws(
     ev: WsEvent,
@@ -59,7 +59,14 @@ pub(crate) fn handle_ws(
             // queued-transition origin cannot outlive a reset here (nothing can
             // be queued once in_flight is cleared before the next accept).
             transitions.reset();
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                queue,
+                source,
+                transitions,
+            );
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {

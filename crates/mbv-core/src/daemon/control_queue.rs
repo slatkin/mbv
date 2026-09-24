@@ -1,8 +1,8 @@
-use crate::daemon::*;
-use crate::player::Player;
-use crate::playback_queue::PlaybackQueue;
-use crate::ctrl::CtrlEvent;
+use super::*;
 use crate::api::EmbyItem;
+use crate::ctrl::{CtrlCmd, CtrlEvent};
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::player::Player;
 
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence. The snapshot is handed to the
@@ -149,16 +149,48 @@ pub(crate) fn broadcast_queue_state(
 
     // ── Unified-queue peers, gate ABS episodes and books independently ──
     let unified_full_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, lineage, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, true,
+        &status,
+        queue,
+        source,
+        lineage,
+        observed_active_slot,
+        in_flight.clone(),
+        queued_latest.clone(),
+        true,
+        true,
     ));
     let unified_abs_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, lineage, observed_active_slot, in_flight.clone(), queued_latest.clone(), true, false,
+        &status,
+        queue,
+        source,
+        lineage,
+        observed_active_slot,
+        in_flight.clone(),
+        queued_latest.clone(),
+        true,
+        false,
     ));
     let unified_book_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, lineage, observed_active_slot, in_flight.clone(), queued_latest.clone(), false, true,
+        &status,
+        queue,
+        source,
+        lineage,
+        observed_active_slot,
+        in_flight.clone(),
+        queued_latest.clone(),
+        false,
+        true,
     ));
     let unified_json = serialize_ctrl_event(&unified_queue_state_for_peer(
-        &status, queue, source, lineage, observed_active_slot, in_flight, queued_latest, false, false,
+        &status,
+        queue,
+        source,
+        lineage,
+        observed_active_slot,
+        in_flight,
+        queued_latest,
+        false,
+        false,
     ));
 
     if let (

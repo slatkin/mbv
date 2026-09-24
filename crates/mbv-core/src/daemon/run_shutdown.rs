@@ -1,5 +1,5 @@
-use std::sync::mpsc;
 use super::*;
+use std::sync::mpsc;
 
 pub(crate) fn setup_shutdown_signal() -> (mpsc::SyncSender<()>, mpsc::Receiver<()>) {
     // Shared shutdown channel — written by SIGTERM thread and tray Quit item.

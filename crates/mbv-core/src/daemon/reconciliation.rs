@@ -1,7 +1,11 @@
+use super::*;
 use crate::config::{EmbySetup, QueueSource};
 use crate::ctrl::ServiceSetupRejection;
-use super::*;
-use std::time::Duration;
+use crate::playback_execution_sequence::ExecSlot;
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::player::Player;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 pub const EMBY_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
 pub const ABS_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
@@ -28,10 +32,7 @@ fn stop_old_emby_run(player: &Player) -> bool {
 
 /// Drop slots matching `drop` from the canonical queue, retaining the active
 /// slot only if it survived. Returns the retained items.
-fn purge_queue(
-    queue: &mut PlaybackQueue,
-    drop: impl Fn(&QueueItem) -> bool,
-) -> Vec<ExecSlot> {
+fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> Vec<ExecSlot> {
     let active = queue.active_slot_id();
     let retained: Vec<_> = queue
         .slot_pairs()
@@ -41,7 +42,10 @@ fn purge_queue(
     let active = active.filter(|id| retained.iter().any(|slot| slot.slot_id == *id));
     let revision = queue.revision();
     *queue = PlaybackQueue::from_slot_items(
-        retained.iter().map(|slot| (slot.slot_id, slot.item.clone())).collect(),
+        retained
+            .iter()
+            .map(|slot| (slot.slot_id, slot.item.clone()))
+            .collect(),
         active,
         revision,
     );
@@ -115,7 +119,14 @@ pub(crate) fn reconcile_packaged_emby(
         // Purging a service's slots interrupts any slot jump; a reset here
         // cannot strand a queued-transition origin (see daemon_ws).
         transitions.reset();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+        broadcast_queue_state(
+            ctrl_clients,
+            player,
+            shared_queue,
+            queue,
+            source,
+            transitions,
+        );
         *client.lock().unwrap() = next.client.lock().unwrap().clone();
         update_player_queue(player, items, active_index, client);
     } else {
@@ -195,7 +206,14 @@ pub(crate) fn reconcile_packaged_audiobookshelf(
         // Purging a service's slots interrupts any slot jump; a reset here
         // cannot strand a queued-transition origin (see daemon_ws).
         transitions.reset();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+        broadcast_queue_state(
+            ctrl_clients,
+            player,
+            shared_queue,
+            queue,
+            source,
+            transitions,
+        );
         update_player_queue(player, items, active_index, client);
         *current = None;
         return Ok(());
@@ -224,7 +242,14 @@ pub(crate) fn reconcile_packaged_audiobookshelf(
         // Purging a service's slots interrupts any slot jump; a reset here
         // cannot strand a queued-transition origin (see daemon_ws).
         transitions.reset();
-        broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+        broadcast_queue_state(
+            ctrl_clients,
+            player,
+            shared_queue,
+            queue,
+            source,
+            transitions,
+        );
         update_player_queue(player, items, active_index, client);
     }
     let generation = current
