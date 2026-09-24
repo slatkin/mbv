@@ -1,7 +1,7 @@
 ## 1. Gate carries its executor
 
-- [x] 1.1 Add `ReplacementExecutor { Routed, Pending }` (next to `PendingQueueAction`); change `pending_queue_replacement` to `Option<(PendingQueueAction, ReplacementExecutor)>` in `app_struct.rs` / `construct.rs`
-- [x] 1.2 `request_queue_replacement(action, via)` in `queue_actions.rs`; add `run_replacement(action, via)` dispatching Routed → `play_items_routed`, Pending → `execute_queue_replacement`
+- [x] 1.1 Add `ReplacementExecutor { Routed(RoutedReplacementPrep), Pending }` (next to `PendingQueueAction`; prep variants `Album`/`MusicAlbums`/`Folder`/`ShuffleFolder`/`Selection`); change `pending_queue_replacement` to `Option<(PendingQueueAction, ReplacementExecutor)>` in `app_struct.rs` / `construct.rs`
+- [x] 1.2 `request_queue_replacement(action, via)` in `queue_actions.rs`; add `run_replacement(action, via)` dispatching Routed → `run_routed_replacement` (replay the entry point's pre-play prep, then `play_items_routed`), Pending → `execute_queue_replacement`
 - [x] 1.3 `ReplacePopulatedQueue` arm in `input_confirm_keys.rs` takes the tuple and calls `run_replacement`
 - [x] 1.4 Update existing `request_queue_replacement` callers and tests (`play_grouped_track`, `input_confirm_keys_tests.rs`) to pass `Pending`
 
@@ -10,7 +10,7 @@
 - [x] 2.1 `replace_and_route_album_queue` → `request_queue_replacement(PlayItems{..,autostart:true}, Routed)`; move any pre-play queue mutation after the gate (design D4)
 - [x] 2.2 The three `play_items_routed` sites in `shuffle_folder_actions.rs` → gate with `Routed` (D4 applies)
 - [x] 2.3 `context_menu_actions.rs` PlaySelection / ShuffleSelection: move `rebuild_queue_for_selection` into the confirmed path; gate with `Routed`
-- [x] 2.4 `shell_playlists.rs` playlist load: `replace_queue_or_prompt` → `request_queue_replacement(.., Pending)`
+- [x] 2.4 `shell_playlists.rs` playlist load: `replace_queue_or_prompt` → `request_queue_replacement(.., Pending)` (the `load_and_play_playlist` route in `library_load_actions.rs`, `PlaylistsActivate{open:false}`, was gated as an additional playlist-load site in 5382bf01)
 
 ## 3. Tests (mock-only, `cargo nextest run -p mbv`)
 
