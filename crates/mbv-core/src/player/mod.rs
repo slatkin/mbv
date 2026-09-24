@@ -276,13 +276,13 @@ pub use types::*;
 mod sources;
 pub use sources::*;
 mod runtime;
-pub use runtime::*;
+pub(crate) use runtime::*;
 mod report_worker;
-pub use report_worker::*;
+pub(self) use report_worker::*;
 mod reporting;
-pub use reporting::*;
+pub(crate) use reporting::*;
 mod run;
-pub use run::*;
+pub(in crate::player) use run::*;
 // `run/` keeps the hot-loop files physically grouped while the controller and
 // submission concerns remain sibling modules.
 mod controller;

@@ -1,4 +1,17 @@
-use super::*;
+#[cfg(test)]
+use crate::config::tests::SYS_ENV_LOCK;
+#[cfg(test)]
+use crate::config::{
+    audiobookshelf_transaction, config_path, load_config, load_library_position_state,
+    load_service_secret, persist_audiobookshelf_setup_and_secret, persist_emby_setup_and_secret,
+    persist_emby_setup_and_secret_at, remove_audiobookshelf_setup_and_secret_with_owned_state,
+    replace_audiobookshelf_setup_and_secret, save_audiobookshelf_setup_at, save_emby_setup_at,
+    save_library_position_state, save_service_secret, service_secret_path, AudiobookshelfSetup,
+    EmbySetup, LibraryPosition, LibraryPositionLevel, LibraryPositionState, ServiceKind,
+    TestStateDirGuard,
+};
+#[cfg(test)]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn library_position_state_round_trips_by_library() {

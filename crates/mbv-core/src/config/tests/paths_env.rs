@@ -1,5 +1,13 @@
-use super::*;
-
+#[cfg(test)]
+use crate::config::{
+    cache_dir, config_path, control_socket_path, data_dir_system_or_local, home_latest_launch_path,
+    is_system_instance, load_home_latest_launch, load_last_remote_connection,
+    load_last_remote_connection_at, load_queue_state, mpv_ipc_path, parse_config, queue_state_path,
+    save_config_settings_at, save_home_latest_launch, save_last_remote_connection,
+    save_last_remote_connection_at, save_queue_state, write_config_text_at, Config,
+    LastRemoteConnection, QueueSource, QueueState, TestStateDirGuard,
+    DEFAULT_SYSTEM_DAEMON_TCP_LISTEN,
+};
 // Path-routing and save/load error-path tests. Included into `config::tests`
 // (see `config.rs`).
 

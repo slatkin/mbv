@@ -1,4 +1,10 @@
-use super::*;
+#[cfg(test)]
+use crate::config::{
+    config_path, load_config, load_queue_state, load_service_secret, persist_emby_setup_and_secret,
+    replace_emby_setup_and_secret, save_config_settings, save_queue_state, save_service_secret,
+    Config, EmbySetup, FeedKind, FeedSubscription, QueueSource, QueueState, ServiceKind,
+    TestStateDirGuard,
+};
 
 #[test]
 fn emby_setup_normalizes_server_and_starts_at_revision_one() {

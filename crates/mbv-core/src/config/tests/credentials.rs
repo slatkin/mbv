@@ -1,4 +1,12 @@
-use super::*;
+#[cfg(test)]
+use crate::config::tests::SYS_ENV_LOCK;
+#[cfg(test)]
+use crate::config::{
+    clear_control_credential_result, clear_service_secret, control_credential_path,
+    load_control_credential, load_or_create_control_credential, load_service_secret,
+    save_control_credential, save_service_secret, service_secret_path, ServiceKind,
+    TestStateDirGuard,
+};
 
 // ── Service-independent startup tests (tasks 1.2–1.4) ────────────────
 #[test]

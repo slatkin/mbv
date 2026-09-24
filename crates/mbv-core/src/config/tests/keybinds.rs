@@ -1,4 +1,5 @@
-use super::*;
+#[cfg(test)]
+use crate::config::{config_path, parse_config, save_config_settings, Config};
 
 // ── `[keys]` config parse + save (change add-configurable-keybinds, U2) ──
 //
@@ -201,7 +202,7 @@ fn keys_saved_section_names_are_lowercase_file_shape() {
 
 #[cfg(test)]
 mod keys_rejections {
-    use super::*;
+    use super::parse_config;
     use rstest::rstest;
 
     /// Each rejection surfaces through the existing config error path with
