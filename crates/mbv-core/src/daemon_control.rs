@@ -111,6 +111,54 @@ fn install_idle_queue_load(
     );
 }
 
+const IDLE_QUEUE_LOAD_STOP_TIMEOUT: Duration = Duration::from_secs(30);
+
+pub(super) fn cancel_pending_idle_queue_load(owner: &mut DaemonPlayerOwner, reason: &str) -> bool {
+    let Some(pending) = owner.pending_idle_load.take() else {
+        return false;
+    };
+    send_to(
+        &pending.reply_tx,
+        &CtrlEvent::UnifiedQueueLoadResult {
+            request_id: pending.request_id,
+            result: crate::ctrl::QueueLoadResult::Rejected {
+                reason: reason.to_string(),
+            },
+        },
+    );
+    true
+}
+
+pub(super) fn cancel_pending_idle_queue_load_if_run_changed(
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+) -> bool {
+    let current_run = (0, player.status.lock().unwrap().sequence_generation);
+    if owner
+        .pending_idle_load
+        .as_ref()
+        .is_some_and(|pending| pending.stopped_run != current_run)
+    {
+        return cancel_pending_idle_queue_load(owner, "playback run changed during queue load");
+    }
+    false
+}
+
+pub(super) fn expire_pending_idle_queue_load(
+    owner: &mut DaemonPlayerOwner,
+    now: Instant,
+) -> bool {
+    if owner.pending_idle_load.as_ref().is_some_and(|pending| {
+        now.duration_since(pending.started_at) >= IDLE_QUEUE_LOAD_STOP_TIMEOUT
+    }) {
+        return cancel_pending_idle_queue_load(
+            owner,
+            "timed out waiting for playback stop finalization",
+        );
+    }
+    false
+}
+
 pub(super) fn complete_pending_idle_queue_load(
     run_identity: (crate::ctrl::PlaybackRequestId, crate::ctrl::PlaybackGeneration),
     failure: Option<String>,
@@ -167,7 +215,8 @@ fn handle_ctrl_for_role(
     stay_alive: bool,
     role: crate::daemon::DaemonRole,
 ) {
-    if owner.pending_idle_load.is_some() {
+    cancel_pending_idle_queue_load_if_run_changed(owner, player);
+    if owner.pending_idle_load.is_some() && !matches!(&cmd, CtrlCmd::RequestShutdown) {
         if let CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } = cmd {
             send_to(
                 request.reply_tx,
@@ -552,6 +601,7 @@ fn handle_ctrl_for_role(
                     source: new_source,
                     reply_tx: request.reply_tx.clone(),
                     stopped_run,
+                    started_at: Instant::now(),
                 });
                 player.stop();
                 return;

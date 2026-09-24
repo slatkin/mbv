@@ -720,7 +720,7 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 52,
             slots: vec![crate::ctrl::UnifiedQueueSlot {
-                slot_id: 900,
+                slot_id: crate::ctrl::slot_id_to_u64(old_slot),
                 item: emby_qi("new", "Video", "Movie"),
             }],
             cursor: 0,
@@ -770,9 +770,26 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         "late old-run observations are ignored after replacement",
     );
     assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
+    assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot, "replacement reuses the old slot id");
+    assert_eq!(owner.core.queue.slots()[0].item.playback_position_ticks(), 0);
+    assert!(!owner.core.queue.slots()[0].item.played());
     assert!(matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
         if state.slots.len() == 1 && state.slots[0].item.id() == "new"
             && state.active_slot.is_none() && !state.status.active));
+    crate::daemon::broadcast_player_event_if_not_replaced(
+        &registry,
+        PlayerEvent::Stopped {
+            slot_id: Some(old_slot),
+            run_identity: old_run,
+            position_ticks: 99_000_000,
+            played: true,
+            consume: true,
+            progress_report_accepted: false,
+            error: None,
+        },
+        true,
+    );
+    assert!(client_rx.try_recv().is_err(), "committing stop is not rebroadcast raw");
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
         request_id: 52,
         result: crate::ctrl::QueueLoadResult::Accepted,
@@ -841,6 +858,102 @@ fn second_idle_load_is_rejected_busy_without_replacing_pending_or_old_queue() {
     } if reason.contains("another idle queue load is pending")));
     assert!(matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
         if reason.contains("finalizing an idle queue load")));
+}
+
+#[test]
+fn pending_idle_load_times_out_and_rejects_without_replacing_old_queue() {
+    let player = cold_player();
+    player.status.lock().unwrap().active = true;
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+
+    handle_ctrl(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 56,
+            slots: vec![],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &merged_tx,
+        true,
+    );
+    let deadline = owner.pending_idle_load.as_ref().unwrap().started_at;
+    assert!(crate::daemon::expire_pending_idle_queue_load(
+        &mut owner,
+        deadline + Duration::from_secs(31),
+    ));
+    assert!(owner.pending_idle_load.is_none());
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "old");
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 56,
+        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+    } if reason.contains("timed out")));
+}
+
+#[test]
+fn pending_idle_load_does_not_block_request_shutdown() {
+    let player = cold_player();
+    player.status.lock().unwrap().active = true;
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, _client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, reply_rx) = mpsc::channel();
+    let (merged_tx, _merged_rx) = mpsc::channel();
+    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+
+    handle_ctrl(
+        CtrlCmd::UnifiedQueueLoadIdle {
+            request_id: 57,
+            slots: vec![],
+            cursor: 0,
+            source: QueueSource::Album,
+        },
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &merged_tx,
+        true,
+    );
+    player.status.lock().unwrap().sequence_generation += 1;
+    handle_ctrl(
+        CtrlCmd::RequestShutdown,
+        client_id,
+        CtrlRequest { reply_tx: &reply_tx },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared_queue_state(),
+        &registry,
+        false,
+        &merged_tx,
+        true,
+    );
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+        request_id: 57,
+        result: crate::ctrl::QueueLoadResult::Rejected { reason },
+    } if reason.contains("run changed")));
+    assert!(owner.pending_idle_load.is_none());
+    assert!(matches!(recv_event(&reply_rx), CtrlEvent::ShutdownRejected { .. }));
 }
 
 #[test]

@@ -377,6 +377,7 @@ pub(super) struct PendingIdleQueueLoad {
     source: crate::config::QueueSource,
     reply_tx: CtrlSender,
     stopped_run: (PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+    started_at: Instant,
 }
 
 /// Route one slot-jump transition through the owner's one-in-flight dispatch

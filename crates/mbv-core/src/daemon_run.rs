@@ -1,3 +1,13 @@
+pub(super) fn broadcast_player_event_if_not_replaced(
+    ctrl_clients: &ClientRegistry,
+    event: PlayerEvent,
+    replacement_committed: bool,
+) {
+    if !replacement_committed {
+        broadcast(ctrl_clients, &CtrlEvent::Player(event));
+    }
+}
+
 pub(super) fn playback_run_identity_is_current(
     run_identity: (PlaybackRequestId, PlaybackGeneration),
     player: &Player,
@@ -340,6 +350,8 @@ pub fn run_with_options(
         let ev = match merged_rx.recv_timeout(Duration::from_millis(25)) {
             Ok(ev) => ev,
             Err(mpsc::RecvTimeoutError::Timeout) => {
+                cancel_pending_idle_queue_load_if_run_changed(&mut owner, &player);
+                expire_pending_idle_queue_load(&mut owner, Instant::now());
                 if let Some((connection_id, event)) = owner.intents.settle_buffering_if_due() {
                     log::info!(target: "pipe_latency", "request={} generation={} outcome=settled", event.request_id, event.generation);
                     let clients = ctrl_clients.lock().unwrap();
@@ -553,6 +565,16 @@ pub fn run_with_options(
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Player(pe) => {
+                if let PlayerEvent::Stopped { run_identity, .. } = &pe {
+                    if owner.pending_idle_load.as_ref().is_some_and(|pending| {
+                        pending.stopped_run != *run_identity
+                    }) {
+                        cancel_pending_idle_queue_load(
+                            &mut owner,
+                            "playback stopped for a different run during queue load",
+                        );
+                    }
+                }
                 let pending_idle_load_matches = match &pe {
                     PlayerEvent::Stopped { run_identity, .. } => owner
                         .pending_idle_load
@@ -670,7 +692,7 @@ pub fn run_with_options(
                         }
                     }
                 }
-                broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
+                broadcast_player_event_if_not_replaced(&ctrl_clients, pe, replacement_committed);
             }
             DaemonEvent::Ws { generation, event } => {
                 if emby_runtime
