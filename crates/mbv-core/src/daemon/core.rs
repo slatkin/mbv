@@ -357,7 +357,7 @@ use crate::player::PlayerOwnerState;
 /// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
 /// loop owns exactly one of these.
 #[derive(Default)]
-pub(crate) struct DaemonPlayerOwner {
+pub(super) struct DaemonPlayerOwner {
     pub(super) core: PlayerOwnerState,
     pub(super) pending_idle_load: Option<PendingIdleQueueLoad>,
     /// Guarded direct-playback lifecycle coordinator. Retained functionally

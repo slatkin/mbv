@@ -1,12 +1,5 @@
-use super::{
-    all_audio, apply_queue_enriched, apply_stopped_observation,
-    apply_track_completed_observation, audio_only_rejection, broadcast,
-    handle_ctrl_for_role, handle_ws,
-    take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
-    CtrlRequest, CtrlTransport, DaemonEvent, DaemonPlayerOwner, PlaybackIntentState,
-    PlayerOwnerState,
-    SharedQueueState,
-};
+use crate::daemon::*;
+use crate::player::PlayerOwnerState;
 use crate::api::{EmbyClient, EmbyItem};
 use crate::mock_http::MockHttp;
 use crate::config::{Config, QueueSource};
@@ -22,7 +15,7 @@ use std::time::Duration;
 
 use rstest::rstest;
 
-fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
+pub fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
     EmbyItem {
         id: name.into(),
         name: name.into(),
@@ -62,11 +55,11 @@ fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
     }
 }
 
-fn emby_qi(name: &str, media_type: &str, item_type: &str) -> QueueItem {
+pub fn emby_qi(name: &str, media_type: &str, item_type: &str) -> QueueItem {
     QueueItem::Emby(Box::new(item(name, media_type, item_type)))
 }
 
-fn video_feed_qi(guid: &str) -> QueueItem {
+pub fn video_feed_qi(guid: &str) -> QueueItem {
     QueueItem::Feed(FeedEntry {
         guid: guid.into(),
         title: guid.into(),
@@ -82,13 +75,13 @@ fn video_feed_qi(guid: &str) -> QueueItem {
     })
 }
 /// Connects a client the same way the accept thread does.
-fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
+pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
     let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true, true);
     (id, rx)
 }
 
-fn shared_queue_state() -> SharedQueueState {
+pub fn shared_queue_state() -> SharedQueueState {
     SharedQueueState {
         queue: Arc::new(Mutex::new(PlaybackQueue::default())),
         source: Arc::new(Mutex::new(QueueSource::Unknown)),
@@ -97,7 +90,7 @@ fn shared_queue_state() -> SharedQueueState {
     }
 }
 
-fn cold_player() -> Player {
+pub fn cold_player() -> Player {
     let (event_tx, _event_rx) = mpsc::channel::<PlayerEvent>();
     Player::new(
         String::new(),
@@ -112,7 +105,7 @@ fn cold_player() -> Player {
     )
 }
 
-fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {
+pub fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {
     match rx.recv().unwrap() {
         CtrlOutbound::Event(json) => serde_json::from_str(&json).unwrap(),
         CtrlOutbound::Flush(_) => panic!("expected a control event"),
@@ -120,7 +113,7 @@ fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {
 }
 
 /// Helper: builds a `PlaybackQueue` from a list of `EmbyItem`s with an active index.
-fn queue_from_items(items: &[EmbyItem], active: usize) -> PlaybackQueue {
+pub fn queue_from_items(items: &[EmbyItem], active: usize) -> PlaybackQueue {
     let qi: Vec<QueueItem> = items
         .iter()
         .cloned()

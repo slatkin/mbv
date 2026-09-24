@@ -1,22 +1,19 @@
 use super::*;
 
-#[path = "basic.rs"]
 mod basic;
-#[path = "audio_only.rs"]
+// Re-export helper functions from basic so all test modules can use them
+pub use basic::{
+    item, emby_qi, video_feed_qi, connect_client, shared_queue_state, cold_player, recv_event,
+    queue_from_items,
+};
+
 mod audio_only;
-#[path = "ctrl_auth.rs"]
 mod ctrl_auth;
-#[path = "playback_intent.rs"]
 mod playback_intent;
-#[path = "feed.rs"]
 mod feed;
-#[path = "service_independent.rs"]
 mod service_independent;
-#[path = "abs_queue.rs"]
 mod abs_queue;
-#[path = "abs_queue_progress.rs"]
 mod abs_queue_progress;
-#[path = "queue_ops.rs"]
 mod queue_ops;
 #[path = "loop.rs"]
 mod r#loop;
