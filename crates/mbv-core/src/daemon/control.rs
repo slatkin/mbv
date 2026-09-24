@@ -1,4 +1,10 @@
 use super::*;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc;
+use crate::api::EmbyClient;
+use crate::player::Player;
+use crate::api::EmbyItem;
+use super::core::DaemonEvent;
 
 #[path = "control_queue.rs"]
 mod control_queue;

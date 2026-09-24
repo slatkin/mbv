@@ -21,8 +21,10 @@ use crate::playback_execution_sequence::ExecSlot;
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::stream::SocketStream;
 use crate::ws::WsEvent;
+use super::control::{broadcast_queue_state, unified_queue_state_for_peer};
+use super::ws::all_audio;
 
-fn bind_ctrl_listener() -> Option<UnixListener> {
+pub(super) fn bind_ctrl_listener() -> Option<UnixListener> {
     let path = crate::config::control_socket_path();
     let _ = std::fs::remove_file(&path);
     match UnixListener::bind(&path) {
@@ -44,7 +46,7 @@ fn bind_ctrl_listener() -> Option<UnixListener> {
     }
 }
 
-enum DaemonEvent {
+pub(super) enum DaemonEvent {
     Player(PlayerEvent),
     Ws {
         generation: crate::service_runtime::SetupGeneration,
@@ -89,14 +91,14 @@ enum PlaybackIntentPhase {
 
 #[derive(Clone, Debug, PartialEq)]
 struct CurrentPlaybackIntent {
-    connection_id: CtrlClientId,
-    request_id: PlaybackRequestId,
-    generation: PlaybackGeneration,
-    action: PlaybackIntentAction,
-    phase: PlaybackIntentPhase,
-    accepted_at: Instant,
-    pipe_output: bool,
-    buffering_deadline: Option<Instant>,
+    pub(super) connection_id: CtrlClientId,
+    pub(super) request_id: PlaybackRequestId,
+    pub(super) generation: PlaybackGeneration,
+    pub(super) action: PlaybackIntentAction,
+    pub(super) phase: PlaybackIntentPhase,
+    pub(super) accepted_at: Instant,
+    pub(super) pipe_output: bool,
+    pub(super) buffering_deadline: Option<Instant>,
 }
 
 /// Daemon-owned lifecycle state for the guarded direct-playback protocol.
@@ -104,7 +106,7 @@ struct CurrentPlaybackIntent {
 /// early active flags from being mistaken for confirmed playback state.
 #[derive(Default)]
 struct PlaybackIntentState {
-    current: Option<CurrentPlaybackIntent>,
+    pub(super) current: Option<CurrentPlaybackIntent>,
 }
 
 impl PlaybackIntentState {
@@ -356,35 +358,35 @@ use crate::player::PlayerOwnerState;
 /// loop owns exactly one of these.
 #[derive(Default)]
 pub(crate) struct DaemonPlayerOwner {
-    core: PlayerOwnerState,
-    pending_idle_load: Option<PendingIdleQueueLoad>,
+    pub(super) core: PlayerOwnerState,
+    pub(super) pending_idle_load: Option<PendingIdleQueueLoad>,
     /// Guarded direct-playback lifecycle coordinator. Retained functionally
     /// as-is (task 3.2 folds its single `current` into the core `transitions`);
     /// kept here so the event loop owns one struct. Meaningless in Bare mode,
     /// so it stays daemon-side.
-    intents: PlaybackIntentState,
+    pub(super) intents: PlaybackIntentState,
     /// Origin client of the transition currently in `core.transitions
     /// .queued_latest` (there is only ever one). Routes the `Superseded` event
     /// when it is displaced. task 3.5 folds transition/intent identity tracking
     /// together.
-    queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
+    pub(super) queued_transition_origin: Option<(PlaybackRequestId, CtrlClientId)>,
 }
 
 pub(crate) struct PendingIdleQueueLoad {
-    request_id: crate::ctrl::QueueLoadRequestId,
-    slots: Vec<(QueueSlotId, QueueItem)>,
-    cursor: usize,
-    source: crate::config::QueueSource,
-    reply_tx: CtrlSender,
-    stopped_run: (PlaybackRequestId, crate::ctrl::PlaybackGeneration),
-    started_at: Instant,
+    pub(super) request_id: crate::ctrl::QueueLoadRequestId,
+    pub(super) slots: Vec<(QueueSlotId, QueueItem)>,
+    pub(super) cursor: usize,
+    pub(super) source: crate::config::QueueSource,
+    pub(super) reply_tx: CtrlSender,
+    pub(super) stopped_run: (PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+    pub(super) started_at: Instant,
 }
 
 /// Route one slot-jump transition through the owner's one-in-flight dispatch
 /// gate (design D4): dispatch it now, or hold it behind the in-flight one and
 /// report `Superseded` for whatever queued transition it displaced.
 #[allow(clippy::too_many_arguments)]
-fn dispatch_slot_jump(
+pub(super) fn dispatch_slot_jump(
     transitions: &mut crate::playback_transition::OwnerTransitionState,
     queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
     ctrl_clients: &ClientRegistry,
@@ -442,7 +444,7 @@ fn dispatch_slot_jump(
 
 /// Drop any in-flight/queued transition: the caller is issuing a
 /// queue-replacing playback command, which deliberately interrupts them.
-fn reset_slot_jumps(
+pub(super) fn reset_slot_jumps(
     transitions: &mut crate::playback_transition::OwnerTransitionState,
     queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
 ) {
@@ -452,7 +454,7 @@ fn reset_slot_jumps(
 
 /// Settle the in-flight transition against a Playback-run observation and, if
 /// a newer transition was queued behind it, dispatch that one now (task 3.3).
-fn settle_and_redispatch(
+pub(super) fn settle_and_redispatch(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     observed_request_id: PlaybackRequestId,
@@ -490,7 +492,7 @@ fn settle_and_redispatch(
 /// timeout to its origin ctrl client, and dispatch whatever was queued behind
 /// it — rebuilding the execution projection from `owner.core.queue` exactly as
 /// [`settle_and_redispatch`] does.
-fn expire_and_redispatch(
+pub(super) fn expire_and_redispatch(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     ctrl_clients: &ClientRegistry,
@@ -546,10 +548,10 @@ fn expire_and_redispatch(
 /// `UnifiedQueueState` is derived from it at the broadcast boundary.
 #[derive(Clone)]
 pub(crate) struct SharedQueueState {
-    queue: Arc<Mutex<PlaybackQueue>>,
-    source: Arc<Mutex<crate::config::QueueSource>>,
-    lineage: Arc<Mutex<crate::ctrl::QueueLineage>>,
-    observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
+    pub(super) queue: Arc<Mutex<PlaybackQueue>>,
+    pub(super) source: Arc<Mutex<crate::config::QueueSource>>,
+    pub(super) lineage: Arc<Mutex<crate::ctrl::QueueLineage>>,
+    pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
 pub struct DaemonPlayerHandle {
@@ -571,7 +573,7 @@ pub fn pid_file() -> std::path::PathBuf {
     dir.join("mbv.pid")
 }
 
-fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
+pub(super) fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
     let Some(json) = serialize_ctrl_event(event) else {
         return;
     };
@@ -582,7 +584,7 @@ fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
 /// Fans out redacted Audiobookshelf progress to peers that negotiated
 /// `abs-progress`. Called from the daemon event loop after the acknowledged
 /// update has been applied to the canonical Bound queue.
-fn broadcast_audiobookshelf_progress(clients: &ClientRegistry, event: AudiobookshelfProgressEvent) {
+pub(super) fn broadcast_audiobookshelf_progress(clients: &ClientRegistry, event: AudiobookshelfProgressEvent) {
     let Some(json) = serialize_ctrl_event(&CtrlEvent::AudiobookshelfProgress(event)) else {
         return;
     };
@@ -591,7 +593,7 @@ fn broadcast_audiobookshelf_progress(clients: &ClientRegistry, event: Audiobooks
 
 /// Fans out redacted Audiobookshelf book progress to peers that negotiated
 /// `abs-book-progress`.
-fn broadcast_audiobookshelf_book_progress(
+pub(super) fn broadcast_audiobookshelf_book_progress(
     clients: &ClientRegistry,
     event: AudiobookshelfBookProgressEvent,
 ) {

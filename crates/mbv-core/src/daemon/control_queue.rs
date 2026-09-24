@@ -1,4 +1,8 @@
 use crate::daemon::*;
+use crate::player::Player;
+use crate::playback_queue::PlaybackQueue;
+use crate::ctrl::CtrlEvent;
+use crate::api::EmbyItem;
 
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
 /// Used for coordinated shutdown persistence. The snapshot is handed to the

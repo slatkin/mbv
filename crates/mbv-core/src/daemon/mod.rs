@@ -2,7 +2,8 @@ pub(crate) mod ctrl;
 
 mod context;
 pub use context::*;
-include!("core.rs");
+mod core;
+pub use core::*;
 mod run_shutdown;
 pub use run_shutdown::*;
 mod run;

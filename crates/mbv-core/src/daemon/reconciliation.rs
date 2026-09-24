@@ -1,6 +1,7 @@
 use crate::config::{EmbySetup, QueueSource};
 use crate::ctrl::ServiceSetupRejection;
 use super::*;
+use std::time::Duration;
 
 pub const EMBY_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
 pub const ABS_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);

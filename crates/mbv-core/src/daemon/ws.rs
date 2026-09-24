@@ -1,4 +1,9 @@
 use super::*;
+use std::sync::{Arc, Mutex};
+use crate::ws::WsEvent;
+use crate::api::EmbyClient;
+use crate::player::Player;
+use crate::playback_queue::PlaybackQueue;
 
 pub(crate) fn handle_ws(
     ev: WsEvent,
