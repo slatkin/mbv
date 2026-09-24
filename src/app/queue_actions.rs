@@ -484,7 +484,7 @@ impl App {
                     return;
                 }
                 if self.local_queue_metadata_applies(self.playing_queue_scope()) {
-                    self.set_queue_source_if_not_local_daemon(source);
+                    self.set_queue_source_if_not_local_daemon(source.clone());
                 }
                 if !autostart {
                     // Playlist Enter populates the queue; Space/Enter starts it.
@@ -516,7 +516,7 @@ impl App {
                     );
                     self.submit_attached_sequence(&id, &items, start_idx);
                 } else {
-                    self.submit_tab_queue(self.playing_queue_scope(), start_idx);
+                    self.submit_tab_queue(self.playing_queue_scope(), start_idx, source);
                     self.player
                         .send_command(PlayerCommand::SetMute(self.mute_on));
                 }

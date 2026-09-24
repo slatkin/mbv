@@ -37,7 +37,14 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
         item,
     };
     assert!(proxy.can_admit_audiobookshelf());
-    assert!(proxy.submit_queue_slots(vec![paired(proxy_audiobookshelf_item())], 0, None, false, 100));
+    assert!(proxy.submit_queue_slots(
+        vec![paired(proxy_audiobookshelf_item())],
+        0,
+        crate::config::QueueSource::Unknown,
+        None,
+        false,
+        100
+    ));
     assert!(proxy.queue_append(vec![paired(proxy_audiobookshelf_item())]));
     assert!(matches!(
         cmd_rx.recv().unwrap(),
@@ -76,6 +83,7 @@ fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
     assert!(!proxy.submit_queue_slots(
         vec![paired(proxy_audiobookshelf_item())],
         0,
+        crate::config::QueueSource::Unknown,
         None,
         false,
         100

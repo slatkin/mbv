@@ -671,6 +671,7 @@ impl App {
         let submitted = self.player.submit_queue_slots(
             all_slots,
             selected_index,
+            self.queue_source.clone(),
             None,
             audio_only,
             self.ui_volume,

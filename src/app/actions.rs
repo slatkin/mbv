@@ -181,7 +181,12 @@ impl App {
     /// The tab's canonical pairs are the identity source for both local and
     /// direct-remote owners; fresh `play_queue` projections would diverge
     /// from monotonic tab ids after a replacement.
-    pub(super) fn submit_tab_queue(&mut self, scope: super::QueueScope, start_idx: usize) -> bool {
+    pub(super) fn submit_tab_queue(
+        &mut self,
+        scope: super::QueueScope,
+        start_idx: usize,
+        source: crate::config::QueueSource,
+    ) -> bool {
         if self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
             return false;
@@ -194,15 +199,13 @@ impl App {
         let sent = self.player.submit_queue_slots(
             slots,
             start_idx,
+            source,
             self.emby_snapshot().map(Arc::new),
             headless,
             self.ui_volume,
         );
         if !sent && self.player.is_remote_disconnected() {
             self.flash(CONNECTION_LOST_MESSAGE.into(), ToastSeverity::Warning);
-        }
-        if sent && !self.is_local_daemon() {
-            self.player.set_queue_source(self.queue_source.clone());
         }
         if sent && matches!(scope, super::QueueScope::Local) && !self.player.is_remote() {
             self.stamp_queue_generation(scope);
@@ -328,7 +331,7 @@ impl App {
         if !direct_remote {
             self.on_queue_replace_silent();
         }
-        self.set_queue_source_if_not_local_daemon(queue_source);
+        self.set_queue_source_if_not_local_daemon(queue_source.clone());
         self.set_queue_scope(self.playing_queue_scope());
         // Keep library focus when playing from the library panel.
         if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -356,7 +359,7 @@ impl App {
                 );
             }
         }
-        self.submit_tab_queue(self.playing_queue_scope(), start_idx);
+        self.submit_tab_queue(self.playing_queue_scope(), start_idx, queue_source);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
         if let Some(count) = mixed_unplayable {
@@ -435,8 +438,9 @@ impl App {
                     self.on_queue_replace_silent();
                 }
                 self.replace_playback_queue(episodes.clone(), 0);
-                self.set_queue_source_if_not_local_daemon(crate::config::QueueSource::Series);
-                self.submit_tab_queue(self.playing_queue_scope(), 0);
+                let source = crate::config::QueueSource::Series;
+                self.set_queue_source_if_not_local_daemon(source.clone());
+                self.submit_tab_queue(self.playing_queue_scope(), 0, source);
                 self.player
                     .send_command(PlayerCommand::SetMute(self.mute_on));
                 if !self.has_direct_remote_queue() {
@@ -452,7 +456,7 @@ impl App {
                 ToastSeverity::Neutral,
             );
         }
-        self.submit_tab_queue(self.playing_queue_scope(), 0);
+        self.submit_tab_queue(self.playing_queue_scope(), 0, self.queue_source.clone());
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
@@ -577,6 +581,7 @@ impl App {
         let submitted = self.player.submit_queue_slots(
             all_slots,
             selected_index,
+            self.queue_source.clone(),
             None,
             audio_only,
             self.ui_volume,

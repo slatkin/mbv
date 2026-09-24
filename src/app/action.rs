@@ -436,6 +436,7 @@ impl App {
                     let submitted = self.player.submit_queue_slots(
                         eligible,
                         start_idx,
+                        self.queue_source.clone(),
                         self.emby_snapshot().map(Arc::new),
                         headless,
                         self.ui_volume,

@@ -54,9 +54,8 @@ fn unavailable_album_playback_keeps_the_existing_queue() {
 #[test]
 fn album_playback_routes_with_album_queue_source() {
     let config = crate::config::Config::default();
-    let (remote, player_rx, _cmd_rx) =
+    let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
-    let observed_source = remote.queue_source.clone();
     let mut app = App::new_remote_with_config(
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
@@ -70,10 +69,13 @@ fn album_playback_routes_with_album_queue_source() {
         .insert("album-1".into(), vec![track.clone()]);
 
     assert!(app.play_album_track("album-1", &track));
-    assert!(matches!(
-        *observed_source.lock().unwrap(),
-        crate::config::QueueSource::Album
-    ));
+    assert!(cmd_rx.try_iter().any(|command| matches!(
+        command,
+        mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace {
+            source: crate::config::QueueSource::Album,
+            ..
+        }
+    )));
 }
 
 /// A started remote-backed App (mirrors `album_playback_routes_with_album_queue_source`):

@@ -246,6 +246,43 @@ fn direct_remote_play_items_keeps_local_queue_intact() {
 }
 
 #[test]
+fn local_daemon_play_submits_intended_source_and_adopts_owner_snapshot_source() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands) =
+        crate::app::tests::make_local_daemon_app_stub_with_cmd_rx(make_items(1));
+    app.queue_source = crate::config::QueueSource::Playlist {
+        id: Some("qixl".into()),
+        name: "QIXL".into(),
+    };
+    let intended_source = crate::config::QueueSource::Playlist {
+        id: Some("taskmaster".into()),
+        name: "Taskmaster".into(),
+    };
+
+    app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+        items: make_items(2),
+        start_idx: 0,
+        source: intended_source.clone(),
+        autostart: true,
+    });
+
+    let sent_source = commands.try_iter().find_map(|command| match command {
+        CtrlCmd::UnifiedQueueReplace { source, .. } => Some(source),
+        _ => None,
+    });
+    assert_eq!(sent_source, Some(intended_source));
+
+    let owner_source = crate::config::QueueSource::Playlist {
+        id: Some("owner-minted".into()),
+        name: "Owner playlist".into(),
+    };
+    let mut snapshot = crate::app::tests::emby_unified_state(&make_items(2), 0);
+    snapshot.source = owner_source.clone();
+    app.handle_player_event(PlayerEvent::UnifiedQueueUpdated(Box::new(snapshot)));
+    assert_eq!(app.queue_source, owner_source);
+}
+
+#[test]
 fn disconnected_remote_rejects_tab_queue_submission_with_warning() {
     let mut app = make_remote_app_stub(make_items(1), make_items(2));
     app.player
@@ -253,7 +290,11 @@ fn disconnected_remote_rejects_tab_queue_submission_with_warning() {
         .unwrap()
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
-    assert!(!app.submit_tab_queue(QueueScope::Remote, 0));
+    assert!(!app.submit_tab_queue(
+        QueueScope::Remote,
+        0,
+        app.queue_source.clone()
+    ));
 
     assert_eq!(app.status, super::actions::CONNECTION_LOST_MESSAGE);
     assert_eq!(app.status_severity, super::notify_actions::ToastSeverity::Warning);
