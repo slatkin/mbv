@@ -81,7 +81,7 @@ impl App {
         self.fetch_audiobookshelf_image(cache_key, server_url, item_id);
     }
 
-    pub(super) fn fetch_audiobookshelf_image(
+    pub(in crate::app) fn fetch_audiobookshelf_image(
         &mut self,
         cache_key: String,
         server_url: String,
