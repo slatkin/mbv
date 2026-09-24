@@ -619,4 +619,5 @@ fn audio_only_rejection<'a>(
     }
 }
 
-include!("core_ctrl_spawn.rs");
+mod core_ctrl_spawn;
+pub use core_ctrl_spawn::*;

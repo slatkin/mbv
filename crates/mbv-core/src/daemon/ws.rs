@@ -1,4 +1,6 @@
-fn handle_ws(
+use super::*;
+
+pub(super) fn handle_ws(
     ev: WsEvent,
     client: Option<&Arc<Mutex<EmbyClient>>>,
     player: &Player,
@@ -169,6 +171,6 @@ fn handle_ws(
     }
 }
 
-fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> bool {
+pub(super) fn all_audio<'a>(items: impl IntoIterator<Item = &'a QueueItem>) -> bool {
     items.into_iter().all(QueueItem::is_audio)
 }

@@ -1,15 +1,21 @@
 pub(crate) mod ctrl;
 
-include!("context.rs");
+mod context;
+pub use context::*;
 include!("core.rs");
-include!("run_shutdown.rs");
+mod run_shutdown;
+pub use run_shutdown::*;
 include!("run.rs");
-include!("event_loop.rs");
-include!("audiobookshelf.rs");
+mod event_loop;
+pub use event_loop::*;
+mod audiobookshelf;
+pub use audiobookshelf::*;
 mod control;
 pub use control::*;
-include!("ws.rs");
-include!("reconciliation.rs");
+mod ws;
+pub use ws::*;
+mod reconciliation;
+pub use reconciliation::*;
 
 #[cfg(test)]
 mod tests {

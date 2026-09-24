@@ -1,4 +1,6 @@
-fn setup_shutdown_signal() -> (mpsc::SyncSender<()>, mpsc::Receiver<()>) {
+use super::*;
+
+pub(super) fn setup_shutdown_signal() -> (mpsc::SyncSender<()>, mpsc::Receiver<()>) {
     // Shared shutdown channel — written by SIGTERM thread and tray Quit item.
     let (shutdown_signal_tx, shutdown_signal_rx) = mpsc::sync_channel::<()>(1);
 

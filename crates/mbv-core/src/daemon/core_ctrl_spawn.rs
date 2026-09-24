@@ -1,4 +1,6 @@
-fn spawn_ctrl_client(
+use super::*;
+
+pub(super) fn spawn_ctrl_client(
     stream: SocketStream,
     transport: CtrlTransport,
     merged_tx: mpsc::Sender<DaemonEvent>,

@@ -1,5 +1,6 @@
 use crate::config::{EmbySetup, QueueSource};
 use crate::ctrl::ServiceSetupRejection;
+use super::*;
 
 pub const EMBY_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
 pub const ABS_REPLACEMENT_FINALIZE_HARD_BOUND: Duration = Duration::from_secs(5);
@@ -66,7 +67,7 @@ fn update_player_queue(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn reconcile_packaged_emby(
+pub(super) fn reconcile_packaged_emby(
     requested_revision: u64,
     current: &mut Option<EmbyOwnerContext>,
     ws_send_tx: &mut Option<crate::ws::WsSender>,
@@ -164,7 +165,7 @@ fn reconcile_packaged_emby(
 /// mismatched revision or unreadable storage rejects without changing the
 /// runtime.
 #[allow(clippy::too_many_arguments)]
-fn reconcile_packaged_audiobookshelf(
+pub(super) fn reconcile_packaged_audiobookshelf(
     requested_revision: u64,
     current: &mut Option<AudiobookshelfOwnerContext>,
     player: &Player,
