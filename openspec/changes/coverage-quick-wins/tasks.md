@@ -92,7 +92,7 @@
 
 ## 6. Dead helper removal
 
-- [ ] 6.1 Delete `set_tv_cursor_for_test` from `src/app/render/test_helpers.rs` (it has
+- [x] 6.1 Delete `set_tv_cursor_for_test` from `src/app/render/test_helpers.rs` (it has
   exactly one occurrence in the tree: its own definition). Its doc comment's reference
   to the already-deleted `set_browser_cursor_for_test` goes with it. Verify
   `rg -n "set_tv_cursor_for_test" --type rust` returns nothing, `tv_owner_key` is left
