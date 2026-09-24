@@ -4,6 +4,10 @@ pub(super) enum LoopFlow {
     Shutdown,
 }
 
+/// Injected owner-queue persistence hook.
+pub(super) type OwnerQueueStore =
+    Box<dyn FnMut(&crate::config::StayAliveQueueState) -> Result<(), String>>;
+
 /// Owns every local the daemon event loop reads, so one event can be handled
 /// without exiting the process (`Shutdown` is returned to the caller).
 pub(super) struct DaemonLoop {
@@ -24,7 +28,7 @@ pub(super) struct DaemonLoop {
     last_capabilities: Instant,
     /// Injected owner-queue persistence, so tests can record snapshots instead
     /// of writing real state files.
-    store: Box<dyn FnMut(&crate::config::StayAliveQueueState) -> Result<(), String>>,
+    store: OwnerQueueStore,
 }
 
 impl DaemonLoop {
