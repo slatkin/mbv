@@ -38,7 +38,7 @@ Every task: pure moves plus the compile-forced edits only, with no renames of ty
 
 ## 7. `remote_player` and `mbvd`
 
-- [ ] 7.1 Replace `include!("tests.rs")` in `remote_player/connect/mod.rs` and in `crates/mbvd/src/main.rs:532` with `#[cfg(test)] mod tests;`. Verify: `cargo check --workspace --all-targets` and `cargo nextest run -p mbvd -p mbv-core` pass, and `rg -n 'include!\(|#\[path' crates` is empty.
+- [x] 7.1 Replace `include!("tests.rs")` in `remote_player/connect/mod.rs` and in `crates/mbvd/src/main.rs:532` with `#[cfg(test)] mod tests;`. Verify: `cargo check --workspace --all-targets` and `cargo nextest run -p mbvd -p mbv-core` pass, and `rg -n 'include!\(|#\[path' crates` is empty. — remote_player/tests.rs moved to connect/tests.rs (it was included from connect/, so the file follows its declaring module; no #[path] needed). The row's literal #[path]-empty gate becomes true via the follow-up user-directed elimination unit (the four pre-existing daemon/audiobookshelf #[path]s were removed there; nesting flattened to siblings of their parents).
 
 ## 8. Final gates
 
