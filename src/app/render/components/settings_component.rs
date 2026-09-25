@@ -15,6 +15,7 @@ pub(in crate::app) struct SettingsRenderGeometry {
     pub cursor_lines: Vec<usize>,
 }
 
+#[derive(Clone, Copy)]
 pub(in crate::app) struct SettingsRenderModel<'a> {
     pub destination: SettingsDestination,
     pub rows: &'a [SettingsRow],
@@ -31,139 +32,157 @@ pub(in crate::app) fn render_settings_content(
     model: SettingsRenderModel<'_>,
     geometry: &mut SettingsRenderGeometry,
 ) {
-    let panel_area = area;
-    geometry.panel_area = panel_area;
-    let content = crate::app::render::render_panel_shell_at(
-        frame,
-        panel_area,
-        match model.setup {
-            Some(SetupDraft::Emby { .. }) => "EMBY SETUP",
-            Some(SetupDraft::Audiobookshelf { .. }) => "AUDIOBOOKSHELF SETUP",
-            None if model.destination == SettingsDestination::Services => "SERVICES",
-            None if model.destination == SettingsDestination::Keys => "KEYS",
-            None => "SETTINGS",
-        },
-        if model.setup.is_some() {
-            "[↵]submit [Esc]back"
-        } else if model.destination == SettingsDestination::Services {
-            "[↵]select [Esc]back"
-        } else if model.destination == SettingsDestination::Keys {
-            // Read-only destination (design D7): nothing to activate.
-            "[↑↓]browse [Esc]back"
-        } else {
-            "[Space]toggle [Esc]close"
-        },
-    );
+    geometry.panel_area = area;
+    let content = render_settings_panel(frame, area, &model);
     geometry.content_area = content;
     geometry.cursor_lines.clear();
     match model.setup {
         Some(setup) => render_setup(frame, content, setup),
         None if model.destination == SettingsDestination::Services => {
             geometry.cursor_lines.extend(0..model.services.len());
-            let lines = model
-                .services
-                .iter()
-                .enumerate()
-                .map(|(index, row)| {
-                    let focused = index == model.services_cursor;
-                    Line::from(vec![
-                        Span::raw(if focused { "▸ " } else { "  " }),
-                        Span::styled(
-                            row.name.clone(),
-                            if focused {
-                                Style::default()
-                                    .fg(palette::TEXT_PRIMARY)
-                                    .add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default().fg(palette::TEXT_SECONDARY)
-                            },
-                        ),
-                        Span::raw("  "),
-                        Span::styled(
-                            row.detail.clone(),
-                            Style::default().fg(if row.muted {
-                                palette::TEXT_MUTED
-                            } else {
-                                palette::ACCENT
-                            }),
-                        ),
-                    ])
-                })
-                .collect::<Vec<_>>();
-            frame.render_widget(Paragraph::new(lines), content);
+            render_services(frame, content, model.services, model.services_cursor);
         }
-        None => {
-            let mut lines: Vec<Line> = Vec::new();
-            // Zebra over the data rows in the playlists-list style, opening
-            // on the panel fill; section headers and the blank group
-            // spacers keep the fill. Stripes ride on the rows, so they hold
-            // still under Paragraph scroll without offset math.
-            let mut striped = false;
-            for row in model.rows {
-                if let Some(cursor) = row.cursor {
-                    if geometry.cursor_lines.len() <= cursor {
-                        geometry.cursor_lines.resize(cursor + 1, 0);
-                    }
-                    geometry.cursor_lines[cursor] = lines.len();
+        None => render_settings_rows(
+            frame,
+            content,
+            model.rows,
+            model.cursor,
+            model.scroll,
+            &mut geometry.cursor_lines,
+        ),
+    }
+}
+
+fn render_settings_panel(frame: &mut Frame, area: Rect, model: &SettingsRenderModel<'_>) -> Rect {
+    let title = match model.setup {
+        Some(SetupDraft::Emby { .. }) => "EMBY SETUP",
+        Some(SetupDraft::Audiobookshelf { .. }) => "AUDIOBOOKSHELF SETUP",
+        None if model.destination == SettingsDestination::Services => "SERVICES",
+        None if model.destination == SettingsDestination::Keys => "KEYS",
+        None => "SETTINGS",
+    };
+    let hint = if model.setup.is_some() {
+        "[↵]submit [Esc]back"
+    } else if model.destination == SettingsDestination::Services {
+        "[↵]select [Esc]back"
+    } else if model.destination == SettingsDestination::Keys {
+        // Read-only destination (design D7): nothing to activate.
+        "[↑↓]browse [Esc]back"
+    } else {
+        "[Space]toggle [Esc]close"
+    };
+    crate::app::render::render_panel_shell_at(frame, area, title, hint)
+}
+
+fn render_services(frame: &mut Frame, content: Rect, services: &[ServiceRow], cursor: usize) {
+    let lines = services
+        .iter()
+        .enumerate()
+        .map(|(index, row)| {
+            let focused = index == cursor;
+            Line::from(vec![
+                Span::raw(if focused { "▸ " } else { "  " }),
+                Span::styled(
+                    row.name.clone(),
+                    if focused {
+                        Style::default()
+                            .fg(palette::TEXT_PRIMARY)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(palette::TEXT_SECONDARY)
+                    },
+                ),
+                Span::raw("  "),
+                Span::styled(
+                    row.detail.clone(),
+                    Style::default().fg(if row.muted {
+                        palette::TEXT_MUTED
+                    } else {
+                        palette::ACCENT
+                    }),
+                ),
+            ])
+        })
+        .collect::<Vec<_>>();
+    frame.render_widget(Paragraph::new(lines), content);
+}
+
+fn render_settings_rows(
+    frame: &mut Frame,
+    content: Rect,
+    rows: &[SettingsRow],
+    cursor: usize,
+    scroll: usize,
+    cursor_lines: &mut Vec<usize>,
+) {
+    let mut lines: Vec<Line> = Vec::new();
+    // Zebra over the data rows in the playlists-list style, opening
+    // on the panel fill; section headers and the blank group
+    // spacers keep the fill. Stripes ride on the rows, so they hold
+    // still under Paragraph scroll without offset math.
+    let mut striped = false;
+    for row in rows {
+        if let Some(row_cursor) = row.cursor {
+            if cursor_lines.len() <= row_cursor {
+                cursor_lines.resize(row_cursor + 1, 0);
+            }
+            cursor_lines[row_cursor] = lines.len();
+        }
+        if row.section {
+            if !lines.is_empty() {
+                lines.push(Line::from(""));
+            }
+            lines.push(Line::from(vec![
+                Span::raw(""),
+                Span::styled(
+                    row.label.clone(),
+                    Style::default()
+                        .fg(palette::TEXT_METADATA)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ]));
+        } else {
+            let focused = row.cursor == Some(cursor);
+            let value_width = (content.width as usize).saturating_sub(row.label.len());
+            let mut spans = vec![
+                Span::styled(
+                    row.label.clone(),
+                    if focused {
+                        Style::default().fg(palette::TEXT_PRIMARY)
+                    } else {
+                        Style::default().fg(palette::PLAYBACK_META_FG)
+                    },
+                ),
+                Span::styled(
+                    format!("{:>width$}", row.value, width = value_width),
+                    Style::default().fg(palette::ACCENT),
+                ),
+            ];
+            // A Paragraph line style leaves trailing cells on the
+            // widget fill, so the stripe rides the spans with a pad
+            // out to the content edge instead.
+            if striped {
+                for span in &mut spans {
+                    span.style = span.style.bg(palette::SETTINGS_STRIPE_BG);
                 }
-                if row.section {
-                    if !lines.is_empty() {
-                        lines.push(Line::from(""));
-                    }
-                    lines.push(Line::from(vec![
-                        Span::raw(""),
-                        Span::styled(
-                            row.label.clone(),
-                            Style::default()
-                                .fg(palette::TEXT_METADATA)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ]));
-                } else {
-                    let focused = row.cursor == Some(model.cursor);
-                    let value_width = (content.width as usize).saturating_sub(row.label.len());
-                    let mut spans = vec![
-                        Span::styled(
-                            row.label.clone(),
-                            if focused {
-                                Style::default().fg(palette::TEXT_PRIMARY)
-                            } else {
-                                Style::default().fg(palette::PLAYBACK_META_FG)
-                            },
-                        ),
-                        Span::styled(
-                            format!("{:>width$}", row.value, width = value_width),
-                            Style::default().fg(palette::ACCENT),
-                        ),
-                    ];
-                    // A Paragraph line style leaves trailing cells on the
-                    // widget fill, so the stripe rides the spans with a pad
-                    // out to the content edge instead.
-                    if striped {
-                        for span in spans.iter_mut() {
-                            span.style = span.style.bg(palette::SETTINGS_STRIPE_BG);
-                        }
-                        let used: usize = spans.iter().map(|span| span.content.width()).sum();
-                        let pad = (content.width as usize).saturating_sub(used);
-                        if pad > 0 {
-                            spans.push(Span::styled(
-                                " ".repeat(pad),
-                                Style::default().bg(palette::SETTINGS_STRIPE_BG),
-                            ));
-                        }
-                    }
-                    striped = !striped;
-                    lines.push(Line::from(spans));
+                let used: usize = spans.iter().map(|span| span.content.width()).sum();
+                let pad = (content.width as usize).saturating_sub(used);
+                if pad > 0 {
+                    spans.push(Span::styled(
+                        " ".repeat(pad),
+                        Style::default().bg(palette::SETTINGS_STRIPE_BG),
+                    ));
                 }
             }
-            let document = lines.len();
-            frame.render_widget(
-                Paragraph::new(lines).scroll((model.scroll as u16, 0)),
-                content,
-            );
-            crate::app::render::render_sidebar_scrollbar(frame, content, document, model.scroll);
+            striped = !striped;
+            lines.push(Line::from(spans));
         }
     }
+    let document = lines.len();
+    let [low, high, ..] = scroll.to_le_bytes();
+    let paragraph_scroll = u16::from_le_bytes([low, high]);
+    frame.render_widget(Paragraph::new(lines).scroll((paragraph_scroll, 0)), content);
+    crate::app::render::render_sidebar_scrollbar(frame, content, document, scroll);
 }
 
 fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
