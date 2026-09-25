@@ -154,35 +154,34 @@ pub(in crate::app) fn render_tab_bar(
             let n = n.to_uppercase();
             let position = vis_start + i;
             let marked = model.markers.get(position).copied().unwrap_or(false);
+            let marker_span = |style: Style| {
+                if marked {
+                    Span::styled("•", Style::default().fg(palette::ACCENT_ACTIVE))
+                } else {
+                    Span::styled(" ", style)
+                }
+            };
             let line = if i == selected_tab {
                 let style = Style::default()
                     .fg(palette::TEXT_STRONG)
                     .add_modifier(Modifier::BOLD);
-                let mut spans = vec![
+                Line::from(vec![
                     Span::styled("▐", Style::default().fg(palette::ACCENT)),
                     Span::styled(format!(" {n}"), style),
-                ];
-                spans.push(if marked {
-                    Span::styled("•", Style::default().fg(palette::ACCENT_ACTIVE))
-                } else {
-                    Span::styled(" ", style)
-                });
-                spans.push(Span::styled(" ", style));
-                Line::from(spans)
+                    marker_span(style),
+                    Span::styled(" ", style),
+                ])
             } else {
                 let style = if model.hovered == Some(position) {
                     Style::default().fg(palette::TEXT_STRONG)
                 } else {
                     Style::default().fg(palette::TEXT_MUTED)
                 };
-                let mut spans = vec![Span::styled(format!("  {n}"), style)];
-                spans.push(if marked {
-                    Span::styled("•", Style::default().fg(palette::ACCENT_ACTIVE))
-                } else {
-                    Span::styled(" ", style)
-                });
-                spans.push(Span::styled(" ", style));
-                Line::from(spans)
+                Line::from(vec![
+                    Span::styled(format!("  {n}"), style),
+                    marker_span(style),
+                    Span::styled(" ", style),
+                ])
             };
             let width = line.width() as u16;
             hits.push((
