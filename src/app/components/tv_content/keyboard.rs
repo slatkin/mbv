@@ -178,6 +178,18 @@ impl TvContent {
         Some(Msg::Shell(Box::new(request)))
     }
 
+    /// Turn a resolved show activation into the shell's series-activation
+    /// request. Wide layout also narrows focus to the episode pane first,
+    /// which is why the `Enter` and `Right` arms share it.
+    fn activate_show_tree_selection(&mut self, item: Option<EmbyItem>) -> Option<ShellRequest> {
+        let item = item?;
+        if self.is_wide {
+            self.episodes.select_first();
+            self.pane = Pane::Episodes;
+        }
+        Some(ShellRequest::TvActivate { item })
+    }
+
     fn handle_show_tree_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let selected = self.browser.selected_target().cloned();
         let transition = match key.code {
@@ -226,13 +238,7 @@ impl TvContent {
                     _ => None,
                 };
                 match activated {
-                    Some(TvTreeTarget::Show(_)) => item.map(|item| {
-                        if self.is_wide {
-                            self.episodes.select_first();
-                            self.pane = Pane::Episodes;
-                        }
-                        ShellRequest::TvActivate { item }
-                    }),
+                    Some(TvTreeTarget::Show(_)) => self.activate_show_tree_selection(item),
                     Some(target @ TvTreeTarget::Season { .. }) => {
                         let expansion = self.toggle_tree_expansion(target);
                         return Some(
@@ -260,13 +266,7 @@ impl TvContent {
                         crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
                             TvTreeTarget::Show(_),
                         ),
-                    ) => item.map(|item| {
-                        if self.is_wide {
-                            self.episodes.select_first();
-                            self.pane = Pane::Episodes;
-                        }
-                        ShellRequest::TvActivate { item }
-                    }),
+                    ) => self.activate_show_tree_selection(item),
                     _ => None,
                 };
                 return Some(

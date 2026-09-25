@@ -15,84 +15,98 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     // All non-Emby sections are parsed unconditionally, even when
     // [server] is absent (feed-only / service-independent startup).
     let feeds = parse_feeds(doc.get("feeds"));
-    let server = doc.get("server");
-    let audiobookshelf = doc.get("audiobookshelf");
+    let mpv = parse_mpv_section(doc.get("mpv"))?;
+    let queue = parse_queue_section(doc.get("queue"));
+    let session = parse_session_section(doc.get("session"));
+    let playback = parse_playback_section(doc.get("playback"));
+    let display = parse_display_section(doc.get("display"));
+    let mbvd = parse_mbvd_section(doc.get("mbvd"));
+    let library = parse_library_section(doc.get("library"));
+    let idle_feed = parse_idle_feed_section(doc.get("idle_feed"));
+    let (server_url, emby_setup) = parse_server_section(doc.get("server"));
+    let audiobookshelf_setup = parse_audiobookshelf_section(doc.get("audiobookshelf"));
+    let library_routes = parse_library_routes_section(doc.get("library_routes"));
 
-    let get_str = |section: &toml::Value, key: &str| -> String {
-        section
-            .get(key)
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string()
+    // `[keys]` (change `add-configurable-keybinds`): parsed into the raw
+    // section-outer shape, then compiled through the keybind registry so
+    // every entry — unknown sections and actions, section mismatches,
+    // reserved chords, and both collision classes — is rejected here, at
+    // the existing config error path, before the process starts.
+    let keybinds = match doc.get("keys") {
+        None => crate::keybinds::Keybinds::default(),
+        Some(keys) => {
+            let raw = parse_raw_keybinds(keys)?;
+            crate::keybinds::load(&raw).map_err(|e| e.to_string())?
+        }
     };
 
-    let misc = doc.get("mpv");
-    let mbvd = doc.get("mbvd");
-    let session = doc.get("session");
-    let library = doc.get("library");
-    let display = doc.get("display");
-    let playback = doc.get("playback");
-    let queue = doc.get("queue");
-    let music = doc.get("library").and_then(|l| l.get("music"));
+    Ok(Config {
+        emby_setup,
+        audiobookshelf_setup,
+        server_url,
+        username: String::new(),
+        password: String::new(),
+        api_key: String::new(),
+        hidden_libraries: library.hidden_libraries,
+        show_audio_window: mpv.show_audio_window,
+        use_mpv_config: mpv.use_mpv_config,
+        video_cache_forward_mb: mpv.video_cache_forward_mb,
+        video_cache_back_mb: mpv.video_cache_back_mb,
+        audio_pipe_enabled: mpv.audio_pipe_enabled,
+        audio_pipe_path: mpv.audio_pipe_path,
+        audio_pipe_samplerate: mpv.audio_pipe_samplerate,
+        audio_pipe_bitdepth: mpv.audio_pipe_bitdepth,
+        audio_pipe_playout_delay_ms: mpv.audio_pipe_playout_delay_ms,
+        audio_device: mpv.audio_device,
+        always_play_next: queue.always_play_next,
+        consume_videos: queue.consume_videos,
+        consume_audio: queue.consume_audio,
+        always_skip_intro: session.always_skip_intro,
+        show_systray_icon: playback.show_systray_icon,
+        no_scripts: mpv.no_scripts,
+        stay_alive: session.stay_alive,
+        save_playlist_on_quit: session.save_playlist_on_quit,
+        autoload: mpv.autoload,
+        music_levels: library.music_levels,
+        system_notifications: display.system_notifications,
+        mouse_support: display.mouse_support,
+        save_playlist_on_consume: queue.save_playlist_on_consume,
+        save_playlist_on_consume_audio: queue.save_playlist_on_consume_audio,
+        subtitle_mode: playback.subtitle_mode,
+        subtitle_lang: playback.subtitle_lang,
+        audio_lang: playback.audio_lang,
+        my_languages: playback.my_languages,
+        feed_view_libraries: library.feed_view_libraries,
+        library_routes,
+        progress_interval_secs: session.progress_interval_secs,
+        quit_timeout_secs: session.quit_timeout_secs,
+        daemon_broadcast_ms: mbvd.broadcast_ms,
+        daemon_client_endpoint: mbvd.client_endpoint,
+        daemon_server_tcp_listen: mbvd.server_tcp_listen,
+        auto_reconnect: session.auto_reconnect,
+        idle_feed_rss_url: idle_feed.rss_url,
+        idle_feed_rotation_secs: idle_feed.rotation_secs,
+        feeds,
+        keybinds,
+    })
+}
 
-    let hidden_libraries: Vec<String> = library
-        .and_then(|m| m.get("hidden_libraries"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.to_lowercase())
-                .collect()
-        })
-        .unwrap_or_else(|| vec!["live tv".into()]);
+struct MpvSettings {
+    show_audio_window: bool,
+    use_mpv_config: bool,
+    video_cache_forward_mb: u32,
+    video_cache_back_mb: u32,
+    audio_pipe_enabled: bool,
+    audio_pipe_path: String,
+    audio_pipe_samplerate: u32,
+    audio_pipe_bitdepth: u8,
+    audio_pipe_playout_delay_ms: Option<u64>,
+    audio_device: String,
+    no_scripts: bool,
+    autoload: bool,
+}
 
-    let show_audio_window = misc
-        .and_then(|m| m.get("show_audio_window"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let use_mpv_config = misc
-        .and_then(|m| m.get("use_mpv_config"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let video_cache_forward_mb = misc
-        .and_then(|m| m.get("video_cache_forward_mb"))
-        .and_then(|v| v.as_integer())
-        .and_then(|v| u32::try_from(v).ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(DEFAULT_VIDEO_CACHE_FORWARD_MB);
-    let video_cache_back_mb = misc
-        .and_then(|m| m.get("video_cache_back_mb"))
-        .and_then(|v| v.as_integer())
-        .and_then(|v| u32::try_from(v).ok())
-        .filter(|v| *v > 0)
-        .unwrap_or(DEFAULT_VIDEO_CACHE_BACK_MB);
-
-    let audio_pipe_enabled = misc
-        .and_then(|m| m.get("audio_pipe_enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let audio_pipe_path = misc
-        .and_then(|m| m.get("audio_pipe_path"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("/tmp/mbv-pipe")
-        .to_string();
-
-    let audio_pipe_samplerate = misc
-        .and_then(|m| m.get("audio_pipe_samplerate"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(1) as u32)
-        .unwrap_or(192_000);
-    let audio_pipe_bitdepth = misc
-        .and_then(|m| m.get("audio_pipe_bitdepth"))
-        .and_then(|v| v.as_integer())
-        .map(|v| match v {
-            16 | 24 | 32 => v as u8,
-            _ => 32,
-        })
-        .unwrap_or(32);
+fn parse_mpv_section(misc: Option<&toml::Value>) -> Result<MpvSettings, String> {
     let audio_pipe_playout_delay_ms = match misc
         .and_then(|m| m.get("audio_pipe_playout_delay_ms"))
         .and_then(|v| v.as_integer())
@@ -116,179 +130,268 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         },
     };
 
-    let always_play_next = queue
-        .and_then(|q| q.get("always_play_next"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    Ok(MpvSettings {
+        show_audio_window: misc
+            .and_then(|m| m.get("show_audio_window"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        use_mpv_config: misc
+            .and_then(|m| m.get("use_mpv_config"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        video_cache_forward_mb: misc
+            .and_then(|m| m.get("video_cache_forward_mb"))
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(DEFAULT_VIDEO_CACHE_FORWARD_MB),
+        video_cache_back_mb: misc
+            .and_then(|m| m.get("video_cache_back_mb"))
+            .and_then(|v| v.as_integer())
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| *v > 0)
+            .unwrap_or(DEFAULT_VIDEO_CACHE_BACK_MB),
+        audio_pipe_enabled: misc
+            .and_then(|m| m.get("audio_pipe_enabled"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        audio_pipe_path: misc
+            .and_then(|m| m.get("audio_pipe_path"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("/tmp/mbv-pipe")
+            .to_string(),
+        audio_pipe_samplerate: misc
+            .and_then(|m| m.get("audio_pipe_samplerate"))
+            .and_then(|v| v.as_integer())
+            .map(|v| v.max(1) as u32)
+            .unwrap_or(192_000),
+        audio_pipe_bitdepth: misc
+            .and_then(|m| m.get("audio_pipe_bitdepth"))
+            .and_then(|v| v.as_integer())
+            .map(|v| match v {
+                16 | 24 | 32 => v as u8,
+                _ => 32,
+            })
+            .unwrap_or(32),
+        audio_pipe_playout_delay_ms,
+        audio_device,
+        no_scripts: misc
+            .and_then(|m| m.get("no_scripts"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        autoload: misc
+            .and_then(|m| m.get("autoload"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    })
+}
 
-    let consume_videos = queue
-        .and_then(|q| q.get("consume_videos"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+struct QueueSettings {
+    always_play_next: bool,
+    consume_videos: bool,
+    consume_audio: bool,
+    save_playlist_on_consume: bool,
+    save_playlist_on_consume_audio: bool,
+}
 
-    let consume_audio = queue
-        .and_then(|q| q.get("consume_audio"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+fn parse_queue_section(queue: Option<&toml::Value>) -> QueueSettings {
+    let get_bool = |key: &str| {
+        queue
+            .and_then(|q| q.get(key))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+    QueueSettings {
+        always_play_next: get_bool("always_play_next"),
+        consume_videos: get_bool("consume_videos"),
+        consume_audio: get_bool("consume_audio"),
+        save_playlist_on_consume: get_bool("save_playlist_on_consume"),
+        save_playlist_on_consume_audio: get_bool("save_playlist_on_consume_audio"),
+    }
+}
 
-    let always_skip_intro = session
-        .and_then(|m| m.get("always_skip_intro"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+struct SessionSettings {
+    always_skip_intro: bool,
+    stay_alive: bool,
+    auto_reconnect: bool,
+    save_playlist_on_quit: bool,
+    progress_interval_secs: u64,
+    quit_timeout_secs: u64,
+}
 
-    let show_systray_icon = playback
-        .and_then(|d| d.get("show_systray_icon"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+fn parse_session_section(session: Option<&toml::Value>) -> SessionSettings {
+    let get_bool = |key: &str| {
+        session
+            .and_then(|m| m.get(key))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+    SessionSettings {
+        always_skip_intro: get_bool("always_skip_intro"),
+        stay_alive: get_bool("stay_alive"),
+        auto_reconnect: get_bool("auto_reconnect"),
+        save_playlist_on_quit: get_bool("save_playlist_on_quit"),
+        progress_interval_secs: session
+            .and_then(|m| m.get("progress_interval_secs"))
+            .and_then(|v| v.as_integer())
+            .map(|v| v.max(1) as u64)
+            .unwrap_or(10),
+        quit_timeout_secs: session
+            .and_then(|m| m.get("quit_timeout_secs"))
+            .and_then(|v| v.as_integer())
+            .map(|v| v.max(1) as u64)
+            .unwrap_or(5),
+    }
+}
 
-    let stay_alive = session
-        .and_then(|m| m.get("stay_alive"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+struct PlaybackSettings {
+    show_systray_icon: bool,
+    subtitle_mode: String,
+    subtitle_lang: String,
+    audio_lang: String,
+    my_languages: Vec<String>,
+}
 
-    let auto_reconnect = session
-        .and_then(|m| m.get("auto_reconnect"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+fn parse_playback_section(playback: Option<&toml::Value>) -> PlaybackSettings {
+    let get_str = |key: &str| {
+        playback
+            .and_then(|p| p.get(key))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string()
+    };
+    PlaybackSettings {
+        show_systray_icon: playback
+            .and_then(|d| d.get("show_systray_icon"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
+        subtitle_mode: get_str("subtitle_mode"),
+        subtitle_lang: get_str("subtitle_lang"),
+        audio_lang: get_str("audio_lang"),
+        my_languages: playback
+            .and_then(|p| p.get("my_languages"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(String::from)
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
+}
 
-    let save_playlist_on_quit = session
-        .and_then(|m| m.get("save_playlist_on_quit"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+struct DisplaySettings {
+    system_notifications: bool,
+    mouse_support: bool,
+}
 
-    let no_scripts = misc
-        .and_then(|m| m.get("no_scripts"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+fn parse_display_section(display: Option<&toml::Value>) -> DisplaySettings {
+    DisplaySettings {
+        system_notifications: display
+            .and_then(|m| m.get("system_notifications"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        mouse_support: display
+            .and_then(|m| m.get("mouse_support"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
+    }
+}
 
-    let autoload = misc
-        .and_then(|m| m.get("autoload"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+struct MbvdSettings {
+    broadcast_ms: u64,
+    client_endpoint: String,
+    server_tcp_listen: String,
+}
 
-    let music_levels: Vec<String> = music
-        .and_then(|m| m.get("levels"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default();
+fn parse_mbvd_section(mbvd: Option<&toml::Value>) -> MbvdSettings {
+    MbvdSettings {
+        broadcast_ms: mbvd
+            .and_then(|d| d.get("broadcast_ms"))
+            .and_then(|v| v.as_integer())
+            .map(|v| v.max(100) as u64)
+            .unwrap_or(500),
+        client_endpoint: mbvd
+            .and_then(|d| d.get("client"))
+            .and_then(|c| c.get("endpoint"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        server_tcp_listen: mbvd
+            .and_then(|d| d.get("server"))
+            .and_then(|s| s.get("tcp_listen"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(default_daemon_server_tcp_listen),
+    }
+}
 
-    let system_notifications = display
-        .and_then(|m| m.get("system_notifications"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+struct LibrarySettings {
+    hidden_libraries: Vec<String>,
+    music_levels: Vec<String>,
+    feed_view_libraries: Vec<String>,
+}
 
-    let mouse_support = display
-        .and_then(|m| m.get("mouse_support"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
+fn parse_library_section(library: Option<&toml::Value>) -> LibrarySettings {
+    let music = library.and_then(|l| l.get("music"));
+    LibrarySettings {
+        hidden_libraries: library
+            .and_then(|m| m.get("hidden_libraries"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_lowercase())
+                    .collect()
+            })
+            .unwrap_or_else(|| vec!["live tv".into()]),
+        music_levels: music
+            .and_then(|m| m.get("levels"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(String::from)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        feed_view_libraries: library
+            .and_then(|m| m.get("feed_view_libraries"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_lowercase())
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
+}
 
-    let save_playlist_on_consume = queue
-        .and_then(|q| q.get("save_playlist_on_consume"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+struct IdleFeedSettings {
+    rss_url: String,
+    rotation_secs: u64,
+}
 
-    let save_playlist_on_consume_audio = queue
-        .and_then(|q| q.get("save_playlist_on_consume_audio"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+fn parse_idle_feed_section(idle_feed: Option<&toml::Value>) -> IdleFeedSettings {
+    IdleFeedSettings {
+        rss_url: idle_feed
+            .and_then(|s| s.get("rss_url"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("https://novaramedia.com/feed/")
+            .to_string(),
+        rotation_secs: idle_feed
+            .and_then(|s| s.get("rotation_interval_secs"))
+            .and_then(|v| v.as_integer())
+            .map(|v| v.max(1) as u64)
+            .unwrap_or(10),
+    }
+}
 
-    let subtitle_mode = playback
-        .and_then(|p| p.get("subtitle_mode"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let subtitle_lang = playback
-        .and_then(|p| p.get("subtitle_lang"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let audio_lang = playback
-        .and_then(|p| p.get("audio_lang"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let my_languages: Vec<String> = playback
-        .and_then(|p| p.get("my_languages"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(String::from)
-                .collect()
-        })
-        .unwrap_or_default();
-    let progress_interval_secs = session
-        .and_then(|m| m.get("progress_interval_secs"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(1) as u64)
-        .unwrap_or(10);
-
-    let quit_timeout_secs = session
-        .and_then(|m| m.get("quit_timeout_secs"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(1) as u64)
-        .unwrap_or(5);
-
-    let daemon_broadcast_ms = mbvd
-        .and_then(|d| d.get("broadcast_ms"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(100) as u64)
-        .unwrap_or(500);
-
-    let daemon_client_endpoint = mbvd
-        .and_then(|d| d.get("client"))
-        .and_then(|c| c.get("endpoint"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let daemon_server_tcp_listen = mbvd
-        .and_then(|d| d.get("server"))
-        .and_then(|s| s.get("tcp_listen"))
-        .and_then(|v| v.as_str())
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(default_daemon_server_tcp_listen);
-
-    let feed_view_libraries: Vec<String> = library
-        .and_then(|m| m.get("feed_view_libraries"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str())
-                .map(|s| s.to_lowercase())
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let library_routes: std::collections::HashMap<String, String> = doc
-        .get("library_routes")
-        .and_then(|v| v.as_table())
-        .map(|table| {
-            table
-                .iter()
-                .filter_map(|(k, v)| v.as_str().map(|s| (k.to_lowercase(), s.to_string())))
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let idle_feed = doc.get("idle_feed");
-    let idle_feed_rss_url = idle_feed
-        .and_then(|s| s.get("rss_url"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("https://novaramedia.com/feed/")
-        .to_string();
-    let idle_feed_rotation_secs = idle_feed
-        .and_then(|s| s.get("rotation_interval_secs"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(1) as u64)
-        .unwrap_or(10);
-
+fn parse_server_section(server: Option<&toml::Value>) -> (String, Option<EmbySetup>) {
     let server_url = server
         .map(|s| get_str(s, "url"))
         .unwrap_or_default()
@@ -305,10 +408,16 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
             .unwrap_or(setup.revision);
         setup
     });
+    (server_url, emby_setup)
+}
+
+fn parse_audiobookshelf_section(
+    audiobookshelf: Option<&toml::Value>,
+) -> Option<AudiobookshelfSetup> {
     let audiobookshelf_url = audiobookshelf
         .map(|section| get_str(section, "url"))
         .unwrap_or_default();
-    let audiobookshelf_setup = (!audiobookshelf_url.trim().is_empty()).then(|| {
+    (!audiobookshelf_url.trim().is_empty()).then(|| {
         let mut setup = AudiobookshelfSetup::new(audiobookshelf_url);
         setup.revision = audiobookshelf
             .and_then(|s| s.get("revision"))
@@ -317,70 +426,29 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
             .filter(|revision| *revision > 0)
             .unwrap_or(setup.revision);
         setup
-    });
-
-    // `[keys]` (change `add-configurable-keybinds`): parsed into the raw
-    // section-outer shape, then compiled through the keybind registry so
-    // every entry — unknown sections and actions, section mismatches,
-    // reserved chords, and both collision classes — is rejected here, at
-    // the existing config error path, before the process starts.
-    let keybinds = match doc.get("keys") {
-        None => crate::keybinds::Keybinds::default(),
-        Some(keys) => {
-            let raw = parse_raw_keybinds(keys)?;
-            crate::keybinds::load(&raw).map_err(|e| e.to_string())?
-        }
-    };
-
-    Ok(Config {
-        emby_setup,
-        audiobookshelf_setup,
-        server_url,
-        username: String::new(),
-        password: String::new(),
-        api_key: String::new(),
-        hidden_libraries,
-        show_audio_window,
-        use_mpv_config,
-        video_cache_forward_mb,
-        video_cache_back_mb,
-        audio_pipe_enabled,
-        audio_pipe_path,
-        audio_pipe_samplerate,
-        audio_pipe_bitdepth,
-        audio_pipe_playout_delay_ms,
-        audio_device,
-        always_play_next,
-        consume_videos,
-        consume_audio,
-        always_skip_intro,
-        show_systray_icon,
-        no_scripts,
-        stay_alive,
-        save_playlist_on_quit,
-        autoload,
-        music_levels,
-        system_notifications,
-        mouse_support,
-        save_playlist_on_consume,
-        save_playlist_on_consume_audio,
-        subtitle_mode,
-        subtitle_lang,
-        audio_lang,
-        my_languages,
-        feed_view_libraries,
-        library_routes,
-        progress_interval_secs,
-        quit_timeout_secs,
-        daemon_broadcast_ms,
-        daemon_client_endpoint,
-        daemon_server_tcp_listen,
-        auto_reconnect,
-        idle_feed_rss_url,
-        idle_feed_rotation_secs,
-        feeds,
-        keybinds,
     })
+}
+
+fn parse_library_routes_section(
+    value: Option<&toml::Value>,
+) -> std::collections::HashMap<String, String> {
+    value
+        .and_then(|v| v.as_table())
+        .map(|table| {
+            table
+                .iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.to_lowercase(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn get_str(section: &toml::Value, key: &str) -> String {
+    section
+        .get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string()
 }
 
 /// Parse the `[keys]` table into the raw section-outer shape (design D3):

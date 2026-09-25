@@ -136,6 +136,56 @@ impl<Target> Default for TreeBrowser<Target> {
     }
 }
 
+/// Validate the projected forest before any owner state is touched: targets
+/// are unique, every declared parent exists, and no parent chain cycles.
+fn validate_forest<Target>(
+    nodes: &[TreeNode<Target>],
+) -> Result<(), TreeReconciliationError<Target>>
+where
+    Target: Clone + Eq + Hash,
+{
+    let mut target_to_index = HashMap::with_capacity(nodes.len());
+    for (index, node) in nodes.iter().enumerate() {
+        if target_to_index.insert(node.target.clone(), index).is_some() {
+            return Err(TreeReconciliationError::DuplicateTarget {
+                target: node.target.clone(),
+            });
+        }
+    }
+
+    for node in nodes {
+        if let Some(parent) = &node.parent {
+            if parent == &node.target {
+                return Err(TreeReconciliationError::SelfParent {
+                    target: node.target.clone(),
+                });
+            }
+            if !target_to_index.contains_key(parent) {
+                return Err(TreeReconciliationError::MissingParent {
+                    target: node.target.clone(),
+                    parent: parent.clone(),
+                });
+            }
+        }
+    }
+
+    // Following each parent chain is sufficient for a forest and avoids
+    // mutating the current owner while cycle validation is in progress.
+    for node in nodes {
+        let mut seen = HashSet::new();
+        let mut current = Some(node.target.clone());
+        while let Some(target) = current {
+            if !seen.insert(target.clone()) {
+                return Err(TreeReconciliationError::Cycle { target });
+            }
+            current = target_to_index
+                .get(&target)
+                .and_then(|&index| nodes[index].parent.clone());
+        }
+    }
+    Ok(())
+}
+
 impl<Target> TreeBrowser<Target> {
     pub fn new() -> Self {
         Self {
@@ -181,45 +231,7 @@ impl<Target> TreeBrowser<Target> {
                 TreeEntry::Heading(_) | TreeEntry::Spacer => None,
             })
             .collect();
-        let mut target_to_index = HashMap::with_capacity(nodes.len());
-        for (index, node) in nodes.iter().enumerate() {
-            if target_to_index.insert(node.target.clone(), index).is_some() {
-                return Err(TreeReconciliationError::DuplicateTarget {
-                    target: node.target.clone(),
-                });
-            }
-        }
-
-        for node in &nodes {
-            if let Some(parent) = &node.parent {
-                if parent == &node.target {
-                    return Err(TreeReconciliationError::SelfParent {
-                        target: node.target.clone(),
-                    });
-                }
-                if !target_to_index.contains_key(parent) {
-                    return Err(TreeReconciliationError::MissingParent {
-                        target: node.target.clone(),
-                        parent: parent.clone(),
-                    });
-                }
-            }
-        }
-
-        // Following each parent chain is sufficient for a forest and avoids
-        // mutating the current owner while cycle validation is in progress.
-        for node in &nodes {
-            let mut seen = HashSet::new();
-            let mut current = Some(node.target.clone());
-            while let Some(target) = current {
-                if !seen.insert(target.clone()) {
-                    return Err(TreeReconciliationError::Cycle { target });
-                }
-                current = target_to_index
-                    .get(&target)
-                    .and_then(|&index| nodes[index].parent.clone());
-            }
-        }
+        validate_forest(&nodes)?;
 
         let mut root_structures = HashMap::new();
         let mut pending_structure = Vec::new();

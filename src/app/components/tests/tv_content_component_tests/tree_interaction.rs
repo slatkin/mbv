@@ -1,84 +1,101 @@
 use super::*;
 
-#[test]
-fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
-    for is_wide in [true, false] {
-        let mut show = make_item("Series A", "Series");
-        show.id = "series-a".into();
-        let mut season = make_item("Season 1", "Season");
-        season.id = "season-1".into();
-        let mut episode = make_item("Episode 1", "Episode");
-        episode.id = "episode-1".into();
-        let detail = crate::app::SeriesDetail {
-            seasons: vec![season.clone()],
-            episodes: [(season.id.clone(), vec![episode.clone()])]
-                .into_iter()
-                .collect(),
-        };
-        let mut owner = TvContent::new();
-        owner.set_is_wide(is_wide);
-        owner.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![show.clone()], 0),
-            Some(show.clone()),
-            Some(detail),
-            0,
-            None,
-            false,
-        ));
-        let show_target = owner.selected_tree_target().cloned().unwrap();
-        assert!(owner.on_key(&key(Key::Char('p'))).is_none());
-        assert!(matches!(
-            owner.on_key(&key(Key::Right)),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == show_target)));
-        assert!(matches!(
-            owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryPlay { item } if item.id == show.id)));
-        assert!(matches!(
-            owner.on_key(&key(Key::Char('.'))),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
-            ) if items.len() == 1 && items[0].id == show.id)));
-        assert!(matches!(
-            owner.on_key(&key(Key::Down)),
-            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        ));
-        let season_target = owner.selected_tree_target().cloned().unwrap();
-        assert!(matches!(season_target, TvTreeTarget::Season { .. }));
-        assert!(matches!(
-            owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryPlay { item } if item.id == season.id)));
-        assert!(matches!(
-            owner.on_key(&key(Key::Char('.'))),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
-            ) if items.len() == 1 && items[0].id == season.id)));
-        assert!(matches!(
-            owner.on_key(&key(Key::Enter)),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == season_target)));
-        assert!(matches!(
-            owner.on_key(&key(Key::Down)),
-            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        ));
-        assert!(matches!(
-            owner.selected_tree_target(),
-            Some(TvTreeTarget::Episode { .. })
-        ));
-        assert!(matches!(
-            owner.on_key(&key(Key::Enter)),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { episode: selected } if selected.id == episode.id)));
-        assert!(matches!(
-            owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryPlay { item } if item.id == episode.id)));
-        assert!(matches!(
-            owner.on_key(&key(Key::Char('.'))),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
-            ) if items.len() == 1 && items[0].id == episode.id)));
-        owner.on_key(&key(Key::Home));
-        assert!(matches!(
-            owner.on_key(&key(Key::Enter)),
-            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { item } if item.id == show.id)));
+fn ctrl(code: Key) -> KeyEvent {
+    KeyEvent {
+        code,
+        modifiers: KeyModifiers::CONTROL,
     }
+}
+
+#[rstest]
+#[case(true)]
+#[case(false)]
+fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow(#[case] is_wide: bool) {
+    let mut show = make_item("Series A", "Series");
+    show.id = "series-a".into();
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-1".into();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season.clone()],
+        episodes: [(season.id.clone(), vec![episode.clone()])]
+            .into_iter()
+            .collect(),
+    };
+    let mut owner = TvContent::new();
+    owner.set_is_wide(is_wide);
+    owner.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![show.clone()], 0),
+        Some(show.clone()),
+        Some(detail),
+        0,
+        None,
+        false,
+    ));
+    let show_target = owner.selected_tree_target().cloned().unwrap();
+    assert!(owner.on_key(&key(Key::Char('p'))).is_none());
+    assert!(matches!(
+        tv_shell_request(&mut owner, Key::Right),
+        ShellRequest::TvTreeExpand { target } if target == show_target
+    ));
+    assert!(matches!(
+        tv_shell_event(&mut owner, ctrl(Key::Char('p'))),
+        ShellRequest::EmbyLibraryPlay { item } if item.id == show.id
+    ));
+    assert!(matches!(
+        tv_shell_request(&mut owner, Key::Char('.')),
+        ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
+        ) if items.len() == 1 && items[0].id == show.id
+    ));
+    assert!(matches!(
+        owner.on_key(&key(Key::Down)),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    ));
+    let season_target = owner.selected_tree_target().cloned().unwrap();
+    assert!(matches!(season_target, TvTreeTarget::Season { .. }));
+    assert!(matches!(
+        tv_shell_event(&mut owner, ctrl(Key::Char('p'))),
+        ShellRequest::EmbyLibraryPlay { item } if item.id == season.id
+    ));
+    assert!(matches!(
+        tv_shell_request(&mut owner, Key::Char('.')),
+        ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
+        ) if items.len() == 1 && items[0].id == season.id
+    ));
+    assert!(matches!(
+        tv_shell_request(&mut owner, Key::Enter),
+        ShellRequest::TvTreeExpand { target } if target == season_target
+    ));
+    assert!(matches!(
+        owner.on_key(&key(Key::Down)),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    ));
+    assert!(matches!(
+        owner.selected_tree_target(),
+        Some(TvTreeTarget::Episode { .. })
+    ));
+    assert!(matches!(
+        tv_shell_request(&mut owner, Key::Enter),
+        ShellRequest::TvEpisodeActivate { episode: selected } if selected.id == episode.id
+    ));
+    assert!(matches!(
+        tv_shell_event(&mut owner, ctrl(Key::Char('p'))),
+        ShellRequest::EmbyLibraryPlay { item } if item.id == episode.id
+    ));
+    assert!(matches!(
+        tv_shell_request(&mut owner, Key::Char('.')),
+        ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
+        ) if items.len() == 1 && items[0].id == episode.id
+    ));
+    owner.on_key(&key(Key::Home));
+    assert!(matches!(
+        tv_shell_request(&mut owner, Key::Enter),
+        ShellRequest::TvActivate { item } if item.id == show.id
+    ));
 }
 
 #[test]

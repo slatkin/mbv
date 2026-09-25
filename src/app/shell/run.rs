@@ -266,48 +266,13 @@ impl Model {
         self.home_content.loading = true;
         terminal.draw(|f| self.draw_frame(f, false, false))?;
 
-        // Only start the configured Remote Service after the first TUI frame
-        // has been rendered. The selected Player owner and UI therefore never
-        // wait for Emby setup, authentication, or connectivity.
-        if let Some((config, generation)) = self.app.emby_startup_request.take() {
-            self.app.emby_startup_rx = Some(service_startup::start(config, generation));
-        }
-        if let Some((config, generation)) = self.app.audiobookshelf_startup_request.take() {
-            self.app.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
-                config,
-                generation,
-                service_startup::AudiobookshelfCompletionKind::Startup,
-            ));
-        }
-
-        // Auto-fetch configured feeds asynchronously so the Feeds tab and the
-        // Home "Feeds" pill are populated shortly after startup instead
-        // of staying empty until the user presses the manual refresh key.
-        self.app.start_feed_fetch();
-
-        if let Some(client) = self.app.emby_client() {
-            client.lock().unwrap().register_capabilities();
-        }
+        self.spawn_startup_services();
 
         // Home populates now; Emby's startup merges its portion later (#543).
         self.fetch_home_at_startup();
         self.app.restore_queue_state();
 
-        // Initialize idle feed if configured
-        if self.app.config.lock().unwrap().idle_feed_rss_url.is_empty() {
-            // No RSS URL configured, skip idle feed
-        } else {
-            let (items_tx, items_rx) = std::sync::mpsc::channel();
-            self.app.idle_feed = Some(IdleFeed {
-                items: Vec::new(),
-                current_index: 0,
-                last_rotation: Instant::now(),
-                last_fetch: Instant::now(),
-                items_tx,
-                items_rx,
-            });
-            self.app.spawn_idle_feed_fetch();
-        }
+        self.init_idle_feed();
 
         terminal.draw(|f| self.draw_frame(f, false, false))?;
 
@@ -325,41 +290,7 @@ impl Model {
                 break;
             }
 
-            if let Some(worker) = self.app.emby_startup_rx.take() {
-                match worker.rx.try_recv() {
-                    Ok(completion) => {
-                        had_events = true;
-                        // Emby bootstrap wrote Home content; assign + re-project
-                        // (5.3d); stale/error return None.
-                        self.apply_emby_completion_drain(completion);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        self.app.emby_startup_rx = Some(worker);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        self.app
-                            .handle_emby_startup_worker_disconnect(worker.generation);
-                        had_events = true;
-                    }
-                }
-            }
-            if let Some(rx) = self.app.emby_setup_rx.take() {
-                match rx.try_recv() {
-                    Ok(completion) => {
-                        had_events = true;
-                        // Emby setup drain re-bootstraps Home content; assign +
-                        // re-project (5.3d); stale/decline return None.
-                        self.apply_emby_setup_completion_drain(completion);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Empty) => {
-                        self.app.emby_setup_rx = Some(rx);
-                    }
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-                        self.app.handle_emby_setup_worker_disconnect();
-                        had_events = true;
-                    }
-                }
-            }
+            had_events |= self.drain_startup_workers();
             let drained_abs_events = self.app.drain_audiobookshelf_events();
             had_events |= drained_abs_events;
             // ABS startup/refresh reset the browse state and reconcile
@@ -371,132 +302,13 @@ impl Model {
                 self.push_audiobookshelf_book_content();
                 self.push_music_workspace_content();
             }
-            if let Ok(ev) = self.app.player_rx.try_recv() {
-                had_events = true;
-                let restart = self.app.handle_player_event(ev);
-                // Playback completion refetches Home; re-project (task 5.3d, sync_home
-                // mirror deletion).
-                self.push_home_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_emby_library_owner_content();
-                // Player events can reconcile ABS podcast progress; re-project (5.3d.11 U6).
-                self.push_audiobookshelf_podcast_content();
-                // Player events can reconcile ABS book progress; re-project (5.3d).
-                self.push_audiobookshelf_book_content();
-                self.push_music_workspace_content();
-                if restart {
-                    continue 'outer;
-                }
+            if self.drain_player_events(&mut had_events) {
+                continue 'outer;
             }
 
             had_events |= self.app.drain_notif_actions();
 
-            while let Ok(ev) = self.app.lib_rx.try_recv() {
-                had_events = true;
-                match ev {
-                    super::super::LibEvent::EmbyLatestSnapshotFetched {
-                        library_id,
-                        title,
-                        items,
-                    } => {
-                        self.update_emby_latest_snapshot(
-                            library_id,
-                            title,
-                            items
-                                .into_iter()
-                                .map(|item| {
-                                    mbv_core::playback_queue::QueueItem::Emby(Box::new(item))
-                                })
-                                .collect(),
-                        );
-                    }
-                    super::super::LibEvent::Loaded {
-                        lib_idx,
-                        parent_id,
-                        level,
-                    } => {
-                        let latest = self.app.libs.get(lib_idx).and_then(|lib| {
-                            (lib.library.collection_type == "tvshows"
-                                && (lib.tv_content_mode
-                                    == Some(mbv_core::config::TvContentMode::Latest)
-                                    || level.tv_content_mode
-                                        == Some(mbv_core::config::TvContentMode::Latest)))
-                            .then(|| {
-                                (
-                                    lib.library.id.clone(),
-                                    lib.library.name.clone(),
-                                    level
-                                        .items
-                                        .iter()
-                                        .cloned()
-                                        .map(|item| {
-                                            mbv_core::playback_queue::QueueItem::Emby(Box::new(
-                                                item,
-                                            ))
-                                        })
-                                        .collect(),
-                                )
-                            })
-                        });
-                        self.app.handle_lib_event(super::super::LibEvent::Loaded {
-                            lib_idx,
-                            parent_id,
-                            level,
-                        });
-                        if let Some((library_id, title, items)) = latest {
-                            self.update_emby_latest_snapshot(library_id, title, items);
-                        }
-                    }
-                    // Recursive album activation used to write `Some(0)` on
-                    // the deleted inline track-focus field directly; the
-                    // component owns the cursor now, so the shell delivers
-                    // the same trigger as a one-shot request consumed at the
-                    // next sync (wide only -- narrow keeps track focus off).
-                    super::super::LibEvent::RecursiveAlbumActivated {
-                        library_id,
-                        nav_stack,
-                    } => {
-                        self.on_recursive_album_activated(library_id, nav_stack);
-                    }
-                    // Position restore used to clear the deleted track-focus
-                    // field; route the same reset to the component at the
-                    // next sync.
-                    super::super::LibEvent::RestoreLibraryPosition { .. } => {
-                        self.handle_restored_library_position_event(ev);
-                        self.music_track_focus_request = Some(MusicTrackFocusRequest::Clear);
-                        // Saved position restored into the nav stack; re-anchor
-                        // the workspace cursor to it at this event rather than
-                        // by an equality test on the next content push.
-                        self.music_workspace_reanchor = true;
-                        self.push_inline_search_content();
-                    }
-                    super::super::LibEvent::HomeContentRefreshed(content) => {
-                        self.assign_home_content(*content)
-                    }
-                    super::super::LibEvent::SeriesDetailFetched { .. } => {
-                        self.app.handle_lib_event(ev);
-                        self.push_tv_workspace_content();
-                    }
-                    // Artist detail completions (tasks 6.1/6.2): the App arms
-                    // own the stale-guard and cache writes; the drain tail's
-                    // Music re-push projects whatever is now current. Kept as
-                    // explicit arms so the variants are never wildcard-hidden.
-                    super::super::LibEvent::ArtistTracksFetched { .. }
-                    | super::super::LibEvent::ArtistArtworkFetched { .. } => {
-                        self.app.handle_lib_event(ev);
-                    }
-                    super::super::LibEvent::HomeContentCleared => self.clear_home_content(),
-                    ev => self.handle_inline_search_lib_event(ev),
-                }
-                self.push_audiobookshelf_podcast_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_emby_library_owner_content();
-                // ABS book async completions (BooksFetched / BookDetailFetched)
-                // and saved-position restore arrive via lib events; re-project (5.3d).
-                self.push_audiobookshelf_book_content();
-                self.push_music_workspace_content();
-                self.push_tv_workspace_content();
-            }
+            had_events |= self.drain_lib_events();
 
             // Search results drain: the shell drains `search_rx` and writes
             // each result into the `SearchSidebarComponent` via downcast
@@ -541,104 +353,20 @@ impl Model {
             had_events |= self.drain_card_image_completions();
             self.app.drain_image_fetches();
 
-            // Apply completed off-thread resize+encode results (#164). A
-            // response for an evicted/replaced/absent key is silently
-            // dropped here; `update_resized_protocol` also guards on
-            // ThreadProtocol's internal id, so a stale response racing a
-            // newer resize request for the same (still-present) key is a
-            // no-op too.
-            while let Ok((key, response)) = self.app.resize_response_rx.try_recv() {
-                had_events = true;
-                // Responses are tagged with the per-suffix mem-key
-                // ("bare@suffix"); route them into the matching protocol of
-                // the bare-key cache entry.
-                if let Some((bare_key, suffix)) = key.rsplit_once('@') {
-                    if let Some(entry) = self.app.card_image_states.get_mut(bare_key) {
-                        if let Some(state) = entry.protocols.get_mut(suffix) {
-                            state.update_resized_protocol(response);
-                        }
-                    }
-                }
-            }
+            had_events |= self.drain_resize_responses();
 
-            while let Ok(ev) = self.app.ws_rx.try_recv() {
-                had_events = true;
-                self.app.handle_ws_event(ev);
-                // `UserDataChanged` refetches Continue Watching inside the handler.
-                self.push_home_content();
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_emby_library_owner_content();
-                self.push_music_workspace_content();
-            }
+            had_events |= self.drain_ws_events();
 
-            while let Ok(ev) = self.app.audiobookshelf_socket_rx.try_recv() {
-                had_events = true;
-                self.app.handle_audiobookshelf_socket_event(ev);
-                // Socket events reconcile ABS podcast episode progress;
-                // re-project (5.3d.11 U6).
-                self.push_audiobookshelf_podcast_content();
-                // Socket events reconcile ABS book progress; re-project (5.3d).
-                self.push_audiobookshelf_book_content();
-                self.push_music_workspace_content();
-            }
+            had_events |= self.drain_audiobookshelf_socket_events();
 
-            // Drain idle feed items
-            if let Some(ref mut idle_feed) = self.app.idle_feed {
-                while let Ok(items) = idle_feed.items_rx.try_recv() {
-                    had_events = true;
-                    idle_feed.items = items;
-                    idle_feed.current_index = 0;
-                }
-                // Re-fetch every 30 minutes
-                if idle_feed.last_fetch.elapsed() >= Duration::from_secs(1800) {
-                    idle_feed.last_fetch = Instant::now();
-                    self.app.spawn_idle_feed_fetch();
-                }
-            }
+            had_events |= self.drain_idle_feed();
 
             self.app.sync_visualizer();
 
-            if let Some(at) = self.app.settings_save_at {
-                if Instant::now() >= at {
-                    let cfg = self.app.config.lock().unwrap().clone();
-                    crate::config::save_config_with_ui(&cfg, &self.app.ui_config_snapshot());
-                    self.app.settings_save_at = None;
-                }
-            }
+            self.run_periodic_maintenance();
 
-            // Periodic session poll when connected to a remote session
-            if self.app.connected_session_id.is_some()
-                && self.app.last_session_poll.elapsed() >= Duration::from_secs(1)
-                && !self.app.sessions_loading
-            {
-                self.app.spawn_sessions_load();
-            }
-
-            // Periodic status poll while attached to a cast target (6.1). The
-            // keep-alive heartbeat this poll's background thread sends is not
-            // optional -- see `CAST_STATUS_POLL_INTERVAL`'s doc comment.
-            if self.app.cast_attachment.is_some()
-                && self.app.last_cast_poll.elapsed()
-                    >= crate::app::dispatch::cast_status::CAST_STATUS_POLL_INTERVAL
-                && !self.app.cast_status_loading
-            {
-                self.app.spawn_cast_status_poll();
-            }
-
-            // Keep this session visible to other Emby clients
-            if let Some(ref tx) = self.app.ws_send_tx {
-                if self.app.last_keepalive.elapsed() >= Duration::from_secs(30) {
-                    let _ = tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
-                    self.app.last_keepalive = Instant::now();
-                }
-            }
-            if self.app.ws_send_tx.is_some()
-                && self.app.last_capabilities.elapsed() >= Duration::from_secs(600)
-            {
-                if let Some(client) = self.app.emby_snapshot() {
-                    std::thread::spawn(move || client.register_capabilities());
-                }
-                self.app.last_capabilities = Instant::now();
+            if self.tick_terminal_messages(&mut had_events, &mut music_resize, &mut tv_resize) {
+                break 'outer;
             }
 
             // Terminal event poll is now driven by TuiRealm. `tick` polls the
@@ -731,36 +459,13 @@ impl Model {
             // Advance idle feed rotation
             self.app.advance_idle_feed_rotation();
 
-            // See `render_interval`'s doc comment for the fast/slow cadence rules.
-            let render_interval = self.app.render_interval();
-            if self
-                .app
-                .wants_terminal_render(had_events, last_render, render_interval)
-            {
-                if self.app.force_clear {
-                    self.app.force_clear = false;
-                    if let Err(e) = terminal.clear() {
-                        log::error!(
-                            target: "run_loop",
-                            "terminal.clear() failed: {e:?} (kind={:?})",
-                            e.kind()
-                        );
-                        return Err(e.into());
-                    }
-                }
-                if self.app.visualizer.is_some() {
-                    self.app.sync_visualizer();
-                }
-                if let Err(e) = terminal.draw(|f| self.draw_frame(f, music_resize, tv_resize)) {
-                    log::error!(
-                        target: "run_loop",
-                        "terminal.draw() failed: {e:?} (kind={:?})",
-                        e.kind()
-                    );
-                    return Err(e.into());
-                }
-                last_render = Instant::now();
-            }
+            self.draw_frame_if_due(
+                had_events,
+                &mut last_render,
+                music_resize,
+                tv_resize,
+                &mut terminal,
+            )?;
         }
 
         self.teardown(quit_timeout);
@@ -775,5 +480,6 @@ impl Model {
     }
 }
 
+mod drains;
 #[cfg(test)]
 mod tests;

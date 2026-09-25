@@ -1,6 +1,98 @@
 use crate::app::{App, LibEvent};
 
 impl App {
+    /// The `AudiobookshelfBooksFetched` body: append the fetched page to the
+    /// library's book browse state, fetch the selected book's detail, and
+    /// chain the next page when one is needed.
+    fn handle_audiobookshelf_books_fetched(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        library_id: String,
+        result: Result<
+            mbv_core::audiobookshelf::AudiobookshelfBookPage,
+            mbv_core::audiobookshelf::AudiobookshelfError,
+        >,
+    ) {
+        if let Some(index) = self
+            .audiobookshelf_libraries
+            .iter()
+            .position(|library| library.id == library_id)
+        {
+            let mut next_page = None;
+            let mut selected_detail = None;
+            if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
+                match result {
+                    Ok(page) => {
+                        state.append_page_books(page.page, page.total, page.items);
+                        next_page = state.needs_page();
+                        if !state.detail_loading {
+                            selected_detail = state.selected_id.clone();
+                        }
+                    }
+                    Err(error) => state.error = Some(error.to_string()),
+                }
+            }
+            if let Some(selected_detail) = selected_detail {
+                self.start_audiobookshelf_book_detail(selected_detail);
+            }
+            if let Some(next_page) = next_page {
+                crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
+                    self.config.lock().unwrap().clone(),
+                    generation,
+                    library_id,
+                    next_page,
+                    self.lib_tx.clone(),
+                );
+            }
+        }
+    }
+
+    /// The `AudiobookshelfBookDetailFetched` body: retire the in-flight mark
+    /// on the owning browse state and cache the detail on success.
+    fn handle_audiobookshelf_book_detail_fetched(
+        &mut self,
+        library_item_id: String,
+        result: Result<
+            (
+                Vec<mbv_core::audiobookshelf::AudiobookshelfChapter>,
+                Vec<mbv_core::audiobookshelf::AudiobookshelfAudioFile>,
+            ),
+            mbv_core::audiobookshelf::AudiobookshelfError,
+        >,
+    ) {
+        match result {
+            Ok(detail) => {
+                if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
+                    state
+                        .books
+                        .iter()
+                        .any(|book| book.library_item_id == library_item_id)
+                }) {
+                    state.detail_loading_ids.remove(&library_item_id);
+                    state.detail_loading = state
+                        .selected_id
+                        .as_ref()
+                        .is_some_and(|id| state.detail_loading_ids.contains(id));
+                    state.detail_cache.insert(library_item_id.clone(), detail);
+                }
+            }
+            Err(_error) => {
+                if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
+                    state
+                        .books
+                        .iter()
+                        .any(|book| book.library_item_id == library_item_id)
+                }) {
+                    state.detail_loading_ids.remove(&library_item_id);
+                    state.detail_loading = state
+                        .selected_id
+                        .as_ref()
+                        .is_some_and(|id| state.detail_loading_ids.contains(id));
+                }
+            }
+        }
+    }
+
     pub(super) fn handle_audiobookshelf_event(&mut self, ev: LibEvent) -> Option<LibEvent> {
         if let LibEvent::AudiobookshelfProgressAcknowledged(update) = ev {
             if !self.audiobookshelf_runtime.accepts(update.generation) {
@@ -41,38 +133,7 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return None;
             }
-            if let Some(index) = self
-                .audiobookshelf_libraries
-                .iter()
-                .position(|library| library.id == library_id)
-            {
-                let mut next_page = None;
-                let mut selected_detail = None;
-                if let Some(state) = self.audiobookshelf_book_browse.get_mut(index) {
-                    match result {
-                        Ok(page) => {
-                            state.append_page_books(page.page, page.total, page.items);
-                            next_page = state.needs_page();
-                            if !state.detail_loading {
-                                selected_detail = state.selected_id.clone();
-                            }
-                        }
-                        Err(error) => state.error = Some(error.to_string()),
-                    }
-                }
-                if let Some(selected_detail) = selected_detail {
-                    self.start_audiobookshelf_book_detail(selected_detail);
-                }
-                if let Some(next_page) = next_page {
-                    crate::app::dispatch::session::service_startup::start_audiobookshelf_books(
-                        self.config.lock().unwrap().clone(),
-                        generation,
-                        library_id,
-                        next_page,
-                        self.lib_tx.clone(),
-                    );
-                }
-            }
+            self.handle_audiobookshelf_books_fetched(generation, library_id, result);
             return None;
         }
         if let LibEvent::AudiobookshelfBookDetailFetched {
@@ -84,37 +145,7 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return None;
             }
-            match result {
-                Ok(detail) => {
-                    if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
-                        state
-                            .books
-                            .iter()
-                            .any(|book| book.library_item_id == library_item_id)
-                    }) {
-                        state.detail_loading_ids.remove(&library_item_id);
-                        state.detail_loading = state
-                            .selected_id
-                            .as_ref()
-                            .is_some_and(|id| state.detail_loading_ids.contains(id));
-                        state.detail_cache.insert(library_item_id.clone(), detail);
-                    }
-                }
-                Err(_error) => {
-                    if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
-                        state
-                            .books
-                            .iter()
-                            .any(|book| book.library_item_id == library_item_id)
-                    }) {
-                        state.detail_loading_ids.remove(&library_item_id);
-                        state.detail_loading = state
-                            .selected_id
-                            .as_ref()
-                            .is_some_and(|id| state.detail_loading_ids.contains(id));
-                    }
-                }
-            }
+            self.handle_audiobookshelf_book_detail_fetched(library_item_id, result);
             return None;
         }
         if let LibEvent::AudiobookshelfDetailFetched {

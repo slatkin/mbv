@@ -116,6 +116,34 @@ fn up_and_down_move_across_artist_roots_and_album_leaves() {
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-1"));
 }
 
+/// Open the inline tree filter and set it to `query` through the component's
+/// own `/` chord and tree operation.
+fn open_tree_filter(owner: &mut MusicContent, query: &str) {
+    assert!(owner
+        .on_key(&KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE,
+        })
+        .is_some());
+    owner
+        .browser
+        .apply(TreeOperation::EditFilter(query.to_string()));
+}
+
+/// `Enter` on the selected album must cross as an album activation of
+/// `expected_id`.
+fn activate_selected_album(owner: &mut MusicContent, expected_id: &str) {
+    match press(owner, Key::Enter) {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicAlbumActivate { item } = *shell_boxed else {
+                panic!("expected album activation, got {shell_boxed:?}")
+            };
+            assert_eq!(item.id, expected_id)
+        }
+        other => panic!("expected album activation, got {other:?}"),
+    }
+}
+
 #[test]
 fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"]), ("Beta", &["b-0"])]);
@@ -137,15 +165,7 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     );
 
     // Filtered artist Enter remains local and toggles expansion.
-    assert!(owner
-        .on_key(&KeyEvent {
-            code: Key::Char('/'),
-            modifiers: KeyModifiers::NONE,
-        })
-        .is_some());
-    owner
-        .browser
-        .apply(TreeOperation::EditFilter("Alpha".to_string()));
+    open_tree_filter(&mut owner, "Alpha");
     assert_eq!(press(&mut owner, Key::Enter), None);
     assert!(!owner.browser.is_expanded(&root));
     assert_eq!(press(&mut owner, Key::Enter), None);
@@ -155,28 +175,12 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     // The existing album activation is preserved on a leaf.
     press(&mut owner, Key::Down);
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));
-    match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(shell_boxed)) => {
-            let ShellRequest::MusicAlbumActivate { item } = *shell_boxed else {
-                panic!("expected album activation, got {shell_boxed:?}")
-            };
-            assert_eq!(item.id, "a-0")
-        }
-        other => panic!("expected album activation, got {other:?}"),
-    }
+    activate_selected_album(&mut owner, "a-0");
 
     // A filtered dismissal must not revert to the pre-filter anchor: `/`,
     // move onto another match, Enter activates and keeps the activated album
     // in the tree, the Workspace/Hero resolution, and the launch snapshot.
-    assert!(owner
-        .on_key(&KeyEvent {
-            code: Key::Char('/'),
-            modifiers: KeyModifiers::NONE,
-        })
-        .is_some());
-    owner
-        .browser
-        .apply(TreeOperation::EditFilter("2001".to_string()));
+    open_tree_filter(&mut owner, "2001");
     assert_eq!(
         owner.selected_album_target().as_deref(),
         Some("a-0"),
@@ -184,15 +188,7 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     );
     press(&mut owner, Key::Down);
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-1"));
-    match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(shell_boxed)) => {
-            let ShellRequest::MusicAlbumActivate { item } = *shell_boxed else {
-                panic!("expected album activation, got {shell_boxed:?}")
-            };
-            assert_eq!(item.id, "a-1")
-        }
-        other => panic!("expected album activation, got {other:?}"),
-    }
+    activate_selected_album(&mut owner, "a-1");
     assert_eq!(
         owner.selected_album_target().as_deref(),
         Some("a-1"),
@@ -208,15 +204,7 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     // restores the pre-filter anchor, so a plain `Select` cannot re-address the
     // hidden leaf and the tree would revert. The re-selection must reveal the
     // ancestor path instead (legacy `select_album_target` parity).
-    assert!(owner
-        .on_key(&KeyEvent {
-            code: Key::Char('/'),
-            modifiers: KeyModifiers::NONE,
-        })
-        .is_some());
-    owner
-        .browser
-        .apply(TreeOperation::EditFilter("b-0".to_string()));
+    open_tree_filter(&mut owner, "b-0");
     let beta_root = find(&owner, |target| target.is_artist());
     assert!(
         !owner.browser.is_expanded(&beta_root),
@@ -229,15 +217,7 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     );
     press(&mut owner, Key::Down);
     assert_eq!(owner.selected_album_target().as_deref(), Some("b-0"));
-    match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(shell_boxed)) => {
-            let ShellRequest::MusicAlbumActivate { item } = *shell_boxed else {
-                panic!("expected album activation, got {shell_boxed:?}")
-            };
-            assert_eq!(item.id, "b-0")
-        }
-        other => panic!("expected album activation, got {other:?}"),
-    }
+    activate_selected_album(&mut owner, "b-0");
     assert_eq!(
         owner.selected_album_target().as_deref(),
         Some("b-0"),

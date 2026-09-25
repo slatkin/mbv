@@ -25,41 +25,38 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
         true,
     ));
 
-    let key = |code| KeyEvent {
-        code,
-        modifiers: KeyModifiers::NONE,
-    };
     assert!(matches!(
-        owner.on_key(&key(Key::Down)),
-        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
-            hit: TvHit::SeriesRow(ref id)
-        } if id == "series-b")));
+        tv_shell_request(&mut owner, Key::Down),
+        ShellRequest::TvHitClick {
+            hit: TvHit::SeriesRow(id)
+        } if id == "series-b"
+    ));
     assert!(matches!(
-        owner.on_key(&key(Key::Char('['))),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::TvCycleLetterPill { delta: -1 })));
+        tv_shell_request(&mut owner, Key::Char('[')),
+        ShellRequest::TvCycleLetterPill { delta: -1 }
+    ));
     assert!(matches!(
-        owner.on_key(&key(Key::Enter)),
-        Some(Msg::Shell(ref shell_boxed))
-             if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { item } if item.name == "Series B" && item.item_type == "Series")));
+        tv_shell_request(&mut owner, Key::Enter),
+        ShellRequest::TvActivate { item } if item.name == "Series B" && item.item_type == "Series"
+    ));
     assert!(matches!(
-        owner.on_key(&key(Key::Up)),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeMove { delta: -1 })));
+        tv_shell_request(&mut owner, Key::Up),
+        ShellRequest::TvEpisodeMove { delta: -1 }
+    ));
     assert!(matches!(
-        owner.on_key(&key(Key::Char(']'))),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { delta: 1 })));
+        tv_shell_request(&mut owner, Key::Char(']')),
+        ShellRequest::TvSeasonMove { delta: 1 }
+    ));
     assert!(matches!(
-        owner.on_key(&key(Key::Esc)),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::TvBack)));
+        tv_shell_request(&mut owner, Key::Esc),
+        ShellRequest::TvBack
+    ));
 
     owner.on_key(&key(Key::Enter));
     assert!(matches!(
-        owner.on_key(&key(Key::Enter)),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { .. })));
+        tv_shell_request(&mut owner, Key::Enter),
+        ShellRequest::TvEpisodeActivate { .. }
+    ));
 }
 
 #[test]

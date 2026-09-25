@@ -3,7 +3,7 @@
 //! the double-click dispatch is by resolved node kind.
 
 use super::tree_fixtures::{
-    find, paint_tree, press, tree_owner, tree_owner_with_tracks, tree_point,
+    find, paint_tree, press, shell_request, tree_owner, tree_owner_with_tracks, tree_point,
 };
 use super::*;
 use crate::app::components::music_tree_target::MusicTreeTarget;
@@ -96,83 +96,91 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
     // A click resolves the painted artist row and changes local selection;
     // the grouping root manufactures no album request, but its resolved
     // focus crosses as the typed artist-track request (design D7).
-    match owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
-        root_at,
-    ))) {
-        Some(Msg::Shell(shell_boxed)) => {
-            let ShellRequest::MusicArtistTracks { target } = *shell_boxed else {
-                panic!("expected the typed artist-track request, got {shell_boxed:?}")
-            };
-            assert_eq!(target.artist_name, "Alpha");
-        }
-        other => panic!("expected the typed artist-track request, got {other:?}"),
-    }
+    let ShellRequest::MusicArtistTracks { target } = shell_request(
+        &mut owner,
+        LibrarySlotEvent::List(MediaListSurfaceInput::Click(root_at)),
+    ) else {
+        panic!("expected the typed artist-track request")
+    };
+    assert_eq!(target.artist_name, "Alpha");
     assert!(owner.selected_is_artist());
 
     // Each gesture resolves the latest completed frame; a mutation invalidates
     // it, so re-paint before the next gesture.
     paint_tree(&mut owner, area);
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
-            album_0_at
-        ))),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { target: 0, .. })));
+        shell_request(
+            &mut owner,
+            LibrarySlotEvent::List(MediaListSurfaceInput::Click(album_0_at))
+        ),
+        ShellRequest::MusicAlbumCursor { target: 0, .. }
+    ));
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));
     paint_tree(&mut owner, area);
 
     // A modified click resolves the current painted row first, toggles only
     // the album leaf, and never emits a playback or Queue request.
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ToggleClick(
-            album_0_at,
-        ))),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
+        shell_request(
+            &mut owner,
+            LibrarySlotEvent::List(MediaListSurfaceInput::ToggleClick(album_0_at))
+        ),
+        ShellRequest::LibraryPanelFocus
+    ));
     assert_eq!(owner.selected_album_targets(), vec!["a-0".to_string()]);
     paint_tree(&mut owner, area);
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
-            at: album_0_at,
-            delta: 1,
-        })),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { target: 1, .. })));
+        shell_request(
+            &mut owner,
+            LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+                at: album_0_at,
+                delta: 1,
+            })
+        ),
+        ShellRequest::MusicAlbumCursor { target: 1, .. }
+    ));
     assert_eq!(owner.browser.selected_target(), Some(&album_1));
     paint_tree(&mut owner, area);
 
     // Double-click resolves the row under the latest retained geometry. The
     // childless leaf is claimed locally and focuses Library once.
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
-            album_0_at
-        ))),
-        Some(Msg::Shell(ref shell_boxed))
-     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
+        shell_request(
+            &mut owner,
+            LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(album_0_at))
+        ),
+        ShellRequest::LibraryPanelFocus
+    ));
     paint_tree(&mut owner, area);
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
-            album_0_at
-        ))),
-        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(
+        shell_request(
+            &mut owner,
+            LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(album_0_at))
+        ),
+        ShellRequest::MusicRowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             Some((x, y)),
-        ) if items.len() == 1 && items[0].id == "a-0" && (*x, *y) == (album_0_at.x, album_0_at.y))));
+        ) if items.len() == 1
+            && items[0].id == "a-0"
+            && (x, y) == (album_0_at.x, album_0_at.y)
+    ));
 
     // A right-click on an artist root inside a marked tree selection acts on
     // that selection, not on every descendant of the root. The grouping root
     // itself never crosses the effect boundary.
     paint_tree(&mut owner, area);
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
-            root_at
-        ))),
-        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(
+        shell_request(
+            &mut owner,
+            LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(root_at))
+        ),
+        ShellRequest::MusicRowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             Some((x, y)),
         ) if items.len() == 1
             && items[0].id == "a-0"
-            && (*x, *y) == (root_at.x, root_at.y))));
+            && (x, y) == (root_at.x, root_at.y)
+    ));
     assert!(owner.selected_is_artist());
     paint_tree(&mut owner, area);
 

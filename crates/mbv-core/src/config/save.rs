@@ -13,22 +13,44 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
         None => return Err(format!("update {}: root is not a table", path.display())),
     };
 
-    macro_rules! section {
-        ($name:literal) => {
-            table
-                .entry($name.to_string())
-                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
-                .as_table_mut()
-                .unwrap()
-        };
-    }
+    write_server_section(table, cfg);
+    write_audiobookshelf_section(table, cfg);
+    write_session_section(table, cfg);
+    write_library_section(table, cfg);
+    write_display_section(table, cfg);
+    write_library_routes_section(table, cfg);
+    write_feeds_section(table, cfg);
+    write_queue_section(table, cfg);
+    write_mpv_section(table, cfg);
+    write_idle_feed_section(table, cfg);
+    // Remove the retired shared-data section when rewriting an existing config.
+    table.remove("shared_data");
+    write_mbvd_section(table, cfg);
+    write_playback_section(table, cfg);
+    write_keys_section(table, cfg);
 
+    let s = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    write_config_text_at(path, &s)
+}
+
+fn section<'a>(
+    table: &'a mut toml::map::Map<String, toml::Value>,
+    name: &str,
+) -> &'a mut toml::map::Map<String, toml::Value> {
+    table
+        .entry(name.to_string())
+        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+        .as_table_mut()
+        .unwrap()
+}
+
+fn write_server_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let setup = cfg.emby_setup.as_ref().filter(|s| !s.server_url.is_empty());
     let server_url = setup
         .map(|s| s.server_url.as_str())
         .unwrap_or(&cfg.server_url);
     if !server_url.is_empty() {
-        let server = section!("server");
+        let server = section(table, "server");
         server.insert(
             "url".to_string(),
             toml::Value::String(server_url.to_string()),
@@ -42,13 +64,15 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             server.remove("user_id");
         }
     }
+}
 
+fn write_audiobookshelf_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let audiobookshelf = cfg
         .audiobookshelf_setup
         .as_ref()
         .filter(|setup| !setup.server_url.is_empty());
     if let Some(setup) = audiobookshelf {
-        let section = section!("audiobookshelf");
+        let section = section(table, "audiobookshelf");
         section.insert(
             "url".to_string(),
             toml::Value::String(setup.server_url.clone()),
@@ -60,8 +84,10 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
     } else {
         table.remove("audiobookshelf");
     }
+}
 
-    let session = section!("session");
+fn write_session_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let session = section(table, "session");
     session.insert(
         "stay_alive".to_string(),
         toml::Value::Boolean(cfg.stay_alive),
@@ -86,8 +112,10 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
         "progress_interval_secs".to_string(),
         toml::Value::Integer(cfg.progress_interval_secs as i64),
     );
+}
 
-    let library = section!("library");
+fn write_library_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let library = section(table, "library");
     library.insert(
         "hidden_libraries".to_string(),
         toml::Value::Array(
@@ -108,23 +136,8 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
         ),
     );
 
-    let display = section!("display");
-    display.insert(
-        "system_notifications".to_string(),
-        toml::Value::Boolean(cfg.system_notifications),
-    );
-    display.insert(
-        "mouse_support".to_string(),
-        toml::Value::Boolean(cfg.mouse_support),
-    );
-
     if !cfg.music_levels.is_empty() {
-        let library = section!("library");
-        let music = library
-            .entry("music".to_string())
-            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
-            .as_table_mut()
-            .unwrap();
+        let music = section(library, "music");
         music.insert(
             "levels".to_string(),
             toml::Value::Array(
@@ -135,7 +148,21 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             ),
         );
     }
+}
 
+fn write_display_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let display = section(table, "display");
+    display.insert(
+        "system_notifications".to_string(),
+        toml::Value::Boolean(cfg.system_notifications),
+    );
+    display.insert(
+        "mouse_support".to_string(),
+        toml::Value::Boolean(cfg.mouse_support),
+    );
+}
+
+fn write_library_routes_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     if cfg.library_routes.is_empty() {
         table.remove("library_routes");
     } else {
@@ -148,7 +175,9 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             toml::Value::Table(routes_table),
         );
     }
+}
 
+fn write_feeds_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     if cfg.feeds.is_empty() {
         table.remove("feeds");
     } else {
@@ -170,8 +199,10 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             .collect();
         table.insert("feeds".to_string(), toml::Value::Array(feeds_arr));
     }
+}
 
-    let queue = section!("queue");
+fn write_queue_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let queue = section(table, "queue");
     queue.insert(
         "always_play_next".to_string(),
         toml::Value::Boolean(cfg.always_play_next),
@@ -192,8 +223,10 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
         "save_playlist_on_consume_audio".to_string(),
         toml::Value::Boolean(cfg.save_playlist_on_consume_audio),
     );
+}
 
-    let mpv = section!("mpv");
+fn write_mpv_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let mpv = section(table, "mpv");
     mpv.insert(
         "show_audio_window".to_string(),
         toml::Value::Boolean(cfg.show_audio_window),
@@ -219,8 +252,10 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
         "audio_device".to_string(),
         toml::Value::String(cfg.audio_device.clone()),
     );
+}
 
-    let idle_feed = section!("idle_feed");
+fn write_idle_feed_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let idle_feed = section(table, "idle_feed");
     idle_feed.insert(
         "rss_url".to_string(),
         toml::Value::String(cfg.idle_feed_rss_url.clone()),
@@ -229,11 +264,10 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
         "rotation_interval_secs".to_string(),
         toml::Value::Integer(cfg.idle_feed_rotation_secs as i64),
     );
+}
 
-    // Remove the retired shared-data section when rewriting an existing config.
-    table.remove("shared_data");
-
-    let mbvd = section!("mbvd");
+fn write_mbvd_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let mbvd = section(table, "mbvd");
     mbvd.insert(
         "broadcast_ms".to_string(),
         toml::Value::Integer(cfg.daemon_broadcast_ms as i64),
@@ -265,11 +299,7 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             mbvd.remove("audio_pipe_playout_delay_ms");
         }
     }
-    let mbvd_client = mbvd
-        .entry("client".to_string())
-        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
-        .as_table_mut()
-        .unwrap();
+    let mbvd_client = section(mbvd, "client");
     if cfg.daemon_client_endpoint.trim().is_empty() {
         mbvd_client.remove("endpoint");
     } else {
@@ -278,11 +308,7 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             toml::Value::String(cfg.daemon_client_endpoint.clone()),
         );
     }
-    let mbvd_server = mbvd
-        .entry("server".to_string())
-        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
-        .as_table_mut()
-        .unwrap();
+    let mbvd_server = section(mbvd, "server");
     if cfg.daemon_server_tcp_listen.trim().is_empty() {
         mbvd_server.remove("tcp_listen");
     } else {
@@ -291,8 +317,10 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             toml::Value::String(cfg.daemon_server_tcp_listen.clone()),
         );
     }
+}
 
-    let playback = section!("playback");
+fn write_playback_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
+    let playback = section(table, "playback");
     playback.insert(
         "show_systray_icon".to_string(),
         toml::Value::Boolean(cfg.show_systray_icon),
@@ -334,13 +362,15 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
             ),
         );
     }
+}
 
-    // `[keys]` (change `add-configurable-keybinds`): patched like any other
-    // section through the read-patch-write path, in the section-outer file
-    // shape (design D3, lowercase section names) that `parse_raw_keybinds`
-    // reads back. An all-defaults configuration — or one whose sections all
-    // lost their entries — prunes the whole table; a section with no
-    // surviving entries contributes no table.
+// `[keys]` (change `add-configurable-keybinds`): patched like any other
+// section through the read-patch-write path, in the section-outer file
+// shape (design D3, lowercase section names) that `parse_raw_keybinds`
+// reads back. An all-defaults configuration — or one whose sections all
+// lost their entries — prunes the whole table; a section with no
+// surviving entries contributes no table.
+fn write_keys_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let mut keys_table = toml::map::Map::new();
     if let Some(prefix) = &cfg.keybinds.prefix {
         keys_table.insert(
@@ -379,9 +409,6 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
     } else {
         table.insert("keys".to_string(), toml::Value::Table(keys_table));
     }
-
-    let s = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
-    write_config_text_at(path, &s)
 }
 
 pub(super) fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), String> {

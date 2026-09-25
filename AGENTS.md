@@ -112,12 +112,16 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
   the outcome, not the delay (mock returning the terminal state, zeroed timeout,
   seam observing attempts). A test that can't be fast without changing prod
   timing asserts the wrong thing — delete it.
+* **Tests stay simple**: one behaviour per test, no loops/branching in the body,
+  setup in helpers. Clippy's complexity threshold (25) is crate-wide, so review
+  enforces the stricter bar for tests.
 * Fixture-varying test families use named `#[case]` tables (via the `rstest`
   dev-dependency); `#[case]` is never a mechanism for generating many thin tests,
   and conversions are opportunistic and file-by-file.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
 * **No lint suppression without per-instance user approval**: no `allow`/`expect`
-  attribute in any form, no loosening `clippy.toml`/`[lints]`. Fix the cause
+  attribute in any form, no loosening `[lints]`, and never edit `clippy.toml`
+  (thresholds included) unless the user explicitly asks. Fix the cause
   (params struct, delete dead code and its tests, drop the unused import).
 * format: `cargo fmt` per Rust change (stock edition-2021, max-width-100); accept
   all reflow, never revert it; `cargo fmt --all -- --check` = read-only check.

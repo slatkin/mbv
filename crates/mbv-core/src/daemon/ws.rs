@@ -5,6 +5,35 @@ use crate::player::{Player, PlayerCommand};
 use crate::ws::WsEvent;
 use std::sync::{Arc, Mutex};
 
+/// Start the remote play on the freshly replaced queue: a single item goes
+/// through `play`, several through `play_queue` at the requested index, with
+/// `start_position_ticks` overriding the item's own position when set.
+fn start_remote_playback(
+    player: &Player,
+    client: &Arc<Mutex<EmbyClient>>,
+    fetched: &[crate::api::EmbyItem],
+    start_idx: usize,
+    start_position_ticks: i64,
+) {
+    if fetched.len() == 1 {
+        let mut play_item = fetched[0].clone();
+        if start_position_ticks > 0 {
+            play_item.playback_position_ticks = start_position_ticks;
+        }
+        let c = Arc::new(client.lock().unwrap().clone());
+        player.play(&play_item, c, 100);
+    } else {
+        let mut start_item = fetched[start_idx].clone();
+        if start_position_ticks > 0 {
+            start_item.playback_position_ticks = start_position_ticks;
+        }
+        let mut items_with_pos = fetched.to_vec();
+        items_with_pos[start_idx] = start_item;
+        let c = Arc::new(client.lock().unwrap().clone());
+        player.play_queue(items_with_pos, start_idx, c, 100);
+    }
+}
+
 pub(crate) fn handle_ws(
     ev: WsEvent,
     client: Option<&Arc<Mutex<EmbyClient>>>,
@@ -67,23 +96,7 @@ pub(crate) fn handle_ws(
                 source,
                 transitions,
             );
-            if fetched.len() == 1 {
-                let mut play_item = fetched[0].clone();
-                if start_position_ticks > 0 {
-                    play_item.playback_position_ticks = start_position_ticks;
-                }
-                let c = Arc::new(client.lock().unwrap().clone());
-                player.play(&play_item, c, 100);
-            } else {
-                let mut start_item = fetched[start_idx].clone();
-                if start_position_ticks > 0 {
-                    start_item.playback_position_ticks = start_position_ticks;
-                }
-                let mut items_with_pos = fetched.clone();
-                items_with_pos[start_idx] = start_item;
-                let c = Arc::new(client.lock().unwrap().clone());
-                player.play_queue(items_with_pos, start_idx, c, 100);
-            }
+            start_remote_playback(player, client, &fetched, start_idx, start_position_ticks);
         }
         WsEvent::Stop => {
             player.stop();

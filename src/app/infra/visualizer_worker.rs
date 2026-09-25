@@ -196,6 +196,23 @@ fn capture_frame_bytes<'a>(
     Ok(&bytes[offset..end])
 }
 
+/// One `run_worker` startup step: run `step`; on failure report
+/// `Startup::Failed` on `startup_tx` and return `None` so the caller bails
+/// out of the worker.
+fn try_startup_step<T>(
+    startup_tx: &Sender<Startup>,
+    message: String,
+    step: impl FnOnce() -> Result<T, pw::Error>,
+) -> Option<T> {
+    match step() {
+        Ok(value) => Some(value),
+        Err(error) => {
+            let _ = startup_tx.send(Startup::Failed(format!("{message}: {error}")));
+            None
+        }
+    }
+}
+
 fn run_worker(
     stop_rx: pw::channel::Receiver<Control>,
     startup_tx: Sender<Startup>,
@@ -204,32 +221,24 @@ fn run_worker(
 ) {
     pw::init();
 
-    let mainloop = match pw::main_loop::MainLoopRc::new(None) {
-        Ok(mainloop) => mainloop,
-        Err(error) => {
-            let _ = startup_tx.send(Startup::Failed(format!(
-                "failed to create PipeWire main loop: {error}"
-            )));
-            return;
-        }
+    let Some(mainloop) = try_startup_step(
+        &startup_tx,
+        "failed to create PipeWire main loop".into(),
+        || pw::main_loop::MainLoopRc::new(None),
+    ) else {
+        return;
     };
-    let context = match pw::context::ContextRc::new(&mainloop, None) {
-        Ok(context) => context,
-        Err(error) => {
-            let _ = startup_tx.send(Startup::Failed(format!(
-                "failed to create PipeWire context: {error}"
-            )));
-            return;
-        }
+    let Some(context) = try_startup_step(
+        &startup_tx,
+        "failed to create PipeWire context".into(),
+        || pw::context::ContextRc::new(&mainloop, None),
+    ) else {
+        return;
     };
-    let core = match context.connect_rc(None) {
-        Ok(core) => core,
-        Err(error) => {
-            let _ = startup_tx.send(Startup::Failed(format!(
-                "failed to connect to PipeWire: {error}"
-            )));
-            return;
-        }
+    let Some(core) = try_startup_step(&startup_tx, "failed to connect to PipeWire".into(), || {
+        context.connect_rc(None)
+    }) else {
+        return;
     };
 
     let _stop_listener = stop_rx.attach(mainloop.loop_(), {
@@ -237,23 +246,23 @@ fn run_worker(
         move |_| mainloop.quit()
     });
 
-    let stream = match pw::stream::StreamBox::new(
-        &core,
-        "mbv-system-audio-visualizer",
-        properties! {
-            *pw::keys::MEDIA_TYPE => "Audio",
-            *pw::keys::MEDIA_CATEGORY => "Capture",
-            *pw::keys::MEDIA_ROLE => "Music",
-            *pw::keys::STREAM_CAPTURE_SINK => "true",
+    let Some(stream) = try_startup_step(
+        &startup_tx,
+        "failed to create PipeWire capture stream".into(),
+        || {
+            pw::stream::StreamBox::new(
+                &core,
+                "mbv-system-audio-visualizer",
+                properties! {
+                    *pw::keys::MEDIA_TYPE => "Audio",
+                    *pw::keys::MEDIA_CATEGORY => "Capture",
+                    *pw::keys::MEDIA_ROLE => "Music",
+                    *pw::keys::STREAM_CAPTURE_SINK => "true",
+                },
+            )
         },
-    ) {
-        Ok(stream) => stream,
-        Err(error) => {
-            let _ = startup_tx.send(Startup::Failed(format!(
-                "failed to create PipeWire capture stream: {error}"
-            )));
-            return;
-        }
+    ) else {
+        return;
     };
     let startup_error_tx = startup_tx.clone();
 

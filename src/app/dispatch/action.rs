@@ -260,204 +260,7 @@ impl App {
                 }
             }
 
-            Command::QueuePlayCursor(t) => {
-                let (n, item) = {
-                    let queue = self.displayed_queue();
-                    let n = queue.total_queue_len();
-                    let item = queue.item_at(t).cloned();
-                    (n, item)
-                };
-                if t >= n {
-                    return false;
-                }
-                // Validate the item at the cursor exists.
-                let Some(item) = item else {
-                    return false;
-                };
-                let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
-                if !item.admissible_for_owner_with_audiobookshelf(
-                    false,
-                    |service| {
-                        service != mbv_core::config::ServiceKind::Audiobookshelf
-                            || owner_can_admit_audiobookshelf
-                    },
-                    owner_can_admit_audiobookshelf,
-                ) {
-                    self.flash(
-                        "Playback owner rejected this Audiobookshelf item".into(),
-                        crate::app::dispatch::notify::ToastSeverity::Error,
-                    );
-                    return false;
-                }
-                if self.player.is_remote_disconnected() {
-                    let status = self.player.status.lock().unwrap();
-                    let active = status.active;
-                    let current_idx = status.current_idx;
-                    drop(status);
-                    let queue = self.displayed_queue();
-                    let is_jump = active
-                        && self.viewed_queue_scope() == self.playing_queue_scope()
-                        && t != current_idx;
-                    if is_jump {
-                        if let Some(slot_id) = queue.slot_id_at(t) {
-                            let _ = self.request_slot_jump(slot_id);
-                        } else {
-                            self.handle_player_event(
-                                mbv_core::player::PlayerEvent::CommandRejected(
-                                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE
-                                        .to_string(),
-                                ),
-                            );
-                        }
-                    } else {
-                        self.flash(
-                            crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
-                            ToastSeverity::Warning,
-                        );
-                    }
-                    return false;
-                }
-                // Validate source for Feed entries early.
-                if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
-                    if entry.primary_source().is_none() {
-                        self.flash(
-                            "Feed entry has no playable source".into(),
-                            crate::app::dispatch::notify::ToastSeverity::Error,
-                        );
-                        return false;
-                    }
-                }
-                // Hydrate stored feed-entry state before building the
-                // playback snapshot so resume uses the latest position.
-                if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
-                    let hydrated = self.hydrate_feed_entry_state(entry.clone());
-                    let sid = self.playback_queue().slot_id_at(t);
-                    if let Some(sid) = sid {
-                        let queue_mut = self.playback_queue_mut();
-                        let _ = queue_mut.queue.apply_progress(
-                            sid,
-                            hydrated.position_ticks,
-                            hydrated.played,
-                        );
-                    }
-                }
-                // Snapshot data from the queue before any mutable borrows.
-                let queue = self.displayed_queue();
-                let emby_items: Vec<EmbyItem> = queue
-                    .queue
-                    .slots()
-                    .iter()
-                    .filter_map(|slot| slot.item.as_emby().cloned())
-                    .collect();
-                let all_slots = queue.all_queue_slots();
-                let slot_id = queue.slot_id_at(t);
-                // Pre-compute the Emby-only projection index for the cursor
-                // position, needed by the session API boundary.
-                let emby_start = queue
-                    .queue
-                    .slots()
-                    .iter()
-                    .take(t)
-                    .filter(|s| s.item.as_emby().is_some())
-                    .count();
-                // Connected remote session: hand off Emby items to the
-                // session; Feed entries cannot cross the Emby session API
-                // so they fall through to the local/direct-remote path.
-                if let mbv_core::playback_queue::QueueItem::Emby(_) = &item {
-                    if let Some(conn_id) = self.connected_session_id.clone() {
-                        let label = item.display_name();
-                        self.flash(
-                            format!("Requesting playback: {label}"),
-                            ToastSeverity::Neutral,
-                        );
-                        self.set_queue_scope(self.playing_queue_scope());
-                        self.submit_attached_sequence(&conn_id, &emby_items, emby_start);
-                        return false;
-                    }
-                }
-                // Local / direct-remote playback.  The same path handles
-                // both Feed and Emby items: jump to an active slot or
-                // cold-start the full canonical queue.
-                let scope = self.viewed_queue_scope();
-                let st = self.player.status.lock().unwrap();
-                let active = st.active;
-                let current_idx = st.current_idx;
-                drop(st);
-                if active
-                    && self.queue_scope_is_playback(scope)
-                    && self.local_queue_is_owner_queue(scope)
-                {
-                    if t == current_idx {
-                        self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
-                    } else if t != current_idx {
-                        let Some(slot_id) = slot_id else {
-                            return false;
-                        };
-                        // One owner-kind seam for every fresh jump, so
-                        // explicit play and the Next-Up accept cannot diverge.
-                        if !self.request_slot_jump(slot_id) && !self.player.is_remote_disconnected()
-                        {
-                            self.flash(
-                                "Playback owner rejected the queue selection".into(),
-                                ToastSeverity::Error,
-                            );
-                        }
-                    }
-                } else {
-                    // Cold start: submit the full canonical queue (all
-                    // variants) so the player's internal playlist matches
-                    // the PlayerTab's queue exactly.
-                    let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
-                    let eligible: Vec<_> = all_slots
-                        .into_iter()
-                        .filter(|slot| {
-                            slot.item.admissible_for_owner_with_audiobookshelf(
-                                false,
-                                |service| {
-                                    service != mbv_core::config::ServiceKind::Audiobookshelf
-                                        || owner_can_admit_audiobookshelf
-                                },
-                                owner_can_admit_audiobookshelf,
-                            )
-                        })
-                        .collect();
-                    if eligible.is_empty() {
-                        self.flash(
-                            "Playback owner rejected the queue".into(),
-                            ToastSeverity::Error,
-                        );
-                        return false;
-                    }
-                    let start_idx = eligible
-                        .iter()
-                        .position(|slot| slot.item.content_id() == item.content_id())
-                        .unwrap_or_else(|| {
-                            eligible
-                                .iter()
-                                .take(t)
-                                .count()
-                                .min(eligible.len().saturating_sub(1))
-                        });
-                    let headless = eligible.iter().all(|slot| slot.item.is_audio());
-                    let submitted = self.player.submit_queue_slots(
-                        eligible,
-                        start_idx,
-                        self.queue_source.clone(),
-                        self.emby_snapshot().map(Arc::new),
-                        headless,
-                        self.ui_volume,
-                    );
-                    if !submitted && self.player.is_remote_disconnected() {
-                        self.flash(
-                            crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
-                            ToastSeverity::Warning,
-                        );
-                    }
-                    if submitted {
-                        self.stamp_queue_generation(scope);
-                    }
-                }
-            }
+            Command::QueuePlayCursor(t) => self.dispatch_queue_play_cursor(t),
 
             Command::Quit => return self.try_quit(),
             Command::NextLibraryTab => self.library_tab_next(),
@@ -519,6 +322,199 @@ impl App {
             }
         }
         false
+    }
+    /// Own the `Command::QueuePlayCursor` state transitions (extracted from
+    /// `dispatch`; every early exit there returned `false`, i.e. fell through
+    /// to dispatch's own `false` tail).
+    pub(in crate::app) fn dispatch_queue_play_cursor(&mut self, t: usize) {
+        let (n, item) = {
+            let queue = self.displayed_queue();
+            let n = queue.total_queue_len();
+            let item = queue.item_at(t).cloned();
+            (n, item)
+        };
+        if t >= n {
+            return;
+        }
+        // Validate the item at the cursor exists.
+        let Some(item) = item else {
+            return;
+        };
+        let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
+        if !item.admissible_for_owner_with_audiobookshelf(
+            false,
+            |service| {
+                service != mbv_core::config::ServiceKind::Audiobookshelf
+                    || owner_can_admit_audiobookshelf
+            },
+            owner_can_admit_audiobookshelf,
+        ) {
+            self.flash(
+                "Playback owner rejected this Audiobookshelf item".into(),
+                crate::app::dispatch::notify::ToastSeverity::Error,
+            );
+            return;
+        }
+        if self.player.is_remote_disconnected() {
+            let status = self.player.status.lock().unwrap();
+            let active = status.active;
+            let current_idx = status.current_idx;
+            drop(status);
+            let queue = self.displayed_queue();
+            let is_jump = active
+                && self.viewed_queue_scope() == self.playing_queue_scope()
+                && t != current_idx;
+            if is_jump {
+                if let Some(slot_id) = queue.slot_id_at(t) {
+                    let _ = self.request_slot_jump(slot_id);
+                } else {
+                    self.handle_player_event(mbv_core::player::PlayerEvent::CommandRejected(
+                        crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.to_string(),
+                    ));
+                }
+            } else {
+                self.flash(
+                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
+                    ToastSeverity::Warning,
+                );
+            }
+            return;
+        }
+        // Validate source for Feed entries early.
+        if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
+            if entry.primary_source().is_none() {
+                self.flash(
+                    "Feed entry has no playable source".into(),
+                    crate::app::dispatch::notify::ToastSeverity::Error,
+                );
+                return;
+            }
+        }
+        // Hydrate stored feed-entry state before building the
+        // playback snapshot so resume uses the latest position.
+        if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = item {
+            let hydrated = self.hydrate_feed_entry_state(entry.clone());
+            let sid = self.playback_queue().slot_id_at(t);
+            if let Some(sid) = sid {
+                let queue_mut = self.playback_queue_mut();
+                let _ =
+                    queue_mut
+                        .queue
+                        .apply_progress(sid, hydrated.position_ticks, hydrated.played);
+            }
+        }
+        // Snapshot data from the queue before any mutable borrows.
+        let queue = self.displayed_queue();
+        let emby_items: Vec<EmbyItem> = queue
+            .queue
+            .slots()
+            .iter()
+            .filter_map(|slot| slot.item.as_emby().cloned())
+            .collect();
+        let all_slots = queue.all_queue_slots();
+        let slot_id = queue.slot_id_at(t);
+        // Pre-compute the Emby-only projection index for the cursor
+        // position, needed by the session API boundary.
+        let emby_start = queue
+            .queue
+            .slots()
+            .iter()
+            .take(t)
+            .filter(|s| s.item.as_emby().is_some())
+            .count();
+        // Connected remote session: hand off Emby items to the
+        // session; Feed entries cannot cross the Emby session API
+        // so they fall through to the local/direct-remote path.
+        if let mbv_core::playback_queue::QueueItem::Emby(_) = &item {
+            if let Some(conn_id) = self.connected_session_id.clone() {
+                let label = item.display_name();
+                self.flash(
+                    format!("Requesting playback: {label}"),
+                    ToastSeverity::Neutral,
+                );
+                self.set_queue_scope(self.playing_queue_scope());
+                self.submit_attached_sequence(&conn_id, &emby_items, emby_start);
+                return;
+            }
+        }
+        // Local / direct-remote playback.  The same path handles
+        // both Feed and Emby items: jump to an active slot or
+        // cold-start the full canonical queue.
+        let scope = self.viewed_queue_scope();
+        let st = self.player.status.lock().unwrap();
+        let active = st.active;
+        let current_idx = st.current_idx;
+        drop(st);
+        if active && self.queue_scope_is_playback(scope) && self.local_queue_is_owner_queue(scope) {
+            if t == current_idx {
+                self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+            } else if t != current_idx {
+                let Some(slot_id) = slot_id else {
+                    return;
+                };
+                // One owner-kind seam for every fresh jump, so
+                // explicit play and the Next-Up accept cannot diverge.
+                if !self.request_slot_jump(slot_id) && !self.player.is_remote_disconnected() {
+                    self.flash(
+                        "Playback owner rejected the queue selection".into(),
+                        ToastSeverity::Error,
+                    );
+                }
+            }
+        } else {
+            // Cold start: submit the full canonical queue (all
+            // variants) so the player's internal playlist matches
+            // the PlayerTab's queue exactly.
+            let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
+            let eligible: Vec<_> = all_slots
+                .into_iter()
+                .filter(|slot| {
+                    slot.item.admissible_for_owner_with_audiobookshelf(
+                        false,
+                        |service| {
+                            service != mbv_core::config::ServiceKind::Audiobookshelf
+                                || owner_can_admit_audiobookshelf
+                        },
+                        owner_can_admit_audiobookshelf,
+                    )
+                })
+                .collect();
+            if eligible.is_empty() {
+                self.flash(
+                    "Playback owner rejected the queue".into(),
+                    ToastSeverity::Error,
+                );
+                return;
+            }
+            let start_idx = eligible
+                .iter()
+                .position(|slot| slot.item.content_id() == item.content_id())
+                .unwrap_or_else(|| {
+                    eligible
+                        .iter()
+                        .take(t)
+                        .count()
+                        .min(eligible.len().saturating_sub(1))
+                });
+            let headless = eligible.iter().all(|slot| slot.item.is_audio());
+            let submitted = self.player.submit_queue_slots(
+                eligible,
+                start_idx,
+                self.queue_source.clone(),
+                self.emby_snapshot().map(Arc::new),
+                headless,
+                self.ui_volume,
+            );
+            if !submitted && self.player.is_remote_disconnected() {
+                self.flash(
+                    crate::app::dispatch::actions::CONNECTION_LOST_MESSAGE.into(),
+                    ToastSeverity::Warning,
+                );
+            }
+            if submitted {
+                self.stamp_queue_generation(scope);
+            }
+        }
     }
 }
 

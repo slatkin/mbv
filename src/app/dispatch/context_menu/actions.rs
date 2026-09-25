@@ -24,33 +24,7 @@ impl App {
         // Watching" coupling, and is ignored everywhere else.
         let lib_idx = self.context_menu_lib_idx();
         match action {
-            Some(ContextAction::Play) => {
-                if matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home()
-                {
-                    if let Some(item) = cw_item {
-                        self.cw_play(item);
-                    }
-                } else if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
-                    // The queue menu carries the resolved index explicitly
-                    // (ContextAction::PlayQueue, D2); bare Play on Queue
-                    // focus should not occur, but keep the legacy read for
-                    // defensive parity with the pre-D2 behavior.
-                    let index = self.displayed_queue().queue_cursor;
-                    self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
-                        index,
-                    ));
-                } else if let Some(lib_idx) = lib_idx {
-                    let cursor = self
-                        .libs
-                        .get(lib_idx)
-                        .and_then(|lib| lib.nav_stack.last())
-                        .map(|l| l.resting().cursor())
-                        .unwrap_or(0);
-                    if let Some(item) = self.current_lib_item(lib_idx, cursor) {
-                        self.select_item(lib_idx, item);
-                    }
-                }
-            }
+            Some(ContextAction::Play) => self.execute_play_action(cw_item, lib_idx),
             Some(ContextAction::PlaySelection(items)) => {
                 // The selection's queue rebuild is deferred into the gated
                 // confirmed path (`run_routed_replacement`), so cancelling the
@@ -193,6 +167,36 @@ impl App {
                 self.spawn_navigate_to_item(item_id, item_type, libs);
             }
             None => {}
+        }
+    }
+
+    /// Execute the bare `Play` context action: Home's Continue Watching column
+    /// plays its resolved item, Queue focus replays the cursor, and an Emby
+    /// library plays the current row. The paths are mutually exclusive.
+    fn execute_play_action(&mut self, cw_item: Option<EmbyItem>, lib_idx: Option<usize>) {
+        if matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home() {
+            if let Some(item) = cw_item {
+                self.cw_play(item);
+            }
+        } else if matches!(self.effective_panel_focus(), PanelFocus::Queue) {
+            // The queue menu carries the resolved index explicitly
+            // (ContextAction::PlayQueue, D2); bare Play on Queue
+            // focus should not occur, but keep the legacy read for
+            // defensive parity with the pre-D2 behavior.
+            let index = self.displayed_queue().queue_cursor;
+            self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+                index,
+            ));
+        } else if let Some(lib_idx) = lib_idx {
+            let cursor = self
+                .libs
+                .get(lib_idx)
+                .and_then(|lib| lib.nav_stack.last())
+                .map(|l| l.resting().cursor())
+                .unwrap_or(0);
+            if let Some(item) = self.current_lib_item(lib_idx, cursor) {
+                self.select_item(lib_idx, item);
+            }
         }
     }
 

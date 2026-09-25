@@ -95,50 +95,10 @@ impl App {
         // Advance the queue lineage so any late work from this process cannot
         // be applied after teardown.
         self.advance_queue_epoch();
-        // #236: persist whichever remote connection (if any) is active
-        // right now, before anything below or in the caller's cleanup
-        // path clears `active_route` / direct-session identity -- so the
-        // next launch's `App::new` can restore it. Mutually exclusive by
-        // construction (library routing and Sessions-panel direct-remote
-        // are two independent ways to end up thin-client; #223's
-        // `restore_local_mode` and `connect_to_session` never let both be
-        // set at once). Gated on `auto_reconnect` so the file is
-        // never written (or read) at all when the feature is off. Also
-        // gated on `launched_as_remote && !home_is_local_daemon`: keyed off
-        // `home_is_local_daemon` (the immutable launch-time snapshot) rather
-        // than the mutable `is_local_daemon`, because a local-daemon-launched
-        // session now routinely calls `try_auto_reconnect()` on attach
-        // (`App::new_remote`) and may reconnect to a genuinely remote
-        // target mid-session, flipping `is_local_daemon` to `false` while
-        // still needing its connection persisted at teardown. A genuinely
-        // remote launch (`--connect-daemon`) never flips `home_is_local_daemon`,
-        // so running this block for it would always compute `None` and wipe
-        // out a real record saved by a different `App::new` session (per
-        // ADR 0010, `new_remote`'s path is unaffected by #236). A same-host
-        // local daemon is meant to behave exactly like a local session (see
-        // the `new_remote` doc comment), so it must not be skipped here.
-        if self.launched_as_remote && !self.home_is_local_daemon {
-            log::info!(target: "auto_reconnect", "teardown persistence skipped: launched as remote");
-        } else if !self.config.lock().unwrap().auto_reconnect {
-            log::info!(target: "auto_reconnect", "teardown persistence skipped: auto-reconnect disabled");
-        } else {
-            let last = self.current_auto_reconnect_target();
-            log::info!(
-                target: "auto_reconnect",
-                "teardown decision={}",
-                match &last {
-                    Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library }) =>
-                        format!("save-library-route library={library:?}"),
-                    Some(mbv_core::config::LastRemoteConnection::DirectSession { device_name }) =>
-                        format!("save-direct-session device={device_name:?}"),
-                    None => "clear".to_string(),
-                }
-            );
-            match mbv_core::config::save_last_remote_connection(last.as_ref()) {
-                Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
-                Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),
-            }
-        }
+        // #236: persist the active remote connection before anything below or
+        // in the caller's cleanup path clears route identity. The full gating
+        // rationale lives on `persist_auto_reconnect_target_on_teardown`.
+        self.persist_auto_reconnect_target_on_teardown();
         let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
         // Leave the daemon's player running when the TUI disconnects; only stop
         // and join the player when we own it locally. Both signal-triggered and
@@ -153,27 +113,7 @@ impl App {
             )
         };
         log::info!(target: "player", "quit: requested={quit_requested} was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos} timeout={}s", quit_timeout.as_secs());
-        // Update the playing item's position before saving — the PlayerEvent::Stopped
-        // that carries this update is never processed after we break out of the event loop.
-        // Use last_valid_pos (never zeroed during track transitions) rather than
-        // position_ticks (transiently 0 when QueueSession advances to the next track).
-        if was_playing && !self.has_direct_remote_queue() {
-            if let Some(slot) = self.player_tab.queue.slots().get(current_idx) {
-                let slot_id = slot.slot_id;
-                if let Some(item) = slot.item.as_emby() {
-                    let mut item = item.clone();
-                    if last_valid_pos > 0 && !item.is_audio() {
-                        item.playback_position_ticks = last_valid_pos;
-                    }
-                    let last_id = item.id.clone();
-                    let _ = self.player_tab.queue.update_slot_item(
-                        slot_id,
-                        mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
-                    );
-                    self.last_played_item_id = Some(last_id);
-                }
-            }
-        }
+        self.flush_playing_position_on_teardown(was_playing, current_idx, last_valid_pos);
         if self.home_is_local_daemon {
             log::info!(
                 target: "queue",
@@ -200,29 +140,8 @@ impl App {
             "teardown: home_is_local_daemon={} stay_alive={} should_request_shutdown={}",
             self.home_is_local_daemon, stay_alive, should_request_shutdown
         );
-        let mut shutdown_response: Option<mbv_core::remote_player::ShutdownResponse> = None;
-        if should_request_shutdown {
-            let current_is_local = matches!(
-                self.player_endpoint,
-                Some(mbv_core::remote_player::DaemonEndpoint::Local)
-            );
-            let current_connected =
-                self.player.is_remote() && !self.player.is_remote_disconnected();
-            if current_is_local && current_connected {
-                // Invoke through the current live Local connection.
-                if let Some(remote) = self.player.as_remote() {
-                    log::info!(target: "daemon_shutdown", "invoking request_shutdown through current Local connection");
-                    shutdown_response = Some(remote.request_shutdown(quit_timeout));
-                } else {
-                    log::warn!(target: "daemon_shutdown", "current player_endpoint is Local but as_remote() returned None; falling back to short-lived connection");
-                    shutdown_response = Self::invoke_shutdown_via_short_lived_local(quit_timeout);
-                }
-            } else {
-                // Create a short-lived Local connection.
-                log::info!(target: "daemon_shutdown", "current target is not a live Local connection; creating short-lived Local connection");
-                shutdown_response = Self::invoke_shutdown_via_short_lived_local(quit_timeout);
-            }
-        }
+        let shutdown_response =
+            self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
         if !self.player.is_remote() {
             self.player.stop_for_shutdown(quit_timeout);
             // During quit shutdown there is no progress-thread join and no WS
@@ -245,43 +164,163 @@ impl App {
         // TimedOut, or failure to connect Local), set a post-terminal message
         // that the local daemon may still be running and names `mbv -q`.
         if should_request_shutdown {
-            if let Some(response) = shutdown_response {
-                use mbv_core::remote_player::ShutdownResponse;
-                match response {
-                    ShutdownResponse::Accepted => {
-                        log::info!(target: "daemon_shutdown", "daemon accepted shutdown request");
-                    }
-                    ShutdownResponse::Rejected { reason } => {
-                        log::warn!(target: "daemon_shutdown", "daemon rejected shutdown request: {reason}");
-                        self.pending_exit_message = Some(format!(
-                            "Local daemon may still be running (shutdown rejected: {}). Use `mbv -q` to stop it.",
-                            reason
-                        ));
-                    }
-                    ShutdownResponse::Disconnected => {
-                        log::warn!(target: "daemon_shutdown", "daemon disconnected before responding to shutdown request");
-                        self.pending_exit_message = Some(
-                            "Local daemon may still be running (disconnected before responding). Use `mbv -q` to stop it.".to_string(),
-                        );
-                    }
-                    ShutdownResponse::TimedOut => {
-                        log::warn!(target: "daemon_shutdown", "daemon did not respond to shutdown request within timeout");
-                        self.pending_exit_message = Some(
-                            "Local daemon may still be running (did not respond within timeout). Use `mbv -q` to stop it.".to_string(),
-                        );
-                    }
-                    ShutdownResponse::Unsupported => {
-                        log::warn!(target: "daemon_shutdown", "peer daemon does not support lifecycle-shutdown");
-                        self.pending_exit_message = Some(
-                            "Local daemon is an older version and cannot be stopped remotely. Use `mbv -q` to stop it.".to_string(),
-                        );
-                    }
+            self.record_shutdown_failure(shutdown_response);
+        }
+    }
+
+    /// Persist whichever remote connection (if any) is active at teardown, so
+    /// the next launch's `App::new` can restore it (#236). Mutually exclusive
+    /// by construction: library routing and Sessions-panel direct-remote are
+    /// two independent ways to end up thin-client, and #223's
+    /// `restore_local_mode` / `connect_to_session` never let both be set at
+    /// once. Gated on `auto_reconnect` so the file is never written (or read)
+    /// at all when the feature is off, and on
+    /// `launched_as_remote && !home_is_local_daemon`: keyed off
+    /// `home_is_local_daemon` (the immutable launch-time snapshot) rather than
+    /// the mutable `is_local_daemon`, because a local-daemon-launched session
+    /// now routinely calls `try_auto_reconnect()` on attach (`App::new_remote`)
+    /// and may reconnect to a genuinely remote target mid-session, flipping
+    /// `is_local_daemon` to `false` while still needing its connection
+    /// persisted at teardown. A genuinely remote launch (`--connect-daemon`)
+    /// never flips `home_is_local_daemon`, so running this for it would always
+    /// compute `None` and wipe out a real record saved by a different
+    /// `App::new` session (per ADR 0010, `new_remote`'s path is unaffected by
+    /// #236). A same-host local daemon is meant to behave exactly like a local
+    /// session (see the `new_remote` doc comment), so it must not be skipped.
+    fn persist_auto_reconnect_target_on_teardown(&mut self) {
+        if self.launched_as_remote && !self.home_is_local_daemon {
+            log::info!(target: "auto_reconnect", "teardown persistence skipped: launched as remote");
+        } else if !self.config.lock().unwrap().auto_reconnect {
+            log::info!(target: "auto_reconnect", "teardown persistence skipped: auto-reconnect disabled");
+        } else {
+            let last = self.current_auto_reconnect_target();
+            log::info!(
+                target: "auto_reconnect",
+                "teardown decision={}",
+                match &last {
+                    Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library }) =>
+                        format!("save-library-route library={library:?}"),
+                    Some(mbv_core::config::LastRemoteConnection::DirectSession { device_name }) =>
+                        format!("save-direct-session device={device_name:?}"),
+                    None => "clear".to_string(),
                 }
-            } else {
-                // Failed to connect or invoke the request.
-                log::warn!(target: "daemon_shutdown", "failed to invoke shutdown request via Local connection");
+            );
+            match mbv_core::config::save_last_remote_connection(last.as_ref()) {
+                Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
+                Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),
+            }
+        }
+    }
+
+    /// Update the playing item's position before saving: the
+    /// `PlayerEvent::Stopped` that carries this update is never processed after
+    /// the event loop breaks, and `last_valid_pos` (never zeroed during track
+    /// transitions) is preferred over `position_ticks` (transiently 0 when
+    /// QueueSession advances to the next track).
+    fn flush_playing_position_on_teardown(
+        &mut self,
+        was_playing: bool,
+        current_idx: usize,
+        last_valid_pos: i64,
+    ) {
+        if !was_playing || self.has_direct_remote_queue() {
+            return;
+        }
+        let Some(slot) = self.player_tab.queue.slots().get(current_idx) else {
+            return;
+        };
+        let slot_id = slot.slot_id;
+        let Some(item) = slot.item.as_emby() else {
+            return;
+        };
+        let mut item = item.clone();
+        if last_valid_pos > 0 && !item.is_audio() {
+            item.playback_position_ticks = last_valid_pos;
+        }
+        let last_id = item.id.clone();
+        let _ = self.player_tab.queue.update_slot_item(
+            slot_id,
+            mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
+        );
+        self.last_played_item_id = Some(last_id);
+    }
+
+    /// Invoke the coordinated daemon shutdown when the policy gate is true
+    /// (launched against the local daemon with stay-alive off). Uses the live
+    /// Local connection when present, else a short-lived Local connection that
+    /// does not mutate `self.player` or any route/queue-scope/MPRIS/
+    /// auto-reconnect state. `None` means no request was made.
+    fn request_teardown_shutdown(
+        &self,
+        quit_timeout: Duration,
+        should_request_shutdown: bool,
+    ) -> Option<mbv_core::remote_player::ShutdownResponse> {
+        if !should_request_shutdown {
+            return None;
+        }
+        let current_is_local = matches!(
+            self.player_endpoint,
+            Some(mbv_core::remote_player::DaemonEndpoint::Local)
+        );
+        let current_connected = self.player.is_remote() && !self.player.is_remote_disconnected();
+        if current_is_local && current_connected {
+            // Invoke through the current live Local connection.
+            if let Some(remote) = self.player.as_remote() {
+                log::info!(target: "daemon_shutdown", "invoking request_shutdown through current Local connection");
+                return Some(remote.request_shutdown(quit_timeout));
+            }
+            log::warn!(target: "daemon_shutdown", "current player_endpoint is Local but as_remote() returned None; falling back to short-lived connection");
+        } else {
+            // Create a short-lived Local connection.
+            log::info!(target: "daemon_shutdown", "current target is not a live Local connection; creating short-lived Local connection");
+        }
+        Self::invoke_shutdown_via_short_lived_local(quit_timeout)
+    }
+
+    /// After a failed shutdown request (Rejected, Disconnected, TimedOut,
+    /// Unsupported, or no response at all), set a post-terminal message that
+    /// the local daemon may still be running and names `mbv -q`.
+    fn record_shutdown_failure(
+        &mut self,
+        response: Option<mbv_core::remote_player::ShutdownResponse>,
+    ) {
+        use mbv_core::remote_player::ShutdownResponse;
+        let Some(response) = response else {
+            // Failed to connect or invoke the request.
+            log::warn!(target: "daemon_shutdown", "failed to invoke shutdown request via Local connection");
+            self.pending_exit_message = Some(
+                "Local daemon may still be running (failed to connect). Use `mbv -q` to stop it."
+                    .to_string(),
+            );
+            return;
+        };
+        match response {
+            ShutdownResponse::Accepted => {
+                log::info!(target: "daemon_shutdown", "daemon accepted shutdown request");
+            }
+            ShutdownResponse::Rejected { reason } => {
+                log::warn!(target: "daemon_shutdown", "daemon rejected shutdown request: {reason}");
+                self.pending_exit_message = Some(format!(
+                    "Local daemon may still be running (shutdown rejected: {}). Use `mbv -q` to stop it.",
+                    reason
+                ));
+            }
+            ShutdownResponse::Disconnected => {
+                log::warn!(target: "daemon_shutdown", "daemon disconnected before responding to shutdown request");
                 self.pending_exit_message = Some(
-                    "Local daemon may still be running (failed to connect). Use `mbv -q` to stop it.".to_string(),
+                    "Local daemon may still be running (disconnected before responding). Use `mbv -q` to stop it.".to_string(),
+                );
+            }
+            ShutdownResponse::TimedOut => {
+                log::warn!(target: "daemon_shutdown", "daemon did not respond to shutdown request within timeout");
+                self.pending_exit_message = Some(
+                    "Local daemon may still be running (did not respond within timeout). Use `mbv -q` to stop it.".to_string(),
+                );
+            }
+            ShutdownResponse::Unsupported => {
+                log::warn!(target: "daemon_shutdown", "peer daemon does not support lifecycle-shutdown");
+                self.pending_exit_message = Some(
+                    "Local daemon is an older version and cannot be stopped remotely. Use `mbv -q` to stop it.".to_string(),
                 );
             }
         }

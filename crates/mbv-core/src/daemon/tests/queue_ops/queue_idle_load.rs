@@ -241,14 +241,8 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
 
     assert_eq!(owner.core.queue.slots()[0].slot_id, old_slot);
     assert!(owner.pending_idle_load.is_some());
-    assert!(matches!(
-        reply_rx.try_recv(),
-        Err(mpsc::TryRecvError::Empty)
-    ));
-    assert!(matches!(
-        commands.try_recv(),
-        Err(mpsc::TryRecvError::Empty)
-    ));
+    assert_no_pending_message(&reply_rx);
+    assert_no_pending_message(&commands);
 
     assert!(crate::daemon::complete_pending_idle_queue_load(
         old_run,
@@ -258,13 +252,7 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         &shared_queue,
         &registry,
     ));
-    assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
-    assert_eq!(owner.core.source, QueueSource::Album);
-    assert!(owner.core.observed_active_slot().is_none());
-    assert!(!player.status.lock().unwrap().active);
-    assert!(!crate::daemon::playback_run_identity_is_current(
-        old_run, &player
-    ));
+    assert_idle_load_committed(&owner, &player, old_run);
     assert_eq!(
         crate::daemon::apply_stopped_observation(
             &mut owner,
@@ -277,22 +265,8 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         None,
         "late old-run observations are ignored after replacement",
     );
-    assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
-    assert_eq!(
-        owner.core.queue.slots()[0].slot_id,
-        old_slot,
-        "replacement reuses the old slot id"
-    );
-    assert_eq!(
-        owner.core.queue.slots()[0].item.playback_position_ticks(),
-        0
-    );
-    assert!(!owner.core.queue.slots()[0].item.played());
-    assert!(
-        matches!(recv_event(&client_rx), CtrlEvent::UnifiedQueueState(state)
-        if state.slots.len() == 1 && state.slots[0].item.id() == "new"
-            && state.active_slot.is_none() && !state.status.active)
-    );
+    assert_replacement_untouched_by_late_observation(&owner, old_slot);
+    assert_published_committed_queue_state(&client_rx);
     crate::daemon::broadcast_player_event_if_not_replaced(
         &registry,
         PlayerEvent::Stopped {
@@ -310,16 +284,74 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
         client_rx.try_recv().is_err(),
         "committing stop is not rebroadcast raw"
     );
-    assert!(matches!(
-        recv_event(&reply_rx),
-        CtrlEvent::UnifiedQueueLoadResult {
-            request_id: 52,
-            result: crate::ctrl::QueueLoadResult::Accepted,
-        }
+    assert_idle_load_accepted(&reply_rx, 52);
+    assert_no_pending_message(&commands);
+}
+
+/// No message of any kind may be waiting.
+fn assert_no_pending_message<T>(rx: &mpsc::Receiver<T>) {
+    assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+}
+
+/// The committed replacement: the new item, album source, no active slot, run
+/// inactive, and the old run identity no longer current.
+fn assert_idle_load_committed(
+    owner: &crate::daemon::DaemonPlayerOwner,
+    player: &crate::player::Player,
+    old_run: u64,
+) {
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
+    assert_eq!(owner.core.source, QueueSource::Album);
+    assert!(owner.core.observed_active_slot().is_none());
+    assert!(!player.status.lock().unwrap().active);
+    assert!(!crate::daemon::playback_run_identity_is_current(
+        old_run, player
     ));
+}
+
+/// A rejected late old-run observation leaves the replacement untouched: the
+/// same item, the reused slot id, position reset, and not played.
+fn assert_replacement_untouched_by_late_observation(
+    owner: &crate::daemon::DaemonPlayerOwner,
+    old_slot: crate::playback_queue::QueueSlotId,
+) {
+    assert_eq!(owner.core.queue.slots()[0].item.id(), "new");
+    assert_eq!(
+        owner.core.queue.slots()[0].slot_id,
+        old_slot,
+        "replacement reuses the old slot id"
+    );
+    assert_eq!(
+        owner.core.queue.slots()[0].item.playback_position_ticks(),
+        0
+    );
+    assert!(!owner.core.queue.slots()[0].item.played());
+}
+
+/// The published snapshot of the committed queue: one slot, no active slot,
+/// run inactive.
+fn assert_published_committed_queue_state(rx: &mpsc::Receiver<crate::daemon::ctrl::CtrlOutbound>) {
+    let state = match recv_event(rx) {
+        CtrlEvent::UnifiedQueueState(state) => state,
+        _ => panic!("expected unified queue state"),
+    };
+    assert_eq!(state.slots.len(), 1);
+    assert_eq!(state.slots[0].item.id(), "new");
+    assert!(state.active_slot.is_none());
+    assert!(!state.status.active);
+}
+
+/// The load result for `request_id` must be `Accepted`.
+fn assert_idle_load_accepted(
+    rx: &mpsc::Receiver<crate::daemon::ctrl::CtrlOutbound>,
+    request_id: u64,
+) {
     assert!(matches!(
-        commands.try_recv(),
-        Err(mpsc::TryRecvError::Empty)
+        recv_event(rx),
+        CtrlEvent::UnifiedQueueLoadResult {
+            request_id: actual,
+            result: crate::ctrl::QueueLoadResult::Accepted,
+        } if actual == request_id
     ));
 }
 

@@ -28,40 +28,7 @@ impl App {
             }
             ConfirmAction::RemoveActiveQueueItem(pos) => {
                 if matches!(key.code, KeyCode::Char('y')) {
-                    let scope = self.viewed_queue_scope();
-                    let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
-                    if let Some(slot_id) = slot_id {
-                        let removed_item = match self
-                            .playback_queue_mut()
-                            .queue
-                            .remove_active_slot_confirmed(slot_id)
-                        {
-                            RemoveSlotResult::Removed(slot) => {
-                                self.playback_queue_mut().clamp_cursor();
-                                Some(slot.item)
-                            }
-                            RemoveSlotResult::RequiresActiveConfirmation(_)
-                            | RemoveSlotResult::NotFound => None,
-                        };
-                        if let Some(item) = removed_item {
-                            let queue = self.playback_queue_mut();
-                            queue.clamp_cursor();
-                            if !self.player.is_remote() {
-                                self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
-                            }
-                            self.pending_delete_slot = Some(slot_id);
-                            if self.connected_session_id.is_some() {
-                                self.playback_target().stop(self);
-                            } else {
-                                self.reset_bare_transitions();
-                                self.player.stop();
-                            }
-                            if self.local_queue_metadata_applies(scope) {
-                                self.queue_dirty = true;
-                            }
-                            self.advance_queue_epoch();
-                        }
-                    }
+                    self.confirm_remove_active_queue_item(pos);
                 }
             }
             ConfirmAction::RescanLibrary(lib_idx) => {
@@ -144,47 +111,104 @@ impl App {
                 _ => {}
             },
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
-                let play_after = matches!(
-                    self.pending_queue_action,
-                    Some(PendingQueueAction::PlayItems { .. })
-                );
-                match key.code {
-                    KeyCode::Char('s') | KeyCode::Char('S') => {
-                        self.save_playlist_to_emby();
-                    }
-                    KeyCode::Char('d') | KeyCode::Char('D') => {
-                        if let Some(action) = self.pending_queue_action.take() {
-                            self.execute_pending_queue_action(action);
-                        }
-                        if play_after {
-                            self.request_sidebar_dismiss(SidebarId::Playlists);
-                            self.set_panel_focus(PanelFocus::Queue);
-                        }
-                    }
-                    KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
-                        self.pending_queue_action = None;
-                    }
-                    _ => {}
-                }
+                self.confirm_discard_or_save_dirty_playlist(key);
             }
-            // Design D6: the populated-queue gate. Confirming hands the stored
-            // payload back to the one queue-replacement executor; every other
-            // key cancels, so no executable payload can fire at a later step.
-            // The gate owns `pending_queue_replacement` exclusively — reading
-            // the shared deferral slot here would let a save-deferral payload
-            // masquerade as a confirmed replacement.
-            ConfirmAction::ReplacePopulatedQueue => match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
-                    if let Some((action, via)) = self.pending_queue_replacement.take() {
-                        self.run_replacement(action, via);
-                    }
-                }
-                _ => {
-                    self.pending_queue_replacement = None;
-                }
-            },
+            // Design D6: the populated-queue gate. The gate owns
+            // `pending_queue_replacement` exclusively — reading the shared
+            // deferral slot here would let a save-deferral payload masquerade
+            // as a confirmed replacement.
+            ConfirmAction::ReplacePopulatedQueue => {
+                self.confirm_replace_populated_queue(key);
+            }
         }
         Some(false)
+    }
+
+    /// `[s]` saves the dirty playlist, `[d]` discards it and runs the pending
+    /// queue action (restoring the Queue panel and dismissing the playlists
+    /// sidebar when that action was a play), and Esc/`[c]` cancels.
+    fn confirm_discard_or_save_dirty_playlist(&mut self, key: KeyEvent) {
+        let play_after = matches!(
+            self.pending_queue_action,
+            Some(PendingQueueAction::PlayItems { .. })
+        );
+        match key.code {
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                self.save_playlist_to_emby();
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') => {
+                if let Some(action) = self.pending_queue_action.take() {
+                    self.execute_pending_queue_action(action);
+                }
+                if play_after {
+                    self.request_sidebar_dismiss(SidebarId::Playlists);
+                    self.set_panel_focus(PanelFocus::Queue);
+                }
+            }
+            KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
+                self.pending_queue_action = None;
+            }
+            _ => {}
+        }
+    }
+
+    /// Confirming the populated-queue gate hands the stored payload back to
+    /// the one queue-replacement executor; every other key cancels, so no
+    /// executable payload can fire at a later step.
+    fn confirm_replace_populated_queue(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                if let Some((action, via)) = self.pending_queue_replacement.take() {
+                    self.run_replacement(action, via);
+                }
+            }
+            _ => {
+                self.pending_queue_replacement = None;
+            }
+        }
+    }
+
+    /// Confirmed removal of the active queue item at `pos`: the owner removes
+    /// the slot (a still-unconfirmed active slot reports `None` and nothing
+    /// changes), then playback stops — through the player target for a
+    /// connected session, or the bare player locally — with the undo entry and
+    /// queue-dirty/epoch bookkeeping preserved.
+    fn confirm_remove_active_queue_item(&mut self, pos: usize) {
+        let scope = self.viewed_queue_scope();
+        let slot_id = self.queue_for_scope_mut(scope).slot_id_at(pos);
+        if let Some(slot_id) = slot_id {
+            let removed_item = match self
+                .playback_queue_mut()
+                .queue
+                .remove_active_slot_confirmed(slot_id)
+            {
+                RemoveSlotResult::Removed(slot) => {
+                    self.playback_queue_mut().clamp_cursor();
+                    Some(slot.item)
+                }
+                RemoveSlotResult::RequiresActiveConfirmation(_) | RemoveSlotResult::NotFound => {
+                    None
+                }
+            };
+            if let Some(item) = removed_item {
+                let queue = self.playback_queue_mut();
+                queue.clamp_cursor();
+                if !self.player.is_remote() {
+                    self.queue_undo_stack.push(UndoEntry::Remove(pos, item));
+                }
+                self.pending_delete_slot = Some(slot_id);
+                if self.connected_session_id.is_some() {
+                    self.playback_target().stop(self);
+                } else {
+                    self.reset_bare_transitions();
+                    self.player.stop();
+                }
+                if self.local_queue_metadata_applies(scope) {
+                    self.queue_dirty = true;
+                }
+                self.advance_queue_epoch();
+            }
+        }
     }
 
     /// Show the clear-queue confirmation modal (called from QueueIntent::Clear).

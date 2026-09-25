@@ -196,6 +196,171 @@ fn ensure_pipe(path: &str) -> Result<(), String> {
     }
 }
 
+/// Resolve the chosen mpv overlay script and warn about an ignored leftover
+/// installer copy. `None` means no script is handed to mpv (the chosen one
+/// is missing), so the fonts are not resolved either.
+fn resolve_overlay_scripts() -> Option<PathBuf> {
+    let source = crate::config::osc_script_source();
+    let script = source.chosen;
+    if !script.exists() {
+        log::warn!(
+            target: "player",
+            "init: resolved mpv overlay script {} does not exist; mpv will run with no overlay scripts",
+            script.display()
+        );
+        return None;
+    }
+    log::info!(target: "player", "init: mpv overlay scripts: {}", script.display());
+    if let Some(legacy) = source.unused_legacy {
+        log::warn!(
+            target: "player",
+            "init: ignoring leftover installer script copy {} (using {}); delete it to silence this warning",
+            legacy.display(),
+            script.display()
+        );
+    }
+    Some(script)
+}
+
+/// Resolve the chosen mpv overlay fonts directory and warn about an ignored
+/// leftover installer copy.
+fn resolve_overlay_fonts() -> PathBuf {
+    let source = crate::config::osc_fonts_source();
+    let fonts = source.chosen;
+    log::info!(target: "player", "init: mpv overlay fonts: {}", fonts.display());
+    if let Some(legacy) = source.unused_legacy {
+        log::warn!(
+            target: "player",
+            "init: ignoring leftover installer font directory {} (using {}); delete it to silence this warning",
+            legacy.display(),
+            fonts.display()
+        );
+    }
+    fonts
+}
+
+/// Post-init demuxer cache budgets (and, when mbv owns the mpv config, the
+/// hwdec policy). Set after init so a user's mpv.conf cannot override them.
+fn configure_caches(mpv: &Mpv, config: &MpvRunConfig) {
+    if config.headless {
+        let _ = mpv.set_property("vo", "null");
+        let _ = mpv.set_property("force-window", "no");
+        // #656: with vo=null, attached cover art would still be selected and
+        // decoded (video/image=true per audio track) for no benefit.
+        let _ = mpv.set_property("audio-display", "no");
+        // Audio-sized demuxer cache: a headless host has no video window to
+        // justify the video-sized budget below.
+        if let Err(e) = mpv.set_property("demuxer-max-bytes", "10M") {
+            log::warn!(target: "player", "failed to set headless forward cache: {e}");
+        }
+        if let Err(e) = mpv.set_property("demuxer-max-back-bytes", "10M") {
+            log::warn!(target: "player", "failed to set headless back cache: {e}");
+        }
+        return;
+    }
+    if let Err(e) = mpv.set_property(
+        "demuxer-max-bytes",
+        format!("{}M", config.video_cache_forward_mb),
+    ) {
+        log::warn!(target: "player", "failed to set video forward cache: {e}");
+    }
+    if let Err(e) = mpv.set_property(
+        "demuxer-max-back-bytes",
+        format!("{}M", config.video_cache_back_mb),
+    ) {
+        log::warn!(target: "player", "failed to set video back cache: {e}");
+    }
+    if !config.use_mpv_config {
+        if let Err(e) = mpv.set_property("hwdec", "auto-safe") {
+            log::warn!(target: "player", "failed to set hwdec policy: {e}");
+        }
+    }
+}
+
+/// Configure the audio output after init: PCM to `audio_pipe_path` when set
+/// (mutually exclusive with `audio_device`), else a clocked ALSA device.
+/// Returns whether startup must be pre-paused so the pipewriter's first read
+/// attaches before playback starts.
+fn configure_audio_output(mpv: &Mpv, config: &MpvRunConfig) -> Result<bool, String> {
+    let armed = if let Some(path) = &config.audio_pipe_path {
+        configure_audio_pipe(mpv, path, config)
+    } else if let Some(device) = &config.audio_device {
+        // Clocked ALSA output: the device identifier alone selects the
+        // backend, so `ao` is left to mpv's own negotiation.
+        if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
+            return Err(format!(
+                "clocked audio output: failed to set audio-device '{device}': {}",
+                mpv_err_str(&e)
+            ));
+        }
+        log::info!(target: "player", "clocked audio output: using ALSA device {device}");
+        false
+    } else {
+        false
+    };
+    if !armed {
+        return Ok(false);
+    }
+    if let Err(e) = mpv.set_property("pause", true) {
+        log::warn!(
+            target: "player",
+            "audio pipe: failed to pre-pause startup: {}",
+            mpv_err_str(&e)
+        );
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+/// Configure the pipewriter output: PCM format, channels, samplerate and
+/// resampler. Returns `true` only when every output property was accepted.
+fn configure_audio_pipe(mpv: &Mpv, path: &str, config: &MpvRunConfig) -> bool {
+    if let Err(e) = ensure_pipe(path) {
+        log::warn!(target: "player", "audio pipe disabled for this session: {e}");
+        return false;
+    }
+    let rate = config.audio_pipe_samplerate.to_string();
+    let (bitdepth, audio_format) = match config.audio_pipe_bitdepth {
+        16 => (16u8, "s16"),
+        24 => (24u8, "s24"),
+        _ => (32u8, "s32"),
+    };
+    let mut failed = Vec::new();
+    if let Err(e) = mpv.set_property("ao", "pcm") {
+        failed.push(format!("ao: {}", mpv_err_str(&e)));
+    }
+    if let Err(e) = mpv.set_property("ao-pcm-file", path) {
+        failed.push(format!("ao-pcm-file: {}", mpv_err_str(&e)));
+    }
+    if let Err(e) = mpv.set_property("ao-pcm-waveheader", "no") {
+        failed.push(format!("ao-pcm-waveheader: {}", mpv_err_str(&e)));
+    }
+    // Force a fixed <bitdepth>-bit/stereo/<rate> PCM format so the byte
+    // stream always matches a single Snapcast `sampleformat`
+    // declaration, no matter the source file's native format.
+    // 32-bit remains the default for headroom, but narrower
+    // bit depths improve compatibility with some Snapclients.
+    if let Err(e) = mpv.set_property("audio-format", audio_format) {
+        failed.push(format!("audio-format: {}", mpv_err_str(&e)));
+    }
+    if let Err(e) = mpv.set_property("audio-channels", "stereo") {
+        failed.push(format!("audio-channels: {}", mpv_err_str(&e)));
+    }
+    if let Err(e) = mpv.set_property("audio-samplerate", rate.as_str()) {
+        failed.push(format!("audio-samplerate: {}", mpv_err_str(&e)));
+    }
+    if let Err(e) = mpv.set_property("audio-swresample-o", "resampler=soxr,precision=28") {
+        failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e)));
+    }
+    if failed.is_empty() {
+        log::info!(target: "player", "audio pipe: writing {rate}Hz/{bitdepth}-bit/stereo PCM to {path} (blocks until a reader attaches)");
+        true
+    } else {
+        log::warn!(target: "player", "audio pipe: failed to configure pcm output for {path}: {}", failed.join(", "));
+        false
+    }
+}
+
 pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
     let ipc_path = crate::config::mpv_ipc_path();
     let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
@@ -250,37 +415,10 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
             opt!("osd-bar", "no");
         }
         if !no_scripts && !use_mpv_config {
-            let source = crate::config::osc_script_source();
-            let script = source.chosen;
-            if script.exists() {
-                log::info!(target: "player", "init: mpv overlay scripts: {}", script.display());
-                if let Some(legacy) = source.unused_legacy {
-                    log::warn!(
-                        target: "player",
-                        "init: ignoring leftover installer script copy {} (using {}); delete it to silence this warning",
-                        legacy.display(),
-                        script.display()
-                    );
-                }
+            if let Some(script) = resolve_overlay_scripts() {
                 opt!("scripts", script.to_str().unwrap_or(""));
-                let fonts_source = crate::config::osc_fonts_source();
-                let fonts = fonts_source.chosen;
-                log::info!(target: "player", "init: mpv overlay fonts: {}", fonts.display());
-                if let Some(legacy_fonts) = fonts_source.unused_legacy {
-                    log::warn!(
-                        target: "player",
-                        "init: ignoring leftover installer font directory {} (using {}); delete it to silence this warning",
-                        legacy_fonts.display(),
-                        fonts.display()
-                    );
-                }
+                let fonts = resolve_overlay_fonts();
                 opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
-            } else {
-                log::warn!(
-                    target: "player",
-                    "init: resolved mpv overlay script {} does not exist; mpv will run with no overlay scripts",
-                    script.display()
-                );
             }
         }
         Ok(())
@@ -302,110 +440,8 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
         libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), log_level.as_ptr() as _);
     }
 
-    // Set after init so user's mpv.conf cannot override these.
-    if config.headless {
-        let _ = mpv.set_property("vo", "null");
-        let _ = mpv.set_property("force-window", "no");
-        // #656: with vo=null, attached cover art would still be selected and
-        // decoded (video/image=true per audio track) for no benefit.
-        let _ = mpv.set_property("audio-display", "no");
-        // Audio-sized demuxer cache: a headless host has no video window to
-        // justify the video-sized budget below.
-        if let Err(e) = mpv.set_property("demuxer-max-bytes", "10M") {
-            log::warn!(target: "player", "failed to set headless forward cache: {e}");
-        }
-        if let Err(e) = mpv.set_property("demuxer-max-back-bytes", "10M") {
-            log::warn!(target: "player", "failed to set headless back cache: {e}");
-        }
-    } else {
-        if let Err(e) = mpv.set_property(
-            "demuxer-max-bytes",
-            format!("{}M", config.video_cache_forward_mb),
-        ) {
-            log::warn!(target: "player", "failed to set video forward cache: {e}");
-        }
-        if let Err(e) = mpv.set_property(
-            "demuxer-max-back-bytes",
-            format!("{}M", config.video_cache_back_mb),
-        ) {
-            log::warn!(target: "player", "failed to set video back cache: {e}");
-        }
-        if !config.use_mpv_config {
-            if let Err(e) = mpv.set_property("hwdec", "auto-safe") {
-                log::warn!(target: "player", "failed to set hwdec policy: {e}");
-            }
-        }
-    }
-    let mut startup_pause_armed = false;
-    if let Some(path) = &config.audio_pipe_path {
-        match ensure_pipe(path) {
-            Ok(()) => {
-                let rate = config.audio_pipe_samplerate.to_string();
-                let (bitdepth, audio_format) = match config.audio_pipe_bitdepth {
-                    16 => (16u8, "s16"),
-                    24 => (24u8, "s24"),
-                    _ => (32u8, "s32"),
-                };
-                let mut failed = Vec::new();
-                if let Err(e) = mpv.set_property("ao", "pcm") {
-                    failed.push(format!("ao: {}", mpv_err_str(&e)));
-                }
-                if let Err(e) = mpv.set_property("ao-pcm-file", path.as_str()) {
-                    failed.push(format!("ao-pcm-file: {}", mpv_err_str(&e)));
-                }
-                if let Err(e) = mpv.set_property("ao-pcm-waveheader", "no") {
-                    failed.push(format!("ao-pcm-waveheader: {}", mpv_err_str(&e)));
-                }
-                // Force a fixed <bitdepth>-bit/stereo/<rate> PCM format so the byte
-                // stream always matches a single Snapcast `sampleformat`
-                // declaration, no matter the source file's native format.
-                // 32-bit remains the default for headroom, but narrower
-                // bit depths improve compatibility with some Snapclients.
-                if let Err(e) = mpv.set_property("audio-format", audio_format) {
-                    failed.push(format!("audio-format: {}", mpv_err_str(&e)));
-                }
-                if let Err(e) = mpv.set_property("audio-channels", "stereo") {
-                    failed.push(format!("audio-channels: {}", mpv_err_str(&e)));
-                }
-                if let Err(e) = mpv.set_property("audio-samplerate", rate.as_str()) {
-                    failed.push(format!("audio-samplerate: {}", mpv_err_str(&e)));
-                }
-                if let Err(e) =
-                    mpv.set_property("audio-swresample-o", "resampler=soxr,precision=28")
-                {
-                    failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e)));
-                }
-                if failed.is_empty() {
-                    startup_pause_armed = true;
-                    log::info!(target: "player", "audio pipe: writing {rate}Hz/{bitdepth}-bit/stereo PCM to {path} (blocks until a reader attaches)");
-                } else {
-                    log::warn!(target: "player", "audio pipe: failed to configure pcm output for {path}: {}", failed.join(", "));
-                }
-            }
-            Err(e) => log::warn!(target: "player", "audio pipe disabled for this session: {e}"),
-        }
-    } else if let Some(device) = &config.audio_device {
-        // Clocked ALSA output: the device identifier alone selects the
-        // backend, so `ao` is left to mpv's own negotiation.
-        if let Err(e) = mpv.set_property("audio-device", device.as_str()) {
-            return Err(format!(
-                "clocked audio output: failed to set audio-device '{device}': {}",
-                mpv_err_str(&e)
-            ));
-        } else {
-            log::info!(target: "player", "clocked audio output: using ALSA device {device}");
-        }
-    }
-    if startup_pause_armed {
-        if let Err(e) = mpv.set_property("pause", true) {
-            log::warn!(
-                target: "player",
-                "audio pipe: failed to pre-pause startup: {}",
-                mpv_err_str(&e)
-            );
-            startup_pause_armed = false;
-        }
-    }
+    configure_caches(&mpv, config);
+    let startup_pause_armed = configure_audio_output(&mpv, config)?;
 
     Ok((mpv, startup_pause_armed))
 }

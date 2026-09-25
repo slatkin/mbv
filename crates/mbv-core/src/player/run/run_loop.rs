@@ -78,241 +78,16 @@ impl PlaybackRun {
             });
         }
 
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            loop {
-                let mut cancel_stop = false;
-                while let Ok(cmd) = cmd_rx.try_recv() {
-                    cancel_stop |= self.handle_command(cmd, &mpv, &mut progress);
-                }
-                self.observe_reporting(false);
-
-                if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                    // A synchronous quit exits promptly for regular playback.
-                    // FIFO output can block mpv in its audio thread, so keep
-                    // that path asynchronous and let the bounded fallback
-                    // handle a delayed Shutdown event.
-                    if self.config.audio_pipe_path.is_some() {
-                        command_quit_async(&mpv);
-                    } else {
-                        let _ = mpv.command("quit", &[]);
-                    }
-                    self.quit_at = Some(Instant::now());
-                    // Pin the slot identity now, while it is still the observed
-                    // active slot, so a QueueMove/QueueRemove drained before the
-                    // deferred Stopped emit cannot rename the occurrence (D2).
-                    self.stop_slot = self.active_slot_id();
-                    self.stop_runtime = self.active_item().map(|item| item.runtime_ticks());
-                }
-
-                if self
-                    .quit_at
-                    .is_some_and(|t| t.elapsed() > Duration::from_millis(200))
-                {
-                    if !self.stop_report.is_sent() {
-                        self.report_stop_now_or_background(&mut progress);
-                    }
-                    let runtime = self
-                        .stop_runtime
-                        .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
-                        .unwrap_or(0);
-                    let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
-                    let (played, consume) = quit_timeout_stop_flags(
-                        self.origin,
-                        is_audio,
-                        self.last_valid_pos,
-                        runtime,
-                        self.stopped_near_end,
-                    );
-                    self.status.lock().unwrap().active = false;
-                    let _ = self.event_tx.send(PlayerEvent::Stopped {
-                        slot_id: self.stop_slot.or_else(|| self.active_slot_id()),
-                        run_identity: self.run_identity,
-                        position_ticks: self.last_valid_pos,
-                        played,
-                        consume,
-                        progress_report_accepted: self.stop_report.is_accepted(),
-                        error: None,
-                    });
-                    return;
-                }
-
-                let mut had_event = false;
-                while let Some(event_result) = mpv.wait_event(0.0) {
-                    had_event = true;
-                    match event_result {
-                        Ok(Event::PropertyChange {
-                            name: "volume",
-                            change: PropertyData::Double(vol),
-                            ..
-                        }) => {
-                            self.status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
-                        }
-                        Ok(Event::PropertyChange {
-                            change: PropertyData::Double(pos_secs),
-                            ..
-                        }) => {
-                            self.on_time_pos(pos_secs, &mpv);
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "pause",
-                            change: PropertyData::Flag(paused),
-                            ..
-                        }) => {
-                            self.status.lock().unwrap().paused = paused;
-                            if self.startup_pause.consume_event() {
-                                continue;
-                            }
-                            let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
-                            self.observe_reporting(true);
-                            if self.quit_at.is_none() {
-                                let event_name = if paused { "Pause" } else { "Unpause" };
-                                let _ = progress_report_tx.send(event_name.to_string());
-                            }
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "sid",
-                            change: PropertyData::Str(s),
-                            ..
-                        }) => {
-                            let id = s.parse::<i64>().unwrap_or(0);
-                            log::info!(target: "player", "sid PropertyChange: raw={s:?} parsed={id}");
-                            self.status.lock().unwrap().sub_id = id;
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "aid",
-                            change: PropertyData::Str(_),
-                            ..
-                        }) => {
-                            refresh_tracks(&mpv, &self.status);
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "mute",
-                            change: PropertyData::Flag(m),
-                            ..
-                        }) => {
-                            self.status.lock().unwrap().muted = m;
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "video-params/h",
-                            change: PropertyData::Int64(h),
-                            ..
-                        }) => {
-                            log::info!(target: "player", "video-params/h (playlist): h={h}");
-                            self.status.lock().unwrap().video_height = h;
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "video-params/h",
-                            change,
-                            ..
-                        }) => {
-                            log::warn!(target: "player", "video-params/h (playlist) unexpected type: {:?}", change);
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "audio-codec-name",
-                            change: PropertyData::Str(s),
-                            ..
-                        }) => {
-                            self.status.lock().unwrap().audio_codec = s.to_lowercase();
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "current-tracks/video/image",
-                            change: PropertyData::Flag(is_img),
-                            ..
-                        }) => {
-                            log::info!(target: "player", "video/image (playlist): is_img={is_img}");
-                            self.status.lock().unwrap().video_is_image = is_img;
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "playlist-pos",
-                            change: PropertyData::Int64(pos),
-                            ..
-                        }) => {
-                            self.on_playlist_pos_changed(pos, mpv_position_ticks(&mpv));
-                        }
-                        Ok(Event::PropertyChange {
-                            name: "playlist-count",
-                            change: PropertyData::Int64(count),
-                            ..
-                        }) => {
-                            if self.load_state.is_ready() {
-                                self.on_playlist_count_changed(count as usize);
-                            }
-                        }
-                        Ok(Event::PlaybackRestart) => {
-                            self.on_playback_restart(&mpv);
-                        }
-                        Ok(Event::EndFile(reason)) => {
-                            let should_continue = self.on_end_file(reason, &mpv, &mut progress);
-                            // on_end_file returns false both for "continue normally" and for
-                            // "end of playlist — return from thread". Detect end-of-playlist
-                            // by checking active flag which on_end_file sets to false.
-                            if !should_continue && !self.status.lock().unwrap().active {
-                                return;
-                            }
-                            if should_continue {
-                                continue;
-                            }
-                        }
-                        Ok(Event::LogMessage {
-                            prefix,
-                            level,
-                            text,
-                            ..
-                        }) => {
-                            if let Some(t) = mpv_log_text(
-                                self.prepared_source
-                                    .as_ref()
-                                    .is_some_and(PreparedSource::has_sensitive_lifecycle),
-                                text,
-                            ) {
-                                log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
-                            }
-                        }
-                        Ok(Event::ClientMessage(args))
-                            if args.first().copied() == Some("mbv-next-up-play") =>
-                        {
-                            log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
-                            self.next_up_jump = true;
-                            let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
-                        }
-                        Ok(Event::ClientMessage(args))
-                            if args.first().copied() == Some("mbv-skip-intro-play") =>
-                        {
-                            let _ = self.event_tx.send(PlayerEvent::SkipIntroPlay);
-                        }
-                        Ok(Event::ClientMessage(args))
-                            if self.config.use_mpv_config
-                                && args.first().copied() == Some("mouse-moved") =>
-                        {
-                            let show = self
-                                .last_mouse_osd
-                                .is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
-                            if show {
-                                let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
-                                self.last_mouse_osd = Some(Instant::now());
-                            }
-                        }
-                        Ok(Event::Shutdown) => {
-                            self.on_shutdown(&mut progress);
-                            return;
-                        }
-                        Err(e) => {
-                            if self.on_mpv_error(e, &mut progress) {
-                                return;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-
-                if !had_event {
-                    if wakeup_read_fd >= 0 {
-                        poll_wakeup(wakeup_read_fd, WAKEUP_POLL_MS);
-                        drain_wakeup(wakeup_read_fd);
-                    } else {
-                        std::thread::sleep(Duration::from_millis(WAKEUP_POLL_MS as u64));
-                    }
-                }
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| loop {
+            if self.run_tick(
+                &mpv,
+                &mut progress,
+                &progress_report_tx,
+                &stop_rx,
+                &cmd_rx,
+                wakeup_read_fd,
+            ) {
+                return;
             }
         })); // end catch_unwind
         if wakeup_read_fd >= 0 {
@@ -338,6 +113,245 @@ impl PlaybackRun {
                 progress_report_accepted: false,
                 error: Some(msg),
             });
+        }
+    }
+
+    /// One iteration of the playback event loop. Returns true when `run`
+    /// should return (end of playlist, shutdown, or quit timeout).
+    fn run_tick(
+        &mut self,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+        progress_report_tx: &mpsc::Sender<String>,
+        stop_rx: &mpsc::Receiver<()>,
+        cmd_rx: &mpsc::Receiver<PlayerCommand>,
+        wakeup_read_fd: RawFd,
+    ) -> bool {
+        let mut cancel_stop = false;
+        while let Ok(cmd) = cmd_rx.try_recv() {
+            cancel_stop |= self.handle_command(cmd, mpv, progress);
+        }
+        self.observe_reporting(false);
+
+        if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
+            self.handle_stop_request(mpv);
+        }
+
+        if self
+            .quit_at
+            .is_some_and(|t| t.elapsed() > Duration::from_millis(200))
+        {
+            self.finalize_quit(progress);
+            return true;
+        }
+
+        let mut had_event = false;
+        while let Some(event_result) = mpv.wait_event(0.0) {
+            had_event = true;
+            if self.handle_mpv_event(event_result, mpv, progress, progress_report_tx) {
+                return true;
+            }
+        }
+
+        if !had_event {
+            if wakeup_read_fd >= 0 {
+                poll_wakeup(wakeup_read_fd, WAKEUP_POLL_MS);
+                drain_wakeup(wakeup_read_fd);
+            } else {
+                std::thread::sleep(Duration::from_millis(WAKEUP_POLL_MS as u64));
+            }
+        }
+        false
+    }
+
+    /// A synchronous quit exits promptly for regular playback.
+    /// FIFO output can block mpv in its audio thread, so keep
+    /// that path asynchronous and let the bounded fallback
+    /// handle a delayed Shutdown event.
+    fn handle_stop_request(&mut self, mpv: &Mpv) {
+        if self.config.audio_pipe_path.is_some() {
+            command_quit_async(mpv);
+        } else {
+            let _ = mpv.command("quit", &[]);
+        }
+        self.quit_at = Some(Instant::now());
+        // Pin the slot identity now, while it is still the observed
+        // active slot, so a QueueMove/QueueRemove drained before the
+        // deferred Stopped emit cannot rename the occurrence (D2).
+        self.stop_slot = self.active_slot_id();
+        self.stop_runtime = self.active_item().map(|item| item.runtime_ticks());
+    }
+
+    /// Emit the final `Stopped` after the quit timeout elapsed.
+    fn finalize_quit(&mut self, progress: &mut ProgressGuard) {
+        if !self.stop_report.is_sent() {
+            self.report_stop_now_or_background(progress);
+        }
+        let runtime = self
+            .stop_runtime
+            .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
+            .unwrap_or(0);
+        let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+        let (played, consume) = quit_timeout_stop_flags(
+            self.origin,
+            is_audio,
+            self.last_valid_pos,
+            runtime,
+            self.stopped_near_end,
+        );
+        self.status.lock().unwrap().active = false;
+        let _ = self.event_tx.send(PlayerEvent::Stopped {
+            slot_id: self.stop_slot.or_else(|| self.active_slot_id()),
+            run_identity: self.run_identity,
+            position_ticks: self.last_valid_pos,
+            played,
+            consume,
+            progress_report_accepted: self.stop_report.is_accepted(),
+            error: None,
+        });
+    }
+
+    /// Dispatch one mpv event. Returns true when `run` should return
+    /// (end of playlist, shutdown, or unrecoverable error).
+    fn handle_mpv_event(
+        &mut self,
+        event_result: Result<Event<'_>, libmpv2::Error>,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+        progress_report_tx: &mpsc::Sender<String>,
+    ) -> bool {
+        match event_result {
+            Ok(Event::PropertyChange { name, change, .. }) => {
+                self.on_property_change(name, change, mpv, progress_report_tx);
+                false
+            }
+            Ok(Event::PlaybackRestart) => {
+                self.on_playback_restart(mpv);
+                false
+            }
+            Ok(Event::EndFile(reason)) => {
+                let should_continue = self.on_end_file(reason, mpv, progress);
+                // on_end_file returns false both for "continue normally" and for
+                // "end of playlist — return from thread". Detect end-of-playlist
+                // by checking active flag which on_end_file sets to false.
+                if !should_continue && !self.status.lock().unwrap().active {
+                    return true;
+                }
+                false
+            }
+            Ok(Event::LogMessage {
+                prefix,
+                level,
+                text,
+                ..
+            }) => {
+                if let Some(t) = mpv_log_text(
+                    self.prepared_source
+                        .as_ref()
+                        .is_some_and(PreparedSource::has_sensitive_lifecycle),
+                    text,
+                ) {
+                    log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
+                }
+                false
+            }
+            Ok(Event::ClientMessage(args)) if args.first().copied() == Some("mbv-next-up-play") => {
+                log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
+                self.next_up_jump = true;
+                let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
+                false
+            }
+            Ok(Event::ClientMessage(args))
+                if args.first().copied() == Some("mbv-skip-intro-play") =>
+            {
+                let _ = self.event_tx.send(PlayerEvent::SkipIntroPlay);
+                false
+            }
+            Ok(Event::ClientMessage(args))
+                if self.config.use_mpv_config && args.first().copied() == Some("mouse-moved") =>
+            {
+                let show = self
+                    .last_mouse_osd
+                    .is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
+                if show {
+                    let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+                    self.last_mouse_osd = Some(Instant::now());
+                }
+                false
+            }
+            Ok(Event::Shutdown) => {
+                self.on_shutdown(progress);
+                true
+            }
+            Err(e) => {
+                if self.on_mpv_error(e, progress) {
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Property-change events: status mirror writes and the reporting hooks.
+    fn on_property_change(
+        &mut self,
+        name: &str,
+        change: PropertyData,
+        mpv: &Mpv,
+        progress_report_tx: &mpsc::Sender<String>,
+    ) {
+        match (name, change) {
+            ("volume", PropertyData::Double(vol)) => {
+                self.status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
+            }
+            (_, PropertyData::Double(pos_secs)) => {
+                self.on_time_pos(pos_secs, mpv);
+            }
+            ("pause", PropertyData::Flag(paused)) => {
+                self.status.lock().unwrap().paused = paused;
+                if self.startup_pause.consume_event() {
+                    return;
+                }
+                let _ = self.event_tx.send(PlayerEvent::PausedChanged(paused));
+                self.observe_reporting(true);
+                if self.quit_at.is_none() {
+                    let event_name = if paused { "Pause" } else { "Unpause" };
+                    let _ = progress_report_tx.send(event_name.to_string());
+                }
+            }
+            ("sid", PropertyData::Str(s)) => {
+                let id = s.parse::<i64>().unwrap_or(0);
+                log::info!(target: "player", "sid PropertyChange: raw={s:?} parsed={id}");
+                self.status.lock().unwrap().sub_id = id;
+            }
+            ("aid", PropertyData::Str(_)) => {
+                refresh_tracks(mpv, &self.status);
+            }
+            ("mute", PropertyData::Flag(m)) => {
+                self.status.lock().unwrap().muted = m;
+            }
+            ("video-params/h", PropertyData::Int64(h)) => {
+                log::info!(target: "player", "video-params/h (playlist): h={h}");
+                self.status.lock().unwrap().video_height = h;
+            }
+            ("video-params/h", change) => {
+                log::warn!(target: "player", "video-params/h (playlist) unexpected type: {:?}", change);
+            }
+            ("audio-codec-name", PropertyData::Str(s)) => {
+                self.status.lock().unwrap().audio_codec = s.to_lowercase();
+            }
+            ("current-tracks/video/image", PropertyData::Flag(is_img)) => {
+                log::info!(target: "player", "video/image (playlist): is_img={is_img}");
+                self.status.lock().unwrap().video_is_image = is_img;
+            }
+            ("playlist-pos", PropertyData::Int64(pos)) => {
+                self.on_playlist_pos_changed(pos, mpv_position_ticks(mpv));
+            }
+            ("playlist-count", PropertyData::Int64(count)) if self.load_state.is_ready() => {
+                self.on_playlist_count_changed(count as usize);
+            }
+            _ => {}
         }
     }
 }

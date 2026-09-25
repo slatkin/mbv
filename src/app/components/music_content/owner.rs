@@ -178,116 +178,15 @@ impl LibraryContentOwner for MusicContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.inline_search.is_active() {
-            // The production Grouped Music session never populates the flat
-            // carrier. Keep the legacy host hook usable for focused harnesses
-            // that explicitly seed that carrier while exercising unrelated
-            // activation plumbing; the panel still always paints the tree.
-            if self.local_filter_owns_input() {
-                return self.on_filter_key(key);
-            }
-            if key.modifiers.contains(KeyModifiers::CONTROL) {
-                if let Some(item) = self.inline_search.selected_item() {
-                    let request = match key.code {
-                        Key::Char('p') => Some(ShellRequest::EmbyLibraryPlay { item }),
-                        Key::Char('a') => Some(ShellRequest::EmbyLibraryEnqueue { item }),
-                        Key::Char('s') => Some(ShellRequest::EmbyLibraryShuffle { item }),
-                        _ => None,
-                    };
-                    if let Some(request) = request {
-                        self.inline_search.close();
-                        self.browser.apply(TreeOperation::ClearFilter);
-                        return Some(Msg::Shell(Box::new(request)));
-                    }
-                }
-            }
-            return match self.inline_search.handle_key(key) {
-                Some(crate::app::components::inline_search::InlineSearchAction::Activate {
-                    id,
-                    item_type,
-                }) => Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
-                    id,
-                    item_type,
-                }))),
-                Some(crate::app::components::inline_search::InlineSearchAction::Dismiss) => {
-                    self.inline_search.close();
-                    self.browser.apply(TreeOperation::ClearFilter);
-                    None
-                }
-                Some(crate::app::components::inline_search::InlineSearchAction::QueryStarted) => {
-                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted)))
-                }
-                None => None,
-            };
+            return self.on_key_inline_search(key);
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Music is focused.
         if key.modifiers.contains(KeyModifiers::CONTROL) && !self.track_focused {
-            if self.selected_is_artist() {
-                return match key.code {
-                    Key::Char('p') => self.artist_action(MusicTreeAction::Play),
-                    Key::Char('a') => self.artist_action(MusicTreeAction::Enqueue),
-                    Key::Char('s') => self.artist_action(MusicTreeAction::Shuffle),
-                    // Artist roots are grouping rows, so watched-state is
-                    // unavailable while the library-wide rescan remains
-                    // available from every focused library row.
-                    Key::Char('w') => None,
-                    Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan))),
-                    _ => None,
-                };
-            }
-            let item = self.selected_item();
-            return match key.code {
-                Key::Char('p') => {
-                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryPlay { item })))
-                }
-                Key::Char('a') => {
-                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryEnqueue { item })))
-                }
-                Key::Char('s') => {
-                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryShuffle { item })))
-                }
-                Key::Char('w') => item.map(|item| {
-                    Msg::Shell(Box::new(ShellRequest::EmbyLibraryToggleWatched { item }))
-                }),
-                Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan))),
-                _ => None,
-            };
+            return self.on_key_ctrl_chord(key);
         }
         match key.code {
-            // Unfiltered artist Enter uses the same Hero entry as Right on an
-            // expanded root in Wide geometry. The panel owns the non-Wide
-            // Enter interception and opens the Library Hero overlay before
-            // this owner sees the chord; the filter keeps its local expansion
-            // behavior in `on_filter_key`. Once the focused pane is this
-            // root's own artist Workspace, Enter belongs to the focused track
-            // below.
-            Key::Enter if self.selected_is_artist() && !self.artist_workspace_focused() => {
-                if self.inline_track_focus_enabled {
-                    self.enter_artist_workspace_focus();
-                }
-                None
-            }
-            Key::Enter if self.track_focused => self.workspace_track_activation(),
-            Key::Enter if self.selected_is_track() => {
-                let (album_target, track_id) = self.selected_tree_track()?;
-                Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
-                    album_target,
-                    track_id,
-                })))
-            }
-            Key::Enter if self.track_list.rows().is_empty() => self
-                .selected_item()
-                .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item }))),
-            // Narrow geometry has no inline track pane: the chord opens (or
-            // re-focuses) the Library Hero overlay instead of focusing a list
-            // nothing paints.
-            Key::Enter if self.inline_track_focus_enabled => {
-                self.enter_track_focus();
-                None
-            }
-            Key::Enter => self
-                .selected_item()
-                .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item }))),
+            Key::Enter => self.on_key_enter(),
             Key::Esc | Key::Backspace if self.track_focused => {
                 self.clear_track_focus();
                 None
@@ -346,64 +245,8 @@ impl LibraryContentOwner for MusicContent {
             // pane holds local focus, otherwise the selected album's
             // generic library context menu (mirrors the retired
             // `MusicWorkspaceComponent`'s '.' handling).
-            Key::Char('.') if self.track_focused => {
-                match self
-                    .track_list
-                    .delegate_operation(
-                        MediaListSurfaceInput::Context
-                            .into_operation(None)
-                            .expect("resolved media-list pointer target"),
-                    )
-                    .external_intent
-                {
-                    Some(RowIntent::ContextSelection(targets)) => {
-                        let items: Vec<EmbyItem> = targets
-                            .into_iter()
-                            .filter_map(|target| self.workspace_track_item(&target))
-                            .collect();
-                        (!items.is_empty()).then_some(Msg::Shell(Box::new(
-                            ShellRequest::MusicRowContextMenu(
-                                crate::app::state::types::context_menu::ContextMenuTargets::Emby(
-                                    items,
-                                ),
-                                None,
-                            ),
-                        )))
-                    }
-                    Some(RowIntent::Context(target)) => {
-                        self.workspace_track_item(&target).map(|track| {
-                            Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                                crate::app::state::types::context_menu::ContextMenuTargets::Emby(
-                                    vec![track],
-                                ),
-                                None,
-                            )))
-                        })
-                    }
-                    _ => None,
-                }
-            }
-            Key::Char('.') => {
-                if self.selected_is_artist() {
-                    let (items, _unresolved_targets) = self.selected_artist_items()?;
-                    if items.is_empty() {
-                        return None;
-                    }
-                    Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-                        None,
-                    ))))
-                } else {
-                    self.selected_item().map(|item| {
-                        Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
-                                item,
-                            ]),
-                            None,
-                        )))
-                    })
-                }
-            }
+            Key::Char('.') if self.track_focused => self.workspace_track_context_menu(),
+            Key::Char('.') => self.album_context_menu_msg(),
             Key::Char('r')
                 if !self.track_focused
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -446,30 +289,7 @@ impl LibraryContentOwner for MusicContent {
             // chord (`panel_left`/`panel_right`), so the bare arrows always
             // reach the tree. Right on an already expanded root (the artist
             // Workspace entry) is task 6.4 and stays unhandled here.
-            Key::Left if !self.track_focused => {
-                if self.selected_is_artist() {
-                    if let Some(root) = self.browser.selected_target().cloned() {
-                        if self.browser.is_expanded(&root) {
-                            self.browser
-                                .apply(TreeOperation::ToggleExpansionTarget(root));
-                        }
-                    }
-                    None
-                } else if self
-                    .browser
-                    .selected_target()
-                    .and_then(|selected| self.browser.node(selected))
-                    .and_then(|node| node.parent.clone())
-                    .is_some()
-                {
-                    // The parent is an artist root, so no album selection
-                    // crosses: artist focus never overwrites album persistence.
-                    self.browser.apply(TreeOperation::Parent);
-                    self.album_selection_request(AlbumCursorKind::Move)
-                } else {
-                    None
-                }
-            }
+            Key::Left if !self.track_focused => self.tree_move_left(),
             // Right first expands cached track children on an album node;
             // the shell already owns any missing album-track fetch and this
             // local operation only projects settled cache data.
@@ -488,19 +308,7 @@ impl LibraryContentOwner for MusicContent {
             // cursor locally, non-Wide asks the shell to open the Library
             // Hero overlay and focus the same Workspace.
             Key::Right if !self.track_focused && self.selected_is_artist() => {
-                let root = self.browser.selected_target().cloned()?;
-                if !self.browser.is_expanded(&root) {
-                    self.browser
-                        .apply(TreeOperation::ToggleExpansionTarget(root));
-                    return None;
-                }
-                if self.inline_track_focus_enabled {
-                    self.enter_artist_workspace_focus();
-                    return None;
-                }
-                self.artist_detail_target().map(|target| {
-                    Msg::Shell(Box::new(ShellRequest::MusicArtistActivate { target }))
-                })
+                self.tree_right_artist()
             }
             _ => None,
         }
@@ -603,5 +411,226 @@ impl MusicContent {
                 .unwrap_or(0),
             _ => 0,
         }
+    }
+    /// The inline-search takeover branch of `on_key`: while inline search is
+    /// active it owns every key.
+    fn on_key_inline_search(&mut self, key: &KeyEvent) -> Option<Msg> {
+        // The production Grouped Music session never populates the flat
+        // carrier. Keep the legacy host hook usable for focused harnesses
+        // that explicitly seed that carrier while exercising unrelated
+        // activation plumbing; the panel still always paints the tree.
+        if self.local_filter_owns_input() {
+            return self.on_filter_key(key);
+        }
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            if let Some(item) = self.inline_search.selected_item() {
+                let request = match key.code {
+                    Key::Char('p') => Some(ShellRequest::EmbyLibraryPlay { item }),
+                    Key::Char('a') => Some(ShellRequest::EmbyLibraryEnqueue { item }),
+                    Key::Char('s') => Some(ShellRequest::EmbyLibraryShuffle { item }),
+                    _ => None,
+                };
+                if let Some(request) = request {
+                    self.inline_search.close();
+                    self.browser.apply(TreeOperation::ClearFilter);
+                    return Some(Msg::Shell(Box::new(request)));
+                }
+            }
+        }
+        match self.inline_search.handle_key(key) {
+            Some(crate::app::components::inline_search::InlineSearchAction::Activate {
+                id,
+                item_type,
+            }) => Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
+                id,
+                item_type,
+            }))),
+            Some(crate::app::components::inline_search::InlineSearchAction::Dismiss) => {
+                self.inline_search.close();
+                self.browser.apply(TreeOperation::ClearFilter);
+                None
+            }
+            Some(crate::app::components::inline_search::InlineSearchAction::QueryStarted) => {
+                Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted)))
+            }
+            None => None,
+        }
+    }
+
+    /// The ctrl-chord branch of `on_key` (no inline search, track pane not
+    /// locally focused).
+    fn on_key_ctrl_chord(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if self.selected_is_artist() {
+            return match key.code {
+                Key::Char('p') => self.artist_action(MusicTreeAction::Play),
+                Key::Char('a') => self.artist_action(MusicTreeAction::Enqueue),
+                Key::Char('s') => self.artist_action(MusicTreeAction::Shuffle),
+                // Artist roots are grouping rows, so watched-state is
+                // unavailable while the library-wide rescan remains
+                // available from every focused library row.
+                Key::Char('w') => None,
+                Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan))),
+                _ => None,
+            };
+        }
+        let item = self.selected_item();
+        match key.code {
+            Key::Char('p') => {
+                item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryPlay { item })))
+            }
+            Key::Char('a') => {
+                item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryEnqueue { item })))
+            }
+            Key::Char('s') => {
+                item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryShuffle { item })))
+            }
+            Key::Char('w') => item
+                .map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryToggleWatched { item }))),
+            Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan))),
+            _ => None,
+        }
+    }
+
+    /// The `Enter` family of `on_key`, in the original arm order.
+    fn on_key_enter(&mut self) -> Option<Msg> {
+        // Unfiltered artist Enter uses the same Hero entry as Right on an
+        // expanded root in Wide geometry. The panel owns the non-Wide
+        // Enter interception and opens the Library Hero overlay before
+        // this owner sees the chord; the filter keeps its local expansion
+        // behavior in `on_filter_key`. Once the focused pane is this
+        // root's own artist Workspace, Enter belongs to the focused track
+        // below.
+        if self.selected_is_artist() && !self.artist_workspace_focused() {
+            if self.inline_track_focus_enabled {
+                self.enter_artist_workspace_focus();
+            }
+            return None;
+        }
+        if self.track_focused {
+            return self.workspace_track_activation();
+        }
+        if self.selected_is_track() {
+            let (album_target, track_id) = self.selected_tree_track()?;
+            return Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
+                album_target,
+                track_id,
+            })));
+        }
+        if self.track_list.rows().is_empty() {
+            return self
+                .selected_item()
+                .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item })));
+        }
+        // Narrow geometry has no inline track pane: the chord opens (or
+        // re-focuses) the Library Hero overlay instead of focusing a list
+        // nothing paints.
+        if self.inline_track_focus_enabled {
+            self.enter_track_focus();
+            return None;
+        }
+        self.selected_item()
+            .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item })))
+    }
+
+    /// `.` on the focused track pane: the track list's own context menu.
+    fn workspace_track_context_menu(&mut self) -> Option<Msg> {
+        match self
+            .track_list
+            .delegate_operation(
+                MediaListSurfaceInput::Context
+                    .into_operation(None)
+                    .expect("resolved media-list pointer target"),
+            )
+            .external_intent
+        {
+            Some(RowIntent::ContextSelection(targets)) => {
+                let items: Vec<EmbyItem> = targets
+                    .into_iter()
+                    .filter_map(|target| self.workspace_track_item(&target))
+                    .collect();
+                (!items.is_empty()).then_some(Msg::Shell(Box::new(
+                    ShellRequest::MusicRowContextMenu(
+                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                        None,
+                    ),
+                )))
+            }
+            Some(RowIntent::Context(target)) => self.workspace_track_item(&target).map(|track| {
+                Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
+                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![track]),
+                    None,
+                )))
+            }),
+            _ => None,
+        }
+    }
+
+    /// `.` on the album/tree pane: the artist's or album's context menu.
+    fn album_context_menu_msg(&mut self) -> Option<Msg> {
+        if self.selected_is_artist() {
+            let (items, _unresolved_targets) = self.selected_artist_items()?;
+            if items.is_empty() {
+                return None;
+            }
+            Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                None,
+            ))))
+        } else {
+            self.selected_item().map(|item| {
+                Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
+                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
+                    None,
+                )))
+            })
+        }
+    }
+
+    /// Left in the tree (task 2.4): collapse a focused expanded artist root,
+    /// or return a leaf to its artist parent.
+    fn tree_move_left(&mut self) -> Option<Msg> {
+        if self.selected_is_artist() {
+            if let Some(root) = self.browser.selected_target().cloned() {
+                if self.browser.is_expanded(&root) {
+                    self.browser
+                        .apply(TreeOperation::ToggleExpansionTarget(root));
+                }
+            }
+            return None;
+        }
+        if self
+            .browser
+            .selected_target()
+            .and_then(|selected| self.browser.node(selected))
+            .and_then(|node| node.parent.clone())
+            .is_some()
+        {
+            // The parent is an artist root, so no album selection
+            // crosses: artist focus never overwrites album persistence.
+            self.browser.apply(TreeOperation::Parent);
+            self.album_selection_request(AlbumCursorKind::Move)
+        } else {
+            None
+        }
+    }
+
+    /// Right on an artist root (task 2.4/task 6.4): a collapsed root
+    /// expands first; only a later Right on the already expanded root
+    /// enters its artist Workspace — Wide takes the inline pane's
+    /// cursor locally, non-Wide asks the shell to open the Library
+    /// Hero overlay and focus the same Workspace.
+    fn tree_right_artist(&mut self) -> Option<Msg> {
+        let root = self.browser.selected_target().cloned()?;
+        if !self.browser.is_expanded(&root) {
+            self.browser
+                .apply(TreeOperation::ToggleExpansionTarget(root));
+            return None;
+        }
+        if self.inline_track_focus_enabled {
+            self.enter_artist_workspace_focus();
+            return None;
+        }
+        self.artist_detail_target()
+            .map(|target| Msg::Shell(Box::new(ShellRequest::MusicArtistActivate { target })))
     }
 }

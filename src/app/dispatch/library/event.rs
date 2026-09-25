@@ -56,96 +56,14 @@ impl App {
                 lib_idx,
                 parent_id,
                 items,
-            } => {
-                // The flat inline-search fetch re-homes the write the deleted
-                // direct flat-result projector used to do against the
-                // component: the completion lands in the nav level's
-                // `all_items` cache (the same guarded write as
-                // `AllItemsPrefetched`) and the shell's event-scoped
-                // projection (5.3d.20c) pushes it into the component. A
-                // completion racing a navigation -- `parent_id` no longer the
-                // last level's -- is stale and must not write.
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last.parent_id == parent_id {
-                            last.all_items = Some(items);
-                        }
-                    }
-                }
-            }
+            } => self.handle_search_items_loaded(lib_idx, parent_id, items),
             LibEvent::AlbumIndexBuilt { library_id, result } => {
-                let rebuild_pending = matches!(
-                    self.album_indexes.get(&library_id),
-                    Some(AlbumIndexState::Loading {
-                        rebuild_pending: true
-                    })
-                );
-                if rebuild_pending {
-                    self.album_indexes.insert(
-                        library_id.clone(),
-                        AlbumIndexState::Loading {
-                            rebuild_pending: false,
-                        },
-                    );
-                    self.spawn_album_index_build(library_id);
-                } else {
-                    match result {
-                        Ok(entries) => {
-                            self.album_indexes.insert(
-                                library_id.clone(),
-                                AlbumIndexState::Ready(std::sync::Arc::new(AlbumIndex::new(
-                                    entries,
-                                ))),
-                            );
-                        }
-                        Err(error) => {
-                            self.album_indexes
-                                .insert(library_id.clone(), AlbumIndexState::Unavailable);
-                            self.flash(
-                                format!("Couldn't load album index: {error}"),
-                                ToastSeverity::Error,
-                            );
-                        }
-                    }
-                }
+                self.handle_album_index_built(library_id, result)
             }
             LibEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
-            } => {
-                let Some(lib_idx) = self
-                    .libs
-                    .iter()
-                    .position(|lib| lib.library.id == library_id)
-                else {
-                    return;
-                };
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    lib.nav_stack = nav_stack;
-                }
-                // Entering inline track focus for the activated album is the
-                // shell's job now (the component owns the cursor; the shell
-                // delivers a one-shot enter request at the next sync — wide
-                // only, narrow stays unfocused).
-                self.save_default_library_position(lib_idx);
-                // A `NavigateLanding::Album` landing defers its tab switch to
-                // this drain (D4): the landed stack has replaced the nav
-                // stack and the saved position above, so the switch's
-                // activation compares equal and never restores. Consume it
-                // only when this landing belongs to the pending navigation's
-                // library; an Inline Search activation, or any other
-                // library's landing, must leave it armed (U2 correction).
-                let belongs_to_pending = self.pending_navigate_tab_switch.is_some_and(|idx| {
-                    self.libs
-                        .get(idx)
-                        .is_some_and(|lib| lib.library.id == library_id)
-                });
-                if belongs_to_pending {
-                    if let Some(idx) = self.pending_navigate_tab_switch.take() {
-                        self.set_library_tab(idx + 1);
-                    }
-                }
-            }
+            } => self.handle_recursive_album_activated(library_id, nav_stack),
             LibEvent::AllItemsPrefetched {
                 lib_idx,
                 parent_id,
@@ -316,85 +234,7 @@ impl App {
                 lib_idx,
                 landing,
                 switch_tab,
-            } => {
-                match landing {
-                    NavigateLanding::Chain { mut nav_stack } => {
-                        for level in &mut nav_stack {
-                            self.retain_grouped_music_level_items(lib_idx, level);
-                        }
-                        if let Some(lib) = self.libs.get_mut(lib_idx) {
-                            lib.nav_stack = nav_stack;
-                            // A completed navigation IS the saved position from now on;
-                            // without this the `switch_tab` activation below compares the
-                            // navigated stack against the stale saved position, takes the
-                            // restore branch, and clobbers the navigation the user asked
-                            // for (queue "Go to Library" / search-sidebar activation
-                            // degraded to a bare tab switch).
-                            self.save_default_library_position(lib_idx);
-                        }
-                        if switch_tab {
-                            self.set_library_tab(lib_idx + 1);
-                        }
-                    }
-                    NavigateLanding::Series { reveal, episode_id } => {
-                        let name = reveal.name.clone();
-                        if self.libs.get(lib_idx).is_none() {
-                            self.flash_error(format!("Could not land on '{name}' in its library"));
-                        } else if self.activate_searched_series(lib_idx, &reveal) {
-                            // D4: the landed root level (pill + cursor) is the
-                            // saved position from now on; the fence in
-                            // `handle_restored_library_position` then discards
-                            // any stale pre-navigation restore.
-                            self.save_default_library_position(lib_idx);
-                            if switch_tab {
-                                self.set_library_tab(lib_idx + 1);
-                            }
-                            // The landing completed; the Model drain owes the
-                            // detail hand-off (task 3.1, design D3).
-                            self.pending_series_handoff = Some(PendingSeriesHandoff {
-                                lib_idx,
-                                reveal,
-                                episode_id,
-                            });
-                        } else if !self
-                            .arm_pending_series_landing(lib_idx, reveal, switch_tab, episode_id)
-                        {
-                            // Miss against a complete corpus (absent item, an
-                            // unloadable library): flash the library-error
-                            // path and leave the active tab unchanged (task
-                            // 4.2's semantics). A satisfiable-but-not-yet
-                            // corpus was armed above instead (U2 correction).
-                            self.flash_error(format!("Could not land on '{name}' in its library"));
-                        }
-                    }
-                    NavigateLanding::Album {
-                        reveal,
-                        ancestors,
-                        track_id,
-                    } => {
-                        let entry = AlbumSearchEntry::from_chain(*reveal, ancestors);
-                        // Fully async, exactly like Inline Search's album
-                        // activation: the nav stack is replaced (and the
-                        // landed position saved) on the
-                        // `RecursiveAlbumActivated` drain, which then consumes
-                        // `pending_navigate_tab_switch` so the tab switch
-                        // never compares the landed stack against the stale
-                        // saved position (D4).
-                        if self.activate_recursive_album(lib_idx, entry) {
-                            if switch_tab {
-                                self.pending_navigate_tab_switch = Some(lib_idx);
-                            }
-                            // Deep selection (task 6.2, design D6): the
-                            // chosen track rides the activation; the shell
-                            // binds it to the activated album at the
-                            // `RecursiveAlbumActivated` drain.
-                            self.pending_track_selection = track_id.map(|id| (lib_idx, id));
-                        } else {
-                            self.flash_error("Could not start the album navigation".to_string());
-                        }
-                    }
-                }
-            }
+            } => self.handle_navigate_to_event(lib_idx, landing, switch_tab),
             LibEvent::PlaylistsLoaded(items) => {
                 self.playlists = items;
                 self.playlists_loading = false;
@@ -457,6 +297,195 @@ impl App {
                 self.pending_navigate_tab_switch = None;
                 self.pending_series_landing = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
+            }
+        }
+    }
+
+    /// The `RecursiveAlbumActivated` arm: install the landed nav stack and
+    /// consume the deferred tab switch when it belongs to this navigation.
+    fn handle_recursive_album_activated(
+        &mut self,
+        library_id: String,
+        nav_stack: Vec<crate::app::state::types::browse::BrowseLevel>,
+    ) {
+        let Some(lib_idx) = self
+            .libs
+            .iter()
+            .position(|lib| lib.library.id == library_id)
+        else {
+            return;
+        };
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            lib.nav_stack = nav_stack;
+        }
+        // Entering inline track focus for the activated album is the
+        // shell's job now (the component owns the cursor; the shell
+        // delivers a one-shot enter request at the next sync — wide
+        // only, narrow stays unfocused).
+        self.save_default_library_position(lib_idx);
+        // A `NavigateLanding::Album` landing defers its tab switch to
+        // this drain (D4): the landed stack has replaced the nav
+        // stack and the saved position above, so the switch's
+        // activation compares equal and never restores. Consume it
+        // only when this landing belongs to the pending navigation's
+        // library; an Inline Search activation, or any other
+        // library's landing, must leave it armed (U2 correction).
+        let belongs_to_pending = self.pending_navigate_tab_switch.is_some_and(|idx| {
+            self.libs
+                .get(idx)
+                .is_some_and(|lib| lib.library.id == library_id)
+        });
+        if belongs_to_pending {
+            if let Some(idx) = self.pending_navigate_tab_switch.take() {
+                self.set_library_tab(idx + 1);
+            }
+        }
+    }
+
+    /// The `NavigateTo` arm: land the requested navigation target.
+    fn handle_navigate_to_event(
+        &mut self,
+        lib_idx: usize,
+        landing: NavigateLanding,
+        switch_tab: bool,
+    ) {
+        match landing {
+            NavigateLanding::Chain { mut nav_stack } => {
+                for level in &mut nav_stack {
+                    self.retain_grouped_music_level_items(lib_idx, level);
+                }
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    lib.nav_stack = nav_stack;
+                    // A completed navigation IS the saved position from now on;
+                    // without this the `switch_tab` activation below compares the
+                    // navigated stack against the stale saved position, takes the
+                    // restore branch, and clobbers the navigation the user asked
+                    // for (queue "Go to Library" / search-sidebar activation
+                    // degraded to a bare tab switch).
+                    self.save_default_library_position(lib_idx);
+                }
+                if switch_tab {
+                    self.set_library_tab(lib_idx + 1);
+                }
+            }
+            NavigateLanding::Series { reveal, episode_id } => {
+                let name = reveal.name.clone();
+                if self.libs.get(lib_idx).is_none() {
+                    self.flash_error(format!("Could not land on '{name}' in its library"));
+                } else if self.activate_searched_series(lib_idx, &reveal) {
+                    // D4: the landed root level (pill + cursor) is the
+                    // saved position from now on; the fence in
+                    // `handle_restored_library_position` then discards
+                    // any stale pre-navigation restore.
+                    self.save_default_library_position(lib_idx);
+                    if switch_tab {
+                        self.set_library_tab(lib_idx + 1);
+                    }
+                    // The landing completed; the Model drain owes the
+                    // detail hand-off (task 3.1, design D3).
+                    self.pending_series_handoff = Some(PendingSeriesHandoff {
+                        lib_idx,
+                        reveal,
+                        episode_id,
+                    });
+                } else if !self.arm_pending_series_landing(lib_idx, reveal, switch_tab, episode_id)
+                {
+                    // Miss against a complete corpus (absent item, an
+                    // unloadable library): flash the library-error
+                    // path and leave the active tab unchanged (task
+                    // 4.2's semantics). A satisfiable-but-not-yet
+                    // corpus was armed above instead (U2 correction).
+                    self.flash_error(format!("Could not land on '{name}' in its library"));
+                }
+            }
+            NavigateLanding::Album {
+                reveal,
+                ancestors,
+                track_id,
+            } => {
+                let entry = AlbumSearchEntry::from_chain(*reveal, ancestors);
+                // Fully async, exactly like Inline Search's album
+                // activation: the nav stack is replaced (and the
+                // landed position saved) on the
+                // `RecursiveAlbumActivated` drain, which then consumes
+                // `pending_navigate_tab_switch` so the tab switch
+                // never compares the landed stack against the stale
+                // saved position (D4).
+                if self.activate_recursive_album(lib_idx, entry) {
+                    if switch_tab {
+                        self.pending_navigate_tab_switch = Some(lib_idx);
+                    }
+                    // Deep selection (task 6.2, design D6): the
+                    // chosen track rides the activation; the shell
+                    // binds it to the activated album at the
+                    // `RecursiveAlbumActivated` drain.
+                    self.pending_track_selection = track_id.map(|id| (lib_idx, id));
+                } else {
+                    self.flash_error("Could not start the album navigation".to_string());
+                }
+            }
+        }
+    }
+
+    /// The `SearchItemsLoaded` arm: the flat inline-search fetch re-homes
+    /// the write the deleted direct flat-result projector used to do against
+    /// the component: the completion lands in the nav level's `all_items`
+    /// cache (the same guarded write as `AllItemsPrefetched`) and the shell's
+    /// event-scoped projection (5.3d.20c) pushes it into the component. A
+    /// completion racing a navigation -- `parent_id` no longer the last
+    /// level's -- is stale and must not write.
+    fn handle_search_items_loaded(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        items: Vec<mbv_core::api::EmbyItem>,
+    ) {
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            if let Some(last) = lib.nav_stack.last_mut() {
+                if last.parent_id == parent_id {
+                    last.all_items = Some(items);
+                }
+            }
+        }
+    }
+
+    /// The `AlbumIndexBuilt` arm: arm a pending rebuild or install the built
+    /// index (or its unavailability).
+    fn handle_album_index_built(
+        &mut self,
+        library_id: String,
+        result: Result<Vec<AlbumSearchEntry>, String>,
+    ) {
+        let rebuild_pending = matches!(
+            self.album_indexes.get(&library_id),
+            Some(AlbumIndexState::Loading {
+                rebuild_pending: true
+            })
+        );
+        if rebuild_pending {
+            self.album_indexes.insert(
+                library_id.clone(),
+                AlbumIndexState::Loading {
+                    rebuild_pending: false,
+                },
+            );
+            self.spawn_album_index_build(library_id);
+        } else {
+            match result {
+                Ok(entries) => {
+                    self.album_indexes.insert(
+                        library_id.clone(),
+                        AlbumIndexState::Ready(std::sync::Arc::new(AlbumIndex::new(entries))),
+                    );
+                }
+                Err(error) => {
+                    self.album_indexes
+                        .insert(library_id.clone(), AlbumIndexState::Unavailable);
+                    self.flash(
+                        format!("Couldn't load album index: {error}"),
+                        ToastSeverity::Error,
+                    );
+                }
             }
         }
     }
