@@ -148,7 +148,6 @@ impl HomeContent {
     /// mounted `HomeComponent::handle_key` contract, unchanged — the router
     /// owns every global chord and keeps precedence).
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         if self.carrier.handle_visual_key(key).is_some() {
             return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
                 self.carrier.selection_summary(),
@@ -161,69 +160,74 @@ impl HomeContent {
         }
         match key.code {
             Key::Up => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Move(-1), None);
+                self.handle_navigation_key(MediaListSurfaceInput::Move(-1));
                 None
             }
             Key::Down => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Move(1), None);
+                self.handle_navigation_key(MediaListSurfaceInput::Move(1));
                 None
             }
             Key::PageUp => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Page(-1), None);
+                self.handle_navigation_key(MediaListSurfaceInput::Page(-1));
                 None
             }
             Key::PageDown => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Page(1), None);
+                self.handle_navigation_key(MediaListSurfaceInput::Page(1));
                 None
             }
             Key::Home => {
-                self.delegate_row_local_input(MediaListSurfaceInput::First, None);
+                self.handle_navigation_key(MediaListSurfaceInput::First);
                 None
             }
             Key::End => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Last, None);
+                self.handle_navigation_key(MediaListSurfaceInput::Last);
                 None
             }
-            Key::Char('.') => {
-                let targets = match self
-                    .delegate_row_local_input(MediaListSurfaceInput::Context, None)
-                    .external_intent
-                {
-                    Some(RowIntent::Context(target)) => {
-                        vec![self.home_row_target(Some(target))]
-                    }
-                    Some(RowIntent::ContextSelection(targets)) => targets
-                        .into_iter()
-                        .map(|target| self.home_row_target(Some(target)))
-                        .collect(),
-                    _ => vec![self.row_target()],
-                };
-                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    ContextMenuTargets::Home(targets),
-                    None,
-                ))))
-            }
-            Key::Enter if ctrl => Some(Msg::Shell(Box::new(ShellRequest::HomeEnqueue(
-                self.row_target(),
-            )))),
-            Key::Enter => match self
-                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-                .external_intent
-            {
-                Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
-                    ShellRequest::HomePlay(self.home_row_target(Some(target))),
-                ))),
-                _ => None,
-            },
-            Key::Char('a') if ctrl => Some(Msg::Shell(Box::new(ShellRequest::HomeEnqueue(
-                self.row_target(),
-            )))),
-            Key::Char('w') if ctrl => Some(Msg::Shell(Box::new(ShellRequest::HomeToggleWatched(
-                self.row_target(),
-            )))),
+            Key::Char('.') => self.open_context_menu(),
+            Key::Enter | Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(
+                Msg::Shell(Box::new(ShellRequest::HomeEnqueue(self.row_target()))),
+            ),
+            Key::Enter => self.activate_selected_row(),
+            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
+                Box::new(ShellRequest::HomeToggleWatched(self.row_target())),
+            )),
             Key::Delete => Some(Msg::Shell(Box::new(ShellRequest::HomeDelete(
                 self.row_target(),
             )))),
+            _ => None,
+        }
+    }
+
+    fn handle_navigation_key(&mut self, input: MediaListSurfaceInput) {
+        self.delegate_row_local_input(input, None);
+    }
+
+    fn open_context_menu(&mut self) -> Option<Msg> {
+        let targets = match self
+            .delegate_row_local_input(MediaListSurfaceInput::Context, None)
+            .external_intent
+        {
+            Some(RowIntent::Context(target)) => vec![self.home_row_target(Some(target))],
+            Some(RowIntent::ContextSelection(targets)) => targets
+                .into_iter()
+                .map(|target| self.home_row_target(Some(target)))
+                .collect(),
+            _ => vec![self.row_target()],
+        };
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            ContextMenuTargets::Home(targets),
+            None,
+        ))))
+    }
+
+    fn activate_selected_row(&mut self) -> Option<Msg> {
+        match self
+            .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+            .external_intent
+        {
+            Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
+                ShellRequest::HomePlay(self.home_row_target(Some(target))),
+            ))),
             _ => None,
         }
     }
