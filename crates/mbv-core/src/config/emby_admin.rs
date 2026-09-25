@@ -196,54 +196,81 @@ pub fn persist_emby_setup_and_secret(setup: &EmbySetup, token: &str) -> Result<(
 /// Remove the Emby setup and only the Emby Service secret as one practical
 /// transaction.  The caller can therefore perform the destructive in-memory
 /// cleanup only after this boundary succeeds.
-pub fn remove_emby_setup_and_secret() -> Result<(), String> {
-    let config = config_path();
-    let secret = service_secret_path(ServiceKind::Emby);
-    let snapshot = |path: &std::path::Path| match std::fs::read(path) {
+fn snapshot_for_rollback(path: &std::path::Path) -> Result<Option<Vec<u8>>, String> {
+    match std::fs::read(path) {
         Ok(bytes) => Ok(Some(bytes)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(format!("read {} for rollback: {error}", path.display())),
-    };
-    let old_config = snapshot(&config)?;
-    let old_secret = snapshot(&secret)?;
-    let restore = |path: &std::path::Path, bytes: &Option<Vec<u8>>| -> Result<(), String> {
-        match bytes {
-            Some(bytes) => {
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-                }
-                let tmp = path.with_extension("rollback.tmp");
-                std::fs::write(&tmp, bytes).map_err(|error| error.to_string())?;
-                #[cfg(unix)]
-                if path == secret {
-                    use std::os::unix::fs::PermissionsExt;
-                    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
-                        .map_err(|error| error.to_string())?;
-                }
-                std::fs::rename(tmp, path).map_err(|error| error.to_string())
+    }
+}
+
+fn restore_removed_file(
+    path: &std::path::Path,
+    secret: &std::path::Path,
+    bytes: Option<&[u8]>,
+) -> Result<(), String> {
+    match bytes {
+        Some(bytes) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
             }
-            None => match std::fs::remove_file(path) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(error.to_string()),
-            },
+            let tmp = path.with_extension("rollback.tmp");
+            std::fs::write(&tmp, bytes).map_err(|error| error.to_string())?;
+            #[cfg(unix)]
+            if path == secret {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+                    .map_err(|error| error.to_string())?;
+            }
+            std::fs::rename(tmp, path).map_err(|error| error.to_string())
         }
-    };
-    let rollback = |reason: String| {
-        let config_result = restore(&config, &old_config);
-        let secret_result = restore(&secret, &old_secret);
-        match (config_result, secret_result) {
-            (Ok(()), Ok(())) => Err(reason),
-            (config_result, secret_result) => Err(format!(
-                "{reason}; rollback failed (config={config_result:?}, secret={secret_result:?})"
-            )),
-        }
-    };
+        None => match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.to_string()),
+        },
+    }
+}
+
+fn rollback_emby_removal(
+    reason: String,
+    config: &std::path::Path,
+    secret: &std::path::Path,
+    old_config: Option<&[u8]>,
+    old_secret: Option<&[u8]>,
+) -> Result<(), String> {
+    let config_result = restore_removed_file(config, secret, old_config);
+    let secret_result = restore_removed_file(secret, secret, old_secret);
+    match (config_result, secret_result) {
+        (Ok(()), Ok(())) => Err(reason),
+        (config_result, secret_result) => Err(format!(
+            "{reason}; rollback failed (config={config_result:?}, secret={secret_result:?})"
+        )),
+    }
+}
+
+pub fn remove_emby_setup_and_secret() -> Result<(), String> {
+    let config = config_path();
+    let secret = service_secret_path(ServiceKind::Emby);
+    let old_config = snapshot_for_rollback(&config)?;
+    let old_secret = snapshot_for_rollback(&secret)?;
     if let Err(error) = clear_emby_setup_at(&config) {
-        return rollback(format!("remove Emby setup: {error}"));
+        return rollback_emby_removal(
+            format!("remove Emby setup: {error}"),
+            &config,
+            &secret,
+            old_config.as_deref(),
+            old_secret.as_deref(),
+        );
     }
     if let Err(error) = clear_service_secret_result(ServiceKind::Emby) {
-        return rollback(format!("remove Emby secret: {error}"));
+        return rollback_emby_removal(
+            format!("remove Emby secret: {error}"),
+            &config,
+            &secret,
+            old_config.as_deref(),
+            old_secret.as_deref(),
+        );
     }
     Ok(())
 }
