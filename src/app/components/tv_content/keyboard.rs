@@ -137,19 +137,10 @@ impl TvContent {
     /// context arms. `.` stays caller-specific: show-tree resolves TreeBrowser
     /// context targets while Wide uses `context_menu_request`.
     fn shared_library_effect(&mut self, key: &KeyEvent, item: Option<EmbyItem>) -> Option<Msg> {
+        if let Some(request) = Self::shared_library_item_effect(key, item) {
+            return Some(Msg::Shell(Box::new(request)));
+        }
         let request = match key.code {
-            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryPlay { item })?
-            }
-            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryEnqueue { item })?
-            }
-            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })?
-            }
-            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                item.map(|item| ShellRequest::EmbyLibraryShuffle { item })?
-            }
             Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 ShellRequest::EmbyLibraryRescan
             }
@@ -176,6 +167,23 @@ impl TvContent {
             _ => return None,
         };
         Some(Msg::Shell(Box::new(request)))
+    }
+
+    /// Shared row actions resolve against the selected library item in each TV layout.
+    fn shared_library_item_effect(key: &KeyEvent, item: Option<EmbyItem>) -> Option<ShellRequest> {
+        match key.code {
+            Key::Char('p' | 'a' | 'w' | 's') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let item = item?;
+                Some(match key.code {
+                    Key::Char('p') => ShellRequest::EmbyLibraryPlay { item },
+                    Key::Char('a') => ShellRequest::EmbyLibraryEnqueue { item },
+                    Key::Char('w') => ShellRequest::EmbyLibraryToggleWatched { item },
+                    Key::Char('s') => ShellRequest::EmbyLibraryShuffle { item },
+                    _ => return None,
+                })
+            }
+            _ => None,
+        }
     }
 
     /// Turn a resolved show activation into the shell's series-activation
