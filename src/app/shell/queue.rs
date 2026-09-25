@@ -159,7 +159,7 @@ impl Model {
         // item and projects the slot's image state. The slot only paints while
         // playback is active (idle collapse), so the projection follows the
         // same gate the card's render used.
-        if self.app.effective_playback_state().active && !self.app.visual_slot_hidden {
+        if self.app.visual_slot_shown() {
             self.app.refresh_queue_card_image();
         }
         if let Some(comp) = self.application.get_component_mut(&id) {
