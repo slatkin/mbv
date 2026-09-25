@@ -222,6 +222,13 @@ impl TvContent {
     /// `ShellRequest::TvActivate` so the shell effect targets the component
     /// selection instead of the mirrored App browse cursor.
     pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
+        // Flat Latest/Upcoming lists resolve by the selected row's stable
+        // target: the flat rows are painted newest-first, while the ordinal
+        // fallback below indexes the cursor into alphabetical order and
+        // would address the wrong row (see the narrow-Latest component test).
+        if self.flat_episode_mode() {
+            return self.selected_episode_item();
+        }
         // Resolve through the same natural/effective order used to build the
         // rail. Stable IDs normally make this equivalent to target lookup;
         // ordinal resolution also keeps malformed duplicate-ID payloads from

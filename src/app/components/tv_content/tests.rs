@@ -4,6 +4,7 @@ use crate::app::tests::make_item;
 use mbv_core::api::EmbyItem;
 
 mod episode_rows_tests;
+mod flat_latest_activation_tests;
 mod tree_panel_tests;
 mod tree_projection_tests;
 mod workspace_tests;
