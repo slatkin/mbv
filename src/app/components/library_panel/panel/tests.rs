@@ -555,6 +555,42 @@ fn wide_hero_link_click_emits_open_url_request() {
 }
 
 #[test]
+fn overlay_link_click_emits_open_url_request() {
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::new(RefCell::new(FixtureLog::default()))).with_link()),
+    );
+    panel.test_open_hero_overlay();
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    terminal
+        .draw(|f| Component::view(&mut panel, f, Rect::new(0, 0, 60, 24)))
+        .unwrap();
+    let (pane, _) = panel.test_overlay_geometry().expect("the overlay painted");
+    let point = (pane.y..pane.bottom())
+        .flat_map(|y| (pane.x..pane.right()).map(move |x| (x, y)))
+        .find(|&(x, y)| {
+            panel
+                .test_link_hits()
+                .resolve(ratatui::layout::Position::new(x, y))
+                .is_some()
+        })
+        .expect("painted IMDb link label");
+
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            point.0,
+            point.1,
+        )),
+        Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(
+            "https://imdb.test/dune".into()
+        ))))
+    );
+}
+
+#[test]
 fn overlay_area_is_the_browser_inset_list_box() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
