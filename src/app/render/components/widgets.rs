@@ -297,72 +297,36 @@ pub(in crate::app) struct PillBarWindow {
     pub(in crate::app) start: Option<usize>,
 }
 
-/// Renders `bar` into `area`, painting the canonical pill-selector row
-/// background, drawing joined angled pills with the selected choice kept on
-/// screen (with `‹`/`›` chevrons when the pills overflow), and returning the
-/// on-screen pill hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
-/// This is the sole renderer for interactive pill selectors; callers do not
-/// select appearance variants.
-pub(in crate::app) fn render_pill_bar(
-    f: &mut Frame,
-    area: Rect,
-    bar: PillBar,
-) -> (Vec<(Rect, usize)>, PillBarWindow) {
-    // `ids` runs parallel to `labels`; a mismatch would panic on the slice
-    // below, so assert the contract up front rather than fail cryptically.
-    debug_assert_eq!(
-        bar.labels.len(),
-        bar.ids.len(),
-        "render_pill_bar: labels and ids must be parallel"
-    );
-    debug_assert!(
-        bar.markers.is_empty() || bar.markers.len() == bar.labels.len(),
-        "render_pill_bar: markers must be empty or parallel to labels"
-    );
-    let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
-    if area.width == 0 || area.height == 0 {
-        return (selector_tabs, bar.window);
-    }
-    let area = Rect { height: 1, ..area };
-    // The row surface is part of the canonical shell, painted even with no
-    // pills to show (task 12.2): the row's place stays reserved (its own
-    // doc comment above), so it must still repaint its own background
-    // rather than leave whatever was underneath before this panel owned the
-    // placement. `Clear` blanks every cell's symbol first -- a bare
-    // `Block::style` only recolors a cell, it never overwrites a stale
-    // glyph.
-    f.render_widget(ratatui::widgets::Clear, area);
-    f.render_widget(
-        Block::default().style(
-            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
-        ),
-        area,
-    );
-    if bar.labels.is_empty() {
-        // Nothing painted: the retained window passes through unchanged so
-        // an empty-frame repaint (or an active Inline Search box in the
-        // row's rect) does not drop the bar's sticky position.
-        return (selector_tabs, bar.window);
-    }
-    let n = bar.labels.len();
-    let bar_w = area.width as usize;
-    let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
-    // Display width of each joined pill is "◢ label[•] ◤" = label width +
-    // optional marker width + inner padding (2) + edge glyphs (2).
-    let pill_widths: Vec<usize> = bar
-        .labels
+fn pill_widths(bar: &PillBar<'_>) -> Vec<usize> {
+    bar.labels
         .iter()
         .enumerate()
-        .map(|(idx, l)| {
-            pill_shell_width(l, bar.markers.get(idx).copied().unwrap_or(false), 1, true)
+        .map(|(idx, label)| {
+            pill_shell_width(
+                label,
+                bar.markers.get(idx).copied().unwrap_or(false),
+                1,
+                true,
+            )
         })
-        .collect();
+        .collect()
+}
 
+// Only scroll when pills overflow: keep all pills visible when they fit, and
+// retain the painted window until selection leaves it. This whole selection
+// policy stays together so painting does not alter the sticky-window behavior.
+fn pill_bar_window(
+    bar: &PillBar<'_>,
+    widths: &[usize],
+    prefix_w: usize,
+    bar_w: usize,
+) -> (usize, usize, bool, bool) {
+    let n = bar.labels.len();
     // Greedy: how many pills fit starting at `start` within `avail` columns.
     let count_fitting = |start: usize, avail: usize| -> usize {
         let mut used = 0usize;
         let mut count = 0usize;
-        for width in pill_widths.iter().skip(start) {
+        for width in widths.iter().skip(start) {
             if used + *width > avail {
                 break;
             }
@@ -371,7 +335,6 @@ pub(in crate::app) fn render_pill_bar(
         }
         count
     };
-
     // Only scroll when the pills overflow: when everything fits, paint
     // all of them from zero so moving selection never pushes visible
     // pills out. When it overflows, the window is sticky (policy on
@@ -380,106 +343,96 @@ pub(in crate::app) fn render_pill_bar(
     // visible pill stayed focused.
     // ponytail: O(n²) over a short selector row; use a sliding window only if
     // selector counts become large enough to measure.
-    let total_w: usize = prefix_w + pill_widths.iter().sum::<usize>();
-    let (scroll_start, scroll_end, has_left, has_right) = if total_w <= bar_w {
-        (0, n, false, false)
-    } else {
-        // Columns a window starting at `start` may use: the "‹ " chevron is
-        // reserved whenever the window starts past the first pill, and " ›"
-        // is always reserved while the row overflows.
-        let avail_from = |start: usize| {
-            bar_w
-                .saturating_sub(prefix_w)
-                .saturating_sub(if start > 0 { 2 } else { 0 }) // "‹ "
-                .saturating_sub(2) // reserve for " ›"
-        };
-        let window_end = |start: usize| (start + count_fitting(start, avail_from(start))).min(n);
-        // Sticky window: keep the retained start (already painted) or find
-        // the fewest-pills slide that reveals the selection. Each branch
-        // resolves `(start, end)` together so `window_end` isn't recomputed
-        // for the same `start` twice. A position past the end (no active
-        // pill) anchors at zero, exactly as before the sticky window: every
-        // painted pill renders unselected.
-        let sticky = if bar.selected_pos < n {
-            let selected = bar.selected_pos;
-            match bar.window.start {
-                Some(prev) if prev < n && selected >= prev => {
-                    let end = window_end(prev);
-                    if selected < end {
-                        Some((prev, end))
-                    } else {
-                        // Minimal slide right: the first window past the
-                        // retained start that reaches past the selection.
-                        (prev + 1..=selected).find_map(|start| {
-                            let end = window_end(start);
-                            (selected < end).then_some((start, end))
-                        })
-                    }
-                }
-                Some(prev) if prev < n => (0..=selected).rev().find_map(|start| {
+    let total_w: usize = prefix_w + widths.iter().sum::<usize>();
+    if total_w <= bar_w {
+        return (0, n, false, false);
+    }
+    // Columns a window starting at `start` may use: the "‹ " chevron is
+    // reserved whenever the window starts past the first pill, and " ›"
+    // is always reserved while the row overflows.
+    let avail_from = |start: usize| {
+        bar_w
+            .saturating_sub(prefix_w)
+            .saturating_sub(if start > 0 { 2 } else { 0 }) // "‹ "
+            .saturating_sub(2) // reserve for " ›"
+    };
+    let window_end = |start: usize| (start + count_fitting(start, avail_from(start))).min(n);
+    let sticky = sticky_pill_window(bar, n, &window_end);
+    let (scroll_start, scroll_end) =
+        sticky.unwrap_or_else(|| centered_pill_window(bar, n, &window_end));
+    (scroll_start, scroll_end, scroll_start > 0, scroll_end < n)
+}
+
+// Keep a valid retained window until selection leaves it; resolve each
+// `(start, end)` together so `window_end` isn't recomputed for the same start.
+// A position past the end (no active pill) anchors at zero, as before sticky
+// windows: every painted pill renders unselected.
+fn sticky_pill_window(
+    bar: &PillBar<'_>,
+    n: usize,
+    window_end: &impl Fn(usize) -> usize,
+) -> Option<(usize, usize)> {
+    if bar.selected_pos >= n {
+        return None;
+    }
+    let selected = bar.selected_pos;
+    match bar.window.start {
+        Some(prev) if prev < n && selected >= prev => {
+            let end = window_end(prev);
+            if selected < end {
+                Some((prev, end))
+            } else {
+                // Minimal slide right: the first window past the retained
+                // start that reaches past the selection.
+                (prev + 1..=selected).find_map(|start| {
                     let end = window_end(start);
                     (selected < end).then_some((start, end))
-                }),
-                _ => None,
-            }
-        } else {
-            None
-        };
-        let (scroll_start, scroll_end) = sticky.unwrap_or_else(|| {
-            let start = (0..=bar.selected_pos.min(n - 1))
-                .filter_map(|start| {
-                    let end = window_end(start);
-                    if end == start || bar.selected_pos >= end {
-                        return None;
-                    }
-                    Some((
-                        (bar.selected_pos - start).min(end - 1 - bar.selected_pos),
-                        start,
-                    ))
                 })
-                // Prefer the later window on a tie: with only two pills visible,
-                // moving left must put the selection at the leading edge rather than
-                // leaving it pinned to the trailing edge.
-                .max_by_key(|(edge_distance, start)| (*edge_distance, *start))
-                .map(|(_, start)| start)
-                .unwrap_or(0);
-            (start, window_end(start))
-        });
-
-        let has_left = scroll_start > 0;
-        let has_right = scroll_end < n;
-        (scroll_start, scroll_end, has_left, has_right)
-    };
-    let window = PillBarWindow {
-        start: Some(scroll_start),
-    };
-
-    let mut spans: Vec<Span> = Vec::new();
-    let mut x_cursor = area.x;
-    if let Some(prefix) = bar.prefix {
-        if prefix == "  " {
-            spans.push(Span::styled(
-                "  ",
-                Style::default()
-                    .fg(palette::STATUS_AVAILABLE)
-                    .bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
-            ));
-        } else {
-            spans.push(Span::styled(
-                prefix.to_string(),
-                Style::default().fg(palette::TEXT_METADATA),
-            ));
+            }
         }
-        x_cursor += prefix_w as u16;
+        Some(prev) if prev < n => (0..=selected).rev().find_map(|start| {
+            let end = window_end(start);
+            (selected < end).then_some((start, end))
+        }),
+        _ => None,
     }
-    if has_left {
-        let chunk = "\u{2039} ";
-        spans.push(Span::styled(
-            chunk,
-            Style::default().fg(palette::PILL_OVERFLOW_FG),
-        ));
-        x_cursor += chunk.width() as u16;
-    }
+}
+
+fn centered_pill_window(
+    bar: &PillBar<'_>,
+    n: usize,
+    window_end: &impl Fn(usize) -> usize,
+) -> (usize, usize) {
+    let start = (0..=bar.selected_pos.min(n - 1))
+        .filter_map(|start| {
+            let end = window_end(start);
+            if end == start || bar.selected_pos >= end {
+                return None;
+            }
+            Some((
+                (bar.selected_pos - start).min(end - 1 - bar.selected_pos),
+                start,
+            ))
+        })
+        // Prefer the later window on a tie: with only two pills visible,
+        // moving left must put the selection at the leading edge rather than
+        // leaving it pinned to the trailing edge.
+        .max_by_key(|(edge_distance, start)| (*edge_distance, *start))
+        .map(|(_, start)| start)
+        .unwrap_or(0);
+    (start, window_end(start))
+}
+
+fn render_visible_pills(
+    bar: &PillBar<'_>,
+    area: Rect,
+    scroll_start: usize,
+    scroll_end: usize,
+    mut x_cursor: u16,
+) -> (Vec<Span<'static>>, Vec<(Rect, usize)>, u16) {
+    let n = bar.labels.len();
+    let mut spans = Vec::new();
+    let mut selector_tabs = Vec::new();
     for (offset, (label, &id)) in bar.labels[scroll_start..scroll_end]
         .iter()
         .zip(bar.ids[scroll_start..scroll_end].iter())
@@ -536,6 +489,96 @@ pub(in crate::app) fn render_pill_bar(
         );
         x_cursor += pill_w;
     }
+    (spans, selector_tabs, x_cursor)
+}
+
+/// Renders `bar` into `area`, painting the canonical pill-selector row
+/// background, drawing joined angled pills with the selected choice kept on
+/// screen (with `‹`/`›` chevrons when the pills overflow), and returning the
+/// on-screen pill hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
+/// This is the sole renderer for interactive pill selectors; callers do not
+/// select appearance variants.
+pub(in crate::app) fn render_pill_bar(
+    f: &mut Frame,
+    area: Rect,
+    bar: PillBar,
+) -> (Vec<(Rect, usize)>, PillBarWindow) {
+    // `ids` runs parallel to `labels`; a mismatch would panic on the slice
+    // below, so assert the contract up front rather than fail cryptically.
+    debug_assert_eq!(
+        bar.labels.len(),
+        bar.ids.len(),
+        "render_pill_bar: labels and ids must be parallel"
+    );
+    debug_assert!(
+        bar.markers.is_empty() || bar.markers.len() == bar.labels.len(),
+        "render_pill_bar: markers must be empty or parallel to labels"
+    );
+    let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
+    if area.width == 0 || area.height == 0 {
+        return (selector_tabs, bar.window);
+    }
+    let area = Rect { height: 1, ..area };
+    // The row surface is part of the canonical shell, painted even with no
+    // pills to show (task 12.2): the row's place stays reserved (its own
+    // doc comment above), so it must still repaint its own background
+    // rather than leave whatever was underneath before this panel owned the
+    // placement. `Clear` blanks every cell's symbol first -- a bare
+    // `Block::style` only recolors a cell, it never overwrites a stale
+    // glyph.
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Block::default().style(
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+        ),
+        area,
+    );
+    if bar.labels.is_empty() {
+        // Nothing painted: the retained window passes through unchanged so
+        // an empty-frame repaint (or an active Inline Search box in the
+        // row's rect) does not drop the bar's sticky position.
+        return (selector_tabs, bar.window);
+    }
+    let bar_w = area.width as usize;
+    let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
+    let pill_widths = pill_widths(&bar);
+    let (scroll_start, scroll_end, has_left, has_right) =
+        pill_bar_window(&bar, &pill_widths, prefix_w, bar_w);
+    let window = PillBarWindow {
+        start: Some(scroll_start),
+    };
+
+    let mut spans: Vec<Span> = Vec::new();
+    let mut x_cursor = area.x;
+    if let Some(prefix) = bar.prefix {
+        if prefix == "  " {
+            spans.push(Span::styled(
+                "  ",
+                Style::default()
+                    .fg(palette::STATUS_AVAILABLE)
+                    .bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+            ));
+        } else {
+            spans.push(Span::styled(
+                prefix.to_string(),
+                Style::default().fg(palette::TEXT_METADATA),
+            ));
+        }
+        x_cursor += prefix_w as u16;
+    }
+    if has_left {
+        let chunk = "\u{2039} ";
+        spans.push(Span::styled(
+            chunk,
+            Style::default().fg(palette::PILL_OVERFLOW_FG),
+        ));
+        x_cursor += chunk.width() as u16;
+    }
+    let (pill_spans, pill_tabs, pill_end_x) =
+        render_visible_pills(&bar, area, scroll_start, scroll_end, x_cursor);
+    spans.extend(pill_spans);
+    selector_tabs.extend(pill_tabs);
+    x_cursor = pill_end_x;
     if has_right {
         let chunk = " \u{203a}";
         spans.push(Span::styled(
