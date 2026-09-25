@@ -352,6 +352,7 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("playlists_open", &["F4"]),
     ("clear_queue_prompt_c", &["c"]),
     ("visualizer", &["v"]),
+    ("hide_visual_slot", &["h"]),
     ("toggle_play_pause", &["Space"]),
     ("stop", &["Esc"]),
     ("seek_back", &["<"]),

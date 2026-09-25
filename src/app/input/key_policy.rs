@@ -79,6 +79,7 @@ pub(in crate::app) enum KeyPolicyBinding {
     PanelModeCycle,
     ClearQueue,
     Visualizer,
+    HideVisualSlot,
     TogglePlayPause,
     Stop,
     SeekBack,
@@ -295,6 +296,13 @@ pub(in crate::app) const KEY_POLICY: &[KeyPolicyEntry] = &[
         name: "visualizer",
         global: true,
         binding: KeyPolicyBinding::Visualizer,
+        gate: KeyPolicyGate::NoBlockingOverlay,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "hide_visual_slot",
+        global: true,
+        binding: KeyPolicyBinding::HideVisualSlot,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
     },
@@ -522,6 +530,7 @@ pub(in crate::app) fn command_for_policy(
         KeyPolicyBinding::ClearQueue => Some(Command::RequestClearQueue),
         KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
         KeyPolicyBinding::Visualizer => Some(Command::ToggleVisualizer),
+        KeyPolicyBinding::HideVisualSlot => Some(Command::ToggleVisualSlotHidden),
         // The split transport set: each action binds the fixed payload its
         // key's call site carried before the bucket split (design D2).
         KeyPolicyBinding::TogglePlayPause => Some(Command::TogglePlayPause),
