@@ -131,89 +131,137 @@ impl PlaylistsComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if self.handle_navigation(key) {
+            return Self::local_change();
+        }
+        if let Some(msg) = self.handle_back(key) {
+            return Some(msg);
+        }
+        if let Some(msg) = Self::handle_dismiss(key, self.open.is_none()) {
+            return Some(msg);
+        }
+        if let Some(msg) = Self::handle_global_command(key) {
+            return Some(msg);
+        }
+        if let Some(msg) = self.handle_open(key) {
+            return Some(msg);
+        }
+        if let Some(msg) = self.handle_activation(key) {
+            return Some(msg);
+        }
+        if let Some(msg) = self.handle_rename(key) {
+            return Some(msg);
+        }
+        if let Some(msg) = self.handle_delete(key) {
+            return Some(msg);
+        }
+        self.handle_refresh(key).or_else(Self::local_change)
+    }
+
+    fn handle_navigation(&mut self, key: &KeyEvent) -> bool {
         match key.code {
-            Key::Up => {
-                if self.open.is_some() {
-                    self.open_cursor = self.open_cursor.saturating_sub(1);
-                } else {
-                    self.cursor = self.cursor.saturating_sub(1);
-                }
+            Key::Up if self.open.is_some() => {
+                self.open_cursor = self.open_cursor.saturating_sub(1);
+            }
+            Key::Up => self.cursor = self.cursor.saturating_sub(1),
+            Key::Down if self.open.is_some() => {
+                self.open_cursor =
+                    (self.open_cursor + 1).min(self.open_items.len().saturating_sub(1));
             }
             Key::Down => {
-                if self.open.is_some() {
-                    self.open_cursor =
-                        (self.open_cursor + 1).min(self.open_items.len().saturating_sub(1));
-                } else {
-                    self.cursor = (self.cursor + 1).min(self.playlists.len().saturating_sub(1));
-                }
+                self.cursor = (self.cursor + 1).min(self.playlists.len().saturating_sub(1));
             }
             Key::PageUp => self.move_page(-1),
             Key::PageDown => self.move_page(1),
-            Key::Home => {
-                if self.open.is_some() {
-                    self.open_cursor = 0;
-                } else {
-                    self.cursor = 0;
-                }
+            Key::Home if self.open.is_some() => self.open_cursor = 0,
+            Key::Home => self.cursor = 0,
+            Key::End if self.open.is_some() => {
+                self.open_cursor = self.open_items.len().saturating_sub(1);
             }
-            Key::End => {
-                if self.open.is_some() {
-                    self.open_cursor = self.open_items.len().saturating_sub(1);
-                } else {
-                    self.cursor = self.playlists.len().saturating_sub(1);
-                }
-            }
-            Key::Left if self.open.is_some() => {
-                self.open = None;
-                self.open_items.clear();
-                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)));
-            }
-            Key::Esc | Key::Backspace | Key::Function(4) if self.open.is_some() => {
-                self.open = None;
-                self.open_items.clear();
-                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)));
-            }
-            Key::Esc | Key::Function(4) => {
-                return Some(Msg::Shell(Box::new(ShellRequest::DismissPlaylists)));
-            }
-            Key::Function(2) => return Some(Msg::Shell(Box::new(ShellRequest::OpenSettings))),
-            Key::Function(3) => return Some(Msg::Shell(Box::new(ShellRequest::OpenSessions))),
-            Key::Char('q') if key.modifiers.is_empty() => {
-                return Some(Msg::Shell(Box::new(ShellRequest::Quit)));
-            }
-            Key::Right if self.open.is_none() => {
-                return (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
-                    ShellRequest::PlaylistsOpen(self.cursor),
-                )));
-            }
-            Key::Enter => {
-                let open = self.open.is_some();
-                let index = if open { self.open_cursor } else { self.cursor };
-                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsActivate {
-                    open,
-                    index,
-                })));
-            }
-            Key::Char('n') if key.modifiers.is_empty() && self.open.is_none() => {
-                return (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
-                    ShellRequest::PlaylistsRename(self.cursor),
-                )));
-            }
-            Key::Char('d') if key.modifiers.is_empty() && self.open.is_none() => {
-                return (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
-                    ShellRequest::PlaylistsDelete(self.cursor),
-                )));
-            }
-            Key::Char('r') => {
-                if self.open.is_some() {
-                    self.open = None;
-                    self.open_items.clear();
-                }
-                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsRefresh)));
-            }
-            _ => return Self::local_change(),
+            Key::End => self.cursor = self.playlists.len().saturating_sub(1),
+            _ => return false,
         }
-        Self::local_change()
+        true
+    }
+
+    fn handle_back(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Left | Key::Esc | Key::Backspace | Key::Function(4) if self.open.is_some() => {}
+            _ => return None,
+        }
+        self.open = None;
+        self.open_items.clear();
+        Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)))
+    }
+
+    fn handle_dismiss(key: &KeyEvent, closed: bool) -> Option<Msg> {
+        match key.code {
+            Key::Esc | Key::Function(4) if closed => {
+                Some(Msg::Shell(Box::new(ShellRequest::DismissPlaylists)))
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_global_command(key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Function(2) => Some(Msg::Shell(Box::new(ShellRequest::OpenSettings))),
+            Key::Function(3) => Some(Msg::Shell(Box::new(ShellRequest::OpenSessions))),
+            Key::Char('q') if key.modifiers.is_empty() => {
+                Some(Msg::Shell(Box::new(ShellRequest::Quit)))
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_open(&self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Right if self.open.is_none() && self.cursor < self.playlists.len() => Some(
+                Msg::Shell(Box::new(ShellRequest::PlaylistsOpen(self.cursor))),
+            ),
+            _ => None,
+        }
+    }
+
+    fn handle_activation(&self, key: &KeyEvent) -> Option<Msg> {
+        if key.code != Key::Enter {
+            return None;
+        }
+        let open = self.open.is_some();
+        let index = if open { self.open_cursor } else { self.cursor };
+        Some(Msg::Shell(Box::new(ShellRequest::PlaylistsActivate {
+            open,
+            index,
+        })))
+    }
+
+    fn handle_rename(&self, key: &KeyEvent) -> Option<Msg> {
+        if key.code != Key::Char('n') || !key.modifiers.is_empty() || self.open.is_some() {
+            return None;
+        }
+        (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
+            ShellRequest::PlaylistsRename(self.cursor),
+        )))
+    }
+
+    fn handle_delete(&self, key: &KeyEvent) -> Option<Msg> {
+        if key.code != Key::Char('d') || !key.modifiers.is_empty() || self.open.is_some() {
+            return None;
+        }
+        (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
+            ShellRequest::PlaylistsDelete(self.cursor),
+        )))
+    }
+
+    fn handle_refresh(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if key.code != Key::Char('r') {
+            return None;
+        }
+        if self.open.is_some() {
+            self.open = None;
+            self.open_items.clear();
+        }
+        Some(Msg::Shell(Box::new(ShellRequest::PlaylistsRefresh)))
     }
 
     fn move_page(&mut self, direction: i64) {
