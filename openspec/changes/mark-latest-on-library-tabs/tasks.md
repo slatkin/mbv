@@ -18,4 +18,4 @@
 
 ## 4. Gate
 
-- [ ] 4.1 `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv` all pass. Manual check by the user: launch with new Emby items, and the Movies tab shows `•`.
+- [x] 4.1 `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv` all pass. Manual check by the user: launch with new Emby items, and the Movies tab shows `•`.
