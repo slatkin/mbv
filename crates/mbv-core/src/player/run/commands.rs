@@ -77,18 +77,12 @@ impl PlaybackRun {
                 self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;
             }
-            command => {
-                let _ = self.handle_simple_command(command, mpv);
-            }
+            command => self.handle_simple_command(command, mpv),
         }
         cancel_stop
     }
 
-    fn handle_simple_command(
-        &mut self,
-        cmd: PlayerCommand,
-        mpv: &Mpv,
-    ) -> Result<(), PlayerCommand> {
+    fn handle_simple_command(&mut self, cmd: PlayerCommand, mpv: &Mpv) {
         match cmd {
             PlayerCommand::NextUpShow {
                 item_id,
@@ -139,9 +133,8 @@ impl PlaybackRun {
                 let _ = mpv.command("seek", &[&seconds, mode]);
                 self.last_seek_at = Some(Instant::now());
             }
-            command => return Err(command),
+            command => log::error!(target: "player", "unhandled command {command:?}"),
         }
-        Ok(())
     }
 
     /// Explicit jump to an owner-assigned slot. Resolves the slot to this
