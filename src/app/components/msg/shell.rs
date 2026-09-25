@@ -241,7 +241,6 @@ pub enum ShellRequest {
     /// owner carries its stable target; the shell resolves the Service IDs and
     /// reuses its existing detail/season fetch guards. The mounted-tree intent
     /// is connected in task 3.1.
-    #[allow(dead_code)]
     TvTreeExpand {
         target: super::super::tv_tree_target::TvTreeTarget,
     },

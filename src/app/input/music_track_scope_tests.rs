@@ -1,20 +1,10 @@
-#![allow(dead_code, unused_imports)]
-
 use super::music_track_test_support::*;
 use super::*;
 use crate::app::components::library_panel::owner::LibraryContentOwner;
 use crate::app::components::msg::Msg;
 use crate::app::components::{ComponentId, ShellRequest};
 use crate::app::shell::Model;
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
-use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
-use ratatui::Terminal;
-use std::io::{Read, Write};
-use tuirealm::component::AppComponent;
-use tuirealm::event::{Event, Key, KeyEvent as TuiKeyEvent, KeyModifiers as TuiKeyModifiers};
+use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers as TuiKeyModifiers};
 
 /// Wide music-group fixture with `album-1`'s cached tracks.
 fn wide_track_focus_model(track_count: usize) -> (Model, ComponentId) {

@@ -355,7 +355,6 @@ impl Model {
     /// (design D2). Production callers are the per-destination conversion
     /// slices (tasks 5.11+); the test harness pushes fixture owners to prove
     /// the mount/focus/mouse/retention wiring ahead of any conversion.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn push_library_owner(
         &mut self,
         key: LibraryKey,

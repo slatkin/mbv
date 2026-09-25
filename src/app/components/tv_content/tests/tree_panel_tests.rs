@@ -1,8 +1,16 @@
 use super::*;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Position;
 use ratatui::Terminal;
 use rstest::rstest;
 use tuirealm::event::{KeyEvent, KeyModifiers};
+
+fn tree_point<Target: PartialEq>(browser: &TreeBrowser<Target>, target: &Target) -> Position {
+    (0..24)
+        .flat_map(|y| (0..80).map(move |x| Position::new(x, y)))
+        .find(|point| browser.resolve_current_point(*point) == Some(target))
+        .expect("tree target is painted in the test frame")
+}
 
 #[rstest]
 #[case::wide(120)]
@@ -341,13 +349,14 @@ fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
     terminal
         .draw(|frame| Component::view(&mut panel, frame, Rect::new(0, 0, 80, 20)))
         .unwrap();
-    let row = panel
-        .owner(&key)
-        .and_then(|owner| owner.as_any().downcast_ref::<TvContent>())
-        .unwrap()
-        .browser
-        .row_rect_for(&episode_target)
-        .unwrap();
+    let row = tree_point(
+        &panel
+            .owner(&key)
+            .and_then(|owner| owner.as_any().downcast_ref::<TvContent>())
+            .unwrap()
+            .browser,
+        &episode_target,
+    );
 
     // The expanded row remains a valid action target even if the shell's
     // selected-series projection has moved on before this event is handled.

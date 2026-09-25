@@ -1,6 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
-use super::*;
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
 struct XdgHomeGuard {

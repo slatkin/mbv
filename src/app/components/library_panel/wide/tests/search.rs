@@ -240,10 +240,7 @@ fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
         Some(&target),
         "the selection survived the transition"
     );
-    let offset = search
-        .results()
-        .current_flow_offset()
-        .expect("the narrow paint retained the row flow");
+    let offset = search.results().scroll();
     // Exact clamp (canonical-media-lists delta: the shared owner's
     // geometry-change rule): the result flow is flat — one display row per
     // pool item — and the selection is the last row, so the narrow box's

@@ -227,7 +227,6 @@ fn scrolled_completed_paint_counts_structural_rows_in_the_viewport_offset() {
     let mut tree = grouped_tree();
     tree.set_geometry(Rect::new(0, 0, 42, 2), Rect::new(0, 0, 42, 2));
     tree.apply(TreeOperation::Select(Target::Beta));
-    assert_eq!(tree.viewport_offset(), 3);
     let _terminal = draw(&mut tree, 42, 2);
 
     assert_eq!(tree.resolve_current_point(Position::new(20, 0)), None);
@@ -265,26 +264,19 @@ fn completed_paint_resolves_rows_around_structures_at_each_width(
         for (row, expected) in [(1, Target::Alpha), (4, Target::Beta), (5, Target::Gamma)] {
             let point = Position::new(width / 2, row);
             assert_eq!(tree.resolve_current_point(point), Some(&expected));
-            tree.apply(TreeOperation::PointerSelect(point));
+            tree.apply(TreeOperation::Select(expected.clone()));
             assert_eq!(tree.selected_target(), Some(&expected));
             let _terminal = draw(&mut tree, width, height);
         }
         for row in [0, 2, 3] {
             let point = Position::new(width / 2, row);
             assert_eq!(tree.resolve_current_point(point), None);
-            let selected = tree.selected_target().cloned();
-            let transition = tree.apply(TreeOperation::PointerSelect(point));
-            assert_eq!(
-                transition.disposition,
-                crate::app::components::list::tree_browser::TreeConsumed::Unhandled
-            );
-            assert_eq!(tree.selected_target().cloned(), selected);
         }
     } else {
         for (row, expected) in [(0, Target::Alpha), (1, Target::Beta), (2, Target::Gamma)] {
             let point = Position::new(width / 2, row);
             assert_eq!(tree.resolve_current_point(point), Some(&expected));
-            tree.apply(TreeOperation::PointerSelect(point));
+            tree.apply(TreeOperation::Select(expected.clone()));
             assert_eq!(tree.selected_target(), Some(&expected));
             let _terminal = draw(&mut tree, width, height);
         }

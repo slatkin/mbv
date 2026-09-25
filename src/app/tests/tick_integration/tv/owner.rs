@@ -195,11 +195,8 @@ fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
     assert!(panel(&harness).test_hero_overlay_open());
     assert!(!tv(&harness).episode_pane_focused());
     assert_eq!(
-        tv(&harness)
-            .viewport_anchor(tv(&harness).painted_viewport_height())
-            .expect("flat episode viewport anchor")
-            .selected_target,
-        "latest-episode"
+        tv(&harness).selected_item().map(|item| item.id).as_deref(),
+        Some("latest-episode")
     );
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,

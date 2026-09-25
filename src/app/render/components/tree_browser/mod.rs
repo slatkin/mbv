@@ -43,7 +43,6 @@ pub(in crate::app) fn tree_metadata_gutter_width(trailing: &str) -> usize {
         .saturating_add(TREE_METADATA_TRAILING_SPACE)
 }
 
-#[allow(dead_code)]
 pub(in crate::app) fn render_tree_browser(
     frame: &mut Frame,
     claim_rect: Rect,
@@ -175,7 +174,6 @@ pub(in crate::app) fn render_tree_browser(
     }
 }
 
-#[allow(dead_code)]
 fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
     // Directly marked rows paint the full-width bar and never reach this
     // role; aggregate states keep their own title roles (design D5).

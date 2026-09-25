@@ -38,7 +38,6 @@ pub enum TreeMarkPolicy {
 
 /// Plain destination input for one tree projection. Structural rows are
 /// positioned among root groups and are never tree nodes.
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TreeEntry<Target> {
     Node(TreeNode<Target>),
@@ -137,7 +136,6 @@ pub struct TreeMarkSummary {
 /// Closed semantic operation vocabulary.  Behaviour is implemented by the
 /// owner in the operations unit; keeping the vocabulary here prevents a
 /// destination from inventing a second mutation surface.
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TreeOperation<Target> {
     Move(i64),
@@ -145,11 +143,9 @@ pub enum TreeOperation<Target> {
     First,
     Last,
     Parent,
-    Child,
     /// Expand the selected node, or activate an already-expanded root.
     /// Expanded descendants consume Right without collapsing or activating.
     Right,
-    ToggleExpansion,
     /// Toggle one node's persistent expansion without changing selection.
     /// A target with neither loaded children nor declared expandability is
     /// an explicit `Unhandled` result.
@@ -163,14 +159,9 @@ pub enum TreeOperation<Target> {
         flow_offset: usize,
     },
     Select(Target),
-    ToggleMark,
-    ToggleMarkTarget(Target),
-    PointerSelect(Position),
     PointerToggleMark(Position),
     Activate,
-    ActivateTarget(Target),
     Context,
-    ContextTarget(Target),
     EditFilter(String),
     ClearFilter,
     /// Clear the ordered mark set.

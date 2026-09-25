@@ -1,7 +1,5 @@
 use super::*;
 pub use super::*;
-#[allow(unused_imports)]
-use std::time::{SystemTime, UNIX_EPOCH};
 
 mod keybinds;
 mod library;
@@ -11,6 +9,7 @@ mod settings;
 pub use paths_env::SYS_ENV_LOCK;
 mod credentials;
 mod emby_admin;
+#[cfg(test)]
 mod launch_state;
 mod paths_migration;
 mod script_source;

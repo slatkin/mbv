@@ -130,27 +130,26 @@ impl FeedsContent {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier.cursor()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
         self.watched_filter
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn selected_group(&self) -> usize {
         self.selected_group
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn latest_selected(&self) -> bool {
         self.latest_selected
     }
@@ -163,7 +162,7 @@ impl FeedsContent {
         1 + self.subscriptions.len()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
         self.visible_entries
             .iter()
@@ -171,7 +170,7 @@ impl FeedsContent {
             .collect()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn subscription_names(&self) -> Vec<&str> {
         self.subscriptions
             .iter()

@@ -352,7 +352,7 @@ mod wide_hero_hero_pane_tests {
             cell.bg,
             palette::surface_colors(palette::Surface::HeroPane, false).fill
         );
-        assert_ne!(cell.bg, palette::resolve_surface_focus(true));
+        assert_ne!(cell.bg, palette::SURFACE_FOCUSED);
     }
 
     #[test]

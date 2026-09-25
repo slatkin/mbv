@@ -40,7 +40,7 @@ fn direct_terminal(mut draw: impl FnMut(&mut ratatui::Frame)) -> Terminal<TestBa
 }
 
 /// TV already routes through `wide_library_panes(area, PANE_PAD_X,
-/// PANE_PAD_Y)` and `resolve_surface_focus` -- the one destination the
+/// PANE_PAD_Y)` and the shared surface resolver -- the one destination the
 /// standardization leaves visually unchanged (task 3.2). Task 8.4 hosts the
 /// owner in the mounted panel.
 #[test]

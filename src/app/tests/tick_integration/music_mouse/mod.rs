@@ -1,4 +1,5 @@
 use ratatui::backend::TestBackend;
+use ratatui::layout::Position;
 use ratatui::Terminal;
 use rstest::rstest;
 use tuirealm::event::{
@@ -132,11 +133,22 @@ fn cached_track(id: &str, number: i64) -> mbv_core::api::EmbyItem {
 /// frame through the shared read-only stable-target row geometry.
 fn tree_node_point(harness: &TickHarness, target: &MusicTreeTarget) -> (u16, u16) {
     let music = harness.model().test_music_owner();
-    let row = music
-        .browser
-        .row_rect_for(target)
+    let list_area = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.test_list_rect())
+        .expect("painted tree list area");
+    let point = (list_area.y..list_area.bottom())
+        .flat_map(|y| (list_area.x..list_area.right()).map(move |x| Position::new(x, y)))
+        .find(|point| music.browser.resolve_current_point(*point) == Some(target))
         .expect("painted tree row");
-    (row.x, row.y)
+    (point.x, point.y)
 }
 
 /// Whether the shared confirm modal is mounted in the current composition.

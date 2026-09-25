@@ -42,6 +42,7 @@ pub(in crate::app) fn render_narrow_skeleton(
     );
     WideSkeletonGeometry {
         browser: area,
+        #[cfg(test)]
         selector_bar: browser.selector_bar,
         list_panel: browser.list_panel,
         list_area: browser.list_area,

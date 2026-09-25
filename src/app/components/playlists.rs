@@ -117,11 +117,11 @@ impl PlaylistsComponent {
         self.panel_area = area;
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn cursor(&self) -> usize {
         self.cursor
     }
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn open_cursor(&self) -> usize {
         self.open_cursor
     }

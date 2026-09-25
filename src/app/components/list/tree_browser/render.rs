@@ -36,7 +36,6 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
         self.paint.store_completed(
             claim_rect,
             content_rect,
-            self.viewport_offset,
             self.retained_rows(&visible_rows, claim_rect, content_rect),
             selected_row,
         );

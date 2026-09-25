@@ -43,7 +43,7 @@ fn test_three_line_short_height_never_publishes_partial_cards(
 }
 
 #[test]
-fn test_three_line_buffer_selection_stripes_hits_and_gap() {
+fn test_three_line_buffer_selection_stripes_and_hits() {
     let mut list = ThreeLineFlatList::new(1);
     list.set_content((0..5).map(item).collect());
     list.set_focused(true);
@@ -65,16 +65,6 @@ fn test_three_line_buffer_selection_stripes_hits_and_gap() {
     for y in 4..=6 {
         assert_eq!(list.resolve_point(Position { x: 1, y }), Some(&1));
     }
-
-    list.set_gap(2);
-    assert_eq!(list.resolve_point(Position { x: 1, y: 4 }), None);
-    terminal
-        .draw(|frame| list.view(frame, Rect::new(0, 0, 12, 7)))
-        .unwrap();
-    for y in 0..=2 {
-        assert_eq!(list.resolve_point(Position { x: 1, y }), Some(&1));
-    }
-    assert_eq!(list.resolve_point(Position { x: 1, y: 3 }), None);
 }
 
 #[test]

@@ -6,7 +6,6 @@ use super::*;
 // scratch directories (uuid-qualified, removed on drop), so no test
 // touches env overrides, the real state dir, or a sibling test's files.
 
-#[allow(dead_code)]
 fn launch_state_sample() -> TuiLaunchState {
     TuiLaunchState {
         version: TUI_LAUNCH_STATE_VERSION,
@@ -24,7 +23,6 @@ fn launch_state_sample() -> TuiLaunchState {
     }
 }
 
-#[allow(dead_code)]
 fn launch_state_queue_focus_sample() -> TuiLaunchState {
     TuiLaunchState {
         version: TUI_LAUNCH_STATE_VERSION,

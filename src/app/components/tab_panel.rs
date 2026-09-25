@@ -60,7 +60,7 @@ impl TabPanel {
     }
 
     /// The hit regions retained from the last paint (test accessor).
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn hit_regions(&self) -> &[(Rect, usize)] {
         &self.hits
     }

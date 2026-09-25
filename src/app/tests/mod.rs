@@ -281,7 +281,9 @@ pub(crate) fn make_app_stub() -> App {
         visualizer: None,
         visualizer_window: Default::default(),
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
+        #[cfg(test)]
         marquee_text: String::new(),
+        #[cfg(test)]
         marquee_started_at: std::time::Instant::now(),
         sessions: Vec::new(),
         cast_receivers: Vec::new(),

@@ -5,13 +5,12 @@
 //! retained-geometry reads — while typed target resolution stays on the
 //! carrier's own surface, so no per-destination `ListSlot` arm can grow.
 
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 use ratatui::Frame;
 use std::hash::Hash;
 use tuirealm::component::Component;
 
 use crate::app::components::inline_search::InlineSearch;
-use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
 use crate::app::palette::{self, Surface};
 
@@ -30,10 +29,6 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
         // The carrier's own viewport clamp (no same-named inherent pair, so
         // no recursion ambiguity to dodge).
         self.clamp_viewport(viewport_height);
-    }
-
-    fn clear_selection(&mut self) {
-        self.clear_owner_selection();
     }
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
@@ -73,10 +68,6 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
     fn selected_row_rect(&self) -> Option<Rect> {
         self.current_selected_row_rect()
     }
-
-    fn claims_point(&self, point: Position) -> bool {
-        self.claims_current_point(point)
-    }
 }
 
 /// The complete shared tree owner uses the same erased PanelList surface as
@@ -88,10 +79,6 @@ impl<Target: Clone + Eq + Hash> PanelList
 {
     fn clamp_viewport(&mut self, viewport_height: usize) {
         self.clamp_viewport_to(viewport_height);
-    }
-
-    fn clear_selection(&mut self) {
-        self.apply(TreeOperation::ClearMarks);
     }
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
@@ -115,10 +102,6 @@ impl<Target: Clone + Eq + Hash> PanelList
         self.selected_row_rect()
     }
 
-    fn claims_point(&self, point: Position) -> bool {
-        self.claims_current_point(point)
-    }
-
     fn search_bar(&self) -> Option<(String, bool)> {
         self.search_bar()
     }
@@ -132,10 +115,6 @@ impl<Target: Clone + Eq + Hash> PanelList
 impl PanelList for InlineSearch {
     fn clamp_viewport(&mut self, viewport_height: usize) {
         PanelList::clamp_viewport(self.results_mut(), viewport_height);
-    }
-
-    fn clear_selection(&mut self) {
-        PanelList::clear_selection(self.results_mut());
     }
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
@@ -153,10 +132,6 @@ impl PanelList for InlineSearch {
     fn selected_row_rect(&self) -> Option<Rect> {
         PanelList::selected_row_rect(self.results())
     }
-
-    fn claims_point(&self, point: Position) -> bool {
-        PanelList::claims_point(self.results(), point)
-    }
 }
 
 #[cfg(test)]
@@ -165,7 +140,7 @@ mod panel_list_tests {
     use super::*;
     use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use ratatui::backend::TestBackend;
-    use ratatui::layout::Rect;
+    use ratatui::layout::{Position, Rect};
     use ratatui::Terminal;
 
     fn item(target: &str) -> MediaListRow<String> {
@@ -224,7 +199,7 @@ mod panel_list_tests {
             })
             .unwrap();
 
-        assert!(PanelList::claims_point(&tree, Position::new(2, 0)));
+        assert!(tree.claims_current_point(Position::new(2, 0)));
         assert_eq!(
             tree.resolve_current_point(Position::new(2, 0)),
             Some(&TreeTarget::Root)
@@ -366,7 +341,7 @@ mod panel_list_tests {
                 PanelList::view(&mut carrier, f, list_rect);
             })
             .unwrap();
-        let wide_offset = carrier.wide().current_flow_offset().expect("wide painted");
+        let wide_offset = carrier.scroll();
         let wide_selected = carrier.selected_target().cloned();
 
         // The panel keeps the same fixed-row owner while geometry changes.
@@ -388,7 +363,7 @@ mod panel_list_tests {
             })
             .unwrap();
         assert_eq!(
-            carrier.wide().current_flow_offset(),
+            Some(carrier.scroll()),
             Some(wide_offset),
             "the re-anchored offset survives the panel-driven transition"
         );

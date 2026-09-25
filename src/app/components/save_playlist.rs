@@ -35,7 +35,7 @@ impl SavePlaylistComponent {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn set_content(&mut self, input: String, rename: bool) {
         self.input = input;
         self.rename = rename;

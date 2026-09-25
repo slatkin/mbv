@@ -50,7 +50,6 @@ pub(in crate::app) struct RouterSnapshot {
 pub(in crate::app) struct KeyPolicyEntry {
     /// Human-readable row label for the policy table; only the tests below
     /// read it, so silence dead-code just where the tests are compiled out.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub name: &'static str,
     /// Whether the central router (UiRoot) owns the binding.
     pub global: bool,

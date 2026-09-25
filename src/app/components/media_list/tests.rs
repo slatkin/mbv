@@ -1,6 +1,6 @@
 use super::{
     MediaKind, MediaList, MediaListCarrier, MediaListRow, MediaListTitleReveal, MediaSemanticState,
-    ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
+    WideMediaList, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -40,7 +40,6 @@ fn wide_list_maps_structural_rows_and_clamps_viewport() {
     ]);
     list.select_last();
     assert_eq!(list.resolve_viewport(3).offset, 3);
-    assert_eq!(list.selected_row_offset(3), Some(2));
     paint(&mut list, Rect::new(2, 5, 10, 3));
     assert_eq!(
         list.resolve_current_point(Position { x: 4, y: 5 }),
@@ -118,14 +117,14 @@ fn fixed_row_owner_survives_wide_narrow_wide_geometry_changes() {
     // viewport clamps on view; no presentation-specific state is transferred.
     carrier.clamp_viewport(3);
     paint(carrier.wide_mut(), Rect::new(0, 0, 20, 3));
-    let narrow_offset = carrier.wide().current_flow_offset().unwrap();
+    let narrow_offset = carrier.scroll();
     assert_eq!(carrier.selected_target(), target.as_ref());
     assert!(narrow_offset <= 5);
 
     carrier.clamp_viewport(7);
     paint(carrier.wide_mut(), Rect::new(0, 0, 20, 7));
     assert_eq!(carrier.selected_target(), target.as_ref());
-    assert!(carrier.wide().current_flow_offset().unwrap() <= narrow_offset);
+    assert!(carrier.scroll() <= narrow_offset);
 }
 
 #[test]
@@ -143,20 +142,6 @@ fn title_reveal_defaults_to_always_and_survives_a_content_refresh() {
         MediaListTitleReveal::OnSelection,
         "an ordinary refresh keeps the list's declared policy"
     );
-}
-
-#[test]
-fn explicit_anchor_clamps_without_changing_fixed_row_owner() {
-    let mut list = WideMediaList::new();
-    list.set_content((0..6).map(|i| item(&i.to_string())).collect());
-    list.select_target(&"3".to_string());
-    let anchor = ViewportAnchor {
-        selected_target: "3".to_string(),
-        selected_row_offset: 5,
-    };
-    list.apply_viewport_anchor(&anchor, 2);
-    assert_eq!(list.selected_target(), Some(&"3".to_string()));
-    assert_eq!(list.resolve_viewport(2).offset, 2);
 }
 
 #[test]

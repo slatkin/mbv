@@ -23,27 +23,18 @@ pub mod panel_list;
 pub mod slots;
 pub mod wide;
 
-#[allow(unused_imports)]
+#[cfg(test)]
+pub(in crate::app) use content::HeroLink;
 pub(in crate::app) use content::{
-    ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroCredit, HeroFacts, HeroHeader,
-    HeroImageState, HeroLink, LibraryPanelContent, ListSlot, PanelHeroImagePaint, PanelList,
-    SelectorRow, Workspace,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroImageState, LibraryPanelContent,
+    ListSlot, PanelHeroImagePaint, SelectorRow, Workspace,
 };
-#[allow(unused_imports)]
-pub(in crate::app) use hero::{
-    emby_artwork_policy, hero_content_abs_book, hero_content_abs_episode, hero_content_emby,
-    hero_content_feed, hero_content_music_album, hero_content_queue, HeroContentData,
-};
-#[allow(unused_imports)]
+pub(in crate::app) use hero::{hero_content_emby, HeroContentData};
+#[cfg(test)]
 pub(in crate::app) use narrow::render_narrow_skeleton;
-#[allow(unused_imports)]
 pub(in crate::app) use overview_box::sanitize_url;
 pub(in crate::app) use owner::{LibraryContentOwner, LibrarySlotEvent};
-#[allow(unused_imports)]
 pub use owner::{LibraryKey, LibraryKind};
-#[allow(unused_imports)]
 pub(in crate::app) use panel::LibraryPanel;
-#[allow(unused_imports)]
-pub(in crate::app) use slots::{paint_pill_row_gap, paint_selector_row};
-#[allow(unused_imports)]
-pub(in crate::app) use wide::{render_wide_skeleton, SkeletonHits, WideSkeletonGeometry};
+#[cfg(test)]
+pub(in crate::app) use wide::WideSkeletonGeometry;

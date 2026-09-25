@@ -20,17 +20,21 @@ fn apply_owns_clamped_tree_navigation_and_parent_child_traversal() {
             .selected_target,
         Some(Target::Root)
     );
-    browser.apply(super::super::TreeOperation::ToggleExpansion);
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Root,
+    ));
     assert_eq!(
         browser
-            .apply(super::super::TreeOperation::Child)
+            .apply(super::super::TreeOperation::Select(Target::Branch))
             .selected_target,
         Some(Target::Branch)
     );
-    browser.apply(super::super::TreeOperation::ToggleExpansion);
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Branch,
+    ));
     assert_eq!(
         browser
-            .apply(super::super::TreeOperation::Child)
+            .apply(super::super::TreeOperation::Select(Target::Leaf))
             .selected_target,
         Some(Target::Leaf)
     );
@@ -42,7 +46,7 @@ fn apply_owns_clamped_tree_navigation_and_parent_child_traversal() {
     );
     browser.apply(super::super::TreeOperation::Last);
     assert_eq!(browser.selected_target(), Some(&Target::Other));
-    assert!(browser.viewport_offset() <= 2);
+    assert!(browser.viewport_offset <= 2);
 }
 
 #[test]
@@ -63,7 +67,7 @@ fn anchor_selection_counts_all_levels_in_the_settled_flow() {
     });
 
     assert_eq!(browser.selected_target(), Some(&Target::Leaf));
-    assert_eq!(browser.viewport_offset(), 2);
+    assert_eq!(browser.viewport_offset, 2);
     assert_eq!(
         browser.visible_targets(),
         vec![Target::Root, Target::Branch, Target::Leaf, Target::Other]
@@ -98,11 +102,13 @@ fn filter_matching_forces_visibility_without_persisting_expansion_and_restores_a
             ),
         ])
         .unwrap();
-    browser.apply(super::super::TreeOperation::ToggleExpansion);
-    browser.apply(super::super::TreeOperation::Child);
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Root,
+    ));
+    browser.apply(super::super::TreeOperation::Select(Target::Branch));
     let anchor = browser.selected_target().cloned();
     browser.apply(super::super::TreeOperation::EditFilter("track".into()));
-    assert_eq!(browser.filter_query(), "track");
+    assert_eq!(browser.filter_query, "track");
     assert!(browser.is_expanded(&Target::Root));
     assert!(!browser.is_expanded(&Target::Branch));
     assert!(browser
@@ -114,37 +120,11 @@ fn filter_matching_forces_visibility_without_persisting_expansion_and_restores_a
 }
 
 #[test]
-fn marking_filter_hidden_target_reconciles_selection_to_visible_row() {
-    let mut browser = TreeBrowser::new();
-    browser
-        .reconcile([
-            named_node(
-                Target::Root,
-                None,
-                "Visible",
-                "visible",
-                TreeMarkPolicy::Direct,
-            ),
-            named_node(
-                Target::Other,
-                None,
-                "Hidden",
-                "hidden",
-                TreeMarkPolicy::Direct,
-            ),
-        ])
-        .unwrap();
-
-    browser.apply(super::super::TreeOperation::EditFilter("visible".into()));
-    let transition = browser.apply(super::super::TreeOperation::ToggleMarkTarget(Target::Other));
-
-    assert_eq!(browser.marked_targets(), &[Target::Other]);
-    assert_eq!(transition.selected_target, Some(Target::Root));
-    assert_eq!(browser.selected_target(), Some(&Target::Root));
-}
-
-#[test]
 fn marks_aggregate_and_context_use_visible_display_order() {
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
+
     let mut browser = TreeBrowser::new();
     browser
         .reconcile([
@@ -178,12 +158,26 @@ fn marks_aggregate_and_context_use_visible_display_order() {
             ),
         ])
         .unwrap();
-    browser.apply(super::super::TreeOperation::ToggleExpansion);
-    browser.apply(super::super::TreeOperation::Select(Target::Leaf));
-    let transition = browser.apply(super::super::TreeOperation::ToggleMark);
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Root,
+    ));
+    let paint_rows = |browser: &mut TreeBrowser<Target>| {
+        let mut terminal = Terminal::new(TestBackend::new(20, 4)).unwrap();
+        terminal
+            .draw(|frame| Component::view(browser, frame, Rect::new(1, 0, 18, 4)))
+            .unwrap();
+    };
+
+    paint_rows(&mut browser);
+    let transition = browser.apply(super::super::TreeOperation::PointerToggleMark(
+        Position::new(2, 2),
+    ));
     assert_eq!(transition.mark_summary.unwrap().marked_count, 1);
     browser.apply(super::super::TreeOperation::Select(Target::Other));
-    browser.apply(super::super::TreeOperation::ToggleMark);
+    paint_rows(&mut browser);
+    browser.apply(super::super::TreeOperation::PointerToggleMark(
+        Position::new(2, 3),
+    ));
     let context = browser.apply(super::super::TreeOperation::Context);
     assert_eq!(
         context.external_intent,
@@ -193,20 +187,19 @@ fn marks_aggregate_and_context_use_visible_display_order() {
         ]))
     );
     browser.apply(super::super::TreeOperation::Select(Target::Root));
-    browser.apply(super::super::TreeOperation::ToggleMark);
+    paint_rows(&mut browser);
+    browser.apply(super::super::TreeOperation::PointerToggleMark(
+        Position::new(2, 0),
+    ));
     assert_eq!(browser.marked_targets(), &[Target::Other]);
-    assert_eq!(
-        browser
-            .apply(super::super::TreeOperation::ToggleMarkTarget(
-                Target::Branch
-            ))
-            .disposition,
-        super::super::TreeConsumed::Unhandled
-    );
 }
 
 #[test]
 fn one_operation_reports_selection_and_mark_changes_together() {
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
+
     let mut browser = TreeBrowser::new();
     browser
         .reconcile([
@@ -220,8 +213,14 @@ fn one_operation_reports_selection_and_mark_changes_together() {
             ),
         ])
         .unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(20, 2)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut browser, frame, Rect::new(1, 0, 18, 2)))
+        .unwrap();
 
-    let transition = browser.apply(super::super::TreeOperation::ToggleMarkTarget(Target::Other));
+    let transition = browser.apply(super::super::TreeOperation::PointerToggleMark(
+        Position::new(2, 1),
+    ));
     assert_eq!(transition.disposition, super::super::TreeConsumed::Consumed);
     assert_eq!(transition.selected_target, Some(Target::Other));
     assert!(transition.selected_target_change.is_some());

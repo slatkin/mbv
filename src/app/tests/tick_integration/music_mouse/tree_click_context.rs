@@ -27,8 +27,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
             .first()
             .expect("tree root")
             .clone();
-        let row = music.browser.row_rect_for(&root).expect("painted tree row");
-        (row.x, row.y)
+        tree_node_point(&harness, &root)
     };
     let click = |column, row| {
         Event::Mouse(MouseEvent {
@@ -180,8 +179,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
                 .into_iter()
                 .find(|candidate| candidate.album_leaf_target() == target)
                 .expect("painted tree node");
-            let row = music.browser.row_rect_for(&node).expect("painted tree row");
-            (row.x, row.y)
+            tree_node_point(&harness, &node)
         };
         (point_for(None), point_for(Some("album-1")))
     };

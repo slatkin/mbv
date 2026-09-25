@@ -1,7 +1,7 @@
 //! Grouped Music tree-owner content and selection contracts: the projected
 //! row/label/hero content, and the selection-summary state the owner reports.
 
-use super::tree_fixtures::{find, tree_owner, tree_owner_with_tracks};
+use super::tree_fixtures::{find, paint_tree, tree_owner, tree_owner_with_tracks, tree_point};
 use super::*;
 use crate::app::components::music_content::workspace::build_track_rows;
 
@@ -155,9 +155,9 @@ fn clearing_grouped_music_marks_removes_the_selection_summary() {
     owner.expand_all_tree_roots();
     let album = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
 
-    owner
-        .browser
-        .apply(TreeOperation::ToggleMarkTarget(album.clone()));
+    paint_tree(&mut owner, Rect::new(0, 0, 40, 10));
+    let point = tree_point(&owner, &album);
+    owner.browser.apply(TreeOperation::PointerToggleMark(point));
     assert_eq!(
         owner.selection_summary().map(|summary| summary.count),
         Some(1)

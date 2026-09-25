@@ -44,26 +44,6 @@ pub const SURFACE_RESTING: Color = Palette::Storm.color(); // resting-content / 
 /// two are equal today and independently editable, so a scrollbar edit
 /// moves the scrollbar alone.
 pub const SURFACE_SIDEBAR: Color = Palette::Green2.color();
-// Transitional: retired from production by task 4.2 (`SURFACE_PLAYBACK` was
-// `SURFACE_RESTING`'s value alias); the name stays reachable only because the
-// frozen `render/tests.rs` pins it, which the neutrality rule forbids editing.
-#[cfg(test)]
-#[allow(dead_code)]
-pub const SURFACE_PLAYBACK: Color = Palette::Storm.color(); // now-playing-strip half
-                                                            // Transitional: retired from production by task 4.2 (`SURFACE_ACCENT_SOFT`'s
-                                                            // value duplicated `SCROLLBAR`'s; the soft variant resolves through the soft
-                                                            // content-body value, `Palette::Green2`, now); the name stays reachable only
-                                                            // because three frozen test files pin it, which the neutrality rule forbids
-                                                            // editing.
-#[cfg(test)]
-#[allow(dead_code)]
-pub const SURFACE_ACCENT_SOFT: Color = Palette::Green2.color();
-// Transitional: retired from production by task 4.2 (`SURFACE_ARTWORK_PLACEHOLDER`
-// was `SURFACE_BACKDROP`'s value alias); the name stays reachable only because
-// the frozen `artwork_placeholder_tests.rs` pins it.
-#[cfg(test)]
-#[allow(dead_code)]
-pub const SURFACE_ARTWORK_PLACEHOLDER: Color = Palette::Slate.color();
 
 // Hero surfaces
 pub const HERO_OVERVIEW_SEPARATOR: Color = Palette::Iris.color(); // overview/credits separator
@@ -106,10 +86,6 @@ pub const TEXT_STRONG: Color = Palette::White.color(); // bold titles/headings
 pub const TEXT_EMPHASIS: Color = Palette::Cream.color(); // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = Palette::Yellow.color(); // focused-row title accent
 pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title (the first metadata line)
-/// Legacy Grouped Music header role, retained in the palette contract. The
-/// shared tree painter now uses destination-supplied `TreeTitleRole`s.
-#[allow(dead_code)]
-pub const MUSIC_HEADER: Color = Palette::Cream.color();
 /// The Workspace box's header label (`TRACKLIST`) in a music album Hero. Its
 /// own role rather than `MUSIC_HEADER`, the music tree's artist/section role
 /// it used to borrow: this one row reads as a label, not as the tree's
@@ -264,25 +240,3 @@ pub const SCROLLBAR: Color = Palette::Green2.color();
 /// against them — equal today and independently editable, so a dim-text
 /// edit moves dim text alone.
 pub const SIDEBAR_SCROLLBAR: Color = Palette::Grey2.color();
-
-/// The central focus lever (design decision 8). Every panel and component
-/// resolves its focused/unfocused surface through this single function
-/// instead of naming `SURFACE_FOCUSED`/`SURFACE_RESTING` at the call site.
-///
-/// `focused` is the caller's two-input focus model already collapsed to one
-/// bool: the existing `PanelFocus` (which panel is focused) for
-/// inline screens with one focusable region, or `PanelFocus` combined
-/// with a pane bit (`left_focused`) for Wide hero screens with two.
-// Transitional: `resolve_surface_focus` is the value-aliased resolver the
-// surface table replaced; every production caller was migrated, but the
-// frozen pre-existing tests still name it (the neutrality rule forbids
-// editing them), so it stays as a test-fed re-export.
-#[cfg(test)]
-#[allow(dead_code)]
-pub fn resolve_surface_focus(focused: bool) -> Color {
-    if focused {
-        SURFACE_FOCUSED
-    } else {
-        SURFACE_RESTING
-    }
-}

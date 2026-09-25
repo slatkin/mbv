@@ -22,7 +22,7 @@ use super::library_panel::{
 use super::list::tree_browser::{TreeBrowser, TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTrailing, MediaSemanticState, RowIntent, ViewportAnchor,
+    MediaListTrailing, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::tv_tree_target::TvTreeTarget;
@@ -315,7 +315,7 @@ impl TvContent {
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.context.focused = focused;
     }
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier.cursor()
     }
@@ -337,13 +337,6 @@ impl TvContent {
             })
             .unwrap_or(0)
     }
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(in crate::app) fn viewport_anchor(
-        &self,
-        viewport_height: usize,
-    ) -> Option<ViewportAnchor<String>> {
-        self.carrier.viewport_anchor(viewport_height)
-    }
     /// The painted item-row height the owner's pagination strides by: the
     /// active presentation's retained content rect from the last frame the
     /// panel viewed it (ADR 0024: the owner reads only geometry it helped
@@ -359,17 +352,12 @@ impl TvContent {
             painted
         }
     }
-    /// The scroll offset the component tracks for its series list.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(in crate::app) fn scroll(&self) -> usize {
-        self.carrier.scroll()
-    }
     #[cfg(test)]
     pub(crate) fn selected_tree_target(&self) -> Option<&TvTreeTarget> {
         self.browser.selected_target()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         let target = self.carrier.selected_target()?;
         self.context

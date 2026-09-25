@@ -7,6 +7,7 @@
 //! model directly into the mounted target via
 //! `get_component_mut`+downcast (design D5).
 
+#[cfg(test)]
 use std::time::Instant;
 
 /// TuiRealm user-event type (design D5). `Application` requires `UserEvent:
@@ -14,6 +15,6 @@ use std::time::Instant;
 /// aids diagnostics. `Clock` reuses `std::time::Instant` (which is `Eq`).
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum UserEvent {
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     Clock(Instant),
 }

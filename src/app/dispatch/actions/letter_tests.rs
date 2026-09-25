@@ -1,46 +1,11 @@
-#![allow(dead_code, unused_imports)]
 use crate::app::state::types::browse::BrowseResting;
 
-use super::*;
-use crate::app::dispatch::library::browse::{
-    build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
-};
+use crate::app::dispatch::library::browse::full_library_fetch_limit;
 use crate::app::tests::{make_app_stub, make_item, make_items};
-use crate::app::{
-    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
-};
-use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::player::PlayerEvent;
+use crate::app::{BrowseLevel, LibraryTab};
+use mbv_core::api::EmbyItem;
 use rstest::rstest;
-use std::collections::HashMap;
-use std::sync::mpsc;
 
-fn folder(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "Folder");
-    item.id = id.into();
-    item.is_folder = true;
-    item
-}
-
-fn album(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "MusicAlbum");
-    item.id = id.into();
-    item.is_folder = true;
-    item.media_type = "Audio".into();
-    item
-}
-
-fn recursive_music_app() -> App {
-    let mut app = make_app_stub();
-    app.music_levels = vec!["group".into(), "artist".into(), "album".into()];
-    let mut library = make_item("Music", "CollectionFolder");
-    library.id = "music-lib".into();
-    library.collection_type = "music".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app
-}
 fn lib_tab(collection_type: &str) -> LibraryTab {
     let mut library = make_item("Lib", "CollectionFolder");
     library.id = "lib-1".into();

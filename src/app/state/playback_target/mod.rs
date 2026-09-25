@@ -132,6 +132,7 @@ impl App {
     /// poll after the user pauses remotely). For pos-advancing clients that
     /// always report `IsPaused=true` (some Emby Web builds), the
     /// position-advance observation each poll keeps this returning false.
+    #[cfg(test)]
     pub(in crate::app) fn playback_transport_paused(&self) -> bool {
         // Same rule as `effective_playback_state`: an idle receiver's status
         // says nothing about the media actually playing; only an engaged cast

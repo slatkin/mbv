@@ -15,11 +15,7 @@ fn track_point(harness: &TickHarness, track: &str) -> (u16, u16) {
                     if album == "album-1" && track_target == track)
         })
         .expect("painted track node");
-    let row = music
-        .browser
-        .row_rect_for(&node)
-        .expect("painted track row");
-    (row.x, row.y)
+    tree_node_point(harness, &node)
 }
 
 /// Rows 5.2/5.3 end to end through the mounted composition: the tree's track

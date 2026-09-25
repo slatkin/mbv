@@ -43,7 +43,7 @@ fn test_three_line_visible_item_capacity(#[case] height: u16, #[case] expected: 
 }
 
 #[test]
-fn test_three_line_paint_invalidation_and_gap_preserve_selection() {
+fn test_three_line_paint_invalidation_preserves_selection() {
     let mut list = ThreeLineFlatList::new(1);
     list.set_content(vec![item(1), item(2), item(3)]);
     let area = ratatui::layout::Rect::new(0, 0, 12, 7);
@@ -66,9 +66,6 @@ fn test_three_line_paint_invalidation_and_gap_preserve_selection() {
         vec![(ratatui::layout::Rect::new(0, 0, 12, 3), 1)],
         None,
     );
-
-    list.set_gap(2);
-    assert_eq!(list.resolve_point(Position { x: 2, y: 0 }), None);
     assert_eq!(list.selected_target(), Some(&1));
-    assert_eq!(list.painting_parts(area).1, 1);
+    assert_eq!(list.painting_parts(area).1, 2);
 }

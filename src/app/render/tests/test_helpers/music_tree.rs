@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
 //! Shared Grouped Music tree fixtures: the stable-target constructors, the
 //! plain fixture forests, the transition-surface shorthands, and the
 //! buffer/state readers every Music tree contract test paints through.
@@ -7,8 +5,6 @@
 //! transitions, retained geometry, and rendered output.
 
 use super::super::*;
-use super::draw_mounted_frame;
-use super::mounted_model_at;
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
 use crate::app::components::list::tree_browser::{
     TreeBrowser, TreeMarkPolicy, TreeNode, TreeOperation, TreeTitleRole,
@@ -20,9 +16,8 @@ use crate::app::components::music_tree_target::MusicTreeTarget;
 use crate::app::components::ComponentId;
 use crate::app::shell::Model;
 use crate::app::state::music_grouping::ArtistKey;
-use crate::app::App;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 use ratatui::Terminal;
 use std::time::{Duration, Instant};
@@ -80,7 +75,8 @@ pub fn mark_state(browser: &TreeBrowser<MusicTreeTarget>, root: &MusicTreeTarget
 /// Mark one leaf through the shared transition surface, idempotently.
 pub fn mark_leaf(browser: &mut TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) {
     if !browser.marked_targets().contains(target) {
-        browser.apply(TreeOperation::ToggleMarkTarget(target.clone()));
+        let point = row_point(browser, target, Rect::new(0, 0, 200, 100));
+        browser.apply(TreeOperation::PointerToggleMark(point));
     }
 }
 
@@ -112,10 +108,26 @@ pub fn set_marquee_clock(browser: &mut TreeBrowser<MusicTreeTarget>, title: &str
 /// resolves its own painted geometry, so the test never re-derives a row from
 /// the projection index.
 pub fn row_y(browser: &TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) -> u16 {
-    browser
-        .row_rect_for(target)
-        .expect("the target's row is painted in the latest frame")
-        .y
+    if browser.selected_target() == Some(target) {
+        if let Some(row) = browser.selected_row_rect() {
+            return row.y;
+        }
+    }
+    row_point(browser, target, Rect::new(0, 0, 200, 100)).y
+}
+
+/// Find a target through the owner's retained point resolver inside a painted
+/// rectangle. This is test-only navigation through the live hit contract, not
+/// a second row-geometry implementation.
+pub fn row_point(
+    browser: &TreeBrowser<MusicTreeTarget>,
+    target: &MusicTreeTarget,
+    area: Rect,
+) -> Position {
+    (area.y..area.bottom())
+        .flat_map(|y| (area.x..area.right()).map(move |x| Position::new(x, y)))
+        .find(|point| browser.resolve_current_point(*point) == Some(target))
+        .expect("the target's row is painted in the supplied frame")
 }
 
 /// The non-Wide Library-panel geometry the mounted `MusicWorkspaceComponent`
@@ -222,7 +234,17 @@ pub fn assert_music_tree_scrollbar_matches_shared(
                 area,
                 browser.visible_targets().len(),
                 area.height as usize,
-                browser.viewport_offset(),
+                browser
+                    .selected_target()
+                    .and_then(|target| {
+                        let index = browser
+                            .visible_targets()
+                            .iter()
+                            .position(|candidate| candidate == target)?;
+                        let row = browser.selected_row_rect()?.y.saturating_sub(area.y) as usize;
+                        index.checked_sub(row)
+                    })
+                    .unwrap_or(0),
                 palette::SCROLLBAR,
             );
         })

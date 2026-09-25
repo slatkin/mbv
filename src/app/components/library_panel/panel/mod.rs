@@ -35,7 +35,7 @@ use crate::app::components::inline_search::InlineSearchHost;
 /// own painted skeleton geometry).
 #[derive(Clone, Debug)]
 struct OverlayGeometry {
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pane: ratatui::layout::Rect,
     frame: ratatui::layout::Rect,
     hero: HeroCompositionGeometry,

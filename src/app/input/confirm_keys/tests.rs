@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
 use super::*;
 use crate::app::state::types::playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::tests::*;

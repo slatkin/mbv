@@ -1,5 +1,5 @@
 use super::*;
-
+use ratatui::layout::Position;
 // ── Task 2.3: the tree is the one Grouped Music browser owner and painter ──
 
 pub(in super::super) fn music_panel(
@@ -95,11 +95,14 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
                 .into_iter()
                 .find(|candidate| candidate.album_leaf_target() == Some(target))
                 .expect("painted album node");
-            let row = music
-                .browser
-                .row_rect_for(&node)
+            let area = music_panel(&harness)
+                .test_list_rect()
+                .expect("painted album content");
+            let point = (area.y..area.bottom())
+                .flat_map(|y| (area.x..area.right()).map(move |x| Position::new(x, y)))
+                .find(|point| music.browser.resolve_current_point(*point) == Some(&node))
                 .expect("painted album row");
-            (row.x, row.y)
+            (point.x, point.y)
         })
     };
     let click = |column, row, modifiers| {

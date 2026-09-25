@@ -9,7 +9,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
     MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition, SelectionOrigin,
-    SelectionSummary, ViewportAnchor, WideMediaList,
+    SelectionSummary, WideMediaList,
 };
 
 /// One logical row flow's destination-side carrier over one canonical owner.
@@ -81,11 +81,6 @@ impl<Target> MediaListCarrier<Target> {
         self.wide.current_selected_row_rect()
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_flow_offset(&self) -> Option<usize> {
-        self.wide.current_flow_offset()
-    }
-
     pub fn invalidate_paint(&mut self) {
         self.wide.invalidate_paint();
     }
@@ -143,7 +138,7 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
         self.wide.toggle_selection(target);
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn extend_selection_to(&mut self, target: &Target) {
         self.wide.extend_selection_to(target);
     }
@@ -204,10 +199,5 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
 
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
         self.wide.resolve_current_point(point)
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<Target>> {
-        self.wide.viewport_anchor(viewport_height)
     }
 }

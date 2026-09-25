@@ -12,7 +12,6 @@ use std::time::Instant;
 /// lists keep a fixed row count per page; the tree owns its own policy.
 const PAGE_DISTANCE: usize = 5;
 
-mod anchor;
 mod carrier;
 mod grouping;
 mod selection;
@@ -21,7 +20,6 @@ mod tests;
 mod types;
 mod wide;
 
-pub use anchor::ViewportAnchor;
 pub use carrier::MediaListCarrier;
 pub use grouping::letter_grouped_rows;
 pub use types::{
@@ -227,17 +225,6 @@ impl<Target> MediaList<Target> {
             height: viewport_height.max(1),
             total_rows: self.rows.len(),
         }
-    }
-
-    /// Zero-based screen-row offset from the viewport top to the selected
-    /// row (design.md D3). `None` when nothing is selectable.
-    #[cfg_attr(not(test), allow(dead_code))]
-    fn selected_row_offset(&self, viewport_height: usize) -> Option<usize>
-    where
-        Target: Clone + Eq,
-    {
-        let row = self.selected_display_row()?;
-        Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
     }
 
     /// Apply a target-resolved operation and report all independent effects.

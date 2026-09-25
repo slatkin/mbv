@@ -1,25 +1,16 @@
-#![allow(dead_code, unused_imports)]
-
 use super::*;
 use crate::app::components::list::tree_browser::TreeOperation;
 use crate::app::components::msg::{Msg, MusicArtistTarget, ShellRequest};
 use crate::app::dispatch::library::browse::{
-    build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
+    build_album_index_with, recursive_album_search_eligible,
 };
 use crate::app::render::make_music_group_app_with_second_album;
 use crate::app::shell::Model;
-use crate::app::tests::{
-    confirm_replace_queue, install_test_emby, make_app_stub, make_item, make_items,
-};
+use crate::app::tests::{confirm_replace_queue, install_test_emby, make_app_stub, make_item};
 use crate::app::{
-    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, PanelFocus, QueueScope, TabSelection,
+    AlbumIndexState, AlbumPathPart, BrowseLevel, LibEvent, LibraryTab, PanelFocus, TabSelection,
 };
-use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::player::PlayerEvent;
 use std::collections::HashMap;
-use std::sync::mpsc;
-use tuirealm::component::AppComponent;
 
 fn folder(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "Folder");

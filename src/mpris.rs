@@ -2,21 +2,27 @@
 // nothing may claim `org.mpris.MediaPlayer2.mbv` on the real session bus
 // from a test process (issue #757), so `start` is only reachable from
 // production. Production builds keep full dead-code checking.
-#![cfg_attr(test, allow(dead_code))]
 
 use std::collections::HashMap;
+#[cfg(not(test))]
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
+#[cfg(not(test))]
 use std::thread;
+#[cfg(not(test))]
 use std::time::Duration;
 
-use zbus::{connection, interface, zvariant};
+use zbus::zvariant;
+#[cfg(not(test))]
+use zbus::{connection, interface};
 
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::{PlayerCommand, PlayerStatus};
 
+#[cfg(not(test))]
 struct MediaPlayer2;
 
+#[cfg(not(test))]
 #[interface(name = "org.mpris.MediaPlayer2")]
 impl MediaPlayer2 {
     fn quit(&self) {}
@@ -71,6 +77,7 @@ pub(crate) struct MprisSource {
 /// directly, which stay module-private.
 pub(crate) type MprisHandle = Arc<Mutex<MprisSource>>;
 
+#[cfg(not(test))]
 struct MediaPlayer2Player {
     /// The current status/command-sender/disconnect-flag triple, shared
     /// with `start`'s polling thread. Rebindable at runtime via `rebind`
@@ -139,6 +146,7 @@ fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
     s
 }
 
+#[cfg(not(test))]
 fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> {
     make_metadata_with_art_resolver(s, crate::config::image_disk_cache_path)
 }
@@ -183,11 +191,13 @@ fn make_metadata_with_art_resolver(
     m
 }
 
+#[cfg(not(test))]
 type StatusAndSender = (
     Arc<Mutex<PlayerStatus>>,
     Arc<dyn Fn(PlayerCommand) + Send + Sync>,
 );
 
+#[cfg(not(test))]
 impl MediaPlayer2Player {
     /// Clones the current `status`/`send` pair out from behind `self.source`'s
     /// lock, dropping that lock immediately -- so callers below never hold
@@ -205,6 +215,7 @@ impl MediaPlayer2Player {
     }
 }
 
+#[cfg(not(test))]
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
 impl MediaPlayer2Player {
     fn play(&self) {
@@ -366,6 +377,7 @@ impl MediaPlayer2Player {
 /// `restore_local_mode` swap which `Player`/`RemotePlayer` owns playback
 /// at runtime, and MPRIS must follow whichever one is current rather than
 /// staying wired to whatever was live when `start` was first called.
+#[cfg(not(test))]
 pub fn start(
     status: Arc<Mutex<PlayerStatus>>,
     send: impl Fn(PlayerCommand) + Send + Sync + 'static,

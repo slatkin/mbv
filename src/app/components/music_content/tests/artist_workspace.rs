@@ -408,7 +408,15 @@ fn restored_album_selection_lands_visible_behind_many_artist_roots() {
 
     assert_eq!(owner.selected_album_target().as_deref(), Some("a5-0"));
     let row = selected_row(&owner);
-    let offset = owner.browser.viewport_offset();
+    let selected_screen_y = owner
+        .browser
+        .selected_row_rect()
+        .expect("restored row painted")
+        .y
+        .saturating_sub(area.y) as usize;
+    let offset = row
+        .checked_sub(selected_screen_y)
+        .expect("selected row precedes viewport");
     assert!(
         row >= offset && row < offset + 5,
         "restored album row {row} outside the viewport {offset}..{}",

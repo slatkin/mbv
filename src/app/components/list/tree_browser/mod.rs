@@ -17,10 +17,9 @@ use ratatui::layout::{Position, Rect};
 use crate::app::components::list::{MarkSelectionState, PaintRetainedState};
 use crate::app::components::media_list::MediaSemanticState;
 
-#[allow(unused_imports)]
 pub use types::{
     TreeConsumed, TreeEntry, TreeExternalIntent, TreeMarkPolicy, TreeMarkSummary, TreeNode,
-    TreeOperation, TreeSelectionChange, TreeTitleRole, TreeTrailing, TreeTransition,
+    TreeOperation, TreeSelectionChange, TreeTitleRole, TreeTransition,
 };
 
 /// A typed failure from an attempted tree projection replacement.
@@ -361,11 +360,6 @@ impl<Target> TreeBrowser<Target> {
         Ok(())
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn model_revision(&self) -> u64 {
-        self.model_revision
-    }
-
     pub fn selected_target(&self) -> Option<&Target> {
         self.selected.as_ref()
     }
@@ -399,13 +393,6 @@ impl<Target> TreeBrowser<Target> {
             .get(target)
             .and_then(|id| self.arena.get(id))
             .map(|entry| &entry.node)
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn nodes(&self) -> impl Iterator<Item = &TreeNode<Target>> {
-        self.ordered_nodes
-            .iter()
-            .filter_map(|id| self.arena.get(id).map(|entry| &entry.node))
     }
 
     pub fn is_expanded(&self, target: &Target) -> bool
@@ -506,19 +493,9 @@ impl<Target> TreeBrowser<Target> {
         self.filter_active
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn filter_query(&self) -> &str {
-        &self.filter_query
-    }
-
     pub fn search_bar(&self) -> Option<(String, bool)> {
         self.filter_active
             .then(|| (self.filter_query.clone(), false))
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn viewport_offset(&self) -> usize {
-        self.viewport_offset
     }
 
     /// Clamp the retained flow offset to a Panel-provided viewport without
@@ -536,19 +513,6 @@ impl<Target> TreeBrowser<Target> {
         self.paint.selected_row_rect()
     }
 
-    /// A target's one-line row rectangle from the latest completed frame,
-    /// clipped to the frame's content area. A target absent from the current
-    /// projection or the latest frame is an explicit absent result.
-    /// Read-only stable-target geometry: callers address rows by target,
-    /// never by projection index.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn row_rect_for(&self, target: &Target) -> Option<Rect>
-    where
-        Target: PartialEq,
-    {
-        self.paint.row_rect_for(target)
-    }
-
     pub fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect)
     where
         Target: Clone + Eq + Hash,
@@ -564,10 +528,7 @@ impl<Target> TreeBrowser<Target> {
         self.focused = focused;
     }
 
-    /// Test seam mirroring the canonical list's clock injection: seed the
-    /// marquee key and start instant so a buffer test can observe a scrolled
-    /// title window without sleeping on the clock.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn set_marquee_started_at(&mut self, text: &str, at: Instant) {
         self.marquee_text.clear();
         self.marquee_text.push_str(text);

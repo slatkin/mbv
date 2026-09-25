@@ -53,7 +53,7 @@ impl<Tag> HitRegions<Tag> {
 
     /// The recorded rect/tag pairs in paint order. Test accessors read them
     /// for hit-geometry assertions.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn regions(&self) -> &[(Rect, Tag)] {
         &self.regions
     }

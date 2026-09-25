@@ -37,19 +37,14 @@
 //! | `LibraryColumn` | yes (Both, LibraryOnly, mini library) | — (focus-driven row; probed in both bits) |
 //! | `WideSplitGutter` | yes (boundary component view) | — (pinned only here at buffer level) |
 //! | `HeroPane` | yes (LibraryOnly Movies, bit `false`) | `tests_wide_hero_pane_characterization.rs` (resting fill) |
-//! | `SelectedRow` | — | `render/components/media_list.rs::selected_row_spans_full_width_with_two_col_indent` (selected-row fill) |
-//! | `SelectedRowOnQueueColumn` | — | `render/components/media_list.rs::zebra_stripes_are_contained_and_selected_row_still_wins` (selected-row fill; no scrollbar-column probe) |
-//! | `SelectedRowOnLibraryPane` | — | `render/components/media_list.rs::library_wide_workspace_stripes_with_library_panel_pair` (library Wide arm stripe; no scrollbar-column probe) |
 //! | `ContextMenuSelectedRow` | yes (context-menu popup, component view) | — |
 //! | `LibraryPanel` | yes (Both, LibraryOnly, wide music) | `tests_library_characterization.rs` rail-body suites |
 //! | `QueuePanel` | yes (wide Both, both bools) | — |
 //! | `MainContentBox` | — | `render/components/media_list.rs::library_wide_browser_restarts_the_stripe_at_each_group` (browser-pane stripe) |
-//! | `InlineHero` | yes (selected detail, component view, both bits) | — |
 //! | `PlaybackPanel` | yes (Both, mini library) | `tests.rs` panel suites |
 //! | `QueueOnlyPlaybackPanel` | yes (wide QueueOnly, mini queue) | — (pinned only here at buffer level) |
 //! | `SidebarBody` | yes (expanded sidebar shell, component view) | — |
 //! | `QueueCardVisualizer` | — | residual (see below): its fill is byte-identical to the containing queue column's in both bool states |
-//! | `PlaybackRecess` | yes (wide Both, both bools) | `tests.rs` panel suites |
 //! | `PlaybackStatusPill` | yes (title-row pill, component view) | — |
 //! | `ArtworkPlaceholder` | — | `components/artwork_placeholder_tests.rs::artwork_placeholder_paints_requested_extent` |
 //! | `ArtworkLoadingPlaceholder` | — | residual: no surviving buffer-level probe observes its loading fill; `tv_wide.rs` is paint-free and the old `tv_wide_tests.rs` proof no longer exists |
@@ -63,9 +58,8 @@
 //! | `SidebarBand` | yes (sidebar shells, component view) | — |
 //! | `TabBar` | yes (Both, LibraryOnly, mini library) | `tests.rs` tab-bar suites |
 //! | `PopupFrame` | yes (confirm-modal caller path) | — |
-//! | `PopupDimBackdrop` | — | residual (see below): it paints no fill of its own |
 //!
-//! The three surfaces with **no buffer-observable rect**, recorded as
+//! The two surfaces with **no buffer-observable rect**, recorded as
 //! residuals with their concrete reasons rather than hidden:
 //! `QueueCardVisualizer` resolves the content-body pair with the queue
 //! column's bit, byte-identical to the containing queue column's fill in both
@@ -73,11 +67,9 @@
 //! reserved rect is also component-internal state);
 //! `StatusBarPill`'s pill spans sit on the status band and carry the band's
 //! own `SURFACE_CHROME` value in both states, indistinguishable from the
-//! `StatusBar` band's fill; `PopupDimBackdrop` paints no fill of its own —
-//! it blends every existing cell halfway toward black, and its row value is
-//! the named `Color::Black` blend base, which no cell's background ever
-//! equals. Their painters remain guarded by the ast-grep rules and the
-//! table's own unit tests; only a rendered-fill assertion is impossible.
+//! `StatusBar` band's fill. Their painters remain guarded by the ast-grep
+//! rules and the table's own unit tests; only a rendered-fill assertion is
+//! impossible.
 
 use super::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use super::test_helpers::{
@@ -114,16 +106,6 @@ impl Painted {
 fn painted(term: &Terminal<TestBackend>) -> Painted {
     let buffer = term.backend().buffer().clone();
     Painted { buffer }
-}
-
-fn mounted_queue_selected_row(model: &crate::app::shell::Model) -> Rect {
-    use crate::app::components::{ComponentId, QueueComponent};
-    model
-        .application
-        .get_component(&ComponentId::Queue)
-        .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
-        .and_then(QueueComponent::selected_row_rect)
-        .expect("the mounted queue retains its selected row")
 }
 
 fn active_queue_app() -> App {
@@ -221,46 +203,6 @@ fn queue_only_strip_and_queue_follow_the_table() {
     );
 }
 
-/// `unify-surface-colour-neutral` 4.1 pin (b): the queue's selected row paints
-/// a hole only while the queue column holds focus — the row policy gates the
-/// highlight on `selected && focused` (`media_list/row.rs`), so with the
-/// queue resting (library holds panel focus) the row paints no hole at all.
-/// The pin fails if the gating ever changes to a cursor bit: a selected row
-/// driven by a cursor bit would paint the column's focused hole while resting.
-#[test]
-fn resting_queue_selected_row_paints_no_hole() {
-    let mut app = active_queue_app();
-    app.panel_mode = PanelMode::Both;
-    app.panel_focus = PanelFocus::Library;
-    app.mini_view_focus = PanelFocus::Library;
-    let mut model = mounted_model_at(app, 200, 30);
-    let term = draw_mounted_terminal(&mut model, 200, 30);
-    let painted = painted(&term);
-    let chrome = model.app.compute_chrome_geometry(Rect::new(0, 0, 200, 30));
-    assert!(!chrome.queue_focused, "the queue must rest for this pin");
-    let row = mounted_queue_selected_row(&model);
-
-    let panel_body = palette::surface_colors(palette::Surface::QueuePanel, false).fill;
-    let focused_hole =
-        palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, true).fill;
-    // Probe the selected row itself: its resting selected treatment must
-    // still use the queue panel backdrop rather than the focused-row hole.
-    let actual = painted.buffer[(row.x, row.y)].bg;
-    assert_eq!(
-        actual,
-        panel_body,
-        "the resting queue row must paint no hole: the queue panel's resting \
-         backdrop ({panel_body:?}); painted {actual:?} at ({}, {})",
-        row.x,
-        row.y + 1
-    );
-    assert_ne!(
-        actual, focused_hole,
-        "the selected row's colour must follow the containing column's focus \
-         bit, not a cursor bit"
-    );
-}
-
 /// `unify-surface-colour-neutral` 4.1: every table row is either probed by
 /// this module (see the module coverage table) or is a recorded residual with
 /// a concrete reason no buffer-observable rect can match it. This test fails
@@ -279,18 +221,13 @@ fn coverage_table_accounts_for_every_surface_row() {
         palette::Surface::LibraryColumn,
         palette::Surface::WideSplitGutter,
         palette::Surface::HeroPane,
-        palette::Surface::SelectedRow,
-        palette::Surface::SelectedRowOnQueueColumn,
-        palette::Surface::SelectedRowOnLibraryPane,
         palette::Surface::ContextMenuSelectedRow,
         palette::Surface::LibraryPanel,
         palette::Surface::QueuePanel,
         palette::Surface::MainContentBox,
-        palette::Surface::InlineHero,
         palette::Surface::PlaybackPanel,
         palette::Surface::QueueOnlyPlaybackPanel,
         palette::Surface::SidebarBody,
-        palette::Surface::PlaybackRecess,
         palette::Surface::PlaybackStatusPill,
         palette::Surface::ArtworkPlaceholder,
         palette::Surface::ArtworkLoadingPlaceholder,
@@ -318,12 +255,6 @@ fn coverage_table_accounts_for_every_surface_row() {
             "the pill spans sit on the status band carrying the band's own \
              SURFACE_CHROME value in both states — no painted cell is \
              distinguishable from the StatusBar band's fill",
-        ),
-        (
-            palette::Surface::PopupDimBackdrop,
-            "paints no fill of its own: it blends every existing cell halfway \
-             toward black, and its row value is the named Color::Black blend \
-             base, which no cell's background ever equals",
         ),
     ];
     for &surface in palette::Surface::ALL {

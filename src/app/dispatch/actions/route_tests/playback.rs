@@ -1,6 +1,5 @@
-#![allow(dead_code, unused_imports)]
-
 use super::*;
+use crate::app::QueueScope;
 
 #[rstest]
 #[case::ctrl_attached(true, false, true, &["Video"], PlaybackEligibility::WhollyUnplayable { unplayable_count: 1 })]

@@ -1,26 +1,9 @@
-#![allow(dead_code, unused_imports)]
-
 use super::*;
-use crate::app::components::library_panel::LibraryKey;
-use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::tv_content::TvContent;
-use crate::app::components::LibraryKind;
-use crate::app::components::{ComponentId, QueueComponent};
-use crate::app::layout::AppLayout;
-use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
+use crate::app::components::QueueComponent;
 use crate::app::shell::Model;
-use crate::app::state::types::audiobookshelf_browse::books::build_surname_buckets;
-use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{App, PanelFocus};
-use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState, TabSelection};
-use crate::config::Config;
-use mbv_core::api::EmbyClient;
-use mbv_core::api::EmbyItem;
-use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
-use mbv_core::config::ServiceKind;
+use crate::app::tests::make_app_stub;
+use crate::app::App;
 use ratatui::backend::TestBackend;
-use ratatui::style::Color;
 use ratatui::Terminal;
 
 mod mounted;
@@ -30,22 +13,6 @@ pub use fixtures::*;
 
 mod music_tree;
 pub use music_tree::*;
-
-/// The active TV library's owner key, derived exactly as production does
-/// (task 8.4: one `Service` key for a `tvshows` library; the owner lives
-/// inside the mounted `LibraryPanel`).
-fn tv_owner_key(model: &crate::app::shell::Model) -> LibraryKey {
-    let index = model
-        .app
-        .tab
-        .emby_library_index()
-        .expect("Emby library tab");
-    LibraryKey::Service {
-        service: ServiceKind::Emby,
-        library_id: model.app.libs[index].library.id.clone(),
-        kind: LibraryKind::TvShows,
-    }
-}
 
 pub fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
     let buf = term.backend().buffer();
@@ -58,59 +25,6 @@ pub fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
         out.push('\n');
     }
     out
-}
-
-pub fn render_sidebar_scrollbar_column(total: usize, visible: u16, scroll: usize) -> String {
-    let backend = TestBackend::new(1, visible);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| {
-        super::components::chrome::render_sidebar_scrollbar(
-            f,
-            Rect::new(0, 0, 0, visible),
-            total,
-            scroll,
-        );
-    })
-    .unwrap();
-    buffer_to_string(&term)
-}
-
-pub fn render_scrollbar_column(height: u16, max_offset: usize, offset: usize) -> String {
-    let backend = TestBackend::new(1, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| {
-        render_right_scrollbar(
-            f,
-            Rect::new(0, 0, 1, height),
-            max_offset,
-            offset,
-            palette::TEXT_METADATA,
-        );
-    })
-    .unwrap();
-    buffer_to_string(&term)
-}
-
-pub fn render_scrollbar_column_with_viewport(
-    height: u16,
-    content_length: usize,
-    viewport_content_length: usize,
-    offset: usize,
-) -> String {
-    let backend = TestBackend::new(1, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| {
-        render_right_scrollbar_with_viewport(
-            f,
-            Rect::new(0, 0, 1, height),
-            content_length,
-            viewport_content_length,
-            offset,
-            palette::TEXT_METADATA,
-        );
-    })
-    .unwrap();
-    buffer_to_string(&term)
 }
 
 pub fn render_pill_bar_hitboxes(
@@ -186,76 +100,6 @@ fn render_pill_bar_hitboxes_with_markers_and_window(
     (tabs, painted_window)
 }
 
-pub fn render_library_to_terminal(app: &mut App, layout: &mut Rect) -> Terminal<TestBackend> {
-    let backend = TestBackend::new(60, 20);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut model = crate::app::shell::Model::new(std::mem::replace(app, make_app_stub()));
-    model.sync_mounted_surfaces();
-    term.draw(|f| {
-        model
-            .app
-            .reserve_library_area(f, Rect::new(0, 0, 60, 20), layout, None);
-        if let Some(area) = model.app.layout.root_frame.library {
-            model.render_library_panel_at(f, area);
-        }
-    })
-    .unwrap();
-    *app = model.app;
-    term
-}
-
-pub fn render_library_to_string(app: &mut App, layout: &mut Rect) -> String {
-    let term = render_library_to_terminal(app, layout);
-    buffer_to_string(&term)
-}
-
-/// Like `render_library_to_string` but at an explicit terminal size, for
-/// tests that need more rows than the default 60x20 (e.g. music-group views
-/// whose hero panel reserves most of a short terminal).
-pub fn render_library_to_string_sized(
-    app: &mut App,
-    layout: &mut Rect,
-    width: u16,
-    height: u16,
-) -> String {
-    let backend = TestBackend::new(width, height);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut model = crate::app::shell::Model::new(std::mem::replace(app, make_app_stub()));
-    model.sync_mounted_surfaces();
-    term.draw(|f| {
-        model
-            .app
-            .reserve_library_area(f, Rect::new(0, 0, width, height), layout, None);
-        if let Some(area) = model.app.layout.root_frame.library {
-            model.render_library_panel_at(f, area);
-        }
-    })
-    .unwrap();
-    *app = model.app;
-    buffer_to_string(&term)
-}
-
-pub fn render_view_to_terminal(
-    app: &mut App,
-    width: u16,
-    height: u16,
-) -> (Terminal<TestBackend>, Rect) {
-    // Mirror the real shell path (task 3.1): the sync pass + `draw_frame`,
-    // which composes the base frame and paints the mounted components —
-    // including the queue panel, which now paints its own surface. Only
-    // terminal_width is touched before the Model is built (the historical
-    // helper contract); the shell path itself normalizes terminal size.
-    app.terminal_width = width;
-    let mut model = Model::new(std::mem::replace(app, make_app_stub()));
-    model.sync_mounted_surfaces();
-    let backend = TestBackend::new(width, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
-    let layout = model.app.layout.left_area;
-    *app = model.app;
-    (term, layout)
-}
-
 /// Queue panel geometry the mounted `QueuePanel` retained after a real shell
 /// draw (task 3.1): the framed list content area. The legacy queue geometry
 /// mirror is gone — the panel owns its geometry.
@@ -321,35 +165,6 @@ pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Termina
 /// Home content is Model-owned (task 5.3d), so a test that needs seeded
 /// Continue Watching rows/pills uses `render_home_shell_with` and seeds
 /// `model.home_content` before the push.
-pub fn render_queue_shell(
-    mut app: App,
-    width: u16,
-    height: u16,
-) -> (crate::app::shell::Model, Terminal<TestBackend>) {
-    app.terminal_width = width;
-    app.terminal_height = height;
-    let mut model = crate::app::shell::Model::new(app);
-    model.sync_queue();
-    let backend = TestBackend::new(width, height);
-    let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| {
-        model.app.compose_root_frame(f);
-        if let Some(area) = model.app.layout.root_frame.queue {
-            model.render_queue_panel_at(f, area);
-        }
-    })
-    .unwrap();
-    (model, term)
-}
-
-pub fn render_home_shell(
-    app: App,
-    width: u16,
-    height: u16,
-) -> (crate::app::shell::Model, Terminal<TestBackend>) {
-    render_home_shell_with(app, width, height, |_| {})
-}
-
 /// `render_home_shell` with a content-seeding callback: the test seeds
 /// Model-owned `home_content` (task 5.3d) right after `Model::new` and
 /// before `push_home_content` projects it into the mounted `HomeComponent`.
@@ -375,31 +190,4 @@ pub fn render_home_shell_with(
     })
     .unwrap();
     (model, term)
-}
-
-pub fn render_view(app: &mut App, width: u16, height: u16) -> Rect {
-    render_view_to_terminal(app, width, height).1
-}
-
-/// The Home content owner inside the mounted `LibraryPanel` (task 5.11),
-/// for the panel-output test path: the characterization tests read the
-/// owner's own cursor/section/scroll — the same painted-truth contract the
-/// deleted mounted `HomeComponent` served.
-pub(in crate::app) fn home_owner(
-    model: &crate::app::shell::Model,
-) -> Option<&crate::app::components::home_content::HomeContent> {
-    use crate::app::components::library_panel::LibraryKey;
-    model
-        .application
-        .get_component(&crate::app::components::ComponentId::Library)
-        .and_then(|c| {
-            c.as_any()
-                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
-        })
-        .and_then(|panel| panel.owner(&LibraryKey::Home))
-        .and_then(|owner| {
-            owner
-                .as_any()
-                .downcast_ref::<crate::app::components::home_content::HomeContent>()
-        })
 }

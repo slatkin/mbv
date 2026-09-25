@@ -365,6 +365,10 @@ fn duplicate_child_identities_are_scoped_to_their_parent(
 fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() {
     use crate::app::components::list::tree_browser::TreeOperation;
     use crate::app::components::tv_tree_target::TvTreeTarget;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Position;
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
 
     let show = tv_show("Alpha", "show-a");
     let mut season_item = make_item("Season 1", "Season");
@@ -413,13 +417,30 @@ fn show_tree_refresh_preserves_selected_identity_expansion_and_valid_viewport() 
     component
         .browser
         .apply(TreeOperation::Select(episode_target.clone()));
-    assert!(component.browser.viewport_offset() > 0);
-
     component.set_content(context());
     component.browser.clamp_viewport_to(1);
 
     assert_eq!(component.browser.selected_target(), Some(&episode_target));
     assert!(component.browser.is_expanded(&show_target));
     assert!(component.browser.is_expanded(&season_target));
-    assert!(component.browser.viewport_offset() < component.browser.visible_targets().len());
+    let area = ratatui::layout::Rect::new(0, 0, 20, 1);
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal
+        .draw(|frame| component.browser.view(frame, area))
+        .unwrap();
+    let selected_row = component
+        .browser
+        .selected_row_rect()
+        .expect("the selected episode has painted geometry");
+    assert!(
+        selected_row.y >= area.y && selected_row.bottom() <= area.bottom(),
+        "the selected episode must remain inside the painted viewport"
+    );
+    assert_eq!(
+        component
+            .browser
+            .resolve_current_point(Position::new(selected_row.x, selected_row.y)),
+        Some(&episode_target),
+        "the painted viewport must resolve the selected episode"
+    );
 }

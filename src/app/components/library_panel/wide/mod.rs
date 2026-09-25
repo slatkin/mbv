@@ -73,14 +73,14 @@ pub(in crate::app) struct WideSkeletonGeometry {
     pub hero: Rect,
     /// The Selector row's pill-bar rect, or a zero-height rect when neither
     /// a selector nor Inline Search is present.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub selector_bar: Rect,
     /// The list box's full panel rect (fill + border).
     pub list_panel: Rect,
     /// The list box's inset row-flow rect.
     pub list_area: Rect,
     /// The Hero pane's inset content rect.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub hero_area: Rect,
     /// The Workspace box's panel and the rect its list was viewed into
     /// (below the optional header rows), when one painted.
@@ -103,6 +103,7 @@ pub(in crate::app) struct WideSkeletonGeometry {
 pub(in crate::app) struct BrowserPaneGeometry {
     /// The Selector row's pill-bar rect, or a zero-height rect when neither
     /// a selector nor Inline Search is present.
+    #[cfg(test)]
     pub(in crate::app) selector_bar: Rect,
     /// The list box's full panel rect (fill + border).
     pub(in crate::app) list_panel: Rect,
@@ -260,6 +261,7 @@ pub(in crate::app) fn paint_browser_pane(
     };
 
     BrowserPaneGeometry {
+        #[cfg(test)]
         selector_bar: pane.pills_area,
         list_panel,
         list_area,
@@ -345,9 +347,11 @@ pub(in crate::app) fn render_wide_skeleton(
     let mut geometry = WideSkeletonGeometry {
         browser: browser_panel,
         hero: hero_panel,
+        #[cfg(test)]
         selector_bar: browser.selector_bar,
         list_panel: browser.list_panel,
         list_area: browser.list_area,
+        #[cfg(test)]
         hero_area,
         workspace: None,
         hero_image: None,

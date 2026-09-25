@@ -36,7 +36,6 @@ pub(in crate::app) struct GroupedAlbumEntry {
     /// display position.
     // Carried by task 1.3; first read by the Grouped Music tree owner
     // (task 2.1 of add-grouped-music-tree-browser).
-    #[allow(dead_code)]
     pub(in crate::app) artist_key: ArtistKey,
     pub(in crate::app) sort_key: String,
     pub(in crate::app) year: String,

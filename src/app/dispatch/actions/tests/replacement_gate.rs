@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
 use super::*;
 
 /// Row 3.1: an album track on a populated target queue asks before the routed

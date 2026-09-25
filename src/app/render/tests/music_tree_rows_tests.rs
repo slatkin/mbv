@@ -7,8 +7,9 @@ use super::test_helpers::{
     draw_mounted_frame, expand_root, make_music_tree_group_app, mark_leaf, mark_state,
     mounted_model_at, mounted_music_tree_browser, mounted_music_wide_geometry, music_tree_frame,
     music_tree_long_leaf, music_tree_row_bg, music_tree_row_fill, music_tree_row_text,
-    music_tree_zebra_fill, row_y, select_target, MarkState, MUSIC_TREE_EXPANDED_PROJECTION_LEN,
-    MUSIC_TREE_LONG_TITLE_YEAR, MUSIC_TREE_WIDE_HEIGHT, MUSIC_TREE_WIDE_WIDTH,
+    music_tree_zebra_fill, row_point, row_y, select_target, MarkState,
+    MUSIC_TREE_EXPANDED_PROJECTION_LEN, MUSIC_TREE_LONG_TITLE_YEAR, MUSIC_TREE_WIDE_HEIGHT,
+    MUSIC_TREE_WIDE_WIDTH,
 };
 use super::*;
 use ratatui::layout::Position;
@@ -65,8 +66,8 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     );
     let buf = term.backend().buffer();
     assert_eq!(
-        browser.viewport_offset(),
-        0,
+        browser.selected_row_rect().map(|row| row.y),
+        Some(list_area.y),
         "a top selection needs no scroll"
     );
 
@@ -116,13 +117,11 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     // top, so it is the row at the viewport's first line) resolves its node,
     // and a point on the scrollbar resolves to the scrollbar region.
     let second_row = album("album-1");
-    let second_row_rect = browser
-        .row_rect_for(&second_row)
-        .expect("the painted second row");
+    let second_row_point = row_point(&browser, &second_row, list_area);
     assert_eq!(
         browser.resolve_current_point(Position {
-            x: second_row_rect.x + 5,
-            y: second_row_rect.y,
+            x: second_row_point.x + 5,
+            y: second_row_point.y,
         }),
         Some(&second_row)
     );
@@ -186,7 +185,9 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     );
     let buf = term.backend().buffer();
     assert!(
-        browser.viewport_offset() > 0,
+        browser
+            .selected_row_rect()
+            .is_some_and(|row| row.y > list_area.y),
         "the bottom Beta leaf forces a scroll"
     );
     let beta_bar_y = row_y(&browser, &album("album-beta-2"));
@@ -219,6 +220,12 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         term.backend().buffer()[(list_area.x + 2, row_y(&browser, &beta_root))].fg,
         palette::TEXT_ACCENT_MUTED,
         "a Partial artist root paints the muted aggregate role"
+    );
+    music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
     );
     mark_leaf(&mut browser, &album("album-beta-2"));
     let term = music_tree_frame(
@@ -342,6 +349,12 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     // leaf, the mark alone paints the bar across its whole row, again
     // overriding the zebra stripe.
     select_target(&mut browser, &album("album-beta-2"));
+    music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
     mark_leaf(&mut browser, &album("album-beta-1"));
     let term = music_tree_frame(
         &mut browser,

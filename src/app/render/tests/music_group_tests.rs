@@ -110,13 +110,11 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     // Latest-render hit testing resolves the painted second row (frame A is
     // at the top, so it is the row at the viewport's first line).
     let second_row = album("album-1");
-    let second_row_rect = browser
-        .row_rect_for(&second_row)
-        .expect("the painted second row");
+    let second_row_point = row_point(&browser, &second_row, list_area);
     assert_eq!(
         browser.resolve_current_point(Position {
-            x: second_row_rect.x + 5,
-            y: second_row_rect.y,
+            x: second_row_point.x + 5,
+            y: second_row_point.y,
         }),
         Some(&second_row)
     );
@@ -231,7 +229,19 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     );
 
     // Aggregate marks: both Beta leaves marked lift the Beta root to Marked.
+    music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
+    );
     mark_leaf(&mut browser, &album("album-beta-1"));
+    music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
+    );
     mark_leaf(&mut browser, &album("album-beta-2"));
     music_tree_frame(
         &mut browser,

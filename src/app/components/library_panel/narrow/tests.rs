@@ -115,7 +115,7 @@ fn fixed_row_owner_clamps_when_narrow_viewport_shrinks_and_restores() {
     assert!(selected.y >= geometry.list_area.y);
     assert!(selected.bottom() <= geometry.list_area.bottom());
     assert_eq!(carrier.selected_target(), Some(&"9".to_string()));
-    assert!(carrier.wide().current_flow_offset().unwrap() <= 9);
+    assert!(carrier.scroll() <= 9);
 }
 
 /// A search session at the non-Wide breakpoint paints the same one-bar +

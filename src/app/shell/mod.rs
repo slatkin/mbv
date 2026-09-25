@@ -16,7 +16,9 @@ use super::{
 };
 use crate::app::dispatch::action::Command;
 use crate::app::dispatch::session::service_startup;
-use crate::app::state::home_latest::{current_launch_secs, HomeLatestLaunchWindow};
+#[cfg(test)]
+use crate::app::state::home_latest::current_launch_secs;
+use crate::app::state::home_latest::HomeLatestLaunchWindow;
 use crate::app::state::types::feeds_manage::FeedsManagePopup;
 use crate::app::state::types::playback::{
     DestinationLatestSnapshot, DestinationLatestSource, HomeContent,
@@ -226,7 +228,7 @@ pub(in crate::app) struct ArbitrationDiagnostic {
 
 /// Test seam over `arbitrate_key`: the folded message list without the
 /// diagnostic record. Production routes through `arbitrate_key` directly.
-#[cfg_attr(not(test), allow(dead_code))]
+#[cfg(test)]
 pub(in crate::app) fn fold_keyboard_messages(
     messages: Vec<Msg>,
     focused: Option<&ComponentId>,
@@ -570,7 +572,7 @@ impl Model {
 
     /// Construct the model, starting the TuiRealm crossterm listener and
     /// mounting the permanent root observer.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn new(app: App) -> Self {
         Self::new_with_listener(
             app,
@@ -591,7 +593,7 @@ impl Model {
         )
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn new_with_listener(
         app: App,
         listener_cfg: EventListenerCfg<UserEvent>,
@@ -599,7 +601,7 @@ impl Model {
         Self::new_with_listener_at(app, listener_cfg, current_launch_secs())
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn new_with_listener_at(
         app: App,
         listener_cfg: EventListenerCfg<UserEvent>,

@@ -57,17 +57,6 @@ impl<Target: PartialEq> MarkSelectionState<Target> {
         true
     }
 
-    /// Toggle membership while retaining addition order for newly added marks.
-    #[allow(dead_code)]
-    pub fn toggle(&mut self, target: Target) -> bool {
-        if self.remove(&target) {
-            false
-        } else {
-            self.add(target);
-            true
-        }
-    }
-
     /// Whether `target` is currently marked.
     pub fn contains(&self, target: &Target) -> bool {
         self.marked.iter().any(|marked| marked == target)
@@ -119,33 +108,12 @@ pub trait MarkSelection<Target: PartialEq> {
         removed
     }
 
-    /// Toggle a stable target's membership.
-    #[allow(dead_code)]
-    fn toggle_mark(&mut self, target: Target) -> bool {
-        let added = self.mark_selection_mut().toggle(target);
-        self.after_mark_mutation();
-        added
-    }
-
-    /// Clear the selection.
-    #[allow(dead_code)]
-    fn clear_marks(&mut self) {
-        self.mark_selection_mut().clear();
-        self.after_mark_mutation();
-    }
-
     /// Let an owner keep any coupled selection state in sync with a mutation.
     fn after_mark_mutation(&mut self) {}
 
     /// Whether a stable target is marked.
     fn is_marked(&self, target: &Target) -> bool {
         self.mark_selection().contains(target)
-    }
-
-    /// Stored membership in addition order.
-    #[cfg_attr(not(test), allow(dead_code))]
-    fn marked_targets(&self) -> &[Target] {
-        self.mark_selection().targets()
     }
 
     /// Marked targets in the current row-flow (display) order.
@@ -201,7 +169,7 @@ mod tests {
         assert!(marks.add_mark(3));
         assert!(marks.remove_mark(&1));
         assert!(marks.add_mark(2));
-        assert_eq!(marks.marked_targets(), &[4, 3, 2]);
+        assert_eq!(marks.marks.targets(), &[4, 3, 2]);
     }
 
     #[test]
@@ -217,8 +185,8 @@ mod tests {
             Row::selectable(3),
         ]);
 
-        assert_eq!(marks.marked_targets(), &[3, 1, 4]);
+        assert_eq!(marks.marks.targets(), &[3, 1, 4]);
         assert_eq!(marks.action_targets(&flow), vec![4, 1, 3]);
-        assert_eq!(marks.marked_targets(), &[3, 1, 4]);
+        assert_eq!(marks.marks.targets(), &[3, 1, 4]);
     }
 }

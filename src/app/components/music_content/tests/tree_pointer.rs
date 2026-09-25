@@ -502,9 +502,8 @@ fn tree_context_click_outside_selection_clears_only_tree_marks() {
     paint_tree(&mut owner, area);
     let a0 = find(&owner, |target| target.album_leaf_target() == Some("a-0"));
     let b0 = find(&owner, |target| target.album_leaf_target() == Some("b-0"));
-    owner
-        .browser
-        .apply(TreeOperation::ToggleMarkTarget(a0.clone()));
+    let a0_at = tree_point(&owner, &a0);
+    owner.browser.apply(TreeOperation::PointerToggleMark(a0_at));
     // The mark mutation invalidated the completed frame; re-paint before
     // resolving the clicked row against the latest geometry.
     paint_tree(&mut owner, area);

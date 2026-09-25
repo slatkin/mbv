@@ -42,6 +42,62 @@ use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
+/// Build the playback painter's typed context for tests that exercise the
+/// production painter directly. The App-side context builder is intentionally
+/// absent from production; this test fixture keeps the painter contract
+/// exercised without restoring that dead API.
+pub(super) fn test_playback_context<'a>(
+    app: &'a mut App,
+    playback: &'a mut PlaybackStripAreas,
+    area: Rect,
+    player_h: u16,
+    show_controls: bool,
+    now_playing_title: Option<(String, ratatui::style::Color)>,
+) -> PlaybackRenderContext<'a> {
+    let (progress, stop_available) = {
+        let status = app.player.status.lock().unwrap();
+        (
+            (status.position_ticks, status.runtime_ticks, status.paused),
+            status.active,
+        )
+    };
+    let panel = if matches!(
+        app.panel_mode,
+        crate::app::state::types::settings::PanelMode::QueueOnly
+    ) {
+        palette::Surface::QueueOnlyPlaybackPanel
+    } else {
+        palette::Surface::PlaybackPanel
+    };
+    let idle_feed_title = app.idle_feed.as_ref().and_then(|feed| {
+        feed.items.get(feed.current_index).map(|item| {
+            (
+                item.title.clone(),
+                item.link.as_deref().is_some_and(|link| !link.is_empty()),
+            )
+        })
+    });
+    PlaybackRenderContext {
+        area,
+        playback,
+        player_h,
+        show_controls,
+        now_playing_title,
+        panel,
+        panel_focused: matches!(app.panel_focus, crate::app::PanelFocus::Queue),
+        progress,
+        use_nerd_fonts: app.use_nerd_fonts,
+        stop_available,
+        next_available: false,
+        prev_available: false,
+        status_indicators: app.build_status_indicator_spans(),
+        title_parts: None,
+        idle_feed_title,
+        marquee_text: &mut app.marquee_text,
+        marquee_started_at: &mut app.marquee_started_at,
+    }
+}
+
 #[test]
 fn volume_pill_icon_follows_volume_state() {
     let mut app = make_app_stub();
@@ -161,13 +217,13 @@ fn title_row_paints_the_plain_next_control() {
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = PlaybackStripAreas::default();
     term.draw(|f| {
-        let mut context = app.playback_panel_context(
-            Rect::new(0, 0, 60, 1),
+        let mut context = test_playback_context(
+            &mut app,
             &mut layout,
+            Rect::new(0, 0, 60, 1),
             1,
             true,
-            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
-            palette::SURFACE_PLAYBACK,
+            Some(("Title".into(), palette::SURFACE_FOCUSED)),
         );
         render_title_row(
             f,
@@ -203,13 +259,13 @@ fn title_row_paints_the_nerd_font_next_control() {
     let mut term = Terminal::new(backend).unwrap();
     let mut layout = PlaybackStripAreas::default();
     term.draw(|f| {
-        let mut context = app.playback_panel_context(
-            Rect::new(0, 0, 60, 1),
+        let mut context = test_playback_context(
+            &mut app,
             &mut layout,
+            Rect::new(0, 0, 60, 1),
             1,
             true,
-            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
-            palette::SURFACE_PLAYBACK,
+            Some(("Title".into(), palette::SURFACE_FOCUSED)),
         );
         render_title_row(
             f,
@@ -275,13 +331,13 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
         let backend = TestBackend::new(30, 1);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            let mut context = app.playback_panel_context(
-                Rect::new(0, 0, 30, 1),
+            let mut context = test_playback_context(
+                app,
                 layout,
+                Rect::new(0, 0, 30, 1),
                 1,
                 true,
-                &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
+                Some((long_title.to_string(), palette::TEXT_STRONG)),
             );
             render_title_row(
                 f,
@@ -339,13 +395,13 @@ fn queue_panel_puts_title_progress_and_time_above_the_controls_row() {
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
         let title = Some(("Title".to_string(), palette::TEXT_STRONG));
-        let context = app.playback_panel_context(
-            Rect::new(0, 0, 60, 3),
+        let context = test_playback_context(
+            &mut app,
             &mut layout,
+            Rect::new(0, 0, 60, 3),
             3,
             true,
-            &title,
-            palette::SURFACE_CHROME,
+            title.clone(),
         );
         render_player_panel(f, context);
     })
@@ -399,13 +455,13 @@ fn library_strip_keeps_the_single_title_row() {
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
         let title = Some(("Title".to_string(), palette::TEXT_STRONG));
-        let context = app.playback_panel_context(
-            Rect::new(0, 0, 60, 3),
+        let context = test_playback_context(
+            &mut app,
             &mut layout,
+            Rect::new(0, 0, 60, 3),
             3,
             true,
-            &title,
-            palette::SURFACE_CHROME,
+            title.clone(),
         );
         render_player_panel(f, context);
     })
@@ -447,13 +503,13 @@ fn queue_title_row_marquees_a_title_that_does_not_fit() {
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
         let title = Some((long_title.to_string(), palette::TEXT_STRONG));
-        let context = app.playback_panel_context(
-            Rect::new(0, 0, 60, 3),
+        let context = test_playback_context(
+            &mut app,
             &mut layout,
+            Rect::new(0, 0, 60, 3),
             3,
             true,
-            &title,
-            palette::SURFACE_CHROME,
+            title.clone(),
         );
         render_player_panel(f, context);
     })
@@ -504,13 +560,13 @@ fn idle_feed_title_marquees_instead_of_truncating() {
         term.draw(|f| {
             render_player_panel(
                 f,
-                app.playback_panel_context(
-                    Rect::new(0, 0, 30, 4),
+                test_playback_context(
+                    app,
                     layout,
+                    Rect::new(0, 0, 30, 4),
                     4,
                     false, // !show_controls => idle state
-                    &None,
-                    palette::SURFACE_CHROME,
+                    None,
                 ),
             );
         })

@@ -37,7 +37,10 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(19, 0)].bg, palette::PILL_ROW_BG);
+    assert_eq!(
+        buffer[(19, 0)].bg,
+        palette::surface_colors(palette::Surface::PillRow, false).fill
+    );
     for x in 0..20 {
         assert_eq!(buffer[(x, 1)].bg, palette::SURFACE_BACKDROP);
     }

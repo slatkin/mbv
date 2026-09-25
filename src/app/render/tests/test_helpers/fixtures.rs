@@ -1,18 +1,7 @@
-#![allow(dead_code, unused_imports)]
-
-use super::super::*;
-use crate::app::layout::AppLayout;
-use crate::app::shell::Model;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{App, PanelFocus};
-use crate::app::{BrowseLevel, LibraryTab, QueueScope, RemoteSlotState, TabSelection};
-use crate::config::Config;
-use mbv_core::api::EmbyClient;
+use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
 use mbv_core::api::EmbyItem;
-use ratatui::backend::TestBackend;
-use ratatui::style::Color;
-use ratatui::Terminal;
 
 pub fn make_movie_app() -> App {
     let mut app = make_app_stub();
@@ -70,23 +59,6 @@ pub fn make_queue_app(item_count: usize) -> App {
             .collect(),
         0,
     );
-    app
-}
-
-pub fn make_remote_queue_app() -> App {
-    let local_items = vec![make_item("Local Queue Item", "Movie")];
-    let remote_items = vec![make_item("Remote Queue Item", "Movie")];
-    let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let mut app = App::new_remote(
-        EmbyClient::new(Config::default()),
-        remote,
-        player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
-    );
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Queue;
-    app.queue_scope = QueueScope::Remote;
-    app.player_tab.set_items(local_items, 0);
     app
 }
 
@@ -254,40 +226,6 @@ pub fn make_home_video_app() -> App {
             tv_content_mode: None,
             music_grouping: None,
         }],
-        ..LibraryTab::new(library)
-    });
-
-    app
-}
-
-pub fn make_large_movie_library_app(library_total: usize) -> App {
-    let mut app = make_app_stub();
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.is_folder = true;
-    library.collection_type = "movies".into();
-
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: Vec::new(),
-            total_count: 0,
-            resting: BrowseResting::new(0, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        library_total: Some(library_total),
         ..LibraryTab::new(library)
     });
 

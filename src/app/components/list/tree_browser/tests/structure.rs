@@ -87,7 +87,7 @@ fn identical_projection_preserves_revision_and_retained_geometry() {
     browser.reconcile(projection.clone()).unwrap();
     paint(&mut browser);
 
-    let revision = browser.model_revision();
+    let revision = browser.model_revision;
     assert_eq!(
         browser.resolve_current_point(Position::new(2, 0)),
         Some(&Target::Root)
@@ -95,7 +95,7 @@ fn identical_projection_preserves_revision_and_retained_geometry() {
 
     browser.reconcile(projection).unwrap();
 
-    assert_eq!(browser.model_revision(), revision);
+    assert_eq!(browser.model_revision, revision);
     assert_eq!(
         browser.resolve_current_point(Position::new(2, 0)),
         Some(&Target::Root)
@@ -109,17 +109,17 @@ fn changed_projection_bumps_revision_and_invalidates_retained_geometry() {
         .reconcile([node(Target::Root, None), node(Target::Other, None)])
         .unwrap();
     paint(&mut browser);
-    let revision = browser.model_revision();
+    let revision = browser.model_revision;
 
     browser
         .reconcile([node(Target::Other, None), node(Target::Root, None)])
         .unwrap();
 
-    assert_eq!(browser.model_revision(), revision + 1);
+    assert_eq!(browser.model_revision, revision + 1);
     assert_eq!(browser.resolve_current_point(Position::new(2, 0)), None);
 
     paint(&mut browser);
-    let revision = browser.model_revision();
+    let revision = browser.model_revision;
     let changed = TreeNode::new(
         Target::Other,
         None,
@@ -132,7 +132,7 @@ fn changed_projection_bumps_revision_and_invalidates_retained_geometry() {
         .reconcile([changed, node(Target::Root, None)])
         .unwrap();
 
-    assert_eq!(browser.model_revision(), revision + 1);
+    assert_eq!(browser.model_revision, revision + 1);
     assert_eq!(browser.resolve_current_point(Position::new(2, 0)), None);
 }
 
@@ -146,7 +146,7 @@ fn changing_heading_content_invalidates_retained_geometry() {
         ])
         .unwrap();
     paint(&mut browser);
-    let revision = browser.model_revision();
+    let revision = browser.model_revision;
 
     browser
         .reconcile([
@@ -155,7 +155,7 @@ fn changing_heading_content_invalidates_retained_geometry() {
         ])
         .unwrap();
 
-    assert_eq!(browser.model_revision(), revision + 1);
+    assert_eq!(browser.model_revision, revision + 1);
     assert!(!browser.has_completed_paint());
 }
 
@@ -194,7 +194,7 @@ fn invalid_projection_returns_typed_error_without_mutating_owner(
     terminal
         .draw(|frame| Component::view(&mut browser, frame, Rect::new(1, 0, 18, 2)))
         .unwrap();
-    let revision = browser.model_revision();
+    let revision = browser.model_revision;
     let selected = browser.selected_target().cloned();
     let roots = browser.roots().into_iter().cloned().collect::<Vec<_>>();
     let expanded = browser.expanded.clone();
@@ -207,7 +207,7 @@ fn invalid_projection_returns_typed_error_without_mutating_owner(
 
     let error = browser.reconcile(projection).unwrap_err();
     assert_eq!(error, expected);
-    assert_eq!(browser.model_revision(), revision);
+    assert_eq!(browser.model_revision, revision);
     assert_eq!(browser.selected_target().cloned(), selected);
     assert_eq!(browser.expanded, expanded);
     assert_eq!(browser.marks, marks);
@@ -247,12 +247,6 @@ fn structural_rows_share_the_flow_but_are_never_selectable_or_actionable() {
     assert_eq!(browser.resolve_current_point(Position::new(2, 0)), None);
     assert_eq!(
         browser
-            .apply(TreeOperation::PointerSelect(Position::new(2, 0)))
-            .disposition,
-        super::super::TreeConsumed::Unhandled
-    );
-    assert_eq!(
-        browser
             .apply(TreeOperation::PointerToggleMark(Position::new(2, 0)))
             .disposition,
         super::super::TreeConsumed::Unhandled
@@ -264,19 +258,12 @@ fn structural_rows_share_the_flow_but_are_never_selectable_or_actionable() {
     assert_eq!(browser.selected_target(), Some(&Target::Other));
     browser.apply(TreeOperation::First);
     assert_eq!(browser.selected_target(), Some(&Target::Root));
-    for operation in [
-        TreeOperation::ToggleExpansionTarget(Target::Missing),
-        TreeOperation::ToggleMarkTarget(Target::Missing),
-        TreeOperation::ActivateTarget(Target::Missing),
-        TreeOperation::ContextTarget(Target::Missing),
-    ] {
-        let transition = browser.apply(operation);
-        assert_eq!(
-            transition.disposition,
-            super::super::TreeConsumed::Unhandled
-        );
-        assert_eq!(transition.external_intent, None);
-    }
+    let transition = browser.apply(TreeOperation::ToggleExpansionTarget(Target::Missing));
+    assert_eq!(
+        transition.disposition,
+        super::super::TreeConsumed::Unhandled
+    );
+    assert_eq!(transition.external_intent, None);
     assert_eq!(browser.marked_targets(), &[]);
 }
 
@@ -295,7 +282,7 @@ fn structural_refresh_preserves_stable_selection_and_clamps_viewport() {
     browser.set_geometry(Rect::new(0, 0, 18, 2), Rect::new(0, 0, 18, 2));
     browser.apply(TreeOperation::Last);
     assert_eq!(browser.selected_target(), Some(&Target::Other));
-    assert!(browser.viewport_offset() > 0);
+    assert!(browser.viewport_offset > 0);
 
     paint(&mut browser);
     browser
@@ -307,7 +294,7 @@ fn structural_refresh_preserves_stable_selection_and_clamps_viewport() {
         .unwrap();
 
     assert_eq!(browser.selected_target(), Some(&Target::Other));
-    assert!(browser.viewport_offset() <= browser.visible_len().saturating_sub(2));
+    assert!(browser.viewport_offset <= browser.visible_len().saturating_sub(2));
     assert!(!browser.has_completed_paint());
 
     browser
@@ -319,22 +306,18 @@ fn structural_refresh_preserves_stable_selection_and_clamps_viewport() {
         ])
         .unwrap();
     assert_eq!(browser.selected_target(), Some(&Target::Other));
-    assert!(browser.viewport_offset() <= browser.visible_len().saturating_sub(2));
+    assert!(browser.viewport_offset <= browser.visible_len().saturating_sub(2));
 }
 
-#[rstest]
-#[case::selected(TreeOperation::ToggleExpansion)]
-#[case::target(TreeOperation::ToggleExpansionTarget(Target::Root))]
-fn declared_expandability_retains_pending_expansion_and_reveals_children(
-    #[case] operation: TreeOperation<Target>,
-) {
+#[test]
+fn declared_expandability_retains_pending_expansion_and_reveals_children() {
     let mut browser = TreeBrowser::new();
     browser
         .reconcile([node(Target::Root, None).with_expandable(true)])
         .unwrap();
     browser.viewport_offset = 1;
 
-    let transition = browser.apply(operation);
+    let transition = browser.apply(TreeOperation::ToggleExpansionTarget(Target::Root));
     assert_eq!(transition.disposition, super::super::TreeConsumed::Consumed);
     assert!(browser.is_expanded(&Target::Root));
     assert_eq!(browser.visible_len(), 1);
@@ -353,7 +336,7 @@ fn declared_expandability_retains_pending_expansion_and_reveals_children(
         vec![Target::Root, Target::Branch]
     );
     assert_eq!(browser.selected_target(), Some(&Target::Root));
-    assert_eq!(browser.viewport_offset(), 1);
+    assert_eq!(browser.viewport_offset, 1);
 }
 
 #[rstest]
@@ -369,7 +352,7 @@ fn reconciliation_keeps_pending_expansion_only_while_expandable_or_populated(
     browser
         .reconcile([node(Target::Root, None).with_expandable(true)])
         .unwrap();
-    browser.apply(TreeOperation::ToggleExpansion);
+    browser.apply(TreeOperation::ToggleExpansionTarget(Target::Root));
     assert!(browser.is_expanded(&Target::Root));
 
     let mut projection = vec![node(Target::Root, None).with_expandable(declared_expandable)];
@@ -389,15 +372,15 @@ fn reconciliation_keeps_pending_expansion_only_while_expandable_or_populated(
     );
 }
 
-#[rstest]
-#[case::selected(TreeOperation::ToggleExpansion)]
-#[case::target(TreeOperation::ToggleExpansionTarget(Target::Root))]
-fn undeclared_childless_music_node_remains_unhandled(#[case] operation: TreeOperation<Target>) {
+#[test]
+fn undeclared_childless_music_node_remains_unhandled() {
     let mut browser = TreeBrowser::new();
     browser.reconcile([node(Target::Root, None)]).unwrap();
 
     assert_eq!(
-        browser.apply(operation).disposition,
+        browser
+            .apply(TreeOperation::ToggleExpansionTarget(Target::Root))
+            .disposition,
         super::super::TreeConsumed::Unhandled
     );
     assert!(!browser.is_expanded(&Target::Root));
@@ -419,8 +402,10 @@ fn heading_free_tree_keeps_music_row_flow_navigation_and_marks() {
         browser.visible_targets(),
         vec![Target::Root, Target::Branch, Target::Other]
     );
+    browser.set_geometry(Rect::new(0, 0, 18, 3), Rect::new(0, 0, 18, 3));
     browser.apply(TreeOperation::Move(1));
-    browser.apply(TreeOperation::ToggleMark);
+    paint(&mut browser);
+    browser.apply(TreeOperation::PointerToggleMark(Position::new(2, 1)));
     assert_eq!(browser.selected_target(), Some(&Target::Branch));
     assert_eq!(browser.marked_targets(), &[Target::Branch]);
     browser.apply(TreeOperation::Last);

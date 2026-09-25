@@ -1,16 +1,11 @@
-#![allow(unused_imports)]
-
-use super::indicators;
+use crate::app::palette;
 use crate::app::ui_util::*;
-use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
-use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
-use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
-use unicode_width::UnicodeWidthStr;
+use tui_scrollbar::GlyphSet;
 
 pub(in crate::app) fn thin_vertical_thumb(mut glyphs: GlyphSet) -> GlyphSet {
     glyphs.thumb_vertical_lower = ['▕'; 8];

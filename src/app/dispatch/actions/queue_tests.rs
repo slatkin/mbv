@@ -1,46 +1,10 @@
-#![allow(dead_code, unused_imports)]
 use crate::app::state::types::browse::BrowseResting;
 
-use super::*;
-use crate::app::dispatch::library::browse::{
-    build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
-};
-use crate::app::tests::{make_app_stub, make_item, make_items};
-use crate::app::{
-    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
-};
+use crate::app::{App, ContextAction};
 use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::player::PlayerEvent;
+use mbv_core::player::PlayerCommand;
 use rstest::rstest;
-use std::collections::HashMap;
-use std::sync::mpsc;
 
-fn folder(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "Folder");
-    item.id = id.into();
-    item.is_folder = true;
-    item
-}
-
-fn album(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "MusicAlbum");
-    item.id = id.into();
-    item.is_folder = true;
-    item.media_type = "Audio".into();
-    item
-}
-
-fn recursive_music_app() -> App {
-    let mut app = make_app_stub();
-    app.music_levels = vec!["group".into(), "artist".into(), "album".into()];
-    let mut library = make_item("Music", "CollectionFolder");
-    library.id = "music-lib".into();
-    library.collection_type = "music".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app
-}
 // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
 
 #[rstest]
@@ -82,7 +46,6 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
 
 #[test]
 fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
-    use crate::app::dispatch::action::Command;
     use crate::app::state::types::overlay::OverlayRequest;
     use crate::app::tests::make_item;
     use crate::player::PlayerCommand;
@@ -279,40 +242,3 @@ fn next_subtitle_entry_matches_remote_sentinel_convention() {
 }
 
 // ── cycle_sub: local branch (#86 unification + idle fallback) ───────────
-
-// `XDG_CONFIG_HOME`/`MBV_SYSTEM` are process-global env vars, so tests
-// that touch them must not run concurrently with each other -- or with
-// any other test in the crate that touches env vars.
-// Reuse config.rs's `SYS_ENV_LOCK` rather than a second, independent
-// mutex: two separate locks over the same global state don't exclude
-// each other and previously caused flaky cross-test env-var races.
-use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
-
-/// RAII guard that points `XDG_CONFIG_HOME` (subtitle-mode saves) and
-/// test-only state-dir lookups (prefs/queue saves) at a fresh tempdir,
-/// restoring and cleaning up on drop -- including on panic.
-struct XdgHomeGuard {
-    dir: std::path::PathBuf,
-    _state_dir: crate::config::TestStateDirGuard,
-}
-
-impl XdgHomeGuard {
-    fn new() -> Self {
-        let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir_all(&dir).unwrap();
-        std::env::set_var("XDG_CONFIG_HOME", &dir);
-        std::env::remove_var("MBV_SYSTEM");
-        let state_dir = crate::config::TestStateDirGuard::new_at(dir.join("mbv"));
-        Self {
-            dir,
-            _state_dir: state_dir,
-        }
-    }
-}
-
-impl Drop for XdgHomeGuard {
-    fn drop(&mut self) {
-        std::env::remove_var("XDG_CONFIG_HOME");
-        let _ = std::fs::remove_dir_all(&self.dir);
-    }
-}

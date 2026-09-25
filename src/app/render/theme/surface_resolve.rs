@@ -12,8 +12,6 @@
 //! exactly as the site computes it today. A `Fixed` row ignores the bool and
 //! pins focused == resting (design D3(a)); no row branches on anything else.
 
-#![cfg_attr(not(test), allow(dead_code))]
-
 use super::surface::{FocusSource, Surface};
 use super::surface_table::{row, RESTING_DEVIATIONS};
 use ratatui::style::Color;
@@ -104,19 +102,14 @@ mod tests {
             Surface::LibraryColumn => (SURFACE_FOCUSED, SURFACE_BACKDROP),
             Surface::WideSplitGutter => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::HeroPane => (Palette::Ink.color(), Palette::Ink.color()),
-            Surface::SelectedRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
             Surface::LibraryPanel => (Palette::Green2.color(), SURFACE_RESTING),
             Surface::QueuePanel => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::MainContentBox => (Palette::Green2.color(), SURFACE_BACKDROP),
-            Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::QueueOnlyPlaybackPanel => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::SidebarBody => (SURFACE_SIDEBAR, SURFACE_SIDEBAR),
             Surface::QueueCardVisualizer => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::PlaybackRecess => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkLoadingPlaceholder => (Palette::Grey2.color(), Palette::Grey2.color()),
@@ -131,7 +124,6 @@ mod tests {
             Surface::SidebarBand => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::TabBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::PopupFrame => (SURFACE_FOCUSED, SURFACE_FOCUSED),
-            Surface::PopupDimBackdrop => (Color::Black, Color::Black),
         }
     }
 

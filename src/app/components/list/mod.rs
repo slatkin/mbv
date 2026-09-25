@@ -4,12 +4,9 @@
 //! of the tree-list widget crate. Adapters retain their own state and implement
 //! only the primitive hooks required by the composed traits.
 //!
-//! The seam ships its whole contract ahead of its second adopter, so an item
-//! without a production caller carries its own attribute rather than the module
-//! carrying a blanket `allow`: `#[cfg_attr(not(test), allow(dead_code))]` when
-//! only tests call it, `#[allow(dead_code)]` when it is contract-only. Accidental
-//! dead code in this module therefore still warns, and an item's attribute is
-//! dropped once a production adopter lands.
+//! Shared mechanics are kept explicit: production callers use the seam, and
+//! declarations without a production consumer are removed rather than hidden
+//! behind lint suppressions.
 
 mod cursor;
 mod expandable;

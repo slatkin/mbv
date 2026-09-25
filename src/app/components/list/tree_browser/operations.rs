@@ -75,32 +75,6 @@ impl<Target: Clone + Eq + Hash> Expandable<Target> for TreeState<'_, Target> {
         let id = *self.browser.target_to_node.get(target)?;
         self.browser.arena.get(&id)?.node.parent.as_ref()
     }
-
-    fn child_targets(&self, target: &Target) -> Vec<&Target> {
-        let Some(id) = self.browser.target_to_node.get(target) else {
-            return Vec::new();
-        };
-        self.browser
-            .arena
-            .get(id)
-            .map(|entry| {
-                entry
-                    .children
-                    .iter()
-                    .filter_map(|child| {
-                        self.browser
-                            .arena
-                            .get(child)
-                            .map(|entry| &entry.node.target)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    fn aggregate_mark_state(&self, target: &Target) -> AggregateMarkState {
-        self.browser.aggregate_mark_state_for(target)
-    }
 }
 
 impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
@@ -382,10 +356,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 self.with_state(|state| Expandable::select_parent(state, &flow));
                 self.reconcile_selection();
             }
-            super::TreeOperation::Child => {
-                self.with_state(|state| Expandable::select_first_child(state, &flow));
-                self.reconcile_selection();
-            }
             super::TreeOperation::Right => {
                 if let Some(target) = self.selected.clone() {
                     if self.is_expandable(&target) {
@@ -402,18 +372,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                             self.with_state(|state| Expandable::toggle_expanded(state, &target));
                             self.reconcile_selection();
                         }
-                    } else {
-                        disposition = TreeConsumed::Unhandled;
-                    }
-                } else {
-                    disposition = TreeConsumed::Unhandled;
-                }
-            }
-            super::TreeOperation::ToggleExpansion => {
-                if let Some(target) = self.selected.clone() {
-                    if self.is_expandable(&target) {
-                        self.with_state(|state| Expandable::toggle_expanded(state, &target));
-                        self.reconcile_selection();
                     } else {
                         disposition = TreeConsumed::Unhandled;
                     }
@@ -443,35 +401,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 }
                 self.reconcile_selection();
             }
-            super::TreeOperation::PointerSelect(point) => {
-                let Some(target) = self.resolve_current_point(point).cloned() else {
-                    disposition = TreeConsumed::Unhandled;
-                    return self.transition(previous, previous_marks, disposition, external_intent);
-                };
-                if !self.with_state(|state| Cursored::select_target(state, &flow, &target)) {
-                    disposition = TreeConsumed::Unhandled;
-                }
-                self.reconcile_selection();
-            }
-            super::TreeOperation::ToggleMark | super::TreeOperation::ToggleMarkTarget(_) => {
-                let target = match operation {
-                    super::TreeOperation::ToggleMark => self.selected.clone(),
-                    super::TreeOperation::ToggleMarkTarget(target) => Some(target),
-                    _ => None,
-                };
-                if let Some(target) = target {
-                    if self.toggle_mark_target(&target) {
-                        self.selected = Some(target);
-                        // A target operation may address a filter-hidden row;
-                        // repair it before reporting the transition.
-                        self.reconcile_selection();
-                    } else {
-                        disposition = TreeConsumed::Unhandled;
-                    }
-                } else {
-                    disposition = TreeConsumed::Unhandled;
-                }
-            }
             super::TreeOperation::PointerToggleMark(point) => {
                 // Legacy parity (the retired `toggle_mark_at`): a modified
                 // click resolves the painted row and moves the cursor to it
@@ -493,14 +422,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     disposition = TreeConsumed::Unhandled;
                 }
             }
-            super::TreeOperation::ActivateTarget(target) => {
-                if self.with_state(|state| Cursored::select_target(state, &flow, &target)) {
-                    external_intent = Some(TreeExternalIntent::Activate(target));
-                    self.reconcile_selection();
-                } else {
-                    disposition = TreeConsumed::Unhandled;
-                }
-            }
             super::TreeOperation::Context => {
                 if let Some(target) = self.selected.clone() {
                     let targets = self.action_targets();
@@ -509,13 +430,6 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     } else {
                         TreeExternalIntent::ContextSelection(targets)
                     });
-                } else {
-                    disposition = TreeConsumed::Unhandled;
-                }
-            }
-            super::TreeOperation::ContextTarget(target) => {
-                if self.target_to_node.contains_key(&target) {
-                    external_intent = Some(TreeExternalIntent::Context(target));
                 } else {
                     disposition = TreeConsumed::Unhandled;
                 }

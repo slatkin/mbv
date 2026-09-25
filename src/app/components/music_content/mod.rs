@@ -370,7 +370,7 @@ impl MusicContent {
     pub(in crate::app) fn clear_track_focus(&mut self) {
         self.track_focused = false;
     }
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn album_cursor(&self) -> usize {
         self.selected_album_index()
     }
@@ -384,7 +384,7 @@ impl MusicContent {
     pub(in crate::app) fn pending_artist_workspace_focus_for_test(&self) -> bool {
         self.pending_artist_workspace_focus.is_some()
     }
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {
         // The tree's visible-node row flow: one entry per projected node, an
         // album target for leaves and `None` for artist roots and tracks.
@@ -399,11 +399,7 @@ impl MusicContent {
     /// visible order, tracks included).
     #[cfg(test)]
     pub(in crate::app) fn expand_all_tree_roots(&mut self) {
-        let targets: Vec<MusicTreeTarget> = self
-            .browser
-            .nodes()
-            .map(|node| node.target.clone())
-            .collect();
+        let targets: Vec<MusicTreeTarget> = self.browser.visible_targets();
         for target in targets {
             if !self.browser.is_expanded(&target) {
                 self.browser

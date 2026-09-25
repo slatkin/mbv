@@ -463,7 +463,7 @@ fn wide_tv_focus_to_queue_drops_right_rail_treatment_via_shell_sync() {
     let (blurred_buf, rail) = render_wide_tv(&mut model);
     assert_eq!(
         blurred_buf[(rail.x.saturating_sub(1), rail.y.saturating_sub(1))].bg,
-        crate::app::palette::resolve_surface_focus(false),
+        crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryPanel, false).fill,
         "blurred right rail drops the focused surface"
     );
     assert!(

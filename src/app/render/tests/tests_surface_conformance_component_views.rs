@@ -76,35 +76,6 @@ fn context_menu_selected_row_follows_the_table() {
     );
 }
 
-/// `unify-surface-colour-neutral` 4.1: the inline-hero selected detail paints
-/// the `InlineHero` row in both bool states — it is focus-driven, so both
-/// halves are pinned. The whole detail block is that row, its top and bottom
-/// spacer rows included: there is no framed border row left to exclude.
-#[test]
-fn inline_hero_follows_the_table() {
-    let hero_area = Rect::new(10, 5, 40, 5);
-    for focused in [false, true] {
-        let buffer = rendered(|f| {
-            super::components::widgets::fill_surface(
-                f,
-                hero_area,
-                palette::Surface::InlineHero,
-                focused,
-            );
-        });
-        let expected = palette::surface_colors(palette::Surface::InlineHero, focused).fill;
-        for row in [hero_area.y, hero_area.y + 2, hero_area.bottom() - 1] {
-            let actual = buffer[(hero_area.x, row)].bg;
-            assert_eq!(
-                actual, expected,
-                "inline hero (focused={focused}): expected {expected:?} at ({}, {}), \
-                 painted {actual:?}",
-                hero_area.x, row
-            );
-        }
-    }
-}
-
 /// `unify-surface-colour-neutral` 4.1: the sidebar shell pins its body and
 /// band rows to the shared surface table.
 #[test]
@@ -153,14 +124,7 @@ fn playback_status_pill_follows_the_table() {
     let mut marquee = String::new();
     let marquee_at = std::time::Instant::now();
     term.draw(|f| {
-        let mut context = app.playback_panel_context(
-            row,
-            &mut layout,
-            1,
-            true,
-            &None,
-            ratatui::style::Color::Reset,
-        );
+        let mut context = super::test_playback_context(&mut app, &mut layout, row, 1, true, None);
         super::components::chrome_player::render_title_row(
             f,
             row,

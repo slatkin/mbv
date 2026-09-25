@@ -9,8 +9,10 @@ use tuirealm::event::Event;
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+#[cfg(test)]
+use super::media_list::MediaSemanticState;
 use super::media_list::{
-    MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTransition, MediaSemanticState,
+    MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTransition,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{Msg, QueueRequest};
@@ -112,7 +114,7 @@ impl QueueComponent {
         self.focused = focused;
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn set_content(
         &mut self,
         slots: Vec<QueueSlot>,
@@ -133,7 +135,7 @@ impl QueueComponent {
 
     /// The semantic states of the projected rows, in row order (tick-test
     /// evidence for the shell's now-playing claim projection).
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn projected_row_states(&self) -> Vec<MediaSemanticState> {
         self.carrier
             .wide()

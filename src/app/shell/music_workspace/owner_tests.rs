@@ -17,6 +17,7 @@ use mbv_core::config::ServiceKind;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
+use tuirealm::component::Component;
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
@@ -34,6 +35,33 @@ fn music_group_app_two_albums() -> crate::app::App {
 fn wide(model: &mut Model) {
     model.app.terminal_width = 160;
     model.app.terminal_height = 40;
+}
+
+fn painted_music_offset(model: &mut Model) -> usize {
+    let area = Rect::new(0, 0, 80, 8);
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    {
+        let browser = &mut model.test_music_owner_mut().browser;
+        terminal.draw(|frame| browser.view(frame, area)).unwrap();
+    }
+
+    let browser = &model.test_music_owner().browser;
+    let selected = browser
+        .selected_target()
+        .cloned()
+        .expect("music owner has a selected target");
+    let target_index = browser
+        .visible_targets()
+        .iter()
+        .position(|target| target == &selected)
+        .expect("selected target is in the painted flow");
+    let selected_row = browser
+        .selected_row_rect()
+        .expect("selected target has painted geometry");
+    let row_in_view = usize::from(selected_row.y - area.y);
+    target_index
+        .checked_sub(row_in_view)
+        .expect("selected target is below the viewport origin")
 }
 
 // ── Keyboard: activation / inline track focus ────────────────────────────
@@ -423,9 +451,15 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
     model.test_music_owner_mut().re_anchor(10, 7);
     assert_eq!(model.test_music_owner().album_cursor(), 10);
     // The carrier clamps the requested scroll to its own valid range for the
-    // fixture's short flow; read back the clamped value as the ground truth
-    // the round trip below must preserve exactly.
-    let scroll = model.test_music_owner().browser.viewport_offset();
+    // fixture's short flow; read the clamped value back through painted row
+    // geometry so this assertion still proves viewport retention, not only
+    // stable-target selection.
+    let scroll = painted_music_offset(&mut model);
+    assert!(
+        scroll > 0,
+        "the fixture must start with a non-zero viewport"
+    );
+    let selected = model.test_music_owner().browser.selected_target().cloned();
 
     // Tab away to Home: Music is no longer the active owner, but stays
     // retained (its library is still in the catalog).
@@ -446,9 +480,14 @@ fn music_owner_keeps_cursor_and_scroll_across_a_tab_change() {
         "the owner's album cursor survives the tab round trip"
     );
     assert_eq!(
-        model.test_music_owner().browser.viewport_offset(),
+        model.test_music_owner().browser.selected_target().cloned(),
+        selected,
+        "the owner's selected target survives the tab round trip"
+    );
+    assert_eq!(
+        painted_music_offset(&mut model),
         scroll,
-        "the owner's scroll survives the tab round trip"
+        "the owner's painted viewport offset survives the tab round trip"
     );
 }
 

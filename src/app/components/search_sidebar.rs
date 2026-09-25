@@ -375,6 +375,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
                 None => LeafKeyResult::Unhandled.into_option(),
             },
             Event::Mouse(mouse) => self.handle_mouse(mouse),
+            #[cfg(test)]
             Event::User(UserEvent::Clock(now)) => self.handle_clock(*now),
             _ => None,
         }

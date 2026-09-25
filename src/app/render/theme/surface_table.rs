@@ -51,11 +51,8 @@
 //! a second input to the resolver: the queue-only branch names it, and its
 //! recess rects share the value through the panel context.
 
-#![cfg_attr(not(test), allow(dead_code))]
-
 use super::surface::{FocusSource, Level, Row, Surface};
 use super::*;
-use ratatui::style::Color;
 
 /// The row for one surface: its level, which column's focus (if any) drove
 /// its focused appearance in main, whether it takes the soft content-body
@@ -106,36 +103,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: Palette::Ink.color(),
         },
-        // The library punch-through: the backdrop beneath the list panel
-        // shows through, never the panel's focus green. Evidence:
-        // `render/components/widgets.rs:136`, `list_rows.rs:341,354,383,469`,
-        // the `SelectedRowSurface::ListBackdrop` arm at
-        // `media_list/wide.rs:202`, and the grid cell at `wide.rs:268`.
-        Surface::SelectedRow => Row {
-            level: Level::ColumnPane,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_BACKDROP,
-        },
-        // The queue list's selected row is a hole in the queue column: it
-        // shows the column's own fill, resolved with the queue column's focus.
-        // Evidence: `render/components/queue.rs:36` (the policy focused bit).
-        Surface::SelectedRowOnQueueColumn => Row {
-            level: Level::ColumnPane,
-            focus: FocusSource::QueueColumn,
-            soft: false,
-            resting: SURFACE_RESTING,
-        },
-        // TV's episode list and Music's track list are holes in the library
-        // pane: they show the pane's fill, resolved with the library column's
-        // focus. Evidence: `render/components/tv_wide.rs:573-576`,
-        // `music_wide.rs:537-538`.
-        Surface::SelectedRowOnLibraryPane => Row {
-            level: Level::ColumnPane,
-            focus: FocusSource::LibraryColumn,
-            soft: false,
-            resting: SURFACE_RESTING,
-        },
         // A popup's context-menu row is the one selected row at this level
         // with a different value; declared rather than silently repainted
         // (`render/components/context_menu.rs:38`).
@@ -180,13 +147,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: true,
             resting: SURFACE_BACKDROP,
         },
-        // The selected row's inline detail (`render/components/hero.rs:192`).
-        Surface::InlineHero => Row {
-            level: Level::ContentBody,
-            focus: FocusSource::LibraryColumn,
-            soft: false,
-            resting: SURFACE_RESTING,
-        },
         // The now-playing panel body: the projection at
         // `shell/playback.rs` and the pre-sync default at
         // `components/playback.rs:55`.
@@ -217,15 +177,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: SURFACE_SIDEBAR,
         },
         // --- recess ---
-        // The now-playing panel's own content rows follow the panel's fill
-        // (`render/components/chrome_player.rs:43,52,65,93,109,197,406`, via
-        // `ctx.panel_bg`).
-        Surface::PlaybackRecess => Row {
-            level: Level::Recess,
-            focus: FocusSource::QueueColumn,
-            soft: false,
-            resting: SURFACE_RESTING,
-        },
         Surface::PlaybackStatusPill => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
@@ -342,18 +293,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_FOCUSED,
         },
-        // The dim backdrop paints no fill of its own: it blends every
-        // existing cell halfway toward black (see
-        // `super::super::components::backdrop::dim`), so its row is that blend
-        // base rather than a rect fill. Main has no role for the shade, so the
-        // row names the `Color::Black` variant the painter's arm uses, not a
-        // new literal.
-        Surface::PopupDimBackdrop => Row {
-            level: Level::Popup,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: Color::Black,
-        },
     }
 }
 
@@ -382,11 +321,6 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
         Surface::WideSplitGutter,
         "the split gap between the wide hero panes is painted as the app backdrop \
          in every frame",
-    ),
-    (
-        Surface::SelectedRow,
-        "the punch-through reveals the backdrop beneath the list panel, not the \
-         column's resting content value",
     ),
     (
         Surface::ContextMenuSelectedRow,

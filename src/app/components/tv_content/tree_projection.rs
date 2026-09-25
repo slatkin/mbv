@@ -218,7 +218,6 @@ impl TvContent {
     }
 
     // Kept as a typed boundary seam until task 3.1 connects mounted tree input.
-    #[allow(dead_code)]
     pub(crate) fn toggle_tree_expansion(&mut self, target: TvTreeTarget) -> Option<Msg> {
         let was_expanded = self.browser.is_expanded(&target);
         let transition = self

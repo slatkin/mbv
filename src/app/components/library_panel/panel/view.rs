@@ -147,6 +147,7 @@ impl Component for LibraryPanel {
                         self.terminal_height,
                     );
                     self.overlay_geometry = Some(super::OverlayGeometry {
+                        #[cfg(test)]
                         pane: overlay_area,
                         frame: overlay_rect,
                         hero: composition,
@@ -157,6 +158,7 @@ impl Component for LibraryPanel {
                     // visible overlay/frame and its hit boundary alive rather
                     // than silently falling back to the covered browser.
                     self.overlay_geometry = Some(super::OverlayGeometry {
+                        #[cfg(test)]
                         pane: overlay_area,
                         frame: overlay_rect,
                         hero: super::super::hero_composition::HeroCompositionGeometry {

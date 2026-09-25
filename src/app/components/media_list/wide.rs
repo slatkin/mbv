@@ -1,6 +1,6 @@
 use super::{
     MediaList, MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition,
-    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
+    RowGeometry, WideMediaListPaintPolicy, WideViewport, ZebraStripe,
 };
 use crate::app::components::list::{
     Cursored, MarkSelection, MarkSelectionState, PaintRetained, PaintRetainedState, Viewported,
@@ -122,20 +122,7 @@ impl<Target> WideMediaList<Target> {
         Target: Clone,
     {
         let rows = row_geometry.target_rects(claim_rect, content_rect);
-        PaintRetained::finish(
-            self,
-            claim_rect,
-            content_rect,
-            row_geometry.offset(),
-            rows,
-            selected_row_rect,
-        );
-    }
-
-    /// The current frame's claimed list rectangle, if `view` completed.
-    #[allow(dead_code)]
-    pub fn current_claim_rect(&self) -> Option<Rect> {
-        self.paint.claim_rect()
+        PaintRetained::finish(self, claim_rect, content_rect, rows, selected_row_rect);
     }
 
     /// The current frame's content rectangle, if `view` completed.
@@ -146,11 +133,6 @@ impl<Target> WideMediaList<Target> {
     /// The current frame's selected-row rectangle, if it is visible.
     pub fn current_selected_row_rect(&self) -> Option<Rect> {
         self.paint.selected_row_rect()
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_flow_offset(&self) -> Option<usize> {
-        self.paint.flow_offset()
     }
 
     /// Whether the current frame's painted list claims `point`.
@@ -242,13 +224,6 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
             self.core.selected_display_row(),
         )
     }
-
-    /// Zero-based screen-row offset from the viewport top to the selected
-    /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
-        self.core.selected_row_offset(viewport_height)
-    }
 }
 
 impl<Target: Clone + Eq> WideMediaList<Target> {
@@ -301,33 +276,13 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
         self.core.toggle_selection(target);
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn extend_selection_to(&mut self, target: &Target) {
         self.core.extend_selection_to(target);
     }
 
     pub fn clear_selection(&mut self) {
         self.core.clear_selection();
-    }
-
-    /// Produce a [`ViewportAnchor`] from the current selection for a painted
-    /// viewport height (design.md D3). `None` when nothing is selectable.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<Target>> {
-        self.core.viewport_anchor(viewport_height)
-    }
-
-    /// Restore a [`ViewportAnchor`] at a painted viewport height: select the
-    /// target if present, then place it at the requested offset where the
-    /// geometry allows, clamping otherwise (design.md D3).
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn apply_viewport_anchor(
-        &mut self,
-        anchor: &ViewportAnchor<Target>,
-        viewport_height: usize,
-    ) {
-        self.invalidate_paint();
-        self.core.apply_viewport_anchor(anchor, viewport_height);
     }
 
     /// Offer one already-normalized row-local input to the shared owner. Every

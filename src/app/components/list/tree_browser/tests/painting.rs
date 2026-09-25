@@ -41,11 +41,14 @@ fn shared_view_paints_depth_metadata_bars_and_scrollbar_without_state_glyphs() {
         ])
         .unwrap();
     browser.set_geometry(Rect::new(1, 0, 18, 2), Rect::new(3, 0, 14, 2));
-    browser.apply(super::super::TreeOperation::ToggleExpansion);
-    browser.apply(super::super::TreeOperation::Child);
-    browser.apply(super::super::TreeOperation::ToggleExpansion);
-    browser.apply(super::super::TreeOperation::Child);
-    browser.apply(super::super::TreeOperation::ToggleMark);
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Root,
+    ));
+    browser.apply(super::super::TreeOperation::Select(Target::Branch));
+    browser.apply(super::super::TreeOperation::ToggleExpansionTarget(
+        Target::Branch,
+    ));
+    browser.apply(super::super::TreeOperation::Select(Target::Leaf));
 
     let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
     terminal

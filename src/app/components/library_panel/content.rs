@@ -292,13 +292,6 @@ pub(in crate::app) trait PanelList {
     /// owner state; selection state remains with the owner.
     fn clamp_viewport(&mut self, viewport_height: usize);
 
-    /// Clear interaction selection when this owner is replaced as the active
-    /// destination. Overlay focus changes do not call this method. Only the
-    /// presentation impls override this; the no-op default exists for the
-    /// test fixtures.
-    #[allow(dead_code)]
-    fn clear_selection(&mut self) {}
-
     /// Configure the paint policy used by the next `view` (design D3/D6: the
     /// panel sets focus and the slot's fixed selected-row surface).
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy);
@@ -321,18 +314,8 @@ pub(in crate::app) trait PanelList {
         None
     }
 
-    /// Whether the current view's retained geometry claims `point` (D6 frame
-    /// invalidation: a presentation that has not completed its view claims
-    /// nothing).
-    #[allow(dead_code)]
-    fn claims_point(&self, point: ratatui::layout::Position) -> bool {
-        let _ = point;
-        false
-    }
-
     /// Returns the destination-owned search bar projection, when the list
     /// remains the browser owner during an in-place search session.
-    #[allow(dead_code)]
     fn search_bar(&self) -> Option<(String, bool)> {
         None
     }

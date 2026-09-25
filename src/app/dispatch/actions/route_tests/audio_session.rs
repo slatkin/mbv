@@ -1,32 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
-use super::*;
-
-fn folder(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "Folder");
-    item.id = id.into();
-    item.is_folder = true;
-    item
-}
-
-fn album(id: &str, name: &str) -> EmbyItem {
-    let mut item = make_item(name, "MusicAlbum");
-    item.id = id.into();
-    item.is_folder = true;
-    item.media_type = "Audio".into();
-    item
-}
-
-fn recursive_music_app() -> App {
-    let mut app = make_app_stub();
-    app.music_levels = vec!["group".into(), "artist".into(), "album".into()];
-    let mut library = make_item("Music", "CollectionFolder");
-    library.id = "music-lib".into();
-    library.collection_type = "music".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab::new(library));
-    app
-}
 fn make_remote_session(audio_only: bool) -> mbv_core::api::SessionInfo {
     mbv_core::api::SessionInfo {
         media_info: mbv_core::api::SessionMediaInfo {
@@ -96,19 +67,6 @@ fn toggle_mute_falls_back_to_cycle_audio_when_remote_session_connected() {
          which advances the session's audio_index"
     );
 }
-fn fetch_album_tracks_is_a_no_op_when_already_cached() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.album_tracks_cache.insert("album-1".into(), Vec::new());
-
-    app.fetch_album_tracks("album-1".into());
-
-    assert!(
-        !app.album_tracks_loading.contains("album-1"),
-        "a cache hit must return before marking the album as loading \
-         (and before spawning a redundant network fetch)"
-    );
-}
-
 #[test]
 fn fetch_album_tracks_is_a_no_op_when_already_loading() {
     let mut app = crate::app::tests::make_app_stub();

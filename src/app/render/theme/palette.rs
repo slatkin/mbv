@@ -11,7 +11,7 @@
 //! Additive unit: the roles (`mod.rs`) and the surface tier consume
 //! `color()`; `ALL`, `name()` and `hex()` are test-only (the uniqueness and
 //! `docs/palette.json` drift tests below) and are `#[cfg(test)]`-gated —
-//! structurally, never `#[allow(dead_code)]`.
+//! structurally, with no production dead-code suppression.
 //!
 //! Known residual `Color::Rgb` literals outside this enum (task 4.1), none
 //! of them palette colours: `components/backdrop.rs`'s dim arithmetic, which
@@ -23,7 +23,7 @@
 
 use ratatui::style::Color;
 
-/// The 20 approved palette variants, in name-table order (hue families,
+/// The 19 approved palette variants, in name-table order (hue families,
 /// dark-to-light within each family; see
 /// `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 ///
@@ -47,8 +47,6 @@ pub(in crate::app) enum Palette {
     Mauve,
     Red,
     Orange,
-    #[allow(dead_code)]
-    Clay,
     Yellow,
     Cream,
     White,
@@ -58,7 +56,7 @@ pub(in crate::app) enum Palette {
 /// the uniqueness tests and the later `docs/palette.json` viewer. Test-only:
 /// production code names variants directly, never through `ALL`.
 #[cfg(test)]
-pub(in crate::app) const ALL: [Palette; 20] = [
+pub(in crate::app) const ALL: [Palette; 19] = [
     Palette::Grey1,
     Palette::Grey2,
     Palette::Grey3,
@@ -75,7 +73,6 @@ pub(in crate::app) const ALL: [Palette; 20] = [
     Palette::Mauve,
     Palette::Red,
     Palette::Orange,
-    Palette::Clay,
     Palette::Yellow,
     Palette::Cream,
     Palette::White,
@@ -102,7 +99,6 @@ impl Palette {
             Palette::Mauve => Color::Rgb(0xd6, 0x99, 0xb6),
             Palette::Red => Color::Rgb(0xe5, 0x7e, 0x80),
             Palette::Orange => Color::Rgb(0xe5, 0x98, 0x75),
-            Palette::Clay => Color::Rgb(0xdd, 0x9a, 0x78),
             Palette::Yellow => Color::Rgb(0xdb, 0xbc, 0x7f),
             Palette::Cream => Color::Rgb(0xfa, 0xed, 0xcd),
             Palette::White => Color::Rgb(0xfd, 0xf6, 0xe3),
@@ -130,7 +126,6 @@ impl Palette {
             Palette::Mauve => "Mauve",
             Palette::Red => "Red",
             Palette::Orange => "Orange",
-            Palette::Clay => "Clay",
             Palette::Yellow => "Yellow",
             Palette::Cream => "Cream",
             Palette::White => "White",
@@ -167,7 +162,7 @@ mod tests {
     /// colour check covers both presentations.
     #[test]
     fn all_lists_every_variant_once_with_distinct_values() {
-        assert_eq!(ALL.len(), 20, "ALL must list exactly the 20 variants");
+        assert_eq!(ALL.len(), 19, "ALL must list exactly the 19 variants");
         let distinct: HashSet<Palette> = ALL.into_iter().collect();
         assert_eq!(
             distinct.len(),
@@ -245,11 +240,8 @@ mod tests {
         Some(rgb)
     }
 
-    /// Every role const in `theme/mod.rs` as `(name, variant name)`, in
-    /// declaration order. The retired test-only names (`#[cfg(test)]`-gated:
-    /// `SURFACE_PLAYBACK`, `SURFACE_ACCENT_SOFT`,
-    /// `SURFACE_ARTWORK_PLACEHOLDER`) are skipped: they are reachable only
-    /// because frozen tests pin them, so they are not production roles and do
+    /// Every production role const in `theme/mod.rs` as `(name, variant
+    /// name)`, in declaration order. Test-only aliases are not roles and do
     /// not belong in the docs.
     ///
     /// Parsed from the source rather than listed here so the guard needs no
@@ -408,10 +400,9 @@ mod tests {
     }
 
     /// Drift guard: the distinct colour values in `docs/palette.json` must
-    /// be exactly the palette's 20 `hex()` values. The `surfaces` and
-    /// `specials` subtrees are deliberately excluded — `surfaces` contains
-    /// the `PopupDimBackdrop` `#000000` dim blend base, which is not a
-    /// palette colour, and `specials` names raw `Color::` mechanics
+    /// be exactly the palette's 19 `hex()` values. The `surfaces` and
+    /// `specials` subtrees are deliberately excluded because they contain
+    /// surface-specific and raw `Color::` values, respectively
     /// (design.md, "Raw `Color::` specials stay outside the palette").
     /// Row 4.2 retargets the JSON to the variant-first structure; the
     /// structural collector above already tolerates that restructure.

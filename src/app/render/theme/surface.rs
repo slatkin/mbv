@@ -20,8 +20,6 @@
 //! wherever the declined branch moved a surface (the library column, the row
 //! above the pill bar) and never where main did not.
 
-#![cfg_attr(not(test), allow(dead_code))]
-
 use super::*;
 use ratatui::style::Color;
 
@@ -132,6 +130,7 @@ macro_rules! declare_surfaces {
 
         impl Surface {
             /// Every declared surface identity, in declaration order.
+            #[cfg(test)]
             pub(in crate::app) const ALL: &'static [Surface] = &[$(Surface::$variant),+];
         }
     };
@@ -143,22 +142,17 @@ declare_surfaces!(
     LibraryColumn,
     WideSplitGutter,
     HeroPane,
-    SelectedRow,
-    SelectedRowOnQueueColumn,
-    SelectedRowOnLibraryPane,
     ContextMenuSelectedRow,
     // --- content body: a focusable content region ---
     LibraryPanel,
     QueuePanel,
     MainContentBox,
-    InlineHero,
     PlaybackPanel,
     // The Queue-only playback strip: a mode-driven chrome-band appearance, not
     // a focus-driven one (see `surface_table`'s row doc).
     QueueOnlyPlaybackPanel,
     SidebarBody,
     // --- recess: a non-focusable inset inside a content body ---
-    PlaybackRecess,
     PlaybackStatusPill,
     ArtworkPlaceholder,
     ArtworkLoadingPlaceholder,
@@ -182,5 +176,4 @@ declare_surfaces!(
     TabBar,
     // --- popup: an overlay frame and its dim backdrop ---
     PopupFrame,
-    PopupDimBackdrop,
 );

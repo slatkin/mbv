@@ -11,13 +11,9 @@ use tuirealm::state::State;
 pub enum ThreeLineRole {
     #[default]
     Name,
-    #[allow(dead_code)]
     Kind,
-    #[allow(dead_code)]
     Detail,
-    #[cfg_attr(not(test), allow(dead_code))]
     Status,
-    #[allow(dead_code)]
     Accent,
 }
 
@@ -84,14 +80,6 @@ impl<Target> ThreeLineFlatList<Target> {
         self.focused
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn set_gap(&mut self, gap: u16) {
-        if self.gap != gap {
-            self.gap = gap;
-            self.invalidate();
-        }
-    }
-
     pub fn items(&self) -> &[ThreeLineItem<Target>] {
         &self.items
     }
@@ -117,7 +105,6 @@ impl<Target> ThreeLineFlatList<Target> {
         self.invalidate();
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn move_selection(&mut self, delta: isize)
     where
         Target: Clone + Eq,
@@ -127,7 +114,6 @@ impl<Target> ThreeLineFlatList<Target> {
         self.invalidate();
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn select_target(&mut self, target: &Target) -> bool
     where
         Target: Clone + Eq,
@@ -138,12 +124,10 @@ impl<Target> ThreeLineFlatList<Target> {
         found
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn resolve_point(&self, point: Position) -> Option<&Target> {
         PaintRetained::resolve_point(self, point)
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn invalidate_paint(&mut self) {
         self.invalidate();
     }
@@ -233,7 +217,7 @@ impl<Target> ThreeLineFlatList<Target> {
         rows: Vec<(Rect, Target)>,
         selected: Option<Rect>,
     ) {
-        PaintRetained::finish(self, area, area, self.offset, rows, selected);
+        PaintRetained::finish(self, area, area, rows, selected);
     }
 
     pub(in crate::app) fn selected(&self) -> Option<&Target> {

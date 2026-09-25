@@ -114,9 +114,8 @@ pub(super) fn paint_tree(owner: &mut MusicContent, area: Rect) {
 /// resolved through the shared read-only stable-target row geometry (never a
 /// projection index or a paint-local point scan).
 pub(super) fn tree_point(owner: &MusicContent, target: &MusicTreeTarget) -> Position {
-    let rect = owner
-        .browser
-        .row_rect_for(target)
-        .expect("node is inside the painted viewport");
-    Position::new(rect.x, rect.y)
+    (0..100)
+        .flat_map(|y| (0..200).map(move |x| Position::new(x, y)))
+        .find(|point| owner.browser.resolve_current_point(*point) == Some(target))
+        .expect("node is inside the painted viewport")
 }

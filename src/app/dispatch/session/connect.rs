@@ -85,18 +85,6 @@ impl App {
     /// clients. Authority is determined by command flow, not connection
     /// lifecycle (ADR 0014 supersedes ADR 0003).
     ///
-    /// `#[allow(dead_code)]`: this repo's convention (`mem:conventions`) is
-    /// "fix all compile warnings -- delete unused code, never
-    /// `#[allow(unused)]`" -- but this primitive is a deliberate exception,
-    /// not a suppressed mistake: issue #222's brief requires it to ship with
-    /// *zero* production call sites (the trigger is #223's job, see
-    /// Architecture above), so a plain `cargo build --workspace` (which
-    /// strips `#[cfg(test)]` code, its only current caller) would otherwise
-    /// warn `associated function is never used`. Deleting the primitive to
-    /// silence that would defeat the entire point of this plan -- shipping
-    /// a complete, tested, reusable connect primitive ahead of the issue
-    /// that wires it up. Remove this attribute in the same change that adds
-    /// #223's first call site (`apply_route_for_playback` or equivalent).
     fn connect_daemon_route_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
@@ -138,9 +126,6 @@ impl App {
     /// conflicting flash on top of that teardown path's own flash. The
     /// caller is expected to try again only on its own next natural trigger
     /// (e.g. the next play/enqueue into this route), never from a
-    /// background timer. See the same `#[allow(dead_code)]` rationale as
-    /// `connect_daemon_route_endpoint` above -- remove both attributes
-    /// together when #223 adds its first call site.
     pub(in crate::app) fn try_daemon_route_connect(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,

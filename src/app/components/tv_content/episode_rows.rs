@@ -234,7 +234,7 @@ impl TvContent {
     /// .selected_series`), exposed so tests can verify the pushed detail
     /// follows the component's authoritative selection rather than the App
     /// browse cursor.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn selected_series_snapshot(&self) -> Option<&EmbyItem> {
         self.context.selected_series.as_ref()
     }

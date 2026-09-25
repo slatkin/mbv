@@ -11,9 +11,10 @@ mod theme;
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
 pub(in crate::app) use components::audiobookshelf_book::book_rows;
 
-#[allow(unused_imports)]
+#[cfg(test)]
+pub(in crate::app) use components::chrome_player::render_title_row;
 pub(in crate::app) use components::chrome_player::{
-    render_player_panel, render_title_row, PlaybackRenderContext, PlaybackStripAreas,
+    render_player_panel, PlaybackRenderContext, PlaybackStripAreas,
 };
 pub(in crate::app) use components::chrome_status::{
     render_status_bar, StatusBarModel, StatusBarRegions, VisualModeIndicator,
@@ -103,15 +104,8 @@ pub(crate) use theme::{
     TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY,
     TEXT_SECONDARY, TEXT_STRONG, WORKSPACE_HEADER_FG,
 };
-// Task 4.2: the retired role names and the value-aliased resolver survive only
-// as test-fed re-exports — each is pinned by a frozen pre-existing test file
-// the neutrality rule forbids editing, so a minimal named re-export stays for
-// exactly those names (see the change report for the per-name reasons).
 #[cfg(test)]
-pub(crate) use theme::{
-    resolve_surface_focus, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ARTWORK_PLACEHOLDER,
-    SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_PLAYBACK,
-};
+pub(crate) use theme::{PILL_SELECTED_BG, SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED};
 // The closed surface table (`unify-surface-colour-neutral` D1/D2/D7) is bridged
 // to `palette.rs` the same way. Its visibility is `crate::app`, so it is not
 // part of the wider `pub(crate)` role list above.
@@ -133,6 +127,5 @@ use unicode_width::UnicodeWidthStr;
 mod tests;
 #[cfg(test)]
 pub(crate) use tests::test_helpers::{
-    buffer_to_string, make_movie_app, make_music_group_app, make_music_group_app_with_second_album,
-    make_queue_app,
+    make_movie_app, make_music_group_app, make_music_group_app_with_second_album, make_queue_app,
 };

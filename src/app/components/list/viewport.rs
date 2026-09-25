@@ -1,28 +1,16 @@
 //! Shared viewport arithmetic over a cursored ordered [`RowFlow`](super::RowFlow).
 
-use std::convert::TryFrom;
-
 use super::{Cursored, Row, RowFlow};
 
 /// The deliberate paging policies supported by the current list shapes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PagingPolicy {
-    /// Move a fixed number of selectable rows, used by flat lists.
-    #[cfg_attr(not(test), allow(dead_code))]
-    FixedSelectableDistance(usize),
     /// Move by one visible viewport, used by nested/tree-shaped lists.
     VisibleViewport,
 }
 
 impl PagingPolicy {
-    /// The flat-list policy with a fixed selectable-row distance.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub const fn fixed_selectable_distance(distance: usize) -> Self {
-        Self::FixedSelectableDistance(distance)
-    }
-
     /// The tree/list policy whose page is the visible viewport.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub const fn visible_viewport() -> Self {
         Self::VisibleViewport
     }
@@ -107,7 +95,6 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
 
     /// Keep this cursor visible using its current target, if it is present in
     /// the flow.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn keep_cursor_visible(&mut self, flow: &RowFlow<Target>, viewport_len: usize) -> usize {
         let selected_position = self.index(flow);
         self.keep_selection_visible(flow, viewport_len, selected_position)
@@ -122,15 +109,6 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
         policy: PagingPolicy,
     ) -> Option<usize> {
         let selected = match policy {
-            PagingPolicy::FixedSelectableDistance(distance) => {
-                let distance = isize::try_from(distance).unwrap_or(isize::MAX);
-                let delta = if direction.is_negative() {
-                    -distance
-                } else {
-                    distance
-                };
-                self.move_by(flow, delta)
-            }
             PagingPolicy::VisibleViewport => {
                 self.page_by_visible_rows(flow, viewport_len, direction)
             }
@@ -194,7 +172,6 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
 
     /// Clamp geometry and then keep the current cursor visible. This is the
     /// operation used after a resize or content replacement.
-    #[cfg_attr(not(test), allow(dead_code))]
     fn reconcile_viewport(&mut self, flow: &RowFlow<Target>, viewport_len: usize) -> usize {
         self.clamp_viewport(flow, viewport_len);
         self.keep_cursor_visible(flow, viewport_len)
@@ -249,19 +226,6 @@ mod tests {
             Row::selectable(4),
             Row::selectable(5),
             Row::selectable(6),
-        ])
-    }
-
-    fn structural_heavy_flow() -> RowFlow<u8> {
-        RowFlow::new(vec![
-            Row::selectable(1),
-            Row::structural(),
-            Row::structural(),
-            Row::selectable(2),
-            Row::structural(),
-            Row::structural(),
-            Row::selectable(3),
-            Row::selectable(4),
         ])
     }
 
@@ -352,33 +316,5 @@ mod tests {
         assert_eq!(selected, Some(if direction < 0 { 7 } else { 0 }));
         assert_eq!(list.selected, expected_selected);
         assert_eq!(list.offset, expected_offset);
-    }
-
-    #[rstest]
-    #[case(1, 4, Some(2), Some(3))]
-    #[case(3, 2, Some(4), Some(2))]
-    fn paging_policies_remain_distinct_over_structural_rows(
-        #[case] distance: usize,
-        #[case] viewport_len: usize,
-        #[case] expected_fixed: Option<u8>,
-        #[case] expected_visible: Option<u8>,
-    ) {
-        let rows = structural_heavy_flow();
-        let mut fixed = TestListState::default();
-        let mut visible = TestListState::default();
-        fixed.first(&rows);
-        visible.first(&rows);
-
-        fixed.page(
-            &rows,
-            viewport_len,
-            1,
-            PagingPolicy::fixed_selectable_distance(distance),
-        );
-        visible.page(&rows, viewport_len, 1, PagingPolicy::visible_viewport());
-
-        assert_eq!(fixed.selected, expected_fixed);
-        assert_eq!(visible.selected, expected_visible);
-        assert_ne!(fixed.selected, visible.selected);
     }
 }

@@ -192,16 +192,16 @@ impl InlineSearch {
         self.results.set_content(Vec::new());
     }
 
-    pub(in crate::app) fn query(&self) -> &str {
-        &self.query
-    }
-
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn restore_query(&mut self, query: String) {
         self.query = query;
         self.deadline = None;
         self.recompute_order();
         self.publish_rows(true);
+    }
+
+    pub(in crate::app) fn query(&self) -> &str {
+        &self.query
     }
 
     pub(in crate::app) fn loading(&self) -> bool {
@@ -223,7 +223,7 @@ impl InlineSearch {
         &mut self.results
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(in crate::app) fn selected_target(&self) -> Option<(String, String)> {
         self.selected_item().map(|item| (item.id, item.item_type))
     }

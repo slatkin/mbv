@@ -1,6 +1,3 @@
-#![allow(dead_code, unused_imports)]
-
-use super::super::*;
 use super::buffer_to_string;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::list::tree_browser::{
@@ -8,9 +5,7 @@ use crate::app::components::list::tree_browser::{
 };
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::components::music_tree_target::MusicTreeTarget;
-use crate::app::components::tv_content::TvContent;
 use crate::app::components::ComponentId;
-use crate::app::layout::PaintedRowGeometry;
 use crate::app::shell::Model;
 use crate::app::state::music_grouping::ArtistKey;
 use crate::app::{App, PanelFocus};
@@ -146,41 +141,4 @@ fn music_tree_fixture_projection(
         });
     }
     nodes
-}
-
-/// The panel-hosted TV owner (task 8.4: reached through the mounted
-/// `LibraryPanel`'s `LibraryKey` map, never a `ComponentId`).
-pub fn tv_owner(model: &Model) -> &TvContent {
-    let key = super::tv_owner_key(model);
-    model
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("library panel mounted")
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .expect("LibraryPanel")
-        .owner(&key)
-        .expect("tv owner installed")
-        .as_any()
-        .downcast_ref::<TvContent>()
-        .expect("TvContent")
-}
-
-/// The TV owner's painted geometry, surfaced as `PaintedRowGeometry` so the shared
-/// role-rect assertions keep working: the mounted `LibraryPanel` owns the
-/// rects and publishes them through its own retained-geometry accessor.
-pub fn mounted_tv_layout(model: &Model) -> PaintedRowGeometry {
-    model
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("library panel mounted")
-        .as_any()
-        .downcast_ref::<LibraryPanel>()
-        .expect("LibraryPanel")
-        .test_painted_layout()
-}
-
-/// The TV owner's series scroll offset this frame.
-pub fn mounted_tv_scroll(model: &Model) -> usize {
-    tv_owner(model).scroll()
 }
