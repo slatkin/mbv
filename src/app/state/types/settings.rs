@@ -190,8 +190,16 @@ pub fn setting_label(key: SettingKey) -> &'static str {
 }
 
 pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
+    setting_key_value(key, cfg)
+        .or_else(|| setting_boolean_value(key, cfg))
+        .or_else(|| setting_text_value(key, cfg, ui))
+        .or_else(|| setting_collection_value(key, cfg))
+        .unwrap_or_default()
+}
+
+fn setting_key_value(key: SettingKey, cfg: &Config) -> Option<String> {
     match key {
-        SettingKey::Services => "Emby, Audiobookshelf, Feeds".into(),
+        SettingKey::Services => Some("Emby, Audiobookshelf, Feeds".into()),
         SettingKey::Keys => {
             // Live keybind summary (design D7): the configured prefix and
             // the number of actions whose router binding deviates from the
@@ -199,58 +207,73 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
             let keys = &cfg.keybinds;
             let prefix = keys.prefix.map(|chord| chord.to_string());
             let count = keys.override_count();
-            match (prefix, count) {
+            Some(match (prefix, count) {
                 (None, 0) => "defaults".into(),
                 (None, n) => format!("{n} overridden"),
                 (Some(prefix), 0) => format!("{prefix} · defaults"),
                 (Some(prefix), n) => format!("{prefix} · {n} overridden"),
-            }
+            })
         }
-        SettingKey::StayAlive => bool_val(cfg.stay_alive),
-        SettingKey::AutoReconnect => bool_val(cfg.auto_reconnect),
-        SettingKey::SavePlaylistOnQuit => bool_val(cfg.save_playlist_on_quit),
-        SettingKey::AlwaysPlayNext => bool_val(cfg.always_play_next),
-        SettingKey::ConsumeVideos => bool_val(cfg.consume_videos),
-        SettingKey::ConsumeAudio => bool_val(cfg.consume_audio),
-        SettingKey::SavePlaylistOnConsume => bool_val(cfg.save_playlist_on_consume),
-        SettingKey::SavePlaylistOnConsumeAudio => bool_val(cfg.save_playlist_on_consume_audio),
-        SettingKey::AlwaysSkipIntro => bool_val(cfg.always_skip_intro),
-        SettingKey::ImageProtocol => ui.image_protocol.clone().unwrap_or_else(|| "none".into()),
-        SettingKey::HiddenLibraries => fmt_hidden_list(&cfg.hidden_libraries),
-        SettingKey::ShowAudioWindow => bool_val(cfg.show_audio_window),
-        SettingKey::UseMpvConfig => bool_val(cfg.use_mpv_config),
-        SettingKey::NoScripts => bool_val(cfg.no_scripts),
-        SettingKey::Autoload => bool_val(cfg.autoload),
-        SettingKey::ShowSysTrayIcon => bool_val(cfg.show_systray_icon),
-        SettingKey::SystemNotifications => bool_val(cfg.system_notifications),
-        SettingKey::MouseSupport => bool_val(cfg.mouse_support),
-        SettingKey::MyLanguages => fmt_lang_list(&cfg.my_languages),
-        SettingKey::SubtitleMode => {
-            if cfg.subtitle_mode.is_empty() {
-                "Default".into()
-            } else {
-                cfg.subtitle_mode.clone()
-            }
-        }
+        _ => None,
+    }
+}
 
-        SettingKey::SubtitleLanguage => {
-            if cfg.subtitle_lang.is_empty() {
-                "any".into()
-            } else {
-                cfg.subtitle_lang.clone()
-            }
+fn setting_boolean_value(key: SettingKey, cfg: &Config) -> Option<String> {
+    let value = match key {
+        SettingKey::StayAlive => cfg.stay_alive,
+        SettingKey::AutoReconnect => cfg.auto_reconnect,
+        SettingKey::SavePlaylistOnQuit => cfg.save_playlist_on_quit,
+        SettingKey::AlwaysPlayNext => cfg.always_play_next,
+        SettingKey::ConsumeVideos => cfg.consume_videos,
+        SettingKey::ConsumeAudio => cfg.consume_audio,
+        SettingKey::SavePlaylistOnConsume => cfg.save_playlist_on_consume,
+        SettingKey::SavePlaylistOnConsumeAudio => cfg.save_playlist_on_consume_audio,
+        SettingKey::AlwaysSkipIntro => cfg.always_skip_intro,
+        SettingKey::ShowAudioWindow => cfg.show_audio_window,
+        SettingKey::UseMpvConfig => cfg.use_mpv_config,
+        SettingKey::NoScripts => cfg.no_scripts,
+        SettingKey::Autoload => cfg.autoload,
+        SettingKey::ShowSysTrayIcon => cfg.show_systray_icon,
+        SettingKey::SystemNotifications => cfg.system_notifications,
+        SettingKey::MouseSupport => cfg.mouse_support,
+        _ => return None,
+    };
+    Some(bool_val(value))
+}
+
+fn setting_text_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> Option<String> {
+    match key {
+        SettingKey::ImageProtocol => {
+            Some(ui.image_protocol.clone().unwrap_or_else(|| "none".into()))
         }
-        SettingKey::AudioLanguage => {
-            if cfg.audio_lang.is_empty() {
-                "any".into()
-            } else {
-                cfg.audio_lang.clone()
-            }
-        }
-        SettingKey::FeedViewLibraries => fmt_feed_view_list(&cfg.feed_view_libraries),
-        SettingKey::LibraryRoutes => fmt_library_routes(&cfg.library_routes),
-        SettingKey::ManageFeeds => fmt_feeds_list(&cfg.feeds),
-        SettingKey::LogOut => String::new(),
+        SettingKey::SubtitleMode => Some(if cfg.subtitle_mode.is_empty() {
+            "Default".into()
+        } else {
+            cfg.subtitle_mode.clone()
+        }),
+        SettingKey::SubtitleLanguage => Some(if cfg.subtitle_lang.is_empty() {
+            "any".into()
+        } else {
+            cfg.subtitle_lang.clone()
+        }),
+        SettingKey::AudioLanguage => Some(if cfg.audio_lang.is_empty() {
+            "any".into()
+        } else {
+            cfg.audio_lang.clone()
+        }),
+        _ => None,
+    }
+}
+
+fn setting_collection_value(key: SettingKey, cfg: &Config) -> Option<String> {
+    match key {
+        SettingKey::HiddenLibraries => Some(fmt_hidden_list(&cfg.hidden_libraries)),
+        SettingKey::MyLanguages => Some(fmt_lang_list(&cfg.my_languages)),
+        SettingKey::FeedViewLibraries => Some(fmt_feed_view_list(&cfg.feed_view_libraries)),
+        SettingKey::LibraryRoutes => Some(fmt_library_routes(&cfg.library_routes)),
+        SettingKey::ManageFeeds => Some(fmt_feeds_list(&cfg.feeds)),
+        SettingKey::LogOut => Some(String::new()),
+        _ => None,
     }
 }
 
