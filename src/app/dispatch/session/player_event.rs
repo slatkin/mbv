@@ -244,7 +244,7 @@ impl App {
                     ev.is_finished,
                 );
             }
-            _ => unreachable!("all remaining PlayerEvent variants are handled above"),
+            _ => {}
         }
         false
     }
