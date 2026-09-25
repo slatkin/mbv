@@ -26,6 +26,7 @@ use crate::app::render::{render_tab_bar, TabBarModel};
 /// its tab hit regions, and emits a tab-select `Msg` for clicks.
 pub struct TabPanel {
     titles: Vec<String>,
+    markers: Vec<bool>,
     selected: usize,
     scroll: usize,
     /// Per-tab hit targets from the last paint, as
@@ -39,6 +40,7 @@ impl TabPanel {
     pub fn new() -> Self {
         Self {
             titles: Vec::new(),
+            markers: Vec::new(),
             selected: 0,
             scroll: 0,
             hits: Vec::new(),
@@ -51,10 +53,12 @@ impl TabPanel {
     pub(in crate::app) fn set_content(
         &mut self,
         titles: Vec<String>,
+        markers: Vec<bool>,
         selected: usize,
         scroll: usize,
     ) {
         self.titles = titles;
+        self.markers = markers;
         self.selected = selected;
         self.scroll = scroll;
     }
@@ -63,6 +67,11 @@ impl TabPanel {
     #[cfg(test)]
     pub(in crate::app) fn hit_regions(&self) -> &[(Rect, usize)] {
         &self.hits
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_markers(&self) -> &[bool] {
+        &self.markers
     }
 
     #[cfg(test)]
@@ -97,6 +106,7 @@ impl Component for TabPanel {
             area,
             &TabBarModel {
                 titles: &self.titles,
+                markers: &self.markers,
                 selected: self.selected,
                 scroll: self.scroll,
                 hovered: self.hovered,
@@ -158,11 +168,13 @@ mod tests {
 
     fn drawn_panel(
         width: u16,
+        titles: Vec<String>,
+        markers: Vec<bool>,
         selected: usize,
         scroll: usize,
     ) -> (TabPanel, ratatui::buffer::Buffer) {
         let mut panel = TabPanel::new();
-        panel.set_content(titles(), selected, scroll);
+        panel.set_content(titles, markers, selected, scroll);
         let mut terminal = Terminal::new(TestBackend::new(width, 3)).unwrap();
         terminal
             .draw(|f| panel.view(f, Rect::new(0, 0, width, 3)))
@@ -174,10 +186,43 @@ mod tests {
     /// with the accent marker, unselected tabs are muted uppercase labels.
     #[test]
     fn tab_bar_paints_selected_and_muted_labels() {
-        let (_, buffer) = drawn_panel(80, 1, 0);
+        let (_, buffer) = drawn_panel(80, titles(), vec![false; 5], 1, 0);
         let row: String = (0..80).map(|x| buffer[(x, 1)].symbol()).collect();
         assert!(row.contains("▐ MOVIES"), "selected tab row: {row:?}");
         assert!(row.contains("CONTINUE"), "muted Continue tab row: {row:?}");
+    }
+
+    #[test]
+    fn marker_paints_inside_only_its_tab_label() {
+        let tab_titles = ["Home", "Movies", "TV"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let (panel, buffer) = drawn_panel(80, tab_titles, vec![false, true, false], 0, 0);
+        let movies_label = panel
+            .hit_regions()
+            .iter()
+            .find(|(_, position)| *position == 1)
+            .map(|(rect, _)| *rect)
+            .expect("Movies tab is painted");
+        let row_y = movies_label.y;
+        let mut marker_cells = Vec::new();
+        for x in 0..buffer.area.width {
+            let cell = &buffer[(x, row_y)];
+            if cell.symbol() == "•" {
+                assert_eq!(cell.fg, palette::ACCENT_ACTIVE);
+                marker_cells.push(x);
+            }
+        }
+        assert_eq!(
+            marker_cells.len(),
+            1,
+            "only one marker is painted on the tab row"
+        );
+        assert!(
+            movies_label.x <= marker_cells[0] && marker_cells[0] < movies_label.right(),
+            "the marker belongs to the Movies label"
+        );
     }
 
     /// Overflow arrows: with all tabs fitting, neither arrow paints; a narrow
@@ -185,11 +230,11 @@ mod tests {
     /// tab overflowing shows the right arrow.
     #[test]
     fn tab_bar_overflow_arrows_follow_the_visible_window() {
-        let (_, wide) = drawn_panel(120, 0, 0);
+        let (_, wide) = drawn_panel(120, titles(), vec![false; 5], 0, 0);
         let wide_row: String = (0..120).map(|x| wide[(x, 1)].symbol()).collect();
         assert!(!wide_row.contains('«') && !wide_row.contains('»'));
 
-        let (panel, narrow) = drawn_panel(30, 4, 1);
+        let (panel, narrow) = drawn_panel(30, titles(), vec![false; 5], 4, 1);
         let row: String = (0..30).map(|x| narrow[(x, 1)].symbol()).collect();
         assert!(
             row.contains('«'),
@@ -205,7 +250,7 @@ mod tests {
     /// emits the tab-select `Msg` with the tab's position.
     #[test]
     fn click_on_a_painted_tab_emits_tab_select() {
-        let (panel, _) = drawn_panel(80, 0, 0);
+        let (panel, _) = drawn_panel(80, titles(), vec![false; 5], 0, 0);
         let hits: Vec<(Rect, usize)> = panel.hit_regions().to_vec();
         assert_eq!(hits.len(), 5, "one hit region per painted tab: {hits:?}");
         let (rect, pos) = hits[2];
@@ -226,7 +271,7 @@ mod tests {
 
     #[test]
     fn moved_over_unselected_tab_sets_hover_without_selection_or_msg() {
-        let (mut panel, _) = drawn_panel(80, 0, 0);
+        let (mut panel, _) = drawn_panel(80, titles(), vec![false; 5], 0, 0);
         let (rect, position) = panel.hit_regions()[1];
         let msg = panel.on(&Event::Mouse(tuirealm::event::MouseEvent {
             kind: MouseEventKind::Moved,
@@ -241,7 +286,7 @@ mod tests {
 
     #[test]
     fn moved_into_gap_clears_hover_without_selection_or_msg() {
-        let (mut panel, _) = drawn_panel(80, 0, 0);
+        let (mut panel, _) = drawn_panel(80, titles(), vec![false; 5], 0, 0);
         let (rect, _) = panel.hit_regions()[1];
         panel.hovered = Some(1);
         let msg = panel.on(&Event::Mouse(tuirealm::event::MouseEvent {
@@ -257,7 +302,7 @@ mod tests {
 
     #[test]
     fn moved_over_selected_tab_sets_hover_without_changing_selection() {
-        let (mut panel, _) = drawn_panel(80, 2, 0);
+        let (mut panel, _) = drawn_panel(80, titles(), vec![false; 5], 2, 0);
         let (rect, position) = panel.hit_regions()[2];
         let msg = panel.on(&Event::Mouse(tuirealm::event::MouseEvent {
             kind: MouseEventKind::Moved,
@@ -272,7 +317,7 @@ mod tests {
 
     #[test]
     fn unselected_hover_strengthens_label_while_selected_style_wins() {
-        let (mut panel, _) = drawn_panel(80, 0, 0);
+        let (mut panel, _) = drawn_panel(80, titles(), vec![false; 5], 0, 0);
         let unselected = panel.hit_regions()[1].0;
         let selected = panel.hit_regions()[0].0;
         panel.hovered = Some(1);
@@ -299,7 +344,7 @@ mod tests {
     /// arrows — resolves to nothing.
     #[test]
     fn click_outside_the_tab_labels_is_a_noop() {
-        let (mut panel, _) = drawn_panel(30, 4, 1);
+        let (mut panel, _) = drawn_panel(30, titles(), vec![false; 5], 4, 1);
         for at in [(0u16, 0u16), (0, 1), (29, 2)] {
             assert_eq!(
                 panel.on(&Event::Mouse(tuirealm::event::MouseEvent {
@@ -319,7 +364,7 @@ mod tests {
     /// backdrop underneath stays until task 12.1).
     #[test]
     fn tab_panel_fills_its_placement_with_its_surface() {
-        let (_, buffer) = drawn_panel(60, 0, 0);
+        let (_, buffer) = drawn_panel(60, titles(), vec![false; 5], 0, 0);
         let fill = palette::surface_colors(palette::Surface::TabBar, false).fill;
         for y in 0..3 {
             for x in 0..60 {
