@@ -41,6 +41,51 @@ fn local_daemon_args(log_level: Option<mbv_core::applog::Level>) -> Vec<String> 
     args
 }
 
+const DISPLAY_VARS: [&str; 3] = ["WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY"];
+
+/// Display variables from `systemctl --user show-environment` output; `None`
+/// unless it names a Wayland or X11 display.
+fn display_env_from(show_environment: &str) -> Option<Vec<(&'static str, String)>> {
+    let vars: Vec<_> = DISPLAY_VARS
+        .into_iter()
+        .filter_map(|name| {
+            show_environment
+                .lines()
+                .find_map(|line| line.strip_prefix(name)?.strip_prefix('='))
+                .map(|value| (name, value.to_string()))
+        })
+        .collect();
+    vars.iter()
+        .any(|(name, _)| *name != "XAUTHORITY")
+        .then_some(vars)
+}
+
+/// The graphical session's display, as exported to the systemd user manager.
+/// The launcher's own env can't be trusted: an SSH login has no display (or a
+/// forwarded one), and every later client attaches to this daemon's mpv.
+fn session_display_env() -> Option<Vec<(&'static str, String)>> {
+    let output = match Command::new("systemctl")
+        .args(["--user", "show-environment"])
+        .stderr(Stdio::null())
+        .output()
+    {
+        Ok(output) if output.status.success() => output,
+        Ok(output) => {
+            log::warn!(target: "local_daemon", "systemctl --user show-environment failed: {}", output.status);
+            return None;
+        }
+        Err(e) => {
+            log::warn!(target: "local_daemon", "cannot run systemctl --user show-environment: {e}");
+            return None;
+        }
+    };
+    let env = display_env_from(&String::from_utf8_lossy(&output.stdout));
+    if env.is_none() {
+        log::warn!(target: "local_daemon", "systemd user manager exports no display; inheriting launcher's");
+    }
+    env
+}
+
 pub fn spawn_detached(
     socket_path: &str,
     log_level: Option<mbv_core::applog::Level>,
@@ -48,6 +93,12 @@ pub fn spawn_detached(
     let exe = std::env::current_exe().map_err(|e| format!("cannot locate binary: {e}"))?;
     let mut cmd = Command::new(exe);
     cmd.args(local_daemon_args(log_level));
+    if let Some(display_env) = session_display_env() {
+        for name in DISPLAY_VARS {
+            cmd.env_remove(name);
+        }
+        cmd.envs(display_env);
+    }
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::piped());
@@ -175,6 +226,28 @@ pub fn run_local_daemon_main() -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
+
+    #[rstest]
+    #[case::wayland_and_x11(
+        "HOME=/h\nWAYLAND_DISPLAY=wayland-1\nDISPLAY=:0\nXAUTHORITY=/run/xauth\n",
+        Some(vec![("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0"), ("XAUTHORITY", "/run/xauth")])
+    )]
+    #[case::x11_only("DISPLAY=:1\n", Some(vec![("DISPLAY", ":1")]))]
+    #[case::prefix_is_not_a_match("DISPLAYX=:9\nWAYLAND_DISPLAY_OLD=x\n", None)]
+    #[case::xauthority_alone_is_no_display("XAUTHORITY=/run/xauth\n", None)]
+    #[case::no_graphical_session("HOME=/h\nPATH=/bin\n", None)]
+    fn display_env_is_read_from_the_user_manager(
+        #[case] show_environment: &str,
+        #[case] expected: Option<Vec<(&'static str, &str)>>,
+    ) {
+        let expected = expected.map(|vars| {
+            vars.into_iter()
+                .map(|(name, value)| (name, value.to_string()))
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(display_env_from(show_environment), expected);
+    }
 
     #[test]
     fn spawn_args_forward_only_an_explicit_log_level() {
