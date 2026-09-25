@@ -407,36 +407,10 @@ impl App {
             palette::STATUS_ERROR
         };
         let mut right_spans: Vec<Span> = Vec::new();
-        let source_label: Option<(String, Color)> = match &self.queue_source {
-            crate::config::QueueSource::Playlist { .. } => None,
-            crate::config::QueueSource::Album
-                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-            {
-                Some(("ALBUM".to_string(), palette::TEXT_MUTED))
-            }
-            crate::config::QueueSource::Series
-                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-            {
-                Some(("SERIES".to_string(), palette::TEXT_MUTED))
-            }
-            crate::config::QueueSource::Shuffle
-                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-            {
-                Some(("SHUFFLE".to_string(), palette::TEXT_MUTED))
-            }
-            crate::config::QueueSource::Remote
-                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-            {
-                Some(("REMOTE Q".to_string(), palette::TEXT_MUTED))
-            }
-            crate::config::QueueSource::Collection { collection_type }
-                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-            {
-                Some((collection_type.to_uppercase(), palette::TEXT_MUTED))
-            }
-            crate::config::QueueSource::Unknown => None,
-            _ => None,
-        };
+        let source_label = queue_source_status_label(
+            &self.queue_source,
+            matches!(self.effective_panel_focus(), PanelFocus::Queue),
+        );
         let append_right = |right_spans: &mut Vec<Span<'static>>, span: Span<'static>| {
             if !right_spans.is_empty() {
                 right_spans.push(Span::raw(" "));
@@ -542,6 +516,28 @@ impl App {
         };
         label.content = label.content.to_uppercase().into();
     }
+}
+
+fn queue_source_status_label(
+    source: &crate::config::QueueSource,
+    queue_focused: bool,
+) -> Option<(String, Color)> {
+    if !queue_focused {
+        return None;
+    }
+    let label = match source {
+        crate::config::QueueSource::Album => "ALBUM".to_string(),
+        crate::config::QueueSource::Series => "SERIES".to_string(),
+        crate::config::QueueSource::Shuffle => "SHUFFLE".to_string(),
+        crate::config::QueueSource::Remote => "REMOTE Q".to_string(),
+        crate::config::QueueSource::Collection { collection_type } => {
+            collection_type.to_uppercase()
+        }
+        crate::config::QueueSource::Playlist { .. } | crate::config::QueueSource::Unknown => {
+            return None;
+        }
+    };
+    Some((label, palette::TEXT_MUTED))
 }
 
 /// Plain-data indicator for active Visual mode.
