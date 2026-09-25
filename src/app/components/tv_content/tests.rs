@@ -31,3 +31,9 @@ fn tv_show(name: &str, id: &str) -> EmbyItem {
     item.id = id.into();
     item
 }
+
+fn tv_episode(name: &str, id: &str) -> EmbyItem {
+    let mut item = make_item(name, "Episode");
+    item.id = id.into();
+    item
+}

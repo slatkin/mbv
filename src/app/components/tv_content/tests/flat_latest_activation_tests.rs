@@ -8,25 +8,13 @@ use tuirealm::event::KeyModifiers;
 /// Ctrl+P must address it, not "Alpha".
 #[test]
 fn narrow_latest_activation_addresses_the_displayed_row() {
-    let episode = |name: &str, id: &str| {
-        let mut item = make_item(name, "Episode");
-        item.id = id.into();
-        item
-    };
     // Pushed newest-first: Zeta is the newest episode displayed first.
     let items = vec![
-        episode("Zeta", "episode-zeta"),
-        episode("Alpha", "episode-alpha"),
+        tv_episode("Zeta", "episode-zeta"),
+        tv_episode("Alpha", "episode-alpha"),
     ];
     let mut owner = TvContent::new();
-    let mut context = TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(items, 0),
-        None,
-        None,
-        0,
-        None,
-        false,
-    );
+    let mut context = tv_tree_context(items, None, None, false);
     context.set_tv_content_mode(Some(TvContentMode::Latest));
     owner.set_content(context);
     owner.set_is_wide(false);
