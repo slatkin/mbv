@@ -4,19 +4,24 @@
 //! targets. This component owns selection and hit geometry; connecting,
 //! detaching, and refreshing targets remain shell work.
 
+use mbv_core::service_runtime::ServiceState;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
+use unicode_width::UnicodeWidthStr;
 
 use super::list::{ThreeLineFlatList, ThreeLineItem, ThreeLineRole, ThreeLineSpan, Viewported};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
+use crate::app::palette;
 use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
+use crate::app::ui_util::service_state_color;
 
 /// The Interactive Component for the Sessions sidebar.
 pub struct SessionsComponent {
@@ -28,6 +33,8 @@ pub struct SessionsComponent {
     connected_session_id: Option<String>,
     cast_attachment_id: Option<String>,
     can_disconnect: bool,
+    use_nerd_fonts: bool,
+    emby_state: ServiceState,
     requested_panel_area: Option<Rect>,
     painted_panel_area: Option<Rect>,
     #[cfg(test)]
@@ -49,6 +56,8 @@ impl SessionsComponent {
             connected_session_id: None,
             cast_attachment_id: None,
             can_disconnect: false,
+            use_nerd_fonts: false,
+            emby_state: ServiceState::NotConfigured,
             requested_panel_area: None,
             painted_panel_area: None,
             #[cfg(test)]
@@ -83,6 +92,47 @@ impl SessionsComponent {
         self.content_dirty = true;
         if geometry_changed {
             self.list.invalidate_paint();
+        }
+    }
+
+    /// Shell-owned display context for the kind badges: Nerd Fonts select
+    /// the service glyphs over the plain `[EMBY]`/`[CAST]` text, and the
+    /// Emby service state resolves the glyph color (the same color the
+    /// status bar paints its Emby glyph). Marks content dirty only on
+    /// change; the shell calls this on every sync alongside `set_content`.
+    pub(in crate::app) fn set_display_context(
+        &mut self,
+        use_nerd_fonts: bool,
+        emby_state: ServiceState,
+    ) {
+        if self.use_nerd_fonts != use_nerd_fonts || self.emby_state != emby_state {
+            self.use_nerd_fonts = use_nerd_fonts;
+            self.emby_state = emby_state;
+            self.content_dirty = true;
+            self.list.invalidate_paint();
+        }
+    }
+
+    /// Kind badge for one row: the nerd-font glyph in the explicit badge
+    /// color when Nerd Fonts are enabled, otherwise the plain `[LABEL] `
+    /// text in the `Kind` role. Returns the span plus its display width so
+    /// title truncation accounts for the narrower glyph.
+    fn kind_span(
+        &self,
+        fallback: &'static str,
+        glyph: &'static str,
+        color: Color,
+    ) -> (ThreeLineSpan, usize) {
+        if self.use_nerd_fonts {
+            (
+                ThreeLineSpan::new(glyph, ThreeLineRole::Badge(color)),
+                glyph.width(),
+            )
+        } else {
+            (
+                ThreeLineSpan::new(fallback, ThreeLineRole::Kind),
+                fallback.width(),
+            )
         }
     }
 
@@ -148,6 +198,7 @@ impl SessionsComponent {
     }
 
     fn project_targets(&self, text_width: usize) -> Vec<ThreeLineItem<SessionTargetKey>> {
+        let emby_color = service_state_color(self.emby_state, palette::ACCENT);
         self.targets
             .iter()
             .map(|target| {
@@ -189,13 +240,16 @@ impl SessionsComponent {
                         let title_width = text_width
                             .saturating_sub(state_icon.len() + 1)
                             .saturating_sub(time.len());
+                        let (kind, kind_w) = self.kind_span("[EMBY] ", "\u{f06b4} ", emby_color);
                         [
                             vec![
-                                ThreeLineSpan::new("[EMBY] ", ThreeLineRole::Kind),
+                                kind,
                                 ThreeLineSpan::new(
                                     crate::app::ui_util::trunc_str(
                                         &session.device_name,
-                                        text_width.saturating_sub(7).saturating_sub(badge.len()),
+                                        text_width
+                                            .saturating_sub(kind_w)
+                                            .saturating_sub(badge.len()),
                                     ),
                                     ThreeLineRole::Name,
                                 ),
@@ -211,24 +265,37 @@ impl SessionsComponent {
                             )],
                         ]
                     }
-                    PanelTarget::Cast(receiver) => [
-                        vec![
-                            ThreeLineSpan::new("[CAST] ", ThreeLineRole::Kind),
-                            ThreeLineSpan::new(
-                                crate::app::ui_util::trunc_str(
-                                    &receiver.friendly_name,
-                                    text_width.saturating_sub(7).saturating_sub(badge.len()),
+                    PanelTarget::Cast(receiver) => {
+                        // Nerd Fonts: the cast glyph when unattached, the
+                        // cast-connected glyph once attached; yellow either way.
+                        let glyph = if connected {
+                            "\u{f0119} "
+                        } else {
+                            "\u{f0118} "
+                        };
+                        let (kind, kind_w) =
+                            self.kind_span("[CAST] ", glyph, palette::TEXT_FOCUS_ACCENT);
+                        [
+                            vec![
+                                kind,
+                                ThreeLineSpan::new(
+                                    crate::app::ui_util::trunc_str(
+                                        &receiver.friendly_name,
+                                        text_width
+                                            .saturating_sub(kind_w)
+                                            .saturating_sub(badge.len()),
+                                    ),
+                                    ThreeLineRole::Name,
                                 ),
-                                ThreeLineRole::Name,
-                            ),
-                            ThreeLineSpan::new(badge, ThreeLineRole::Accent),
-                        ],
-                        vec![ThreeLineSpan::new(
-                            format!("{}:{}", receiver.host, receiver.port),
-                            ThreeLineRole::Detail,
-                        )],
-                        Vec::new(),
-                    ],
+                                ThreeLineSpan::new(badge, ThreeLineRole::Accent),
+                            ],
+                            vec![ThreeLineSpan::new(
+                                format!("{}:{}", receiver.host, receiver.port),
+                                ThreeLineRole::Detail,
+                            )],
+                            Vec::new(),
+                        ]
+                    }
                 };
                 ThreeLineItem::new(key, lines)
             })
@@ -411,6 +478,116 @@ mod tests {
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Cast("cast-1".into())
             ))))
+        );
+    }
+
+    use rstest::rstest;
+
+    fn badge_component(
+        use_nerd_fonts: bool,
+        emby_state: ServiceState,
+        cast_attachment: Option<&str>,
+    ) -> SessionsComponent {
+        use mbv_core::cast::discovery::CastReceiver;
+
+        let mut emby = crate::app::tests::make_session("Emby Box", "Emby");
+        emby.id = "emby-1".into();
+        let targets = vec![
+            PanelTarget::Emby(Box::new(emby)),
+            PanelTarget::Cast(CastReceiver {
+                id: "cast-1".into(),
+                friendly_name: "Living Room".into(),
+                host: "192.168.0.5".into(),
+                port: 8009,
+            }),
+        ];
+        let mut component = SessionsComponent::new();
+        component.set_display_context(use_nerd_fonts, emby_state);
+        component.set_content(
+            &targets,
+            false,
+            None,
+            cast_attachment,
+            false,
+            Some(Rect::new(0, 0, 50, 16)),
+        );
+        component
+    }
+
+    #[test]
+    fn test_session_plain_badges_unchanged_without_nerd_fonts() {
+        let component = badge_component(false, ServiceState::Ready, None);
+        let items = component.project_targets(40);
+        assert_eq!(items[0].lines[0][0].text, "[EMBY] ");
+        assert_eq!(items[0].lines[0][0].role, ThreeLineRole::Kind);
+        assert_eq!(items[1].lines[0][0].text, "[CAST] ");
+        assert_eq!(items[1].lines[0][0].role, ThreeLineRole::Kind);
+    }
+
+    #[test]
+    fn test_session_nerd_font_badges_use_service_glyphs() {
+        let component = badge_component(true, ServiceState::Ready, None);
+        let items = component.project_targets(40);
+        assert_eq!(items[0].lines[0][0].text, "\u{f06b4} ");
+        assert_eq!(
+            items[0].lines[0][0].role,
+            ThreeLineRole::Badge(palette::ACCENT)
+        );
+        assert_eq!(items[1].lines[0][0].text, "\u{f0118} ");
+        assert_eq!(
+            items[1].lines[0][0].role,
+            ThreeLineRole::Badge(palette::TEXT_FOCUS_ACCENT)
+        );
+    }
+
+    #[test]
+    fn test_session_nerd_cast_badge_switches_glyph_when_attached() {
+        let component = badge_component(true, ServiceState::Ready, Some("cast-1"));
+        let items = component.project_targets(40);
+        assert_eq!(items[1].lines[0][0].text, "\u{f0119} ");
+        assert_eq!(
+            items[1].lines[0][0].role,
+            ThreeLineRole::Badge(palette::TEXT_FOCUS_ACCENT)
+        );
+    }
+
+    #[rstest]
+    #[case(ServiceState::Ready, palette::ACCENT)]
+    #[case(ServiceState::NotConfigured, palette::TEXT_MUTED)]
+    #[case(ServiceState::Connecting, palette::STATUS_ERROR)]
+    #[case(ServiceState::NeedsAuthentication, palette::STATUS_ERROR)]
+    #[case(ServiceState::Unavailable, palette::STATUS_ERROR)]
+    fn test_session_nerd_emby_badge_tracks_status_bar_color(
+        #[case] state: ServiceState,
+        #[case] expected: ratatui::style::Color,
+    ) {
+        let component = badge_component(true, state, None);
+        let items = component.project_targets(40);
+        assert_eq!(items[0].lines[0][0].text, "\u{f06b4} ");
+        assert_eq!(items[0].lines[0][0].role, ThreeLineRole::Badge(expected));
+    }
+
+    #[test]
+    fn test_session_nerd_badges_paint_badge_colors() {
+        let mut component = badge_component(true, ServiceState::Ready, None);
+        let mut terminal = Terminal::new(TestBackend::new(50, 16)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let content = component.painted_content_area.unwrap();
+        let buffer = terminal.backend().buffer();
+        let fg_at = |symbol: &str, row: u16| {
+            let x = (0..buffer.area.width)
+                .find(|&x| buffer[(x, row)].symbol() == symbol)
+                .unwrap_or_else(|| panic!("no {symbol:?} painted on row {row}"));
+            buffer[(x, row)].fg
+        };
+        // The first row is selected, so this also pins that badge colors
+        // survive selection like the connected `Accent` badge does.
+        assert_eq!(fg_at("\u{f06b4}", content.y), palette::ACCENT);
+        assert_eq!(
+            fg_at("\u{f0118}", content.y + 3),
+            palette::TEXT_FOCUS_ACCENT
         );
     }
 

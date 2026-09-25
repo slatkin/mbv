@@ -49,19 +49,6 @@ pub(in crate::app::render) fn daemon_endpoint_label(endpoint: &str) -> Option<St
         .map(str::to_string)
 }
 
-/// Status-bar glyph colour for a Remote Service: `ready` when connected,
-/// red when configured but not connected, grey when not configured.
-pub(in crate::app::render) fn service_state_color(
-    state: mbv_core::service_runtime::ServiceState,
-    ready: Color,
-) -> Color {
-    match state {
-        mbv_core::service_runtime::ServiceState::Ready => ready,
-        mbv_core::service_runtime::ServiceState::NotConfigured => palette::TEXT_MUTED,
-        _ => palette::STATUS_ERROR,
-    }
-}
-
 // --- Render-seam free functions (design D9, task 3.1) ---
 //
 // Extracted from `impl App` methods so Interactive Components can call them

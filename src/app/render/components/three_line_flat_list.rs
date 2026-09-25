@@ -43,7 +43,9 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
                 list.item(index).lines[line_index as usize]
                     .iter()
                     .map(|span| {
-                        let fg = if selected && span.role != ThreeLineRole::Accent {
+                        let fg = if selected
+                            && !matches!(span.role, ThreeLineRole::Accent | ThreeLineRole::Badge(_))
+                        {
                             palette::SELECTED_ROW_FG
                         } else {
                             match span.role {
@@ -52,6 +54,7 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
                                 ThreeLineRole::Detail => palette::TEXT_MUTED,
                                 ThreeLineRole::Status => palette::STATUS_AVAILABLE,
                                 ThreeLineRole::Accent => palette::ACCENT_ACTIVE,
+                                ThreeLineRole::Badge(color) => color,
                             }
                         };
                         Span::styled(span.text.clone(), Style::default().fg(fg).bg(bg))

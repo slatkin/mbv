@@ -1,5 +1,6 @@
 use super::{Cursored, PaintRetained, PaintRetainedState, Row, RowFlow, Viewported};
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Color;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::Component;
@@ -15,6 +16,10 @@ pub enum ThreeLineRole {
     Detail,
     Status,
     Accent,
+    /// Explicit-color badge (e.g. a nerd-font service glyph): the component
+    /// resolves the color shell-side, and the painter preserves it on the
+    /// selected row like `Accent`.
+    Badge(Color),
 }
 
 /// One styled text span in a three-line item's presentation.

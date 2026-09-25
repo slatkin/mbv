@@ -118,6 +118,7 @@ impl Model {
             .map(|attachment| attachment.receiver_id.as_str());
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(sessions) = comp.as_any_mut().downcast_mut::<SessionsComponent>() {
+                sessions.set_display_context(self.app.use_nerd_fonts, self.app.emby_runtime.state);
                 sessions.set_content(
                     &self.app.panel_targets,
                     self.app.sessions_loading,

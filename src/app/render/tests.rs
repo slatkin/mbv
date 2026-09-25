@@ -135,7 +135,7 @@ fn volume_pill_number_is_aqua() {
 #[test]
 fn emby_status_glyph_color_tracks_service_state() {
     use mbv_core::service_runtime::ServiceState;
-    let color = super::components::chrome::service_state_color;
+    let color = crate::app::ui_util::service_state_color;
     assert_eq!(color(ServiceState::Ready, palette::ACCENT), palette::ACCENT);
     assert_eq!(
         color(ServiceState::NotConfigured, palette::ACCENT),
