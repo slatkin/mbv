@@ -107,83 +107,91 @@ struct MpvSettings {
 }
 
 fn parse_mpv_section(misc: Option<&toml::Value>) -> Result<MpvSettings, String> {
-    let audio_pipe_playout_delay_ms = match misc
+    Ok(MpvSettings {
+        show_audio_window: mpv_bool(misc, "show_audio_window"),
+        use_mpv_config: mpv_bool(misc, "use_mpv_config"),
+        video_cache_forward_mb: mpv_cache_size(
+            misc,
+            "video_cache_forward_mb",
+            DEFAULT_VIDEO_CACHE_FORWARD_MB,
+        ),
+        video_cache_back_mb: mpv_cache_size(
+            misc,
+            "video_cache_back_mb",
+            DEFAULT_VIDEO_CACHE_BACK_MB,
+        ),
+        audio_pipe_enabled: mpv_bool(misc, "audio_pipe_enabled"),
+        audio_pipe_path: mpv_audio_pipe_path(misc),
+        audio_pipe_samplerate: mpv_audio_pipe_samplerate(misc),
+        audio_pipe_bitdepth: mpv_audio_pipe_bitdepth(misc),
+        audio_pipe_playout_delay_ms: mpv_audio_pipe_playout_delay(misc)?,
+        audio_device: mpv_audio_device(misc)?,
+        no_scripts: mpv_bool(misc, "no_scripts"),
+        autoload: mpv_bool(misc, "autoload"),
+    })
+}
+
+fn mpv_bool(misc: Option<&toml::Value>, key: &str) -> bool {
+    misc.and_then(|m| m.get(key))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
+fn mpv_cache_size(misc: Option<&toml::Value>, key: &str, default: u32) -> u32 {
+    misc.and_then(|m| m.get(key))
+        .and_then(|v| v.as_integer())
+        .and_then(|v| u32::try_from(v).ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(default)
+}
+
+fn mpv_audio_pipe_path(misc: Option<&toml::Value>) -> String {
+    misc.and_then(|m| m.get("audio_pipe_path"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("/tmp/mbv-pipe")
+        .to_string()
+}
+
+fn mpv_audio_pipe_samplerate(misc: Option<&toml::Value>) -> u32 {
+    misc.and_then(|m| m.get("audio_pipe_samplerate"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(1) as u32)
+        .unwrap_or(192_000)
+}
+
+fn mpv_audio_pipe_bitdepth(misc: Option<&toml::Value>) -> u8 {
+    misc.and_then(|m| m.get("audio_pipe_bitdepth"))
+        .and_then(|v| v.as_integer())
+        .map(|v| match v {
+            16 | 24 | 32 => v as u8,
+            _ => 32,
+        })
+        .unwrap_or(32)
+}
+
+fn mpv_audio_pipe_playout_delay(misc: Option<&toml::Value>) -> Result<Option<u64>, String> {
+    match misc
         .and_then(|m| m.get("audio_pipe_playout_delay_ms"))
         .and_then(|v| v.as_integer())
     {
         Some(value) if value < 0 => {
-            return Err("mpv.audio_pipe_playout_delay_ms must be nonnegative".to_string())
+            Err("mpv.audio_pipe_playout_delay_ms must be nonnegative".to_string())
         }
-        Some(value) => Some(value as u64),
-        None => None,
-    };
+        Some(value) => Ok(Some(value as u64)),
+        None => Ok(None),
+    }
+}
 
-    let audio_device = match misc.and_then(|m| m.get("audio_device")) {
-        None => "alsa".to_string(),
+fn mpv_audio_device(misc: Option<&toml::Value>) -> Result<String, String> {
+    match misc.and_then(|m| m.get("audio_device")) {
+        None => Ok("alsa".to_string()),
         Some(value) => match value.as_str() {
-            Some(value) if is_valid_audio_device(value) => value.to_string(),
-            _ => {
-                return Err(format!(
-                    "mpv.audio_device must be \"alsa\" or start with \"alsa/\", got {value:?}"
-                ))
-            }
+            Some(value) if is_valid_audio_device(value) => Ok(value.to_string()),
+            _ => Err(format!(
+                "mpv.audio_device must be \"alsa\" or start with \"alsa/\", got {value:?}"
+            )),
         },
-    };
-
-    Ok(MpvSettings {
-        show_audio_window: misc
-            .and_then(|m| m.get("show_audio_window"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
-        use_mpv_config: misc
-            .and_then(|m| m.get("use_mpv_config"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
-        video_cache_forward_mb: misc
-            .and_then(|m| m.get("video_cache_forward_mb"))
-            .and_then(|v| v.as_integer())
-            .and_then(|v| u32::try_from(v).ok())
-            .filter(|v| *v > 0)
-            .unwrap_or(DEFAULT_VIDEO_CACHE_FORWARD_MB),
-        video_cache_back_mb: misc
-            .and_then(|m| m.get("video_cache_back_mb"))
-            .and_then(|v| v.as_integer())
-            .and_then(|v| u32::try_from(v).ok())
-            .filter(|v| *v > 0)
-            .unwrap_or(DEFAULT_VIDEO_CACHE_BACK_MB),
-        audio_pipe_enabled: misc
-            .and_then(|m| m.get("audio_pipe_enabled"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
-        audio_pipe_path: misc
-            .and_then(|m| m.get("audio_pipe_path"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("/tmp/mbv-pipe")
-            .to_string(),
-        audio_pipe_samplerate: misc
-            .and_then(|m| m.get("audio_pipe_samplerate"))
-            .and_then(|v| v.as_integer())
-            .map(|v| v.max(1) as u32)
-            .unwrap_or(192_000),
-        audio_pipe_bitdepth: misc
-            .and_then(|m| m.get("audio_pipe_bitdepth"))
-            .and_then(|v| v.as_integer())
-            .map(|v| match v {
-                16 | 24 | 32 => v as u8,
-                _ => 32,
-            })
-            .unwrap_or(32),
-        audio_pipe_playout_delay_ms,
-        audio_device,
-        no_scripts: misc
-            .and_then(|m| m.get("no_scripts"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
-        autoload: misc
-            .and_then(|m| m.get("autoload"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
-    })
+    }
 }
 
 struct QueueSettings {
