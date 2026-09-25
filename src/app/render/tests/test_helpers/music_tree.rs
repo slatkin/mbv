@@ -20,7 +20,6 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 use ratatui::Terminal;
-use std::time::{Duration, Instant};
 
 /// A fixture album's stable tree target.
 pub fn album(name: &str) -> MusicTreeTarget {
@@ -90,18 +89,6 @@ pub fn expand_root(browser: &mut TreeBrowser<MusicTreeTarget>, root: &MusicTreeT
 /// Select a stable target through the shared transition surface.
 pub fn select_target(browser: &mut TreeBrowser<MusicTreeTarget>, target: &MusicTreeTarget) {
     browser.apply(TreeOperation::Select(target.clone()));
-}
-
-/// Inject the shared marquee clock (no sleeps): the marquee primitive resets
-/// its start instant when the keyed title changes, so seeding the key and
-/// instant is the state a real frame reaches after `elapsed_ms`.
-pub fn set_marquee_clock(browser: &mut TreeBrowser<MusicTreeTarget>, title: &str, elapsed_ms: u64) {
-    browser.set_marquee_started_at(
-        title,
-        Instant::now()
-            .checked_sub(Duration::from_millis(elapsed_ms))
-            .expect("the injected clock precedes the process start"),
-    )
 }
 
 /// The painted buffer y of a target's row in the latest tree frame. The owner

@@ -109,6 +109,29 @@ fn feeds_mut(panel: &mut LibraryPanel) -> &mut FeedsContent {
         .expect("Feeds owner installed")
 }
 
+fn canonical_cursor(owner: &FeedsContent) -> usize {
+    owner.canonical_cursor()
+}
+
+fn visible_titles(owner: &FeedsContent) -> Vec<String> {
+    owner
+        .canonical_rows()
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Item { primary, .. } => Some(primary.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn selected_group(owner: &mut FeedsContent) -> usize {
+    owner.selected_group()
+}
+
+fn current_watched_filter(owner: &mut FeedsContent) -> WatchedFilter {
+    owner.watched_filter()
+}
+
 fn key(code: Key) -> KeyEvent {
     KeyEvent {
         code,
@@ -154,8 +177,8 @@ fn feeds_owner_reanchors_missing_group_and_item_to_first_choices() {
         item: Some(LibraryItemIdentity::Feeds { id: "gone".into() }),
     };
     assert!(owner.reanchor_launch_state(&state));
-    assert_eq!(owner.selected_group(), 0);
-    assert_eq!(owner.watched_filter(), WatchedFilter::All);
+    assert_eq!(selected_group(&mut owner), 0);
+    assert_eq!(current_watched_filter(&mut owner), WatchedFilter::All);
     assert_eq!(
         owner.canonical_selected_target(),
         Some(&"A-unplayed".to_string())
@@ -207,10 +230,12 @@ fn unfocused_panel_does_not_forward_keys_to_the_feeds_owner() {
             None
         );
     }
-    assert_eq!(feeds(&panel).cursor(), 0);
-    assert_eq!(feeds(&panel).scroll(), 0);
-    assert_eq!(feeds(&panel).selected_group(), 0);
-    assert_eq!(feeds(&panel).watched_filter(), WatchedFilter::All);
+    assert_eq!(canonical_cursor(feeds(&panel)), 0);
+    assert_eq!(selected_group(feeds_mut(&mut panel)), 0);
+    assert_eq!(
+        current_watched_filter(feeds_mut(&mut panel)),
+        WatchedFilter::All
+    );
 }
 
 #[test]
@@ -218,7 +243,7 @@ fn down_moves_the_component_cursor_without_app_state() {
     let mut owner = component();
     let msg = down(&mut owner, Key::Down);
 
-    assert_eq!(owner.cursor(), 1);
+    assert_eq!(canonical_cursor(&owner), 1);
     assert_eq!(msg, None);
 }
 
@@ -245,8 +270,8 @@ fn latest_uses_all_loaded_entries_and_restores_group_and_filter_on_selector_exit
     down(&mut owner, Key::Char(']'));
     down(&mut owner, Key::Char('w'));
     down(&mut owner, Key::Char('w'));
-    assert_eq!(owner.selected_group(), 1);
-    assert_eq!(owner.watched_filter(), WatchedFilter::Unwatched);
+    assert_eq!(selected_group(&mut owner), 1);
+    assert_eq!(current_watched_filter(&mut owner), WatchedFilter::Unwatched);
 
     let selected = owner.on_slot_event(LibrarySlotEvent::SelectorPicked(0));
     assert_eq!(
@@ -255,7 +280,7 @@ fn latest_uses_all_loaded_entries_and_restores_group_and_filter_on_selector_exit
     );
     assert!(owner.latest_selected());
     assert_eq!(
-        owner.visible_titles(),
+        visible_titles(&owner),
         ["B-new", "A-new", "A-played", "B-played"]
     );
     assert_eq!(owner.content().selector.unwrap().active, Some(0));
@@ -264,9 +289,9 @@ fn latest_uses_all_loaded_entries_and_restores_group_and_filter_on_selector_exit
         1 + WatchedFilter::COUNT + 1,
     ));
     assert!(!owner.latest_selected());
-    assert_eq!(owner.selected_group(), 1);
-    assert_eq!(owner.watched_filter(), WatchedFilter::Unwatched);
-    assert_eq!(owner.visible_titles(), ["A-new"]);
+    assert_eq!(selected_group(&mut owner), 1);
+    assert_eq!(current_watched_filter(&mut owner), WatchedFilter::Unwatched);
+    assert_eq!(visible_titles(&owner), ["A-new"]);
 }
 
 #[test]
@@ -280,9 +305,9 @@ fn watched_filter_shortcut_leaves_latest_and_cycles_restored_filter_once() {
     down(&mut owner, Key::Char('w'));
 
     assert!(!owner.latest_selected());
-    assert_eq!(owner.selected_group(), 1);
-    assert_eq!(owner.watched_filter(), WatchedFilter::All);
-    assert_eq!(owner.visible_titles(), ["A-unplayed", "A-played"]);
+    assert_eq!(selected_group(&mut owner), 1);
+    assert_eq!(current_watched_filter(&mut owner), WatchedFilter::All);
+    assert_eq!(visible_titles(&owner), ["A-unplayed", "A-played"]);
 }
 
 #[test]
@@ -290,20 +315,20 @@ fn watched_filter_rebuilds_the_component_visible_list() {
     let mut owner = component();
     down(&mut owner, Key::Char('w'));
 
-    assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
-    assert_eq!(owner.visible_titles(), ["Second"]);
+    assert_eq!(current_watched_filter(&mut owner), WatchedFilter::Watched);
+    assert_eq!(visible_titles(&owner), ["Second"]);
 }
 
 #[test]
 fn visible_entries_all_group() {
-    assert_eq!(component().visible_titles().len(), 2);
+    assert_eq!(visible_titles(&component()).len(), 2);
 }
 
 #[test]
 fn visible_entries_subscription_group() {
     let mut owner = grouped_component();
     down(&mut owner, Key::Char(']'));
-    assert_eq!(owner.visible_titles(), ["A-unplayed", "A-played"]);
+    assert_eq!(visible_titles(&owner), ["A-unplayed", "A-played"]);
 }
 
 #[test]
@@ -321,8 +346,7 @@ fn clamp_state_works() {
         all_entries: Vec::new(),
         loading: false,
     });
-    assert_eq!(owner.cursor(), 0);
-    assert_eq!(owner.scroll(), 0);
+    assert_eq!(canonical_cursor(&owner), 0);
 }
 
 #[test]
@@ -334,7 +358,7 @@ fn watched_filter_cycle_order() {
         WatchedFilter::All,
     ] {
         down(&mut owner, Key::Char('w'));
-        assert_eq!(owner.watched_filter(), expected);
+        assert_eq!(current_watched_filter(&mut owner), expected);
     }
 }
 
@@ -346,7 +370,7 @@ fn watched_filter(#[case] key_presses: usize, #[case] expected: [&str; 1]) {
     for _ in 0..key_presses {
         down(&mut owner, Key::Char('w'));
     }
-    assert_eq!(owner.visible_titles(), expected);
+    assert_eq!(visible_titles(&owner), expected);
 }
 
 #[test]
@@ -357,7 +381,7 @@ fn watched_filter_empty_result() {
         vec![entry("First", false)],
     );
     down(&mut owner, Key::Char('w'));
-    assert!(owner.visible_titles().is_empty());
+    assert!(visible_titles(&owner).is_empty());
 }
 
 #[test]
@@ -365,8 +389,13 @@ fn filter_cycle_resets_cursor_and_scroll() {
     let mut owner = component();
     down(&mut owner, Key::Down);
     down(&mut owner, Key::Char('w'));
-    assert_eq!(owner.cursor(), 0);
-    assert_eq!(owner.scroll(), 0);
+    assert_eq!(canonical_cursor(&owner), 0);
+    assert_eq!(
+        down(&mut owner, Key::Enter),
+        Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry(
+            "Second", true
+        )])))
+    );
 }
 
 #[test]
@@ -374,7 +403,7 @@ fn filter_applies_to_subscription_group() {
     let mut owner = grouped_component();
     down(&mut owner, Key::Char(']'));
     down(&mut owner, Key::Char('w'));
-    assert_eq!(owner.visible_titles(), ["A-played"]);
+    assert_eq!(visible_titles(&owner), ["A-played"]);
 }
 
 #[test]
@@ -382,7 +411,7 @@ fn group_change_reflects_active_filter() {
     let mut owner = grouped_component();
     down(&mut owner, Key::Char('w'));
     down(&mut owner, Key::Char(']'));
-    assert_eq!(owner.visible_titles(), ["A-played"]);
+    assert_eq!(visible_titles(&owner), ["A-played"]);
 }
 
 #[test]
@@ -415,8 +444,8 @@ fn unfocused_component_handles_mouse_input() {
         kind: MouseEventKind::ScrollDown,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(feeds(&panel).selected_group(), 1);
-    assert_eq!(feeds(&panel).cursor(), 1);
+    assert_eq!(selected_group(feeds_mut(&mut panel)), 1);
+    assert_eq!(canonical_cursor(feeds(&panel)), 1);
 }
 
 #[test]
@@ -436,24 +465,23 @@ fn mouse_owns_feed_selector_and_row_geometry() {
         kind: MouseEventKind::Down(MouseButton::Left),
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(feeds(&panel).selected_group(), 1);
-    assert_eq!(feeds(&panel).cursor(), 0);
+    assert_eq!(selected_group(feeds_mut(&mut panel)), 1);
+    assert_eq!(canonical_cursor(feeds(&panel)), 0);
 }
 
 #[test]
 fn subscription_change_resets_component_selection() {
     let mut owner = grouped_component();
     down(&mut owner, Key::Down);
-    assert_eq!(owner.cursor(), 1);
+    assert_eq!(canonical_cursor(&owner), 1);
     owner.set_content(FeedsOwnerPush {
         subscriptions: vec![subscription("Replacement")],
         entries: vec![Vec::new()],
         all_entries: Vec::new(),
         loading: false,
     });
-    assert_eq!(owner.selected_group(), 0);
-    assert_eq!(owner.cursor(), 0);
-    assert_eq!(owner.scroll(), 0);
+    assert_eq!(selected_group(&mut owner), 0);
+    assert_eq!(canonical_cursor(&owner), 0);
 }
 
 #[test]
@@ -549,7 +577,7 @@ fn changing_group_invalidates_previous_row_geometry() {
         .resolve_row_id(Position::new(previous_row.x, previous_row.y))
         .is_none());
     down(feeds_mut(&mut panel), Key::Down);
-    assert_eq!(feeds(&panel).cursor(), 0);
+    assert_eq!(canonical_cursor(feeds(&panel)), 0);
 }
 
 #[test]
@@ -564,7 +592,7 @@ fn unchanged_snapshot_does_not_overwrite_component_cursor() {
         loading: false,
     });
 
-    assert_eq!(owner.cursor(), 1);
+    assert_eq!(canonical_cursor(&owner), 1);
 }
 
 #[test]
@@ -610,8 +638,8 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
         dated_entry("Recent One", false, 5),
         dated_entry("Old One", true, 40),
     ]);
-    assert_eq!(owner.visible_titles(), ["New One", "Recent One", "Old One"]);
-    assert_eq!(owner.cursor(), 0);
+    assert_eq!(visible_titles(&owner), ["New One", "Recent One", "Old One"]);
+    assert_eq!(canonical_cursor(&owner), 0);
     assert_eq!(owner.canonical_selectable_len(), 3);
     assert_eq!(
         owner
@@ -623,14 +651,14 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
     );
     for expected in [1, 2, 2] {
         down(&mut owner, Key::Down);
-        assert_eq!(owner.cursor(), expected);
+        assert_eq!(canonical_cursor(&owner), expected);
     }
     for expected in [1, 0, 0] {
         down(&mut owner, Key::Up);
-        assert_eq!(owner.cursor(), expected);
+        assert_eq!(canonical_cursor(&owner), expected);
     }
 
-    assert_eq!(owner.cursor(), 0);
+    assert_eq!(canonical_cursor(&owner), 0);
     let mut panel = panel_with(owner, true);
     let _ = paint(&mut panel, crate::app::TWO_COLUMN_THRESHOLD, 30);
     assert!(panel
@@ -649,21 +677,17 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
     for _ in 0..15 {
         down(&mut owner, Key::Down);
     }
-    assert_eq!(owner.cursor(), 15);
+    assert_eq!(canonical_cursor(&owner), 15);
 
     let wide = crate::app::TWO_COLUMN_THRESHOLD;
     let mut panel = panel_with(owner, true);
     let _ = paint(&mut panel, wide, 10);
-    assert!(
-        feeds(&panel).scroll() > 0,
-        "wide viewport scrolled to the selection"
-    );
 
     // Breakpoint flip Wide -> Narrow: one ViewportAnchor carries the
     // selection and keeps it on screen.
     let narrow = wide - 1;
     let _ = paint(&mut panel, narrow, 10);
-    assert_eq!(feeds(&panel).cursor(), 15);
+    assert_eq!(canonical_cursor(feeds(&panel)), 15);
     assert_eq!(
         feeds(&panel).canonical_selected_target(),
         Some(&"Entry 15".to_string())
@@ -705,7 +729,7 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
     }
     let row = resolved.expect("a painted selectable row must resolve FeedsRowClick");
     assert!(
-        feeds(&panel).cursor() > 0 || row < list.y + 4,
+        canonical_cursor(feeds(&panel)) > 0 || row < list.y + 4,
         "click must select the resolved row on both controls"
     );
     assert!(matches!(

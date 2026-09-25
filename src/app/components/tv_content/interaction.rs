@@ -573,8 +573,8 @@ impl TvContent {
         self.carrier.select_target(first);
         self.carrier.enter_visual_mode();
         for target in targets.iter().skip(1) {
-            self.carrier.select_target(target);
-            self.carrier.extend_selection_to(target);
+            self.carrier
+                .delegate_operation(MediaListOperation::Range(target.clone()));
         }
         let _ = self.carrier.selection_summary();
     }

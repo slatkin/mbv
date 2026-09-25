@@ -70,10 +70,9 @@ mod tests {
     use super::*;
     use crate::app::render::theme::*;
 
-    /// Every variant is placed, `ALL` has no duplicates, and every one
-    /// resolves. `ALL` is generated from the same macro variant list as the
-    /// enum, so it is complete by construction; the exhaustive match in
-    /// `row` fails to compile if a new variant is not placed.
+    /// Every explicitly inventoried production surface resolves, and the
+    /// exhaustive match in `row` fails to compile if a new variant is not
+    /// placed.
     #[test]
     fn all_lists_every_surface_and_every_surface_resolves() {
         let mut seen = HashSet::new();
@@ -100,7 +99,6 @@ mod tests {
         match surface {
             Surface::QueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::LibraryColumn => (SURFACE_FOCUSED, SURFACE_BACKDROP),
-            Surface::WideSplitGutter => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::HeroPane => (Palette::Ink.color(), Palette::Ink.color()),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
             Surface::LibraryPanel => (Palette::Green2.color(), SURFACE_RESTING),

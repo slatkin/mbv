@@ -53,8 +53,6 @@ fn expect_fixed(
     );
 }
 
-// `unify-surface-colour-neutral` 4.1: the wide hero split gap's painter pins
-// the `WideSplitGutter` fill across the gap rect while the boundary is armed.
 /// `unify-surface-colour-neutral` 4.1: the context menu's selected row paints
 /// `ACCENT_ACTIVE` through the production context-menu painter.
 #[test]

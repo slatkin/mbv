@@ -88,6 +88,13 @@ fn area_contains(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> boo
     })
 }
 
+fn selected_filter(panel: &mut LibraryPanel) -> Option<WatchedFilter> {
+    let owner = panel
+        .owner_mut(&LibraryKey::Feeds)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<FeedsContent>())?;
+    Some(owner.watched_filter())
+}
+
 /// The panel paints one Selector row containing watched-filter and feed-group
 /// pills, plus the policy hero header — no destination chrome. The shared
 /// skeleton owns the no-secondary-row contract.
@@ -167,19 +174,15 @@ fn feeds_latest_paints_provider_date_subscription_title_marker_and_wide_hero() {
 fn watched_pill_click_changes_the_filter() {
     let mut panel = panel_with(feed_owner(), true);
     let _terminal = terminal_for(&mut panel, 240, 30);
-    let selector = panel.test_selector_hits().regions();
-    let (watched, _) = selector
+    let watched = panel
+        .test_selector_hits()
+        .regions()
         .iter()
         .find(|(_, id)| *id == 1 + WatchedFilter::Watched.position())
+        .map(|(rect, _)| *rect)
         .expect("the Watched pill is painted");
     let watched_x = watched.x;
-    let filter = |panel: &LibraryPanel| {
-        panel
-            .owner(&LibraryKey::Feeds)
-            .and_then(|owner| owner.as_any().downcast_ref::<FeedsContent>())
-            .map(FeedsContent::watched_filter)
-    };
-    assert_eq!(filter(&panel), Some(WatchedFilter::All));
+    assert_eq!(selected_filter(&mut panel), Some(WatchedFilter::All));
 
     let msg = panel.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
@@ -188,7 +191,7 @@ fn watched_pill_click_changes_the_filter() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(msg, None);
-    assert_eq!(filter(&panel), Some(WatchedFilter::Watched));
+    assert_eq!(selected_filter(&mut panel), Some(WatchedFilter::Watched));
 }
 
 /// The `w` chord still changes the filter through the panel's keyboard
@@ -201,11 +204,7 @@ fn w_key_changes_the_filter() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(msg, None);
-    let owner = panel
-        .owner_mut(&LibraryKey::Feeds)
-        .and_then(|owner| owner.as_any_mut().downcast_mut::<FeedsContent>())
-        .expect("Feeds owner installed");
-    assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
+    assert_eq!(selected_filter(&mut panel), Some(WatchedFilter::Watched));
 }
 
 /// Without subscriptions the panel paints neither the Selector bar nor a

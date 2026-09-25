@@ -138,11 +138,6 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
         self.wide.toggle_selection(target);
     }
 
-    #[cfg(test)]
-    pub fn extend_selection_to(&mut self, target: &Target) {
-        self.wide.extend_selection_to(target);
-    }
-
     /// Clear the shared owner's selection (#729): one inherent name, so no
     /// same-named trait/inherent pair on the carrier.
     pub fn clear_owner_selection(&mut self) {

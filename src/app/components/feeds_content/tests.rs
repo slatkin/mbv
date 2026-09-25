@@ -94,7 +94,7 @@ fn content_selector_follows_the_active_watched_filter() {
         vec![entry("unplayed", FeedKind::Audio, false)],
     );
     owner.cycle_watched_filter();
-    assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
+    assert_eq!(owner.watched_filter, WatchedFilter::Watched);
     let content = owner.content();
     assert_eq!(content.selector.unwrap().active, Some(4));
     match content.list {

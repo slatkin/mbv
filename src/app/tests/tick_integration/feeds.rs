@@ -79,6 +79,43 @@ fn feeds_owner(harness: &TickHarness) -> &FeedsContent {
         .expect("Feeds owner installed")
 }
 
+fn selected_index(harness: &TickHarness) -> usize {
+    let owner = feeds_owner(harness);
+    let selected = owner
+        .canonical_selected_target()
+        .expect("Feeds owner has a selected target");
+    owner
+        .canonical_rows()
+        .iter()
+        .filter_map(|row| row.selectable_target())
+        .position(|target| target == selected)
+        .expect("selected target is in the canonical flow")
+}
+
+fn visible_titles(harness: &TickHarness) -> Vec<String> {
+    feeds_owner(harness)
+        .canonical_rows()
+        .iter()
+        .filter_map(|row| match row {
+            crate::app::components::media_list::MediaListRow::Item { primary, .. } => {
+                Some(primary.clone())
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn selected_filter(harness: &mut TickHarness) -> Option<WatchedFilter> {
+    let model = harness.model_mut();
+    let owner = model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        .and_then(|panel| panel.owner_mut(&LibraryKey::Feeds))
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<FeedsContent>())?;
+    Some(owner.watched_filter())
+}
+
 fn list_rect(harness: &TickHarness) -> Rect {
     panel(harness)
         .test_wide_geometry()
@@ -106,18 +143,18 @@ fn selected_rect(harness: &TickHarness) -> Option<Rect> {
 fn feeds_tick_navigation_paints_selected_row_at_wide_and_narrow() {
     let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert_eq!(feeds_owner(&harness).cursor(), 0);
+    assert_eq!(selected_index(&harness), 0);
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
     let _ = harness.step();
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert_eq!(feeds_owner(&harness).cursor(), 1);
+    assert_eq!(selected_index(&harness), 1);
 
     let narrow = crate::app::TWO_COLUMN_THRESHOLD - 1;
     draw(&mut harness, narrow);
-    assert_eq!(feeds_owner(&harness).cursor(), 1);
+    assert_eq!(selected_index(&harness), 1);
 }
 
 #[test]
@@ -167,9 +204,9 @@ fn feeds_tick_click_resolves_painted_entry_and_blank_is_noop() {
         }));
         let outcome = harness.step();
         assert!(!outcome.raw_messages.is_empty());
-        assert_eq!(feeds_owner(&harness).cursor(), 0);
+        assert_eq!(selected_index(&harness), 0);
 
-        let before_cursor = feeds_owner(&harness).cursor();
+        let before_cursor = selected_index(&harness);
         let before_paint = selected_rect(&harness);
         harness.inject(Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -185,7 +222,7 @@ fn feeds_tick_click_resolves_painted_entry_and_blank_is_noop() {
                 row: 0,
             })]
         );
-        assert_eq!(feeds_owner(&harness).cursor(), before_cursor);
+        assert_eq!(selected_index(&harness), before_cursor);
         assert_eq!(selected_rect(&harness), before_paint);
     }
 }
@@ -198,7 +235,7 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
     ] {
         let mut off_harness = harness(width);
         draw(&mut off_harness, width);
-        let before_cursor = feeds_owner(&off_harness).cursor();
+        let before_cursor = selected_index(&off_harness);
         let before_paint = selected_rect(&off_harness);
         off_harness.inject(Event::Mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
@@ -214,12 +251,12 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
             outcome.raw_messages,
             vec![Msg::TerminalEvent(TerminalObserverEvent::Mouse)]
         );
-        assert_eq!(feeds_owner(&off_harness).cursor(), before_cursor);
+        assert_eq!(selected_index(&off_harness), before_cursor);
         assert_eq!(selected_rect(&off_harness), before_paint);
 
         let mut harness = harness(width);
         draw(&mut harness, width);
-        let before_cursor = feeds_owner(&harness).cursor();
+        let before_cursor = selected_index(&harness);
         let before_paint = selected_rect(&harness);
         let list = list_rect(&harness);
         harness.inject(Event::Mouse(MouseEvent {
@@ -234,7 +271,7 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
         // A claimed wheel over the control moves through the shared owner's
         // Wheel→Move path now that an identical sync no longer invalidates the
         // painted frame (the 6.1 `last_projected_rows` skip).
-        assert_eq!(feeds_owner(&harness).cursor(), before_cursor + 1);
+        assert_eq!(selected_index(&harness), before_cursor + 1);
         // The claimed move re-selects the next row, so the painted selected-row
         // rect necessarily moves with it.
         assert_ne!(selected_rect(&harness), before_paint);
@@ -251,9 +288,9 @@ fn feeds_tick_round_trip_preserves_selected_target() {
     }));
     let _ = harness.step();
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD - 1);
-    assert_eq!(feeds_owner(&harness).cursor(), 1);
+    assert_eq!(selected_index(&harness), 1);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert_eq!(feeds_owner(&harness).cursor(), 1);
+    assert_eq!(selected_index(&harness), 1);
 }
 
 #[test]
@@ -293,7 +330,7 @@ fn feeds_tick_focus_and_mouse_eligibility_follow_the_panel() {
 fn feeds_tick_watched_pill_click_changes_the_filter_through_the_panel() {
     let mut harness = harness(240);
     draw(&mut harness, 240);
-    assert_eq!(feeds_owner(&harness).watched_filter(), WatchedFilter::All);
+    assert_eq!(selected_filter(&mut harness), Some(WatchedFilter::All));
     let watched = panel(&harness)
         .test_selector_hits()
         .regions()
@@ -309,8 +346,8 @@ fn feeds_tick_watched_pill_click_changes_the_filter_through_the_panel() {
     }));
     let _ = harness.step();
     assert_eq!(
-        feeds_owner(&harness).watched_filter(),
-        WatchedFilter::Watched,
+        selected_filter(&mut harness),
+        Some(WatchedFilter::Watched),
         "the painted Watched pill must set the owner's filter"
     );
 }
@@ -384,7 +421,9 @@ fn feeds_tick_latest_selection_uses_loaded_snapshot_without_fetch_and_refreshes_
     harness.model_mut().app.feed_tab.rebuild_all_entries();
     harness.model_mut().sync_mounted_surfaces();
     assert!(feeds_owner(&harness).latest_selected());
-    assert!(feeds_owner(&harness).visible_titles().contains(&"Three"));
+    assert!(visible_titles(&harness)
+        .iter()
+        .any(|title| title == "Three"));
 }
 
 #[test]
@@ -429,7 +468,7 @@ fn feeds_owner_retained_across_a_tab_change() {
         modifiers: KeyModifiers::NONE,
     }));
     let _ = harness.step();
-    assert_eq!(feeds_owner(&harness).cursor(), 1);
+    assert_eq!(selected_index(&harness), 1);
     assert!(panel(&harness).has_owner(&LibraryKey::Feeds));
 
     // Leave Feeds: the retained owner must survive the round trip.
@@ -440,7 +479,7 @@ fn feeds_owner_retained_across_a_tab_change() {
     harness.model_mut().app.tab = TabSelection::Feeds;
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
-        feeds_owner(&harness).cursor(),
+        selected_index(&harness),
         1,
         "the retained Feeds owner keeps its cursor across a tab change"
     );

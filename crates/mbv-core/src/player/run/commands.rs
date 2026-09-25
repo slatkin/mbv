@@ -171,18 +171,21 @@ impl PlaybackRun {
     }
 
     fn cmd_jump_to_active_file(&mut self, slot_id: QueueSlotId, mpv: &Mpv) {
-        let Err(error) = self.select_active_slot(slot_id, mpv) else {
-            let _ = mpv.set_property("pause", false);
-            // Active-file projection has no mpv playlist move to
-            // observe, so the JumpTo emits its TrackChanged
-            // observation here, shaped like the on_end_file settle
-            // (design D1). The tag stays on `forced_transition` so
-            // a duplicate settle path still carries it; the
-            // pipeline treats the second attempt as Ignored.
-            self.emit_track_changed(slot_id, self.forced_transition);
-            return;
-        };
-        log::warn!(target: "player", "active-file selection failed: {error}");
+        match self.select_active_slot(slot_id, mpv) {
+            Ok(()) => {
+                let _ = mpv.set_property("pause", false);
+                // Active-file projection has no mpv playlist move to
+                // observe, so the JumpTo emits its TrackChanged
+                // observation here, shaped like the on_end_file settle
+                // (design D1). The tag stays on `forced_transition` so
+                // a duplicate settle path still carries it; the
+                // pipeline treats the second attempt as Ignored.
+                self.emit_track_changed(slot_id, self.forced_transition);
+            }
+            Err(error) => {
+                log::warn!(target: "player", "active-file selection failed: {error}");
+            }
+        }
     }
 
     fn cmd_jump_to_playlist(

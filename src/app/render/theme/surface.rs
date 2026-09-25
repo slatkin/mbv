@@ -140,7 +140,6 @@ declare_surfaces!(
     // --- column/pane: the surface a content body sits on ---
     QueueColumn,
     LibraryColumn,
-    WideSplitGutter,
     HeroPane,
     ContextMenuSelectedRow,
     // --- content body: a focusable content region ---

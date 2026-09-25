@@ -173,47 +173,39 @@ fn resolve_play_intent(
 /// published `current_idx` mirror instead recomputes the neighbor from a
 /// coordinate that lags one transition behind while a jump settles, so
 /// rapid Next presses kept landing on (or re-issuing) the wrong slot.
-/// A relative Next/Previous step advances from the *desired* active slot
-/// — the newest queued or in-flight transition, else the slot the run
-/// observes playing, else the queue's active marker. Stepping from the
-/// published `current_idx` mirror instead recomputes the neighbor from a
-/// coordinate that lags one transition behind while a jump settles, so
-/// rapid Next presses kept landing on (or re-issuing) the wrong slot.
 fn step_to_neighbor_slot(
     ctx: &mut CtrlContext<'_>,
     action: crate::ctrl::PlaybackIntentAction,
     request_id: crate::ctrl::PlaybackRequestId,
     generation: crate::ctrl::PlaybackGeneration,
 ) {
-    let base_idx = ctx
-        .owner
-        .core
-        .transitions
+    let queue = &ctx.owner.core.queue;
+    let transitions = &ctx.owner.core.transitions;
+    let observed_active_slot = *ctx.shared_queue.observed_active_slot.lock().unwrap();
+    let base_idx = transitions
         .queued_latest()
-        .or_else(|| ctx.owner.core.transitions.in_flight())
+        .or_else(|| transitions.in_flight())
         .map(|t| t.target)
-        .or_else(|| *ctx.shared_queue.observed_active_slot.lock().unwrap())
-        .or_else(|| ctx.owner.core.queue.active_slot_id())
-        .and_then(|slot| ctx.owner.core.queue.slot_index(slot));
+        .or(observed_active_slot)
+        .or_else(|| queue.active_slot_id())
+        .and_then(|slot| queue.slot_index(slot));
     let neighbor_idx = base_idx.and_then(|idx| match action {
         crate::ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
-        _ => Some(idx + 1).filter(|&next| next < ctx.owner.core.queue.len()),
+        _ => Some(idx + 1).filter(|&next| next < queue.len()),
     });
     log::info!(
         target: "transition",
         "playback intent: action={:?} queued_latest={:?} in_flight={:?} observed_active_slot={:?} queue_active_slot={:?} base_idx={:?} neighbor_idx={:?} queue_len={}",
         action,
-        ctx.owner.core.transitions.queued_latest().map(|t| t.target),
-        ctx.owner.core.transitions.in_flight().map(|t| t.target),
-        *ctx.shared_queue.observed_active_slot.lock().unwrap(),
-        ctx.owner.core.queue.active_slot_id(),
+        transitions.queued_latest().map(|t| t.target),
+        transitions.in_flight().map(|t| t.target),
+        observed_active_slot,
+        queue.active_slot_id(),
         base_idx,
         neighbor_idx,
-        ctx.owner.core.queue.len(),
+        queue.len(),
     );
-    if let Some(slot_id) =
-        neighbor_idx.and_then(|idx| ctx.owner.core.queue.slots().get(idx).map(|s| s.slot_id))
-    {
+    if let Some(slot_id) = neighbor_idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id)) {
         dispatch_slot_jump(
             &mut DaemonOwnerContext {
                 player: ctx.player,

@@ -130,26 +130,6 @@ impl FeedsContent {
         }
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn cursor(&self) -> usize {
-        self.carrier.cursor()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn scroll(&self) -> usize {
-        self.carrier.scroll()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
-        self.watched_filter
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn selected_group(&self) -> usize {
-        self.selected_group
-    }
-
     pub(in crate::app) fn latest_selected(&self) -> bool {
         self.latest_selected
     }
@@ -160,22 +140,6 @@ impl FeedsContent {
 
     pub(in crate::app) fn group_count(&self) -> usize {
         1 + self.subscriptions.len()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
-        self.visible_entries
-            .iter()
-            .map(|entry| entry.title.as_str())
-            .collect()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn subscription_names(&self) -> Vec<&str> {
-        self.subscriptions
-            .iter()
-            .map(|subscription| subscription.name.as_str())
-            .collect()
     }
 
     /// The stable row id under `point`, resolved by the shared owner that
@@ -441,6 +405,25 @@ impl FeedsContent {
     /// stable target).
     fn reset_selection(&mut self) {
         self.delegate_row_local_input(MediaListSurfaceInput::First, None);
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn canonical_cursor(&self) -> usize {
+        self.carrier.cursor()
+    }
+
+    /// The selected feed group, and the Watched filter applied within it:
+    /// owner-local selection state with no other production-observable
+    /// signal (the Selector row's `active` pill only ever encodes Latest or
+    /// the group, never the filter — see `content()`).
+    #[cfg(test)]
+    pub(in crate::app) fn selected_group(&self) -> usize {
+        self.selected_group
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
+        self.watched_filter
     }
 
     #[cfg(test)]

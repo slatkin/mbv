@@ -276,11 +276,6 @@ impl<Target: Clone + Eq> WideMediaList<Target> {
         self.core.toggle_selection(target);
     }
 
-    #[cfg(test)]
-    pub fn extend_selection_to(&mut self, target: &Target) {
-        self.core.extend_selection_to(target);
-    }
-
     pub fn clear_selection(&mut self) {
         self.core.clear_selection();
     }

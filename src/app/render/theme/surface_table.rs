@@ -21,18 +21,8 @@
 //!     `queue.rs`, `widgets.rs`, `hero.rs`, `home.rs:402`, `chrome.rs`,
 //!     `chrome_tabs.rs:43`); the popup frame and its dim backdrop
 //!     (`modal_frame.rs:47`, `backdrop.rs:8-19`).
-//! (b) **`SelectedRowSurface` policy family** (`components/media_list/mod.rs:198`):
-//!     `ListBackdrop` resolves the `SelectedRow` row (the punch-through),
-//!     row), `OwningSurface` resolves the containing surface's focus pair
-//!     (`media_list/wide.rs:202-203`). The `OwningSurface` callers declare
-//!     `SelectedRowOnQueueColumn` (`render/components/queue.rs:36`) or
-//!     `SelectedRowOnLibraryPane` (`tv_wide.rs:573-576`,
-//!     `music_wide.rs:537-538`).
-//!     NOTE (accepted selected-row bar): the selected-row painter now paints
-//!     the opaque `SELECTED_ROW_BG` bar for every selected row and
-//!     `selected_row_surface_color` ignores this family, so these
-//!     `SelectedRow*` rows no longer reach the screen; the family is kept for
-//!     the surface-table contract and pending cleanup.
+//! (b) The selected-row painter uses the opaque `SELECTED_ROW_BG` bar; no
+//!     separate selected-row surface identity remains in this table.
 //! (c) **Cursor-driven sites** keep their predicate as the bit (D3(c)):
 //!     `tv_wide.rs:254` (`ctx.focused && ctx.episode_cursor.is_some()`),
 //!     `card.rs:245` (the queue column's focus), and the highlight gates of the
@@ -80,14 +70,6 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::LibraryColumn => Row {
             level: Level::ColumnPane,
             focus: FocusSource::LibraryColumn,
-            soft: false,
-            resting: SURFACE_BACKDROP,
-        },
-        // The wide hero split gap paints the backdrop in every frame today
-        // (`components/wide_hero_boundary.rs:121`).
-        Surface::WideSplitGutter => Row {
-            level: Level::ColumnPane,
-            focus: FocusSource::Fixed,
             soft: false,
             resting: SURFACE_BACKDROP,
         },
@@ -316,11 +298,6 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
         "the library column rests as the app backdrop (`SURFACE_BACKDROP`) \
          rather than the column/pane level's resting value; its focused half \
          takes `SURFACE_FOCUSED`",
-    ),
-    (
-        Surface::WideSplitGutter,
-        "the split gap between the wide hero panes is painted as the app backdrop \
-         in every frame",
     ),
     (
         Surface::ContextMenuSelectedRow,

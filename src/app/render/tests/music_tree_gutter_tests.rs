@@ -4,8 +4,8 @@
 
 use super::test_helpers::{
     album, artist, expand_root, gutter_projection, music_tree_frame, music_tree_hierarchy_glyph,
-    music_tree_row_slice, music_tree_row_text, select_target, set_marquee_clock, tree_browser,
-    GUTTER_ARTIST, GUTTER_YEAR, GUTTER_YEARED,
+    music_tree_row_slice, music_tree_row_text, select_target, tree_browser, GUTTER_ARTIST,
+    GUTTER_YEAR, GUTTER_YEARED,
 };
 use super::*;
 
@@ -135,7 +135,6 @@ fn music_tree_overflow_with_room_keeps_cell_budget_aligned() {
     let root = artist("gutter-artist");
     expand_root(&mut browser, &root);
     select_target(&mut browser, &album("gutter-yeared"));
-    set_marquee_clock(&mut browser, GUTTER_YEARED, 0);
 
     let area = Rect::new(0, 0, WIDTH, 2);
     let term = music_tree_frame(&mut browser, area, FRAME_WIDTH, area.height);

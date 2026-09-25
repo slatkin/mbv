@@ -72,6 +72,8 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::library_panel::LibraryContentOwner;
+    use crate::app::state::types::feed_tab::WatchedFilter;
     use crate::app::tests::make_app_stub;
     use crate::app::PanelFocus;
     use mbv_core::config::{FeedKind, FeedSubscription};
@@ -88,9 +90,12 @@ mod tests {
         model
             .update_feeds_owner(|feeds| {
                 feeds
-                    .subscription_names()
+                    .content()
+                    .selector
+                    .expect("Feeds selector is present")
+                    .pills
                     .into_iter()
-                    .map(str::to_string)
+                    .skip(1 + WatchedFilter::COUNT + 1)
                     .collect()
             })
             .expect("Feeds owner installed")

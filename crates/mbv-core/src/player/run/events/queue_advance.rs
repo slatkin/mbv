@@ -3,6 +3,17 @@ use crate::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 use super::super::*;
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
 
+/// The completed item's outcome, past the end of the queue (`stop_at_queue_end`).
+struct QueueEndStop<'a> {
+    completed_slot_id: Option<QueueSlotId>,
+    completed_item: &'a QueueItem,
+    completed_pos: i64,
+    played_out: bool,
+    consume_track: bool,
+    natural: bool,
+    completed_runtime: i64,
+}
+
 impl PlaybackRun {
     /// Returns true if the event loop should `continue`.
     pub(in crate::player) fn on_end_file(
@@ -110,13 +121,15 @@ impl PlaybackRun {
 
         if next_idx >= self.queue_len() {
             return self.stop_at_queue_end(
-                completed_slot_id,
-                &completed_item,
-                completed_pos,
-                played_out,
-                consume_track,
-                natural,
-                completed_runtime,
+                QueueEndStop {
+                    completed_slot_id,
+                    completed_item: &completed_item,
+                    completed_pos,
+                    played_out,
+                    consume_track,
+                    natural,
+                    completed_runtime,
+                },
                 progress,
             );
         }
@@ -338,34 +351,23 @@ impl PlaybackRun {
 
     /// Past the end of the queue: report the completed item stopped and end
     /// the run (signals run() to return).
-    #[allow(clippy::too_many_arguments)]
-    fn stop_at_queue_end(
-        &mut self,
-        completed_slot_id: Option<QueueSlotId>,
-        completed_item: &QueueItem,
-        completed_pos: i64,
-        played_out: bool,
-        consume_track: bool,
-        natural: bool,
-        completed_runtime: i64,
-        progress: &mut ProgressGuard,
-    ) -> bool {
+    fn stop_at_queue_end(&mut self, stop: QueueEndStop<'_>, progress: &mut ProgressGuard) -> bool {
         progress.stop_and_join(self.progress_join_budget());
         self.status.lock().unwrap().active = false;
-        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(completed_pos));
+        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(stop.completed_pos));
         self.close_prepared_source_at(provider_lifecycle_close_pos(
-            completed_item,
-            natural,
-            completed_runtime,
+            stop.completed_item,
+            stop.natural,
+            stop.completed_runtime,
             self.last_valid_pos,
         ));
-        self.mark_played_or_retry(played_out, completed_item);
+        self.mark_played_or_retry(stop.played_out, stop.completed_item);
         let _ = self.event_tx.send(PlayerEvent::Stopped {
-            slot_id: completed_slot_id,
+            slot_id: stop.completed_slot_id,
             run_identity: self.run_identity,
-            position_ticks: completed_pos,
-            played: played_out,
-            consume: consume_track,
+            position_ticks: stop.completed_pos,
+            played: stop.played_out,
+            consume: stop.consume_track,
             progress_report_accepted: self.stop_report.is_accepted(),
             error: None,
         });

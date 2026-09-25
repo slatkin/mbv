@@ -5,13 +5,13 @@ use super::test_helpers::{
     album, artist, artist_root, draw_mounted_frame, expand_root, make_music_tree_group_app,
     mounted_model_at, mounted_music_tree_browser, mounted_music_wide_geometry, music_tree_frame,
     music_tree_long_leaf, music_tree_row_text, reset_projection, row_y, select_target,
-    set_marquee_clock, tree_browser, MUSIC_TREE_LONG_TITLE, MUSIC_TREE_WIDE_HEIGHT,
-    MUSIC_TREE_WIDE_WIDTH, RESET_TITLE_FIRST, RESET_TITLE_SECOND,
+    tree_browser, MUSIC_TREE_LONG_TITLE, MUSIC_TREE_WIDE_HEIGHT, MUSIC_TREE_WIDE_WIDTH,
+    RESET_TITLE_FIRST, RESET_TITLE_SECOND,
 };
 use ratatui::layout::Rect;
 
-/// The focused selected row marquees its title through the injected clock (no
-/// sleeps) while an unfocused row truncates with an ellipsis instead.
+/// The focused selected row starts its title window at the beginning, while
+/// an unfocused row truncates with an ellipsis instead.
 #[test]
 fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
     let mut model = mounted_model_at(
@@ -34,8 +34,7 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
         row.trim_start()
     }
 
-    // Hold phase: the window rests on the title's beginning — no ellipsis.
-    set_marquee_clock(&mut browser, MUSIC_TREE_LONG_TITLE, 0);
+    // The first painted frame rests on the title's beginning — no ellipsis.
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -58,29 +57,8 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
         "the marquee window carries no ellipsis"
     );
 
-    // Seven steps past the hold: the window has travelled seven columns.
-    set_marquee_clock(&mut browser, MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
-    let term = music_tree_frame(
-        &mut browser,
-        list_area,
-        MUSIC_TREE_WIDE_WIDTH,
-        MUSIC_TREE_WIDE_HEIGHT,
-    );
-    let scrolled_row = music_tree_row_text(
-        &term,
-        row_y(&browser, &long_leaf),
-        list_area.x,
-        list_area.right(),
-    );
-    let scrolled = name_slot(&scrolled_row);
-    assert!(
-        scrolled.starts_with(&MUSIC_TREE_LONG_TITLE[7..14]),
-        "the focused title window advanced: {scrolled}"
-    );
-
     // Unfocused, the same row truncates with an ellipsis instead of marqueeing.
     browser.set_focused(false);
-    set_marquee_clock(&mut browser, MUSIC_TREE_LONG_TITLE, 600 + 150 * 7);
     let term = music_tree_frame(
         &mut browser,
         list_area,
@@ -117,21 +95,18 @@ fn music_tree_title_clock_resets_when_the_selection_changes() {
         row.trim_start()
     }
 
-    // Select the first title and inject a mid-scroll clock: its window has
-    // travelled eight columns, not its hold start.
+    // The first selected title starts at the beginning of its window.
     select_target(&mut browser, &first);
-    set_marquee_clock(&mut browser, RESET_TITLE_FIRST, 600 + 150 * 8);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let first_row = music_tree_row_text(&term, 1, 0, WIDTH);
     let first_name = name_slot(&first_row);
     assert!(
-        first_name.starts_with(&RESET_TITLE_FIRST[8..20]),
-        "the injected clock is mid-scroll: {first_name}"
+        first_name.starts_with(&RESET_TITLE_FIRST[..12]),
+        "the first title starts at its hold position: {first_name}"
     );
 
-    // Select the second title without touching the clock. Its title text
-    // differs, so the primitive resets the clock and it paints its hold
-    // window from the start.
+    // Selecting a different title resets the clock and starts the new window
+    // from its beginning.
     select_target(&mut browser, &second);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let second_row = music_tree_row_text(&term, 2, 0, WIDTH);

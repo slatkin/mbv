@@ -26,7 +26,7 @@
 //!
 //! The test renders one representative frame per breakpoint and probes only
 //! the regions that frame locates. A surface absent from that frame is not
-//! silently skipped: the coverage table below names every `Surface::ALL` row
+//! silently skipped: the coverage table below names every production surface
 //! and says where it is pinned, by this test or by an existing one, or why no
 //! buffer-level pin exists. "—" means this test does not probe it; the named
 //! test is the pin.
@@ -75,6 +75,7 @@ use super::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use super::test_helpers::{
     draw_mounted_terminal, make_movie_app, make_queue_app, mounted_model_at,
 };
+use super::theme::Surface;
 use super::*;
 use crate::app::{PanelFocus, PanelMode};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -219,7 +220,6 @@ fn coverage_table_accounts_for_every_surface_row() {
     let probed_here: &[palette::Surface] = &[
         palette::Surface::QueueColumn,
         palette::Surface::LibraryColumn,
-        palette::Surface::WideSplitGutter,
         palette::Surface::HeroPane,
         palette::Surface::ContextMenuSelectedRow,
         palette::Surface::LibraryPanel,
@@ -257,7 +257,7 @@ fn coverage_table_accounts_for_every_surface_row() {
              distinguishable from the StatusBar band's fill",
         ),
     ];
-    for &surface in palette::Surface::ALL {
+    for &surface in Surface::ALL {
         let pinned = probed_here.contains(&surface);
         let residual = residuals.iter().any(|(s, _)| *s == surface);
         assert!(
@@ -268,7 +268,7 @@ fn coverage_table_accounts_for_every_surface_row() {
     }
     for (surface, reason) in residuals {
         assert!(
-            palette::Surface::ALL.contains(surface),
+            Surface::ALL.contains(surface),
             "{surface:?} is recorded but not a declared surface"
         );
         assert!(!reason.is_empty(), "{surface:?} carries no reason");
@@ -286,7 +286,7 @@ fn coverage_table_accounts_for_every_surface_row() {
     }
     assert_eq!(
         seen.len(),
-        palette::Surface::ALL.len(),
+        Surface::ALL.len(),
         "the coverage lists must account for every declared surface"
     );
 }

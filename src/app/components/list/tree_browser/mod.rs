@@ -528,13 +528,6 @@ impl<Target> TreeBrowser<Target> {
         self.focused = focused;
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn set_marquee_started_at(&mut self, text: &str, at: Instant) {
-        self.marquee_text.clear();
-        self.marquee_text.push_str(text);
-        self.marquee_started_at = at;
-    }
-
     pub fn invalidate_paint(&mut self) {
         self.paint.invalidate();
     }
