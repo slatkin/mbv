@@ -161,43 +161,26 @@ impl Model {
         let placement = self.sync_chrome_root().tab;
         self.mount_to_placement(ChromePanel::Tab, placement);
         let id = ChromePanel::Tab.id();
-        let titles: Vec<String> = std::iter::once(
+        let (titles, markers): (Vec<String>, Vec<bool>) = std::iter::once((
             crate::app::ui_util::continue_tab_title(self.app.use_nerd_fonts).to_string(),
-        )
-        .chain(self.app.libs.iter().map(|l| l.library.name.clone()))
-        .chain(
-            self.app
-                .audiobookshelf_libraries
-                .iter()
-                .map(|l| l.name.clone()),
-        )
-        .chain(
-            self.app
-                .has_feeds_subscriptions()
-                .then(|| "Feeds".to_string()),
-        )
-        .collect();
-        let markers: Vec<bool> = std::iter::once(false)
-            .chain(self.app.libs.iter().map(|lib| {
-                self.destination_latest_marker(
-                    &crate::app::state::types::playback::DestinationLatestSource::Emby(
-                        lib.library.id.clone(),
-                    ),
-                )
-            }))
-            .chain(self.app.audiobookshelf_libraries.iter().map(|lib| {
-                self.destination_latest_marker(
-                    &crate::app::state::types::playback::DestinationLatestSource::Audiobookshelf(
-                        lib.id.clone(),
-                    ),
-                )
-            }))
-            .chain(self.app.has_feeds_subscriptions().then(|| {
-                self.destination_latest_marker(
-                    &crate::app::state::types::playback::DestinationLatestSource::Feeds,
-                )
-            }))
-            .collect();
+            false,
+        ))
+        .chain(self.app.libs.iter().map(|lib| {
+            let marker = self
+                .destination_latest_marker(&DestinationLatestSource::Emby(lib.library.id.clone()));
+            (lib.library.name.clone(), marker)
+        }))
+        .chain(self.app.audiobookshelf_libraries.iter().map(|lib| {
+            let marker = self.destination_latest_marker(&DestinationLatestSource::Audiobookshelf(
+                lib.id.clone(),
+            ));
+            (lib.name.clone(), marker)
+        }))
+        .chain(self.app.has_feeds_subscriptions().then(|| {
+            let marker = self.destination_latest_marker(&DestinationLatestSource::Feeds);
+            ("Feeds".to_string(), marker)
+        }))
+        .unzip();
         let selected = self
             .app
             .tab
