@@ -175,43 +175,21 @@ fn apply_ctrl_event(
             current.current_idx = current_idx;
             current.queue_len = queue_len;
         }
-        CtrlEvent::Player(pe) => {
-            match &pe {
-                PlayerEvent::Stopped { .. } => {
-                    status.lock().unwrap().active = false;
-                }
-                // `TrackChanged` now names a `QueueSlotId`, not an ordinal;
-                // this read loop has no queue to resolve it against. The
-                // forwarded event reaches the Client, whose queue coordinates
-                // are replaced by the next unified snapshot rather than
-                // merged from this event.
-                PlayerEvent::PausedChanged(paused) => {
-                    status.lock().unwrap().paused = *paused;
-                }
-                _ => {}
-            }
-            if notify {
-                let _ = event_tx.send(pe);
-            }
-        }
+        CtrlEvent::Player(pe) => apply_player_event(pe, status, event_tx, notify),
         CtrlEvent::CommandRejected(reason) => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
-            }
+            send_if_notifying(notify, event_tx, PlayerEvent::CommandRejected(reason));
         }
         CtrlEvent::PlaybackIntent(event) => {
             // A coalesced request is terminal for that request identity too;
             // the canonical request remains tracked separately by the daemon.
             pending_playback.lock().unwrap().remove(&event.request_id);
-            if notify {
-                let _ = event_tx.send(PlayerEvent::PlaybackIntent(event));
-            }
+            send_if_notifying(notify, event_tx, PlayerEvent::PlaybackIntent(event));
         }
-        CtrlEvent::PipePlaybackStatus(status_event) => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::PipePlaybackStatus(status_event));
-            }
-        }
+        CtrlEvent::PipePlaybackStatus(status_event) => send_if_notifying(
+            notify,
+            event_tx,
+            PlayerEvent::PipePlaybackStatus(status_event),
+        ),
         CtrlEvent::ShutdownAccepted | CtrlEvent::ShutdownRejected { .. } => {
             // Handled by the request-completion path in RemotePlayer
             //, not by the general event loop.
@@ -220,25 +198,13 @@ fn apply_ctrl_event(
             log::debug!(target: "remote", "ignoring owner-service reconciliation event");
         }
         CtrlEvent::Disconnected { reason } => {
-            if notify {
-                let msg = disconnect_reason_message(&reason).to_string();
-                match reason {
-                    DisconnectReason::TakenOverByEmbyRemote => {
-                        let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
-                    }
-                    // Handled by the reader thread's end-of-loop logic below
-                    // (`is_structured_disconnect`), which sends
-                    // `PlayerEvent::DaemonShutdownAnnounced` once the
-                    // connection actually closes; nothing to do here.
-                    DisconnectReason::DaemonShutdown => {}
-                }
-            }
+            apply_disconnected_event(reason, event_tx, notify);
         }
-        CtrlEvent::UnifiedQueueLoadResult { request_id, result } => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::UnifiedQueueLoadResult { request_id, result });
-            }
-        }
+        CtrlEvent::UnifiedQueueLoadResult { request_id, result } => send_if_notifying(
+            notify,
+            event_tx,
+            PlayerEvent::UnifiedQueueLoadResult { request_id, result },
+        ),
         CtrlEvent::UnifiedQueueState(unified) => {
             // Keep a compatibility projection for older status consumers,
             // but retain the canonical snapshot for TUI and reconnect paths.
@@ -255,15 +221,57 @@ fn apply_ctrl_event(
         CtrlEvent::AudiobookshelfProgress(event) => {
             // Dormant: forwarded for a future browse-reconciliation consumer.
             // Does not touch `status`, `items`, or `unified_queue`.
-            if notify {
-                let _ = event_tx.send(PlayerEvent::AudiobookshelfProgress(event));
-            }
+            send_if_notifying(notify, event_tx, PlayerEvent::AudiobookshelfProgress(event));
         }
-        CtrlEvent::AudiobookshelfBookProgress(event) => {
-            if notify {
-                let _ = event_tx.send(PlayerEvent::AudiobookshelfBookProgress(event));
-            }
+        CtrlEvent::AudiobookshelfBookProgress(event) => send_if_notifying(
+            notify,
+            event_tx,
+            PlayerEvent::AudiobookshelfBookProgress(event),
+        ),
+    }
+}
+
+fn send_if_notifying(notify: bool, event_tx: &mpsc::Sender<PlayerEvent>, event: PlayerEvent) {
+    if notify {
+        let _ = event_tx.send(event);
+    }
+}
+
+fn apply_player_event(
+    event: PlayerEvent,
+    status: &Arc<Mutex<PlayerStatus>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
+) {
+    match &event {
+        PlayerEvent::Stopped { .. } => status.lock().unwrap().active = false,
+        // `TrackChanged` now names a `QueueSlotId`, not an ordinal; this read
+        // loop has no queue to resolve it against. The forwarded event reaches
+        // the Client, whose queue coordinates are replaced by the next unified
+        // snapshot rather than merged from this event.
+        PlayerEvent::PausedChanged(paused) => status.lock().unwrap().paused = *paused,
+        _ => {}
+    }
+    send_if_notifying(notify, event_tx, event);
+}
+
+fn apply_disconnected_event(
+    reason: DisconnectReason,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
+) {
+    if !notify {
+        return;
+    }
+    let msg = disconnect_reason_message(&reason).to_string();
+    match reason {
+        DisconnectReason::TakenOverByEmbyRemote => {
+            let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
         }
+        // Handled by the reader thread's end-of-loop logic below
+        // (`is_structured_disconnect`), which sends
+        // `PlayerEvent::DaemonShutdownAnnounced` once the connection closes.
+        DisconnectReason::DaemonShutdown => {}
     }
 }
 
