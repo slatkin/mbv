@@ -124,50 +124,71 @@ impl AppComponent<Msg, UserEvent> for ConfirmComponent {
 
 fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmIntent> {
     match action {
-        ConfirmAction::ClearQueue => match key {
-            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
-            Key::Esc => Some(ConfirmIntent::Cancel),
-            _ => Some(ConfirmIntent::Dismiss),
-        },
+        ConfirmAction::ClearQueue | ConfirmAction::ReplacePopulatedQueue => {
+            clear_or_replace_queue_intent(key)
+        }
         ConfirmAction::RemoveActiveQueueItem(_) | ConfirmAction::RemoveFeedSubscription(_) => {
-            match key {
-                Key::Char('y') => Some(ConfirmIntent::Accept),
-                Key::Esc => Some(ConfirmIntent::Cancel),
-                _ => Some(ConfirmIntent::Dismiss),
-            }
+            remove_item_intent(key)
         }
         ConfirmAction::RescanLibrary(_)
         | ConfirmAction::RemoveEmby
         | ConfirmAction::ReplaceEmby(_)
         | ConfirmAction::RemoveAudiobookshelf
-        | ConfirmAction::ReplaceAudiobookshelf(_) => match key {
-            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
-            Key::Esc => Some(ConfirmIntent::Cancel),
-            _ => None,
-        },
+        | ConfirmAction::ReplaceAudiobookshelf(_) => service_intent(key),
         ConfirmAction::SaveOverwritePlaylist { .. } | ConfirmAction::DeletePlaylist { .. } => {
-            match key {
-                Key::Char('y') => Some(ConfirmIntent::Accept),
-                Key::Esc => Some(ConfirmIntent::Cancel),
-                _ => None,
-            }
+            playlist_intent(key)
         }
-        ConfirmAction::PlayLocallyInstead => match key {
-            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
-            Key::Char('n') | Key::Char('N') | Key::Esc => Some(ConfirmIntent::Cancel),
-            _ => None,
-        },
-        ConfirmAction::DiscardOrSaveDirtyPlaylist => match key {
-            Key::Char('s') | Key::Char('S') => Some(ConfirmIntent::Save),
-            Key::Char('d') | Key::Char('D') => Some(ConfirmIntent::Discard),
-            Key::Char('c') | Key::Char('C') | Key::Esc => Some(ConfirmIntent::Cancel),
-            _ => None,
-        },
-        ConfirmAction::ReplacePopulatedQueue => match key {
-            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
-            Key::Esc => Some(ConfirmIntent::Cancel),
-            _ => Some(ConfirmIntent::Dismiss),
-        },
+        ConfirmAction::PlayLocallyInstead => play_locally_intent(key),
+        ConfirmAction::DiscardOrSaveDirtyPlaylist => dirty_playlist_intent(key),
+    }
+}
+
+fn clear_or_replace_queue_intent(key: Key) -> Option<ConfirmIntent> {
+    match key {
+        Key::Char('y' | 'Y') | Key::Enter => Some(ConfirmIntent::Accept),
+        Key::Esc => Some(ConfirmIntent::Cancel),
+        _ => Some(ConfirmIntent::Dismiss),
+    }
+}
+
+fn remove_item_intent(key: Key) -> Option<ConfirmIntent> {
+    match key {
+        Key::Char('y') => Some(ConfirmIntent::Accept),
+        Key::Esc => Some(ConfirmIntent::Cancel),
+        _ => Some(ConfirmIntent::Dismiss),
+    }
+}
+
+fn service_intent(key: Key) -> Option<ConfirmIntent> {
+    match key {
+        Key::Char('y' | 'Y') | Key::Enter => Some(ConfirmIntent::Accept),
+        Key::Esc => Some(ConfirmIntent::Cancel),
+        _ => None,
+    }
+}
+
+fn playlist_intent(key: Key) -> Option<ConfirmIntent> {
+    match key {
+        Key::Char('y') => Some(ConfirmIntent::Accept),
+        Key::Esc => Some(ConfirmIntent::Cancel),
+        _ => None,
+    }
+}
+
+fn play_locally_intent(key: Key) -> Option<ConfirmIntent> {
+    match key {
+        Key::Char('y' | 'Y') | Key::Enter => Some(ConfirmIntent::Accept),
+        Key::Char('n' | 'N') | Key::Esc => Some(ConfirmIntent::Cancel),
+        _ => None,
+    }
+}
+
+fn dirty_playlist_intent(key: Key) -> Option<ConfirmIntent> {
+    match key {
+        Key::Char('s' | 'S') => Some(ConfirmIntent::Save),
+        Key::Char('d' | 'D') => Some(ConfirmIntent::Discard),
+        Key::Char('c' | 'C') | Key::Esc => Some(ConfirmIntent::Cancel),
+        _ => None,
     }
 }
 
