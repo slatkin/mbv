@@ -112,8 +112,7 @@ pub fn parse_audio_info(streams: &[Value]) -> String {
 }
 
 pub fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
-    let video = streams.iter().find(|s| s["Type"].as_str() == Some("Video"));
-    let audio_only = video.is_none();
+    let audio_only = !streams.iter().any(|s| s["Type"].as_str() == Some("Video"));
     let video_label = if audio_only {
         parse_audio_info(streams)
             .split("  |  ")
@@ -124,43 +123,50 @@ pub fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
         parse_video_info(streams)
     };
 
-    let audio_streams = streams
+    SessionMediaInfo {
+        video_label,
+        audio_only,
+        audio_streams: parse_session_audio_streams(streams),
+        subtitle_streams: parse_session_subtitle_streams(streams),
+    }
+}
+
+fn parse_session_audio_streams(streams: &[Value]) -> Vec<SessionAudioStream> {
+    streams
         .iter()
         .filter(|s| s["Type"].as_str() == Some("Audio"))
         .filter_map(|s| {
             s.get("Index")?;
             let index = s["Index"].as_i64().unwrap_or(0);
             let language = s["Language"].as_str().unwrap_or("").to_string();
-            let label = {
-                let lang_name = audio_language_name(&language);
-                let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
-                let layout = s["ChannelLayout"].as_str().unwrap_or("");
-                let layout_str = match layout {
-                    "mono" => "Mono",
-                    "stereo" => "Stereo",
-                    "5.1" => "5.1",
-                    "7.1" => "7.1",
-                    other if !other.is_empty() => other,
-                    _ => "",
-                };
-                let title = s["DisplayTitle"]
-                    .as_str()
-                    .or_else(|| s["Title"].as_str())
-                    .unwrap_or("");
-                let pieces: Vec<&str> = [lang_name, &codec, layout_str]
-                    .iter()
-                    .filter(|part| !part.is_empty())
-                    .copied()
-                    .collect();
-                if !pieces.is_empty() {
-                    pieces.join(" ")
-                } else if !title.is_empty() {
-                    title.to_string()
-                } else if !language.is_empty() {
-                    language.to_uppercase()
-                } else {
-                    format!("#{index}")
-                }
+            let lang_name = audio_language_name(&language);
+            let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
+            let layout = s["ChannelLayout"].as_str().unwrap_or("");
+            let layout_str = match layout {
+                "mono" => "Mono",
+                "stereo" => "Stereo",
+                "5.1" => "5.1",
+                "7.1" => "7.1",
+                other if !other.is_empty() => other,
+                _ => "",
+            };
+            let title = s["DisplayTitle"]
+                .as_str()
+                .or_else(|| s["Title"].as_str())
+                .unwrap_or("");
+            let pieces: Vec<&str> = [lang_name, &codec, layout_str]
+                .iter()
+                .filter(|part| !part.is_empty())
+                .copied()
+                .collect();
+            let label = if !pieces.is_empty() {
+                pieces.join(" ")
+            } else if !title.is_empty() {
+                title.to_string()
+            } else if !language.is_empty() {
+                language.to_uppercase()
+            } else {
+                format!("#{index}")
             };
             Some(SessionAudioStream {
                 index,
@@ -168,9 +174,11 @@ pub fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
                 language,
             })
         })
-        .collect();
+        .collect()
+}
 
-    let subtitle_streams = streams
+fn parse_session_subtitle_streams(streams: &[Value]) -> Vec<SessionSubtitleStream> {
+    streams
         .iter()
         .filter(|s| s["Type"].as_str() == Some("Subtitle"))
         .filter_map(|s| {
@@ -206,14 +214,7 @@ pub fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
                 forced,
             })
         })
-        .collect();
-
-    SessionMediaInfo {
-        video_label,
-        audio_only,
-        audio_streams,
-        subtitle_streams,
-    }
+        .collect()
 }
 
 /// The single raw-JSON-to-`EmbyItem` constructor. `pub` so the app crate's
