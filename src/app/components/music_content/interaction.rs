@@ -194,122 +194,125 @@ impl MusicContent {
         }
     }
 
-    /// The filtered-tree pointer branch of the `List` slot event: wheel, click,
-    /// toggle, double-click and context-click resolve against the current-frame
-    /// tree geometry.
+    /// The filtered-tree pointer branch of the `List` slot event resolves
+    /// gestures against the current-frame tree geometry.
     fn tree_pointer_input(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         match input {
-            MediaListSurfaceInput::Wheel { at, delta } => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                self.browser.apply(TreeOperation::Move(delta));
-                self.pointer_album_selection_request(AlbumCursorKind::Move)
-            }
+            MediaListSurfaceInput::Wheel { at, delta } => self.tree_pointer_wheel(at, delta),
             MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::RangeClick(at) => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                let target = self.browser.resolve_current_point(at).cloned()?;
-                self.browser.apply(TreeOperation::ClearMarks);
-                self.browser.apply(TreeOperation::Select(target));
-                self.pointer_album_selection_request(AlbumCursorKind::Move)
+                self.tree_pointer_select(at)
             }
-            MediaListSurfaceInput::ToggleClick(at) => {
-                // Resolve the latest painted row before changing
-                // either focus or membership. Artist roots toggle
-                // their visible album descendants; they never
-                // become effect or Queue targets.
-                self.browser.resolve_current_point(at)?;
-                self.browser.apply(TreeOperation::PointerToggleMark(at));
-                self.pointer_album_selection_request(AlbumCursorKind::Move)
-            }
-            MediaListSurfaceInput::DoubleClick(at) => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                let target = self.browser.resolve_current_point(at).cloned()?;
-                if let MusicTreeTarget::Track { album, track } = &target {
-                    // Resolve the stable identity from the resolved
-                    // target before any local mutation, so a track
-                    // gesture never changes the selection and then
-                    // returns no message.
-                    let album_target = album.clone();
-                    let track_id = track.clone();
-                    self.browser.apply(TreeOperation::Select(target));
-                    return Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
-                        album_target,
-                        track_id,
-                    })));
-                }
-                self.browser.apply(TreeOperation::Select(target.clone()));
-                if matches!(target, MusicTreeTarget::Artist(_)) {
-                    self.browser
-                        .apply(TreeOperation::ToggleExpansionTarget(target));
-                    return Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus)));
-                }
-                if self
-                    .browser
-                    .children_of(&target)
-                    .is_some_and(|children| !children.is_empty())
-                {
-                    self.browser
-                        .apply(TreeOperation::ToggleExpansionTarget(target));
-                }
-                Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus)))
-            }
-            MediaListSurfaceInput::ContextClick(at) => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                let target = self.browser.resolve_current_point(at).cloned()?;
-                let marked = self.selected_album_targets_in_display_order();
-                let clicked_marked = match &target {
-                    MusicTreeTarget::Album(album) => {
-                        marked.iter().any(|selected| selected == album)
-                    }
-                    MusicTreeTarget::Artist(_) => self
-                        .artist_album_targets(&target)
-                        .into_iter()
-                        .any(|target| marked.iter().any(|selected| selected == &target)),
-                    MusicTreeTarget::Track { .. } => false,
-                };
-                self.browser.apply(TreeOperation::Select(target));
-                if !marked.is_empty() && clicked_marked {
-                    let (items, unresolved_targets) = self.selected_tree_items()?;
-                    if items.is_empty() && unresolved_targets.is_empty() {
-                        return None;
-                    }
-                    return Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-                        Some((at.x, at.y)),
-                    ))));
-                }
-
-                // A context click outside the marked set has the
-                // canonical list semantics: clear only this tree
-                // selection and open the ordinary single/root menu.
-                self.browser.apply(TreeOperation::ClearMarks);
-                if self.selected_is_artist() {
-                    let (items, _unresolved_targets) = self.selected_artist_items()?;
-                    if items.is_empty() {
-                        return None;
-                    }
-                    Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-                        Some((at.x, at.y)),
-                    ))))
-                } else {
-                    let item = self.selected_item()?;
-                    Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
-                            item,
-                        ]),
-                        Some((at.x, at.y)),
-                    ))))
-                }
-            }
+            MediaListSurfaceInput::ToggleClick(at) => self.tree_pointer_toggle(at),
+            MediaListSurfaceInput::DoubleClick(at) => self.tree_pointer_double_click(at),
+            MediaListSurfaceInput::ContextClick(at) => self.tree_pointer_context_click(at),
             _ => None,
         }
+    }
+
+    fn tree_pointer_wheel(&mut self, at: ratatui::layout::Position, delta: i64) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        self.browser.apply(TreeOperation::Move(delta));
+        self.pointer_album_selection_request(AlbumCursorKind::Move)
+    }
+
+    fn tree_pointer_select(&mut self, at: ratatui::layout::Position) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        let target = self.browser.resolve_current_point(at).cloned()?;
+        self.browser.apply(TreeOperation::ClearMarks);
+        self.browser.apply(TreeOperation::Select(target));
+        self.pointer_album_selection_request(AlbumCursorKind::Move)
+    }
+
+    fn tree_pointer_toggle(&mut self, at: ratatui::layout::Position) -> Option<Msg> {
+        // Resolve the latest painted row before changing either focus or
+        // membership. Artist roots toggle visible album descendants; they never
+        // become effect or Queue targets.
+        self.browser.resolve_current_point(at)?;
+        self.browser.apply(TreeOperation::PointerToggleMark(at));
+        self.pointer_album_selection_request(AlbumCursorKind::Move)
+    }
+
+    fn tree_pointer_double_click(&mut self, at: ratatui::layout::Position) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        let target = self.browser.resolve_current_point(at).cloned()?;
+        if let MusicTreeTarget::Track { album, track } = &target {
+            // Resolve stable identity before local mutation so a track gesture
+            // never changes selection and then returns no message.
+            let album_target = album.clone();
+            let track_id = track.clone();
+            self.browser.apply(TreeOperation::Select(target));
+            return Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
+                album_target,
+                track_id,
+            })));
+        }
+        self.browser.apply(TreeOperation::Select(target.clone()));
+        if matches!(target, MusicTreeTarget::Artist(_))
+            || self
+                .browser
+                .children_of(&target)
+                .is_some_and(|children| !children.is_empty())
+        {
+            self.browser
+                .apply(TreeOperation::ToggleExpansionTarget(target));
+        }
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus)))
+    }
+
+    fn tree_pointer_context_click(&mut self, at: ratatui::layout::Position) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        let target = self.browser.resolve_current_point(at).cloned()?;
+        let marked = self.selected_album_targets_in_display_order();
+        let clicked_marked = match &target {
+            MusicTreeTarget::Album(album) => marked.iter().any(|selected| selected == album),
+            MusicTreeTarget::Artist(_) => self
+                .artist_album_targets(&target)
+                .into_iter()
+                .any(|target| marked.iter().any(|selected| selected == &target)),
+            MusicTreeTarget::Track { .. } => false,
+        };
+        self.browser.apply(TreeOperation::Select(target));
+        if !marked.is_empty() && clicked_marked {
+            return self.tree_marked_context_menu(at);
+        }
+
+        // A context click outside the marked set has the canonical list
+        // semantics: clear only this tree selection and open the ordinary menu.
+        self.browser.apply(TreeOperation::ClearMarks);
+        self.tree_single_context_menu(at)
+    }
+
+    fn tree_marked_context_menu(&self, at: ratatui::layout::Position) -> Option<Msg> {
+        let (items, unresolved_targets) = self.selected_tree_items()?;
+        if items.is_empty() && unresolved_targets.is_empty() {
+            return None;
+        }
+        Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+            Some((at.x, at.y)),
+        ))))
+    }
+
+    fn tree_single_context_menu(&self, at: ratatui::layout::Position) -> Option<Msg> {
+        let items = if self.selected_is_artist() {
+            self.selected_artist_items()?.0
+        } else {
+            vec![self.selected_item()?]
+        };
+        if items.is_empty() {
+            return None;
+        }
+        Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+            Some((at.x, at.y)),
+        ))))
     }
 }
