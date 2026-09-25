@@ -255,86 +255,98 @@ impl SettingsComponent {
             return self.setup_key(key);
         }
         if self.destination == SettingsDestination::Keys {
-            return match key.code {
-                Key::Up => {
-                    self.keys_cursor = self.keys_cursor.saturating_sub(1);
-                    self.scroll_cursor_into_view(self.keys_cursor);
-                    None
-                }
-                Key::Down => {
-                    self.keys_cursor = (self.keys_cursor + 1)
-                        .min(Self::action_count(&self.keys).saturating_sub(1));
-                    self.scroll_cursor_into_view(self.keys_cursor);
-                    None
-                }
-                Key::PageUp => {
-                    self.scroll = self.scroll.saturating_sub(10);
-                    self.clamp_keys_cursor_to_window();
-                    None
-                }
-                Key::PageDown => {
-                    self.scroll = self.scroll.saturating_add(10).min(self.max_scroll());
-                    self.clamp_keys_cursor_to_window();
-                    None
-                }
-                Key::Home => {
-                    self.scroll = 0;
-                    self.clamp_keys_cursor_to_window();
-                    None
-                }
-                Key::End => {
-                    self.scroll = self.max_scroll();
-                    self.clamp_keys_cursor_to_window();
-                    None
-                }
-                // Read-only destination (design D7): Enter/Space select
-                // nothing — the chord changes in the config file, never in
-                // place (ADR 0023). Returning None lets `on()`'s fallback
-                // claim them like the cursor moves.
-                Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                    let intent = settings_intent_for_key(key.code)?;
-                    if matches!(intent, SettingsIntent::Back) {
-                        // Leaving Keys zeroes the local cursor so the next
-                        // entry starts at the top (the Services precedent).
-                        self.keys_cursor = 0;
-                    }
-                    Some(Msg::Shell(Box::new(ShellRequest::SettingsIntent(intent))))
-                }
-                _ => None,
-            };
+            return self.handle_keys_key(key);
         }
         if self.destination == SettingsDestination::Services {
-            return match key.code {
-                Key::Up => {
-                    self.services_cursor = self.services_cursor.saturating_sub(1);
-                    None
-                }
-                Key::Down => {
-                    self.services_cursor =
-                        (self.services_cursor + 1).min(self.services.len().saturating_sub(1));
-                    None
-                }
-                Key::Enter
-                | Key::Char(' ')
-                | Key::Char('d')
-                | Key::Char('D')
-                | Key::Char('t')
-                | Key::Char('T')
-                | Key::Char('r')
-                | Key::Char('R') => self.service_key(key),
-                Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                    let intent = settings_intent_for_key(key.code)?;
-                    if matches!(intent, SettingsIntent::Back) {
-                        // Leaving Services zeroes the local cursor so the next
-                        // entry starts at the top; the shell-side mirror of
-                        // this reset is being deleted.
-                        self.services_cursor = 0;
-                    }
-                    Some(Msg::Shell(Box::new(ShellRequest::SettingsIntent(intent))))
-                }
-                _ => None,
-            };
+            return self.handle_services_key(key);
         }
+        self.handle_main_key(key)
+    }
+
+    fn handle_keys_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Up => {
+                self.keys_cursor = self.keys_cursor.saturating_sub(1);
+                self.scroll_cursor_into_view(self.keys_cursor);
+                None
+            }
+            Key::Down => {
+                self.keys_cursor =
+                    (self.keys_cursor + 1).min(Self::action_count(&self.keys).saturating_sub(1));
+                self.scroll_cursor_into_view(self.keys_cursor);
+                None
+            }
+            Key::PageUp => {
+                self.scroll = self.scroll.saturating_sub(10);
+                self.clamp_keys_cursor_to_window();
+                None
+            }
+            Key::PageDown => {
+                self.scroll = self.scroll.saturating_add(10).min(self.max_scroll());
+                self.clamp_keys_cursor_to_window();
+                None
+            }
+            Key::Home => {
+                self.scroll = 0;
+                self.clamp_keys_cursor_to_window();
+                None
+            }
+            Key::End => {
+                self.scroll = self.max_scroll();
+                self.clamp_keys_cursor_to_window();
+                None
+            }
+            // Read-only destination (design D7): Enter/Space select
+            // nothing — the chord changes in the config file, never in
+            // place (ADR 0023). Returning None lets `on()`'s fallback
+            // claim them like the cursor moves.
+            Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
+                let intent = settings_intent_for_key(key.code)?;
+                if matches!(intent, SettingsIntent::Back) {
+                    // Leaving Keys zeroes the local cursor so the next
+                    // entry starts at the top (the Services precedent).
+                    self.keys_cursor = 0;
+                }
+                Some(Msg::Shell(Box::new(ShellRequest::SettingsIntent(intent))))
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_services_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Up => {
+                self.services_cursor = self.services_cursor.saturating_sub(1);
+                None
+            }
+            Key::Down => {
+                self.services_cursor =
+                    (self.services_cursor + 1).min(self.services.len().saturating_sub(1));
+                None
+            }
+            Key::Enter
+            | Key::Char(' ')
+            | Key::Char('d')
+            | Key::Char('D')
+            | Key::Char('t')
+            | Key::Char('T')
+            | Key::Char('r')
+            | Key::Char('R') => self.service_key(key),
+            Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
+                let intent = settings_intent_for_key(key.code)?;
+                if matches!(intent, SettingsIntent::Back) {
+                    // Leaving Services zeroes the local cursor so the next
+                    // entry starts at the top; the shell-side mirror of
+                    // this reset is being deleted.
+                    self.services_cursor = 0;
+                }
+                Some(Msg::Shell(Box::new(ShellRequest::SettingsIntent(intent))))
+            }
+            _ => None,
+        }
+    }
+
+    fn handle_main_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         match key.code {
             Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
                 settings_intent_for_key(key.code)
