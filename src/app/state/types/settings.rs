@@ -189,12 +189,54 @@ pub fn setting_label(key: SettingKey) -> &'static str {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SettingValueKind {
+    Key,
+    Boolean,
+    Text,
+    Collection,
+}
+
+fn setting_kind(key: SettingKey) -> SettingValueKind {
+    use SettingKey as K;
+    use SettingValueKind as V;
+
+    match key {
+        K::Services | K::Keys => V::Key,
+        K::StayAlive
+        | K::AutoReconnect
+        | K::SavePlaylistOnQuit
+        | K::AlwaysPlayNext
+        | K::ConsumeVideos
+        | K::ConsumeAudio
+        | K::SavePlaylistOnConsume
+        | K::SavePlaylistOnConsumeAudio
+        | K::AlwaysSkipIntro
+        | K::ShowAudioWindow
+        | K::UseMpvConfig
+        | K::NoScripts
+        | K::Autoload
+        | K::ShowSysTrayIcon
+        | K::SystemNotifications
+        | K::MouseSupport => V::Boolean,
+        K::ImageProtocol | K::SubtitleMode | K::SubtitleLanguage | K::AudioLanguage => V::Text,
+        K::HiddenLibraries
+        | K::MyLanguages
+        | K::FeedViewLibraries
+        | K::LibraryRoutes
+        | K::ManageFeeds
+        | K::LogOut => V::Collection,
+    }
+}
+
 pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
-    setting_key_value(key, cfg)
-        .or_else(|| setting_boolean_value(key, cfg))
-        .or_else(|| setting_text_value(key, cfg, ui))
-        .or_else(|| setting_collection_value(key, cfg))
-        .unwrap_or_default()
+    match setting_kind(key) {
+        SettingValueKind::Key => setting_key_value(key, cfg),
+        SettingValueKind::Boolean => setting_boolean_value(key, cfg),
+        SettingValueKind::Text => setting_text_value(key, cfg, ui),
+        SettingValueKind::Collection => setting_collection_value(key, cfg),
+    }
+    .unwrap_or_default()
 }
 
 fn setting_key_value(key: SettingKey, cfg: &Config) -> Option<String> {
