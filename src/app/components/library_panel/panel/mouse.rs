@@ -159,57 +159,85 @@ impl LibraryPanel {
             | MouseGesture::Scroll { at, .. } => at,
             MouseGesture::Drag { .. } | MouseGesture::DragEnd => return None,
         };
-        // Painted pill rows first: the pill painted under the pointer in the
-        // latest frame is the one that resolves (ADR 0024).
+        if let Some(message) = self.selector_or_link_gesture(gesture, at) {
+            return message;
+        }
+        // The hero pane is painted separately from the Browser pane's list
+        // slot, and its owner decides what input it claims.
+        if self.hero_pane_rect().is_some_and(|rect| rect.contains(at)) {
+            return self.hero_surface_gesture(gesture);
+        }
+        self.list_surface_gesture(gesture)
+    }
+
+    /// Painted pill rows resolve first: the pill painted under the pointer in
+    /// the latest frame is the one that resolves (ADR 0024). Link labels are
+    /// ordinary text; the panel retains valid URL geometry and owns the click
+    /// effect request.
+    fn selector_or_link_gesture(
+        &mut self,
+        gesture: MouseGesture,
+        at: Position,
+    ) -> Option<Option<Msg>> {
         if let Some(&index) = self.hits.selector.resolve(at) {
-            return self.slot_event(LibrarySlotEvent::SelectorPicked(index));
+            return Some(self.slot_event(LibrarySlotEvent::SelectorPicked(index)));
         }
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
-            return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
+            return Some(self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index)));
         }
-        // Link labels are ordinary painted text, but the panel retains their
-        // valid URL geometry and owns the click effect request.
         if let MouseGesture::Click { .. } = gesture {
             if let Some(&index) = self.hits.links.resolve(at) {
                 if let Some(url) = self.painted_link_urls.get(index).cloned().and_then(|url| {
                     super::super::overview_box::sanitize_url(&url).map(str::to_owned)
                 }) {
-                    return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
+                    return Some(Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url)))));
                 }
             }
         }
-        // The hero pane's own input (e.g. the Workspace box's episode rows)
-        // resolves next: it is painted separately from the Browser pane's
-        // list slot, and the owner decides what inside it it claims.
-        let inside_hero = self.hero_pane_rect().is_some_and(|rect| rect.contains(at));
-        if inside_hero {
-            return match gesture {
-                MouseGesture::Click { at, modifier } => {
-                    let input = match modifier {
-                        ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
-                        ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
-                        ClickModifier::None => MediaListSurfaceInput::Click(at),
-                    };
-                    self.slot_event(LibrarySlotEvent::HeroPane(input))
-                }
-                MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
-                    MediaListSurfaceInput::DoubleClick(at),
-                )),
-                MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
-                    MediaListSurfaceInput::ContextClick(at),
-                )),
-                MouseGesture::Scroll { at, delta } => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
-                        at,
-                        delta,
-                    }))
-                }
-                _ => None,
-            };
-        }
-        let inside_list = self.list_rect().is_some_and(|rect| rect.contains(at));
+        None
+    }
+
+    /// Resolve the hero pane's own input, including Workspace box episode rows.
+    fn hero_surface_gesture(&mut self, gesture: MouseGesture) -> Option<Msg> {
         match gesture {
-            MouseGesture::Click { at, modifier } if inside_list => {
+            MouseGesture::Click { at, modifier } => {
+                let input = match modifier {
+                    ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                    ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                    ClickModifier::None => MediaListSurfaceInput::Click(at),
+                };
+                self.slot_event(LibrarySlotEvent::HeroPane(input))
+            }
+            MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                MediaListSurfaceInput::DoubleClick(at),
+            )),
+            MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                MediaListSurfaceInput::ContextClick(at),
+            )),
+            MouseGesture::Scroll { at, delta } => {
+                self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
+                    at,
+                    delta,
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    /// Resolve gestures inside the painted browser list slot.
+    fn list_surface_gesture(&mut self, gesture: MouseGesture) -> Option<Msg> {
+        let at = match gesture {
+            MouseGesture::Click { at, .. }
+            | MouseGesture::DoubleClick(at)
+            | MouseGesture::RightClick(at)
+            | MouseGesture::Scroll { at, .. } => at,
+            MouseGesture::Drag { .. } | MouseGesture::DragEnd => return None,
+        };
+        if !self.list_rect().is_some_and(|rect| rect.contains(at)) {
+            return None;
+        }
+        match gesture {
+            MouseGesture::Click { at, modifier } => {
                 let input = match modifier {
                     ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
                     ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
@@ -217,7 +245,7 @@ impl LibraryPanel {
                 };
                 self.slot_event(LibrarySlotEvent::List(input))
             }
-            MouseGesture::DoubleClick(at) if inside_list => {
+            MouseGesture::DoubleClick(at) => {
                 // Only a destination whose browser rows are hero-bearing
                 // opens the Library Hero overlay on double-click; a
                 // not-hero-bearing owner (the podcast tab) activates the
@@ -237,16 +265,16 @@ impl LibraryPanel {
                     at,
                 )))
             }
-            MouseGesture::RightClick(at) if inside_list => self.slot_event(LibrarySlotEvent::List(
+            MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::List(
                 MediaListSurfaceInput::ContextClick(at),
             )),
-            MouseGesture::Scroll { at, delta } if inside_list => {
+            MouseGesture::Scroll { at, delta } => {
                 self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
                     at,
                     delta,
                 }))
             }
-            _ => None,
+            MouseGesture::Drag { .. } | MouseGesture::DragEnd => None,
         }
     }
 
