@@ -164,22 +164,46 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        // A freshly created owner (first push for this `LibraryKey`) has no
-        // prior selection to preserve: adopt the shell's resting cursor once,
-        // explicitly, exactly as the old mount-time trigger did. A re-point
-        // at an already-installed owner keeps its divergent local cursor.
-        if !self.library_panel_has_owner(&key) {
+        let (resting, cursor) = self.music_workspace_cursor(&key, index);
+        let context = self.project_music_workspace_context(&key, index, cursor);
+        self.fetch_music_workspace_album_tracks(&context);
+        let reanchor = std::mem::take(&mut self.music_workspace_reanchor)
+            .then(|| resting.unwrap_or((context.list.cursor(), 0)));
+        let wide = self.app.is_right_panel_wide();
+        let request = self.music_track_focus_request.take();
+        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        // Activation can outrun the album's track fetch (its tracks are not
+        // yet cached when the one-shot Enter request is consumed): the
+        // closure only reaches the owner, so it reports back whether the
+        // request needs to stay armed (bound to this album) for the tracks
+        // re-push to retry, rather than re-arming `self` from inside.
+        if let Some(rearm) =
+            self.push_music_workspace_owner(context, reanchor, wide, focused, request)
+        {
+            self.music_track_focus_request = Some(rearm);
+        }
+        self.apply_pending_music_track_selection();
+    }
+
+    fn music_workspace_cursor(
+        &mut self,
+        key: &LibraryKey,
+        index: usize,
+    ) -> (Option<(usize, usize)>, Option<usize>) {
+        // A fresh owner adopts the shell's resting cursor once; an existing
+        // owner retains its divergent local cursor when the projection repoints.
+        if !self.library_panel_has_owner(key) {
             self.music_workspace_reanchor = true;
         }
         let resting = self.app.libs[index]
             .nav_stack
             .last()
-            .map(|l| (l.resting().cursor(), l.resting().scroll()));
+            .map(|level| (level.resting().cursor(), level.resting().scroll()));
         let selected_target = (!self.music_workspace_reanchor)
             .then(|| {
                 self.music_owner()
                     .and_then(MusicContent::selected_item)
-                    .map(|i| i.id)
+                    .map(|item| item.id)
             })
             .flatten();
         let cursor = self.app.libs[index]
@@ -188,9 +212,18 @@ impl Model {
             .and_then(|level| {
                 selected_target
                     .as_deref()
-                    .and_then(|t| level.items.iter().position(|i| i.id == t))
+                    .and_then(|target| level.items.iter().position(|item| item.id == target))
             })
-            .or_else(|| resting.map(|r| r.0));
+            .or_else(|| resting.map(|position| position.0));
+        (resting, cursor)
+    }
+
+    fn project_music_workspace_context(
+        &mut self,
+        key: &LibraryKey,
+        index: usize,
+        cursor: Option<usize>,
+    ) -> crate::app::render::MusicWideRenderCtx {
         let base_context = self.app.wide_music_render_ctx(index, cursor);
         // The artist detail projection (design D7, tasks 6.1–6.3): read the
         // owner's component-resolved artist target, re-bind it to this push's
@@ -207,15 +240,20 @@ impl Model {
         if let Some(target) = artist_target.clone() {
             self.request_music_artist_detail(target);
         }
-        let context = match artist_target {
+        match artist_target {
             Some(target) => self
                 .app
-                .project_music_artist_detail(&key, base_context, target),
+                .project_music_artist_detail(key, base_context, target),
             None => base_context,
-        };
-        // Grouped Music's album-track fetch follows the tree owner's resolved
-        // album selection: an artist-root focus has no album, so no album-track
-        // fetch starts for it (the artist-track request is a later row).
+        }
+    }
+
+    fn fetch_music_workspace_album_tracks(
+        &mut self,
+        context: &crate::app::render::MusicWideRenderCtx,
+    ) {
+        // Album fetch follows the tree owner's resolved album; an artist root
+        // has no album and never starts an album-track fetch.
         let owner_selection_is_artist = self
             .music_owner()
             .is_some_and(MusicContent::selected_is_artist);
@@ -228,53 +266,55 @@ impl Model {
                 }
             }
         }
-        let reanchor = std::mem::take(&mut self.music_workspace_reanchor)
-            .then(|| resting.unwrap_or((context.list.cursor(), 0)));
-        let wide = self.app.is_right_panel_wide();
-        let request = self.music_track_focus_request.take();
-        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        // Activation can outrun the album's track fetch (its tracks are not
-        // yet cached when the one-shot Enter request is consumed): the
-        // closure only reaches the owner, so it reports back whether the
-        // request needs to stay armed (bound to this album) for the tracks
-        // re-push to retry, rather than re-arming `self` from inside.
-        let rearm = self
-            .update_music_owner(|owner| {
-                owner.set_content(context);
-                if let Some((c, s)) = reanchor {
-                    owner.re_anchor(c, s);
+    }
+
+    fn push_music_workspace_owner(
+        &mut self,
+        context: crate::app::render::MusicWideRenderCtx,
+        reanchor: Option<(usize, usize)>,
+        wide: bool,
+        focused: bool,
+        request: Option<MusicTrackFocusRequest>,
+    ) -> Option<MusicTrackFocusRequest> {
+        self.update_music_owner(|owner| {
+            owner.set_content(context);
+            if let Some((cursor, scroll)) = reanchor {
+                owner.re_anchor(cursor, scroll);
+            }
+            owner.set_focused(focused);
+            owner.set_inline_track_focus_enabled(wide);
+            match request {
+                Some(MusicTrackFocusRequest::Clear) => {
+                    owner.clear_track_focus();
+                    None
                 }
-                owner.set_focused(focused);
-                owner.set_inline_track_focus_enabled(wide);
-                match request {
-                    Some(MusicTrackFocusRequest::Clear) => {
-                        owner.clear_track_focus();
-                        None
-                    }
-                    Some(MusicTrackFocusRequest::Enter { album_id })
-                        if wide && owner.selected_item().is_some_and(|a| a.id == album_id) =>
-                    {
-                        owner.enter_track_focus();
-                        (wide && !owner.track_focused())
-                            .then_some(MusicTrackFocusRequest::Enter { album_id })
-                    }
-                    _ => None,
+                Some(MusicTrackFocusRequest::Enter { album_id })
+                    if wide
+                        && owner
+                            .selected_item()
+                            .is_some_and(|album| album.id == album_id) =>
+                {
+                    owner.enter_track_focus();
+                    (wide && !owner.track_focused())
+                        .then_some(MusicTrackFocusRequest::Enter { album_id })
                 }
-            })
-            .flatten();
-        if let Some(rearm) = rearm {
-            self.music_track_focus_request = Some(rearm);
-        }
+                _ => None,
+            }
+        })
+        .flatten()
+    }
+
+    fn apply_pending_music_track_selection(&mut self) {
         // Deep selection (task 6.2, design D6): select the navigated track
         // once its album's track rows arrive. A superseded album or an
         // absent track drops the pending silently (no error -- the
         // navigation target was reached).
-        if let Some(sel) = self.pending_music_track_selection.clone() {
+        if let Some(selection) = self.pending_music_track_selection.clone() {
             let resolved = self
                 .update_music_owner(|owner| {
                     if !owner
                         .selected_item()
-                        .is_some_and(|album| album.id == sel.album_id)
+                        .is_some_and(|album| album.id == selection.album_id)
                     {
                         // Superseded: the owner moved to another album.
                         return true;
@@ -283,7 +323,7 @@ impl Model {
                         // Rows not here yet; stay armed for the re-push.
                         return false;
                     }
-                    owner.track_list.select_target(&sel.track_id);
+                    owner.track_list.select_target(&selection.track_id);
                     true
                 })
                 .unwrap_or(false);
