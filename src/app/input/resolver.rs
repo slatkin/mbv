@@ -47,17 +47,8 @@ impl KeyChord {
     /// carries only Ctrl/Shift/Alt, which map losslessly onto crossterm
     /// modifiers.
     pub(in crate::app) fn from_keybinds_chord(chord: mbv_core::keybinds::Chord) -> Self {
-        use mbv_core::keybinds::{Key as RegistryKey, KeyMods};
-        let mut mods = KeyModifiers::empty();
-        if chord.mods.contains(KeyMods::CTRL) {
-            mods.insert(KeyModifiers::CONTROL);
-        }
-        if chord.mods.contains(KeyMods::SHIFT) {
-            mods.insert(KeyModifiers::SHIFT);
-        }
-        if chord.mods.contains(KeyMods::ALT) {
-            mods.insert(KeyModifiers::ALT);
-        }
+        use mbv_core::keybinds::Key as RegistryKey;
+        let mods = registry_mods_to_modifiers(chord.mods);
         let code = match chord.key {
             RegistryKey::Backspace => KeyCode::Backspace,
             RegistryKey::Enter => KeyCode::Enter,
@@ -79,6 +70,24 @@ impl KeyChord {
         };
         Self::new(code, mods)
     }
+}
+
+/// Map the registry's Ctrl/Shift/Alt modifier set onto crossterm modifiers.
+/// Extracted from `KeyChord::from_keybinds_chord` (issue #803); the mapping
+/// is lossless in both directions.
+fn registry_mods_to_modifiers(mods: mbv_core::keybinds::KeyMods) -> KeyModifiers {
+    use mbv_core::keybinds::KeyMods;
+    let mut out = KeyModifiers::empty();
+    if mods.contains(KeyMods::CTRL) {
+        out.insert(KeyModifiers::CONTROL);
+    }
+    if mods.contains(KeyMods::SHIFT) {
+        out.insert(KeyModifiers::SHIFT);
+    }
+    if mods.contains(KeyMods::ALT) {
+        out.insert(KeyModifiers::ALT);
+    }
+    out
 }
 
 /// Convert a TuiRealm `KeyEvent` to a crossterm `KeyEvent` for the
