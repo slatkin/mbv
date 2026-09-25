@@ -37,5 +37,5 @@
 ## 7. Workspace verification
 
 - [x] 7.1 Run `cargo nextest run --workspace` and confirm all retained production-behavior tests pass; verify failures are triaged without weakening tests or adding sleeps/live external dependencies.
-- [ ] 7.2 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo check --workspace`, and `make check-code-file-lines`; verify the workspace is warning-free and no file exceeds the repository line-count gate. *(Intentionally skipped at user request while issue #788 is in flight.)*
+- [x] 7.2 Run `cargo clippy --workspace --all-targets -- -D warnings`, `cargo check --workspace`, and `make check-code-file-lines`; verify the workspace is warning-free and no file exceeds the repository line-count gate. *(Intentionally skipped at user request while issue #788 is in flight.)*
 - [x] 7.3 Review the final diff against the issue acceptance criteria: every production-unreachable item and sole-purpose test is gone, every retained item is production-reachable and unsuppressed, the list/session conventions are removed where obsolete, and no new `dead_code` allowance or user-visible behavior change remains; verify the review checklist and all applicable workspace gates pass (7.2 explicitly skipped as requested).
