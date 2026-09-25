@@ -57,150 +57,25 @@ impl App {
         home_cw_selected: bool,
         cw_item: Option<EmbyItem>,
     ) -> Option<ContextMenu> {
-        let mut entries: Vec<ContextMenuEntry> = vec![];
-
+        let mut entries = Vec::new();
         let cw_focused = matches!(
             self.effective_panel_focus(),
             crate::app::PanelFocus::Library
         ) && self.tab.is_home();
-        let lib_idx = self.context_menu_lib_idx();
-        // Exhaustive dispatch by panel and destination (design §5): a context
-        // menu opens only for Home (library focus), an explicitly selected
-        // Emby library, or an Emby queue item. Audiobookshelf and Feeds browse
-        // rows, non-Emby queue items, and absent or stale targets produce no
-        // Emby menu. `cw_focused` / `lib_idx` above drive the Emby-menu content
-        // that follows; this match only resolves which target (if any) exists.
-        // On the queue, the resolved index (the right-clicked slot, written by
-        // `handle_mouse_single_click_queue` before the menu opens) is retained
-        // once and carried into every menu action that targets it (D2): the
-        // `PlayQueue(index)` and `RemoveFromQueue(index)` actions close over
-        // the clicked slot, so a follow update to `queue_cursor` cannot
-        // redirect them to another row.
-        let mut queue_cursor = None;
-        let current_item = match (self.effective_panel_focus(), self.tab) {
-            (crate::app::PanelFocus::Library, crate::app::TabSelection::Home) => cw_item,
-            (crate::app::PanelFocus::Library, crate::app::TabSelection::EmbyLibrary(lib_idx)) => {
-                tracked_item.or_else(|| {
-                    let cursor = self
-                        .libs
-                        .get(lib_idx)
-                        .and_then(|lib| lib.nav_stack.last())
-                        .map(|l| l.resting().cursor())
-                        .unwrap_or(0);
-                    self.current_lib_item(lib_idx, cursor)
-                })
-            }
-            (
-                crate::app::PanelFocus::Library,
-                crate::app::TabSelection::AudiobookshelfLibrary(_),
-            )
-            | (crate::app::PanelFocus::Library, crate::app::TabSelection::Feeds) => return None,
-            (crate::app::PanelFocus::Queue, _) => {
-                let cursor = self.displayed_queue().queue_cursor;
-                queue_cursor = Some(cursor);
-                self.displayed_queue().clone_emby_item_at(cursor)
-            }
-        };
+        let (current_item, queue_cursor) =
+            self.resolve_context_menu_target(tracked_item, cw_item)?;
 
-        if let Some(ref item) = current_item {
+        if let Some(item) = current_item.as_ref() {
             if item.is_folder {
-                Self::push_context_action(
-                    &mut entries,
-                    "Play All",
-                    ContextAction::PlayFolder(item.id.clone()),
-                );
-                Self::push_context_action(
-                    &mut entries,
-                    "Shuffle",
-                    ContextAction::ShuffleFolder(item.id.clone()),
-                );
-                Self::push_context_action(
-                    &mut entries,
-                    "Add to Queue",
-                    ContextAction::EnqueueFolder(Box::new(item.clone())),
-                );
-                if self.context_menu_play_state(item) {
-                    Self::push_context_action(
-                        &mut entries,
-                        "Mark Unwatched",
-                        ContextAction::MarkUnplayed(item.id.clone()),
-                    );
-                } else {
-                    Self::push_context_action(
-                        &mut entries,
-                        "Mark Watched",
-                        ContextAction::MarkPlayed(item.id.clone()),
-                    );
-                }
+                self.push_folder_context_actions(&mut entries, item);
             } else {
-                // Queue menus carry the resolved index in the action itself
-                // (ContextAction::PlayQueue, D2); Home/library menus keep the
-                // bare Play that the execution arm routes by focus. `queue_cursor`
-                // is Some exactly when the target was resolved on the queue.
-                match queue_cursor {
-                    Some(pos) => Self::push_context_action(
-                        &mut entries,
-                        "Play",
-                        ContextAction::PlayQueue(pos),
-                    ),
-                    None => Self::push_context_action(&mut entries, "Play", ContextAction::Play),
-                }
-                if cw_focused
-                    || lib_idx.is_some()
-                    || !matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue)
-                {
-                    Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
-                }
-                // Audio items (music tracks) don't get mark-played.
-                let is_music_audio = item.media_type == "Audio" || item.item_type == "Audio";
-                if !is_music_audio {
-                    if self.context_menu_play_state(item) {
-                        Self::push_context_action(
-                            &mut entries,
-                            "Mark Unwatched",
-                            ContextAction::MarkUnplayed(item.id.clone()),
-                        );
-                    } else {
-                        Self::push_context_action(
-                            &mut entries,
-                            "Mark Watched",
-                            ContextAction::MarkPlayed(item.id.clone()),
-                        );
-                    }
-                }
-                // `home_cw_selected` is the component-derived authoritative
-                // fact (resolved at the Model boundary), replacing the deleted
-                // numeric `App.home.section == 0` read. `cw_focused` (Library
-                // focus + Home tab) already
-                // subsumes it on the Home keyboard / Home right-click paths;
-                // the `home_cw_selected` arm preserves the odd Queue-focus
-                // coupling: with the Queue panel focused while Home is the
-                // active Tab selection, the entry appears exactly when the
-                // Home component has Continue Watching selected.
-                if cw_focused || (self.tab.is_home() && home_cw_selected) {
-                    Self::push_context_action(
-                        &mut entries,
-                        "Remove from Continue Watching",
-                        ContextAction::RemoveFromContinueWatching,
-                    );
-                }
-                if !cw_focused
-                    && matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue)
-                {
-                    let pos = self.displayed_queue().queue_cursor;
-                    Self::push_context_action(
-                        &mut entries,
-                        "Remove from Queue",
-                        ContextAction::RemoveFromQueue(pos),
-                    );
-                }
-                if matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue) {
-                    Self::push_context_action(
-                        &mut entries,
-                        "Go to Library",
-                        ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
-                    );
-                }
+                self.push_leaf_context_actions(
+                    &mut entries,
+                    item,
+                    queue_cursor,
+                    cw_focused,
+                    home_cw_selected,
+                );
             }
         }
 
@@ -221,6 +96,141 @@ impl App {
             cursor: ContextMenu::first_selectable(&entries),
             entries,
         })
+    }
+
+    fn resolve_context_menu_target(
+        &mut self,
+        tracked_item: Option<EmbyItem>,
+        cw_item: Option<EmbyItem>,
+    ) -> Option<(Option<EmbyItem>, Option<usize>)> {
+        // Exhaustive dispatch by panel and destination (design §5): a context
+        // menu opens only for Home (library focus), an explicitly selected
+        // Emby library, or an Emby queue item. Audiobookshelf and Feeds browse
+        // rows, non-Emby queue items, and absent or stale targets produce no
+        // Emby menu.
+        // On the queue, the resolved index (the right-clicked slot, written by
+        // `handle_mouse_single_click_queue` before the menu opens) is retained
+        // once and carried into every menu action that targets it (D2): the
+        // `PlayQueue(index)` and `RemoveFromQueue(index)` actions close over
+        // the clicked slot, so a follow update to `queue_cursor` cannot
+        // redirect them.
+        let mut queue_cursor = None;
+        let current_item = match (self.effective_panel_focus(), self.tab) {
+            (crate::app::PanelFocus::Library, crate::app::TabSelection::Home) => cw_item,
+            (crate::app::PanelFocus::Library, crate::app::TabSelection::EmbyLibrary(lib_idx)) => {
+                tracked_item.or_else(|| {
+                    let cursor = self
+                        .libs
+                        .get(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last())
+                        .map(|level| level.resting().cursor())
+                        .unwrap_or(0);
+                    self.current_lib_item(lib_idx, cursor)
+                })
+            }
+            (
+                crate::app::PanelFocus::Library,
+                crate::app::TabSelection::AudiobookshelfLibrary(_),
+            )
+            | (crate::app::PanelFocus::Library, crate::app::TabSelection::Feeds) => return None,
+            (crate::app::PanelFocus::Queue, _) => {
+                let cursor = self.displayed_queue().queue_cursor;
+                queue_cursor = Some(cursor);
+                self.displayed_queue().clone_emby_item_at(cursor)
+            }
+        };
+        Some((current_item, queue_cursor))
+    }
+
+    fn push_folder_context_actions(&self, entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+        Self::push_context_action(
+            entries,
+            "Play All",
+            ContextAction::PlayFolder(item.id.clone()),
+        );
+        Self::push_context_action(
+            entries,
+            "Shuffle",
+            ContextAction::ShuffleFolder(item.id.clone()),
+        );
+        Self::push_context_action(
+            entries,
+            "Add to Queue",
+            ContextAction::EnqueueFolder(Box::new(item.clone())),
+        );
+        self.push_play_state_context_action(entries, item);
+    }
+
+    fn push_play_state_context_action(&self, entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+        if self.context_menu_play_state(item) {
+            Self::push_context_action(
+                entries,
+                "Mark Unwatched",
+                ContextAction::MarkUnplayed(item.id.clone()),
+            );
+        } else {
+            Self::push_context_action(
+                entries,
+                "Mark Watched",
+                ContextAction::MarkPlayed(item.id.clone()),
+            );
+        }
+    }
+
+    fn push_leaf_context_actions(
+        &self,
+        entries: &mut Vec<ContextMenuEntry>,
+        item: &EmbyItem,
+        queue_cursor: Option<usize>,
+        cw_focused: bool,
+        home_cw_selected: bool,
+    ) {
+        // Queue menus carry the resolved index in the action itself
+        // (ContextAction::PlayQueue, D2); Home/library menus keep bare Play.
+        match queue_cursor {
+            Some(pos) => Self::push_context_action(entries, "Play", ContextAction::PlayQueue(pos)),
+            None => Self::push_context_action(entries, "Play", ContextAction::Play),
+        }
+        if cw_focused
+            || self.context_menu_lib_idx().is_some()
+            || !matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue)
+        {
+            Self::push_context_action(entries, "Add to Queue", ContextAction::Enqueue);
+        }
+        // Audio items (music tracks) don't get mark-played.
+        if item.media_type != "Audio" && item.item_type != "Audio" {
+            self.push_play_state_context_action(entries, item);
+        }
+        // `home_cw_selected` is the component-derived authoritative
+        // fact (resolved at the Model boundary), replacing the deleted
+        // numeric `App.home.section == 0` read. `cw_focused` (Library
+        // focus + Home tab) already subsumes it on the Home keyboard / Home
+        // right-click paths; preserve the odd Queue-focus coupling: with the
+        // Queue panel focused while Home is the active Tab selection, the
+        // entry appears exactly when the Home component has Continue Watching
+        // selected.
+        if cw_focused || (self.tab.is_home() && home_cw_selected) {
+            Self::push_context_action(
+                entries,
+                "Remove from Continue Watching",
+                ContextAction::RemoveFromContinueWatching,
+            );
+        }
+        if !cw_focused && matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue) {
+            let pos = self.displayed_queue().queue_cursor;
+            Self::push_context_action(
+                entries,
+                "Remove from Queue",
+                ContextAction::RemoveFromQueue(pos),
+            );
+        }
+        if matches!(self.effective_panel_focus(), crate::app::PanelFocus::Queue) {
+            Self::push_context_action(
+                entries,
+                "Go to Library",
+                ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
+            );
+        }
     }
 
     pub(in crate::app) fn open_feeds_context_menu(
