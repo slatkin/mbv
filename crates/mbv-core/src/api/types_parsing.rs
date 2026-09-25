@@ -29,28 +29,56 @@ pub fn parse_video_info(streams: &[Value]) -> String {
 }
 
 fn audio_language_name(lang: &str) -> &'static str {
-    match lang.to_lowercase().as_str() {
-        "en" | "eng" => "English",
-        "fr" | "fre" | "fra" => "French",
-        "de" | "ger" | "deu" => "German",
-        "es" | "spa" => "Spanish",
-        "it" | "ita" => "Italian",
-        "pt" | "por" => "Portuguese",
-        "ja" | "jpn" => "Japanese",
-        "ko" | "kor" => "Korean",
-        "zh" | "chi" | "zho" => "Chinese",
-        "ru" | "rus" => "Russian",
-        "ar" | "ara" => "Arabic",
-        "nl" | "nld" | "dut" => "Dutch",
-        "sv" | "swe" => "Swedish",
-        "no" | "nor" => "Norwegian",
-        "da" | "dan" => "Danish",
-        "fi" | "fin" => "Finnish",
-        "pl" | "pol" => "Polish",
-        "cs" | "cze" | "ces" => "Czech",
-        "tr" | "tur" => "Turkish",
-        _ => "",
-    }
+    const LANGUAGES: &[(&str, &str)] = &[
+        ("en", "English"),
+        ("eng", "English"),
+        ("fr", "French"),
+        ("fre", "French"),
+        ("fra", "French"),
+        ("de", "German"),
+        ("ger", "German"),
+        ("deu", "German"),
+        ("es", "Spanish"),
+        ("spa", "Spanish"),
+        ("it", "Italian"),
+        ("ita", "Italian"),
+        ("pt", "Portuguese"),
+        ("por", "Portuguese"),
+        ("ja", "Japanese"),
+        ("jpn", "Japanese"),
+        ("ko", "Korean"),
+        ("kor", "Korean"),
+        ("zh", "Chinese"),
+        ("chi", "Chinese"),
+        ("zho", "Chinese"),
+        ("ru", "Russian"),
+        ("rus", "Russian"),
+        ("ar", "Arabic"),
+        ("ara", "Arabic"),
+        ("nl", "Dutch"),
+        ("nld", "Dutch"),
+        ("dut", "Dutch"),
+        ("sv", "Swedish"),
+        ("swe", "Swedish"),
+        ("no", "Norwegian"),
+        ("nor", "Norwegian"),
+        ("da", "Danish"),
+        ("dan", "Danish"),
+        ("fi", "Finnish"),
+        ("fin", "Finnish"),
+        ("pl", "Polish"),
+        ("pol", "Polish"),
+        ("cs", "Czech"),
+        ("cze", "Czech"),
+        ("ces", "Czech"),
+        ("tr", "Turkish"),
+        ("tur", "Turkish"),
+    ];
+    let lang = lang.to_lowercase();
+    LANGUAGES
+        .iter()
+        .find_map(|(code, name)| (*code == lang).then_some(*name))
+        .unwrap_or("")
 }
 
 pub fn parse_audio_info(streams: &[Value]) -> String {
