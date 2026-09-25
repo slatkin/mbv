@@ -130,7 +130,7 @@ impl HomeContent {
 
     /// Home's typed request target for a stable item identity the shared
     /// owner resolved, or the owner's current selection for a local effect.
-    fn home_row_target(&self, item_id: Option<String>) -> super::msg::HomeRowTarget {
+    fn home_row_target(_self: &Self, item_id: Option<String>) -> super::msg::HomeRowTarget {
         super::msg::HomeRowTarget {
             item_id,
             source: None,
@@ -141,7 +141,7 @@ impl HomeContent {
     /// The typed effect target for Home's current selection (the shared
     /// owner's stable target, never a cursor-minus-section-index lookup).
     fn row_target(&self) -> super::msg::HomeRowTarget {
-        self.home_row_target(self.carrier.selected_target().cloned())
+        Self::home_row_target(self, self.carrier.selected_target().cloned())
     }
 
     /// Home's local key interpretation, forwarded by the focused panel (the
@@ -207,10 +207,10 @@ impl HomeContent {
             .delegate_row_local_input(MediaListSurfaceInput::Context, None)
             .external_intent
         {
-            Some(RowIntent::Context(target)) => vec![self.home_row_target(Some(target))],
+            Some(RowIntent::Context(target)) => vec![Self::home_row_target(self, Some(target))],
             Some(RowIntent::ContextSelection(targets)) => targets
                 .into_iter()
-                .map(|target| self.home_row_target(Some(target)))
+                .map(|target| Self::home_row_target(self, Some(target)))
                 .collect(),
             _ => vec![self.row_target()],
         };
@@ -226,7 +226,7 @@ impl HomeContent {
             .external_intent
         {
             Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
-                ShellRequest::HomePlay(self.home_row_target(Some(target))),
+                ShellRequest::HomePlay(Self::home_row_target(self, Some(target))),
             ))),
             _ => None,
         }
@@ -248,6 +248,100 @@ impl HomeContent {
     pub(in crate::app) fn test_active_rows(&self) -> &[MediaListRow<String>] {
         self.carrier.rows()
     }
+
+    fn on_list_slot_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let at = pointer_position(input);
+        // Pointer target resolution and local selection: the same `claim_row`
+        // contract (a blank/gap click leaves the selection unchanged).
+        let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
+        if is_selection_click(input) {
+            self.carrier
+                .delegate_operation(input.into_operation(target.clone())?);
+        }
+
+        match input {
+            MediaListSurfaceInput::Wheel { .. } => Some(self.claim_wheel(input)),
+            MediaListSurfaceInput::DoubleClick(_) => self.activate_pointer_target(target?),
+            MediaListSurfaceInput::ContextClick(at) => self.open_pointer_context(at, target?),
+            MediaListSurfaceInput::Click(_)
+            | MediaListSurfaceInput::ToggleClick(_)
+            | MediaListSurfaceInput::RangeClick(_) => Some(self.claim_pointer_click()),
+            _ => None,
+        }
+    }
+
+    fn claim_wheel(&mut self, input: MediaListSurfaceInput) -> Msg {
+        self.delegate_row_local_input(input, None);
+        Msg::TerminalEvent(super::msg::TerminalObserverEvent::MouseClaimed)
+    }
+
+    fn activate_pointer_target(&mut self, target: String) -> Option<Msg> {
+        self.carrier
+            .delegate_operation(MediaListOperation::Activate(target));
+        Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
+            target: self.row_target(),
+        })))
+    }
+
+    fn open_pointer_context(
+        &mut self,
+        at: ratatui::layout::Position,
+        target: String,
+    ) -> Option<Msg> {
+        let outcome = self
+            .carrier
+            .delegate_operation(MediaListOperation::Context(target));
+        let targets = match outcome.external_intent {
+            Some(RowIntent::Context(target)) => vec![Self::home_row_target(self, Some(target))],
+            Some(RowIntent::ContextSelection(targets)) => targets
+                .into_iter()
+                .map(|target| Self::home_row_target(self, Some(target)))
+                .collect(),
+            _ => vec![self.row_target()],
+        };
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            ContextMenuTargets::Home(targets),
+            Some((at.x, at.y)),
+        ))))
+    }
+
+    fn claim_pointer_click(&self) -> Msg {
+        Msg::Shell(Box::new(ShellRequest::HomeRowClick {
+            target: self.row_target(),
+        }))
+    }
+
+    fn activate_home_hero(&mut self) -> Option<Msg> {
+        match self
+            .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+            .external_intent
+        {
+            Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
+                ShellRequest::HomePlay(Self::home_row_target(self, Some(target))),
+            ))),
+            _ => None,
+        }
+    }
+}
+
+fn pointer_position(input: MediaListSurfaceInput) -> Option<ratatui::layout::Position> {
+    match input {
+        MediaListSurfaceInput::Click(at)
+        | MediaListSurfaceInput::ToggleClick(at)
+        | MediaListSurfaceInput::RangeClick(at)
+        | MediaListSurfaceInput::DoubleClick(at)
+        | MediaListSurfaceInput::ContextClick(at) => Some(at),
+        _ => None,
+    }
+}
+
+fn is_selection_click(input: MediaListSurfaceInput) -> bool {
+    matches!(
+        input,
+        MediaListSurfaceInput::Click(_)
+            | MediaListSurfaceInput::ToggleClick(_)
+            | MediaListSurfaceInput::RangeClick(_)
+    )
 }
 
 impl LibraryContentOwner for HomeContent {
@@ -301,86 +395,10 @@ impl LibraryContentOwner for HomeContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(_) => None,
-            LibrarySlotEvent::List(input) => {
-                let at = match input {
-                    MediaListSurfaceInput::Click(at)
-                    | MediaListSurfaceInput::ToggleClick(at)
-                    | MediaListSurfaceInput::RangeClick(at)
-                    | MediaListSurfaceInput::DoubleClick(at)
-                    | MediaListSurfaceInput::ContextClick(at) => Some(at),
-                    _ => None,
-                };
-                // Pointer target resolution and local selection: the same
-                // `claim_row` contract (a blank/gap click leaves the
-                // selection unchanged).
-                let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if matches!(
-                    input,
-                    MediaListSurfaceInput::Click(_)
-                        | MediaListSurfaceInput::ToggleClick(_)
-                        | MediaListSurfaceInput::RangeClick(_)
-                ) {
-                    self.carrier
-                        .delegate_operation(input.into_operation(target.clone())?);
-                    let _ = ();
-                }
-                match input {
-                    MediaListSurfaceInput::Wheel { .. } => {
-                        self.delegate_row_local_input(input, None);
-                        Some(Msg::TerminalEvent(
-                            super::msg::TerminalObserverEvent::MouseClaimed,
-                        ))
-                    }
-                    MediaListSurfaceInput::DoubleClick(_) => {
-                        self.carrier
-                            .delegate_operation(MediaListOperation::Activate(target?));
-                        Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
-                            target: self.row_target(),
-                        })))
-                    }
-                    MediaListSurfaceInput::ContextClick(at) => {
-                        let outcome = {
-                            let target = target?;
-                            self.carrier
-                                .delegate_operation(MediaListOperation::Context(target))
-                        };
-                        let _ = ();
-                        let targets = match outcome.external_intent {
-                            Some(RowIntent::Context(target)) => {
-                                vec![self.home_row_target(Some(target))]
-                            }
-                            Some(RowIntent::ContextSelection(targets)) => targets
-                                .into_iter()
-                                .map(|target| self.home_row_target(Some(target)))
-                                .collect(),
-                            _ => vec![self.row_target()],
-                        };
-                        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                            ContextMenuTargets::Home(targets),
-                            Some((at.x, at.y)),
-                        ))))
-                    }
-                    MediaListSurfaceInput::Click(_)
-                    | MediaListSurfaceInput::ToggleClick(_)
-                    | MediaListSurfaceInput::RangeClick(_) => {
-                        Some(Msg::Shell(Box::new(ShellRequest::HomeRowClick {
-                            target: self.row_target(),
-                        })))
-                    }
-                    _ => None,
-                }
-            }
+            LibrarySlotEvent::List(input) => self.on_list_slot_event(input),
             // Home has no Workspace and no hero-pane input of its own.
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
-            LibrarySlotEvent::HeroActivate => match self
-                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-                .external_intent
-            {
-                Some(RowIntent::Activate(target)) => Some(Msg::Shell(Box::new(
-                    ShellRequest::HomePlay(self.home_row_target(Some(target))),
-                ))),
-                _ => None,
-            },
+            LibrarySlotEvent::HeroActivate => self.activate_home_hero(),
         }
     }
 
