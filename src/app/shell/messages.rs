@@ -77,10 +77,7 @@ impl Model {
             | ShellRequest::AudiobookshelfBookIntent(_)) => {
                 self.handle_audiobookshelf_book_request(request);
             }
-            // Browser selected-item typed effects (task 5.3d, Emby
-            // browser effect decoupling): the component reports the
-            // explicit `EmbyItem` target; the shell forwards it
-            // straight to the App effect (no App-cursor re-read).
+            // Emby-browser requests preserve their per-effect projection policy.
             request @ (ShellRequest::EmbyLibraryActivate { .. }
             | ShellRequest::EmbyLibraryPlay { .. }
             | ShellRequest::EmbyLibraryEnqueue { .. }
@@ -88,17 +85,14 @@ impl Model {
             | ShellRequest::EmbyLibraryShuffle { .. }
             | ShellRequest::EmbyLibraryRefresh
             | ShellRequest::EmbyLibraryRescan
-            | ShellRequest::EmbyLibraryBack) => {
-                self.handle_emby_library_request(request);
-                // Library navigation/effects change content; re-project all
-                // destination owners. Inactive owners are no-ops.
-                self.reproject_all_owners();
-            }
-            // Pure cursor movement: the component already resolved its own
-            // index, so apply the App-side nav effects but skip the content
-            // re-projection the effect requests above need.
-            request @ ShellRequest::EmbyLibraryCursorIndex { .. } => {
-                self.handle_emby_library_request(request);
+            | ShellRequest::EmbyLibraryBack
+            | ShellRequest::EmbyLibraryCursorIndex { .. }
+            | ShellRequest::EmbyLibraryPillClick { .. }
+            | ShellRequest::EmbyLibraryLatestSelected
+            | ShellRequest::EmbyLibraryLatestExit { .. }
+            | ShellRequest::EmbyLibraryRowClick { .. }
+            | ShellRequest::EmbyLibraryRowActivate { .. }) => {
+                self.handle_emby_shell_request(request);
             }
             ShellRequest::OpenUrl(url) => {
                 if crate::app::components::library_panel::sanitize_url(&url).is_some() {
@@ -119,33 +113,6 @@ impl Model {
                     // Preserve the legacy short-circuit: this path skips the deferred-message drain.
                     return quit;
                 }
-            }
-            ShellRequest::EmbyLibraryPillClick { target } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    self.app.handle_mouse_selector_click_emby(lib_idx, target);
-                }
-                // A music-group pill switch replaces the album level;
-                // re-anchor the workspace cursor at this nav event.
-                self.music_workspace_reanchor = true;
-                self.push_active_emby_library_owner_content();
-            }
-            ShellRequest::EmbyLibraryLatestSelected => {
-                self.handle_emby_library_latest_selected();
-            }
-            ShellRequest::EmbyLibraryLatestExit { target } => {
-                self.handle_emby_library_latest_exit(target);
-            }
-            ShellRequest::EmbyLibraryRowClick { target } => {
-                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
-                    self.app.handle_mouse_single_click_emby(lib_idx, target);
-                }
-                self.push_active_emby_library_owner_content();
-            }
-            ShellRequest::EmbyLibraryRowActivate { target } => {
-                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
-                    self.app.handle_mouse_double_click_emby(lib_idx, target);
-                }
-                self.push_active_emby_library_owner_content();
             }
             ShellRequest::HomeRowClick { .. } => {
                 self.app.set_panel_focus(crate::app::PanelFocus::Library);
@@ -201,10 +168,6 @@ impl Model {
             ShellRequest::RowContextMenu(targets, anchor) => {
                 self.handle_library_row_context_menu(targets, anchor);
             }
-            // TV keyboard requests are resolved by the mounted
-            // workspace component. Cursor and pane movement remain
-            // component-local; the shell handles only cross-boundary
-            // effects such as activation, back, and letter pills.
             request @ (ShellRequest::TvMoveRows { .. }
             | ShellRequest::TvJumpCursor { .. }
             | ShellRequest::TvActivate { .. }
@@ -213,25 +176,18 @@ impl Model {
             | ShellRequest::TvCycleLetterPill { .. }
             | ShellRequest::TvEpisodeMove { .. }
             | ShellRequest::TvSeasonMove { .. }
-            | ShellRequest::TvTreeExpand { .. }) => self.handle_tv_request(request),
-            ShellRequest::TvHitClick { hit } => self.handle_tv_hit_click(hit),
-            ShellRequest::TvHitDoubleClick { hit } => {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    self.app.handle_mouse_double_click_tv(lib_idx, hit);
-                }
-                self.push_tv_workspace_content();
-            }
-            request @ (ShellRequest::PlaylistsBack
+            | ShellRequest::TvTreeExpand { .. }
+            | ShellRequest::TvHitClick { .. }
+            | ShellRequest::TvHitDoubleClick { .. }
+            | ShellRequest::PlaylistsBack
             | ShellRequest::PlaylistsOpen(_)
             | ShellRequest::PlaylistsActivate { .. }
             | ShellRequest::PlaylistsRename(_)
             | ShellRequest::PlaylistsDelete(_)
             | ShellRequest::PlaylistsRefresh
-            | ShellRequest::DismissPlaylists) => self.handle_playlists_request(request),
-            ShellRequest::SettingsIntent(intent) => {
-                if self.handle_settings_intent(intent) {
-                    quit = true;
-                }
+            | ShellRequest::DismissPlaylists
+            | ShellRequest::SettingsIntent(_)) => {
+                quit |= self.handle_tv_playlist_settings_request(request);
             }
             ShellRequest::SavePlaylistIntent(intent) => {
                 self.handle_save_playlist_intent(intent);
@@ -275,6 +231,93 @@ impl Model {
             quit = true;
         }
         quit
+    }
+
+    fn handle_emby_shell_request(&mut self, request: ShellRequest) {
+        match request {
+            // Browser selected-item typed effects (task 5.3d, Emby
+            // browser effect decoupling): forward the explicit target without
+            // re-reading the App cursor, then re-project all destination owners.
+            request @ (ShellRequest::EmbyLibraryActivate { .. }
+            | ShellRequest::EmbyLibraryPlay { .. }
+            | ShellRequest::EmbyLibraryEnqueue { .. }
+            | ShellRequest::EmbyLibraryToggleWatched { .. }
+            | ShellRequest::EmbyLibraryShuffle { .. }
+            | ShellRequest::EmbyLibraryRefresh
+            | ShellRequest::EmbyLibraryRescan
+            | ShellRequest::EmbyLibraryBack) => {
+                self.handle_emby_library_request(request);
+                self.reproject_all_owners();
+            }
+            // Cursor movement already carries the component-resolved index;
+            // unlike content-changing effects, it does not re-project.
+            request @ ShellRequest::EmbyLibraryCursorIndex { .. } => {
+                self.handle_emby_library_request(request);
+            }
+            ShellRequest::EmbyLibraryPillClick { target } => {
+                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    self.app.handle_mouse_selector_click_emby(lib_idx, target);
+                }
+                // A music-group pill switch replaces the album level;
+                // re-anchor the workspace cursor at this nav event.
+                self.music_workspace_reanchor = true;
+                self.push_active_emby_library_owner_content();
+            }
+            ShellRequest::EmbyLibraryLatestSelected => {
+                self.handle_emby_library_latest_selected();
+            }
+            ShellRequest::EmbyLibraryLatestExit { target } => {
+                self.handle_emby_library_latest_exit(target);
+            }
+            ShellRequest::EmbyLibraryRowClick { target } => {
+                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
+                    self.app.handle_mouse_single_click_emby(lib_idx, target);
+                }
+                self.push_active_emby_library_owner_content();
+            }
+            ShellRequest::EmbyLibraryRowActivate { target } => {
+                if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
+                    self.app.handle_mouse_double_click_emby(lib_idx, target);
+                }
+                self.push_active_emby_library_owner_content();
+            }
+            _ => unreachable!("request is an Emby library request"),
+        }
+    }
+
+    fn handle_tv_playlist_settings_request(&mut self, request: ShellRequest) -> bool {
+        match request {
+            // TV keyboard requests are resolved by the mounted workspace
+            // component. Cursor and pane movement remain component-local.
+            request @ (ShellRequest::TvMoveRows { .. }
+            | ShellRequest::TvJumpCursor { .. }
+            | ShellRequest::TvActivate { .. }
+            | ShellRequest::TvEpisodeActivate { .. }
+            | ShellRequest::TvBack
+            | ShellRequest::TvCycleLetterPill { .. }
+            | ShellRequest::TvEpisodeMove { .. }
+            | ShellRequest::TvSeasonMove { .. }
+            | ShellRequest::TvTreeExpand { .. }) => {
+                self.handle_tv_request(request);
+            }
+            ShellRequest::TvHitClick { hit } => self.handle_tv_hit_click(hit),
+            ShellRequest::TvHitDoubleClick { hit } => {
+                if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                    self.app.handle_mouse_double_click_tv(lib_idx, hit);
+                }
+                self.push_tv_workspace_content();
+            }
+            request @ (ShellRequest::PlaylistsBack
+            | ShellRequest::PlaylistsOpen(_)
+            | ShellRequest::PlaylistsActivate { .. }
+            | ShellRequest::PlaylistsRename(_)
+            | ShellRequest::PlaylistsDelete(_)
+            | ShellRequest::PlaylistsRefresh
+            | ShellRequest::DismissPlaylists) => self.handle_playlists_request(request),
+            ShellRequest::SettingsIntent(intent) => return self.handle_settings_intent(intent),
+            _ => unreachable!("request is a TV, playlist, or settings request"),
+        }
+        false
     }
 
     pub(crate) fn drain_deferred_library_message(
