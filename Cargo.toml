@@ -31,6 +31,15 @@ mod_module_files = "deny"
 cognitive_complexity = "warn"
 excessive_nesting = "warn"
 
+[workspace.lints.rust]
+ambiguous_negative_literals = "warn"
+missing_debug_implementations = "warn"
+redundant_imports = "warn"
+redundant_lifetimes = "warn"
+trivial_numeric_casts = "warn"
+unsafe_op_in_unsafe_fn = "warn"
+unused_lifetimes = "warn"
+
 [package]
 name = "mbv"
 version.workspace = true

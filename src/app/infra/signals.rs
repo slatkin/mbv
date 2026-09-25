@@ -40,7 +40,7 @@ fn stdin_has_hup() -> bool {
         events: 0,
         revents: 0,
     };
-    unsafe { libc::poll(&mut pfd, 1, 0) > 0 && (pfd.revents & libc::POLLHUP as libc::c_short) != 0 }
+    unsafe { libc::poll(&mut pfd, 1, 0) > 0 && (pfd.revents & libc::POLLHUP) != 0 }
 }
 
 // Watchdog thread: detects terminal close (SIGHUP or stdin POLLHUP) and
