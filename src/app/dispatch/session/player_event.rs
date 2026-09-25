@@ -63,24 +63,7 @@ impl App {
             PlayerEvent::Stopped { .. } => return self.handle_stopped_event(ev),
             PlayerEvent::TrackCompleted { .. } => self.handle_track_completed_event(ev),
             PlayerEvent::TrackChanged { .. } => self.handle_track_changed_event(ev),
-            PlayerEvent::QueueNextUp { next_idx } => {
-                if let Some(item) = self.playback_queue().clone_emby_item_at(next_idx) {
-                    let item_id = item.id.clone();
-                    let show_title = item.series_name.clone();
-                    let ep_title = item.name.clone();
-                    let artist = item.artist.clone();
-                    self.next_up_item = Some(item.clone());
-                    // Daemon sends NextUpShow to mpv directly; only send from local player.
-                    if !self.player.is_remote() {
-                        self.player.send_command(PlayerCommand::NextUpShow {
-                            item_id,
-                            show_title,
-                            ep_title,
-                            artist,
-                        });
-                    }
-                }
-            }
+            PlayerEvent::QueueNextUp { next_idx } => self.handle_queue_next_up(next_idx),
             PlayerEvent::NextUpThreshold { .. } => {
                 // Series episodes now use play_queue; this only fires for movies
                 // (always_play_next=false or non-series content). No action needed.
@@ -121,62 +104,19 @@ impl App {
                 self.flash(reason, ToastSeverity::Error);
             }
             PlayerEvent::PlaybackIntent(event) => {
-                use mbv_core::ctrl::PlaybackIntentOutcome;
-                let message = match event.outcome {
-                    PlaybackIntentOutcome::Accepted => "Playback request accepted",
-                    PlaybackIntentOutcome::Applied => "Playback request applied",
-                    PlaybackIntentOutcome::Coalesced { .. } => "Playback request already pending",
-                    PlaybackIntentOutcome::Superseded => "Playback request superseded",
-                    PlaybackIntentOutcome::Rejected { ref reason } => {
-                        use mbv_core::ctrl::PlaybackIntentRejection;
-                        match reason {
-                            PlaybackIntentRejection::EmptyTarget => "Nothing to play",
-                            PlaybackIntentRejection::ResolutionFailed => {
-                                "Couldn't load playback items"
-                            }
-                            PlaybackIntentRejection::AudioOnly => "Can't play audio in video mode",
-                            PlaybackIntentRejection::InvalidTarget => "Invalid playback target",
-                            PlaybackIntentRejection::Unavailable => "Playback unavailable",
-                        }
-                    }
-                };
-                self.flash(message.to_string(), ToastSeverity::Neutral);
+                self.flash(
+                    playback_intent_message(&event.outcome).to_string(),
+                    ToastSeverity::Neutral,
+                );
             }
             PlayerEvent::PipePlaybackStatus(status) => {
-                use mbv_core::ctrl::PipePlaybackPhase;
-                let message = match status.phase {
-                    PipePlaybackPhase::Resolving => "Resolving pipe playback target".to_string(),
-                    PipePlaybackPhase::PlayerOpening => "Opening player output".to_string(),
-                    PipePlaybackPhase::OutputStarted => {
-                        "Output started; downstream delay is unknown".to_string()
-                    }
-                    PipePlaybackPhase::OutputBuffering => {
-                        let remaining = status.estimated_remaining_ms.unwrap_or_default();
-                        format!(
-                            "Output started; estimated output buffering (~{} ms remaining)",
-                            remaining
-                        )
-                    }
-                };
-                // These statuses only originate from a direct pipe-output
-                // daemon. Local, attached-Emby, and ordinary daemon routes
-                // never receive the event, so their presentation is unchanged.
-                self.flash(message, ToastSeverity::Neutral);
+                self.flash(pipe_playback_message(&status), ToastSeverity::Neutral);
             }
             PlayerEvent::PausedChanged(paused) => {
                 // Persist Feed position on pause (one write per pause event).
                 if paused {
                     if let Some(slot_id) = self.playback_queue().queue.active_slot_id() {
-                        if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-                            if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item
-                            {
-                                if entry.feed_id.is_some() {
-                                    let pos_ticks =
-                                        self.player.status.lock().unwrap().position_ticks;
-                                    self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
-                                }
-                            }
-                        }
+                        self.persist_feed_slot_position(slot_id);
                     }
                 }
             }
@@ -184,29 +124,11 @@ impl App {
                 // If a seek was pending for a Feed slot, persist the
                 // resulting position now (confirmed seek completion).
                 if let Some(slot_id) = self.feed_seek_pending_slot.take() {
-                    if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-                        if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item {
-                            if entry.feed_id.is_some() {
-                                let pos_ticks = self.player.status.lock().unwrap().position_ticks;
-                                self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
-                            }
-                        }
-                    }
+                    self.persist_feed_slot_position(slot_id);
                 }
             }
             PlayerEvent::RemoteDisconnected(reason) => {
-                self.next_up_item = None;
-                if self.is_local_daemon() {
-                    self.raise_daemon_lost_modal();
-                    self.refresh_after_stop();
-                    return true;
-                }
-                if self.try_reattach_remote_daemon() {
-                    return true;
-                }
-                self.restore_local_mode(&reason);
-                self.refresh_after_stop();
-                return true;
+                return self.handle_remote_disconnected(&reason);
             }
             PlayerEvent::EmbyAuthorityTaken(reason) => {
                 // Authority-change notification: Emby remote has taken authority.
@@ -705,5 +627,99 @@ impl App {
                 restart_error: None,
             }),
         );
+    }
+
+    /// Look-ahead hint for the Next-Up card (extracted from
+    /// `handle_player_event`).
+    fn handle_queue_next_up(&mut self, next_idx: usize) {
+        if let Some(item) = self.playback_queue().clone_emby_item_at(next_idx) {
+            let item_id = item.id.clone();
+            let show_title = item.series_name.clone();
+            let ep_title = item.name.clone();
+            let artist = item.artist.clone();
+            self.next_up_item = Some(item.clone());
+            // Daemon sends NextUpShow to mpv directly; only send from local player.
+            if !self.player.is_remote() {
+                self.player.send_command(PlayerCommand::NextUpShow {
+                    item_id,
+                    show_title,
+                    ep_title,
+                    artist,
+                });
+            }
+        }
+    }
+
+    /// The disconnect half of the daemon-loss paths (extracted from
+    /// `handle_player_event`): modal-or-reattach-or-fallback, always ending
+    /// the tick.
+    fn handle_remote_disconnected(&mut self, reason: &str) -> bool {
+        self.next_up_item = None;
+        if self.is_local_daemon() {
+            self.raise_daemon_lost_modal();
+            self.refresh_after_stop();
+            return true;
+        }
+        if self.try_reattach_remote_daemon() {
+            return true;
+        }
+        self.restore_local_mode(reason);
+        self.refresh_after_stop();
+        true
+    }
+
+    /// Persist a Feed slot's current player position, when the slot still
+    /// exists and carries a feed identity. Shared by the pause and
+    /// seek-completion paths (extracted from `handle_player_event`).
+    fn persist_feed_slot_position(&mut self, slot_id: mbv_core::playback_queue::QueueSlotId) {
+        if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+            if let mbv_core::playback_queue::QueueItem::Feed(ref entry) = slot.item {
+                if entry.feed_id.is_some() {
+                    let pos_ticks = self.player.status.lock().unwrap().position_ticks;
+                    self.persist_feed_slot_lifecycle(slot_id, pos_ticks, false);
+                }
+            }
+        }
+    }
+}
+
+/// The one message for a correlated direct-daemon playback-intent outcome
+/// (extracted from `handle_player_event`).
+fn playback_intent_message(outcome: &mbv_core::ctrl::PlaybackIntentOutcome) -> &'static str {
+    use mbv_core::ctrl::{PlaybackIntentOutcome, PlaybackIntentRejection};
+    match outcome {
+        PlaybackIntentOutcome::Accepted => "Playback request accepted",
+        PlaybackIntentOutcome::Applied => "Playback request applied",
+        PlaybackIntentOutcome::Coalesced { .. } => "Playback request already pending",
+        PlaybackIntentOutcome::Superseded => "Playback request superseded",
+        PlaybackIntentOutcome::Rejected { reason } => match reason {
+            PlaybackIntentRejection::EmptyTarget => "Nothing to play",
+            PlaybackIntentRejection::ResolutionFailed => "Couldn't load playback items",
+            PlaybackIntentRejection::AudioOnly => "Can't play audio in video mode",
+            PlaybackIntentRejection::InvalidTarget => "Invalid playback target",
+            PlaybackIntentRejection::Unavailable => "Playback unavailable",
+        },
+    }
+}
+
+/// The one message for a direct-daemon pipe-output status (extracted from
+/// `handle_player_event`). These statuses only originate from a direct
+/// pipe-output daemon. Local, attached-Emby, and ordinary daemon routes
+/// never receive the event, so their presentation is unchanged.
+fn pipe_playback_message(status: &mbv_core::ctrl::PipePlaybackStatus) -> String {
+    use mbv_core::ctrl::PipePlaybackPhase;
+    match status.phase {
+        PipePlaybackPhase::Resolving => "Resolving pipe playback target".to_string(),
+        PipePlaybackPhase::PlayerOpening => "Opening player output".to_string(),
+        PipePlaybackPhase::OutputStarted => {
+            "Output started; downstream delay is unknown".to_string()
+        }
+        PipePlaybackPhase::OutputBuffering => {
+            let remaining = status.estimated_remaining_ms.unwrap_or_default();
+            format!(
+                "Output started; estimated output buffering (~{} ms remaining)",
+                remaining
+            )
+        }
     }
 }
