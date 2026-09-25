@@ -436,28 +436,53 @@ impl MusicContent {
 
     fn on_filter_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
-            if self.selected_is_artist() {
-                return match key.code {
-                    Key::Char('p') => self.artist_action(MusicTreeAction::Play),
-                    Key::Char('a') => self.artist_action(MusicTreeAction::Enqueue),
-                    Key::Char('s') => self.artist_action(MusicTreeAction::Shuffle),
-                    _ => None,
-                };
-            }
-            let item = self.selected_item();
+            self.on_filter_control_key(key)
+        } else {
+            self.on_filter_unmodified_key(key)
+        }
+    }
+
+    fn on_filter_control_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if self.selected_is_artist() {
             return match key.code {
-                Key::Char('p') => {
-                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryPlay { item })))
-                }
-                Key::Char('a') => {
-                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryEnqueue { item })))
-                }
-                Key::Char('s') => {
-                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryShuffle { item })))
-                }
+                Key::Char('p') => self.artist_action(MusicTreeAction::Play),
+                Key::Char('a') => self.artist_action(MusicTreeAction::Enqueue),
+                Key::Char('s') => self.artist_action(MusicTreeAction::Shuffle),
                 _ => None,
             };
         }
+        let item = self.selected_item();
+        match key.code {
+            Key::Char('p') => {
+                item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryPlay { item })))
+            }
+            Key::Char('a') => {
+                item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryEnqueue { item })))
+            }
+            Key::Char('s') => {
+                item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryShuffle { item })))
+            }
+            _ => None,
+        }
+    }
+
+    fn on_filter_unmodified_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Esc | Key::Backspace | Key::Char(_) => self.on_filter_edit_key(key),
+            Key::Up
+            | Key::Down
+            | Key::PageUp
+            | Key::PageDown
+            | Key::Home
+            | Key::End
+            | Key::Left
+            | Key::Right => self.on_filter_navigation_key(key),
+            Key::Enter => self.on_filter_enter_key(),
+            _ => None,
+        }
+    }
+
+    fn on_filter_edit_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         match key.code {
             Key::Esc => {
                 self.inline_search.close();
@@ -481,6 +506,12 @@ impl MusicContent {
                 let _ = self.inline_search.handle_key(key);
                 None
             }
+            _ => None,
+        }
+    }
+
+    fn on_filter_navigation_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
             Key::Up => self.move_album(-1, AlbumCursorKind::Move),
             Key::Down => self.move_album(1, AlbumCursorKind::Move),
             Key::PageUp => self.page_album(-1, AlbumCursorKind::Page),
@@ -517,56 +548,57 @@ impl MusicContent {
                     _ => None,
                 }
             }
-            Key::Enter if self.selected_is_artist() => {
-                if let Some(root) = self.browser.selected_target().cloned() {
-                    self.browser
-                        .apply(TreeOperation::ToggleExpansionTarget(root));
-                }
-                None
-            }
-            Key::Enter if self.selected_is_track() => {
-                let (album_target, track_id) = self.selected_tree_track()?;
-                Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
-                    album_target,
-                    track_id,
-                })))
-            }
-            Key::Enter => {
-                // Capture the activated target before the dismissal restores
-                // the pre-filter anchor, then re-select it: the shared
-                // `ClearFilter` restores `filter_anchor`, so without this the
-                // tree (and with it Hero/Workspace/persistence) would revert
-                // to the row the filter started on. `AnchorSelection` rather
-                // than `Select` because the filter can reach a leaf under a
-                // collapsed artist root: `Select` only addresses a visible
-                // row, so the re-selection would come back `Unhandled` and
-                // the tree would revert. `AnchorSelection` reveals the
-                // ancestor path (legacy `select_album_target` parity) and
-                // re-arms the viewport visibility rule for the next view.
-                let target = self.browser.selected_target().cloned();
-                let item = self.selected_item()?;
-                self.inline_search.close();
-                self.browser.apply(TreeOperation::ClearFilter);
-                if let Some(target) = target {
-                    self.browser.apply(TreeOperation::AnchorSelection {
-                        target,
-                        flow_offset: 0,
-                    });
-                }
-                if self.track_list.rows().is_empty() {
-                    Some(Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate {
-                        item,
-                    })))
-                } else if self.inline_track_focus_enabled {
-                    self.enter_track_focus();
-                    None
-                } else {
-                    Some(Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate {
-                        item,
-                    })))
-                }
-            }
             _ => None,
+        }
+    }
+
+    fn on_filter_enter_key(&mut self) -> Option<Msg> {
+        if self.selected_is_artist() {
+            if let Some(root) = self.browser.selected_target().cloned() {
+                self.browser
+                    .apply(TreeOperation::ToggleExpansionTarget(root));
+            }
+            return None;
+        }
+        if self.selected_is_track() {
+            let (album_target, track_id) = self.selected_tree_track()?;
+            return Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
+                album_target,
+                track_id,
+            })));
+        }
+
+        // Capture the activated target before the dismissal restores the
+        // pre-filter anchor, then re-select it: the shared `ClearFilter`
+        // restores `filter_anchor`, so without this the tree (and with it
+        // Hero/Workspace/persistence) would revert to the row the filter
+        // started on. `AnchorSelection` rather than `Select` because the
+        // filter can reach a leaf under a collapsed artist root: `Select`
+        // only addresses a visible row, so the re-selection would come back
+        // `Unhandled` and the tree would revert. `AnchorSelection` reveals
+        // the ancestor path (legacy `select_album_target` parity) and re-arms
+        // the viewport visibility rule for the next view.
+        let target = self.browser.selected_target().cloned();
+        let item = self.selected_item()?;
+        self.inline_search.close();
+        self.browser.apply(TreeOperation::ClearFilter);
+        if let Some(target) = target {
+            self.browser.apply(TreeOperation::AnchorSelection {
+                target,
+                flow_offset: 0,
+            });
+        }
+        if self.track_list.rows().is_empty() {
+            Some(Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate {
+                item,
+            })))
+        } else if self.inline_track_focus_enabled {
+            self.enter_track_focus();
+            None
+        } else {
+            Some(Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate {
+                item,
+            })))
         }
     }
 }
