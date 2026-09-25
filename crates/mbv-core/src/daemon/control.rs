@@ -281,6 +281,14 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
         return;
     }
 
+    dispatch_ctrl_command(cmd, &mut ctx, queue_lineage);
+}
+
+fn dispatch_ctrl_command(
+    cmd: CtrlCmd,
+    ctx: &mut CtrlContext<'_>,
+    queue_lineage: crate::ctrl::QueueLineage,
+) {
     match cmd {
         CtrlCmd::Hello(_) => {
             log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
@@ -289,7 +297,7 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
             items,
             cursor,
             source: new_source,
-        } => queue_setup::handle_adopt_queue(&mut ctx, queue_lineage, items, cursor, new_source),
+        } => queue_setup::handle_adopt_queue(ctx, queue_lineage, items, cursor, new_source),
         // Stale index-addressed jump from a cross-version peer. Slot-id +
         // request-identity JumpTo is now the only jump path, so an ordinal
         // index carries no evidence about which slot was intended: reject it
@@ -306,8 +314,8 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
         CtrlCmd::PlayerCmd(pc) => {
             ctx.player.send_command(PlayerCommand::from(pc));
         }
-        CtrlCmd::Stop => handle_stop(&mut ctx),
-        CtrlCmd::PlaybackIntent(intent) => playback::handle_playback_intent(&mut ctx, intent),
+        CtrlCmd::Stop => handle_stop(ctx),
+        CtrlCmd::PlaybackIntent(intent) => playback::handle_playback_intent(ctx, intent),
         CtrlCmd::RequestShutdown => {
             send_to(ctx.reply_tx, &CtrlEvent::ShutdownAccepted);
             let _ = ctx.merged_tx.send(DaemonEvent::Shutdown);
@@ -318,16 +326,11 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
             slots,
             cursor,
             source: new_source,
-        } => queue_load::handle_queue_load_idle(&mut ctx, request_id, slots, cursor, new_source),
+        } => queue_load::handle_queue_load_idle(ctx, request_id, slots, cursor, new_source),
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: new_source,
             lineage: cmd_lineage,
-        } => queue_setup::handle_queue_source_update(
-            &mut ctx,
-            queue_lineage,
-            new_source,
-            cmd_lineage,
-        ),
+        } => queue_setup::handle_queue_source_update(ctx, queue_lineage, new_source, cmd_lineage),
         // ── Unified queue commands ──────────────────────────────────────
         CtrlCmd::UnifiedQueueReplace {
             items,
@@ -335,7 +338,7 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
             start_idx,
             source: new_source,
         } => queue_setup::handle_queue_replace(
-            &mut ctx,
+            ctx,
             queue_lineage,
             items,
             slots,
@@ -343,21 +346,21 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
             new_source,
         ),
         CtrlCmd::UnifiedQueueAppend { items } => {
-            queue_setup::handle_queue_append(&mut ctx, queue_lineage, items)
+            queue_setup::handle_queue_append(ctx, queue_lineage, items);
         }
         CtrlCmd::UnifiedQueueRemoveSlot { slot_id } => {
-            queue_edit::handle_queue_remove_slot(&mut ctx, queue_lineage, slot_id)
+            queue_edit::handle_queue_remove_slot(ctx, queue_lineage, slot_id);
         }
         CtrlCmd::UnifiedQueueRemoveSlots { slot_ids } => {
-            queue_edit::handle_queue_remove_slots(&mut ctx, slot_ids)
+            queue_edit::handle_queue_remove_slots(ctx, slot_ids);
         }
         CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index } => {
-            queue_edit::handle_queue_move_slot(&mut ctx, queue_lineage, slot_id, to_index)
+            queue_edit::handle_queue_move_slot(ctx, queue_lineage, slot_id, to_index);
         }
         CtrlCmd::UnifiedQueuePlaySlot { slot_id } => {
-            queue_edit::handle_queue_play_slot(&mut ctx, queue_lineage, slot_id)
+            queue_edit::handle_queue_play_slot(ctx, queue_lineage, slot_id);
         }
-        CtrlCmd::UnifiedQueueClear => queue_edit::handle_queue_clear(&mut ctx),
+        CtrlCmd::UnifiedQueueClear => queue_edit::handle_queue_clear(ctx),
     }
 }
 
