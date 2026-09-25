@@ -156,37 +156,85 @@ pub(in crate::app) static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
 use crate::config::{Config, UiConfig};
 
 pub fn setting_label(key: SettingKey) -> &'static str {
-    match key {
-        SettingKey::Services => "Services",
-        SettingKey::Keys => "Keys",
-        SettingKey::StayAlive => "Stay alive on exit",
-        SettingKey::AutoReconnect => "Auto reconnect",
-        SettingKey::SavePlaylistOnQuit => "Save playlist on quit",
-        SettingKey::AlwaysPlayNext => "Always play next",
-        SettingKey::ConsumeVideos => "Consume videos",
-        SettingKey::ConsumeAudio => "Consume audio",
-        SettingKey::SavePlaylistOnConsume => "Save playlist on consume",
-        SettingKey::SavePlaylistOnConsumeAudio => "Save playlist on consume (audio)",
-        SettingKey::AlwaysSkipIntro => "Always skip intro",
-        SettingKey::ImageProtocol => "Image protocol",
-        SettingKey::HiddenLibraries => "Hidden libraries",
-        SettingKey::ShowAudioWindow => "Show audio window",
-        SettingKey::UseMpvConfig => "Use mpv config",
-        SettingKey::NoScripts => "No scripts",
-        SettingKey::Autoload => "autoload",
-        SettingKey::ShowSysTrayIcon => "Show systray icon",
-        SettingKey::SystemNotifications => "System notifications",
-        SettingKey::MouseSupport => "Mouse support",
-        SettingKey::MyLanguages => "My languages",
-        SettingKey::SubtitleMode => "Subtitle mode",
-
-        SettingKey::SubtitleLanguage => "Subtitle language",
-        SettingKey::AudioLanguage => "Audio language",
-        SettingKey::FeedViewLibraries => "Feed view",
-        SettingKey::LibraryRoutes => "Library routes",
-        SettingKey::ManageFeeds => "Manage feeds",
-        SettingKey::LogOut => "Log out",
+    match setting_kind(key) {
+        SettingValueKind::Key => setting_key_label(key),
+        SettingValueKind::Boolean => setting_boolean_label(key),
+        SettingValueKind::Text => setting_text_label(key),
+        SettingValueKind::Collection => setting_collection_label(key),
     }
+}
+
+fn setting_key_label(key: SettingKey) -> &'static str {
+    label_for(
+        key,
+        &[
+            (SettingKey::Services, "Services"),
+            (SettingKey::Keys, "Keys"),
+        ],
+    )
+}
+
+fn setting_boolean_label(key: SettingKey) -> &'static str {
+    label_for(
+        key,
+        &[
+            (SettingKey::StayAlive, "Stay alive on exit"),
+            (SettingKey::AutoReconnect, "Auto reconnect"),
+            (SettingKey::SavePlaylistOnQuit, "Save playlist on quit"),
+            (SettingKey::AlwaysPlayNext, "Always play next"),
+            (SettingKey::ConsumeVideos, "Consume videos"),
+            (SettingKey::ConsumeAudio, "Consume audio"),
+            (
+                SettingKey::SavePlaylistOnConsume,
+                "Save playlist on consume",
+            ),
+            (
+                SettingKey::SavePlaylistOnConsumeAudio,
+                "Save playlist on consume (audio)",
+            ),
+            (SettingKey::AlwaysSkipIntro, "Always skip intro"),
+            (SettingKey::ShowAudioWindow, "Show audio window"),
+            (SettingKey::UseMpvConfig, "Use mpv config"),
+            (SettingKey::NoScripts, "No scripts"),
+            (SettingKey::Autoload, "autoload"),
+            (SettingKey::ShowSysTrayIcon, "Show systray icon"),
+            (SettingKey::SystemNotifications, "System notifications"),
+            (SettingKey::MouseSupport, "Mouse support"),
+        ],
+    )
+}
+
+fn setting_text_label(key: SettingKey) -> &'static str {
+    label_for(
+        key,
+        &[
+            (SettingKey::ImageProtocol, "Image protocol"),
+            (SettingKey::SubtitleMode, "Subtitle mode"),
+            (SettingKey::SubtitleLanguage, "Subtitle language"),
+            (SettingKey::AudioLanguage, "Audio language"),
+        ],
+    )
+}
+
+fn setting_collection_label(key: SettingKey) -> &'static str {
+    label_for(
+        key,
+        &[
+            (SettingKey::HiddenLibraries, "Hidden libraries"),
+            (SettingKey::MyLanguages, "My languages"),
+            (SettingKey::FeedViewLibraries, "Feed view"),
+            (SettingKey::LibraryRoutes, "Library routes"),
+            (SettingKey::ManageFeeds, "Manage feeds"),
+            (SettingKey::LogOut, "Log out"),
+        ],
+    )
+}
+
+fn label_for(key: SettingKey, labels: &[(SettingKey, &'static str)]) -> &'static str {
+    labels
+        .iter()
+        .find_map(|(candidate, label)| (*candidate == key).then_some(*label))
+        .unwrap_or_else(|| unreachable!("setting label group must contain its key"))
 }
 
 #[derive(Clone, Copy)]
