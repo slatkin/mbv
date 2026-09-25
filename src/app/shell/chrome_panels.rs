@@ -39,7 +39,7 @@ impl Model {
     /// The reservation is derived from the prior paint checkpoint, so draw
     /// remains read-only with respect to `AppLayout`.
     pub(in crate::app) fn sync_queue_card_geometry(&mut self) {
-        if self.app.now_playing_status() == NowPlayingStatus::Idle {
+        if !self.app.visual_slot_shown() {
             self.app.layout.card = CardGeometry::default();
             return;
         }
@@ -341,7 +341,7 @@ impl Model {
             ..inset
         };
         let wide = queue_playback_column_wide(placement.width);
-        if self.app.now_playing_status() != NowPlayingStatus::Idle {
+        if self.app.visual_slot_shown() {
             // Fill the slot region's own background first (task 12.2):
             // the visual slot only paints the image/placeholder it
             // actually has (documented: images-off or not-yet-loaded

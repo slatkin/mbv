@@ -197,15 +197,15 @@ pub(in crate::app) fn queue_playback_transport_area(
     // controls + pills, show + pos/dur, title.
     let player_rows = PLAYER_BOX_HEIGHT + u16::from(title_expanded);
     if column_wide {
+        let gap = if card_width > 0 {
+            SLOT_TRANSPORT_GAP
+        } else {
+            0
+        };
         Rect {
-            x: slot_region
-                .x
-                .saturating_add(card_width)
-                .saturating_add(SLOT_TRANSPORT_GAP),
+            x: slot_region.x.saturating_add(card_width).saturating_add(gap),
             y: slot_region.y,
-            width: slot_region
-                .width
-                .saturating_sub(card_width + SLOT_TRANSPORT_GAP),
+            width: slot_region.width.saturating_sub(card_width + gap),
             height: card_height.max(player_rows),
         }
     } else {
@@ -629,6 +629,14 @@ mod root_frame_tests {
         assert!(f.library_playback.is_none());
         assert!(f.status_bar.is_none());
         assert!(f.queue_boundary.is_none());
+    }
+
+    #[test]
+    fn wide_transport_without_a_slot_uses_the_full_slot_region() {
+        let slot_region = Rect::new(7, 11, 80, 6);
+        let transport = queue_playback_transport_area(slot_region, true, 0, 0, false);
+        assert_eq!(transport.x, slot_region.x);
+        assert_eq!(transport.width, slot_region.width);
     }
 
     /// Idle playback collapses the visual slot/transport rows — and with them
