@@ -7,6 +7,60 @@ impl super::super::Model {
         quit: &mut bool,
     ) -> Option<ShellRequest> {
         match request {
+            request @ (ShellRequest::Quit
+            | ShellRequest::TabSelect(_)
+            | ShellRequest::DismissHelp
+            | ShellRequest::OpenSettings
+            | ShellRequest::OpenSessions
+            | ShellRequest::OpenPlaylists
+            | ShellRequest::ConfirmIntent(_)
+            | ShellRequest::DaemonLostIntent(_)
+            | ShellRequest::ContextMenuIntent(_)
+            | ShellRequest::ContextMenuSelect(_)
+            | ShellRequest::ContextMenuDismiss
+            | ShellRequest::DismissSearch
+            | ShellRequest::SearchActivate { .. }
+            | ShellRequest::OpenInlineSearch
+            | ShellRequest::InlineSearchQueryStarted
+            | ShellRequest::InlineSearchActivate { .. }
+            | ShellRequest::MultiselectCommit { .. }) => {
+                self.handle_navigation_overlay(request, quit)
+            }
+            request @ (ShellRequest::DismissSessions
+            | ShellRequest::RefreshSessions
+            | ShellRequest::SelectSession(_)
+            | ShellRequest::DetachSessions) => {
+                self.handle_sessions_navigation(request);
+                None
+            }
+            request @ (ShellRequest::RefreshFeeds
+            | ShellRequest::FeedsPlay(_)
+            | ShellRequest::FeedsRowClick
+            | ShellRequest::FeedsEnqueue(_)
+            | ShellRequest::FeedsManageIntent(_)
+            | ShellRequest::FeedsLatestSelected) => {
+                self.handle_feeds_navigation(request);
+                None
+            }
+            request @ (ShellRequest::AudiobookshelfPodcastEpisodeIntent(_)
+            | ShellRequest::AudiobookshelfPodcastLatestSelected) => {
+                self.handle_podcast_navigation(request);
+                None
+            }
+            request @ (ShellRequest::LibraryRoutesEnter | ShellRequest::LibraryRoutesEsc) => {
+                self.handle_library_routes_request(request);
+                None
+            }
+            _ => Some(request),
+        }
+    }
+
+    fn handle_navigation_overlay(
+        &mut self,
+        request: ShellRequest,
+        quit: &mut bool,
+    ) -> Option<ShellRequest> {
+        match request {
             // Help overlay cross-boundary requests (design D4).
             ShellRequest::Quit => *quit = true,
             // Tab bar click: the mounted `TabPanel` resolved the tab from
@@ -84,6 +138,19 @@ impl super::super::Model {
             ShellRequest::InlineSearchActivate { id, item_type } => {
                 self.activate_inline_search_item(id, item_type);
             }
+            ShellRequest::MultiselectCommit { .. } => {
+                self.handle_multiselect_commit();
+                // The committed visibility settings may change Emby browser content.
+                // Re-project that destination owner.
+                self.push_active_emby_library_owner_content();
+            }
+            _ => unreachable!("request is a navigation overlay request"),
+        }
+        None
+    }
+
+    fn handle_sessions_navigation(&mut self, request: ShellRequest) {
+        match request {
             ShellRequest::DismissSessions => {
                 self.dismiss_sidebar(super::super::SidebarId::Sessions);
             }
@@ -116,6 +183,12 @@ impl super::super::Model {
                 }
                 self.dismiss_sidebar(super::super::SidebarId::Sessions);
             }
+            _ => unreachable!("request is a sessions navigation request"),
+        }
+    }
+
+    fn handle_feeds_navigation(&mut self, request: ShellRequest) {
+        match request {
             ShellRequest::RefreshFeeds => {
                 self.app.refresh_feeds();
             }
@@ -142,19 +215,19 @@ impl super::super::Model {
                     self.app.enqueue_feed_entries(entries);
                 }
             }
-            ShellRequest::MultiselectCommit { .. } => {
-                self.handle_multiselect_commit();
-                // The committed visibility settings may change Emby browser content.
-                // Re-project that destination owner.
-                self.push_active_emby_library_owner_content();
-            }
-            request @ ShellRequest::LibraryRoutesEnter
-            | request @ ShellRequest::LibraryRoutesEsc => {
-                self.handle_library_routes_request(request);
-            }
             ShellRequest::FeedsManageIntent(intent) => {
                 self.handle_feeds_manage_intent(intent);
             }
+            ShellRequest::FeedsLatestSelected => {
+                self.record_home_latest_acknowledgement(DestinationLatestSource::Feeds);
+                self.sync_feeds();
+            }
+            _ => unreachable!("request is a feeds navigation request"),
+        }
+    }
+
+    fn handle_podcast_navigation(&mut self, request: ShellRequest) {
+        match request {
             ShellRequest::AudiobookshelfPodcastEpisodeIntent(intent) => {
                 // Typed podcast episode action intent (task 5.3d.7).
                 // The shell resolves the episode-selection and
@@ -163,10 +236,6 @@ impl super::super::Model {
                 // effects (D17); re-project after the effect.
                 self.handle_audiobookshelf_podcast_episode_intent(intent);
                 self.push_audiobookshelf_podcast_content();
-            }
-            ShellRequest::FeedsLatestSelected => {
-                self.record_home_latest_acknowledgement(DestinationLatestSource::Feeds);
-                self.sync_feeds();
             }
             ShellRequest::AudiobookshelfPodcastLatestSelected => {
                 if let Some(index) = self.app.tab.audiobookshelf_index() {
@@ -178,8 +247,7 @@ impl super::super::Model {
                 }
                 self.push_audiobookshelf_podcast_content();
             }
-            _ => return Some(request),
+            _ => unreachable!("request is a podcast navigation request"),
         }
-        None
     }
 }
