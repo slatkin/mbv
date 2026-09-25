@@ -391,7 +391,22 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             super::TreeOperation::Parent => {
                 self.with_state(|state| Expandable::select_parent(state, flow));
             }
-            _ => return,
+            // Every other operation is dispatched by a different branch in
+            // apply_operation; keep this match exhaustive as the vocabulary grows.
+            super::TreeOperation::Move(_)
+            | super::TreeOperation::Page(_)
+            | super::TreeOperation::Right
+            | super::TreeOperation::ToggleExpansionTarget(_)
+            | super::TreeOperation::AnchorSelection { .. }
+            | super::TreeOperation::Select(_)
+            | super::TreeOperation::PointerToggleMark(_)
+            | super::TreeOperation::Activate
+            | super::TreeOperation::Context
+            | super::TreeOperation::EditFilter(_)
+            | super::TreeOperation::ClearFilter
+            | super::TreeOperation::ClearMarks => {
+                unreachable!("apply_cursor_operation only handles First, Last, and Parent")
+            }
         }
         self.reconcile_selection();
     }
@@ -401,7 +416,22 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             super::TreeOperation::EditFilter(query) => self.filter_edit(query),
             super::TreeOperation::ClearFilter => self.clear_filter(),
             super::TreeOperation::ClearMarks => self.marks.clear(),
-            _ => return,
+            // Every other operation is dispatched by a different branch in
+            // apply_operation; keep this match exhaustive as the vocabulary grows.
+            super::TreeOperation::Move(_)
+            | super::TreeOperation::Page(_)
+            | super::TreeOperation::First
+            | super::TreeOperation::Last
+            | super::TreeOperation::Parent
+            | super::TreeOperation::Right
+            | super::TreeOperation::ToggleExpansionTarget(_)
+            | super::TreeOperation::AnchorSelection { .. }
+            | super::TreeOperation::Select(_)
+            | super::TreeOperation::PointerToggleMark(_)
+            | super::TreeOperation::Activate
+            | super::TreeOperation::Context => unreachable!(
+                "apply_filter_operation only handles EditFilter, ClearFilter, and ClearMarks"
+            ),
         }
     }
 
