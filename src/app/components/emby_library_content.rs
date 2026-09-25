@@ -351,15 +351,4 @@ impl EmbyLibraryContent {
             ShellRequest::EmbyLibraryPillClick { target: index - 1 }
         })))
     }
-
-    /// Test-only cursor seed, mirroring the embedded owner's test cursor seed:
-    /// tests position the authoritative owner selection directly before
-    /// exercising navigation.
-    #[cfg(test)]
-    pub(in crate::app) fn set_cursor_for_test(&mut self, cursor: usize) {
-        if let Some(item) = self.items().get(cursor) {
-            let target = item.id.clone();
-            self.carrier.select_target(&target);
-        }
-    }
 }

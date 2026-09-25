@@ -339,14 +339,12 @@ impl LibraryPanel {
             return crate::app::layout::PaintedRowGeometry {
                 left_area: wide.list_area,
                 selected_item_rect: wide.selected,
-                selector_tabs: Vec::new(),
             };
         }
         if let Some(narrow) = self.narrow_geometry.as_ref() {
             return crate::app::layout::PaintedRowGeometry {
                 left_area: narrow.list_area,
                 selected_item_rect: narrow.selected,
-                selector_tabs: Vec::new(),
             };
         }
         crate::app::layout::PaintedRowGeometry::default()

@@ -30,10 +30,6 @@ pub use types::{
 };
 pub use wide::WideMediaList;
 pub(crate) use wide::{queue_row_background, queue_row_zebra_stripe, row_marquee_key};
-// The tree-row zebra role is asserted by the Music buffer tests only; the
-// production zebra pair is composed in `wide` itself.
-#[cfg(test)]
-pub(crate) use wide::queue_row_zebra;
 
 /// The single canonical owner for one logical provider-neutral media-row flow.
 ///
@@ -98,16 +94,6 @@ impl<Target> MediaList<Target> {
             self.marquee_started_at = Instant::now();
         }
         (self.marquee_text.clone(), self.marquee_started_at)
-    }
-
-    /// Test-only clock injection: advances the marquee clock without a real
-    /// sleep. `text` must match the currently marqueed title so the injected
-    /// time isn't immediately reset by the next `marquee_state` call.
-    #[cfg(test)]
-    pub(crate) fn set_marquee_started_at(&mut self, text: &str, at: Instant) {
-        self.marquee_text.clear();
-        self.marquee_text.push_str(text);
-        self.marquee_started_at = at;
     }
 
     fn rows(&self) -> &[MediaListRow<Target>] {

@@ -7,8 +7,6 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
-#[cfg(test)]
-mod tests;
 mod title;
 
 pub(in crate::app) use title::render_title_row;

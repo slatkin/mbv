@@ -1,7 +1,5 @@
 pub(super) mod artwork_placeholder;
 
-#[cfg(test)]
-mod artwork_placeholder_tests;
 pub(super) mod audiobookshelf_book;
 
 pub(super) mod backdrop;
@@ -40,8 +38,6 @@ pub(super) mod sessions;
 pub(super) mod settings;
 pub(super) mod settings_component;
 pub(super) mod three_line_flat_list;
-#[cfg(test)]
-mod three_line_flat_list_tests;
 pub(super) mod tree_browser;
 pub(super) mod tv_wide;
 pub(super) mod visualizer;

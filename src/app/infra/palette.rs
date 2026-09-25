@@ -1,6 +1,8 @@
 // Raw colour primitives live in `render::theme` and are private to that
 // module (openspec/changes/enforce-mbv-ui-design-system step 2); this
 // re-export keeps every existing `palette::<role>` call site resolving.
+#[cfg(test)]
+pub(crate) use crate::app::render::PILL_SELECTED_BG;
 pub(crate) use crate::app::render::{
     bar_role_fg, ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, DURATION, GROUP_HEADING_FG,
     HERO_CREDITS_NAME, HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR,
@@ -12,10 +14,6 @@ pub(crate) use crate::app::render::{
     STATUS_AVAILABLE, STATUS_ERROR, SURFACE_RESTING, TEXT_ACCENT_MUTED, TEXT_EMPHASIS,
     TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,
     TEXT_STRONG, WORKSPACE_HEADER_FG,
-};
-#[cfg(test)]
-pub(crate) use crate::app::render::{
-    PILL_SELECTED_BG, SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED,
 };
 
 // Hero-title role, kept off the main list above to mark it as a late addition

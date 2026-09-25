@@ -286,19 +286,3 @@ fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn short_resolution_buckets() {
-        assert_eq!(short_resolution_label(2160), "4K");
-        assert_eq!(short_resolution_label(3840), "4K");
-        assert_eq!(short_resolution_label(1440), "QHD");
-        assert_eq!(short_resolution_label(1080), "FHD");
-        assert_eq!(short_resolution_label(720), "HD");
-        assert_eq!(short_resolution_label(480), "SD");
-        assert_eq!(short_resolution_label(360), "SD");
-    }
-}

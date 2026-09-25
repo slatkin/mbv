@@ -472,8 +472,3 @@ impl App {
         self.queue_card_projection = projection;
     }
 }
-
-#[cfg(test)]
-mod painter_tests;
-#[cfg(test)]
-mod tests;

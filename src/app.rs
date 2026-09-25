@@ -40,8 +40,6 @@ use self::state::types::browse::{
     AlbumPathPart, AlbumSearchEntry, BrowseLevel, SeriesDetail,
 };
 use self::state::types::confirm::{ConfirmAction, ConfirmModal};
-#[cfg(test)]
-use self::state::types::context_menu::LibraryRoutePopup;
 use self::state::types::context_menu::{
     ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage, MultiSelectKind,
 };

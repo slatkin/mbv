@@ -4,7 +4,6 @@
 //! the mounted `LibraryPanel` that hosts the owner (task 8.4 deleted the
 //! mounted component, its `ComponentId` and its hit stores).
 
-use crate::app::components::inline_search::SearchPool;
 use crate::app::components::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::components::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
@@ -78,20 +77,6 @@ fn down(owner: &mut TvContent, code: Key) -> Option<Msg> {
     owner.on_key(&key(code))
 }
 
-/// Dispatch one key and require the owner to cross its boundary with a shell
-/// request, returning the request for the caller's own match.
-fn tv_shell_request(owner: &mut TvContent, code: Key) -> ShellRequest {
-    tv_shell_event(owner, key(code))
-}
-
-/// As [`tv_shell_request`], for a key that carries modifiers.
-fn tv_shell_event(owner: &mut TvContent, event: KeyEvent) -> ShellRequest {
-    let Some(Msg::Shell(shell_boxed)) = owner.on_key(&event) else {
-        panic!("expected the TV owner to emit a shell request");
-    };
-    *shell_boxed
-}
-
 fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<crate::app::components::UserEvent> {
     Event::Mouse(MouseEvent {
         kind,
@@ -105,5 +90,3 @@ mod content_projection;
 mod episode_keyboard;
 mod launch_state;
 mod pointer_interaction;
-mod search;
-mod tree_interaction;

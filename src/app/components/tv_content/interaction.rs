@@ -550,18 +550,6 @@ impl TvContent {
         self.handle_key(key)
     }
 
-    /// Test-only: the embedded Inline Search session, for the component-level
-    /// search tests (the panel forwards the index/keyboard to it).
-    #[cfg(test)]
-    pub(crate) fn inline_search(&self) -> &InlineSearch {
-        &self.inline_search
-    }
-
-    #[cfg(test)]
-    pub(crate) fn inline_search_mut(&mut self) -> &mut InlineSearch {
-        &mut self.inline_search
-    }
-
     /// Test-only cursor seed for the embedded TV content owner:
     /// seeds the shared owner's stable target from a raw `context.list.items`
     /// index, for tests driving the merged component directly.

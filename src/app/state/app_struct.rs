@@ -447,10 +447,6 @@ pub struct App {
     /// tracked text changes so a new string always starts its scroll from
     /// the beginning rather than mid-cycle. Used by all marquee callers
     /// (mini-view "On Now", standard title row, idle feed title).
-    #[cfg(test)]
-    pub(in crate::app) marquee_text: String,
-    #[cfg(test)]
-    pub(in crate::app) marquee_started_at: std::time::Instant,
     pub(in crate::app) last_nav_at: Instant,
     pub(in crate::app) last_library_nav_at: Instant,
     /// Tracks terminal focus and arms a grace window to swallow the

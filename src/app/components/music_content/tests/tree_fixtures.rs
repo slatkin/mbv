@@ -88,15 +88,6 @@ pub(super) fn press(owner: &mut MusicContent, code: Key) -> Option<Msg> {
     })
 }
 
-/// Dispatch one slot event and require the component to cross its boundary
-/// with a shell request, returning the request for the caller's own match.
-pub(super) fn shell_request(owner: &mut MusicContent, event: LibrarySlotEvent) -> ShellRequest {
-    let Some(Msg::Shell(shell_boxed)) = owner.on_slot_event(event) else {
-        panic!("expected the component to emit a shell request");
-    };
-    *shell_boxed
-}
-
 pub(super) fn selected_row(owner: &MusicContent) -> usize {
     let selected = owner
         .browser

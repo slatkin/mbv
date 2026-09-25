@@ -11,8 +11,6 @@ mod theme;
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
 pub(in crate::app) use components::audiobookshelf_book::book_rows;
 
-#[cfg(test)]
-pub(in crate::app) use components::chrome_player::render_title_row;
 pub(in crate::app) use components::chrome_player::{
     render_player_panel, PlaybackRenderContext, PlaybackStripAreas,
 };
@@ -77,8 +75,7 @@ pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sideba
 // lane C) keep resolving without editing any call site. The `pub(crate)`
 // trio is referenced from outside `render` entirely (src/app.rs,
 // src/app/actions.rs); the rest are referenced via `super::X` from render's
-// sibling submodules (album, card, detail, home, list, music, pills, queue)
-// and/or `use super::*` in render/tests.rs.
+// sibling submodules (album, card, detail, home, list, music, pills, queue).
 pub use components::indicators;
 use components::widgets::render_right_scrollbar;
 pub(super) use screens::album_plan::sorted_group_album_order;
@@ -92,6 +89,8 @@ pub(crate) use screens::sort_filter::{
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
+#[cfg(test)]
+pub(crate) use theme::PILL_SELECTED_BG;
 pub(crate) use theme::{
     bar_role_fg, ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, DURATION, GROUP_HEADING_FG,
     HERO_CREDITS_NAME, HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR,
@@ -104,8 +103,6 @@ pub(crate) use theme::{
     TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY,
     TEXT_SECONDARY, TEXT_STRONG, WORKSPACE_HEADER_FG,
 };
-#[cfg(test)]
-pub(crate) use theme::{PILL_SELECTED_BG, SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED};
 // The closed surface table (`unify-surface-colour-neutral` D1/D2/D7) is bridged
 // to `palette.rs` the same way. Its visibility is `crate::app`, so it is not
 // part of the wider `pub(crate)` role list above.
@@ -114,18 +111,10 @@ pub(in crate::app) use theme::{surface_colors, Surface};
 use super::{palette, App};
 use crate::app::infra::ui_util::natural_sort_key;
 
-// Test-only modules and shared render fixtures.
+// Shared app fixtures for tests outside `render`.
 #[cfg(test)]
-use components::widgets::right_panel_content_area;
+mod fixtures;
 #[cfg(test)]
-use mbv_core::api::TICKS_PER_SECOND;
-#[cfg(test)]
-use ratatui::layout::Rect;
-#[cfg(test)]
-use unicode_width::UnicodeWidthStr;
-#[cfg(test)]
-mod tests;
-#[cfg(test)]
-pub(crate) use tests::test_helpers::{
+pub(crate) use fixtures::{
     make_movie_app, make_music_group_app, make_music_group_app_with_second_album, make_queue_app,
 };

@@ -201,11 +201,6 @@ impl<Target> WideMediaList<Target> {
     pub(crate) fn set_title_reveal(&mut self, policy: MediaListTitleReveal) {
         self.core.set_title_reveal(policy);
     }
-
-    #[cfg(test)]
-    pub(crate) fn set_marquee_started_at(&mut self, text: &str, at: std::time::Instant) {
-        self.core.set_marquee_started_at(text, at);
-    }
 }
 
 impl<Target: Clone + Eq> WideMediaList<Target> {

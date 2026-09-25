@@ -36,5 +36,3 @@ pub(in crate::app) use overview_box::sanitize_url;
 pub(in crate::app) use owner::{LibraryContentOwner, LibrarySlotEvent};
 pub use owner::{LibraryKey, LibraryKind};
 pub(in crate::app) use panel::LibraryPanel;
-#[cfg(test)]
-pub(in crate::app) use wide::WideSkeletonGeometry;

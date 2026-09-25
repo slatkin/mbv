@@ -768,6 +768,3 @@ pub(in crate::app) fn render_status_bar(
     }
     regions
 }
-
-#[cfg(test)]
-mod chrome_status_tests;

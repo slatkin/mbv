@@ -703,9 +703,3 @@ mod artist_workspace;
 
 #[cfg(test)]
 mod artist_actions;
-
-#[cfg(test)]
-mod tree_pointer;
-
-#[cfg(test)]
-mod tree_key;

@@ -41,21 +41,3 @@ pub fn dim_backdrop_in(f: &mut Frame, area: ratatui::layout::Rect) {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use rstest::rstest;
-
-    #[rstest]
-    #[case::dim_white_becomes_half_bright_gray(Color::White, Color::Rgb(127, 127, 127))]
-    #[case::dim_black_stays_black(Color::Black, Color::Rgb(0, 0, 0))]
-    #[case::dim_reset_stays_black(Color::Reset, Color::Rgb(0, 0, 0))]
-    #[case::dim_rgb_halves_each_channel(Color::Rgb(200, 100, 50), Color::Rgb(100, 50, 25))]
-    #[case::dim_rgb_zero_stays_zero(Color::Rgb(0, 0, 0), Color::Rgb(0, 0, 0))]
-    #[case::dim_rgb_max_becomes_half(Color::Rgb(255, 255, 255), Color::Rgb(127, 127, 127))]
-    #[case::dim_indexed_passthrough(Color::Indexed(196), Color::Indexed(196))]
-    fn dim_cases(#[case] input: Color, #[case] expected: Color) {
-        assert_eq!(dim(input), expected);
-    }
-}

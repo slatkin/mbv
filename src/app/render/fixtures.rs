@@ -1,3 +1,10 @@
+//! Shared app fixtures used by tests outside `render` (library, music
+//! workspace, TV workspace, tick-integration and dispatch tests reach these
+//! through `crate::app::render::make_*`).
+//!
+//! The render presentation suite that once lived beside these was pruned in
+//! issue #801 section 2; only the fixtures with surviving callers remain.
+
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, TabSelection};
@@ -147,87 +154,5 @@ pub fn make_music_group_app_with_second_album() -> App {
         .unwrap()
         .items
         .push(second_album);
-    app
-}
-
-/// The long album title the Grouped Music tree row tests share: it cannot fit
-/// any supported Library browser width, so it exercises truncation, clipping,
-/// and the marquee window.
-pub const MUSIC_TREE_LONG_TITLE: &str =
-    "A Suspiciously Long Album Title That Cannot Fit Any Library Browser Row";
-pub const MUSIC_TREE_LONG_TITLE_YEAR: u32 = 1999;
-
-/// The expanded projection length for `make_music_tree_group_app`: one Alpha
-/// root over 41 leaves, one Beta root over 2 leaves.
-pub const MUSIC_TREE_EXPANDED_PROJECTION_LEN: usize = 45;
-
-/// The repository's existing Wide Grouped Music fixture corpus
-/// (`music_app_many_albums`'s 40 Alpha albums) plus a long-titled album and a
-/// second artist group, so the group-relative zebra reset has two groups to
-/// cross.
-pub fn make_music_tree_group_app() -> App {
-    let mut app = make_music_group_app();
-    app.panel_focus = PanelFocus::Library;
-    let level = app.libs[0].nav_stack.last_mut().unwrap();
-    for i in 1..40 {
-        let mut album = make_item(&format!("Album {i:02}"), "MusicAlbum");
-        album.id = format!("album-extra-{i}");
-        album.artist = "Alpha".into();
-        level.items.push(album);
-    }
-    let mut long_album = make_item(MUSIC_TREE_LONG_TITLE, "MusicAlbum");
-    long_album.id = "album-long".into();
-    long_album.artist = "Alpha".into();
-    long_album.production_year = MUSIC_TREE_LONG_TITLE_YEAR;
-    level.items.push(long_album);
-
-    let mut beta_one = make_item("Beta Session", "MusicAlbum");
-    beta_one.id = "album-beta-1".into();
-    beta_one.artist = "Beta".into();
-    level.items.push(beta_one);
-    let mut beta_two = make_item("Beta Nights", "MusicAlbum");
-    beta_two.id = "album-beta-2".into();
-    beta_two.artist = "Beta".into();
-    level.items.push(beta_two);
-
-    level.total_count = level.items.len();
-    app
-}
-
-pub fn make_home_video_app() -> App {
-    let mut app = make_app_stub();
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    let mut library = make_item("Home Videos", "CollectionFolder");
-    library.id = "lib-homevideos".into();
-    library.is_folder = true;
-    library.collection_type = "homevideos".into();
-
-    let mut first = make_item("Birthday Clip", "Video");
-    first.id = "video-1".into();
-    let mut second = make_item("Vacation Clip", "Video");
-    second.id = "video-2".into();
-
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
-            parent_id: "lib-homevideos".into(),
-            title: "Home Videos".into(),
-            items: vec![first, second],
-            total_count: 2,
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
-
     app
 }

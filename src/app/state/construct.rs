@@ -217,10 +217,6 @@ impl App {
             visualizer: None,
             visualizer_window: Default::default(),
             visualizer_glyph: init.visualizer_glyph,
-            #[cfg(test)]
-            marquee_text: String::new(),
-            #[cfg(test)]
-            marquee_started_at: std::time::Instant::now(),
             last_played_item_id: None,
             last_played_completed: false,
             card_image_states: std::collections::HashMap::new(),

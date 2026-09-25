@@ -1,8 +1,6 @@
 use super::chrome::thin_vertical_thumb;
 use crate::app::components::media_list::queue_row_background;
-#[cfg(test)]
-use crate::app::TabSelection;
-use crate::app::{palette, App};
+use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -651,60 +649,4 @@ pub(in crate::app) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
         )),
         area,
     );
-}
-
-impl App {
-    #[cfg(test)]
-    pub(in crate::app) fn reserve_library_area(
-        &mut self,
-        _f: &mut Frame,
-        area: Rect,
-        layout: &mut Rect,
-        _cursor_scroll: Option<(usize, usize)>,
-    ) {
-        // If a music-group library's nav_stack was truncated to just the group
-        // level (e.g., stale breadcrumb click), immediately re-push the album level.
-        // (Emby-only; done inside the Emby match arm below.)
-        // Exhaustive destination dispatch: each Service renders only its own
-        // view; there is no default-to-Emby branch. The selected destination
-        // was already normalized to a live index by `render_main`.
-        match self.tab {
-            TabSelection::Home => {
-                // Home content is painted by the mounted `HomeComponent`.
-                // The legacy frame only reserves the full Home destination
-                // area here — it paints no Home rows, hero, or image
-                // (task 5.3d, Home legacy underpaint removal); nothing reads
-                // the reservation back (task 12.4), so it is a no-op.
-            }
-            TabSelection::Feeds => {
-                // Feeds is painted by its embedded owner inside the mounted
-                // `LibraryPanel` (task 7.3); the legacy base frame reserves
-                // nothing and paints no feed entry, selector pill or filter
-                // pill.
-            }
-            TabSelection::AudiobookshelfLibrary(_) => {
-                // Audiobookshelf destinations are painted by the embedded
-                // LibraryPanel owner; the legacy frame only reserves the area.
-            }
-            TabSelection::EmbyLibrary(lib_idx) => {
-                if self.is_feed_home_video_group_view(lib_idx) {
-                    // EmbyLibraryContent owns feed group presentation at every
-                    // width; publish only the full browser area.
-                    *layout = area;
-                    return;
-                }
-                {
-                    // Wide TV's mounted `LibraryPanel` paints the whole Wide
-                    // hero workspace through its embedded TV content owner
-                    // panel's shared skeleton (task 8.2); the legacy base
-                    // frame reserves only the destination area here and
-                    // paints no workspace.
-                    //
-                    // The active Emby/TV content owner owns the browse body at every width;
-                    // reserve only the destination area here.
-                    *layout = area;
-                }
-            }
-        }
-    }
 }

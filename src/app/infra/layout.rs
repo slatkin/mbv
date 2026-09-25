@@ -67,7 +67,6 @@ pub(crate) struct CardGeometry {
 pub(crate) struct PaintedRowGeometry {
     pub left_area: Rect,
     pub selected_item_rect: Option<Rect>,
-    pub selector_tabs: Vec<(Rect, usize)>,
 }
 
 /// Root/chrome frame geometry computed paint-free by
@@ -89,12 +88,6 @@ pub(crate) struct FrameChromeGeometry {
     /// Inner left-column content rect with the shared horizontal padding
     /// applied (queue and card paint areas are derived from this).
     pub left_content: Rect,
-    #[cfg(test)]
-    pub player_area: Rect,
-    #[cfg(test)]
-    pub status_area: Rect,
-    #[cfg(test)]
-    pub queue_focused: bool,
     /// Tab-bar box rect at the top of the right column.
     pub tab_bar_area: Rect,
     /// Whether the right panel is visible this frame (`panel_mode != QueueOnly`).

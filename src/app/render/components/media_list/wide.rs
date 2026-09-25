@@ -37,26 +37,6 @@ pub(super) struct MediaListPaint<Target> {
 /// The painter resolves the scroll offset and stores it back into `list` via
 /// [`WideMediaList::set_scroll`] before returning, so the offset persists across
 /// frames without the caller threading a `usize` back.
-#[cfg(test)]
-pub(super) fn render_wide_media_list<Target: Clone + Eq>(
-    f: &mut Frame,
-    paint_area: Rect,
-    content_area: Rect,
-    list: &mut WideMediaList<Target>,
-    focused: bool,
-    selected_bg: Color,
-) -> MediaListPaint<Target> {
-    render_wide_media_list_with_zebra(
-        f,
-        paint_area,
-        content_area,
-        list,
-        focused,
-        selected_bg,
-        None,
-    )
-}
-
 pub(super) fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
     f: &mut Frame,
     paint_area: Rect,
