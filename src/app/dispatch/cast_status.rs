@@ -187,16 +187,17 @@ impl App {
                 let media_source_id = media_source_id.clone();
                 let session_id = session_id.clone();
                 let is_paused = report.is_paused;
-                let _ = *runtime_ticks;
+                let progress = mbv_core::api::ProgressReport {
+                    item_id,
+                    media_source_id,
+                    position_ticks,
+                    runtime_ticks: *runtime_ticks,
+                    is_paused,
+                    session_id,
+                    event_name: "timeupdate".to_string(),
+                };
                 std::thread::spawn(move || {
-                    client.report_progress_http(
-                        &item_id,
-                        &media_source_id,
-                        position_ticks,
-                        is_paused,
-                        &session_id,
-                        "timeupdate",
-                    );
+                    client.report_progress_http(&progress);
                 });
             }
             CastProgressTarget::Feed { feed_id, guid } => {

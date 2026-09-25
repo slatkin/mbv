@@ -1,5 +1,20 @@
 use super::*;
 
+/// One progress report for both progress transports. The two transports
+/// previously took the same adjacent same-type args (`position_ticks` /
+/// `runtime_ticks`) positionally, so a swap compiled silently and corrupted
+/// reported progress; named fields make that impossible. `runtime_ticks`
+/// is only read by the ws transport (log line); http ignores it.
+pub struct ProgressReport {
+    pub item_id: ItemId,
+    pub media_source_id: MediaSourceId,
+    pub position_ticks: i64,
+    pub runtime_ticks: i64,
+    pub is_paused: bool,
+    pub session_id: EmbySessionId,
+    pub event_name: String,
+}
+
 impl EmbyClient {
     pub fn report_start(
         &self,
@@ -43,18 +58,16 @@ impl EmbyClient {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn report_progress_ws(
-        &self,
-        item_id: &ItemId,
-        media_source_id: &MediaSourceId,
-        position_ticks: i64,
-        runtime_ticks: i64,
-        is_paused: bool,
-        session_id: &EmbySessionId,
-        event_name: &str,
-        ws_tx: &crate::ws::WsSender,
-    ) {
+    pub fn report_progress_ws(&self, report: &ProgressReport, ws_tx: &crate::ws::WsSender) {
+        let ProgressReport {
+            item_id,
+            media_source_id,
+            position_ticks,
+            runtime_ticks,
+            is_paused,
+            session_id,
+            event_name,
+        } = report;
         let data = serde_json::json!({
             "UserId": self.user_id,
             "ItemId": item_id.as_str(),
@@ -78,27 +91,20 @@ impl EmbyClient {
         log::debug!(target: "api", "outbound: ws Progress pos={pos_s}s/{run_s}s paused={is_paused} event={event_name}");
         if ws_tx.send_text(msg).is_err() {
             log::warn!(target: "api", "ws channel disconnected, falling back to HTTP");
-            self.report_progress_http(
-                item_id,
-                media_source_id,
-                position_ticks,
-                is_paused,
-                session_id,
-                event_name,
-            );
+            self.report_progress_http(report);
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn report_progress_http(
-        &self,
-        item_id: &ItemId,
-        media_source_id: &MediaSourceId,
-        position_ticks: i64,
-        is_paused: bool,
-        session_id: &EmbySessionId,
-        event_name: &str,
-    ) {
+    pub fn report_progress_http(&self, report: &ProgressReport) {
+        let ProgressReport {
+            item_id,
+            media_source_id,
+            position_ticks,
+            is_paused,
+            session_id,
+            event_name,
+            ..
+        } = report;
         let body = serde_json::json!({
             "UserId": self.user_id,
             "ItemId": item_id.as_str(),

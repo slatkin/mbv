@@ -9,6 +9,7 @@ mod client_library;
 mod client_playlists;
 mod client_reporting;
 pub use client_playlists::*;
+pub use client_reporting::ProgressReport;
 mod client_sessions;
 
 #[cfg(test)]

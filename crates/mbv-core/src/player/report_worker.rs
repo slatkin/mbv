@@ -228,15 +228,22 @@ impl SessionReporter {
             let s = self.status.lock().unwrap_or_else(|e| e.into_inner());
             (s.position_ticks, s.runtime_ticks, s.paused)
         };
+        let report = crate::api::ProgressReport {
+            item_id: id,
+            media_source_id: msid,
+            position_ticks: pos,
+            runtime_ticks: runtime,
+            is_paused: paused,
+            session_id: sid,
+            event_name: event_name.to_string(),
+        };
         if let Some(ref tx) = self.ws_tx {
             if tx.is_connected() {
-                self.client
-                    .report_progress_ws(&id, &msid, pos, runtime, paused, &sid, event_name, tx);
+                self.client.report_progress_ws(&report, tx);
                 return;
             }
         }
-        self.client
-            .report_progress_http(&id, &msid, pos, paused, &sid, event_name);
+        self.client.report_progress_http(&report);
     }
 
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
