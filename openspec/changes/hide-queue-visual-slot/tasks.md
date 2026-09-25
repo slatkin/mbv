@@ -23,7 +23,7 @@
 
 ## 2. Collapse and paint
 
-- [ ] 2.1 Add one `App` predicate, "visual slot shown" = not `Idle` and not `visual_slot_hidden`.
+- [x] 2.1 Add one `App` predicate, "visual slot shown" = not `Idle` and not `visual_slot_hidden`.
   Use it in `Model::sync_queue_card_geometry` (publish `CardGeometry::default()` when not shown)
   and at the slot paint in `Model::render_queue_playback_panel` (skip
   `render_queue_playback_slot`; keep the transport). Leave `last_card_*` untouched. Verify with
@@ -31,7 +31,7 @@
   - The published card geometry is zero.
   - The Queue placement begins directly below the header + transport + separator rows.
   - Showing the slot again restores the previous card geometry.
-- [ ] 2.2 In `queue_playback_transport_area` (`src/app/render/arrangements/chrome.rs`) apply
+- [x] 2.2 In `queue_playback_transport_area` (`src/app/render/arrangements/chrome.rs`) apply
   `SLOT_TRANSPORT_GAP` only when `card_width > 0`. Verify with a unit test: at the wide
   breakpoint with `card_width = 0` the transport's `x` equals the slot region's `x` and its width
   equals the region width. The existing arrangement tests must still pass.
