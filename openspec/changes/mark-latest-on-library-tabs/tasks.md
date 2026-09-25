@@ -7,7 +7,7 @@
 
 ## 2. Tab bar projection and paint
 
-- [ ] 2.1 Add `markers: &'a [bool]` to `TabBarModel` (`src/app/render/components/chrome_tabs.rs`). In `render_tab_bar`, for a marked tab paint `•` in `palette::ACCENT_ACTIVE` in place of the first trailing padding space (selected: `"▐ {n}•  "` → keep the total width identical to the unmarked form; unselected: `"  {n}• "`). An empty or short slice means unmarked. Do not touch `tab_title_widths`/`visible_tab_range`. Verify: `cargo check -p mbv`.
+- [ ] 2.1 Add `markers: &'a [bool]` to `TabBarModel` (`src/app/render/components/chrome_tabs.rs`). In `render_tab_bar`, for a marked tab paint `•` in `palette::ACCENT_ACTIVE` in place of the first trailing padding space (selected `"▐ {n}  "` → `"▐ {n}• "`; unselected `"  {n}  "` → `"  {n}• "`; total width unchanged). An empty or short slice means unmarked. Do not touch `tab_title_widths`/`visible_tab_range`. Verify: `cargo check -p mbv`.
 - [ ] 2.2 Add `markers: Vec<bool>` to `TabPanel` (`src/app/components/tab_panel.rs`), taken by `set_content` and passed into `TabBarModel`. Update `set_content` callers and the existing tab_panel tests' helper. Verify: the existing `tab_panel.rs` tests pass.
 - [ ] 2.3 In `Model::sync_tab_panel` (`src/app/shell/chrome_panels.rs`), build `markers` in the same order as the titles (design D2): Home `false`, each `app.libs` entry `destination_latest_marker(Emby(lib.library.id))`, each `app.audiobookshelf_libraries` entry `destination_latest_marker(Audiobookshelf(lib.id))`, Feeds (when subscribed) `destination_latest_marker(Feeds)`. Verify: `cargo check -p mbv`.
 
