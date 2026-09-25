@@ -155,17 +155,33 @@ fn clear_emby_setup_at(path: &std::path::Path) -> Result<(), String> {
         .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))
 }
 
-pub(super) fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> Result<(), String> {
-    if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
-        return Err("Emby setup requires a server URL and user ID".to_string());
-    }
-    let mut doc: toml::Value = match std::fs::read_to_string(path) {
+fn load_emby_setup_doc(path: &std::path::Path) -> Result<toml::Value, String> {
+    Ok(match std::fs::read_to_string(path) {
         Ok(text) => toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             toml::Value::Table(toml::map::Map::new())
         }
         Err(e) => return Err(format!("read {}: {e}", path.display())),
-    };
+    })
+}
+
+fn write_emby_setup_doc(doc: &toml::Value, path: &std::path::Path) -> Result<(), String> {
+    let text = toml::to_string(doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create directory {}: {e}", parent.display()))?;
+    }
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, path)
+        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+}
+
+pub(super) fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> Result<(), String> {
+    if setup.server_url.trim().is_empty() || setup.user_id.trim().is_empty() {
+        return Err("Emby setup requires a server URL and user ID".to_string());
+    }
+    let mut doc: toml::Value = load_emby_setup_doc(path)?;
     let table = doc
         .as_table_mut()
         .ok_or_else(|| format!("update {}: root is not a table", path.display()))?;
@@ -189,15 +205,7 @@ pub(super) fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> R
     for key in ["username", "password", "api_key"] {
         server.remove(key);
     }
-    let text = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("create directory {}: {e}", parent.display()))?;
-    }
-    let tmp = path.with_extension("toml.tmp");
-    std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, path)
-        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+    write_emby_setup_doc(&doc, path)
 }
 
 /// Commit the two persisted halves of an Emby setup as one practical
