@@ -276,117 +276,15 @@ fn run_worker(
         })
         .state_changed({
             let mainloop = mainloop.clone();
-            move |_, data, _, new| match new {
-                pw::stream::StreamState::Streaming => {
-                    data.streaming = true;
-                    if data.format.format() == AudioFormat::F32LE
-                        && data.format.channels() == 2
-                        && data.format.rate() != 0
-                    {
-                        if let Some(startup_tx) = data.startup_tx.take() {
-                            let _ = startup_tx.send(Startup::Ready);
-                        }
-                    }
-                }
-                pw::stream::StreamState::Error(error) => {
-                    let message = format!("PipeWire capture stream failed: {error}");
-                    if let Some(startup_tx) = data.startup_tx.take() {
-                        let _ = startup_tx.send(Startup::Failed(message));
-                    } else {
-                        let _ = data.failure_tx.send(message);
-                    }
-                    if let Ok(mut buffer) = data.buffer.try_lock() {
-                        buffer.clear();
-                    }
-                    mainloop.quit();
-                }
-                _ => {}
-            }
+            move |_, data, _, new| handle_stream_state(&mainloop, data, new)
         })
         .param_changed({
             let mainloop = mainloop.clone();
-            move |_, data, id, param| {
-                let Some(param) = param else {
-                    return;
-                };
-                if id != pw::spa::param::ParamType::Format.as_raw() {
-                    return;
-                }
-                let result = (|| {
-                    let (media_type, media_subtype) =
-                        pw::spa::param::format_utils::parse_format(param).map_err(|error| {
-                            format!("failed to parse PipeWire media format: {error}")
-                        })?;
-                    if media_type != MediaType::Audio || media_subtype != MediaSubtype::Raw {
-                        return Err("PipeWire negotiated a non-raw-audio format".to_string());
-                    }
-                    let mut format = AudioInfoRaw::new();
-                    format.parse(param).map_err(|error| {
-                        format!("failed to parse PipeWire audio format: {error}")
-                    })?;
-                    if format.format() != AudioFormat::F32LE
-                        || format.channels() != 2
-                        || format.rate() == 0
-                    {
-                        return Err(format!("unsupported PipeWire capture format: {format:?}"));
-                    }
-                    let mut buffer = data
-                        .buffer
-                        .lock()
-                        .unwrap_or_else(|poisoned| poisoned.into_inner());
-                    *buffer = StereoSampleBuffer::with_sample_rate(format.rate());
-                    data.format = format;
-                    if data.streaming {
-                        if let Some(startup_tx) = data.startup_tx.take() {
-                            let _ = startup_tx.send(Startup::Ready);
-                        }
-                    }
-                    Ok(())
-                })();
-                if let Err(message) = result {
-                    if let Some(startup_tx) = data.startup_tx.take() {
-                        let _ = startup_tx.send(Startup::Failed(message));
-                    } else {
-                        let _ = data.failure_tx.send(message);
-                    }
-                    mainloop.quit();
-                }
-            }
+            move |_, data, id, param| handle_stream_param(&mainloop, data, id, param)
         })
         .process({
             let mainloop = mainloop.clone();
-            move |stream, data| {
-                let Some(mut buffer) = stream.dequeue_buffer() else {
-                    return;
-                };
-                let Some(raw) = buffer.datas_mut().first_mut() else {
-                    return;
-                };
-                let offset = raw.chunk().offset() as usize;
-                let size = raw.chunk().size() as usize;
-                let stride = raw.chunk().stride();
-                let corrupted = raw
-                    .chunk()
-                    .flags()
-                    .contains(pw::spa::buffer::ChunkFlags::CORRUPTED);
-                let Some(bytes) = raw.data() else {
-                    return;
-                };
-                match capture_frame_bytes(&data.format, bytes, offset, size, stride, corrupted) {
-                    Ok(frame) => {
-                        if let Ok(mut sample_buffer) = data.buffer.try_lock() {
-                            sample_buffer.push_pcm_bytes(frame, data.format.channels());
-                        }
-                    }
-                    Err(error) => {
-                        if let Ok(mut sample_buffer) = data.buffer.try_lock() {
-                            sample_buffer.clear();
-                        }
-                        let _ = data.failure_tx.send(error.into());
-                        mainloop.quit();
-                    }
-                }
-            }
+            move |stream, data| handle_stream_process(&mainloop, stream, data)
         })
         .register();
 
@@ -400,6 +298,146 @@ fn run_worker(
         }
     };
 
+    if !connect_capture_stream(&stream, &startup_error_tx) {
+        return;
+    }
+
+    mainloop.run();
+    let _ = stream.disconnect();
+    drop(listener);
+}
+
+/// The capture stream's state machine (extracted from `run_worker`):
+/// advertise readiness on the first stereo-F32LE streaming signal, and tear
+/// the loop down on errors.
+fn handle_stream_state(
+    mainloop: &pw::main_loop::MainLoopRc,
+    data: &mut WorkerData,
+    new: pw::stream::StreamState,
+) {
+    match new {
+        pw::stream::StreamState::Streaming => {
+            data.streaming = true;
+            if data.format.format() == AudioFormat::F32LE
+                && data.format.channels() == 2
+                && data.format.rate() != 0
+            {
+                if let Some(startup_tx) = data.startup_tx.take() {
+                    let _ = startup_tx.send(Startup::Ready);
+                }
+            }
+        }
+        pw::stream::StreamState::Error(error) => {
+            let message = format!("PipeWire capture stream failed: {error}");
+            if let Some(startup_tx) = data.startup_tx.take() {
+                let _ = startup_tx.send(Startup::Failed(message));
+            } else {
+                let _ = data.failure_tx.send(message);
+            }
+            if let Ok(mut buffer) = data.buffer.try_lock() {
+                buffer.clear();
+            }
+            mainloop.quit();
+        }
+        _ => {}
+    }
+}
+
+/// The capture stream's format negotiation (extracted from `run_worker`):
+/// accept stereo-F32LE only, then size the sample buffer to its rate.
+fn handle_stream_param(
+    mainloop: &pw::main_loop::MainLoopRc,
+    data: &mut WorkerData,
+    id: u32,
+    param: Option<&Pod>,
+) {
+    let Some(param) = param else {
+        return;
+    };
+    if id != pw::spa::param::ParamType::Format.as_raw() {
+        return;
+    }
+    let result = (|| {
+        let (media_type, media_subtype) = pw::spa::param::format_utils::parse_format(param)
+            .map_err(|error| format!("failed to parse PipeWire media format: {error}"))?;
+        if media_type != MediaType::Audio || media_subtype != MediaSubtype::Raw {
+            return Err("PipeWire negotiated a non-raw-audio format".to_string());
+        }
+        let mut format = AudioInfoRaw::new();
+        format
+            .parse(param)
+            .map_err(|error| format!("failed to parse PipeWire audio format: {error}"))?;
+        if format.format() != AudioFormat::F32LE || format.channels() != 2 || format.rate() == 0 {
+            return Err(format!("unsupported PipeWire capture format: {format:?}"));
+        }
+        let mut buffer = data
+            .buffer
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        *buffer = StereoSampleBuffer::with_sample_rate(format.rate());
+        data.format = format;
+        if data.streaming {
+            if let Some(startup_tx) = data.startup_tx.take() {
+                let _ = startup_tx.send(Startup::Ready);
+            }
+        }
+        Ok(())
+    })();
+    if let Err(message) = result {
+        if let Some(startup_tx) = data.startup_tx.take() {
+            let _ = startup_tx.send(Startup::Failed(message));
+        } else {
+            let _ = data.failure_tx.send(message);
+        }
+        mainloop.quit();
+    }
+}
+
+/// One capture callback (extracted from `run_worker`): push the frame's PCM
+/// bytes into the sample window, or clear it and tear the loop down.
+fn handle_stream_process(
+    mainloop: &pw::main_loop::MainLoopRc,
+    stream: &pw::stream::Stream,
+    data: &mut WorkerData,
+) {
+    let Some(mut buffer) = stream.dequeue_buffer() else {
+        return;
+    };
+    let Some(raw) = buffer.datas_mut().first_mut() else {
+        return;
+    };
+    let offset = raw.chunk().offset() as usize;
+    let size = raw.chunk().size() as usize;
+    let stride = raw.chunk().stride();
+    let corrupted = raw
+        .chunk()
+        .flags()
+        .contains(pw::spa::buffer::ChunkFlags::CORRUPTED);
+    let Some(bytes) = raw.data() else {
+        return;
+    };
+    match capture_frame_bytes(&data.format, bytes, offset, size, stride, corrupted) {
+        Ok(frame) => {
+            if let Ok(mut sample_buffer) = data.buffer.try_lock() {
+                sample_buffer.push_pcm_bytes(frame, data.format.channels());
+            }
+        }
+        Err(error) => {
+            if let Ok(mut sample_buffer) = data.buffer.try_lock() {
+                sample_buffer.clear();
+            }
+            let _ = data.failure_tx.send(error.into());
+            mainloop.quit();
+        }
+    }
+}
+
+/// Build the F32LE-stereo format pod and connect the capture stream
+/// (extracted from `run_worker`). Reports each failure on `startup_tx`.
+fn connect_capture_stream(
+    stream: &pw::stream::StreamBox<'_>,
+    startup_tx: &Sender<Startup>,
+) -> bool {
     let mut audio_info = AudioInfoRaw::new();
     audio_info.set_format(AudioFormat::F32LE);
     audio_info.set_channels(2);
@@ -414,17 +452,17 @@ fn run_worker(
     ) {
         Ok((values, _)) => values.into_inner(),
         Err(error) => {
-            let _ = startup_error_tx.send(Startup::Failed(format!(
+            let _ = startup_tx.send(Startup::Failed(format!(
                 "failed to serialize PipeWire format: {error}"
             )));
-            return;
+            return false;
         }
     };
     let Some(pod) = Pod::from_bytes(&values) else {
-        let _ = startup_error_tx.send(Startup::Failed(
+        let _ = startup_tx.send(Startup::Failed(
             "failed to create PipeWire format pod".into(),
         ));
-        return;
+        return false;
     };
     let mut params = [pod];
     if let Err(error) = stream.connect(
@@ -435,15 +473,12 @@ fn run_worker(
             | pw::stream::StreamFlags::RT_PROCESS,
         &mut params,
     ) {
-        let _ = startup_error_tx.send(Startup::Failed(format!(
+        let _ = startup_tx.send(Startup::Failed(format!(
             "failed to connect PipeWire capture stream: {error}"
         )));
-        return;
+        return false;
     }
-
-    mainloop.run();
-    let _ = stream.disconnect();
-    drop(listener);
+    true
 }
 
 pub(crate) fn join_worker(handle: JoinHandle<()>) {
