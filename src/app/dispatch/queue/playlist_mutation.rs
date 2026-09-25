@@ -7,6 +7,14 @@ use crate::app::state::queue_owner::QueueOrigin;
 
 impl App {
     pub(super) fn start_playlist_mutation(&mut self, playlist_id: &str) {
+        if self.discard_stale_playlist_mutation(playlist_id) {
+            return;
+        }
+        self.prepare_full_playlist_update(playlist_id);
+        self.dispatch_playlist_mutation(playlist_id);
+    }
+
+    fn discard_stale_playlist_mutation(&mut self, playlist_id: &str) -> bool {
         let stale = self
             .playlist_mutations
             .get(playlist_id)
@@ -40,8 +48,11 @@ impl App {
             {
                 self.finish_playlist_mutation(playlist_id, mutation_id);
             }
-            return;
         }
+        stale
+    }
+
+    fn prepare_full_playlist_update(&mut self, playlist_id: &str) {
         // Full updates (Save/Replace) recreate server playlist-entry IDs.
         // Consume eligibility derived from the old IDs dies at this boundary,
         // after earlier same-playlist mutations have completed, not when the
@@ -73,6 +84,9 @@ impl App {
                 self.save_queue_state();
             }
         }
+    }
+
+    fn dispatch_playlist_mutation(&mut self, playlist_id: &str) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
