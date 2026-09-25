@@ -164,175 +164,183 @@ fn decode_progress(payload: &Value) -> Option<AudiobookshelfProgress> {
 /// [`SocketEvent`]s to `event_tx`. Sending on the returned sender signals
 /// shutdown.
 ///
-/// The thread handles:
-/// - Engine.IO ping/pong heartbeat: in protocol v4 the *server* pings every
-///   `pingInterval` and the client replies pong; the thread also closes a
-///   connection that has seen no data for `pingInterval + pingTimeout`.
-/// - Socket.IO CONNECT (`40`) on initial connection and every reconnect.
-/// - Auth emit (`42["auth", "<token>"]` — the server reads the token as the
-///   first event argument) after each connect-ack.
-/// - Reconnect with exponential backoff capped at 60s.
+/// The thread handles Engine.IO ping/pong heartbeats, Socket.IO authentication,
+/// and reconnects with exponential backoff capped at 60s.
+#[must_use]
 pub fn start(
     ws_url: String,
     token: String,
     event_tx: mpsc::Sender<SocketEvent>,
 ) -> mpsc::Sender<()> {
     let (shutdown_tx, shutdown_rx) = mpsc::channel::<()>();
-
-    thread::spawn(move || {
-        // Default heartbeat params from Engine.IO spec — overwritten by `open`
-        // packet once received.
-        let mut ping_interval = Duration::from_millis(25_000);
-        let mut ping_timeout = Duration::from_millis(20_000);
-
-        let mut backoff_secs: u64 = 1;
-        let mut shutdown_requested = false;
-
-        'reconnect: loop {
-            log::info!(target: "audiobookshelf_socket", "connecting…");
-
-            match tungstenite::connect(&ws_url) {
-                Ok((mut socket, _)) => {
-                    backoff_secs = 1;
-
-                    // Short read timeout so we can drain outbound messages
-                    // between reads.
-                    let timeout = Some(Duration::from_millis(100));
-                    match socket.get_ref() {
-                        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
-                            let _ = tcp.set_read_timeout(timeout);
-                        }
-                        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => {
-                            let _ = tls.get_ref().set_read_timeout(timeout);
-                        }
-                        _ => {}
-                    }
-
-                    // Socket.IO v4: open the default namespace. A send
-                    // failure at the WebSocket level will surface on the
-                    // next read/send inside 'conn and trigger reconnect.
-                    let _ = socket.send(Message::Text("40".into()));
-
-                    log::info!(target: "audiobookshelf_socket", "connected");
-
-                    let mut last_activity = Instant::now();
-
-                    'conn: loop {
-                        if shutdown_rx.try_recv().is_ok() {
-                            shutdown_requested = true;
-                            break 'conn;
-                        }
-
-                        // Engine.IO v4 heartbeat: the SERVER pings every
-                        // `ping_interval` and we reply pong in the read match
-                        // below; a client-sent ping is a protocol error that
-                        // makes the server close the connection
-                        // ("invalid heartbeat direction").
-
-                        // Detect stale connection: no data for longer than
-                        // ping_interval + ping_timeout.
-                        if last_activity.elapsed() >= ping_interval + ping_timeout {
-                            log::warn!(
-                                target: "audiobookshelf_socket",
-                                "no data for {:.0}s, reconnecting",
-                                last_activity.elapsed().as_secs_f64()
-                            );
-                            break 'conn;
-                        }
-
-                        match socket.read() {
-                            Ok(Message::Text(txt)) => {
-                                last_activity = Instant::now();
-
-                                // Engine.IO ping → respond with pong.
-                                if txt == "2" {
-                                    let _ = socket.send(Message::Text("3".into()));
-                                    continue;
-                                }
-                                // Engine.IO pong — activity is already updated above.
-                                if txt == "3" {
-                                    continue;
-                                }
-
-                                if let Some(ev) = parse(&txt) {
-                                    match ev {
-                                        SocketEvent::Open {
-                                            ping_interval: pi,
-                                            ping_timeout: pt,
-                                        } => {
-                                            ping_interval = pi;
-                                            ping_timeout = pt;
-                                        }
-                                        SocketEvent::ConnectAck => {
-                                            // Authenticate immediately after the
-                                            // Socket.IO connect acknowledgement.
-                                            // The server reads the token as the
-                                            // first event argument — a bare
-                                            // string, not an object.
-                                            let auth_payload = serde_json::json!(["auth", token]);
-                                            let _ = socket.send(Message::Text(
-                                                format!("42{auth_payload}").into(),
-                                            ));
-                                        }
-                                        other => {
-                                            if event_tx.send(other).is_err() {
-                                                // App dropped event receiver → stop.
-                                                return;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Ok(Message::Ping(data)) => {
-                                last_activity = Instant::now();
-                                let _ = socket.send(Message::Pong(data));
-                            }
-                            Ok(Message::Pong(_)) => {
-                                last_activity = Instant::now();
-                            }
-                            Ok(Message::Close(_)) => {
-                                log::info!(
-                                    target: "audiobookshelf_socket",
-                                    "closed by server, reconnecting"
-                                );
-                                break 'conn;
-                            }
-                            Err(tungstenite::Error::Io(e))
-                                if e.kind() == ErrorKind::WouldBlock
-                                    || e.kind() == ErrorKind::TimedOut => {}
-                            Err(e) => {
-                                log::warn!(
-                                    target: "audiobookshelf_socket",
-                                    "error: {e}, reconnecting"
-                                );
-                                break 'conn;
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                Err(e) => {
-                    log::warn!(
-                        target: "audiobookshelf_socket",
-                        "connect failed: {e}"
-                    );
-                }
-            }
-
-            if shutdown_requested {
-                log::info!(
-                    target: "audiobookshelf_socket",
-                    "shutdown requested, exiting reconnect loop"
-                );
-                break 'reconnect;
-            }
-
-            // Exponential backoff with jitter, max 60s.
-            crate::reconnect_backoff_sleep(&mut backoff_secs, "audiobookshelf_socket");
-        }
-    });
-
+    thread::spawn(move || run_socket_thread(&ws_url, &token, &event_tx, &shutdown_rx));
     shutdown_tx
+}
+
+fn run_socket_thread(
+    ws_url: &str,
+    token: &str,
+    event_tx: &mpsc::Sender<SocketEvent>,
+    shutdown_rx: &mpsc::Receiver<()>,
+) {
+    // Default heartbeat params from Engine.IO spec — overwritten by `open`
+    // packet once received.
+    let mut ping_interval = Duration::from_secs(25);
+    let mut ping_timeout = Duration::from_secs(20);
+    let mut backoff_secs: u64 = 1;
+    let mut shutdown_requested = false;
+
+    'reconnect: loop {
+        log::info!(target: "audiobookshelf_socket", "connecting…");
+        match tungstenite::connect(ws_url) {
+            Ok((socket, _)) => {
+                backoff_secs = 1;
+                shutdown_requested = match run_connected(
+                    socket,
+                    token,
+                    event_tx,
+                    shutdown_rx,
+                    &mut ping_interval,
+                    &mut ping_timeout,
+                ) {
+                    Ok(shutdown_requested) => shutdown_requested,
+                    Err(()) => return,
+                };
+            }
+            Err(e) => log::warn!(target: "audiobookshelf_socket", "connect failed: {e}"),
+        }
+
+        if shutdown_requested {
+            log::info!(
+                target: "audiobookshelf_socket",
+                "shutdown requested, exiting reconnect loop"
+            );
+            break 'reconnect;
+        }
+
+        // Exponential backoff with jitter, max 60s.
+        crate::reconnect_backoff_sleep(&mut backoff_secs, "audiobookshelf_socket");
+    }
+}
+
+fn run_connected(
+    mut socket: tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>,
+    token: &str,
+    event_tx: &mpsc::Sender<SocketEvent>,
+    shutdown_rx: &mpsc::Receiver<()>,
+    ping_interval: &mut Duration,
+    ping_timeout: &mut Duration,
+) -> Result<bool, ()> {
+    // Short read timeout so we can drain outbound messages between reads.
+    let timeout = Some(Duration::from_millis(100));
+    match socket.get_ref() {
+        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
+            let _ = tcp.set_read_timeout(timeout);
+        }
+        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => {
+            let _ = tls.get_ref().set_read_timeout(timeout);
+        }
+        _ => {}
+    }
+
+    // Socket.IO v4: open the default namespace. A send failure at the WebSocket
+    // level will surface on the next read/send inside 'conn and trigger reconnect.
+    let _ = socket.send(Message::Text("40".into()));
+    log::info!(target: "audiobookshelf_socket", "connected");
+    let mut last_activity = Instant::now();
+
+    'conn: loop {
+        if shutdown_rx.try_recv().is_ok() {
+            return Ok(true);
+        }
+
+        // Engine.IO v4 heartbeat: the SERVER pings every `ping_interval` and
+        // we reply pong below; a client-sent ping is a protocol error.
+        if last_activity.elapsed() >= *ping_interval + *ping_timeout {
+            log::warn!(
+                target: "audiobookshelf_socket",
+                "no data for {:.0}s, reconnecting",
+                last_activity.elapsed().as_secs_f64()
+            );
+            break 'conn;
+        }
+
+        match socket.read() {
+            Ok(Message::Text(txt)) => {
+                last_activity = Instant::now();
+                if !handle_text(
+                    &mut socket,
+                    &txt,
+                    token,
+                    event_tx,
+                    ping_interval,
+                    ping_timeout,
+                ) {
+                    return Err(());
+                }
+            }
+            Ok(Message::Ping(data)) => {
+                last_activity = Instant::now();
+                let _ = socket.send(Message::Pong(data));
+            }
+            Ok(Message::Pong(_)) => last_activity = Instant::now(),
+            Ok(Message::Close(_)) => {
+                log::info!(target: "audiobookshelf_socket", "closed by server, reconnecting");
+                break 'conn;
+            }
+            Err(tungstenite::Error::Io(e))
+                if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut => {}
+            Err(e) => {
+                log::warn!(target: "audiobookshelf_socket", "error: {e}, reconnecting");
+                break 'conn;
+            }
+            _ => {}
+        }
+    }
+    Ok(false)
+}
+
+fn handle_text(
+    socket: &mut tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>,
+    txt: &str,
+    token: &str,
+    event_tx: &mpsc::Sender<SocketEvent>,
+    ping_interval: &mut Duration,
+    ping_timeout: &mut Duration,
+) -> bool {
+    // Engine.IO ping/pong are handled at the connection layer.
+    if txt == "2" {
+        let _ = socket.send(Message::Text("3".into()));
+        return true;
+    }
+    if txt == "3" {
+        return true;
+    }
+
+    if let Some(ev) = parse(txt) {
+        match ev {
+            SocketEvent::Open {
+                ping_interval: pi,
+                ping_timeout: pt,
+            } => {
+                *ping_interval = pi;
+                *ping_timeout = pt;
+            }
+            SocketEvent::ConnectAck => {
+                // Server reads the token as the first event argument — a bare
+                // string, not an object.
+                let auth_payload = serde_json::json!(["auth", token]);
+                let _ = socket.send(Message::Text(format!("42{auth_payload}").into()));
+            }
+            other => {
+                if event_tx.send(other).is_err() {
+                    // App dropped event receiver → stop the background thread.
+                    return false;
+                }
+            }
+        }
+    }
+    true
 }
 
 // ---------------------------------------------------------------------------
