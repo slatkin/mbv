@@ -145,77 +145,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => self.pick_selector(index),
-            LibrarySlotEvent::List(input) => {
-                if self.inline_search.is_active() {
-                    return self.handle_search_pointer(input);
-                }
-                // Row-local claim gate (mirrors the owner's list-point claim):
-                // only a point that resolves to a painted selectable row claims the
-                // click; empty list space claims nothing.
-                let target = match input {
-                    MediaListSurfaceInput::Click(at)
-                    | MediaListSurfaceInput::ToggleClick(at)
-                    | MediaListSurfaceInput::RangeClick(at)
-                    | MediaListSurfaceInput::DoubleClick(at)
-                    | MediaListSurfaceInput::ContextClick(at) => {
-                        self.carrier.resolve_current_point(at).cloned()
-                    }
-                    _ => None,
-                };
-                match input {
-                    MediaListSurfaceInput::Wheel { .. } => {
-                        // The resolved wheel echo drives the shell's
-                        // `video_cursor`/resting-cursor write and pagination
-                        // through the same typed arm as keyboard movement
-                        // (`shell/emby_library.rs::handle_emby_library_request`).
-                        self.carrier
-                            .delegate_operation(MediaListOperation::Move(match input {
-                                MediaListSurfaceInput::Wheel { delta, .. } => delta,
-                                _ => 0,
-                            }));
-                        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                            index: self.cursor(),
-                        })))
-                    }
-                    MediaListSurfaceInput::Click(_at)
-                    | MediaListSurfaceInput::ToggleClick(_at)
-                    | MediaListSurfaceInput::RangeClick(_at) => {
-                        let target = target?;
-                        self.carrier
-                            .delegate_operation(input.into_operation(Some(target.clone()))?);
-                        let _ = ();
-                        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRowClick {
-                            target: Some(target),
-                        })))
-                    }
-                    MediaListSurfaceInput::DoubleClick(_at) => {
-                        let target = target?;
-                        self.carrier
-                            .delegate_operation(MediaListOperation::Activate(target.clone()));
-                        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRowActivate {
-                            target: Some(target),
-                        })))
-                    }
-                    MediaListSurfaceInput::ContextClick(at) => {
-                        let target = target?;
-                        let outcome = self
-                            .carrier
-                            .delegate_operation(MediaListOperation::Context(target.clone()));
-                        let targets = match outcome.external_intent {
-                            Some(RowIntent::Context(target)) => vec![target],
-                            Some(RowIntent::ContextSelection(targets)) => targets,
-                            _ => vec![target],
-                        };
-                        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                            crate::app::state::types::context_menu::ContextMenuTargets::Browser(
-                                targets,
-                            ),
-                            Some((at.x, at.y)),
-                        ))))
-                    }
-                    _ => None,
-                }
-            }
+            LibrarySlotEvent::List(input) => self.on_list_event(input),
             // The Browser owner has no Workspace and no hero-pane input of
             // its own.
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
@@ -383,5 +313,85 @@ impl LibraryContentOwner for EmbyLibraryContent {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+impl EmbyLibraryContent {
+    fn on_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        if self.inline_search.is_active() {
+            return self.handle_search_pointer(input);
+        }
+        // Row-local claim gate (mirrors the owner's list-point claim):
+        // only a point that resolves to a painted selectable row claims the
+        // click; empty list space claims nothing.
+        let target = match input {
+            MediaListSurfaceInput::Click(at)
+            | MediaListSurfaceInput::ToggleClick(at)
+            | MediaListSurfaceInput::RangeClick(at)
+            | MediaListSurfaceInput::DoubleClick(at)
+            | MediaListSurfaceInput::ContextClick(at) => {
+                self.carrier.resolve_current_point(at).cloned()
+            }
+            _ => None,
+        };
+        self.on_list_point_event(input, target)
+    }
+
+    fn on_list_point_event(
+        &mut self,
+        input: MediaListSurfaceInput,
+        target: Option<String>,
+    ) -> Option<Msg> {
+        match input {
+            MediaListSurfaceInput::Wheel { .. } => {
+                // The resolved wheel echo drives the shell's
+                // `video_cursor`/resting-cursor write and pagination
+                // through the same typed arm as keyboard movement
+                // (`shell/emby_library.rs::handle_emby_library_request`).
+                self.carrier
+                    .delegate_operation(MediaListOperation::Move(match input {
+                        MediaListSurfaceInput::Wheel { delta, .. } => delta,
+                        _ => 0,
+                    }));
+                Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
+                    index: self.cursor(),
+                })))
+            }
+            MediaListSurfaceInput::Click(_at)
+            | MediaListSurfaceInput::ToggleClick(_at)
+            | MediaListSurfaceInput::RangeClick(_at) => {
+                let target = target?;
+                self.carrier
+                    .delegate_operation(input.into_operation(Some(target.clone()))?);
+                let _ = ();
+                Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRowClick {
+                    target: Some(target),
+                })))
+            }
+            MediaListSurfaceInput::DoubleClick(_at) => {
+                let target = target?;
+                self.carrier
+                    .delegate_operation(MediaListOperation::Activate(target.clone()));
+                Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRowActivate {
+                    target: Some(target),
+                })))
+            }
+            MediaListSurfaceInput::ContextClick(at) => {
+                let target = target?;
+                let outcome = self
+                    .carrier
+                    .delegate_operation(MediaListOperation::Context(target.clone()));
+                let targets = match outcome.external_intent {
+                    Some(RowIntent::Context(target)) => vec![target],
+                    Some(RowIntent::ContextSelection(targets)) => targets,
+                    _ => vec![target],
+                };
+                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+                    crate::app::state::types::context_menu::ContextMenuTargets::Browser(targets),
+                    Some((at.x, at.y)),
+                ))))
+            }
+            _ => None,
+        }
     }
 }
