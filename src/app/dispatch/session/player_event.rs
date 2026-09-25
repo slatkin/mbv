@@ -59,19 +59,54 @@ impl App {
     /// Handle a PlayerEvent received from the player thread.
     /// Returns true if the caller's event loop should `continue` (skip render for this tick).
     pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
+        let ev = match self.handle_player_event_playback(ev) {
+            Ok(should_continue) => return should_continue,
+            Err(ev) => ev,
+        };
+        let ev = match self.handle_player_event_notices(ev) {
+            Ok(should_continue) => return should_continue,
+            Err(ev) => ev,
+        };
+        match self.handle_player_event_queue_state(ev) {
+            Ok(should_continue) => should_continue,
+            Err(ev) => self.handle_player_event_progress(ev),
+        }
+    }
+
+    fn handle_player_event_playback(&mut self, ev: PlayerEvent) -> Result<bool, PlayerEvent> {
         match ev {
-            PlayerEvent::Stopped { .. } => return self.handle_stopped_event(ev),
-            PlayerEvent::TrackCompleted { .. } => self.handle_track_completed_event(ev),
-            PlayerEvent::TrackChanged { .. } => self.handle_track_changed_event(ev),
-            PlayerEvent::QueueNextUp { next_idx } => self.handle_queue_next_up(next_idx),
+            PlayerEvent::Stopped { .. } => Ok(self.handle_stopped_event(ev)),
+            PlayerEvent::TrackCompleted { .. } => {
+                self.handle_track_completed_event(ev);
+                Ok(false)
+            }
+            PlayerEvent::TrackChanged { .. } => {
+                self.handle_track_changed_event(ev);
+                Ok(false)
+            }
+            PlayerEvent::QueueNextUp { next_idx } => {
+                self.handle_queue_next_up(next_idx);
+                Ok(false)
+            }
             PlayerEvent::NextUpThreshold { .. } => {
                 // Series episodes now use play_queue; this only fires for movies
                 // (always_play_next=false or non-series content). No action needed.
+                Ok(false)
             }
-            PlayerEvent::NextUpPlay => self.handle_next_up_play(),
+            PlayerEvent::NextUpPlay => {
+                self.handle_next_up_play();
+                Ok(false)
+            }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
-                return self.handle_unified_queue_updated(unified)
+                Ok(self.handle_unified_queue_updated(unified))
             }
+            PlayerEvent::RemoteDisconnected(reason) => Ok(self.handle_remote_disconnected(&reason)),
+            ev => Err(ev),
+        }
+    }
+
+    fn handle_player_event_notices(&mut self, ev: PlayerEvent) -> Result<bool, PlayerEvent> {
+        match ev {
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always
                 // reports the boundary neutrally, regardless of daemon-host
@@ -82,15 +117,18 @@ impl App {
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);
                 }
+                Ok(false)
             }
-            PlayerEvent::IntroEnded => {}
+            PlayerEvent::IntroEnded => Ok(false),
             PlayerEvent::SkipIntroPlay => {
                 self.status.clear();
+                Ok(false)
             }
             PlayerEvent::MpvQuit => {
                 self.next_up_item = None;
                 self.status.clear();
                 self.refresh_after_stop();
+                Ok(false)
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
@@ -102,16 +140,25 @@ impl App {
                     self.bare_owner.clear_unconfirmable_transition();
                 }
                 self.flash(reason, ToastSeverity::Error);
+                Ok(false)
             }
             PlayerEvent::PlaybackIntent(event) => {
                 self.flash(
                     playback_intent_message(&event.outcome).to_string(),
                     ToastSeverity::Neutral,
                 );
+                Ok(false)
             }
             PlayerEvent::PipePlaybackStatus(status) => {
                 self.flash(pipe_playback_message(&status), ToastSeverity::Neutral);
+                Ok(false)
             }
+            ev => Err(ev),
+        }
+    }
+
+    fn handle_player_event_queue_state(&mut self, ev: PlayerEvent) -> Result<bool, PlayerEvent> {
+        match ev {
             PlayerEvent::PausedChanged(paused) => {
                 // Persist Feed position on pause (one write per pause event).
                 if paused {
@@ -119,6 +166,7 @@ impl App {
                         self.persist_feed_slot_position(slot_id);
                     }
                 }
+                Ok(false)
             }
             PlayerEvent::OutputStarted => {
                 // If a seek was pending for a Feed slot, persist the
@@ -126,18 +174,18 @@ impl App {
                 if let Some(slot_id) = self.feed_seek_pending_slot.take() {
                     self.persist_feed_slot_position(slot_id);
                 }
-            }
-            PlayerEvent::RemoteDisconnected(reason) => {
-                return self.handle_remote_disconnected(&reason);
+                Ok(false)
             }
             PlayerEvent::EmbyAuthorityTaken(reason) => {
                 // Authority-change notification: Emby remote has taken authority.
                 // The connection stays open — do NOT call restore_local_mode().
                 // Just flash the status so the user knows commands are temporarily rejected.
                 self.flash(reason, ToastSeverity::Warning);
+                Ok(false)
             }
             PlayerEvent::QueueDesynced(reason) => {
                 self.flash(reason, ToastSeverity::Neutral);
+                Ok(false)
             }
             // The announced-shutdown counterpart to the unannounced-loss
             // modal raised from PlayerEvent::Stopped above (task 7.2): a
@@ -152,18 +200,28 @@ impl App {
                     self.restore_local_mode("Daemon disconnected — returned to local mode");
                     self.refresh_after_stop();
                 }
+                Ok(false)
             }
-            PlayerEvent::UnifiedQueueLoadResult { result, .. } => match result {
-                mbv_core::ctrl::QueueLoadResult::Accepted => {
-                    self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
+            PlayerEvent::UnifiedQueueLoadResult { result, .. } => {
+                match result {
+                    mbv_core::ctrl::QueueLoadResult::Accepted => {
+                        self.flash("Queue load accepted".into(), ToastSeverity::Neutral);
+                    }
+                    mbv_core::ctrl::QueueLoadResult::Rejected { reason } => {
+                        self.flash(
+                            format!("Queue load rejected: {reason}"),
+                            ToastSeverity::Error,
+                        );
+                    }
                 }
-                mbv_core::ctrl::QueueLoadResult::Rejected { reason } => {
-                    self.flash(
-                        format!("Queue load rejected: {reason}"),
-                        ToastSeverity::Error,
-                    );
-                }
-            },
+                Ok(false)
+            }
+            ev => Err(ev),
+        }
+    }
+
+    fn handle_player_event_progress(&mut self, ev: PlayerEvent) -> bool {
+        match ev {
             PlayerEvent::AudiobookshelfProgress(ev) => {
                 // No client-side generation gate: the daemon already drops
                 // stale-generation updates before emitting, and the daemon's
@@ -186,6 +244,7 @@ impl App {
                     ev.is_finished,
                 );
             }
+            _ => unreachable!("all remaining PlayerEvent variants are handled above"),
         }
         false
     }
