@@ -160,96 +160,111 @@ impl TvContent {
     /// its row through its own carrier, and blank pane space is the
     /// `EpisodesPane` hit the deleted `resolve_hit` fallback produced.
     fn hero_pane_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
-        // The series rail is the only scrollable TV surface in the Wide
-        // pane (legacy `handle_mouse_wide`). Over an open Library Hero
-        // overlay, the Workspace's episode list is the scrollable surface:
-        // a wheel over its rows steps the list like the Wide workspace
-        // wheel does and is claimed. The overlay is a non-Wide surface, so
-        // the actual breakpoint — not the pushed bit alone — gates this
-        // arm: a stale bit in Wide must never claim the Wide pane's wheel.
-        if let MediaListSurfaceInput::Wheel { at, delta } = input {
-            if self.is_wide || !self.hero_overlay_open || !self.episodes.claims_current_point(at) {
-                return None;
-            }
-            self.episodes.delegate_operation(
-                MediaListSurfaceInput::Wheel { at, delta }
-                    .into_operation(None)
-                    .expect("resolved media-list pointer target"),
-            );
-            return Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed));
-        }
-        let at = match input {
+        match input {
+            MediaListSurfaceInput::Wheel { at, delta } => self.hero_pane_wheel(at, delta),
             MediaListSurfaceInput::Click(at)
             | MediaListSurfaceInput::ToggleClick(at)
-            | MediaListSurfaceInput::RangeClick(at)
-            | MediaListSurfaceInput::DoubleClick(at)
-            | MediaListSurfaceInput::ContextClick(at) => at,
-            _ => return None,
-        };
-        let hit = if self.episodes.claims_current_point(at) {
+            | MediaListSurfaceInput::RangeClick(at) => self.hero_pane_select(at, input),
+            MediaListSurfaceInput::DoubleClick(at) => self.hero_pane_double_click(at),
+            MediaListSurfaceInput::ContextClick(at) => self.hero_pane_context_click(at, input),
+            MediaListSurfaceInput::Move(_)
+            | MediaListSurfaceInput::Page(_)
+            | MediaListSurfaceInput::First
+            | MediaListSurfaceInput::Last
+            | MediaListSurfaceInput::Activate
+            | MediaListSurfaceInput::Context => None,
+        }
+    }
+
+    /// The series rail is the only scrollable TV surface in the Wide pane
+    /// (legacy `handle_mouse_wide`). Over an open Library Hero overlay, the
+    /// Workspace's episode list is the scrollable surface: a wheel over its
+    /// rows steps the list like the Wide workspace wheel does and is claimed.
+    /// The overlay is a non-Wide surface, so the actual breakpoint — not the
+    /// pushed bit alone — gates this arm: a stale bit in Wide must never claim
+    /// the Wide pane's wheel.
+    fn hero_pane_wheel(&mut self, at: Position, delta: i64) -> Option<Msg> {
+        if self.is_wide || !self.hero_overlay_open || !self.episodes.claims_current_point(at) {
+            return None;
+        }
+        self.episodes.delegate_operation(
+            MediaListSurfaceInput::Wheel { at, delta }
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    }
+
+    fn hero_pane_hit(&self, at: Position) -> Option<TvHit> {
+        if self.episodes.claims_current_point(at) {
             self.episodes
                 .resolve_current_point(at)
                 .cloned()
-                .map(TvHit::EpisodeRow)?
+                .map(TvHit::EpisodeRow)
         } else {
-            TvHit::EpisodesPane
-        };
-        match input {
-            MediaListSurfaceInput::Click(_)
-            | MediaListSurfaceInput::ToggleClick(_)
-            | MediaListSurfaceInput::RangeClick(_) => {
-                self.apply_pane_click(hit.clone(), at, input);
-                let _ = ();
-                Some(Msg::Shell(Box::new(ShellRequest::TvHitClick { hit })))
-            }
-            MediaListSurfaceInput::DoubleClick(_) => {
-                self.apply_pane_click(hit.clone(), at, MediaListSurfaceInput::Click(at));
-                Some(Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick { hit })))
-            }
-            MediaListSurfaceInput::ContextClick(_) => {
-                let item = match &hit {
-                    TvHit::EpisodeRow(target) => self
-                        .current_season_episodes()
-                        .iter()
-                        .find(|item| item.id == *target)
-                        .cloned(),
-                    TvHit::SeriesRow(target) => self
-                        .context
-                        .list
-                        .items
-                        .iter()
-                        .find(|item| item.id == *target)
-                        .cloned(),
-                    _ => None,
-                }?;
-                let outcome = self.episodes.delegate_operation(
-                    input
-                        .into_operation(Some(match &hit {
-                            TvHit::EpisodeRow(target) => target.clone(),
-                            _ => return None,
-                        }))
-                        .expect("resolved media-list pointer target"),
-                );
-                let _ = ();
-                let items = match outcome.external_intent {
-                    Some(RowIntent::ContextSelection(targets)) => targets
-                        .into_iter()
-                        .filter_map(|target| {
-                            self.current_season_episodes()
-                                .iter()
-                                .find(|item| item.id == target)
-                                .cloned()
-                        })
-                        .collect(),
-                    _ => vec![item],
-                };
-                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-                    Some((at.x, at.y)),
-                ))))
-            }
-            _ => None,
+            Some(TvHit::EpisodesPane)
         }
+    }
+
+    fn hero_pane_select(&mut self, at: Position, input: MediaListSurfaceInput) -> Option<Msg> {
+        let hit = self.hero_pane_hit(at)?;
+        self.apply_pane_click(hit.clone(), at, input);
+        let _ = ();
+        Some(Msg::Shell(Box::new(ShellRequest::TvHitClick { hit })))
+    }
+
+    fn hero_pane_double_click(&mut self, at: Position) -> Option<Msg> {
+        let hit = self.hero_pane_hit(at)?;
+        self.apply_pane_click(hit.clone(), at, MediaListSurfaceInput::Click(at));
+        Some(Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick { hit })))
+    }
+
+    fn hero_pane_context_click(
+        &mut self,
+        at: Position,
+        input: MediaListSurfaceInput,
+    ) -> Option<Msg> {
+        let hit = self.hero_pane_hit(at)?;
+        let item = match &hit {
+            TvHit::EpisodeRow(target) => self
+                .current_season_episodes()
+                .iter()
+                .find(|item| item.id == *target)
+                .cloned(),
+            TvHit::SeriesRow(target) => self
+                .context
+                .list
+                .items
+                .iter()
+                .find(|item| item.id == *target)
+                .cloned(),
+            _ => None,
+        }?;
+        let outcome = self.episodes.delegate_operation(
+            input
+                .into_operation(Some(match &hit {
+                    TvHit::EpisodeRow(target) => target.clone(),
+                    _ => return None,
+                }))
+                .expect("resolved media-list pointer target"),
+        );
+        let _ = ();
+        let items = match outcome.external_intent {
+            Some(RowIntent::ContextSelection(targets)) => targets
+                .into_iter()
+                .filter_map(|target| {
+                    self.current_season_episodes()
+                        .iter()
+                        .find(|item| item.id == target)
+                        .cloned()
+                })
+                .collect(),
+            _ => vec![item],
+        };
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+            Some((at.x, at.y)),
+        ))))
     }
 
     /// Inline Search pointer handling (design.md D4): the panel-normalized
