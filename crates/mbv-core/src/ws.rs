@@ -196,125 +196,191 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
     let (out_tx, out_rx) = mpsc::channel::<OutboundMessage>();
     let connected = Arc::new(AtomicBool::new(false));
     let connected_bg = connected.clone();
-    thread::spawn(move || {
-        let mut backoff_secs: u64 = 1;
-        let mut shutdown_requested = false;
-        'reconnect: loop {
-            connected_bg.store(false, Ordering::Relaxed);
-            log::info!(target: "ws", "connecting…");
-            match tungstenite::connect(&ws_url) {
-                Ok((mut socket, _)) => {
-                    // Successful connection — reset backoff.
-                    backoff_secs = 1;
-
-                    // Short read timeout so we can drain outbound messages between reads.
-                    let timeout = Some(Duration::from_millis(100));
-                    match socket.get_ref() {
-                        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
-                            let _ = tcp.set_read_timeout(timeout);
-                        }
-                        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => {
-                            let _ = tls.get_ref().set_read_timeout(timeout);
-                        }
-                        _ => {}
-                    }
-                    log::info!(target: "ws", "connected");
-
-                    // Drop any stale outbound text messages buffered while disconnected so
-                    // an old progress update is never replayed after reconnect.
-                    drop_stale_outbound(&out_rx);
-                    connected_bg.store(true, Ordering::Relaxed);
-
-                    let mut last_activity = Instant::now();
-                    let mut last_ping = Instant::now();
-                    const PING_INTERVAL: Duration = Duration::from_secs(20);
-                    const PONG_TIMEOUT: Duration = Duration::from_secs(45);
-
-                    'conn: loop {
-                        // Send outbound messages.
-                        while let Ok(msg) = out_rx.try_recv() {
-                            match msg {
-                                OutboundMessage::Text(msg) => {
-                                    if socket.send(Message::Text(msg.into())).is_err() {
-                                        log::warn!(target: "ws", "send error, reconnecting");
-                                        break 'conn;
-                                    }
-                                }
-                                OutboundMessage::Flush(tx) => {
-                                    let _ = tx.send(());
-                                }
-                                OutboundMessage::Shutdown => {
-                                    shutdown_requested = true;
-                                    break 'conn;
-                                }
-                            }
-                        }
-
-                        // M4: Send periodic heartbeat pings.
-                        if last_ping.elapsed() >= PING_INTERVAL {
-                            if socket.send(Message::Ping(vec![].into())).is_err() {
-                                log::warn!(target: "ws", "ping send failed, reconnecting");
-                                break 'conn;
-                            }
-                            last_ping = Instant::now();
-                        }
-
-                        // M4: Detect stale connection (no data for PONG_TIMEOUT).
-                        if last_activity.elapsed() >= PONG_TIMEOUT {
-                            log::warn!(target: "ws", "no response for {:.0}s, reconnecting",
-                                last_activity.elapsed().as_secs_f64());
-                            break 'conn;
-                        }
-
-                        match socket.read() {
-                            Ok(Message::Text(txt)) => {
-                                last_activity = Instant::now();
-                                if let Some(ev) = parse(&txt) {
-                                    if event_tx.send(ev).is_err() {
-                                        return;
-                                    }
-                                }
-                            }
-                            Ok(Message::Ping(data)) => {
-                                last_activity = Instant::now();
-                                let _ = socket.send(Message::Pong(data));
-                            }
-                            Ok(Message::Pong(_)) => {
-                                last_activity = Instant::now();
-                            }
-                            Ok(Message::Close(_)) => {
-                                log::info!(target: "ws", "closed by server, reconnecting");
-                                break 'conn;
-                            }
-                            Err(tungstenite::Error::Io(e))
-                                if e.kind() == ErrorKind::WouldBlock
-                                    || e.kind() == ErrorKind::TimedOut => {}
-                            Err(e) => {
-                                log::warn!(target: "ws", "error: {e}, reconnecting");
-                                break 'conn;
-                            }
-                            _ => {}
-                        }
-                    }
-                    connected_bg.store(false, Ordering::Relaxed);
-                }
-                Err(e) => {
-                    log::warn!(target: "ws", "connect failed: {e}");
-                }
-            }
-            // Exit reconnect loop if shutdown was requested.
-            if shutdown_requested {
-                log::info!(target: "ws", "shutdown requested, exiting reconnect loop");
-                break 'reconnect;
-            }
-            // M3: Exponential backoff with jitter, max 60s.
-            crate::reconnect_backoff_sleep(&mut backoff_secs, "ws");
-        }
-    });
+    thread::spawn(move || reconnect_loop(ws_url, event_tx, out_rx, connected_bg));
     WsSender {
         tx: out_tx,
         connected,
     }
+}
+
+type WsSocket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>;
+
+#[derive(PartialEq)]
+enum ConnectionResult {
+    Reconnect,
+    Shutdown,
+    EventReceiverClosed,
+}
+
+fn reconnect_loop(
+    ws_url: String,
+    event_tx: mpsc::Sender<WsEvent>,
+    out_rx: mpsc::Receiver<OutboundMessage>,
+    connected: Arc<AtomicBool>,
+) {
+    let mut backoff_secs: u64 = 1;
+    loop {
+        connected.store(false, Ordering::Relaxed);
+        log::info!(target: "ws", "connecting…");
+        match tungstenite::connect(&ws_url) {
+            Ok((mut socket, _)) => {
+                // Successful connection — reset backoff.
+                backoff_secs = 1;
+                prepare_connection(&socket, &out_rx);
+                connected.store(true, Ordering::Relaxed);
+                let result = run_connection(&mut socket, &out_rx, &event_tx);
+                if result == ConnectionResult::EventReceiverClosed {
+                    return;
+                }
+                connected.store(false, Ordering::Relaxed);
+                if result == ConnectionResult::Shutdown {
+                    log::info!(target: "ws", "shutdown requested, exiting reconnect loop");
+                    return;
+                }
+            }
+            Err(e) => log::warn!(target: "ws", "connect failed: {e}"),
+        }
+        // M3: Exponential backoff with jitter, max 60s.
+        crate::reconnect_backoff_sleep(&mut backoff_secs, "ws");
+    }
+}
+
+fn prepare_connection(socket: &WsSocket, out_rx: &mpsc::Receiver<OutboundMessage>) {
+    // Short read timeout so we can drain outbound messages between reads.
+    let timeout = Some(Duration::from_millis(100));
+    match socket.get_ref() {
+        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
+            let _ = tcp.set_read_timeout(timeout);
+        }
+        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => {
+            let _ = tls.get_ref().set_read_timeout(timeout);
+        }
+        _ => {}
+    }
+    log::info!(target: "ws", "connected");
+
+    // Drop any stale outbound text messages buffered while disconnected so
+    // an old progress update is never replayed after reconnect.
+    drop_stale_outbound(out_rx);
+}
+
+const PING_INTERVAL: Duration = Duration::from_secs(20);
+const PONG_TIMEOUT: Duration = Duration::from_secs(45);
+
+fn run_connection(
+    socket: &mut WsSocket,
+    out_rx: &mpsc::Receiver<OutboundMessage>,
+    event_tx: &mpsc::Sender<WsEvent>,
+) -> ConnectionResult {
+    let mut last_activity = Instant::now();
+    let mut last_ping = Instant::now();
+
+    loop {
+        match drain_outbound(socket, out_rx) {
+            OutboundResult::Continue => {}
+            OutboundResult::Reconnect => return ConnectionResult::Reconnect,
+            OutboundResult::Shutdown => return ConnectionResult::Shutdown,
+        }
+        if !send_heartbeat(socket, &mut last_ping, PING_INTERVAL) {
+            return ConnectionResult::Reconnect;
+        }
+        if connection_timed_out(last_activity, PONG_TIMEOUT) {
+            return ConnectionResult::Reconnect;
+        }
+        match read_message(socket, event_tx, &mut last_activity) {
+            ReadResult::Continue => {}
+            ReadResult::Reconnect => return ConnectionResult::Reconnect,
+            ReadResult::EventReceiverClosed => return ConnectionResult::EventReceiverClosed,
+        }
+    }
+}
+
+enum OutboundResult {
+    Continue,
+    Reconnect,
+    Shutdown,
+}
+
+fn drain_outbound(
+    socket: &mut WsSocket,
+    out_rx: &mpsc::Receiver<OutboundMessage>,
+) -> OutboundResult {
+    while let Ok(msg) = out_rx.try_recv() {
+        match msg {
+            OutboundMessage::Text(msg) => {
+                if socket.send(Message::Text(msg.into())).is_err() {
+                    log::warn!(target: "ws", "send error, reconnecting");
+                    return OutboundResult::Reconnect;
+                }
+            }
+            OutboundMessage::Flush(tx) => {
+                let _ = tx.send(());
+            }
+            OutboundMessage::Shutdown => return OutboundResult::Shutdown,
+        }
+    }
+    OutboundResult::Continue
+}
+
+fn send_heartbeat(socket: &mut WsSocket, last_ping: &mut Instant, interval: Duration) -> bool {
+    if last_ping.elapsed() < interval {
+        return true;
+    }
+    if socket.send(Message::Ping(vec![].into())).is_err() {
+        log::warn!(target: "ws", "ping send failed, reconnecting");
+        return false;
+    }
+    *last_ping = Instant::now();
+    true
+}
+
+fn connection_timed_out(last_activity: Instant, timeout: Duration) -> bool {
+    if last_activity.elapsed() < timeout {
+        return false;
+    }
+    log::warn!(target: "ws", "no response for {:.0}s, reconnecting",
+        last_activity.elapsed().as_secs_f64());
+    true
+}
+
+enum ReadResult {
+    Continue,
+    Reconnect,
+    EventReceiverClosed,
+}
+
+fn read_message(
+    socket: &mut WsSocket,
+    event_tx: &mpsc::Sender<WsEvent>,
+    last_activity: &mut Instant,
+) -> ReadResult {
+    match socket.read() {
+        Ok(Message::Text(txt)) => {
+            *last_activity = Instant::now();
+            if let Some(ev) = parse(&txt) {
+                if event_tx.send(ev).is_err() {
+                    return ReadResult::EventReceiverClosed;
+                }
+            }
+        }
+        Ok(Message::Ping(data)) => {
+            *last_activity = Instant::now();
+            let _ = socket.send(Message::Pong(data));
+        }
+        Ok(Message::Pong(_)) => *last_activity = Instant::now(),
+        Ok(Message::Close(_)) => {
+            log::info!(target: "ws", "closed by server, reconnecting");
+            return ReadResult::Reconnect;
+        }
+        Err(tungstenite::Error::Io(e))
+            if e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut => {}
+        Err(e) => {
+            log::warn!(target: "ws", "error: {e}, reconnecting");
+            return ReadResult::Reconnect;
+        }
+        _ => {}
+    }
+    ReadResult::Continue
 }
 
 #[cfg(test)]
