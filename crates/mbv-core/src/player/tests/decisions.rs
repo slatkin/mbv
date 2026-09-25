@@ -31,6 +31,9 @@ fn tracks() -> (AudioTracks, SubtitleTracks) {
 #[case::smart_hides_matching_audio_language("Smart", "English", "en", Some(None))]
 #[case::smart_selects_when_audio_differs("Smart", "French", "en", Some(Some(4)))]
 #[case::hearing_impaired_prefers_sdh("HearingImpaired", "French", "fr", Some(Some(5)))]
+#[case::only_forced_falls_back_to_any_forced("OnlyForced", "German", "en", Some(Some(4)))]
+#[case::always_falls_back_to_first("Always", "German", "en", Some(Some(3)))]
+#[case::unknown_mode_leaves_selection_unchanged("Unknown", "French", "en", None)]
 fn subtitle_modes_choose_expected_track(
     #[case] mode: &str,
     #[case] subtitle_lang: &str,
@@ -47,18 +50,25 @@ fn subtitle_modes_choose_expected_track(
     assert_eq!(selected, expected);
 }
 
-#[test]
-fn audio_preference_selects_matching_track_only_when_needed() {
+#[rstest]
+#[case::selects_preferred_track(1, "en", "French", Some(2))]
+#[case::keeps_matching_current_track(2, "fr", "French", None)]
+#[case::leaves_selection_when_no_match(1, "de", "German", None)]
+fn audio_preference_selects_matching_track_only_when_needed(
+    #[case] current_id: i64,
+    #[case] current_lang: &str,
+    #[case] preference: &str,
+    #[case] expected: Option<i64>,
+) {
     let (audio, subtitles) = tracks();
     let prefs = SubtitlePrefs {
-        audio_lang: "French".into(),
+        audio_lang: preference.into(),
         ..Default::default()
     };
     assert_eq!(
-        select_tracks(&audio, &subtitles, 1, "en", &prefs).0,
-        Some(2)
+        select_tracks(&audio, &subtitles, current_id, current_lang, &prefs).0,
+        expected
     );
-    assert_eq!(select_tracks(&audio, &subtitles, 2, "fr", &prefs).0, None);
 }
 
 #[test]
@@ -131,23 +141,89 @@ fn queue_next_up_fires_at_threshold(
     );
 }
 
-#[test]
-fn standalone_next_up_fires_at_threshold() {
+#[rstest]
+#[case::armed(NextUp::Armed, true, 7_000_000_000, 6_500_000_000, crate::player::NextUpDecision { fire: Some(NextUpFire::Standalone), ..Default::default() })]
+#[case::no_series_arms(NextUp::Idle, false, 7_000_000_000, 1, crate::player::NextUpDecision { arm: true, ..Default::default() })]
+#[case::no_series_already_armed(NextUp::Armed, false, 7_000_000_000, 1, Default::default())]
+#[case::short_runtime_does_not_fire(NextUp::Armed, true, 60_000_000, 1, Default::default())]
+#[case::fired_does_not_fire(NextUp::Fired, true, 7_000_000_000, 6_500_000_000, Default::default())]
+fn standalone_next_up_obeys_state_and_series_gates(
+    #[case] state: NextUp,
+    #[case] has_series: bool,
+    #[case] runtime: i64,
+    #[case] ticks: i64,
+    #[case] expected: crate::player::NextUpDecision,
+) {
     assert_eq!(
-        standalone_next_up_decision(NextUp::Armed, true, 7_000_000_000, 6_500_000_000).fire,
-        Some(NextUpFire::Standalone),
+        standalone_next_up_decision(state, has_series, runtime, ticks),
+        expected
     );
 }
 
-#[test]
-fn next_up_requires_consecutive_tv_episodes_and_preserves_minimum_runtime() {
+#[rstest]
+#[case::no_next_episode(
+    NextUp::Idle,
+    0,
+    1,
+    true,
+    false,
+    7_000_000_000,
+    6_500_000_000,
+    Default::default()
+)]
+#[case::next_item_not_episode(
+    NextUp::Idle,
+    0,
+    2,
+    true,
+    false,
+    7_000_000_000,
+    6_500_000_000,
+    Default::default()
+)]
+#[case::runtime_too_short(
+    NextUp::Idle,
+    0,
+    2,
+    true,
+    true,
+    5_999_999_999,
+    5_500_000_000,
+    Default::default()
+)]
+#[case::insufficient_remaining(
+    NextUp::Idle,
+    0,
+    2,
+    true,
+    true,
+    7_000_000_000,
+    6_900_000_000,
+    Default::default()
+)]
+#[case::resets_fired_below_window(NextUp::Fired, 0, 2, true, true, 7_000_000_000, 6_000_000_000, crate::player::NextUpDecision { reset: true, arm: false, fire: None })]
+#[case::arms_near_start(NextUp::Idle, 0, 2, true, true, 7_000_000_000, 1, crate::player::NextUpDecision { arm: true, ..Default::default() })]
+fn queue_next_up_preserves_guards_and_reset(
+    #[case] state: NextUp,
+    #[case] current_idx: usize,
+    #[case] queue_len: usize,
+    #[case] current_is_episode: bool,
+    #[case] next_is_episode: bool,
+    #[case] runtime: i64,
+    #[case] ticks: i64,
+    #[case] expected: crate::player::NextUpDecision,
+) {
     assert_eq!(
-        queue_next_up_decision(NextUp::Idle, 0, 2, true, false, 1_000_000_000, 950_000_000),
-        Default::default()
-    );
-    assert_eq!(
-        queue_next_up_decision(NextUp::Idle, 0, 2, true, true, 5_999_999_999, 5_500_000_000),
-        Default::default()
+        queue_next_up_decision(
+            state,
+            current_idx,
+            queue_len,
+            current_is_episode,
+            next_is_episode,
+            runtime,
+            ticks,
+        ),
+        expected
     );
 }
 
@@ -194,6 +270,39 @@ fn active_item_state_gates_feed_resume_position(#[case] position: i64, #[case] e
     entry.position_ticks = position;
     let state = active_item_state(Some(&crate::playback_queue::QueueItem::Feed(entry)));
     assert_eq!(state.last_valid_pos, expected);
+}
+
+#[test]
+fn active_item_state_resolves_audiobookshelf_episode_and_book() {
+    let episode = active_item_state(Some(&super::abs_item()));
+    assert_eq!(episode.osd_title, "Episode");
+    assert_eq!(episode.last_valid_pos, 0);
+    assert_eq!(episode.series_id.as_str(), "");
+
+    let book = active_item_state(Some(&super::abs_book_item()));
+    assert_eq!(book.osd_title, "Book");
+    assert_eq!(book.last_valid_pos, 0);
+    assert_eq!(book.series_id.as_str(), "");
+}
+
+#[rstest]
+#[case::audio("AudioTrack", "Audio", 0)]
+#[case::non_episode("Movie", "Video", 75)]
+fn active_item_state_clears_episode_identity_for_non_episodes(
+    #[case] item_type: &str,
+    #[case] media_type: &str,
+    #[case] expected_position: i64,
+) {
+    let mut item = super::make_media_item("media");
+    item.item_type = item_type.into();
+    item.media_type = media_type.into();
+    item.playback_position_ticks = 75;
+    let state = active_item_state(Some(&crate::playback_queue::QueueItem::Emby(Box::new(
+        item,
+    ))));
+    assert_eq!(state.last_valid_pos, expected_position);
+    assert_eq!(state.series_id.as_str(), "");
+    assert_eq!((state.season, state.episode), (0, 0));
 }
 
 #[test]
