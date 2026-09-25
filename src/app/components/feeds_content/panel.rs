@@ -7,6 +7,84 @@ use super::super::library_panel::HeroContentData;
 use super::super::media_list::MediaListOperation;
 use super::*;
 
+impl FeedsContent {
+    fn on_selector_picked(&mut self, index: usize) -> Option<Msg> {
+        if index == 0 {
+            self.latest_selected = true;
+            self.rebuild_visible_entries();
+            self.reset_selection();
+            Some(Msg::Shell(Box::new(ShellRequest::FeedsLatestSelected)))
+        } else if index <= WatchedFilter::COUNT {
+            self.latest_selected = false;
+            self.select_watched_filter(index - 1);
+            None
+        } else {
+            self.latest_selected = false;
+            self.select_group(index - 1 - WatchedFilter::COUNT);
+            None
+        }
+    }
+
+    fn on_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        match input {
+            MediaListSurfaceInput::Wheel { at, delta } => {
+                // The claim gate mirrors the mounted component: a wheel
+                // outside the painted active list is unclaimed.
+                if !self.claims_current_point(at) {
+                    return None;
+                }
+                self.delegate_row_local_input(MediaListSurfaceInput::Wheel { at, delta }, None);
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            MediaListSurfaceInput::Click(at)
+            | MediaListSurfaceInput::ToggleClick(at)
+            | MediaListSurfaceInput::RangeClick(at) => self.on_row_click(input, at),
+            MediaListSurfaceInput::ContextClick(at) => self.on_context_click(input, at),
+            MediaListSurfaceInput::DoubleClick(at) => self.on_double_click(at),
+            _ => None,
+        }
+    }
+
+    fn on_row_click(
+        &mut self,
+        input: MediaListSurfaceInput,
+        at: ratatui::layout::Position,
+    ) -> Option<Msg> {
+        let target = self.resolve_row_id(at)?;
+        self.delegate_row_local_input(input, Some(target));
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsRowClick)))
+    }
+
+    fn on_context_click(
+        &mut self,
+        input: MediaListSurfaceInput,
+        at: ratatui::layout::Position,
+    ) -> Option<Msg> {
+        let target = self.resolve_row_id(at)?;
+        let outcome = self.delegate_row_local_input(input, Some(target.clone()));
+        let entries = match outcome.external_intent {
+            Some(RowIntent::ContextSelection(targets)) => targets
+                .into_iter()
+                .filter_map(|target| self.entry_for_target(&target).cloned())
+                .collect(),
+            _ => vec![self.entry_for_target(&target)?.clone()],
+        };
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
+            Some((at.x, at.y)),
+        ))))
+    }
+
+    fn on_double_click(&mut self, at: ratatui::layout::Position) -> Option<Msg> {
+        // Resolve once, then delegate the target-bearing activation.
+        let target = self.resolve_row_id(at)?;
+        self.carrier
+            .delegate_operation(MediaListOperation::Activate(target.clone()));
+        let entry = self.entry_for_target(&target)?.clone();
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(vec![entry]))))
+    }
+}
+
 impl LibraryContentOwner for FeedsContent {
     fn reanchor_launch_state(&mut self, state: &mbv_core::config::TuiLaunchState) -> bool {
         if self.loading && self.visible_entries.is_empty() && !self.subscriptions.is_empty() {
@@ -188,65 +266,8 @@ impl LibraryContentOwner for FeedsContent {
     /// its own carrier.
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(index) => {
-                if index == 0 {
-                    self.latest_selected = true;
-                    self.rebuild_visible_entries();
-                    self.reset_selection();
-                    Some(Msg::Shell(Box::new(ShellRequest::FeedsLatestSelected)))
-                } else if index <= WatchedFilter::COUNT {
-                    self.latest_selected = false;
-                    self.select_watched_filter(index - 1);
-                    None
-                } else {
-                    self.latest_selected = false;
-                    self.select_group(index - 1 - WatchedFilter::COUNT);
-                    None
-                }
-            }
-            LibrarySlotEvent::List(input) => match input {
-                MediaListSurfaceInput::Wheel { at, delta } => {
-                    // The claim gate mirrors the mounted component: a wheel
-                    // outside the painted active list is unclaimed.
-                    if !self.claims_current_point(at) {
-                        return None;
-                    }
-                    self.delegate_row_local_input(MediaListSurfaceInput::Wheel { at, delta }, None);
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-                }
-                MediaListSurfaceInput::Click(at)
-                | MediaListSurfaceInput::ToggleClick(at)
-                | MediaListSurfaceInput::RangeClick(at) => {
-                    let target = self.resolve_row_id(at)?;
-                    self.delegate_row_local_input(input, Some(target));
-                    let _ = ();
-                    Some(Msg::Shell(Box::new(ShellRequest::FeedsRowClick)))
-                }
-                MediaListSurfaceInput::ContextClick(at) => {
-                    let target = self.resolve_row_id(at)?;
-                    let outcome = self.delegate_row_local_input(input, Some(target.clone()));
-                    let entries = match outcome.external_intent {
-                        Some(RowIntent::ContextSelection(targets)) => targets
-                            .into_iter()
-                            .filter_map(|target| self.entry_for_target(&target).cloned())
-                            .collect(),
-                        _ => vec![self.entry_for_target(&target)?.clone()],
-                    };
-                    Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                        crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
-                        Some((at.x, at.y)),
-                    ))))
-                }
-                MediaListSurfaceInput::DoubleClick(at) => {
-                    // Resolve once, then delegate the target-bearing activation.
-                    let target = self.resolve_row_id(at)?;
-                    self.carrier
-                        .delegate_operation(MediaListOperation::Activate(target.clone()));
-                    let entry = self.entry_for_target(&target)?.clone();
-                    Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(vec![entry]))))
-                }
-                _ => None,
-            },
+            LibrarySlotEvent::SelectorPicked(index) => self.on_selector_picked(index),
+            LibrarySlotEvent::List(input) => self.on_list_event(input),
             // Feeds has no Workspace and no hero-pane input of its own.
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
             LibrarySlotEvent::HeroActivate => self
