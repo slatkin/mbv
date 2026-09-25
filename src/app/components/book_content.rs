@@ -361,6 +361,101 @@ impl BookContent {
     }
 }
 
+impl BookContent {
+    fn on_bucket_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Char('[') if key.modifiers.is_empty() => {
+                self.cycle_bucket(-1);
+                self.bucket_request()
+            }
+            Key::Char(']') if key.modifiers.is_empty() => {
+                self.cycle_bucket(1);
+                self.bucket_request()
+            }
+            _ => None,
+        }
+    }
+
+    fn on_chapter_navigation_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Up | Key::Char('k') if self.chapter_focused => {
+                self.move_chapter(-1);
+                self.chapter_focus_request()
+            }
+            Key::Down | Key::Char('j') if self.chapter_focused => {
+                self.move_chapter(1);
+                self.chapter_focus_request()
+            }
+            _ => None,
+        }
+    }
+
+    fn on_book_navigation_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Up | Key::Char('k') if !self.chapter_focused => {
+                self.move_book(MediaListSurfaceInput::Move(-1))
+            }
+            Key::Down | Key::Char('j') if !self.chapter_focused => {
+                self.move_book(MediaListSurfaceInput::Move(1))
+            }
+            Key::PageUp if !self.chapter_focused => self.move_book(MediaListSurfaceInput::Page(-1)),
+            Key::PageDown if !self.chapter_focused => {
+                self.move_book(MediaListSurfaceInput::Page(1))
+            }
+            Key::Home if !self.chapter_focused => {
+                self.select_bucket_edge(false);
+                self.book_request()
+            }
+            Key::End if !self.chapter_focused => {
+                self.select_bucket_edge(true);
+                self.book_request()
+            }
+            _ => None,
+        }
+    }
+
+    fn on_chapter_focus_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Esc | Key::Backspace if self.chapter_focused => {
+                self.clear_chapter_focus();
+                self.chapter_focus_request()
+            }
+            _ => None,
+        }
+    }
+
+    fn on_activation_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match key.code {
+            Key::Char(' ') | Key::Enter if self.chapter_focused => Some(Msg::Shell(Box::new(
+                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter(
+                    self.chapter_target(),
+                )),
+            ))),
+            // Enter on the selected book moves focus into the chapter
+            // workspace (the same rule as grouped Music's track pane); the
+            // shell decides wide focus vs narrow modal. Arrows never move
+            // focus between panels.
+            Key::Enter if !self.chapter_list.rows().is_empty() => Some(Msg::Shell(Box::new(
+                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::FocusChapters),
+            ))),
+            Key::Char(' ') => Some(Msg::Shell(Box::new(
+                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Play),
+            ))),
+            Key::Enter => Some(Msg::Shell(Box::new(
+                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate),
+            ))),
+            Key::Char('a')
+                if !self.chapter_focused && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                Some(Msg::Shell(Box::new(
+                    ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Enqueue),
+                )))
+            }
+            _ => None,
+        }
+    }
+}
+
 impl Default for BookContent {
     fn default() -> Self {
         Self::new()
@@ -446,73 +541,11 @@ impl LibraryContentOwner for BookContent {
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Books is focused.
-        match key.code {
-            Key::Char('[') if key.modifiers.is_empty() => {
-                self.cycle_bucket(-1);
-                self.bucket_request()
-            }
-            Key::Char(']') if key.modifiers.is_empty() => {
-                self.cycle_bucket(1);
-                self.bucket_request()
-            }
-            Key::Up | Key::Char('k') if self.chapter_focused => {
-                self.move_chapter(-1);
-                self.chapter_focus_request()
-            }
-            Key::Down | Key::Char('j') if self.chapter_focused => {
-                self.move_chapter(1);
-                self.chapter_focus_request()
-            }
-            Key::Up | Key::Char('k') => self.move_book(MediaListSurfaceInput::Move(-1)),
-            Key::Down | Key::Char('j') => self.move_book(MediaListSurfaceInput::Move(1)),
-            Key::PageUp if !self.chapter_focused => self.move_book(MediaListSurfaceInput::Page(-1)),
-            Key::PageDown if !self.chapter_focused => {
-                self.move_book(MediaListSurfaceInput::Page(1))
-            }
-            Key::Home if !self.chapter_focused => {
-                self.select_bucket_edge(false);
-                self.book_request()
-            }
-            Key::End if !self.chapter_focused => {
-                self.select_bucket_edge(true);
-                self.book_request()
-            }
-            Key::Esc | Key::Backspace if self.chapter_focused => {
-                self.clear_chapter_focus();
-                self.chapter_focus_request()
-            }
-            Key::Char(' ') if self.chapter_focused => Some(Msg::Shell(Box::new(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter(
-                    self.chapter_target(),
-                )),
-            ))),
-            Key::Enter if self.chapter_focused => Some(Msg::Shell(Box::new(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::ActivateChapter(
-                    self.chapter_target(),
-                )),
-            ))),
-            // Enter on the selected book moves focus into the chapter
-            // workspace (the same rule as grouped Music's track pane); the
-            // shell decides wide focus vs narrow modal. Arrows never move
-            // focus between panels.
-            Key::Enter if !self.chapter_list.rows().is_empty() => Some(Msg::Shell(Box::new(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::FocusChapters),
-            ))),
-            Key::Char(' ') => Some(Msg::Shell(Box::new(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Play),
-            ))),
-            Key::Enter => Some(Msg::Shell(Box::new(
-                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate),
-            ))),
-            Key::Char('a')
-                if !self.chapter_focused && key.modifiers.contains(KeyModifiers::CONTROL) =>
-            {
-                Some(Msg::Shell(Box::new(
-                    ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Enqueue),
-                )))
-            }
-            _ => None,
-        }
+        self.on_bucket_key(key)
+            .or_else(|| self.on_chapter_navigation_key(key))
+            .or_else(|| self.on_book_navigation_key(key))
+            .or_else(|| self.on_chapter_focus_key(key))
+            .or_else(|| self.on_activation_key(key))
     }
 
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
