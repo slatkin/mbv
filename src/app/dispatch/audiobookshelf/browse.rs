@@ -212,8 +212,14 @@ impl App {
         crate::app::dispatch::session::service_startup::start_audiobookshelf_shows(
             self.config.lock().unwrap().clone(),
             generation,
-            library_id,
+            library_id.clone(),
             0,
+            self.lib_tx.clone(),
+        );
+        crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
+            self.config.lock().unwrap().clone(),
+            generation,
+            library_id,
             self.lib_tx.clone(),
         );
     }

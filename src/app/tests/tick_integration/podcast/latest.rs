@@ -1,6 +1,153 @@
 use super::*;
 
 #[test]
+fn podcast_latest_refresh_replaces_shelf_without_losing_selection_or_acknowledgement() {
+    use crate::app::state::types::audiobookshelf_browse::PillSelection;
+    use mbv_core::audiobookshelf::{
+        AudiobookshelfFailureClass, AudiobookshelfShelf, AudiobookshelfShelfEntry,
+    };
+    use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
+
+    let mut app = audiobookshelf_app();
+    app.home_latest_launch_window = crate::app::state::home_latest::HomeLatestLaunchWindow {
+        previous: Some(1_600_000_000),
+        current: 1_800_000_000,
+    };
+    let item = |episode_id: &str| {
+        QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+            library_item_id: "show-a".into(),
+            episode_id: episode_id.into(),
+            title: episode_id.into(),
+            show_title: Some("Show A".into()),
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: Some(1_700_000_000),
+            is_finished: false,
+            cover_path: None,
+        })
+    };
+    app.audiobookshelf_shelf_cache
+        .insert("abs-podcasts".into(), vec![item("old-episode")]);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
+            previous: Some(1_600_000_000),
+            current: 1_800_000_000,
+        };
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(podcast(&mut harness).content().selector.unwrap().markers[0]);
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('['),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let selected = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in selected.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(podcast(&mut harness).pill(), &PillSelection::Latest);
+    assert!(!podcast(&mut harness).content().selector.unwrap().markers[0]);
+
+    // Refresh clears the catalog and reissues both source fetches; the shelf
+    // cache remains visible until the fetched replacement is applied.
+    let old_generation = harness.model().app.audiobookshelf_runtime.generation();
+    harness.model_mut().app.audiobookshelf_refresh();
+    let fresh_generation = harness.model().app.audiobookshelf_runtime.generation();
+    harness.model_mut().push_audiobookshelf_podcast_content();
+    draw(&mut harness, 160);
+    assert!(podcast(&mut harness)
+        .episode_rows()
+        .iter()
+        .any(|row| matches!(row,
+        MediaListRow::Item { target, .. } if target.episode_id() == "old-episode")));
+
+    let refreshed = item("refreshed-episode");
+    harness
+        .model_mut()
+        .app
+        .handle_lib_event(crate::app::LibEvent::AudiobookshelfShelfFetched {
+            generation: fresh_generation,
+            library_id: "abs-podcasts".into(),
+            result: Ok(vec![AudiobookshelfShelf {
+                label: "Newest Episodes".into(),
+                entries: vec![AudiobookshelfShelfEntry::Episode(
+                    refreshed.as_audiobookshelf().unwrap().clone(),
+                )],
+            }]),
+        });
+    harness.model_mut().push_audiobookshelf_podcast_content();
+    draw(&mut harness, 160);
+    assert_eq!(podcast(&mut harness).pill(), &PillSelection::Latest);
+    assert!(!podcast(&mut harness).content().selector.unwrap().markers[0]);
+    let listed_after_refresh: Vec<_> = podcast(&mut harness)
+        .episode_rows()
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Item { target, .. } => Some(target.episode_id().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(listed_after_refresh, ["refreshed-episode"]);
+
+    // A real Service replacement advances the setup generation. Its late
+    // shelf response is ignored, and a current-generation Err preserves the
+    // last successful snapshot too.
+    harness
+        .model_mut()
+        .app
+        .audiobookshelf_runtime
+        .remove_setup();
+    assert_ne!(
+        harness.model().app.audiobookshelf_runtime.generation(),
+        old_generation
+    );
+    let current_generation = harness.model().app.audiobookshelf_runtime.generation();
+    harness
+        .model_mut()
+        .app
+        .handle_lib_event(crate::app::LibEvent::AudiobookshelfShelfFetched {
+            generation: old_generation,
+            library_id: "abs-podcasts".into(),
+            result: Ok(vec![AudiobookshelfShelf {
+                label: "Newest Episodes".into(),
+                entries: vec![AudiobookshelfShelfEntry::Episode(
+                    item("stale-episode").as_audiobookshelf().unwrap().clone(),
+                )],
+            }]),
+        });
+    harness
+        .model_mut()
+        .app
+        .handle_lib_event(crate::app::LibEvent::AudiobookshelfShelfFetched {
+            generation: current_generation,
+            library_id: "abs-podcasts".into(),
+            result: Err(mbv_core::audiobookshelf::AudiobookshelfError {
+                class: AudiobookshelfFailureClass::Protocol,
+            }),
+        });
+    harness.model_mut().push_audiobookshelf_podcast_content();
+    draw(&mut harness, 160);
+    assert_eq!(podcast(&mut harness).pill(), &PillSelection::Latest);
+    assert!(!podcast(&mut harness).content().selector.unwrap().markers[0]);
+    let listed_after_rejected_results: Vec<_> = podcast(&mut harness)
+        .episode_rows()
+        .iter()
+        .filter_map(|row| match row {
+            MediaListRow::Item { target, .. } => Some(target.episode_id().to_owned()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(listed_after_rejected_results, listed_after_refresh);
+}
+
+#[test]
 fn podcast_latest_uses_cached_shelf_and_resolves_provider_targets_without_emby() {
     let app = audiobookshelf_app();
     let mut harness = TickHarness::new(app);

@@ -356,6 +356,45 @@ fn activation_with_a_fetch_in_flight_does_not_double_fetch_and_the_newer_result_
 }
 
 #[test]
+fn refresh_fetches_shelves_only_for_the_selected_podcast_library() {
+    use std::time::Duration;
+
+    let mut app = crate::app::tests::podcast::audiobookshelf_app();
+    let second = mbv_core::audiobookshelf::AudiobookshelfLibrary {
+        id: "abs-podcasts-2".into(),
+        name: "Second podcast library".into(),
+        media_type: "podcast".into(),
+    };
+    app.audiobookshelf_browse.push(
+        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
+            second.clone(),
+        ),
+    );
+    app.audiobookshelf_libraries.push(second);
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+    let expected_generation = app.audiobookshelf_runtime.generation();
+
+    app.audiobookshelf_refresh();
+
+    let mut shelf_events = Vec::new();
+    while let Ok(event) = app.lib_rx.recv_timeout(Duration::from_secs(2)) {
+        if let LibEvent::AudiobookshelfShelfFetched {
+            generation,
+            library_id,
+            ..
+        } = event
+        {
+            shelf_events.push((generation, library_id));
+        }
+    }
+    assert_eq!(
+        shelf_events,
+        [(expected_generation, "abs-podcasts".into())],
+        "refresh requests exactly the selected library's shelf"
+    );
+}
+
+#[test]
 fn refresh_key_resets_the_fan_out_scope_and_rerequests() {
     let mut app = unfetched_podcast_app(2);
     app.select_audiobookshelf_show_target("show-0");
