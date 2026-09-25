@@ -209,20 +209,45 @@ impl App {
     }
 
     fn execute_context_navigation_action(&mut self, action: Option<ContextAction>) {
-        if let Some(ContextAction::GoToLibrary(item_id, item_type)) = action {
-            let libs: Vec<(usize, String, String)> = self
-                .libs
-                .iter()
-                .enumerate()
-                .map(|(i, lib)| {
-                    (
-                        i,
-                        lib.library.id.clone(),
-                        lib.library.collection_type.clone(),
-                    )
-                })
-                .collect();
-            self.spawn_navigate_to_item(item_id, item_type, libs);
+        match action {
+            Some(ContextAction::GoToLibrary(item_id, item_type)) => {
+                let libs: Vec<(usize, String, String)> = self
+                    .libs
+                    .iter()
+                    .enumerate()
+                    .map(|(i, lib)| {
+                        (
+                            i,
+                            lib.library.id.clone(),
+                            lib.library.collection_type.clone(),
+                        )
+                    })
+                    .collect();
+                self.spawn_navigate_to_item(item_id, item_type, libs);
+            }
+            Some(
+                ContextAction::Play
+                | ContextAction::PlaySelection(_)
+                | ContextAction::ShuffleSelection(_)
+                | ContextAction::EnqueueSelection(_)
+                | ContextAction::RemoveSelection(_)
+                | ContextAction::MarkPlayedSelection(_)
+                | ContextAction::MarkUnplayedSelection(_)
+                | ContextAction::PlayQueue(_)
+                | ContextAction::PlayFolder(_)
+                | ContextAction::ShuffleFolder(_)
+                | ContextAction::Enqueue
+                | ContextAction::EnqueueFolder(_)
+                | ContextAction::MarkPlayed(_)
+                | ContextAction::MarkUnplayed(_)
+                | ContextAction::RemoveFromContinueWatching
+                | ContextAction::RemoveFromQueue(_)
+                | ContextAction::FeedsPlay(_)
+                | ContextAction::FeedsEnqueue(_)
+                | ContextAction::FeedsMarkPlayed(_)
+                | ContextAction::FeedsMarkUnplayed(_),
+            ) => {}
+            None => {}
         }
     }
 
