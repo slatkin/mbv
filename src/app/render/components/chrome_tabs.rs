@@ -162,12 +162,11 @@ pub(in crate::app) fn render_tab_bar(
                     Span::styled("▐", Style::default().fg(palette::ACCENT)),
                     Span::styled(format!(" {n}"), style),
                 ];
-                if marked {
-                    spans.push(Span::styled(
-                        "•",
-                        Style::default().fg(palette::ACCENT_ACTIVE),
-                    ));
-                }
+                spans.push(if marked {
+                    Span::styled("•", Style::default().fg(palette::ACCENT_ACTIVE))
+                } else {
+                    Span::styled(" ", style)
+                });
                 spans.push(Span::styled(" ", style));
                 Line::from(spans)
             } else {
@@ -177,12 +176,11 @@ pub(in crate::app) fn render_tab_bar(
                     Style::default().fg(palette::TEXT_MUTED)
                 };
                 let mut spans = vec![Span::styled(format!("  {n}"), style)];
-                if marked {
-                    spans.push(Span::styled(
-                        "•",
-                        Style::default().fg(palette::ACCENT_ACTIVE),
-                    ));
-                }
+                spans.push(if marked {
+                    Span::styled("•", Style::default().fg(palette::ACCENT_ACTIVE))
+                } else {
+                    Span::styled(" ", style)
+                });
                 spans.push(Span::styled(" ", style));
                 Line::from(spans)
             };
