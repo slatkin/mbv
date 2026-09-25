@@ -228,23 +228,53 @@ pub fn load(raw: &RawKeybinds) -> Result<Keybinds, KeybindsError> {
         .iter()
         .map(|s| Chord::parse(s).expect("reserved chord must parse"))
         .collect();
-
     let prefix = raw
         .prefix
         .as_ref()
         .map(|s| parse_configured(s, "keys.prefix", &reserved))
         .transpose()?;
+    let configured = load_sections(&raw.sections, &reserved)?;
+    let keybinds = Keybinds {
+        prefix,
+        sections: configured.sections,
+    };
 
-    let mut sections = Vec::new();
+    // The prefix chord must not collide with any other configured or declared
+    // binding (router scope or prefix namespace).
+    reject_prefix_collisions(&keybinds, &configured.router, &configured.prefix_namespace)?;
+    // Router-scope: a configured chord must not equal any other action's
+    // effective chord (configured or declared default). Pure default-vs-
+    // default pairs are exempt — the declaration test pins that no two
+    // actions share a default chord.
+    reject_router_collisions(&configured.router)?;
+    // Prefix namespace: two configured assignments must not share a chord.
+    reject_prefix_namespace_collisions(&configured.prefix_namespace)?;
+
+    Ok(keybinds)
+}
+
+struct LoadedSections {
+    sections: Vec<(KeySection, SectionBindings)>,
+    router: Vec<(&'static KeybindAction, Chord)>,
+    prefix_namespace: Vec<(&'static KeybindAction, Chord)>,
+}
+
+fn load_sections(
+    raw_sections: &[(String, RawSection)],
+    reserved: &[Chord],
+) -> Result<LoadedSections, KeybindsError> {
     // `KeySection::from_name` matches case-insensitively, but the save loop
     // keys the compiled tables by lowercase section name — two raw spellings
     // of one section would silently collapse to the later spelling on save
     // while the reader took the first. Reject them at load.
     let mut seen_sections: Vec<&str> = Vec::new();
-    let mut configured_router: Vec<(&'static KeybindAction, Chord)> = Vec::new();
-    let mut configured_prefix_ns: Vec<(&'static KeybindAction, Chord)> = Vec::new();
+    let mut loaded = LoadedSections {
+        sections: Vec::new(),
+        router: Vec::new(),
+        prefix_namespace: Vec::new(),
+    };
 
-    for (section_name, raw_section) in &raw.sections {
+    for (section_name, raw_section) in raw_sections {
         if let Some(first) = seen_sections
             .iter()
             .find(|seen| seen.eq_ignore_ascii_case(section_name))
@@ -263,8 +293,8 @@ pub fn load(raw: &RawKeybinds) -> Result<Keybinds, KeybindsError> {
         for (id, chord) in &raw_section.router {
             let action = lookup_in_section(id, section_name)?;
             let entry = format!("keys.{section_name}.{id}");
-            let parsed = parse_configured(chord, &entry, &reserved)?;
-            configured_router.push((action, parsed));
+            let parsed = parse_configured(chord, &entry, reserved)?;
+            loaded.router.push((action, parsed));
             bindings.router.push((action.id, parsed));
         }
         for (id, chord) in &raw_section.prefix {
@@ -276,55 +306,61 @@ pub fn load(raw: &RawKeybinds) -> Result<Keybinds, KeybindsError> {
                 });
             }
             let entry = format!("keys.{section_name}.prefix.{id}");
-            let parsed = parse_configured(chord, &entry, &reserved)?;
-            configured_prefix_ns.push((action, parsed));
+            let parsed = parse_configured(chord, &entry, reserved)?;
+            loaded.prefix_namespace.push((action, parsed));
             bindings.prefix.push((action.id, parsed));
         }
-        sections.push((section, bindings));
+        loaded.sections.push((section, bindings));
     }
 
-    let keybinds = Keybinds { prefix, sections };
+    Ok(loaded)
+}
 
-    // The prefix chord must not collide with any other configured or declared
-    // binding (router scope or prefix namespace).
-    if let Some(prefix) = keybinds.prefix {
-        for (action, chord) in &configured_router {
-            if *chord == prefix {
-                return Err(KeybindsError::PrefixCollision {
-                    chord: prefix.to_string(),
-                    entry: format!("keys.{}.{}", action.section.name(), action.id),
-                });
-            }
-        }
-        for (action, chord) in &configured_prefix_ns {
-            if *chord == prefix {
-                return Err(KeybindsError::PrefixCollision {
-                    chord: prefix.to_string(),
-                    entry: format!("keys.{}.prefix.{}", action.section.name(), action.id),
-                });
-            }
-        }
-        for action in KEYBIND_ACTIONS {
-            if configured_router
-                .iter()
-                .any(|(configured, _)| configured.id == action.id)
-            {
-                continue;
-            }
-            if action.parsed_default_chords().contains(&prefix) {
-                return Err(KeybindsError::PrefixCollision {
-                    chord: prefix.to_string(),
-                    entry: format!("keys.{}.{}", action.section.name(), action.id),
-                });
-            }
+fn reject_prefix_collisions(
+    keybinds: &Keybinds,
+    configured_router: &[(&'static KeybindAction, Chord)],
+    configured_prefix_ns: &[(&'static KeybindAction, Chord)],
+) -> Result<(), KeybindsError> {
+    let Some(prefix) = keybinds.prefix else {
+        return Ok(());
+    };
+    for (action, chord) in configured_router {
+        if *chord == prefix {
+            return Err(KeybindsError::PrefixCollision {
+                chord: prefix.to_string(),
+                entry: format!("keys.{}.{}", action.section.name(), action.id),
+            });
         }
     }
+    for (action, chord) in configured_prefix_ns {
+        if *chord == prefix {
+            return Err(KeybindsError::PrefixCollision {
+                chord: prefix.to_string(),
+                entry: format!("keys.{}.prefix.{}", action.section.name(), action.id),
+            });
+        }
+    }
+    for action in KEYBIND_ACTIONS {
+        if configured_router
+            .iter()
+            .any(|(configured, _)| configured.id == action.id)
+        {
+            continue;
+        }
+        if action.parsed_default_chords().contains(&prefix) {
+            return Err(KeybindsError::PrefixCollision {
+                chord: prefix.to_string(),
+                entry: format!("keys.{}.{}", action.section.name(), action.id),
+            });
+        }
+    }
+    Ok(())
+}
 
-    // Router-scope: a configured chord must not equal any other action's
-    // effective chord (configured or declared default). Pure default-vs-
-    // default pairs are exempt — the declaration test pins that no two
-    // actions share a default chord.
-    for (action, chord) in &configured_router {
+fn reject_router_collisions(
+    configured_router: &[(&'static KeybindAction, Chord)],
+) -> Result<(), KeybindsError> {
+    for (action, chord) in configured_router {
         for other in KEYBIND_ACTIONS {
             if other.id == action.id {
                 continue;
@@ -345,8 +381,12 @@ pub fn load(raw: &RawKeybinds) -> Result<Keybinds, KeybindsError> {
             }
         }
     }
+    Ok(())
+}
 
-    // Prefix namespace: two configured assignments must not share a chord.
+fn reject_prefix_namespace_collisions(
+    configured_prefix_ns: &[(&'static KeybindAction, Chord)],
+) -> Result<(), KeybindsError> {
     for (index, (first, chord)) in configured_prefix_ns.iter().enumerate() {
         for (second, other_chord) in configured_prefix_ns.iter().skip(index + 1) {
             if first.id != second.id && chord == other_chord {
@@ -358,8 +398,7 @@ pub fn load(raw: &RawKeybinds) -> Result<Keybinds, KeybindsError> {
             }
         }
     }
-
-    Ok(keybinds)
+    Ok(())
 }
 
 fn lookup_in_section(
