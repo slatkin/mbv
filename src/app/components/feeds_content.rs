@@ -231,34 +231,13 @@ impl FeedsContent {
         {
             return None;
         }
+        if self.handle_navigation_key(key.code) {
+            return None;
+        }
         match key.code {
             Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::RefreshFeeds))),
             Key::Char('w') => {
                 self.cycle_watched_filter();
-                None
-            }
-            Key::Up | Key::Char('k') | Key::Left | Key::Char('h') => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Move(-1), None);
-                None
-            }
-            Key::Down | Key::Char('j') | Key::Right | Key::Char('l') => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Move(1), None);
-                None
-            }
-            Key::PageUp => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Page(-1), None);
-                None
-            }
-            Key::PageDown => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Page(1), None);
-                None
-            }
-            Key::Home => {
-                self.delegate_row_local_input(MediaListSurfaceInput::First, None);
-                None
-            }
-            Key::End => {
-                self.delegate_row_local_input(MediaListSurfaceInput::Last, None);
                 None
             }
             Key::Char('[') => {
@@ -269,53 +248,81 @@ impl FeedsContent {
                 self.cycle_group(1);
                 None
             }
-            Key::Enter => match self
-                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-                .external_intent
-            {
-                Some(RowIntent::Activate(target)) => {
-                    Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(
-                        self.entry_for_target(&target)
-                            .cloned()
-                            .into_iter()
-                            .collect(),
-                    ))))
-                }
-                _ => Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(Vec::new())))),
-            },
-            Key::Char('.') => {
-                let target = self.carrier.selected_target()?.clone();
-                let entries = match self
-                    .delegate_row_local_input(MediaListSurfaceInput::Context, None)
-                    .external_intent
-                {
-                    Some(RowIntent::ContextSelection(targets)) => targets
-                        .into_iter()
-                        .filter_map(|target| self.entry_for_target(&target).cloned())
-                        .collect(),
-                    _ => vec![self.entry_for_target(&target)?.clone()],
-                };
-                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
-                    None,
-                ))))
-            }
-            Key::Char('e') => match self
-                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
-                .external_intent
-            {
-                Some(RowIntent::Activate(target)) => {
-                    Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(
-                        self.entry_for_target(&target)
-                            .cloned()
-                            .into_iter()
-                            .collect(),
-                    ))))
-                }
-                _ => Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(Vec::new())))),
-            },
+            Key::Enter => self.play_selected_feed(),
+            Key::Char('e') => self.enqueue_selected_feed(),
+            Key::Char('.') => self.open_selected_feed_context(),
             _ => None,
         }
+    }
+
+    fn handle_navigation_key(&mut self, key: Key) -> bool {
+        let input = match key {
+            Key::Up | Key::Char('k') | Key::Left | Key::Char('h') => {
+                MediaListSurfaceInput::Move(-1)
+            }
+            Key::Down | Key::Char('j') | Key::Right | Key::Char('l') => {
+                MediaListSurfaceInput::Move(1)
+            }
+            Key::PageUp => MediaListSurfaceInput::Page(-1),
+            Key::PageDown => MediaListSurfaceInput::Page(1),
+            Key::Home => MediaListSurfaceInput::First,
+            Key::End => MediaListSurfaceInput::Last,
+            _ => return false,
+        };
+        self.delegate_row_local_input(input, None);
+        true
+    }
+
+    fn play_selected_feed(&mut self) -> Option<Msg> {
+        match self
+            .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+            .external_intent
+        {
+            Some(RowIntent::Activate(target)) => {
+                Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(
+                    self.entry_for_target(&target)
+                        .cloned()
+                        .into_iter()
+                        .collect(),
+                ))))
+            }
+            _ => Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(Vec::new())))),
+        }
+    }
+
+    fn enqueue_selected_feed(&mut self) -> Option<Msg> {
+        match self
+            .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+            .external_intent
+        {
+            Some(RowIntent::Activate(target)) => {
+                Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(
+                    self.entry_for_target(&target)
+                        .cloned()
+                        .into_iter()
+                        .collect(),
+                ))))
+            }
+            _ => Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(Vec::new())))),
+        }
+    }
+
+    fn open_selected_feed_context(&mut self) -> Option<Msg> {
+        let target = self.carrier.selected_target()?.clone();
+        let entries = match self
+            .delegate_row_local_input(MediaListSurfaceInput::Context, None)
+            .external_intent
+        {
+            Some(RowIntent::ContextSelection(targets)) => targets
+                .into_iter()
+                .filter_map(|target| self.entry_for_target(&target).cloned())
+                .collect(),
+            _ => vec![self.entry_for_target(&target)?.clone()],
+        };
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
+            None,
+        ))))
     }
 
     fn rebuild_visible_entries(&mut self) {
