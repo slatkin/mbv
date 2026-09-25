@@ -11,68 +11,7 @@ impl App {
                 play_now,
                 start_position_ticks,
                 start_index,
-            } => {
-                log::info!(target: "ws", "Play: {} id(s), play_now={play_now}", item_ids.len());
-                if !play_now {
-                    return;
-                }
-                self.on_queue_replace_silent();
-                let items = {
-                    let Some(client) = self.emby_client() else {
-                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                        return;
-                    };
-                    let c = client.lock().unwrap();
-                    match c.get_items_by_ids(&item_ids) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            let msg = format!("Couldn't play from remote: {e}");
-                            drop(c);
-                            self.flash(msg, ToastSeverity::Error);
-                            return;
-                        }
-                    }
-                };
-                if items.is_empty() {
-                    log::warn!(target: "ws", "Play: no items found for ids={}", item_ids.join(","));
-                    return;
-                }
-                let start_idx = start_index.min(items.len().saturating_sub(1));
-                self.set_panel_focus(PanelFocus::Queue);
-                self.queue_source = crate::config::QueueSource::Remote;
-                if items.len() == 1 {
-                    let mut item = items[0].clone();
-                    if start_position_ticks > 0 {
-                        item.playback_position_ticks = start_position_ticks;
-                    }
-                    self.player_tab.set_items(vec![item.clone()], 0);
-                    self.flash(item.playback_label(), ToastSeverity::Neutral);
-                    self.submit_tab_queue(
-                        self.playing_queue_scope(),
-                        0,
-                        crate::config::QueueSource::Remote,
-                    );
-                } else {
-                    log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
-                    // Always hand the whole list to play_queue (not just the clicked
-                    // item) so the remote-controlled queue continues past start_idx.
-                    // play_queue already handles the "something is already playing"
-                    // case in place via unified queue submission.
-                    let mut items_with_pos = items.clone();
-                    if start_position_ticks > 0 {
-                        items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
-                    }
-                    self.player_tab.set_items(items_with_pos, start_idx);
-                    // Keep the tab's canonical slot identities when starting
-                    // this replacement; do not mint a fresh sequential run.
-                    self.submit_tab_queue(
-                        self.playing_queue_scope(),
-                        start_idx,
-                        crate::config::QueueSource::Remote,
-                    );
-                }
-                self.save_queue_state();
-            }
+            } => self.handle_ws_play(&item_ids, play_now, start_position_ticks, start_index),
             WsEvent::Stop => {
                 self.reset_bare_transitions();
                 self.player.stop();
@@ -151,6 +90,75 @@ impl App {
                 }
             }
         }
+    }
+
+    fn handle_ws_play(
+        &mut self,
+        item_ids: &[String],
+        play_now: bool,
+        start_position_ticks: i64,
+        start_index: usize,
+    ) {
+        log::info!(target: "ws", "Play: {} id(s), play_now={play_now}", item_ids.len());
+        if !play_now {
+            return;
+        }
+        self.on_queue_replace_silent();
+        let items = {
+            let Some(client) = self.emby_client() else {
+                self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+                return;
+            };
+            let c = client.lock().unwrap();
+            match c.get_items_by_ids(item_ids) {
+                Ok(v) => v,
+                Err(e) => {
+                    let msg = format!("Couldn't play from remote: {e}");
+                    drop(c);
+                    self.flash(msg, ToastSeverity::Error);
+                    return;
+                }
+            }
+        };
+        if items.is_empty() {
+            log::warn!(target: "ws", "Play: no items found for ids={}", item_ids.join(","));
+            return;
+        }
+        let start_idx = start_index.min(items.len().saturating_sub(1));
+        self.set_panel_focus(PanelFocus::Queue);
+        self.queue_source = crate::config::QueueSource::Remote;
+        if items.len() == 1 {
+            let mut item = items[0].clone();
+            if start_position_ticks > 0 {
+                item.playback_position_ticks = start_position_ticks;
+            }
+            self.player_tab.set_items(vec![item.clone()], 0);
+            self.flash(item.playback_label(), ToastSeverity::Neutral);
+            self.submit_tab_queue(
+                self.playing_queue_scope(),
+                0,
+                crate::config::QueueSource::Remote,
+            );
+        } else {
+            log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
+            // Always hand the whole list to play_queue (not just the clicked
+            // item) so the remote-controlled queue continues past start_idx.
+            // play_queue already handles the "something is already playing"
+            // case in place via unified queue submission.
+            let mut items_with_pos = items.clone();
+            if start_position_ticks > 0 {
+                items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
+            }
+            self.player_tab.set_items(items_with_pos, start_idx);
+            // Keep the tab's canonical slot identities when starting
+            // this replacement; do not mint a fresh sequential run.
+            self.submit_tab_queue(
+                self.playing_queue_scope(),
+                start_idx,
+                crate::config::QueueSource::Remote,
+            );
+        }
+        self.save_queue_state();
     }
 }
 
