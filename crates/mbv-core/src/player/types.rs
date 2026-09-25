@@ -532,70 +532,87 @@ pub(super) fn select_tracks(
     audio_lang: &str,
     prefs: &SubtitlePrefs,
 ) -> (Option<i64>, Option<Option<i64>>) {
-    let audio = if prefs.audio_lang.is_empty()
-        || audio_tracks
+    (
+        preferred_audio_track(audio_tracks, audio_id, &prefs.audio_lang),
+        preferred_subtitle_track(sub_tracks, audio_lang, prefs),
+    )
+}
+
+fn preferred_audio_track(tracks: &[(i64, String)], current_id: i64, language: &str) -> Option<i64> {
+    if language.is_empty()
+        || tracks
             .iter()
-            .find(|(id, _)| *id == audio_id)
-            .is_some_and(|(_, label)| label_matches_lang(label, &prefs.audio_lang))
+            .find(|(id, _)| *id == current_id)
+            .is_some_and(|(_, label)| label_matches_lang(label, language))
     {
         None
     } else {
-        audio_tracks
+        tracks
             .iter()
-            .find(|(_, label)| label_matches_lang(label, &prefs.audio_lang))
+            .find(|(_, label)| label_matches_lang(label, language))
             .map(|(id, _)| *id)
-    };
-    let subtitle = match prefs.mode.as_str() {
+    }
+}
+
+fn preferred_subtitle_track(
+    tracks: &[(i64, String, bool)],
+    audio_lang: &str,
+    prefs: &SubtitlePrefs,
+) -> Option<Option<i64>> {
+    match prefs.mode.as_str() {
         "" | "Default" => None,
         "None" => Some(None),
-        "OnlyForced" => Some(
-            sub_tracks
-                .iter()
-                .find(|(_, label, forced)| {
-                    *forced && label_matches_lang(label, &prefs.subtitle_lang)
-                })
-                .or_else(|| sub_tracks.iter().find(|(_, _, forced)| *forced))
-                .map(|(id, _, _)| *id),
-        ),
-        "Always" => Some(
-            sub_tracks
-                .iter()
-                .find(|(_, label, _)| label_matches_lang(label, &prefs.subtitle_lang))
-                .or_else(|| sub_tracks.first())
-                .map(|(id, _, _)| *id),
-        ),
-        "Smart" => {
-            let audio_name = lang_code_to_name(audio_lang).to_lowercase();
-            if !prefs.subtitle_lang.is_empty() && audio_name == prefs.subtitle_lang.to_lowercase() {
-                Some(None)
-            } else {
-                Some(
-                    sub_tracks
-                        .iter()
-                        .find(|(_, label, _)| label_matches_lang(label, &prefs.subtitle_lang))
-                        .or_else(|| sub_tracks.first())
-                        .map(|(id, _, _)| *id),
-                )
-            }
-        }
-        "HearingImpaired" => Some(
-            sub_tracks
-                .iter()
-                .find(|(_, label, _)| {
-                    let label = label.to_lowercase();
-                    label.contains("sdh") || label.contains(" cc") || label.contains("(cc)")
-                })
-                .or_else(|| {
-                    sub_tracks
-                        .iter()
-                        .find(|(_, label, _)| label_matches_lang(label, &prefs.subtitle_lang))
-                })
-                .or_else(|| sub_tracks.first())
-                .map(|(id, _, _)| *id),
-        ),
+        "OnlyForced" => Some(only_forced_subtitle(tracks, &prefs.subtitle_lang)),
+        "Always" => Some(language_subtitle_or_first(tracks, &prefs.subtitle_lang)),
+        "Smart" => Some(smart_subtitle(tracks, audio_lang, &prefs.subtitle_lang)),
+        "HearingImpaired" => Some(hearing_impaired_subtitle(tracks, &prefs.subtitle_lang)),
         _ => None,
-    };
-    (audio, subtitle)
+    }
+}
+
+fn only_forced_subtitle(tracks: &[(i64, String, bool)], language: &str) -> Option<i64> {
+    tracks
+        .iter()
+        .find(|(_, label, forced)| *forced && label_matches_lang(label, language))
+        .or_else(|| tracks.iter().find(|(_, _, forced)| *forced))
+        .map(|(id, _, _)| *id)
+}
+
+fn language_subtitle_or_first(tracks: &[(i64, String, bool)], language: &str) -> Option<i64> {
+    tracks
+        .iter()
+        .find(|(_, label, _)| label_matches_lang(label, language))
+        .or_else(|| tracks.first())
+        .map(|(id, _, _)| *id)
+}
+
+fn smart_subtitle(
+    tracks: &[(i64, String, bool)],
+    audio_lang: &str,
+    subtitle_lang: &str,
+) -> Option<i64> {
+    let audio_name = lang_code_to_name(audio_lang).to_lowercase();
+    if !subtitle_lang.is_empty() && audio_name == subtitle_lang.to_lowercase() {
+        None
+    } else {
+        language_subtitle_or_first(tracks, subtitle_lang)
+    }
+}
+
+fn hearing_impaired_subtitle(tracks: &[(i64, String, bool)], language: &str) -> Option<i64> {
+    tracks
+        .iter()
+        .find(|(_, label, _)| {
+            let label = label.to_lowercase();
+            label.contains("sdh") || label.contains(" cc") || label.contains("(cc)")
+        })
+        .or_else(|| {
+            tracks
+                .iter()
+                .find(|(_, label, _)| label_matches_lang(label, language))
+        })
+        .or_else(|| tracks.first())
+        .map(|(id, _, _)| *id)
 }
 
 pub(super) fn auto_select_tracks(
