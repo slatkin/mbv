@@ -515,13 +515,7 @@ impl Model {
             // selected before its asynchronous snapshot arrived.
             self.record_home_latest_acknowledgement(latest_source.clone());
         }
-        let latest_has_new_content = self
-            .tv_latest_snapshots
-            .get(&library_id)
-            .is_some_and(|snapshot| snapshot.has_new_content);
-        let latest_acknowledged = self
-            .acknowledged_home_latest_sources
-            .contains(&latest_source);
+        let latest_marker = self.destination_latest_marker(&latest_source);
         let list_pane_width = self.app.list_pane_width;
         // Panel focus is the library area's focus bit; the owner paints its
         // focused pane and claims local chords from it (task 8.4).
@@ -530,7 +524,7 @@ impl Model {
         self.update_tv_owner(|owner| {
             owner.set_is_wide(is_wide);
             owner.set_list_pane_width(list_pane_width);
-            owner.set_latest_marker(latest_has_new_content && !latest_acknowledged);
+            owner.set_latest_marker(latest_marker);
             owner.set_content(context);
             owner.set_focused(library_focused);
         });

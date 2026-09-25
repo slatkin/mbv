@@ -78,17 +78,11 @@ impl Model {
         if selected_latest && !self.acknowledged_home_latest_sources.contains(&source) {
             self.record_home_latest_acknowledgement(source.clone());
         }
-        let has_new = latest.iter().any(|item| {
-            crate::app::state::home_latest::is_new_in_launch_window(
-                item,
-                self.app.home_latest_launch_window,
-            )
-        });
-        let acknowledged = self.acknowledged_home_latest_sources.contains(&source);
+        let latest_marker = self.destination_latest_marker(&source);
         self.update_abs_podcast_owner(|owner| {
             owner.set_content(&snapshot, images_enabled);
             owner.set_latest_items(&latest);
-            owner.set_latest_marker(has_new && !acknowledged);
+            owner.set_latest_marker(latest_marker);
             owner.set_focused(focused);
         });
     }

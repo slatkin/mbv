@@ -160,6 +160,42 @@ impl Model {
             }
         }
     }
+
+    pub(in crate::app) fn destination_latest_marker(
+        &self,
+        source: &DestinationLatestSource,
+    ) -> bool {
+        let has_new_content = match source {
+            DestinationLatestSource::Emby(library_id) => self
+                .tv_latest_snapshots
+                .get(library_id)
+                .is_some_and(|snapshot| snapshot.has_new_content),
+            DestinationLatestSource::Audiobookshelf(library_id) => self
+                .app
+                .audiobookshelf_shelf_cache
+                .get(library_id)
+                .is_some_and(|items| {
+                    items.iter().any(|item| {
+                        crate::app::state::home_latest::is_new_in_launch_window(
+                            item,
+                            self.app.home_latest_launch_window,
+                        )
+                    })
+                }),
+            DestinationLatestSource::Feeds => self.app.feed_tab.all_entries.iter().any(|entry| {
+                self.app
+                    .home_latest_launch_window
+                    .previous
+                    .is_some_and(|previous| {
+                        entry.pub_date_secs.is_some_and(|timestamp| {
+                            previous < timestamp
+                                && timestamp <= self.app.home_latest_launch_window.current
+                        })
+                    })
+            }),
+        };
+        has_new_content && !self.acknowledged_home_latest_sources.contains(source)
+    }
 }
 
 fn recompute_destination_latest_marker(
