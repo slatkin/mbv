@@ -100,21 +100,6 @@ fn hide_visual_slot_falls_through_to_text_entry() {
 }
 
 #[test]
-fn hide_visual_slot_precedes_focused_feeds_content() {
-    let key = crossterm::event::KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
-    let focused = crate::app::components::ComponentId::Library;
-    assert_eq!(
-        crate::app::input::router::resolve_router_outcome_with_focused(
-            key,
-            &snapshot(),
-            Some(&focused),
-            &keybinds()
-        ),
-        crate::app::input::router::RouterOutcome::Command(Command::ToggleVisualSlotHidden)
-    );
-}
-
-#[test]
 fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     let mut active = snapshot();
     active.player_active = true;

@@ -35,6 +35,30 @@ fn library_focus_routes_bracket_to_library_leaf() {
      if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryLatestSelected)));
 }
 #[test]
+fn global_hide_visual_slot_discards_feeds_h_move_up_message() {
+    // Spec scenario: the global `h` hide action takes precedence over Feeds'
+    // local vim-style move-up, represented by its selection projection message.
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
+        crate::app::components::media_list::SelectionSummary {
+            count: 1,
+            origin: crate::app::components::media_list::SelectionOrigin::Library(
+                crate::app::components::media_list::LibrarySelectionOrigin::Feeds,
+            ),
+        },
+    ))));
+    let out = fold_tick_focused(
+        leaf,
+        key(KeyCode::Char('h')),
+        Some(ComponentId::Library),
+        idle_snapshot(),
+    );
+    assert!(
+        out.is_empty(),
+        "global hide-visual-slot command must discard Feeds' local h message"
+    );
+}
+
+#[test]
 fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
     let leaf = Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryEnqueue {
         item: crate::app::tests::make_item("item", "Movie"),
