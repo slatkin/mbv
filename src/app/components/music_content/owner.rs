@@ -317,11 +317,24 @@ impl MusicContent {
     /// The outer option distinguishes an unhandled key from a handled key
     /// whose local action emits no message.
     fn on_key_track_focused(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+        self.on_key_track_focus_exit(key)
+            .or_else(|| self.on_key_track_move(key))
+            .or_else(|| self.on_key_track_overlay_navigation(key))
+            .or_else(|| self.on_key_track_context_menu(key))
+    }
+
+    fn on_key_track_focus_exit(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
         match key.code {
             Key::Esc | Key::Backspace if self.track_focused => {
                 self.clear_track_focus();
                 Some(None)
             }
+            _ => None,
+        }
+    }
+
+    fn on_key_track_move(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+        match key.code {
             Key::Up | Key::Char('k') if self.track_focused => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Move(-1)
@@ -338,8 +351,15 @@ impl MusicContent {
                 );
                 Some(None)
             }
-            // Overlay pager/jump chords move the focused track list, never
-            // the covered album browser.
+            _ => None,
+        }
+    }
+
+    /// Overlay pager/jump chords move the focused track list, never the
+    /// covered album browser. Outside this guard, album navigation still sees
+    /// Home/End/PageUp/PageDown even while a track is focused.
+    fn on_key_track_overlay_navigation(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+        match key.code {
             Key::PageUp if self.hero_overlay_open && self.track_focused => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Page(-1)
@@ -364,7 +384,13 @@ impl MusicContent {
                 self.track_list.select_last();
                 Some(None)
             }
-            // The focused track's own menu wins over the album menu.
+            _ => None,
+        }
+    }
+
+    /// The focused track's own menu wins over the album menu.
+    fn on_key_track_context_menu(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+        match key.code {
             Key::Char('.') if self.track_focused => Some(self.workspace_track_context_menu()),
             _ => None,
         }
