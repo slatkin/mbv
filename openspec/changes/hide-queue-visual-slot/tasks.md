@@ -2,16 +2,16 @@
 
 ## 1. State, persistence, and keybinding
 
-- [ ] 1.1 Add `visual_slot_hidden: bool` to `App` (`src/app/state/app_struct.rs`). In
+- [x] 1.1 Add `visual_slot_hidden: bool` to `App` (`src/app/state/app_struct.rs`). In
   `construct.rs` read it from prefs (missing or non-bool → `false`), and write it in
   `save_prefs` (`src/app/input.rs`). Verify with a prefs round-trip unit test next to
   `list_pane_width_prefs_round_trip_width_and_null`: `true` saved then loaded is `true`, and a
   missing key loads `false`.
-- [ ] 1.2 Declare `hide_visual_slot` in `KEYBIND_ACTIONS` (`crates/mbv-core/src/keybinds/registry.rs`,
+- [x] 1.2 Declare `hide_visual_slot` in `KEYBIND_ACTIONS` (`crates/mbv-core/src/keybinds/registry.rs`,
   section `Playback`, default `["h"]`, gate `NoBlockingOverlay`, rebindable, prefix-addressable).
   Update the table's count doc comment. Verify: `cargo nextest run -p mbv-core keybinds` passes,
   including the registry's own consistency tests.
-- [ ] 1.3 Add a `KeyPolicyEntry` named `hide_visual_slot` next to `visualizer`
+- [x] 1.3 Add a `KeyPolicyEntry` named `hide_visual_slot` next to `visualizer`
   (`src/app/input/key_policy.rs`; `global: true`, `NoBlockingOverlay`) with a new
   `KeyPolicyBinding` → a new `Command::ToggleVisualSlotHidden` (`src/app/dispatch/action.rs`,
   exhaustive arm, no wildcard). The command flips the flag, calls `sync_visualizer`, and calls
