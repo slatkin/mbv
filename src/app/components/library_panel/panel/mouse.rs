@@ -298,56 +298,38 @@ impl LibraryPanel {
             .workspace
             .is_some_and(|(panel, _)| panel.contains(at))
         {
-            return match gesture {
-                MouseGesture::Click { at, modifier } => {
-                    let input = match modifier {
-                        ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
-                        ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
-                        ClickModifier::None => MediaListSurfaceInput::Click(at),
-                    };
-                    self.slot_event(LibrarySlotEvent::HeroPane(input))
-                }
-                MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
-                    MediaListSurfaceInput::DoubleClick(at),
-                )),
-                MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
-                    MediaListSurfaceInput::ContextClick(at),
-                )),
-                MouseGesture::Scroll { at, delta } => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
-                        at,
-                        delta,
-                    }))
-                }
-                _ => None,
-            };
+            return self.hero_surface_gesture(gesture);
         }
         if matches!(gesture, MouseGesture::DoubleClick(_)) {
-            let result = self
-                .owners
-                .active_mut()
-                .map(|owner| owner.activate_hero_selection())
-                .unwrap_or(LeafKeyResult::Unhandled);
-            return match result {
-                // A pointer gesture always claims as mouse. Preserve a
-                // destination request, but never leak a keyboard claim from
-                // an owner's legacy leaf disposition.
-                LeafKeyResult::Consumed(Some(message))
-                    if matches!(message.as_ref(), Msg::TerminalEvent(_)) =>
-                {
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-                }
-                LeafKeyResult::Consumed(message) => message.map(|message| *message).or(Some(
-                    Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed),
-                )),
-                LeafKeyResult::Unhandled => {
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-                }
-            };
+            return self.activate_overlay_hero_selection();
         }
         Some(Msg::TerminalEvent(
             crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
         ))
+    }
+
+    fn activate_overlay_hero_selection(&mut self) -> Option<Msg> {
+        let result = self
+            .owners
+            .active_mut()
+            .map(|owner| owner.activate_hero_selection())
+            .unwrap_or(LeafKeyResult::Unhandled);
+        match result {
+            // A pointer gesture always claims as mouse. Preserve a
+            // destination request, but never leak a keyboard claim from an
+            // owner's legacy leaf disposition.
+            LeafKeyResult::Consumed(Some(message))
+                if matches!(message.as_ref(), Msg::TerminalEvent(_)) =>
+            {
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            LeafKeyResult::Consumed(message) => message.map(|message| *message).or(Some(
+                Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed),
+            )),
+            LeafKeyResult::Unhandled => {
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+        }
     }
 
     pub(super) fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
