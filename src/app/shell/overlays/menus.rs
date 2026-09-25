@@ -259,40 +259,52 @@ impl Model {
             return;
         };
         self.dismiss_popup(&id);
-        self.commit_multiselect(kind, items);
+        self.commit_multiselect(kind, &items);
     }
 
-    fn commit_multiselect(&mut self, kind: MultiSelectKind, items: Vec<(String, String, bool)>) {
+    fn commit_multiselect(&mut self, kind: MultiSelectKind, items: &[(String, String, bool)]) {
         if matches!(kind, MultiSelectKind::MyLanguages) {
-            let selected: Vec<String> = items
-                .iter()
-                .filter(|(_, _, is_sel)| *is_sel)
-                .map(|(_, name, _)| name.clone())
-                .collect();
-            {
-                let mut c = self.app.config.lock().unwrap();
-                if !selected.is_empty() {
-                    if !c.subtitle_lang.is_empty() && !selected.contains(&c.subtitle_lang) {
-                        c.subtitle_lang = String::new();
-                    }
-                    if !c.audio_lang.is_empty() && !selected.contains(&c.audio_lang) {
-                        c.audio_lang = String::new();
-                    }
-                }
-                c.my_languages = selected;
-            }
-            let cfg = self.app.config.lock().unwrap().clone();
-            {
-                let mut p = self.app.player.subtitle_prefs.lock().unwrap();
-                p.subtitle_lang = cfg.subtitle_lang.clone();
-                p.audio_lang = cfg.audio_lang.clone();
-            }
-            if let Err(e) = crate::config::save_config_settings(&cfg) {
-                log::warn!(target: "config", "config save failed: {e}");
-            }
+            self.commit_my_languages(items);
             return;
         }
 
+        self.commit_library_list_selection(kind, items);
+    }
+
+    fn commit_my_languages(&mut self, items: &[(String, String, bool)]) {
+        let selected: Vec<String> = items
+            .iter()
+            .filter(|(_, _, is_sel)| *is_sel)
+            .map(|(_, name, _)| name.clone())
+            .collect();
+        {
+            let mut c = self.app.config.lock().unwrap();
+            if !selected.is_empty() {
+                if !c.subtitle_lang.is_empty() && !selected.contains(&c.subtitle_lang) {
+                    c.subtitle_lang = String::new();
+                }
+                if !c.audio_lang.is_empty() && !selected.contains(&c.audio_lang) {
+                    c.audio_lang = String::new();
+                }
+            }
+            c.my_languages = selected;
+        };
+        let cfg = self.app.config.lock().unwrap().clone();
+        {
+            let mut p = self.app.player.subtitle_prefs.lock().unwrap();
+            p.subtitle_lang.clone_from(&cfg.subtitle_lang);
+            p.audio_lang.clone_from(&cfg.audio_lang);
+        };
+        if let Err(e) = crate::config::save_config_settings(&cfg) {
+            log::warn!(target: "config", "config save failed: {e}");
+        }
+    }
+
+    fn commit_library_list_selection(
+        &mut self,
+        kind: MultiSelectKind,
+        items: &[(String, String, bool)],
+    ) {
         let hidden: Vec<String> = items
             .iter()
             .filter(|(_, _, is_hidden)| *is_hidden)
@@ -301,8 +313,8 @@ impl Model {
         {
             let mut c = self.app.config.lock().unwrap();
             match kind {
-                MultiSelectKind::HiddenLibraries => c.hidden_libraries = hidden.clone(),
-                MultiSelectKind::FeedViewLibraries => c.feed_view_libraries = hidden.clone(),
+                MultiSelectKind::HiddenLibraries => c.hidden_libraries.clone_from(&hidden),
+                MultiSelectKind::FeedViewLibraries => c.feed_view_libraries.clone_from(&hidden),
                 MultiSelectKind::MyLanguages => unreachable!(),
             }
         }
