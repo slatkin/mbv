@@ -19,6 +19,10 @@ fn list_pane_width_from_prefs(prefs: &serde_json::Value) -> Option<u16> {
     prefs["list_pane_width"].as_u64().map(|v| v as u16)
 }
 
+fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
+    prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
+}
+
 impl App {
     /// Construct a local player and its worker channels through the ordinary
     /// startup path. The fall-through path uses this before it tears down an
@@ -185,6 +189,7 @@ impl App {
                 .map(|v| (v as u16).max(LEFT_WIDTH_DEFAULT))
                 .unwrap_or(LEFT_WIDTH_DEFAULT),
             list_pane_width: list_pane_width_from_prefs(&prefs),
+            visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
             // Mini view always starts on the queue panel; not persisted.
             mini_view_focus: PanelFocus::Queue,
@@ -719,7 +724,18 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use super::list_pane_width_from_prefs;
+    use super::{list_pane_width_from_prefs, visual_slot_hidden_from_prefs};
+
+    #[test]
+    fn visual_slot_hidden_pref_defaults_false_for_missing_or_invalid_values() {
+        assert!(!visual_slot_hidden_from_prefs(&serde_json::json!({})));
+        assert!(!visual_slot_hidden_from_prefs(
+            &serde_json::json!({ "visual_slot_hidden": "true" })
+        ));
+        assert!(visual_slot_hidden_from_prefs(
+            &serde_json::json!({ "visual_slot_hidden": true })
+        ));
+    }
 
     #[test]
     fn list_pane_width_pref_accepts_width_and_rejects_empty_or_invalid_values() {

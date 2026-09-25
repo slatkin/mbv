@@ -229,6 +229,7 @@ pub struct App {
     /// hero surface and clamped against each surface's active content-area
     /// width at paint time (`list_pane_width`).
     pub(in crate::app) list_pane_width: Option<u16>,
+    pub(in crate::app) visual_slot_hidden: bool,
     pub(in crate::app) panel_mode: PanelMode,
     pub(in crate::app) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
     /// The one startup launch snapshot loaded from disk. Its tab identity is
