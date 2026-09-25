@@ -345,61 +345,7 @@ impl FeedsContent {
         let now = current_time_secs();
         let rows: Vec<MediaListRow<String>> = feed_display_rows(&self.visible_entries, now)
             .into_iter()
-            .map(|row| match row {
-                FeedDisplayRow::Spacer => MediaListRow::Spacer,
-                FeedDisplayRow::Heading(group) => MediaListRow::Heading {
-                    text: group.label().to_string(),
-                },
-                FeedDisplayRow::Entry(index) => {
-                    let entry = &self.visible_entries[index];
-                    let (primary, secondary, trailing) = if self.latest_selected {
-                        let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
-                            self.subscriptions
-                                .iter()
-                                .find(|subscription| subscription.url == feed_id)
-                                .map(|subscription| subscription.name.as_str())
-                        });
-                        let queue_item = QueueItem::Feed(entry.clone());
-                        let parts = queue_item.playback_title_parts(feed_name);
-                        let (primary, secondary) = match parts.context {
-                            Some(context) => (context.text, Some(parts.title.text)),
-                            None => (parts.title.text, None),
-                        };
-                        let trailing =
-                            crate::app::state::home_latest::provider_timestamp_secs(&queue_item)
-                                .map(crate::app::ui_util::fmt_publish_date_short)
-                                .filter(|date| !date.is_empty())
-                                .map(MediaListTrailing::Gutter);
-                        (primary, secondary, trailing)
-                    } else {
-                        (entry.title.clone(), None, None)
-                    };
-                    MediaListRow::Item {
-                        target: entry.guid.clone(),
-                        primary,
-                        secondary,
-                        trailing,
-                        // Library lists carry no time column (only the Queue
-                        // list and the sessions modal show one).
-                        duration: None,
-                        kind: MediaKind::Media,
-                        semantic_state: if entry.played {
-                            MediaSemanticState::Played
-                        } else if entry.position_ticks > 0 {
-                            let progress = entry
-                                .duration_ticks
-                                .filter(|duration| *duration > 0)
-                                .map(|duration| {
-                                    ((entry.position_ticks.max(0) as u64 * 100) / duration).min(100)
-                                        as u16
-                                });
-                            MediaSemanticState::active(progress)
-                        } else {
-                            MediaSemanticState::Ordinary
-                        },
-                    }
-                }
-            })
+            .map(|row| self.media_list_row(row))
             .collect();
         // Ordinary refresh: an unchanged projection preserves the shared
         // owner's painted frame instead of re-issuing it (the 6.1
@@ -408,6 +354,65 @@ impl FeedsContent {
         if self.last_projected_rows.as_ref() != Some(&rows) {
             self.carrier.set_content(rows.clone());
             self.last_projected_rows = Some(rows);
+        }
+    }
+
+    fn media_list_row(&self, row: FeedDisplayRow) -> MediaListRow<String> {
+        match row {
+            FeedDisplayRow::Spacer => MediaListRow::Spacer,
+            FeedDisplayRow::Heading(group) => MediaListRow::Heading {
+                text: group.label().to_string(),
+            },
+            FeedDisplayRow::Entry(index) => {
+                let entry = &self.visible_entries[index];
+                let (primary, secondary, trailing) = if self.latest_selected {
+                    let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
+                        self.subscriptions
+                            .iter()
+                            .find(|subscription| subscription.url == feed_id)
+                            .map(|subscription| subscription.name.as_str())
+                    });
+                    let queue_item = QueueItem::Feed(entry.clone());
+                    let parts = queue_item.playback_title_parts(feed_name);
+                    let (primary, secondary) = match parts.context {
+                        Some(context) => (context.text, Some(parts.title.text)),
+                        None => (parts.title.text, None),
+                    };
+                    let trailing =
+                        crate::app::state::home_latest::provider_timestamp_secs(&queue_item)
+                            .map(crate::app::ui_util::fmt_publish_date_short)
+                            .filter(|date| !date.is_empty())
+                            .map(MediaListTrailing::Gutter);
+                    (primary, secondary, trailing)
+                } else {
+                    (entry.title.clone(), None, None)
+                };
+                MediaListRow::Item {
+                    target: entry.guid.clone(),
+                    primary,
+                    secondary,
+                    trailing,
+                    // Library lists carry no time column (only the Queue
+                    // list and the sessions modal show one).
+                    duration: None,
+                    kind: MediaKind::Media,
+                    semantic_state: if entry.played {
+                        MediaSemanticState::Played
+                    } else if entry.position_ticks > 0 {
+                        let progress =
+                            entry
+                                .duration_ticks
+                                .filter(|duration| *duration > 0)
+                                .map(|duration| {
+                                    ((entry.position_ticks.max(0) as u64 * 100) / duration).min(100)
+                                        as u16
+                                });
+                        MediaSemanticState::active(progress)
+                    } else {
+                        MediaSemanticState::Ordinary
+                    },
+                }
+            }
         }
     }
 
