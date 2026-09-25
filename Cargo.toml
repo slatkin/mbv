@@ -29,6 +29,7 @@ rstest = { version = "0.27", default-features = false }
 [workspace.lints.clippy]
 mod_module_files = "deny"
 cognitive_complexity = "warn"
+excessive_nesting = "warn"
 
 [package]
 name = "mbv"
