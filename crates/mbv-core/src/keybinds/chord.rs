@@ -116,6 +116,28 @@ impl Chord {
 }
 
 fn parse_key(token: &str) -> Result<Key, ChordParseError> {
+    const NAMED_KEYS: &[(&str, Key)] = &[
+        ("esc", Key::Esc),
+        ("escape", Key::Esc),
+        ("tab", Key::Tab),
+        ("backtab", Key::BackTab),
+        ("enter", Key::Enter),
+        ("return", Key::Enter),
+        ("space", Key::Char(' ')),
+        ("left", Key::Left),
+        ("right", Key::Right),
+        ("up", Key::Up),
+        ("down", Key::Down),
+        ("home", Key::Home),
+        ("end", Key::End),
+        ("pageup", Key::PageUp),
+        ("pagedown", Key::PageDown),
+        ("delete", Key::Delete),
+        ("del", Key::Delete),
+        ("insert", Key::Insert),
+        ("backspace", Key::Backspace),
+    ];
+
     let token = token.trim();
     if token.is_empty() {
         return Err(ChordParseError::EmptyToken);
@@ -125,32 +147,15 @@ fn parse_key(token: &str) -> Result<Key, ChordParseError> {
         return Ok(Key::Char(c));
     }
     let lower = token.to_ascii_lowercase();
-    let key = match lower.as_str() {
-        "esc" | "escape" => Key::Esc,
-        "tab" => Key::Tab,
-        "backtab" => Key::BackTab,
-        "enter" | "return" => Key::Enter,
-        "space" => Key::Char(' '),
-        "left" => Key::Left,
-        "right" => Key::Right,
-        "up" => Key::Up,
-        "down" => Key::Down,
-        "home" => Key::Home,
-        "end" => Key::End,
-        "pageup" => Key::PageUp,
-        "pagedown" => Key::PageDown,
-        "delete" | "del" => Key::Delete,
-        "insert" => Key::Insert,
-        "backspace" => Key::Backspace,
-        f if f.len() > 1
-            && f.starts_with('f')
-            && f[1..].parse::<u8>().is_ok_and(|n| (1..=12).contains(&n)) =>
-        {
-            Key::F(f[1..].parse::<u8>().expect("validated above"))
-        }
-        _ => return Err(ChordParseError::UnknownKey(token.to_string())),
-    };
-    Ok(key)
+    if let Some((_, key)) = NAMED_KEYS.iter().find(|(name, _)| *name == lower) {
+        return Ok(*key);
+    }
+    lower
+        .strip_prefix('f')
+        .and_then(|number| number.parse::<u8>().ok())
+        .filter(|number| (1..=12).contains(number))
+        .map(Key::F)
+        .ok_or_else(|| ChordParseError::UnknownKey(token.to_string()))
 }
 
 impl std::fmt::Display for Key {
