@@ -63,42 +63,7 @@ impl Model {
             | ShellRequest::TvActivate { .. }
             | ShellRequest::TvBack
             | ShellRequest::TvCycleLetterPill { .. } => {
-                match request {
-                    ShellRequest::TvActivate { item } => {
-                        // Flat Latest/Upcoming rows are leaf episodes. Keep a
-                        // defensive item-kind gate here so a stale or legacy
-                        // request can never enter the Series workspace -- an
-                        // id-less Upcoming placeholder is the one exception
-                        // and routes to its series' Workspace.
-                        if item.item_type == "Episode" {
-                            if !self.app.open_series_for_unplayable_episode(lib_idx, &item) {
-                                self.app.play_item(item);
-                            }
-                        } else {
-                            let owner_has_target = self
-                                .tv_owner()
-                                .and_then(TvContent::selected_tree_show)
-                                .is_some_and(|selected| {
-                                    selected.id == item.id && selected.name == item.name
-                                });
-                            if self.app.wide_tv_library_area(lib_idx).is_some() {
-                                self.app.activate_selected_series_item(lib_idx, &item);
-                            } else if owner_has_target {
-                                self.open_library_hero_overlay();
-                            }
-                        }
-                    }
-                    ShellRequest::TvBack => self.app.go_back(lib_idx),
-                    ShellRequest::TvCycleLetterPill { delta } => {
-                        self.app.cycle_letter_pill(lib_idx, delta);
-                        self.acknowledge_active_tv_latest();
-                    }
-                    // closed set: the outer arm's guard already restricts this to
-                    // TvMoveRows/TvJumpCursor/TvActivate/TvBack/
-                    // TvCycleLetterPill; the pure cursor moves need no App effect.
-                    _ => {}
-                }
-                self.push_tv_workspace_content();
+                self.handle_tv_navigation_request(lib_idx, request);
             }
             ShellRequest::TvEpisodeMove { .. } => {}
             ShellRequest::TvSeasonMove { .. } => {
@@ -116,6 +81,44 @@ impl Model {
             // every one has an arm above.
             _ => {}
         }
+    }
+
+    fn handle_tv_navigation_request(&mut self, lib_idx: usize, request: ShellRequest) {
+        match request {
+            ShellRequest::TvActivate { item } => {
+                // Flat Latest/Upcoming rows are leaf episodes. Keep a
+                // defensive item-kind gate here so a stale or legacy
+                // request can never enter the Series workspace -- an
+                // id-less Upcoming placeholder is the one exception
+                // and routes to its series' Workspace.
+                if item.item_type == "Episode" {
+                    if !self.app.open_series_for_unplayable_episode(lib_idx, &item) {
+                        self.app.play_item(item);
+                    }
+                } else {
+                    let owner_has_target = self
+                        .tv_owner()
+                        .and_then(TvContent::selected_tree_show)
+                        .is_some_and(|selected| {
+                            selected.id == item.id && selected.name == item.name
+                        });
+                    if self.app.wide_tv_library_area(lib_idx).is_some() {
+                        self.app.activate_selected_series_item(lib_idx, &item);
+                    } else if owner_has_target {
+                        self.open_library_hero_overlay();
+                    }
+                }
+            }
+            ShellRequest::TvBack => self.app.go_back(lib_idx),
+            ShellRequest::TvCycleLetterPill { delta } => {
+                self.app.cycle_letter_pill(lib_idx, delta);
+                self.acknowledge_active_tv_latest();
+            }
+            // closed set: the caller restricts this to TvMoveRows/TvJumpCursor/
+            // TvActivate/TvBack/TvCycleLetterPill; cursor moves need no App effect.
+            _ => {}
+        }
+        self.push_tv_workspace_content();
     }
 
     /// One-shot shell-driven selection re-anchor: point the active TV
