@@ -125,44 +125,11 @@ pub(in crate::app) fn paint_overview_box(
     let viewport = inner.height as usize;
     let max_offset = inner_rows.saturating_sub(viewport);
     let offset = scroll_offset.min(max_offset);
-    // One virtual row space for the whole flow: the overview occupies rows
-    // `0..text_rows`, then the separator and its blank row, then the table.
-    // `visible_row` maps a flow row to the screen row the current offset
-    // puts it on, or `None` while it is scrolled out of the viewport.
-    let visible_row = |flow_row: usize| -> Option<u16> {
-        let screen_row = u16::try_from(flow_row.checked_sub(offset)?).ok()?;
-        let y = inner.y.saturating_add(screen_row);
-        (y < inner.bottom()).then_some(y)
-    };
-    if let Some(text) = overview {
-        // One row per wrapped line, empty lines included, so the flow's row
-        // positions stay exact while it scrolls.
-        let wrapped = textwrap::wrap(text, (inner.width as usize).saturating_sub(1).max(1));
-        for (index, line) in wrapped.iter().enumerate() {
-            let Some(y) = visible_row(index) else {
-                continue;
-            };
-            if line.is_empty() {
-                continue;
-            }
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    line.as_ref(),
-                    Style::default().fg(palette::TEXT_EMPHASIS),
-                ))),
-                Rect {
-                    x: inner.x,
-                    y,
-                    width: inner.width,
-                    height: 1,
-                },
-            );
-        }
-    }
+    paint_overview_text(f, inner, overview, offset);
     if has_credits_gap {
         // The separator follows the overview in the same flow; the blank row
         // below it is the flow's next row.
-        if let Some(y) = visible_row(text_rows) {
+        if let Some(y) = visible_overview_row(inner, text_rows, offset) {
             crate::app::render::components::widgets::render_block_separator(
                 f,
                 Rect {
@@ -174,24 +141,7 @@ pub(in crate::app) fn paint_overview_box(
             );
         }
     }
-    if let Some(credits) = credits {
-        let credits_start = text_rows + gap_rows;
-        let first_visible = offset.saturating_sub(credits_start).min(credit_rows);
-        if first_visible < credit_rows {
-            if let Some(y) = visible_row(credits_start + first_visible) {
-                paint_credits_from(
-                    f,
-                    Rect {
-                        y,
-                        height: inner.bottom().saturating_sub(y),
-                        ..inner
-                    },
-                    credits,
-                    first_visible,
-                );
-            }
-        }
-    }
+    paint_overview_credits(f, inner, credits, text_rows, gap_rows, offset);
     if max_offset > 0 && viewport > 0 {
         render_right_scrollbar_with_viewport(
             f,
@@ -208,6 +158,73 @@ pub(in crate::app) fn paint_overview_box(
         content_length: inner_rows,
         viewport,
     })
+}
+
+// One virtual row space for the whole flow: the overview occupies rows
+// `0..text_rows`, then the separator and its blank row, then the table.
+// A flow row outside the scrolled viewport has no screen coordinate.
+fn visible_overview_row(inner: Rect, flow_row: usize, offset: usize) -> Option<u16> {
+    let screen_row = u16::try_from(flow_row.checked_sub(offset)?).ok()?;
+    let y = inner.y.saturating_add(screen_row);
+    (y < inner.bottom()).then_some(y)
+}
+
+fn paint_overview_text(f: &mut Frame, inner: Rect, overview: Option<&str>, offset: usize) {
+    let Some(text) = overview else {
+        return;
+    };
+    // One row per wrapped line, empty lines included, so the flow's row
+    // positions stay exact while it scrolls.
+    let wrapped = textwrap::wrap(text, (inner.width as usize).saturating_sub(1).max(1));
+    for (index, line) in wrapped.iter().enumerate() {
+        let Some(y) = visible_overview_row(inner, index, offset) else {
+            continue;
+        };
+        if line.is_empty() {
+            continue;
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                line.as_ref(),
+                Style::default().fg(palette::TEXT_EMPHASIS),
+            ))),
+            Rect {
+                x: inner.x,
+                y,
+                width: inner.width,
+                height: 1,
+            },
+        );
+    }
+}
+
+fn paint_overview_credits(
+    f: &mut Frame,
+    inner: Rect,
+    credits: Option<&[HeroCredit]>,
+    text_rows: usize,
+    gap_rows: usize,
+    offset: usize,
+) {
+    let Some(credits) = credits else {
+        return;
+    };
+    let credits_start = text_rows + gap_rows;
+    let first_visible = offset.saturating_sub(credits_start).min(credits.len());
+    if first_visible < credits.len() {
+        if let Some(y) = visible_overview_row(inner, credits_start + first_visible, offset) {
+            paint_credits_from(
+                f,
+                Rect {
+                    y,
+                    height: inner.bottom().saturating_sub(y),
+                    ..inner
+                },
+                credits,
+                first_visible,
+            );
+        }
+    }
 }
 
 fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_offset: usize) {
