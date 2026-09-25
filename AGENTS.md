@@ -26,6 +26,7 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * Commit or undo your changes; never leave a dirty worktree.
 * No file over 800 lines at push time: split along responsibility seams and run
   `make check-code-file-lines` just before pushing; never a per-task/CI/acceptance gate.
+* Coding standards should follow https://microsoft.github.io/rust-guidelines/guidelines/universal/index.html
 
 ## Repository map
 
