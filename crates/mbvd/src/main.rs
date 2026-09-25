@@ -205,23 +205,21 @@ fn classified_auth_error(error: &str) -> String {
     }
 }
 
-fn connect_emby() -> Result<(), String> {
-    if !interactive_terminal() {
-        return Err("mbvd: --connect emby requires an interactive terminal".into());
-    }
-    // The packaged command always uses the daemon's system-instance paths.
-    std::env::set_var("MBV_SYSTEM", "1");
-    let _lock = administration_lock("emby")?;
-    let server_url = prompt("Emby server URL")?;
-    let username = prompt("Username")?;
-    let password = prompt_secret("Password")?;
-    let config = config::load_config()
-        .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
-    let existing = config.emby_setup.clone();
-    let client = mbv_core::api::EmbyClient::new(config);
-    let exchange = client
-        .exchange_credentials_bounded(&server_url, &username, &password, Duration::from_secs(10))
-        .map_err(|error| classified_auth_error(&error))?;
+fn exchange_emby_credentials(
+    client: &mbv_core::api::EmbyClient,
+    server_url: &str,
+    username: &str,
+    password: &str,
+) -> Result<mbv_core::api::EmbyCredentialExchange, String> {
+    client
+        .exchange_credentials_bounded(server_url, username, password, Duration::from_secs(10))
+        .map_err(|error| classified_auth_error(&error))
+}
+
+fn commit_emby_setup(
+    existing: Option<config::EmbySetup>,
+    exchange: mbv_core::api::EmbyCredentialExchange,
+) -> Result<config::EmbySetup, String> {
     let mut setup = config::EmbySetup::new(exchange.server_url.clone(), exchange.user_id);
     setup.revision = match existing.as_ref() {
         None => 1,
@@ -240,6 +238,25 @@ fn connect_emby() -> Result<(), String> {
         config::replace_emby_setup_and_secret(&setup, &exchange.token)
             .map_err(|_| "mbvd: could not replace Emby setup".to_string())?;
     }
+    Ok(setup)
+}
+
+fn connect_emby() -> Result<(), String> {
+    if !interactive_terminal() {
+        return Err("mbvd: --connect emby requires an interactive terminal".into());
+    }
+    // The packaged command always uses the daemon's system-instance paths.
+    std::env::set_var("MBV_SYSTEM", "1");
+    let _lock = administration_lock("emby")?;
+    let server_url = prompt("Emby server URL")?;
+    let username = prompt("Username")?;
+    let password = prompt_secret("Password")?;
+    let config = config::load_config()
+        .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
+    let existing = config.emby_setup.clone();
+    let client = mbv_core::api::EmbyClient::new(config);
+    let exchange = exchange_emby_credentials(&client, &server_url, &username, &password)?;
+    let setup = commit_emby_setup(existing, exchange)?;
     if daemon_running() {
         reconcile_running_owner(config::ServiceKind::Emby, setup.revision)?;
         println!(
