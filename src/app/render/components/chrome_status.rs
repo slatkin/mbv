@@ -594,58 +594,39 @@ pub(in crate::app) struct StatusBarRegions {
 /// stay-alive). The playlist status pill renders in the left queue panel
 /// instead; the Local/Remote queue-scope pills paint in the QueueColumn
 /// footer (`render_queue_status`), never here.
-pub(in crate::app) fn render_status_bar(
-    f: &mut Frame,
-    area: Rect,
-    model: &StatusBarModel,
-) -> StatusBarRegions {
-    let mut regions = StatusBarRegions::default();
-    // Keep the row itself darker so the pills read as segments sitting on top of it.
-    let bar_style =
-        Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
-    // `Clear` blanks every cell's symbol first (task 12.2): a bare
-    // `Block::style` only recolors a cell, it never overwrites a stale
-    // glyph left by whatever painted this placement before the status bar
-    // owned it.
-    f.render_widget(Clear, area);
-    f.render_widget(Block::default().style(bar_style), area);
+struct StatusBarLeftSegments {
+    mute: Option<Vec<Span<'static>>>,
+    volume: Vec<Span<'static>>,
+    remote: Vec<Span<'static>>,
+    armed: Option<Vec<Span<'static>>>,
+    visual: Option<Vec<Span<'static>>>,
+    volume_width: u16,
+    remote_width: u16,
+    visual_width: u16,
+    fits: StatusBarFit,
+    show_visual: bool,
+    show_armed: bool,
+    show_remote: bool,
+    show_volume: bool,
+}
 
-    let mute_status = model.mute.clone();
-    let vol_status = model.volume.clone();
-    let remote_status = if model.show_session_pill {
-        model.remote.clone()
-    } else {
-        Vec::new()
-    };
-    let armed_status = model.prefix_armed.clone();
+struct StatusBarWidths {
+    visual: u16,
+    armed: u16,
+    remote: u16,
+    mute: u16,
+    volume: u16,
+}
 
-    // Preserve the existing left-segment overflow order: mute drops
-    // first, then the volume pill, then remote. The armed pill sits with
-    // the visual-mode indicator at the top persistence tier: it drops only
-    // when nothing else is left (it names the active routing mode).
-    let remote_w = App::status_width(&remote_status);
-    let armed_w = armed_status
-        .as_ref()
-        .map(|spans| App::status_width(spans))
-        .unwrap_or(0);
-    let visual_status = model.visual_mode.as_ref().map(|indicator| {
-        vec![Span::styled(
-            format!("-- VISUAL ({}) --", indicator.count),
-            Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
-                .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
-        )]
-    });
-    let visual_w = visual_status
-        .as_ref()
-        .map(|spans| App::status_width(spans))
-        .unwrap_or(0);
-    let mute_w: u16 = mute_status
-        .as_ref()
-        .map(|spans| App::status_width(spans))
-        .unwrap_or(0);
-    let vol_w = App::status_width(&vol_status);
-    let available = area.width;
+#[derive(Clone, Copy)]
+struct StatusBarFit {
+    all: bool,
+    without_mute: bool,
+    without_volume: bool,
+    without_remote: bool,
+}
+
+fn status_bar_fit(widths: StatusBarWidths, available: u16) -> StatusBarFit {
     let joined_width = |widths: &[u16]| -> u16 {
         let mut total = 0u16;
         for (count, width) in widths.iter().copied().filter(|w| *w > 0).enumerate() {
@@ -656,67 +637,146 @@ pub(in crate::app) fn render_status_bar(
         }
         total
     };
-    let fits_all = joined_width(&[visual_w, armed_w, remote_w, mute_w, vol_w]) <= available;
-    let fits_without_mute =
-        !fits_all && joined_width(&[visual_w, armed_w, remote_w, vol_w]) <= available;
-    let fits_without_volume = !fits_all
-        && !fits_without_mute
-        && joined_width(&[visual_w, armed_w, remote_w, mute_w]) <= available;
-    let fits_without_remote = !fits_all
-        && !fits_without_mute
-        && !fits_without_volume
-        && joined_width(&[visual_w, armed_w, mute_w, vol_w]) <= available;
+    let all = joined_width(&[
+        widths.visual,
+        widths.armed,
+        widths.remote,
+        widths.mute,
+        widths.volume,
+    ]) <= available;
+    let without_mute = !all
+        && joined_width(&[widths.visual, widths.armed, widths.remote, widths.volume]) <= available;
+    let without_volume = !all
+        && !without_mute
+        && joined_width(&[widths.visual, widths.armed, widths.remote, widths.mute]) <= available;
+    let without_remote = !all
+        && !without_mute
+        && !without_volume
+        && joined_width(&[widths.visual, widths.armed, widths.mute, widths.volume]) <= available;
+    StatusBarFit {
+        all,
+        without_mute,
+        without_volume,
+        without_remote,
+    }
+}
 
-    let any_fit = fits_all || fits_without_mute || fits_without_volume || fits_without_remote;
-    let show_visual = visual_w > 0 && any_fit;
-    let show_armed = armed_w > 0 && any_fit;
-    let show_remote = remote_w > 0 && (fits_all || fits_without_mute || fits_without_volume);
-    let show_volume = fits_all || fits_without_mute || fits_without_remote;
+fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBarLeftSegments {
+    let mute = model.mute.clone();
+    let volume = model.volume.clone();
+    let remote = if model.show_session_pill {
+        model.remote.clone()
+    } else {
+        Vec::new()
+    };
+    let armed = model.prefix_armed.clone();
 
+    // Preserve the existing left-segment overflow order: mute drops
+    // first, then the volume pill, then remote. The armed pill sits with
+    // the visual-mode indicator at the top persistence tier: it drops only
+    // when nothing else is left (it names the active routing mode).
+    let remote_width = App::status_width(&remote);
+    let armed_width = armed
+        .as_ref()
+        .map(|spans| App::status_width(spans))
+        .unwrap_or(0);
+    let visual = model.visual_mode.as_ref().map(|indicator| {
+        vec![Span::styled(
+            format!("-- VISUAL ({}) --", indicator.count),
+            Style::default()
+                .fg(palette::TEXT_FOCUS_ACCENT)
+                .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+        )]
+    });
+    let visual_width = visual
+        .as_ref()
+        .map(|spans| App::status_width(spans))
+        .unwrap_or(0);
+    let mute_width: u16 = mute
+        .as_ref()
+        .map(|spans| App::status_width(spans))
+        .unwrap_or(0);
+    let volume_width = App::status_width(&volume);
+    let fits = status_bar_fit(
+        StatusBarWidths {
+            visual: visual_width,
+            armed: armed_width,
+            remote: remote_width,
+            mute: mute_width,
+            volume: volume_width,
+        },
+        available,
+    );
+    let any_fit = fits.all || fits.without_mute || fits.without_volume || fits.without_remote;
+    StatusBarLeftSegments {
+        mute,
+        volume,
+        remote,
+        armed,
+        visual,
+        volume_width,
+        remote_width,
+        visual_width,
+        fits,
+        show_visual: visual_width > 0 && any_fit,
+        show_armed: armed_width > 0 && any_fit,
+        show_remote: remote_width > 0 && (fits.all || fits.without_mute || fits.without_volume),
+        show_volume: fits.all || fits.without_mute || fits.without_remote,
+    }
+}
+
+fn render_status_bar_left(
+    f: &mut Frame,
+    area: Rect,
+    bar_style: Style,
+    segments: StatusBarLeftSegments,
+) -> (StatusBarRegions, u16) {
+    let mut regions = StatusBarRegions::default();
     let mut spans: Vec<Span> = Vec::new();
-    if show_visual {
+    if segments.show_visual {
         let visual_x = area.x + App::status_width(&spans);
-        App::append_status(&mut spans, visual_status.unwrap_or_default());
+        App::append_status(&mut spans, segments.visual.unwrap_or_default());
         regions.visual_clear = Some(Rect {
             x: visual_x,
             y: area.y,
-            width: visual_w,
+            width: segments.visual_width,
             height: 1,
         });
     }
-    if show_armed {
-        App::append_status(&mut spans, armed_status.unwrap_or_default());
+    if segments.show_armed {
+        App::append_status(&mut spans, segments.armed.unwrap_or_default());
     }
-    if show_volume {
+    if segments.show_volume {
         let vol_x = area.x + App::status_width(&spans);
-        App::append_status(&mut spans, vol_status);
+        App::append_status(&mut spans, segments.volume);
         regions.volume = Some(Rect {
             x: vol_x,
             y: area.y,
-            width: vol_w,
+            width: segments.volume_width,
             height: 1,
         });
     }
-    let remote_x =
-        show_remote.then(|| area.x + App::status_width(&spans) + u16::from(!spans.is_empty()));
-    if show_remote {
-        App::append_status(&mut spans, remote_status);
+    let remote_x = segments
+        .show_remote
+        .then(|| area.x + App::status_width(&spans) + u16::from(!spans.is_empty()));
+    if segments.show_remote {
+        App::append_status(&mut spans, segments.remote);
         regions.remote = remote_x.map(|x| Rect {
             x,
             y: area.y,
-            width: remote_w,
+            width: segments.remote_width,
             height: 1,
         });
     }
-    if fits_all || fits_without_mute {
-        if let Some(mute) = mute_status {
+    if segments.fits.all || segments.fits.without_mute {
+        if let Some(mute) = segments.mute {
             let mute_x = area.x + App::status_width(&spans);
-            let mute_w = App::status_width(&mute);
+            let mute_width = App::status_width(&mute);
             App::append_status(&mut spans, mute);
             regions.mute = Some(Rect {
                 x: mute_x,
                 y: area.y,
-                width: mute_w,
+                width: mute_width,
                 height: 1,
             });
         }
@@ -726,7 +786,6 @@ pub(in crate::app) fn render_status_bar(
     // the above priority drop, so the right-segment overlap check can compare
     // against the real left edge instead of a hardcoded constant.
     let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
-    let left_content_w: u16 = label_w;
     if !spans.is_empty() {
         let label_rect = Rect {
             x: area.x,
@@ -739,15 +798,23 @@ pub(in crate::app) fn render_status_bar(
             label_rect,
         );
     }
+    (regions, label_w)
+}
 
-    let right_spans = &model.right;
+fn render_status_bar_right(
+    f: &mut Frame,
+    area: Rect,
+    bar_style: Style,
+    left_content_width: u16,
+    right_spans: &[Span<'static>],
+) {
     if !right_spans.is_empty() {
         let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
-        // Compare against `left_content_w` (pill + session label, from Task 2),
+        // Compare against `left_content_width` (pill + session label, from Task 2),
         // not a hardcoded pill-only width -- otherwise this check passes while
         // the right segment still overlaps a rendered session label (e.g.
         // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
-        let left_end = area.x + left_content_w;
+        let left_end = area.x + left_content_width;
         let right_x = area.x + area.width.saturating_sub(right_w);
         if right_w > 0 && right_x > left_end {
             let right_rect = Rect {
@@ -757,7 +824,7 @@ pub(in crate::app) fn render_status_bar(
                 height: 1,
             };
             f.render_widget(
-                Paragraph::new(Line::from(right_spans.clone())).style(bar_style),
+                Paragraph::new(Line::from(right_spans.to_vec())).style(bar_style),
                 right_rect,
             );
         }
@@ -766,5 +833,25 @@ pub(in crate::app) fn render_status_bar(
         // (Design doc's open question on narrow-terminal truncation: right
         // segment yields first.)
     }
+}
+
+pub(in crate::app) fn render_status_bar(
+    f: &mut Frame,
+    area: Rect,
+    model: &StatusBarModel,
+) -> StatusBarRegions {
+    // Keep the row itself darker so the pills read as segments sitting on top of it.
+    let bar_style =
+        Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
+    // `Clear` blanks every cell's symbol first (task 12.2): a bare
+    // `Block::style` only recolors a cell, it never overwrites a stale
+    // glyph left by whatever painted this placement before the status bar
+    // owned it.
+    f.render_widget(Clear, area);
+    f.render_widget(Block::default().style(bar_style), area);
+
+    let segments = status_bar_left_segments(model, area.width);
+    let (regions, left_content_width) = render_status_bar_left(f, area, bar_style, segments);
+    render_status_bar_right(f, area, bar_style, left_content_width, &model.right);
     regions
 }
