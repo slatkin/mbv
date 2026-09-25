@@ -86,9 +86,34 @@ impl App {
             .get(lib_idx)
             .filter(|lib| !lib.nav_stack.is_empty())
             .map(|lib| lib.library_position_snapshot());
-        let mut saved = self.saved_library_position(lib_idx);
         let is_tv = self.libs[lib_idx].library.collection_type == "tvshows";
-        let saved_mode_is_stale = saved
+        let mut saved = self.saved_library_position(lib_idx);
+        let saved_mode_is_stale = Self::saved_tv_mode_is_stale(&saved);
+
+        if current.as_ref() == saved.as_ref() && (!is_tv || !saved_mode_is_stale) {
+            self.activate_unchanged_library_position(lib_idx, current.is_none());
+            return;
+        }
+
+        if is_tv {
+            Self::normalize_saved_tv_mode(&mut saved);
+        }
+        if let Some(position) = saved
+            .as_ref()
+            .filter(|position| !position.levels.is_empty())
+        {
+            self.replace_saved_library_position(lib_idx, position.clone());
+        }
+        match saved {
+            Some(position) if !position.levels.is_empty() => {
+                self.restore_saved_library_position(lib_idx, position);
+            }
+            _ => self.reset_library_position(lib_idx),
+        }
+    }
+
+    fn saved_tv_mode_is_stale(saved: &Option<crate::config::LibraryPosition>) -> bool {
+        saved
             .as_ref()
             .and_then(|position| position.levels.first())
             .is_some_and(|root| match root.tv_content_mode.as_ref() {
@@ -99,99 +124,100 @@ impl App {
                     .library_total
                     .is_some_and(|total| total <= crate::app::render::LIBRARY_PILL_THRESHOLD),
                 _ => false,
-            });
-        if current.as_ref() == saved.as_ref() && (!is_tv || !saved_mode_is_stale) {
-            if current.is_none() {
-                self.ensure_lib_loaded_for(lib_idx);
-            } else if self.is_feed_home_video_library(lib_idx) {
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if lib.feed_home_video.is_none() {
-                        lib.feed_home_video = Some(FeedHomeVideoState {
-                            loading: true,
-                            ..FeedHomeVideoState::default()
-                        });
-                    }
-                }
-                self.maybe_refresh_feed_groups_after_refresh(lib_idx);
-            }
-            return;
-        }
-        if is_tv {
-            if let Some(position) = saved.as_mut() {
-                if let Some(root) = position.levels.first_mut() {
-                    let mode = crate::app::render::resolve_tv_content_mode(
-                        root.library_total.unwrap_or_default(),
-                        root.tv_content_mode.as_ref(),
-                    );
-                    root.letter_filter_index = match mode {
-                        mbv_core::config::TvContentMode::Range(index) => Some(index),
-                        _ => None,
-                    };
-                    root.tv_content_mode = Some(mode);
-                }
-            }
-        }
-        if let Some(position) = saved
-            .as_ref()
-            .filter(|position| !position.levels.is_empty())
-        {
-            self.replace_saved_library_position(lib_idx, position.clone());
-        }
-        match saved {
-            Some(position) if !position.levels.is_empty() => {
-                let root = &position.levels[0];
-                let restore_feed_view = self.is_feed_home_video_library(lib_idx);
-                let placeholder = BrowseLevel {
-                    fetched_rows: 0,
-                    parent_id: root.parent_id.clone(),
-                    title: root.title.clone(),
-                    items: Vec::new(),
-                    total_count: 0,
-                    resting: BrowseResting::new(0, 0),
-                    item_types: root.item_types.clone(),
-                    unplayed_only: root.unplayed_only,
-                    sort_by: root.sort_by.clone(),
-                    sort_order: root.sort_order.clone(),
-                    loading: true,
+            })
+    }
 
-                    all_items: None,
-                    letter_filter: root.letter_filter_index.and_then(|index| {
-                        let filter_kind =
-                            crate::app::render::LetterFilterKind::from_collection_type(
-                                self.libs[lib_idx].library.collection_type.as_str(),
-                            );
-                        if filter_kind == crate::app::render::LetterFilterKind::Tv
-                            && index
-                                >= crate::app::render::LetterFilter::count_for_kind(filter_kind)
-                        {
-                            None
-                        } else {
-                            crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
-                        }
-                    }),
-                    tv_content_mode: root.tv_content_mode.clone(),
-                    music_grouping: None,
+    fn normalize_saved_tv_mode(saved: &mut Option<crate::config::LibraryPosition>) {
+        if let Some(position) = saved.as_mut() {
+            if let Some(root) = position.levels.first_mut() {
+                let mode = crate::app::render::resolve_tv_content_mode(
+                    root.library_total.unwrap_or_default(),
+                    root.tv_content_mode.as_ref(),
+                );
+                root.letter_filter_index = match mode {
+                    mbv_core::config::TvContentMode::Range(index) => Some(index),
+                    _ => None,
                 };
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if restore_feed_view {
-                        lib.feed_home_video
-                            .get_or_insert_with(FeedHomeVideoState::default)
-                            .loading = true;
-                    }
-                    lib.apply_library_position(position.clone(), vec![placeholder]);
-                }
-                self.spawn_restore_library_position(lib_idx, position);
-            }
-            _ => {
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    lib.apply_library_position(
-                        crate::config::LibraryPosition::default(),
-                        Vec::new(),
-                    );
-                }
-                self.ensure_lib_loaded_for(lib_idx);
+                root.tv_content_mode = Some(mode);
             }
         }
+    }
+
+    fn activate_unchanged_library_position(&mut self, lib_idx: usize, current_is_none: bool) {
+        if current_is_none {
+            self.ensure_lib_loaded_for(lib_idx);
+        } else if self.is_feed_home_video_library(lib_idx) {
+            if let Some(lib) = self.libs.get_mut(lib_idx) {
+                if lib.feed_home_video.is_none() {
+                    lib.feed_home_video = Some(FeedHomeVideoState {
+                        loading: true,
+                        ..FeedHomeVideoState::default()
+                    });
+                }
+            }
+            self.maybe_refresh_feed_groups_after_refresh(lib_idx);
+        }
+    }
+
+    fn restore_saved_library_position(
+        &mut self,
+        lib_idx: usize,
+        position: crate::config::LibraryPosition,
+    ) {
+        let root = &position.levels[0];
+        let restore_feed_view = self.is_feed_home_video_library(lib_idx);
+        let placeholder = self.library_position_placeholder(lib_idx, root);
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            if restore_feed_view {
+                lib.feed_home_video
+                    .get_or_insert_with(FeedHomeVideoState::default)
+                    .loading = true;
+            }
+            lib.apply_library_position(position.clone(), vec![placeholder]);
+        }
+        self.spawn_restore_library_position(lib_idx, position);
+    }
+
+    fn library_position_placeholder(
+        &self,
+        lib_idx: usize,
+        root: &crate::config::LibraryPositionLevel,
+    ) -> BrowseLevel {
+        BrowseLevel {
+            fetched_rows: 0,
+            parent_id: root.parent_id.clone(),
+            title: root.title.clone(),
+            items: Vec::new(),
+            total_count: 0,
+            resting: BrowseResting::new(0, 0),
+            item_types: root.item_types.clone(),
+            unplayed_only: root.unplayed_only,
+            sort_by: root.sort_by.clone(),
+            sort_order: root.sort_order.clone(),
+            loading: true,
+            all_items: None,
+            letter_filter: root.letter_filter_index.and_then(|index| {
+                let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
+                    self.libs[lib_idx].library.collection_type.as_str(),
+                );
+                if filter_kind == crate::app::render::LetterFilterKind::Tv
+                    && index >= crate::app::render::LetterFilter::count_for_kind(filter_kind)
+                {
+                    None
+                } else {
+                    crate::app::render::LetterFilter::for_index_for_kind(index, filter_kind)
+                }
+            }),
+            tv_content_mode: root.tv_content_mode.clone(),
+            music_grouping: None,
+        }
+    }
+
+    fn reset_library_position(&mut self, lib_idx: usize) {
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            lib.apply_library_position(crate::config::LibraryPosition::default(), Vec::new());
+        }
+        self.ensure_lib_loaded_for(lib_idx);
     }
 
     pub(in crate::app) fn clear_saved_library_position(&mut self, lib_idx: usize) {
