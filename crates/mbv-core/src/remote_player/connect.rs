@@ -47,6 +47,14 @@ where
     F: FnOnce() -> Result<String, String>,
 {
     let mut reader = BufReader::new(stream);
+    let ctrl_compatibility = read_server_hello(&mut reader)?;
+    send_client_hello(&mut reader, &ctrl_compatibility, load_control_token)?;
+    let state_event = read_initial_state(&mut reader)?;
+
+    Ok((reader, state_event, ctrl_compatibility))
+}
+
+fn read_server_hello(reader: &mut BufReader<SocketStream>) -> Result<CtrlCompatibility, String> {
     let mut first_line = String::new();
     reader
         .read_line(&mut first_line)
@@ -56,33 +64,39 @@ where
     }
     let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
         .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
-    let ctrl_compatibility = match hello {
-        CtrlEvent::Hello(info) => {
-            info.validate_peer()?;
-            let mut compatibility = info.compatibility()?;
-            compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
-            compatibility.supports_audio_only = info.supports_audio_only();
-            compatibility.supports_control_auth = info.supports_control_auth();
-            compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
-            log::info!(
-                target: "remote",
-                "daemon protocol ok: version={} app={} capabilities={:?}",
-                info.protocol_version,
-                info.app_version,
-                info.capabilities
-            );
-            compatibility
-        }
-        _ => {
-            return Err("daemon did not send protocol hello".to_string());
-        }
+    let CtrlEvent::Hello(info) = hello else {
+        return Err("daemon did not send protocol hello".to_string());
     };
-    let mut client_hello = if ctrl_compatibility.supports_control_auth {
+    info.validate_peer()?;
+    let mut compatibility = info.compatibility()?;
+    compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
+    compatibility.supports_audio_only = info.supports_audio_only();
+    compatibility.supports_control_auth = info.supports_control_auth();
+    compatibility.supports_owner_queue_load = info.supports_owner_queue_load();
+    log::info!(
+        target: "remote",
+        "daemon protocol ok: version={} app={} capabilities={:?}",
+        info.protocol_version,
+        info.app_version,
+        info.capabilities
+    );
+    Ok(compatibility)
+}
+
+fn send_client_hello<F>(
+    reader: &mut BufReader<SocketStream>,
+    compatibility: &CtrlCompatibility,
+    load_control_token: F,
+) -> Result<(), String>
+where
+    F: FnOnce() -> Result<String, String>,
+{
+    let mut client_hello = if compatibility.supports_control_auth {
         CtrlHello::current_control_client(load_control_token()?)
     } else {
         CtrlHello::current()
     };
-    client_hello.protocol_version = ctrl_compatibility.client_protocol_version;
+    client_hello.protocol_version = compatibility.client_protocol_version;
     let client_hello =
         serde_json::to_string(&CtrlCmd::Hello(client_hello)).map_err(|e| e.to_string())?;
     // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
@@ -91,8 +105,10 @@ where
     // concurrent access from another thread during this phase, so there's
     // nothing a second handle buys here beyond an extra fallible call.
     writeln!(reader.get_mut(), "{client_hello}")
-        .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
+        .map_err(|e| format!("failed to send daemon protocol hello: {e}"))
+}
 
+fn read_initial_state(reader: &mut BufReader<SocketStream>) -> Result<CtrlEvent, String> {
     let mut state_line = String::new();
     reader
         .read_line(&mut state_line)
@@ -100,10 +116,8 @@ where
     if state_line.trim().is_empty() {
         return Err("daemon closed connection before initial state".to_string());
     }
-    let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
-        .map_err(|e| format!("invalid daemon initial state: {e}"))?;
-
-    Ok((reader, state_event, ctrl_compatibility))
+    serde_json::from_str::<CtrlEvent>(state_line.trim_end())
+        .map_err(|e| format!("invalid daemon initial state: {e}"))
 }
 
 /// Best-effort signal to a running same-user Local daemon to reread its own
