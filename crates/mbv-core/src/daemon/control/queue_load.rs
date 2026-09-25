@@ -85,7 +85,7 @@ pub(in crate::daemon) fn cancel_pending_idle_queue_load_if_run_changed(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
 ) -> bool {
-    let current_run = (0, player.status.lock().unwrap().sequence_generation);
+    let current_run = player.status.lock().unwrap().sequence_generation;
     if owner
         .pending_idle_load
         .as_ref()
@@ -112,10 +112,7 @@ pub(in crate::daemon) fn expire_pending_idle_queue_load(
 }
 
 pub(in crate::daemon) fn complete_pending_idle_queue_load(
-    run_identity: (
-        crate::ctrl::PlaybackRequestId,
-        crate::ctrl::PlaybackGeneration,
-    ),
+    run_identity: crate::ctrl::PlaybackGeneration,
     failure: Option<String>,
     owner: &mut DaemonPlayerOwner,
     player: &Player,
@@ -200,7 +197,7 @@ pub(super) fn handle_queue_load_idle(
         return;
     }
 
-    let stopped_run = (0, ctx.player.status.lock().unwrap().sequence_generation);
+    let stopped_run = ctx.player.status.lock().unwrap().sequence_generation;
     if ctx.player.status.lock().unwrap().active {
         ctx.owner.pending_idle_load = Some(PendingIdleQueueLoad {
             request_id,

@@ -371,7 +371,7 @@ pub(crate) struct PendingIdleQueueLoad {
     pub(super) cursor: usize,
     pub(super) source: crate::config::QueueSource,
     pub(super) reply_tx: CtrlSender,
-    pub(super) stopped_run: (PlaybackRequestId, crate::ctrl::PlaybackGeneration),
+    pub(super) stopped_run: crate::ctrl::PlaybackGeneration,
     pub(super) started_at: Instant,
 }
 

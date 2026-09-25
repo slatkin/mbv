@@ -1,7 +1,7 @@
 use super::core::{bind_ctrl_listener, broadcast, DaemonEvent};
 use super::*;
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
-use crate::ctrl::{CtrlEvent, PlaybackGeneration, PlaybackRequestId};
+use crate::ctrl::{CtrlEvent, PlaybackGeneration};
 use crate::daemon::ctrl::{ClientRegistry, CtrlClients};
 use crate::playback::PlaybackQueue;
 use crate::playback_queue::QueueSlotId;
@@ -22,30 +22,16 @@ pub(crate) fn broadcast_player_event_if_not_replaced(
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct PlaybackRunIdentity {
-    request_id: PlaybackRequestId,
-    generation: PlaybackGeneration,
-}
-
-impl From<(PlaybackRequestId, PlaybackGeneration)> for PlaybackRunIdentity {
-    fn from((request_id, generation): (PlaybackRequestId, PlaybackGeneration)) -> Self {
-        Self {
-            request_id,
-            generation,
-        }
-    }
-}
+/// The playback-run identity carried by `PlayerEvent::Stopped`/
+/// `TrackCompleted`: the owner submission generation at event construction
+/// time.
+pub(crate) type PlaybackRunIdentity = PlaybackGeneration;
 
 pub(crate) fn playback_run_identity_is_current(
     run_identity: PlaybackRunIdentity,
     player: &Player,
 ) -> bool {
-    run_identity
-        == PlaybackRunIdentity {
-            request_id: 0,
-            generation: player.status.lock().unwrap().sequence_generation,
-        }
+    run_identity == player.status.lock().unwrap().sequence_generation
 }
 
 pub(super) fn apply_track_completed_observation(

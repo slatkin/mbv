@@ -77,16 +77,8 @@ fn test_loop_with_queue(
     }
 }
 
-fn current_run(
-    event_loop: &DaemonLoop,
-) -> (
-    crate::ctrl::PlaybackRequestId,
-    crate::ctrl::PlaybackGeneration,
-) {
-    (
-        0,
-        event_loop.player.status.lock().unwrap().sequence_generation,
-    )
+fn current_run(event_loop: &DaemonLoop) -> crate::ctrl::PlaybackGeneration {
+    event_loop.player.status.lock().unwrap().sequence_generation
 }
 
 #[test]
@@ -143,7 +135,7 @@ fn track_completed_stale_run_leaves_queue_and_persists_nothing() {
         .event_loop
         .handle_event(DaemonEvent::Player(PlayerEvent::TrackCompleted {
             slot_id: slot,
-            run_identity: (0, 4),
+            run_identity: 4,
             position_ticks: 900,
             played: true,
             consume: true,
@@ -216,7 +208,7 @@ fn stopped_stale_run_persists_nothing() {
         .event_loop
         .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
             slot_id: Some(slot),
-            run_identity: (0, 4),
+            run_identity: 4,
             position_ticks: 900,
             played: true,
             consume: false,
@@ -304,7 +296,7 @@ fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
         cursor: 0,
         source: QueueSource::Album,
         reply_tx,
-        stopped_run: (0, 5),
+        stopped_run: 5,
         started_at: Instant::now(),
     });
 
@@ -312,7 +304,7 @@ fn stopped_different_run_cancels_pending_idle_load_and_persists_nothing() {
         .event_loop
         .handle_event(DaemonEvent::Player(PlayerEvent::Stopped {
             slot_id: Some(old_slot),
-            run_identity: (0, 4),
+            run_identity: 4,
             position_ticks: 900,
             played: false,
             consume: false,

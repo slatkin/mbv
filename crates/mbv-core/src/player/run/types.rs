@@ -29,10 +29,7 @@ pub(in crate::player) struct RunInit {
 
 pub(in crate::player) struct PlaybackRun {
     pub(in crate::player) origin: PlaybackOrigin,
-    pub(in crate::player) run_identity: (
-        crate::ctrl::PlaybackRequestId,
-        crate::ctrl::PlaybackGeneration,
-    ),
+    pub(in crate::player) run_identity: crate::ctrl::PlaybackGeneration,
     pub(in crate::player) config: MpvRunConfig,
     pub(in crate::player) reporter: SessionReporter,
     pub(in crate::player) event_tx: mpsc::Sender<PlayerEvent>,
