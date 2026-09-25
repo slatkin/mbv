@@ -191,29 +191,9 @@ impl TvContent {
     }
 
     fn handle_show_tree_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        let selected = self.browser.selected_target().cloned();
-        let transition = match key.code {
-            Key::Up | Key::Char('k') => Some(self.browser.apply(TreeOperation::Move(-1))),
-            Key::Down | Key::Char('j') => Some(self.browser.apply(TreeOperation::Move(1))),
-            Key::PageUp => Some(self.browser.apply(TreeOperation::Page(-1))),
-            Key::PageDown => Some(self.browser.apply(TreeOperation::Page(1))),
-            Key::Home => Some(self.browser.apply(TreeOperation::First)),
-            Key::End => Some(self.browser.apply(TreeOperation::Last)),
-            _ => None,
-        };
-        if let Some(transition) = transition {
-            let changed = transition.selected_target != selected;
-            let selected = transition.selected_target;
-            return Some(if changed {
-                selected
-                    .as_ref()
-                    .and_then(|target| self.tree_selection_request(target))
-                    .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-            } else {
-                Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
-            });
+        if let Some(message) = self.handle_show_tree_movement(key) {
+            return Some(message);
         }
-
         if matches!(key.code, Key::Esc | Key::Backspace) {
             return Some(Msg::Shell(Box::new(ShellRequest::TvBack)));
         }
@@ -227,85 +207,130 @@ impl TvContent {
         if let Some(message) = self.shared_library_effect(key, item.clone()) {
             return Some(message);
         }
+        self.handle_show_tree_action(key, target, item)
+    }
+
+    fn handle_show_tree_movement(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let selected = self.browser.selected_target().cloned();
+        let transition = match key.code {
+            Key::Up | Key::Char('k') => Some(self.browser.apply(TreeOperation::Move(-1))),
+            Key::Down | Key::Char('j') => Some(self.browser.apply(TreeOperation::Move(1))),
+            Key::PageUp => Some(self.browser.apply(TreeOperation::Page(-1))),
+            Key::PageDown => Some(self.browser.apply(TreeOperation::Page(1))),
+            Key::Home => Some(self.browser.apply(TreeOperation::First)),
+            Key::End => Some(self.browser.apply(TreeOperation::Last)),
+            _ => None,
+        }?;
+        let changed = transition.selected_target != selected;
+        let selected = transition.selected_target;
+        Some(if changed {
+            selected
+                .as_ref()
+                .and_then(|target| self.tree_selection_request(target))
+                .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        } else {
+            Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+        })
+    }
+
+    fn handle_show_tree_action(
+        &mut self,
+        key: &KeyEvent,
+        target: Option<TvTreeTarget>,
+        item: Option<EmbyItem>,
+    ) -> Option<Msg> {
         let request = match key.code {
-            Key::Enter => {
-                let activated = match self.browser.apply(TreeOperation::Activate).external_intent {
-                    Some(
-                        crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
-                            target,
-                        ),
-                    ) => Some(target),
-                    _ => None,
-                };
-                match activated {
-                    Some(TvTreeTarget::Show(_)) => self.activate_show_tree_selection(item),
-                    Some(target @ TvTreeTarget::Season { .. }) => {
-                        let expansion = self.toggle_tree_expansion(target);
-                        return Some(
-                            expansion
-                                .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
-                        );
-                    }
-                    Some(TvTreeTarget::Episode { .. }) => {
-                        item.map(|episode| ShellRequest::TvEpisodeActivate { episode })
-                    }
-                    None => None,
-                }
-            }
-            Key::Right => {
-                if let Some(target) = target.clone() {
-                    if !self.browser.is_expanded(&target) {
-                        if let Some(message) = self.toggle_tree_expansion(target) {
-                            return Some(message);
-                        }
-                    }
-                }
-                let intent = self.browser.apply(TreeOperation::Right).external_intent;
-                let activation = match intent {
-                    Some(
-                        crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
-                            TvTreeTarget::Show(_),
-                        ),
-                    ) => self.activate_show_tree_selection(item),
-                    _ => None,
-                };
-                return Some(
-                    activation
-                        .map(|request| Msg::Shell(Box::new(request)))
-                        .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
-                );
-            }
-            Key::Left => {
-                if let Some(target) = target {
-                    if self.browser.is_expanded(&target) {
-                        self.browser
-                            .apply(TreeOperation::ToggleExpansionTarget(target));
-                        return Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed));
-                    }
-                    self.browser.apply(TreeOperation::Parent);
-                    return Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed));
-                }
-                None
-            }
-            Key::Char('.') => {
-                let intent = self.browser.apply(TreeOperation::Context).external_intent;
-                let targets = match intent {
-                    Some(crate::app::components::list::tree_browser::TreeExternalIntent::Context(target)) => vec![target],
-                    Some(crate::app::components::list::tree_browser::TreeExternalIntent::ContextSelection(targets)) => targets,
-                    _ => Vec::new(),
-                };
-                let items: Vec<_> = targets
-                    .iter()
-                    .filter_map(|target| self.show_item_for_tree_target(target))
-                    .collect();
-                (!items.is_empty()).then_some(ShellRequest::RowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-                    None,
-                ))
-            }
+            Key::Enter => return self.activate_show_tree_key(item),
+            Key::Right => return self.expand_show_tree_right(target, item),
+            Key::Left => return self.collapse_show_tree_left(target),
+            Key::Char('.') => self.show_tree_context_request(),
             _ => None,
         };
         request.map(|request| Msg::Shell(Box::new(request)))
+    }
+
+    fn activate_show_tree_key(&mut self, item: Option<EmbyItem>) -> Option<Msg> {
+        let activated = match self.browser.apply(TreeOperation::Activate).external_intent {
+            Some(crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
+                target,
+            )) => Some(target),
+            _ => None,
+        };
+        match activated {
+            Some(TvTreeTarget::Show(_)) => self
+                .activate_show_tree_selection(item)
+                .map(|request| Msg::Shell(Box::new(request))),
+            Some(target @ TvTreeTarget::Season { .. }) => Some(
+                self.toggle_tree_expansion(target)
+                    .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+            ),
+            Some(TvTreeTarget::Episode { .. }) => item
+                .map(|episode| ShellRequest::TvEpisodeActivate { episode })
+                .map(|request| Msg::Shell(Box::new(request))),
+            None => None,
+        }
+    }
+
+    fn expand_show_tree_right(
+        &mut self,
+        target: Option<TvTreeTarget>,
+        item: Option<EmbyItem>,
+    ) -> Option<Msg> {
+        if let Some(target) = target {
+            if !self.browser.is_expanded(&target) {
+                if let Some(message) = self.toggle_tree_expansion(target) {
+                    return Some(message);
+                }
+            }
+        }
+        let intent = self.browser.apply(TreeOperation::Right).external_intent;
+        let activation = match intent {
+            Some(crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
+                TvTreeTarget::Show(_),
+            )) => self.activate_show_tree_selection(item),
+            _ => None,
+        };
+        Some(
+            activation
+                .map(|request| Msg::Shell(Box::new(request)))
+                .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+        )
+    }
+
+    fn collapse_show_tree_left(&mut self, target: Option<TvTreeTarget>) -> Option<Msg> {
+        if let Some(target) = target {
+            if self.browser.is_expanded(&target) {
+                self.browser
+                    .apply(TreeOperation::ToggleExpansionTarget(target));
+            } else {
+                self.browser.apply(TreeOperation::Parent);
+            }
+            return Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed));
+        }
+        None
+    }
+
+    fn show_tree_context_request(&mut self) -> Option<ShellRequest> {
+        let intent = self.browser.apply(TreeOperation::Context).external_intent;
+        let targets = match intent {
+            Some(crate::app::components::list::tree_browser::TreeExternalIntent::Context(
+                target,
+            )) => vec![target],
+            Some(
+                crate::app::components::list::tree_browser::TreeExternalIntent::ContextSelection(
+                    targets,
+                ),
+            ) => targets,
+            _ => Vec::new(),
+        };
+        let items: Vec<_> = targets
+            .iter()
+            .filter_map(|target| self.show_item_for_tree_target(target))
+            .collect();
+        (!items.is_empty()).then_some(ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+            None,
+        ))
     }
 
     /// Wide pane-based keyboard handling (unchanged from before the merge).
