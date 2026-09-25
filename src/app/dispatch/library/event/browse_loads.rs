@@ -216,11 +216,57 @@ impl App {
         lib_idx: usize,
         requested_position: crate::config::LibraryPosition,
         position: crate::config::LibraryPosition,
-        mut nav_stack: Vec<BrowseLevel>,
+        nav_stack: Vec<BrowseLevel>,
     ) {
         if self.saved_library_position(lib_idx).as_ref() != Some(&requested_position) {
             return;
         }
+        let nav_stack =
+            self.restore_library_position_levels(lib_idx, &requested_position, nav_stack);
+        let position = self.rebuild_restored_library_position(
+            lib_idx,
+            position,
+            &requested_position,
+            &nav_stack,
+        );
+
+        // A restore an armed pending Series landing is waiting on is never
+        // stale: the landing spawned it and cannot retry until it applies,
+        // and the landing is initiated from another tab (queue "Go to
+        // Library") whose tab switch happens only on completion.
+        let serves_pending_landing = self
+            .pending_series_landing
+            .as_ref()
+            .is_some_and(|pending| pending.lib_idx == lib_idx);
+        if self.active_library_position_scope_for(lib_idx).is_none() && !serves_pending_landing {
+            return;
+        }
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            lib.apply_library_position(position.clone(), nav_stack);
+        }
+        self.finish_restored_library_position(lib_idx);
+        // Deliberately no `spawn_all_items_prefetch` call here (unlike
+        // `handle_lib_loaded`'s sibling call, which is safe): this method
+        // fires for every library restored at app *startup*, all
+        // concurrently. Eagerly fetching+parsing a whole library's worth of
+        // full-field items (People, MediaStreams, ...) here piles CPU-bound
+        // JSON parsing on top of N other libraries' simultaneous restore
+        // fetches and visibly stalls first paint of the default library
+        // (#260). `all_items` is a pure cache for instant fuzzy-search open
+        // via the unified search modal. The modal reads it lazily
+        // (see `AllItemsPrefetched` handling), so nothing here requires
+        // it to be warm. If you're tempted to add
+        // this back, don't: benchmark against a library with 500+ items
+        // first and check `~/.local/state/mbv/mbv.log` for `parent=<id>`
+        // `http=`/`parse=` timings from `get_items_sorted`.
+    }
+
+    fn restore_library_position_levels(
+        &self,
+        lib_idx: usize,
+        requested_position: &crate::config::LibraryPosition,
+        mut nav_stack: Vec<BrowseLevel>,
+    ) -> Vec<BrowseLevel> {
         for (index, level) in nav_stack.iter_mut().enumerate() {
             self.retain_grouped_music_level_items(lib_idx, level);
             if let Some(saved_level) = requested_position.levels.get(index) {
@@ -256,14 +302,22 @@ impl App {
             }
         }
         nav_stack.truncate(valid_levels);
+        nav_stack
+    }
 
+    fn rebuild_restored_library_position(
+        &self,
+        lib_idx: usize,
+        mut position: crate::config::LibraryPosition,
+        requested_position: &crate::config::LibraryPosition,
+        nav_stack: &[BrowseLevel],
+    ) -> crate::config::LibraryPosition {
         // Rebuild the saved position from the filtered levels so a dropped
         // empty folder cannot leave a stale focused id or server-row count.
         let library_total = position
             .levels
             .first()
             .and_then(|level| level.library_total);
-        let mut position = position;
         position.levels = nav_stack
             .iter()
             .map(BrowseLevel::to_position_level)
@@ -286,20 +340,10 @@ impl App {
                 root.letter_filter_index = None;
             }
         }
-        // A restore an armed pending Series landing is waiting on is never
-        // stale: the landing spawned it and cannot retry until it applies,
-        // and the landing is initiated from another tab (queue "Go to
-        // Library") whose tab switch happens only on completion.
-        let serves_pending_landing = self
-            .pending_series_landing
-            .as_ref()
-            .is_some_and(|pending| pending.lib_idx == lib_idx);
-        if self.active_library_position_scope_for(lib_idx).is_none() && !serves_pending_landing {
-            return;
-        }
-        if let Some(lib) = self.libs.get_mut(lib_idx) {
-            lib.apply_library_position(position.clone(), nav_stack);
-        }
+        position
+    }
+
+    fn finish_restored_library_position(&mut self, lib_idx: usize) {
         // Positions saved before the letter-pill feature existed carry no
         // `library_total`, so without this call `should_show_letter_pills`
         // would stay false forever for those libraries. This is a no-op for
@@ -328,19 +372,5 @@ impl App {
         {
             self.retry_pending_series_landing(lib_idx, &parent_id);
         }
-        // Deliberately no `spawn_all_items_prefetch` call here (unlike
-        // `handle_lib_loaded`'s sibling call, which is safe): this method
-        // fires for every library restored at app *startup*, all
-        // concurrently. Eagerly fetching+parsing a whole library's worth of
-        // full-field items (People, MediaStreams, ...) here piles CPU-bound
-        // JSON parsing on top of N other libraries' simultaneous restore
-        // fetches and visibly stalls first paint of the default library
-        // (#260). `all_items` is a pure cache for instant fuzzy-search open
-        // via the unified search modal. The modal reads it lazily
-        // (see `AllItemsPrefetched` handling), so nothing here requires
-        // it to be warm. If you're tempted to add
-        // this back, don't: benchmark against a library with 500+ items
-        // first and check `~/.local/state/mbv/mbv.log` for `parent=<id>`
-        // `http=`/`parse=` timings from `get_items_sorted`.
     }
 }
