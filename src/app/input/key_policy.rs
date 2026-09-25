@@ -158,47 +158,54 @@ impl KeyPolicyGate {
             Self::NoBlockingOverlayAndHelpClosed => {
                 !snapshot.blocking_overlay_open && !snapshot.help_overlay_open
             }
-            Self::PanelFocusQueue => {
-                !snapshot.blocking_overlay_open
-                    && !snapshot.overlay_holds_focus
-                    && snapshot.panel_focus == PanelFocus::Queue
-            }
-            Self::PanelFocusLibraryBoth => {
-                !snapshot.blocking_overlay_open
-                    && !snapshot.overlay_holds_focus
-                    && snapshot.panel_focus == PanelFocus::Library
-                    && snapshot.panel_mode == PanelMode::Both
-            }
+            Self::PanelFocusQueue => panel_focus_queue_allowed(snapshot),
+            Self::PanelFocusLibraryBoth => panel_focus_library_both_allowed(snapshot),
             Self::QueueColumnWidth => snapshot.panel_mode == PanelMode::Both,
             Self::ClearQueuePrompt => {
                 !snapshot.blocking_overlay_open && !snapshot.context_menu_open
             }
             Self::SessionsSidebarOpen => snapshot.sessions_sidebar_open,
-            Self::Playback => {
-                // Playback shortcuts are single letters (space, a, …); a
-                // focused text entry must keep them as typed characters.
-                !snapshot.blocking_overlay_open
-                    && !snapshot.text_entry_focused
-                    && (snapshot.player_active || snapshot.has_remote_session)
-            }
-            Self::PlaybackUngated => {
+            Self::Playback => playback_allowed(snapshot),
+            Self::PlaybackUngated | Self::PrefixArming => {
                 !snapshot.blocking_overlay_open && !snapshot.text_entry_focused
             }
-            Self::IdleFeedLink => {
-                !snapshot.blocking_overlay_open
-                    && !snapshot.text_entry_focused
-                    && idle_feed_command_for_key(
-                        chord,
-                        snapshot.player_active,
-                        snapshot.connected_session_id_present,
-                        snapshot.queue_only_idle,
-                        snapshot.idle_feed_link_available,
-                    )
-                    .is_some()
-            }
-            Self::PrefixArming => !snapshot.blocking_overlay_open && !snapshot.text_entry_focused,
+            Self::IdleFeedLink => idle_feed_link_allowed(chord, snapshot),
         }
     }
+}
+
+fn panel_focus_queue_allowed(snapshot: &RouterSnapshot) -> bool {
+    !snapshot.blocking_overlay_open
+        && !snapshot.overlay_holds_focus
+        && snapshot.panel_focus == PanelFocus::Queue
+}
+
+fn panel_focus_library_both_allowed(snapshot: &RouterSnapshot) -> bool {
+    !snapshot.blocking_overlay_open
+        && !snapshot.overlay_holds_focus
+        && snapshot.panel_focus == PanelFocus::Library
+        && snapshot.panel_mode == PanelMode::Both
+}
+
+fn playback_allowed(snapshot: &RouterSnapshot) -> bool {
+    // Playback shortcuts are single letters (space, a, …); a focused text
+    // entry must keep them as typed characters.
+    !snapshot.blocking_overlay_open
+        && !snapshot.text_entry_focused
+        && (snapshot.player_active || snapshot.has_remote_session)
+}
+
+fn idle_feed_link_allowed(chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
+    !snapshot.blocking_overlay_open
+        && !snapshot.text_entry_focused
+        && idle_feed_command_for_key(
+            chord,
+            snapshot.player_active,
+            snapshot.connected_session_id_present,
+            snapshot.queue_only_idle,
+            snapshot.idle_feed_link_available,
+        )
+        .is_some()
 }
 
 /// The ordered keyboard policy. Entries are first-match-wins.
