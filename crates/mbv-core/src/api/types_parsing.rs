@@ -131,47 +131,50 @@ pub fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
     }
 }
 
+fn session_audio_label(s: &Value) -> String {
+    let index = s["Index"].as_i64().unwrap_or(0);
+    let language = s["Language"].as_str().unwrap_or("");
+    let lang_name = audio_language_name(language);
+    let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
+    let layout = s["ChannelLayout"].as_str().unwrap_or("");
+    let layout_str = match layout {
+        "mono" => "Mono",
+        "stereo" => "Stereo",
+        "5.1" => "5.1",
+        "7.1" => "7.1",
+        other if !other.is_empty() => other,
+        _ => "",
+    };
+    let title = s["DisplayTitle"]
+        .as_str()
+        .or_else(|| s["Title"].as_str())
+        .unwrap_or("");
+    let pieces: Vec<&str> = [lang_name, &codec, layout_str]
+        .iter()
+        .filter(|part| !part.is_empty())
+        .copied()
+        .collect();
+    if !pieces.is_empty() {
+        pieces.join(" ")
+    } else if !title.is_empty() {
+        title.to_string()
+    } else if !language.is_empty() {
+        language.to_uppercase()
+    } else {
+        format!("#{index}")
+    }
+}
+
 fn parse_session_audio_streams(streams: &[Value]) -> Vec<SessionAudioStream> {
     streams
         .iter()
         .filter(|s| s["Type"].as_str() == Some("Audio"))
         .filter_map(|s| {
             s.get("Index")?;
-            let index = s["Index"].as_i64().unwrap_or(0);
-            let language = s["Language"].as_str().unwrap_or("").to_string();
-            let lang_name = audio_language_name(&language);
-            let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
-            let layout = s["ChannelLayout"].as_str().unwrap_or("");
-            let layout_str = match layout {
-                "mono" => "Mono",
-                "stereo" => "Stereo",
-                "5.1" => "5.1",
-                "7.1" => "7.1",
-                other if !other.is_empty() => other,
-                _ => "",
-            };
-            let title = s["DisplayTitle"]
-                .as_str()
-                .or_else(|| s["Title"].as_str())
-                .unwrap_or("");
-            let pieces: Vec<&str> = [lang_name, &codec, layout_str]
-                .iter()
-                .filter(|part| !part.is_empty())
-                .copied()
-                .collect();
-            let label = if !pieces.is_empty() {
-                pieces.join(" ")
-            } else if !title.is_empty() {
-                title.to_string()
-            } else if !language.is_empty() {
-                language.to_uppercase()
-            } else {
-                format!("#{index}")
-            };
             Some(SessionAudioStream {
-                index,
-                label,
-                language,
+                index: s["Index"].as_i64().unwrap_or(0),
+                label: session_audio_label(s),
+                language: s["Language"].as_str().unwrap_or("").to_string(),
             })
         })
         .collect()
