@@ -87,26 +87,31 @@ pub(in crate::app) fn tuirealm_key_to_crossterm(
     key: tuirealm::event::KeyEvent,
 ) -> crossterm::event::KeyEvent {
     use tuirealm::event::{Key as TuiKey, KeyModifiers as TuiMods};
+    const KEY_CODES: &[(TuiKey, KeyCode)] = &[
+        (TuiKey::Backspace, KeyCode::Backspace),
+        (TuiKey::Enter, KeyCode::Enter),
+        (TuiKey::Left, KeyCode::Left),
+        (TuiKey::Right, KeyCode::Right),
+        (TuiKey::Up, KeyCode::Up),
+        (TuiKey::Down, KeyCode::Down),
+        (TuiKey::Home, KeyCode::Home),
+        (TuiKey::End, KeyCode::End),
+        (TuiKey::PageUp, KeyCode::PageUp),
+        (TuiKey::PageDown, KeyCode::PageDown),
+        (TuiKey::Tab, KeyCode::Tab),
+        (TuiKey::BackTab, KeyCode::BackTab),
+        (TuiKey::Delete, KeyCode::Delete),
+        (TuiKey::Insert, KeyCode::Insert),
+        (TuiKey::Esc, KeyCode::Esc),
+        (TuiKey::Null, KeyCode::Null),
+    ];
     let code = match key.code {
-        TuiKey::Backspace => crossterm::event::KeyCode::Backspace,
-        TuiKey::Char(c) => crossterm::event::KeyCode::Char(c),
-        TuiKey::Enter => crossterm::event::KeyCode::Enter,
-        TuiKey::Left => crossterm::event::KeyCode::Left,
-        TuiKey::Right => crossterm::event::KeyCode::Right,
-        TuiKey::Up => crossterm::event::KeyCode::Up,
-        TuiKey::Down => crossterm::event::KeyCode::Down,
-        TuiKey::Home => crossterm::event::KeyCode::Home,
-        TuiKey::End => crossterm::event::KeyCode::End,
-        TuiKey::PageUp => crossterm::event::KeyCode::PageUp,
-        TuiKey::PageDown => crossterm::event::KeyCode::PageDown,
-        TuiKey::Tab => crossterm::event::KeyCode::Tab,
-        TuiKey::BackTab => crossterm::event::KeyCode::BackTab,
-        TuiKey::Delete => crossterm::event::KeyCode::Delete,
-        TuiKey::Insert => crossterm::event::KeyCode::Insert,
-        TuiKey::Esc => crossterm::event::KeyCode::Esc,
-        TuiKey::Null => crossterm::event::KeyCode::Null,
-        TuiKey::Function(n) => crossterm::event::KeyCode::F(n),
-        _ => crossterm::event::KeyCode::Null,
+        TuiKey::Char(c) => KeyCode::Char(c),
+        TuiKey::Function(n) => KeyCode::F(n),
+        code => KEY_CODES
+            .iter()
+            .find_map(|(tui_code, mapped_code)| (*tui_code == code).then_some(*mapped_code))
+            .unwrap_or(KeyCode::Null),
     };
     let mut modifiers = crossterm::event::KeyModifiers::empty();
     if key.modifiers.contains(TuiMods::SHIFT) {
