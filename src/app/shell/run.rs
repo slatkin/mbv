@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
-use crate::app::PanelFocus;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -305,167 +304,19 @@ impl Model {
             if self.drain_player_events(&mut had_events) {
                 continue 'outer;
             }
-
-            had_events |= self.app.drain_notif_actions();
-
-            had_events |= self.drain_lib_events();
-
-            // Search results drain: the shell drains `search_rx` and writes
-            // each result into the `SearchSidebarComponent` via downcast
-            // (task 3.2). The debounce is component-owned; the shell fires
-            // the wall clock via the sweep below (#609) and routes any
-            // emitted `Msg::Service(SearchQuery)` through the same
-            // service-request handler the keyboard path uses.
-            had_events |= self.drain_search_results();
-
-            // Search debounce sweep (#609): production never wired a
-            // `UserEvent::Clock` publisher, so the shell supplies the
-            // wall-clock tick directly via `tick_search_clock` once per
-            // main-loop iteration. The component owns the deadline and
-            // emits `Msg::Service(SearchQuery)` when it passes; the shell
-            // dispatches it through `handle_service_request` (the same
-            // path the keyboard arm routes Service requests through).
-            if let Some(Msg::Service(request)) = self.tick_search_clock(Instant::now()) {
-                had_events = true;
-                self.handle_service_request(request);
-            }
-
-            // Inline Search debounce sweep: same shell-supplied wall clock,
-            // pumped into the embedded control of the active session. A
-            // fired debounce re-scored the results and needs a redraw.
-            had_events |= self.tick_inline_search_clock(Instant::now());
-
-            had_events |= self.app.drain_session_events();
-
-            had_events |= self.app.expire_bare_transition(Instant::now());
-
-            had_events |= self.app.drain_cast_events();
-
-            // Feed results update their embedded destination owner.
-            if self.app.drain_feed_tab_results() {
-                had_events = true;
-                // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_emby_library_owner_content();
-            }
-
-            had_events |= self.drain_feed_add_results();
-
-            had_events |= self.drain_card_image_completions();
-            self.app.drain_image_fetches();
-
-            had_events |= self.drain_resize_responses();
-
-            had_events |= self.drain_ws_events();
-
-            had_events |= self.drain_audiobookshelf_socket_events();
-
-            had_events |= self.drain_idle_feed();
-
-            self.app.sync_visualizer();
-
-            self.run_periodic_maintenance();
-
-            if self.tick_terminal_messages(&mut had_events, &mut music_resize, &mut tv_resize) {
+            if self.drain_iteration_work(&mut had_events, &mut music_resize, &mut tv_resize) {
                 break 'outer;
             }
 
-            // Terminal event poll is now driven by TuiRealm. `tick` polls the
-            // crossterm listener (a background worker) for one event within
-            // the same timeout the legacy loop used (8 ms with the visualizer,
-            // 50 ms otherwise). UiRoot observes every event independently of
-            // the active component's `Option<Msg>`; its typed event signal is
-            // only handed to the legacy fallback when UiRoot has focus. This
-            // preserves D12 redraws for local mutations without duplicating
-            // legacy handling on converted surfaces. When the terminal closes
-            // (SIGHUP), the listener's failed poll/read surfaces as a tick
-            // error; breaking here lets post-loop cleanup run (player.stop +
-            // join) — same contract as the legacy direct poll/read path.
-            let poll_timeout = if self.app.visualizer.is_some() {
-                Duration::from_millis(8)
-            } else {
-                Duration::from_millis(50)
-            };
-            let messages = match self.application.tick(PollStrategy::Once(poll_timeout)) {
-                Ok(msgs) => msgs,
-                Err(_) => break,
-            };
-            // ADR 0024: fold the mouse-derived messages (one per eligible
-            // subscribed component) down to at most one before the keyboard
-            // router fold and `handle_terminal_message` dispatch. A keyboard
-            // tick passes through untouched.
-            let messages = fold_mouse_messages(messages);
-            if !messages.is_empty() {
-                had_events = true;
-                // `PollStrategy::Once` delivers at most one terminal event per
-                // tick, so this runs 0 or 1 times; `quit` handles the legacy
-                // `handle_key`-returns-true loop break without a labelled
-                // break inside the fold.
-                let mut quit = false;
-                // Snapshot focus before handling any messages. A legacy key can
-                // mount or dismiss an overlay, changing focus before UiRoot's
-                // observer message is folded; routing by the live focus then
-                // double-delivers that same terminal event.
-                let focused = self.application.focus().cloned();
-                // ADR 0023: the Keyboard Router fold. `Application::tick`
-                // returns the focused component's message first, then the
-                // UiRoot observer's. With `PollStrategy::Once` there is at
-                // most one terminal event per tick, so the leaf's request and
-                // the router's resolution for the same chord arrive together.
-                // The router's outcome selects between them: `Command` runs the
-                // semantic command and discards the leaf's message, `Swallow`
-                // runs nothing and discards it, `FallThrough` lets the leaf's
-                // own request stand.
-                let router = self.router_outcome(&messages);
-                let (messages, diagnostic) = arbitrate_key(messages, focused.as_ref(), &router);
-                // A prefix-namespace dispatch (design D6, task 6.2) runs the
-                // mapped action and disarms, like an immediate `Command`.
-                if let RouterOutcome::Command(command) | RouterOutcome::PrefixDispatch(command) =
-                    &router
-                {
-                    quit |= self.dispatch_router_command(command.clone());
-                }
-                // A deferred candidate fires on an unhandled press; its
-                // commands never quit, so it does not feed the loop's quit
-                // flag.
-                self.apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
-                for msg in messages {
-                    if self.handle_terminal_message(msg, &mut music_resize, &mut tv_resize) {
-                        quit = true;
-                    }
-                }
-                if quit {
-                    break 'outer;
-                }
-            }
-
-            // Apply the Settings panel's live mouse-capture flip: the toggle
-            // arm only records the intent; the capture sequence goes out on
-            // the session stdout here, before the next draw.
-            if let Some(enabled) = self.app.mouse_capture_pending.take() {
-                let _ = crate::app::set_mouse_capture(terminal.backend_mut(), enabled);
-            }
-
-            // Drain deferred component intents after this tick's primary
-            // messages, including ticks with no primary component message.
-            if self.drain_deferred_library_message(&mut music_resize, &mut tv_resize) {
-                break 'outer;
-            }
-
-            // Keep in sync with tests/tick_integration/harness.rs, the other caller of this shared pass.
-            self.sync_mounted_surfaces();
-
-            self.app.expire_music_grouping_candidates();
-            self.app.sync_volume_from_player();
-            // Advance idle feed rotation
-            self.app.advance_idle_feed_rotation();
-
-            self.draw_frame_if_due(
+            if self.finish_run_iteration(
+                &mut terminal,
                 had_events,
                 &mut last_render,
                 music_resize,
                 tv_resize,
-                &mut terminal,
-            )?;
+            )? {
+                break 'outer;
+            }
         }
 
         self.teardown(quit_timeout);
@@ -477,6 +328,77 @@ impl Model {
             println!("{msg}");
         }
         Ok(())
+    }
+
+    fn finish_run_iteration(
+        &mut self,
+        terminal: &mut ratatui::Terminal<ratatui::backend::CrosstermBackend<std::io::Stdout>>,
+        had_events: bool,
+        last_render: &mut Instant,
+        mut music_resize: bool,
+        mut tv_resize: bool,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        // Apply the Settings panel's live mouse-capture flip before the next draw.
+        if let Some(enabled) = self.app.mouse_capture_pending.take() {
+            let _ = crate::app::set_mouse_capture(terminal.backend_mut(), enabled);
+        }
+        // Drain deferred component intents after primary messages, including
+        // ticks with no primary component message.
+        if self.drain_deferred_library_message(&mut music_resize, &mut tv_resize) {
+            return Ok(true);
+        }
+
+        // Keep in sync with tests/tick_integration/harness.rs, the other caller of this shared pass.
+        self.sync_mounted_surfaces();
+        self.app.expire_music_grouping_candidates();
+        self.app.sync_volume_from_player();
+        self.app.advance_idle_feed_rotation();
+        self.draw_frame_if_due(had_events, last_render, music_resize, tv_resize, terminal)?;
+        Ok(false)
+    }
+
+    fn drain_iteration_work(
+        &mut self,
+        had_events: &mut bool,
+        music_resize: &mut bool,
+        tv_resize: &mut bool,
+    ) -> bool {
+        *had_events |= self.app.drain_notif_actions();
+        *had_events |= self.drain_lib_events();
+
+        // Search results drain: the shell drains `search_rx` and writes each
+        // result into the SearchSidebarComponent. The debounce is component-
+        // owned; the shell fires the wall clock via the sweep below (#609)
+        // and routes any emitted request through the normal service handler.
+        *had_events |= self.drain_search_results();
+
+        // The shell supplies the wall-clock tick directly once per loop.
+        if let Some(Msg::Service(request)) = self.tick_search_clock(Instant::now()) {
+            *had_events = true;
+            self.handle_service_request(request);
+        }
+        *had_events |= self.tick_inline_search_clock(Instant::now());
+
+        *had_events |= self.app.drain_session_events();
+        *had_events |= self.app.expire_bare_transition(Instant::now());
+        *had_events |= self.app.drain_cast_events();
+
+        // Feed results update their embedded destination owner.
+        if self.app.drain_feed_tab_results() {
+            *had_events = true;
+            self.push_active_emby_library_owner_content();
+        }
+
+        *had_events |= self.drain_feed_add_results();
+        *had_events |= self.drain_card_image_completions();
+        self.app.drain_image_fetches();
+        *had_events |= self.drain_resize_responses();
+        *had_events |= self.drain_ws_events();
+        *had_events |= self.drain_audiobookshelf_socket_events();
+        *had_events |= self.drain_idle_feed();
+        self.app.sync_visualizer();
+        self.run_periodic_maintenance();
+        self.tick_terminal_messages(had_events, music_resize, tv_resize)
     }
 }
 
