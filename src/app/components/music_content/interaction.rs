@@ -18,81 +18,91 @@ impl MusicContent {
 
     pub(super) fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(index) => {
-                let delta = index as i64 - self.context.group_cursor as i64;
-                (delta != 0).then_some(Msg::Shell(Box::new(ShellRequest::MusicGroupSwitch {
-                    delta,
-                })))
-            }
-            LibrarySlotEvent::List(input) => {
-                let filtered_tree = self.local_filter_owns_input();
-                if self.inline_search.is_active() && !filtered_tree {
-                    self.inline_search_pointer_input(input)
-                } else {
-                    self.tree_pointer_input(input)
-                }
-            }
+            LibrarySlotEvent::SelectorPicked(index) => self.selector_picked(index),
+            LibrarySlotEvent::List(input) => self.list_input(input),
             LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
-            LibrarySlotEvent::HeroActivate => {
-                if self.track_focused {
-                    self.workspace_track_activation()
-                } else {
-                    self.selected_item()
-                        .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item })))
-                }
-            }
-            LibrarySlotEvent::HeroPane(input) => match input {
-                // The track owner is local to this workspace; the shell
-                // never recomputes a wheel step. Track-pane focus is not a
-                // selection and does not move here (mirrors the retired
-                // `MusicWorkspaceComponent`'s wheel handling).
-                MediaListSurfaceInput::Wheel { at, delta } => {
-                    if self.track_list.claims_current_point(at) {
-                        self.track_list.delegate_operation(
-                            MediaListSurfaceInput::Wheel { at, delta }
-                                .into_operation(None)
-                                .expect("resolved media-list pointer target"),
-                        );
-                    }
-                    None
-                }
-                MediaListSurfaceInput::Click(at)
-                | MediaListSurfaceInput::ToggleClick(at)
-                | MediaListSurfaceInput::RangeClick(at)
-                | MediaListSurfaceInput::DoubleClick(at) => {
-                    let target = self.track_list.resolve_current_point(at)?.clone();
-                    self.track_focused = true;
+            LibrarySlotEvent::HeroActivate => self.hero_activate(),
+            LibrarySlotEvent::HeroPane(input) => self.hero_pane_input(input),
+        }
+    }
+
+    fn selector_picked(&self, index: usize) -> Option<Msg> {
+        let delta = index as i64 - self.context.group_cursor as i64;
+        (delta != 0).then_some(Msg::Shell(Box::new(ShellRequest::MusicGroupSwitch {
+            delta,
+        })))
+    }
+
+    fn list_input(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let filtered_tree = self.local_filter_owns_input();
+        if self.inline_search.is_active() && !filtered_tree {
+            self.inline_search_pointer_input(input)
+        } else {
+            self.tree_pointer_input(input)
+        }
+    }
+
+    fn hero_activate(&mut self) -> Option<Msg> {
+        if self.track_focused {
+            self.workspace_track_activation()
+        } else {
+            self.selected_item()
+                .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item })))
+        }
+    }
+
+    fn hero_pane_input(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        match input {
+            // The track owner is local to this workspace; the shell
+            // never recomputes a wheel step. Track-pane focus is not a
+            // selection and does not move here (mirrors the retired
+            // `MusicWorkspaceComponent`'s wheel handling).
+            MediaListSurfaceInput::Wheel { at, delta } => {
+                if self.track_list.claims_current_point(at) {
                     self.track_list.delegate_operation(
-                        input
-                            .into_operation(Some(target))
+                        MediaListSurfaceInput::Wheel { at, delta }
+                            .into_operation(None)
                             .expect("resolved media-list pointer target"),
                     );
-                    (matches!(input, MediaListSurfaceInput::DoubleClick(_)))
-                        .then(|| self.workspace_track_activation())?
                 }
-                MediaListSurfaceInput::ContextClick(at) => {
-                    let target = self.track_list.resolve_current_point(at)?.clone();
-                    let item = self.workspace_track_item(&target)?;
-                    let outcome = self.track_list.delegate_operation(
-                        input
-                            .into_operation(Some(target))
-                            .expect("resolved media-list pointer target"),
-                    );
-                    let _ = ();
-                    let items = match outcome.external_intent {
-                        Some(RowIntent::ContextSelection(targets)) => targets
-                            .into_iter()
-                            .filter_map(|target| self.workspace_track_item(&target))
-                            .collect(),
-                        _ => vec![item],
-                    };
-                    Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
-                        crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-                        Some((at.x, at.y)),
-                    ))))
-                }
-                _ => None,
-            },
+                None
+            }
+            MediaListSurfaceInput::Click(at)
+            | MediaListSurfaceInput::ToggleClick(at)
+            | MediaListSurfaceInput::RangeClick(at)
+            | MediaListSurfaceInput::DoubleClick(at) => {
+                let target = self.track_list.resolve_current_point(at)?.clone();
+                self.track_focused = true;
+                self.track_list.delegate_operation(
+                    input
+                        .into_operation(Some(target))
+                        .expect("resolved media-list pointer target"),
+                );
+                (matches!(input, MediaListSurfaceInput::DoubleClick(_)))
+                    .then(|| self.workspace_track_activation())?
+            }
+            MediaListSurfaceInput::ContextClick(at) => {
+                let target = self.track_list.resolve_current_point(at)?.clone();
+                let item = self.workspace_track_item(&target)?;
+                let outcome = self.track_list.delegate_operation(
+                    input
+                        .into_operation(Some(target))
+                        .expect("resolved media-list pointer target"),
+                );
+                let _ = ();
+                let items = match outcome.external_intent {
+                    Some(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .filter_map(|target| self.workspace_track_item(&target))
+                        .collect(),
+                    _ => vec![item],
+                };
+                Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
+                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                    Some((at.x, at.y)),
+                ))))
+            }
+            _ => None,
         }
     }
     /// The Inline Search pointer branch of the `List` slot event (design.md D4):
