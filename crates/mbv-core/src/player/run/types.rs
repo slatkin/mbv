@@ -6,6 +6,27 @@ pub(in crate::player) enum PlaybackOrigin {
     Queue,
 }
 
+/// Arguments shared by the `PlaybackRun` constructors: everything except the
+/// queue itself (`Vec<ExecSlot>` vs `ExecutionSequence`) and the subtitle
+/// URLs only `init_from_queue` takes. One struct so same-type neighbours
+/// (`server_url`/`token`, the `Arc<Mutex<..>>` trio) can't be swapped
+/// silently at a call site.
+pub(in crate::player) struct RunInit {
+    pub(in crate::player) start_idx: usize,
+    pub(in crate::player) origin: PlaybackOrigin,
+    pub(in crate::player) reporter: SessionReporter,
+    pub(in crate::player) config: MpvRunConfig,
+    pub(in crate::player) startup_pause_for_pipe: bool,
+    pub(in crate::player) status: Arc<Mutex<PlayerStatus>>,
+    pub(in crate::player) event_tx: mpsc::Sender<PlayerEvent>,
+    pub(in crate::player) subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
+    pub(in crate::player) shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
+    pub(in crate::player) server_url: String,
+    pub(in crate::player) token: String,
+    pub(in crate::player) audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
+    pub(in crate::player) prepared_source: Option<PreparedSource>,
+}
+
 pub(in crate::player) struct PlaybackRun {
     pub(in crate::player) origin: PlaybackOrigin,
     pub(in crate::player) run_identity: (

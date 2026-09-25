@@ -506,24 +506,8 @@ impl PlaybackRun {
     }
 
     /// Construct a `PlaybackRun` from the Player owner's canonical slots.
-    #[allow(clippy::too_many_arguments)]
-    pub(in crate::player) fn new_from_slot_items(
-        items: Vec<ExecSlot>,
-        start_idx: usize,
-        origin: PlaybackOrigin,
-        reporter: SessionReporter,
-        config: MpvRunConfig,
-        startup_pause_for_pipe: bool,
-        status: Arc<Mutex<PlayerStatus>>,
-        event_tx: mpsc::Sender<PlayerEvent>,
-        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-        shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
-        server_url: String,
-        token: String,
-        audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
-        prepared_source: Option<PreparedSource>,
-    ) -> Self {
-        let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
+    pub(in crate::player) fn new_from_slot_items(items: Vec<ExecSlot>, init: RunInit) -> Self {
+        let active_slot_id = items.get(init.start_idx).map(|slot| slot.slot_id);
         let queue = ExecutionSequence::from_slot_items(
             items
                 .into_iter()
@@ -533,6 +517,13 @@ impl PlaybackRun {
         );
         Self::init_from_queue(
             queue,
+            init,
+            Vec::new(), // no external subtitles for feed items
+        )
+    }
+
+    fn init_from_queue(queue: ExecutionSequence, init: RunInit, ext_sub_urls: Vec<String>) -> Self {
+        let RunInit {
             start_idx,
             origin,
             reporter,
@@ -546,28 +537,7 @@ impl PlaybackRun {
             token,
             audiobookshelf_context,
             prepared_source,
-            Vec::new(), // no external subtitles for feed items
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn init_from_queue(
-        queue: ExecutionSequence,
-        start_idx: usize,
-        origin: PlaybackOrigin,
-        reporter: SessionReporter,
-        config: MpvRunConfig,
-        startup_pause_for_pipe: bool,
-        status: Arc<Mutex<PlayerStatus>>,
-        event_tx: mpsc::Sender<PlayerEvent>,
-        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-        shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
-        server_url: String,
-        token: String,
-        audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
-        prepared_source: Option<PreparedSource>,
-        ext_sub_urls: Vec<String>,
-    ) -> Self {
+        } = init;
         let start_idx = start_idx.min(queue.slots().len().saturating_sub(1));
         let initial_item = queue
             .active_slot()

@@ -108,6 +108,9 @@ pub(crate) struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
 }
 
 impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
+    // Kept (not bundled): these 9 args are exactly the lifecycle's stored
+    // session fields, so a params struct would be a 1:1 shadow of this
+    // constructor with no independent meaning — no real unit to name.
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         generation: crate::service_runtime::SetupGeneration,
