@@ -204,7 +204,7 @@ impl DaemonLoop {
             &mut self.owner,
             &self.player,
             &self.shared_queue,
-            run_identity.into(),
+            run_identity,
             slot_id,
             position_ticks,
             played,
@@ -265,7 +265,7 @@ impl DaemonLoop {
                 let Some(updated) = apply_stopped_observation(
                     &mut self.owner,
                     &self.player,
-                    (*run_identity).into(),
+                    *run_identity,
                     *slot_id,
                     *position_ticks,
                     *played,

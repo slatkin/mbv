@@ -211,7 +211,7 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
     let (merged_tx, _merged_rx) = mpsc::channel();
     let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
     let old_slot = owner.core.queue.slots()[0].slot_id;
-    let old_run = (0, player.status.lock().unwrap().sequence_generation);
+    let old_run = player.status.lock().unwrap().sequence_generation;
 
     handle_ctrl_for_role(
         CtrlCmd::UnifiedQueueLoadIdle {
@@ -263,14 +263,13 @@ fn pending_idle_load_keeps_old_queue_until_stop_then_commits_once_and_invalidate
     assert!(owner.core.observed_active_slot().is_none());
     assert!(!player.status.lock().unwrap().active);
     assert!(!crate::daemon::playback_run_identity_is_current(
-        old_run.into(),
-        &player
+        old_run, &player
     ));
     assert_eq!(
         crate::daemon::apply_stopped_observation(
             &mut owner,
             &player,
-            old_run.into(),
+            old_run,
             Some(old_slot),
             99_000_000,
             false,

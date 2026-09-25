@@ -604,7 +604,7 @@ impl PlaybackRun {
             "playback init origin={origin:?} idx={start_idx} item_pos={}s",
             initial_pos / crate::api::TICKS_PER_SECOND
         );
-        let run_identity = (0, status.lock().unwrap().sequence_generation);
+        let run_identity = status.lock().unwrap().sequence_generation;
         let active_file = queue.has_audiobookshelf_entries();
         let active_file_starting = active_file && prepared_source.is_some();
         let mut prepared_source = prepared_source;

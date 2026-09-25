@@ -362,7 +362,7 @@ fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
     let next_slot_id = app.playback_queue().resolve_slot_at(2).unwrap();
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(1).unwrap(),
-        run_identity: (0, 0),
+        run_identity: 0,
         position_ticks: 0,
         played: true,
         consume: true,
@@ -407,7 +407,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
     let next_slot_id = app.playback_queue().resolve_slot_at(2).unwrap();
     app.handle_player_event(PlayerEvent::TrackCompleted {
         slot_id: app.playback_queue().resolve_slot_at(1).unwrap(),
-        run_identity: (0, 0),
+        run_identity: 0,
         position_ticks: 0,
         played: true,
         consume: true,

@@ -80,8 +80,8 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
 fn stale_stopped_and_completed_run_observations_are_rejected() {
     let player = cold_player();
     player.status.lock().unwrap().sequence_generation = 5;
-    let current_run = (0, 5);
-    let old_run = (0, 4);
+    let current_run = 5;
+    let old_run = 4;
     let shared_queue = shared_queue_state();
 
     let queue = queue_from_items(
@@ -112,7 +112,7 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         apply_stopped_observation(
             &mut stopped_owner,
             &player,
-            old_run.into(),
+            old_run,
             Some(stopped_slot),
             900,
             true,
@@ -130,7 +130,7 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         apply_stopped_observation(
             &mut stopped_owner,
             &player,
-            current_run.into(),
+            current_run,
             Some(stopped_slot),
             900,
             false,
@@ -195,7 +195,7 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         &mut completed_owner,
         &player,
         &shared_queue,
-        old_run.into(),
+        old_run,
         completed_slot,
         crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         true,
@@ -234,7 +234,7 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         &mut completed_owner,
         &player,
         &shared_queue,
-        current_run.into(),
+        current_run,
         completed_slot,
         crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         false,
@@ -256,7 +256,7 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         &mut completed_owner,
         &player,
         &shared_queue,
-        current_run.into(),
+        current_run,
         completed_slot,
         0,
         true,

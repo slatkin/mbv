@@ -29,7 +29,12 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 /// `external_urls`. A v9 peer drops every UnifiedQueue* command from a v10
 /// client because the removed required fields fail deserialization — silently,
 /// since undeserializable ctrl lines are skipped without a log.
-pub const CTRL_PROTOCOL_VERSION: u32 = 10;
+///
+/// Version 11 bumps for the `run_identity` tuple→scalar wire-shape change in
+/// `PlayerEvent::Stopped`/`TrackCompleted`; a v10 peer's `[0, gen]` array fails
+/// to deserialize (the field is dropped silently by serde default) so a
+/// mismatched pair must be rejected at handshake.
+pub const CTRL_PROTOCOL_VERSION: u32 = 11;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";

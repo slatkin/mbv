@@ -3,7 +3,7 @@ use super::super::*;
 #[test]
 fn current_hello_validates() {
     CtrlHello::current().validate_peer().unwrap();
-    assert_eq!(CtrlHello::current().protocol_version, 10);
+    assert_eq!(CtrlHello::current().protocol_version, 11);
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use super::core::{bind_ctrl_listener, broadcast, DaemonEvent};
 use super::*;
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
-use crate::ctrl::{CtrlEvent, PlaybackGeneration, PlaybackRequestId};
+use crate::ctrl::{CtrlEvent, PlaybackGeneration};
 use crate::daemon::ctrl::{ClientRegistry, CtrlClients};
 use crate::playback::PlaybackQueue;
 use crate::playback_queue::QueueSlotId;
@@ -22,37 +22,18 @@ pub(crate) fn broadcast_player_event_if_not_replaced(
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct PlaybackRunIdentity {
-    request_id: PlaybackRequestId,
-    generation: PlaybackGeneration,
-}
-
-impl From<(PlaybackRequestId, PlaybackGeneration)> for PlaybackRunIdentity {
-    fn from((request_id, generation): (PlaybackRequestId, PlaybackGeneration)) -> Self {
-        Self {
-            request_id,
-            generation,
-        }
-    }
-}
-
 pub(crate) fn playback_run_identity_is_current(
-    run_identity: PlaybackRunIdentity,
+    run_identity: PlaybackGeneration,
     player: &Player,
 ) -> bool {
-    run_identity
-        == PlaybackRunIdentity {
-            request_id: 0,
-            generation: player.status.lock().unwrap().sequence_generation,
-        }
+    run_identity == player.status.lock().unwrap().sequence_generation
 }
 
 pub(super) fn apply_track_completed_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
-    run_identity: PlaybackRunIdentity,
+    run_identity: PlaybackGeneration,
     slot_id: QueueSlotId,
     position_ticks: i64,
     played: bool,
@@ -92,7 +73,7 @@ pub(super) fn apply_track_completed_observation(
 pub(super) fn apply_stopped_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
-    run_identity: PlaybackRunIdentity,
+    run_identity: PlaybackGeneration,
     slot_id: Option<QueueSlotId>,
     position_ticks: i64,
     played: bool,
