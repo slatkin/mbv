@@ -504,6 +504,12 @@ pub(in crate::app) fn command_for_policy(
     binding: KeyPolicyBinding,
     key: KeyChord,
 ) -> Option<Command> {
+    command_for_simple_binding(binding)
+        .or_else(|| command_for_navigation_binding(binding, key))
+        .or_else(|| command_for_transport_binding(binding))
+}
+
+fn command_for_simple_binding(binding: KeyPolicyBinding) -> Option<Command> {
     match binding {
         KeyPolicyBinding::SettingsOpen => Some(Command::ToggleSettings),
         KeyPolicyBinding::SessionsOpen => Some(Command::OpenSessions),
@@ -511,6 +517,20 @@ pub(in crate::app) fn command_for_policy(
         KeyPolicyBinding::SearchOpen => Some(Command::OpenSearch),
         KeyPolicyBinding::HelpOpen => Some(Command::OpenHelp),
         KeyPolicyBinding::Quit => Some(Command::Quit),
+        KeyPolicyBinding::PanelRight => Some(Command::FocusPanel(PanelFocus::Library)),
+        KeyPolicyBinding::PanelLeft => Some(Command::FocusPanel(PanelFocus::Queue)),
+        KeyPolicyBinding::PanelModeCycle => Some(Command::CyclePanelMode),
+        KeyPolicyBinding::CtrlL => Some(Command::ForceClear),
+        KeyPolicyBinding::ClearQueue => Some(Command::RequestClearQueue),
+        KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
+        KeyPolicyBinding::Visualizer => Some(Command::ToggleVisualizer),
+        KeyPolicyBinding::HideVisualSlot => Some(Command::ToggleVisualSlotHidden),
+        _ => None,
+    }
+}
+
+fn command_for_navigation_binding(binding: KeyPolicyBinding, key: KeyChord) -> Option<Command> {
+    match binding {
         KeyPolicyBinding::NextLibraryTab | KeyPolicyBinding::AltNextLibraryTab => {
             Some(Command::NextLibraryTab)
         }
@@ -523,16 +543,14 @@ pub(in crate::app) fn command_for_policy(
             }
             _ => None,
         },
-        KeyPolicyBinding::PanelRight => Some(Command::FocusPanel(PanelFocus::Library)),
-        KeyPolicyBinding::PanelLeft => Some(Command::FocusPanel(PanelFocus::Queue)),
-        KeyPolicyBinding::PanelModeCycle => Some(Command::CyclePanelMode),
-        KeyPolicyBinding::CtrlL => Some(Command::ForceClear),
-        KeyPolicyBinding::ClearQueue => Some(Command::RequestClearQueue),
-        KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
-        KeyPolicyBinding::Visualizer => Some(Command::ToggleVisualizer),
-        KeyPolicyBinding::HideVisualSlot => Some(Command::ToggleVisualSlotHidden),
-        // The split transport set: each action binds the fixed payload its
-        // key's call site carried before the bucket split (design D2).
+        _ => None,
+    }
+}
+
+fn command_for_transport_binding(binding: KeyPolicyBinding) -> Option<Command> {
+    // The split transport set: each action binds the fixed payload its key's
+    // call site carried before the bucket split (design D2).
+    match binding {
         KeyPolicyBinding::TogglePlayPause => Some(Command::TogglePlayPause),
         KeyPolicyBinding::Stop => Some(Command::Stop),
         KeyPolicyBinding::SeekBack => Some(Command::SeekRelative(-5.0)),
