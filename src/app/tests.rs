@@ -5,6 +5,7 @@ mod actions_tests_queue_state_reseat;
 mod audiobookshelf_browse_actions_sibling_tests;
 mod audiobookshelf_runtime;
 mod auto_reconnect;
+mod context_actions;
 mod context_menu_placement;
 mod daemon_bootstrap;
 mod feeds;
@@ -26,6 +27,7 @@ mod route_state;
 mod routing_matrix;
 mod services_settings_lifecycle;
 mod session_connect;
+mod settings_activation;
 mod split_browse_state_browse_level_tests;
 pub(crate) mod tick_integration;
 

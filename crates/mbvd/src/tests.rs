@@ -87,6 +87,18 @@ fn abs_diagnostics_classify_auth_rejection_and_other_failures() {
 }
 
 #[test]
+fn connect_emby_rejects_non_interactive_terminal_without_touching_state() {
+    if interactive_terminal() {
+        return;
+    }
+    let error = connect_emby().unwrap_err();
+    assert!(
+        error.contains("requires an interactive terminal"),
+        "got: {error}"
+    );
+}
+
+#[test]
 fn connect_abs_rejects_non_interactive_terminal_without_touching_state() {
     // In the test harness stdin/stdout are not terminals, so the command
     // rejects up front. Guard on interactivity so this never hangs if a
@@ -110,6 +122,35 @@ fn disconnect_abs_rejects_non_interactive_terminal_without_touching_state() {
     assert!(
         error.contains("requires an interactive terminal"),
         "got: {error}"
+    );
+}
+
+#[test]
+fn reconcile_outcome_distinguishes_applied_rejected_and_unrelated_events() {
+    use mbv_core::ctrl::{CtrlEvent, ServiceSetupRejection};
+
+    assert_eq!(
+        reconcile_event_outcome(CtrlEvent::ServiceSetupApplied {
+            kind: config::ServiceKind::Emby,
+            revision: 1,
+        }),
+        Some(Ok(()))
+    );
+    assert_eq!(
+        reconcile_event_outcome(CtrlEvent::ServiceSetupRejected {
+            kind: config::ServiceKind::Emby,
+            revision: 1,
+            reason: ServiceSetupRejection::RevisionMismatch,
+        }),
+        Some(Err(
+            "mbvd: restart required (live setup rejected: RevisionMismatch)".into()
+        ))
+    );
+    assert_eq!(
+        reconcile_event_outcome(CtrlEvent::StatusOnly(
+            mbv_core::player::PlayerStatus::default()
+        )),
+        None
     );
 }
 

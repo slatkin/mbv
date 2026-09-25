@@ -701,6 +701,32 @@ mod tests {
     }
 
     #[test]
+    fn clear_queue_intent_only_opens_confirmation_for_a_nonempty_queue() {
+        let mut empty = Model::new(make_app_stub());
+        empty.handle_queue_intent(QueueIntent::Clear);
+        assert!(empty.app.pending_overlay.is_none());
+
+        let mut populated_app = make_app_stub();
+        populated_app.player_tab.set_queue_items(emby_items(1), 0);
+        let mut populated = Model::new(populated_app);
+        populated.handle_queue_intent(QueueIntent::Clear);
+        assert!(matches!(
+            populated.app.pending_overlay.as_ref(),
+            Some(crate::app::state::types::overlay::OverlayRequest::Confirm(modal))
+                if modal.on_confirm == crate::app::ConfirmAction::ClearQueue
+        ));
+    }
+
+    #[test]
+    fn save_playlist_intent_is_ignored_for_an_empty_queue() {
+        let mut model = Model::new(make_app_stub());
+
+        model.handle_queue_intent(QueueIntent::SavePlaylist);
+
+        assert!(model.app.pending_overlay.is_none());
+    }
+
+    #[test]
     fn remote_undo_falls_back_to_local_when_no_direct_remote_queue() {
         // Finding 5: after a remote disconnect the still-mounted component can
         // emit Undo { scope: Remote } for a frame. With no direct remote queue

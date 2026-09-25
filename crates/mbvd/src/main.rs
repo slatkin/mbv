@@ -352,6 +352,30 @@ fn disconnect_abs() -> Result<(), String> {
     Ok(())
 }
 
+fn reconcile_event_outcome(event: mbv_core::ctrl::CtrlEvent) -> Option<Result<(), String>> {
+    match event {
+        mbv_core::ctrl::CtrlEvent::ServiceSetupApplied { .. } => Some(Ok(())),
+        mbv_core::ctrl::CtrlEvent::ServiceSetupRejected { reason, .. } => Some(Err(format!(
+            "mbvd: restart required (live setup rejected: {reason:?})"
+        ))),
+        _ => None,
+    }
+}
+
+fn wait_for_reconcile_outcome(reader: impl BufRead) -> Result<(), String> {
+    for next in reader.lines() {
+        let line = next.map_err(|_| {
+            "mbvd: restart required (setup acknowledgement unavailable)".to_string()
+        })?;
+        let event = serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line)
+            .map_err(|_| "mbvd: restart required (invalid setup acknowledgement)".to_string())?;
+        if let Some(outcome) = reconcile_event_outcome(event) {
+            return outcome;
+        }
+    }
+    Err("mbvd: restart required (setup acknowledgement unavailable)".into())
+}
+
 fn reconcile_running_owner(kind: config::ServiceKind, revision: u64) -> Result<(), String> {
     let stream = UnixStream::connect(config::control_socket_path())
         .map_err(|_| "mbvd: restart required (packaged daemon ctrl unavailable)".to_string())?;
@@ -387,23 +411,7 @@ fn reconcile_running_owner(kind: config::ServiceKind, revision: u64) -> Result<(
         .flush()
         .map_err(|_| "mbvd: restart required (cannot flush setup request)".to_string())?;
 
-    for next in reader.lines() {
-        let line = next.map_err(|_| {
-            "mbvd: restart required (setup acknowledgement unavailable)".to_string()
-        })?;
-        let event = serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line)
-            .map_err(|_| "mbvd: restart required (invalid setup acknowledgement)".to_string())?;
-        match event {
-            mbv_core::ctrl::CtrlEvent::ServiceSetupApplied { .. } => return Ok(()),
-            mbv_core::ctrl::CtrlEvent::ServiceSetupRejected { reason, .. } => {
-                return Err(format!(
-                    "mbvd: restart required (live setup rejected: {reason:?})"
-                ))
-            }
-            _ => {}
-        }
-    }
-    Err("mbvd: restart required (setup acknowledgement unavailable)".into())
+    wait_for_reconcile_outcome(reader)
 }
 
 fn log_path() -> std::path::PathBuf {
