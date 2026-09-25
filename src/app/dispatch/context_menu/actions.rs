@@ -15,20 +15,22 @@ impl App {
     ) {
         // The shell dismisses the mounted ContextMenu component; this only
         // dispatches the chosen action (task 5.3c).
-        // The menu can only have opened on a matched Emby library, Home, or
-        // the queue; `context_menu_lib_idx()` resolves the explicitly matched
-        // Emby library (positive match, `None` on Home/queue) that every
-        // Emby-only callee below must receive. `cw_item` is the resolved
-        // Continue Watching column target supplied by the Home component; it
-        // feeds the Home-tab arms and the queue-menu's "Remove from Continue
-        // Watching" coupling, and is ignored everywhere else.
         let lib_idx = self.context_menu_lib_idx();
+        let action = self.execute_context_selection_action(action, lib_idx);
+        let action = self.execute_context_library_action(action, cw_item, lib_idx);
+        let action = self.execute_context_queue_and_feed_action(action);
+        self.execute_context_navigation_action(action);
+    }
+
+    fn execute_context_selection_action(
+        &mut self,
+        action: Option<ContextAction>,
+        lib_idx: Option<usize>,
+    ) -> Option<ContextAction> {
         match action {
-            Some(ContextAction::Play) => self.execute_play_action(cw_item, lib_idx),
             Some(ContextAction::PlaySelection(items)) => {
-                // The selection's queue rebuild is deferred into the gated
-                // confirmed path (`run_routed_replacement`), so cancelling the
-                // replacement leaves the queue untouched (design D4).
+                // Queue rebuild is deferred to the gated confirmed path, so
+                // cancelling leaves the queue untouched (design D4).
                 self.request_queue_replacement(
                     PendingQueueAction::PlayItems {
                         items,
@@ -38,6 +40,7 @@ impl App {
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
                 );
+                None
             }
             Some(ContextAction::ShuffleSelection(mut items)) => {
                 items.shuffle(&mut rand::rng());
@@ -50,6 +53,7 @@ impl App {
                     },
                     ReplacementExecutor::Routed(RoutedReplacementPrep::Selection),
                 );
+                None
             }
             Some(ContextAction::EnqueueSelection(items)) => {
                 if let Some(lib_idx) = lib_idx {
@@ -57,19 +61,20 @@ impl App {
                         self.enqueue_lib_item(lib_idx, item);
                     }
                 } else {
-                    for item in items {
-                        if !item.is_folder && crate::app::ui_util::is_playable(&item) {
-                            self.submit_queue_item(
-                                mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
-                                false,
-                            );
-                        }
+                    for item in items
+                        .into_iter()
+                        .filter(|item| !item.is_folder && crate::app::ui_util::is_playable(item))
+                    {
+                        self.submit_queue_item(
+                            mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
+                            false,
+                        );
                     }
                 }
+                None
             }
             Some(ContextAction::RemoveSelection(targets)) => {
-                // Queue targets go through one batch edit so the owner
-                // publishes a single snapshot; Continue Watching targets are
+                // Queue targets are batched; Continue Watching targets are
                 // independent Service writes.
                 let mut queue_slot_ids = Vec::new();
                 for target in targets {
@@ -84,37 +89,48 @@ impl App {
                     let scope = self.viewed_queue_scope();
                     self.remove_slots_from_queue(scope, &queue_slot_ids);
                 }
+                None
             }
             Some(ContextAction::MarkPlayedSelection(ids)) => {
                 for id in ids {
                     self.context_set_played(&id, true, lib_idx);
                 }
+                None
             }
             Some(ContextAction::MarkUnplayedSelection(ids)) => {
                 for id in ids {
                     self.context_set_played(&id, false, lib_idx);
                 }
+                None
             }
-            Some(ContextAction::PlayQueue(index)) => {
-                self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
-                    index,
-                ));
+            action => action,
+        }
+    }
+
+    fn execute_context_library_action(
+        &mut self,
+        action: Option<ContextAction>,
+        cw_item: Option<EmbyItem>,
+        lib_idx: Option<usize>,
+    ) -> Option<ContextAction> {
+        match action {
+            Some(ContextAction::Play) => {
+                self.execute_play_action(cw_item, lib_idx);
+                None
             }
             Some(ContextAction::PlayFolder(id)) => {
-                let ct = if let Some(lib_idx) = lib_idx {
-                    self.libs[lib_idx].library.collection_type.clone()
-                } else {
-                    String::new()
-                };
-                // The folder replacement, its Collection source, and its save
-                // are deferred into the gated confirmed path (design D4), so
-                // cancelling leaves the queue source unchanged.
-                self.play_folder(&id, ct);
+                let collection_type = lib_idx
+                    .map(|index| self.libs[index].library.collection_type.clone())
+                    .unwrap_or_default();
+                // Replacement and its save remain gated by confirmation (D4).
+                self.play_folder(&id, collection_type);
+                None
             }
             Some(ContextAction::ShuffleFolder(id)) => {
                 if let Some(lib_idx) = lib_idx {
                     self.shuffle_folder(lib_idx, &id);
                 }
+                None
             }
             Some(ContextAction::Enqueue) => {
                 if matches!(self.effective_panel_focus(), PanelFocus::Library) && self.tab.is_home()
@@ -127,46 +143,86 @@ impl App {
                         .libs
                         .get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .map(|l| l.resting().cursor())
+                        .map(|level| level.resting().cursor())
                         .unwrap_or(0);
                     if let Some(item) = self.current_lib_item(lib_idx, cursor) {
                         self.enqueue_lib_item(lib_idx, item);
                     }
                 }
+                None
             }
-            Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
-            Some(ContextAction::MarkPlayed(id)) => self.context_set_played(&id, true, lib_idx),
-            Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false, lib_idx),
+            Some(ContextAction::EnqueueFolder(item)) => {
+                self.do_enqueue_folder((*item).clone());
+                None
+            }
+            Some(ContextAction::MarkPlayed(id)) => {
+                self.context_set_played(&id, true, lib_idx);
+                None
+            }
+            Some(ContextAction::MarkUnplayed(id)) => {
+                self.context_set_played(&id, false, lib_idx);
+                None
+            }
             Some(ContextAction::RemoveFromContinueWatching) => {
                 if let Some(item) = cw_item {
                     self.remove_from_continue_watching(item);
                 }
+                None
             }
-            Some(ContextAction::RemoveFromQueue(pos)) => self.remove_from_queue(pos),
-            Some(ContextAction::FeedsPlay(entries)) => self.play_feed_entries(entries),
-            Some(ContextAction::FeedsEnqueue(entries)) => self.enqueue_feed_entries(entries),
+            action => action,
+        }
+    }
+
+    fn execute_context_queue_and_feed_action(
+        &mut self,
+        action: Option<ContextAction>,
+    ) -> Option<ContextAction> {
+        match action {
+            Some(ContextAction::PlayQueue(index)) => {
+                self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+                    index,
+                ));
+                None
+            }
+            Some(ContextAction::RemoveFromQueue(pos)) => {
+                self.remove_from_queue(pos);
+                None
+            }
+            Some(ContextAction::FeedsPlay(entries)) => {
+                self.play_feed_entries(entries);
+                None
+            }
+            Some(ContextAction::FeedsEnqueue(entries)) => {
+                self.enqueue_feed_entries(entries);
+                None
+            }
             Some(ContextAction::FeedsMarkPlayed(entries)) => {
-                self.set_feed_entries_played(entries, true)
+                self.set_feed_entries_played(entries, true);
+                None
             }
             Some(ContextAction::FeedsMarkUnplayed(entries)) => {
-                self.set_feed_entries_played(entries, false)
+                self.set_feed_entries_played(entries, false);
+                None
             }
-            Some(ContextAction::GoToLibrary(item_id, item_type)) => {
-                let libs: Vec<(usize, String, String)> = self
-                    .libs
-                    .iter()
-                    .enumerate()
-                    .map(|(i, lib)| {
-                        (
-                            i,
-                            lib.library.id.clone(),
-                            lib.library.collection_type.clone(),
-                        )
-                    })
-                    .collect();
-                self.spawn_navigate_to_item(item_id, item_type, libs);
-            }
-            None => {}
+            action => action,
+        }
+    }
+
+    fn execute_context_navigation_action(&mut self, action: Option<ContextAction>) {
+        if let Some(ContextAction::GoToLibrary(item_id, item_type)) = action {
+            let libs: Vec<(usize, String, String)> = self
+                .libs
+                .iter()
+                .enumerate()
+                .map(|(i, lib)| {
+                    (
+                        i,
+                        lib.library.id.clone(),
+                        lib.library.collection_type.clone(),
+                    )
+                })
+                .collect();
+            self.spawn_navigate_to_item(item_id, item_type, libs);
         }
     }
 
