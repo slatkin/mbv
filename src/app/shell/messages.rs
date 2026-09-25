@@ -94,17 +94,7 @@ impl Model {
             | ShellRequest::EmbyLibraryRowActivate { .. }) => {
                 self.handle_emby_shell_request(request);
             }
-            ShellRequest::OpenUrl(url) => {
-                if crate::app::components::library_panel::sanitize_url(&url).is_some() {
-                    if let Err(error) = crate::app::open_url(&url) {
-                        log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
-                        self.app.flash(
-                            format!("Unable to open link: {error}"),
-                            ToastSeverity::Neutral,
-                        );
-                    }
-                }
-            }
+            ShellRequest::OpenUrl(url) => self.handle_open_url_request(url),
             ShellRequest::LibraryScroll { key, index, scroll } => {
                 if self
                     .handle_library_scroll_request(key, index, scroll)
@@ -114,15 +104,6 @@ impl Model {
                     return quit;
                 }
             }
-            ShellRequest::HomeRowClick { .. } => {
-                self.app.set_panel_focus(crate::app::PanelFocus::Library);
-            }
-            ShellRequest::HomeRowActivate { target } => {
-                self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                if let Some((item, from_cw)) = self.home_stable_target(&target) {
-                    self.app.home_play_target(item, from_cw);
-                }
-            }
             // Home typed effects (task 5.3d, Home typed-effect
             // prep): `HomeComponent` owns the cursor and reports the
             // flat target index it resolved; the shell forwards it
@@ -130,44 +111,8 @@ impl Model {
             // is acted on directly (no App-owned flat cursor remains).
             request @ (ShellRequest::HomePlay(_)
             | ShellRequest::HomeEnqueue(_)
-            | ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Home(_),
-                _,
-            )
             | ShellRequest::HomeDelete(_)
             | ShellRequest::HomeToggleWatched(_)) => self.handle_home_request(request),
-            ShellRequest::QueueScopeClick { scope } => {
-                self.app.handle_mouse_selector_click_queue(scope);
-                self.queue_click_reproject();
-            }
-            ShellRequest::QueueRowClick { slot_id } => {
-                self.app.handle_mouse_single_click_queue(slot_id);
-                self.queue_click_reproject();
-            }
-            ShellRequest::QueueRowActivate { slot_id } => {
-                self.app.handle_mouse_double_click_queue(slot_id);
-                self.queue_click_reproject();
-            }
-            ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Queue(slot_ids),
-                anchor,
-            ) => self.handle_queue_row_context_menu(slot_ids, anchor),
-            ShellRequest::MusicRowContextMenu(targets, anchor) => {
-                self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                // Reuse the generic resolver after applying Music's
-                // focus policy; the component still emitted only one
-                // semantic request and the shell never re-resolves a
-                // pointer coordinate.
-                quit |= self.handle_shell_request(
-                    ShellRequest::RowContextMenu(targets, anchor),
-                    music_resize,
-                    tv_resize,
-                );
-            }
-            // Other destination payloads are converted in later slices.
-            ShellRequest::RowContextMenu(targets, anchor) => {
-                self.handle_library_row_context_menu(targets, anchor);
-            }
             request @ (ShellRequest::TvMoveRows { .. }
             | ShellRequest::TvJumpCursor { .. }
             | ShellRequest::TvActivate { .. }
@@ -195,11 +140,55 @@ impl Model {
             ShellRequest::QueueIntent(intent) => {
                 self.handle_queue_intent(intent);
             }
-            // Wide hero split resize (add-mouse-wide-split-resize
-            // design.md): the gap boundary component owns the gesture and
-            // the resolved list-pane width; the shell clamps it against
-            // the active surface's content width and stores the session
-            // override. Live positions do not write preferences.
+            // Emitted only from SettingsComponent::handle_mouse (settings.rs:318); the
+            // keyboard dismiss is SettingsIntent::Back. Mouse-only, inert under D16
+            // (migrate-tui-to-tuirealm design D16, #628).
+            ShellRequest::DismissSettings => {}
+            request @ (ShellRequest::HomeRowClick { .. }
+            | ShellRequest::HomeRowActivate { .. }
+            | ShellRequest::QueueScopeClick { .. }
+            | ShellRequest::QueueRowClick { .. }
+            | ShellRequest::QueueRowActivate { .. }
+            | ShellRequest::ResizeListPaneLive(_)
+            | ShellRequest::ResizeListPaneEnd(_)) => {
+                self.handle_pointer_and_layout_request(request)
+            }
+            request
+            @ (ShellRequest::RowContextMenu(..) | ShellRequest::MusicRowContextMenu(..)) => {
+                quit |= self.handle_row_context_menu_request(request, music_resize, tv_resize);
+            }
+            _ => unreachable!("request handled by message sub-dispatchers"),
+        }
+        if self.drain_deferred_library_message(music_resize, tv_resize) {
+            quit = true;
+        }
+        quit
+    }
+
+    fn handle_pointer_and_layout_request(&mut self, request: ShellRequest) {
+        match request {
+            ShellRequest::HomeRowClick { .. } => {
+                self.app.set_panel_focus(crate::app::PanelFocus::Library);
+            }
+            ShellRequest::HomeRowActivate { target } => {
+                self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                if let Some((item, from_cw)) = self.home_stable_target(&target) {
+                    self.app.home_play_target(item, from_cw);
+                }
+            }
+            ShellRequest::QueueScopeClick { scope } => {
+                self.app.handle_mouse_selector_click_queue(scope);
+                self.queue_click_reproject();
+            }
+            ShellRequest::QueueRowClick { slot_id } => {
+                self.app.handle_mouse_single_click_queue(slot_id);
+                self.queue_click_reproject();
+            }
+            ShellRequest::QueueRowActivate { slot_id } => {
+                self.app.handle_mouse_double_click_queue(slot_id);
+                self.queue_click_reproject();
+            }
+            // Wide hero split resize: live positions do not write preferences.
             ShellRequest::ResizeListPaneLive(width) => {
                 if let Some(content_area) = self.library_panel_content_area() {
                     self.app.list_pane_width =
@@ -209,8 +198,7 @@ impl Model {
                         );
                 }
             }
-            // The panel emits End only after a changed drag. Persist
-            // once at release, mirroring the Queue boundary's split.
+            // Persist only once at release, after a changed drag.
             ShellRequest::ResizeListPaneEnd(width) => {
                 if let Some(content_area) = self.library_panel_content_area() {
                     self.app.list_pane_width =
@@ -221,16 +209,58 @@ impl Model {
                 }
                 self.app.save_prefs();
             }
-            // Emitted only from SettingsComponent::handle_mouse (settings.rs:318); the
-            // keyboard dismiss is SettingsIntent::Back. Mouse-only, inert under D16
-            // (migrate-tui-to-tuirealm design D16, #628).
-            ShellRequest::DismissSettings => {}
-            _ => unreachable!("request handled by message sub-dispatchers"),
+            _ => unreachable!("request is a pointer or layout request"),
         }
-        if self.drain_deferred_library_message(music_resize, tv_resize) {
-            quit = true;
+    }
+
+    fn handle_row_context_menu_request(
+        &mut self,
+        request: ShellRequest,
+        music_resize: &mut bool,
+        tv_resize: &mut bool,
+    ) -> bool {
+        match request {
+            ShellRequest::RowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Home(_),
+                _,
+            ) => {
+                self.handle_home_request(request);
+                false
+            }
+            ShellRequest::RowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Queue(slot_ids),
+                anchor,
+            ) => {
+                self.handle_queue_row_context_menu(slot_ids, anchor);
+                false
+            }
+            ShellRequest::MusicRowContextMenu(targets, anchor) => {
+                self.app.set_panel_focus(crate::app::PanelFocus::Library);
+                // Keep Music's focus policy before reusing the generic resolver.
+                self.handle_shell_request(
+                    ShellRequest::RowContextMenu(targets, anchor),
+                    music_resize,
+                    tv_resize,
+                )
+            }
+            ShellRequest::RowContextMenu(targets, anchor) => {
+                self.handle_library_row_context_menu(targets, anchor);
+                false
+            }
+            _ => unreachable!("request is a row context-menu request"),
         }
-        quit
+    }
+
+    fn handle_open_url_request(&mut self, url: String) {
+        if crate::app::components::library_panel::sanitize_url(&url).is_some() {
+            if let Err(error) = crate::app::open_url(&url) {
+                log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
+                self.app.flash(
+                    format!("Unable to open link: {error}"),
+                    ToastSeverity::Neutral,
+                );
+            }
+        }
     }
 
     fn handle_emby_shell_request(&mut self, request: ShellRequest) {
