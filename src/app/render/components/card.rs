@@ -318,39 +318,22 @@ impl App {
         (height, width, loading)
     }
 
-    /// The queue visual slot's image projection (task 3.4, design D9): the
-    /// queue projection — not the painter — issues every fetch for the
-    /// now-playing item and projects the slot to paint. Active-first, then
-    /// the viewed queue's selection, exactly as the painter-side source
-    /// resolution used to derive it.
-    pub(in crate::app) fn refresh_queue_card_image(&mut self) {
-        let mut projection = QueueCardProjection {
-            cache_key: None,
-            images_enabled: self.images_enabled(),
-            visualizer: self.visualizer_enabled,
-        };
-        if projection.visualizer || !projection.images_enabled {
-            self.queue_card_projection = projection;
-            return;
-        }
-        // Presentation: the visual slot follows a selected-but-unconfirmed
-        // slot, so the artwork switches with the queue row's highlight.
-        //
-        // Active-first, then the viewed queue's selection. The exception is a
-        // watched remote Session playing foreign content: the transport is
-        // active with no local slot, so the slot uses the item the Session
-        // names, and the selected row's artwork is never borrowed.
-        let playback = self.displayed_playback_state();
+    fn queue_card_emby_source(
+        &self,
+        playback: crate::app::PlaybackState,
+    ) -> Option<(usize, EmbyItem)> {
         let slotless_active = playback.active && playback.active_idx.is_none();
-        let active_source = if playback.active {
+        let active = if playback.active {
             playback.active_idx.and_then(|idx| {
-                let queue = self.playback_queue();
-                queue.emby_item_at(idx).cloned().map(|item| (idx, item))
+                self.playback_queue()
+                    .emby_item_at(idx)
+                    .cloned()
+                    .map(|item| (idx, item))
             })
         } else {
             None
         };
-        let selected_source = || {
+        active.or_else(|| {
             if slotless_active {
                 return None;
             }
@@ -358,91 +341,83 @@ impl App {
             queue
                 .clone_emby_item_at(queue.queue_cursor)
                 .map(|item| (queue.queue_cursor, item))
+        })
+    }
+
+    /// A watched remote Session names an item outside the local queue. Its own
+    /// Primary image is used (an episode's still lives there), never the selected row.
+    fn project_slotless_session(&mut self, projection: &mut QueueCardProjection) -> bool {
+        let Some(item_id) = self
+            .connected_session_state
+            .as_ref()
+            .and_then(|session| session.now_playing_item_id.clone())
+        else {
+            return true;
         };
-        let Some((cursor, item)) = active_source.or_else(selected_source) else {
-            // A watched remote Session names the item it is playing even when
-            // that item is not in the local queue: project that item's own
-            // artwork by id (its Primary image -- an episode's still lives
-            // there) instead of the placeholder.
+        let cache_key = card_cache_key_for_id(&item_id);
+        self.fetch_card_image(cache_key.clone(), item_id, String::new(), &["Primary"]);
+        projection.cache_key = Some(cache_key);
+        true
+    }
+
+    /// The active/selected slot holds a non-Emby item (or the queue is empty).
+    fn project_audiobookshelf_cover(
+        &mut self,
+        playback: crate::app::PlaybackState,
+        projection: &mut QueueCardProjection,
+    ) -> bool {
+        let slotless_active = playback.active && playback.active_idx.is_none();
+        let raw_item = if playback.active {
+            playback
+                .active_idx
+                .and_then(|idx| self.playback_queue().item_at(idx).cloned())
+        } else {
+            None
+        }
+        .or_else(|| {
             if slotless_active {
-                if let Some(item_id) = self
-                    .connected_session_state
-                    .as_ref()
-                    .and_then(|session| session.now_playing_item_id.clone())
-                {
-                    let cache_key = card_cache_key_for_id(&item_id);
-                    self.fetch_card_image(cache_key.clone(), item_id, String::new(), &["Primary"]);
-                    projection.cache_key = Some(cache_key);
-                }
-                self.queue_card_projection = projection;
-                return;
+                return None;
             }
-            // The active/selected slot holds a non-Emby item (or the queue is
-            // empty) -- resolve the raw `QueueItem` the same active-first,
-            // then-selected way so Audiobookshelf artwork still renders here.
-            let raw_item = if playback.active {
-                playback
-                    .active_idx
-                    .and_then(|idx| self.playback_queue().item_at(idx).cloned())
-            } else {
-                None
-            }
-            .or_else(|| {
-                if slotless_active {
-                    return None;
-                }
-                let queue = self.displayed_queue();
-                queue.item_at(queue.queue_cursor).cloned()
-            });
-            let cover_id = match raw_item {
-                Some(QueueItem::Audiobookshelf(ep)) => Some((ep.library_item_id, false)),
-                Some(QueueItem::AudiobookshelfBook(book)) => Some((book.library_item_id, true)),
-                _ => None,
-            };
-            let Some((item_id, is_book)) = cover_id else {
-                self.queue_card_projection = projection;
-                return;
-            };
-            let Some(server_url) = self
-                .config
-                .lock()
-                .unwrap()
-                .audiobookshelf_setup
-                .as_ref()
-                .map(|setup| setup.server_url.clone())
-            else {
-                self.queue_card_projection = projection;
-                return;
-            };
-            if is_book {
-                self.fetch_audiobookshelf_book_cover(server_url.clone(), item_id.clone());
-            } else {
-                self.fetch_audiobookshelf_cover(server_url.clone(), item_id.clone());
-            }
-            let cache_key = if is_book {
-                audiobookshelf_book_cover_cache_key(
-                    &server_url,
-                    &item_id,
-                    self.current_protocol_suffix(),
-                )
-            } else {
-                audiobookshelf_cover_cache_key(
-                    &server_url,
-                    &item_id,
-                    self.current_protocol_suffix(),
-                )
-            };
-            projection.cache_key = Some(cache_key);
-            self.queue_card_projection = projection;
-            return;
+            let queue = self.displayed_queue();
+            queue.item_at(queue.queue_cursor).cloned()
+        });
+        let cover_id = match raw_item {
+            Some(QueueItem::Audiobookshelf(ep)) => Some((ep.library_item_id, false)),
+            Some(QueueItem::AudiobookshelfBook(book)) => Some((book.library_item_id, true)),
+            _ => None,
         };
+        let Some((item_id, is_book)) = cover_id else {
+            return true;
+        };
+        let Some(server_url) = self
+            .config
+            .lock()
+            .unwrap()
+            .audiobookshelf_setup
+            .as_ref()
+            .map(|setup| setup.server_url.clone())
+        else {
+            return true;
+        };
+        if is_book {
+            self.fetch_audiobookshelf_book_cover(server_url.clone(), item_id.clone());
+        } else {
+            self.fetch_audiobookshelf_cover(server_url.clone(), item_id.clone());
+        }
+        let cache_key = if is_book {
+            audiobookshelf_book_cover_cache_key(
+                &server_url,
+                &item_id,
+                self.current_protocol_suffix(),
+            )
+        } else {
+            audiobookshelf_cover_cache_key(&server_url, &item_id, self.current_protocol_suffix())
+        };
+        projection.cache_key = Some(cache_key);
+        true
+    }
 
-        let img_types = card_image_types(&item.item_type);
-        let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-        let cache_key = card_cache_key(&item);
-        self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
-
-        // Prefetch images for nearby items so they are ready before the cursor reaches them.
+    fn prefetch_card_images(&mut self, cursor: usize) {
         // Collect data first (releasing the borrow on queue) then call fetch (&mut self).
         const PREFETCH_AHEAD: usize = 3;
         const PREFETCH_BEHIND: usize = 1;
@@ -455,19 +430,51 @@ impl App {
             .enumerate()
             .filter(|(i, _)| start + i != cursor)
             .filter_map(|(_, slot)| slot.item.as_emby())
-            .map(|p| {
+            .map(|item| {
                 (
-                    card_cache_key(p),
-                    p.id.clone(),
-                    p.series_id.clone(),
-                    p.item_type.clone(),
+                    card_cache_key(item),
+                    item.id.clone(),
+                    item.series_id.clone(),
+                    item.item_type.clone(),
                 )
             })
             .collect();
-        for (pkey, pid, psid, ptype) in prefetch {
-            let ptypes = card_image_types(&ptype);
-            self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
+        for (key, id, series_id, item_type) in prefetch {
+            self.fetch_list_card_image_when_idle(key, id, series_id, card_image_types(&item_type));
         }
+    }
+
+    /// The queue projection issues every fetch for the now-playing item and
+    /// projects the slot the painter consumes. Active-first, then viewed selection.
+    pub(in crate::app) fn refresh_queue_card_image(&mut self) {
+        let mut projection = QueueCardProjection {
+            cache_key: None,
+            images_enabled: self.images_enabled(),
+            visualizer: self.visualizer_enabled,
+        };
+        if projection.visualizer || !projection.images_enabled {
+            self.queue_card_projection = projection;
+            return;
+        }
+
+        // Presentation follows a selected-but-unconfirmed slot, switching artwork with its highlight.
+        let playback = self.displayed_playback_state();
+        let slotless_active = playback.active && playback.active_idx.is_none();
+        let Some((cursor, item)) = self.queue_card_emby_source(playback) else {
+            if slotless_active {
+                self.project_slotless_session(&mut projection);
+            } else {
+                self.project_audiobookshelf_cover(playback, &mut projection);
+            }
+            self.queue_card_projection = projection;
+            return;
+        };
+
+        let img_types = card_image_types(&item.item_type);
+        let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
+        let cache_key = card_cache_key(&item);
+        self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+        self.prefetch_card_images(cursor);
         projection.cache_key = Some(cache_key);
         self.queue_card_projection = projection;
     }
