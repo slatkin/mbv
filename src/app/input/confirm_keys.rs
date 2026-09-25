@@ -18,98 +18,27 @@ impl App {
         key: KeyEvent,
     ) -> Option<bool> {
         match action {
-            ConfirmAction::ClearQueue => {
-                if matches!(
-                    key.code,
-                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-                ) {
-                    self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-                }
-            }
+            ConfirmAction::ClearQueue => self.confirm_clear_queue(key),
             ConfirmAction::RemoveActiveQueueItem(pos) => {
-                if matches!(key.code, KeyCode::Char('y')) {
-                    self.confirm_remove_active_queue_item(pos);
-                }
+                self.confirm_remove_active_queue_item_for_key(pos, key);
             }
-            ConfirmAction::RescanLibrary(lib_idx) => {
-                if matches!(
-                    key.code,
-                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-                ) {
-                    self.trigger_lib_rescan(lib_idx);
-                }
+            ConfirmAction::RescanLibrary(lib_idx) => self.confirm_rescan_library(lib_idx, key),
+            ConfirmAction::SaveOverwritePlaylist { existing_id, name } => {
+                self.confirm_save_overwrite_playlist(existing_id, name, key);
             }
-            ConfirmAction::SaveOverwritePlaylist { existing_id, name } => match key.code {
-                KeyCode::Char('y') => {
-                    self.do_overwrite_playlist(&existing_id, &name);
-                }
-                KeyCode::Esc => {
-                    self.open_save_playlist_dialog(SavePlaylistDialog {
-                        input: name,
-                        stage: SavePlaylistStage::EnterName,
-                    });
-                }
-                _ => {}
-            },
-            ConfirmAction::DeletePlaylist { id, name } => match key.code {
-                KeyCode::Char('y') => {
-                    self.spawn_delete_playlist(id, name);
-                }
-                KeyCode::Esc => {}
-                _ => {}
-            },
+            ConfirmAction::DeletePlaylist { id, name } => {
+                self.confirm_delete_playlist(id, name, key);
+            }
             ConfirmAction::RemoveFeedSubscription(index) => {
-                if matches!(key.code, KeyCode::Char('y')) {
-                    self.remove_feed_confirmed(index);
-                }
+                self.confirm_remove_feed_subscription(index, key);
             }
-            ConfirmAction::RemoveEmby => {
-                if matches!(
-                    key.code,
-                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-                ) {
-                    self.remove_emby_confirmed();
-                } else if key.code == KeyCode::Esc {
-                }
-            }
-            ConfirmAction::ReplaceEmby(generation) => {
-                if key.code == KeyCode::Esc {
-                    self.pending_emby_replacement = None;
-                } else if matches!(
-                    key.code,
-                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-                ) {
-                    self.replace_emby_confirmed(generation);
-                }
-            }
-            ConfirmAction::RemoveAudiobookshelf => {
-                if matches!(
-                    key.code,
-                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-                ) {
-                    self.remove_audiobookshelf_confirmed();
-                } else if key.code == KeyCode::Esc {
-                }
-            }
+            ConfirmAction::RemoveEmby => self.confirm_remove_emby(key),
+            ConfirmAction::ReplaceEmby(generation) => self.confirm_replace_emby(generation, key),
+            ConfirmAction::RemoveAudiobookshelf => self.confirm_remove_audiobookshelf(key),
             ConfirmAction::ReplaceAudiobookshelf(generation) => {
-                if key.code == KeyCode::Esc {
-                    self.pending_audiobookshelf_replacement = None;
-                } else if matches!(
-                    key.code,
-                    KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-                ) {
-                    self.replace_audiobookshelf_confirmed(generation);
-                }
+                self.confirm_replace_audiobookshelf(generation, key);
             }
-            ConfirmAction::PlayLocallyInstead => match key.code {
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
-                    self.play_pending_local_play();
-                }
-                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
-                    self.pending_local_play = None;
-                }
-                _ => {}
-            },
+            ConfirmAction::PlayLocallyInstead => self.confirm_play_locally(key),
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
                 self.confirm_discard_or_save_dirty_playlist(key);
             }
@@ -122,6 +51,120 @@ impl App {
             }
         }
         Some(false)
+    }
+
+    fn confirm_clear_queue(&mut self, key: KeyEvent) {
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+        }
+    }
+
+    fn confirm_remove_active_queue_item_for_key(&mut self, pos: usize, key: KeyEvent) {
+        if matches!(key.code, KeyCode::Char('y')) {
+            self.confirm_remove_active_queue_item(pos);
+        }
+    }
+
+    fn confirm_rescan_library(&mut self, lib_idx: usize, key: KeyEvent) {
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.trigger_lib_rescan(lib_idx);
+        }
+    }
+
+    fn confirm_save_overwrite_playlist(
+        &mut self,
+        existing_id: String,
+        name: String,
+        key: KeyEvent,
+    ) {
+        match key.code {
+            KeyCode::Char('y') => self.do_overwrite_playlist(&existing_id, &name),
+            KeyCode::Esc => self.open_save_playlist_dialog(SavePlaylistDialog {
+                input: name,
+                stage: SavePlaylistStage::EnterName,
+            }),
+            _ => {}
+        }
+    }
+
+    fn confirm_delete_playlist(&mut self, id: String, name: String, key: KeyEvent) {
+        if key.code == KeyCode::Char('y') {
+            self.spawn_delete_playlist(id, name);
+        }
+    }
+
+    fn confirm_remove_feed_subscription(&mut self, index: usize, key: KeyEvent) {
+        if matches!(key.code, KeyCode::Char('y')) {
+            self.remove_feed_confirmed(index);
+        }
+    }
+
+    fn confirm_remove_emby(&mut self, key: KeyEvent) {
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.remove_emby_confirmed();
+        } else if key.code == KeyCode::Esc {
+        }
+    }
+
+    fn confirm_replace_emby(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        key: KeyEvent,
+    ) {
+        if key.code == KeyCode::Esc {
+            self.pending_emby_replacement = None;
+        } else if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.replace_emby_confirmed(generation);
+        }
+    }
+
+    fn confirm_remove_audiobookshelf(&mut self, key: KeyEvent) {
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.remove_audiobookshelf_confirmed();
+        } else if key.code == KeyCode::Esc {
+        }
+    }
+
+    fn confirm_replace_audiobookshelf(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        key: KeyEvent,
+    ) {
+        if key.code == KeyCode::Esc {
+            self.pending_audiobookshelf_replacement = None;
+        } else if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.replace_audiobookshelf_confirmed(generation);
+        }
+    }
+
+    fn confirm_play_locally(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                self.play_pending_local_play();
+            }
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                self.pending_local_play = None;
+            }
+            _ => {}
+        }
     }
 
     /// `[s]` saves the dirty playlist, `[d]` discards it and runs the pending
