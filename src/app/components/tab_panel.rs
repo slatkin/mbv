@@ -26,6 +26,7 @@ use crate::app::render::{render_tab_bar, TabBarModel};
 /// its tab hit regions, and emits a tab-select `Msg` for clicks.
 pub struct TabPanel {
     titles: Vec<String>,
+    markers: Vec<bool>,
     selected: usize,
     scroll: usize,
     /// Per-tab hit targets from the last paint, as
@@ -39,6 +40,7 @@ impl TabPanel {
     pub fn new() -> Self {
         Self {
             titles: Vec::new(),
+            markers: Vec::new(),
             selected: 0,
             scroll: 0,
             hits: Vec::new(),
@@ -51,10 +53,12 @@ impl TabPanel {
     pub(in crate::app) fn set_content(
         &mut self,
         titles: Vec<String>,
+        markers: Vec<bool>,
         selected: usize,
         scroll: usize,
     ) {
         self.titles = titles;
+        self.markers = markers;
         self.selected = selected;
         self.scroll = scroll;
     }
@@ -63,6 +67,11 @@ impl TabPanel {
     #[cfg(test)]
     pub(in crate::app) fn hit_regions(&self) -> &[(Rect, usize)] {
         &self.hits
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_markers(&self) -> &[bool] {
+        &self.markers
     }
 
     #[cfg(test)]
@@ -97,6 +106,7 @@ impl Component for TabPanel {
             area,
             &TabBarModel {
                 titles: &self.titles,
+                markers: &self.markers,
                 selected: self.selected,
                 scroll: self.scroll,
                 hovered: self.hovered,
@@ -162,7 +172,8 @@ mod tests {
         scroll: usize,
     ) -> (TabPanel, ratatui::buffer::Buffer) {
         let mut panel = TabPanel::new();
-        panel.set_content(titles(), selected, scroll);
+        panel.set_content(titles(), vec![false; 5], selected, scroll);
+        assert_eq!(panel.test_markers(), &[false; 5]);
         let mut terminal = Terminal::new(TestBackend::new(width, 3)).unwrap();
         terminal
             .draw(|f| panel.view(f, Rect::new(0, 0, width, 3)))

@@ -177,13 +177,34 @@ impl Model {
                 .then(|| "Feeds".to_string()),
         )
         .collect();
+        let markers: Vec<bool> = std::iter::once(false)
+            .chain(self.app.libs.iter().map(|lib| {
+                self.destination_latest_marker(
+                    &crate::app::state::types::playback::DestinationLatestSource::Emby(
+                        lib.library.id.clone(),
+                    ),
+                )
+            }))
+            .chain(self.app.audiobookshelf_libraries.iter().map(|lib| {
+                self.destination_latest_marker(
+                    &crate::app::state::types::playback::DestinationLatestSource::Audiobookshelf(
+                        lib.id.clone(),
+                    ),
+                )
+            }))
+            .chain(self.app.has_feeds_subscriptions().then(|| {
+                self.destination_latest_marker(
+                    &crate::app::state::types::playback::DestinationLatestSource::Feeds,
+                )
+            }))
+            .collect();
         let selected = self
             .app
             .tab
             .to_position_with_counts(self.app.libs.len(), self.app.feeds_tab_pos());
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<TabPanel>() {
-                panel.set_content(titles, selected, self.app.tab_scroll);
+                panel.set_content(titles, markers, selected, self.app.tab_scroll);
             }
         }
     }

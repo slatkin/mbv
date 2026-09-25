@@ -22,6 +22,8 @@ pub(in crate::app) struct TabBarModel<'a> {
     /// Tab titles in position order (Home, Emby libraries, Audiobookshelf
     /// libraries, Feeds when subscribed).
     pub titles: &'a [String],
+    /// Parallel per-tab Latest markers; missing entries are treated as unmarked.
+    pub markers: &'a [bool],
     /// The selected tab's position (its `titles` index; Home = 0).
     pub selected: usize,
     /// Scroll anchor shared with the keyboard tab-cycling path
@@ -151,23 +153,38 @@ pub(in crate::app) fn render_tab_bar(
         .map(|(i, n)| {
             let n = n.to_uppercase();
             let position = vis_start + i;
+            let marked = model.markers.get(position).copied().unwrap_or(false);
             let line = if i == selected_tab {
-                Line::from(vec![
+                let style = Style::default()
+                    .fg(palette::TEXT_STRONG)
+                    .add_modifier(Modifier::BOLD);
+                let mut spans = vec![
                     Span::styled("▐", Style::default().fg(palette::ACCENT)),
-                    Span::styled(
-                        format!(" {n}  "),
-                        Style::default()
-                            .fg(palette::TEXT_STRONG)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ])
+                    Span::styled(format!(" {n}"), style),
+                ];
+                if marked {
+                    spans.push(Span::styled(
+                        "•",
+                        Style::default().fg(palette::ACCENT_ACTIVE),
+                    ));
+                }
+                spans.push(Span::styled(" ", style));
+                Line::from(spans)
             } else {
                 let style = if model.hovered == Some(position) {
                     Style::default().fg(palette::TEXT_STRONG)
                 } else {
                     Style::default().fg(palette::TEXT_MUTED)
                 };
-                Line::from(Span::styled(format!("  {n}  "), style))
+                let mut spans = vec![Span::styled(format!("  {n}"), style)];
+                if marked {
+                    spans.push(Span::styled(
+                        "•",
+                        Style::default().fg(palette::ACCENT_ACTIVE),
+                    ));
+                }
+                spans.push(Span::styled(" ", style));
+                Line::from(spans)
             };
             let width = line.width() as u16;
             hits.push((
