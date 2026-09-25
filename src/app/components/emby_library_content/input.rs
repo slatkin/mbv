@@ -7,6 +7,7 @@ use crate::app::components::inline_search::InlineSearchAction;
 use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput, RowIntent};
 use crate::app::components::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::LetterFilter;
+use mbv_core::api::EmbyItem;
 
 impl EmbyLibraryContent {
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors
@@ -181,18 +182,27 @@ impl EmbyLibraryContent {
         self.pick_selector(next)
     }
 
-    fn selected_item_request(&mut self, key: &KeyEvent) -> Option<ShellRequest> {
-        let selected = self.selected_effect_item();
+    fn selected_item_action(item: EmbyItem, key: &KeyEvent) -> Option<ShellRequest> {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
-            Key::Enter => selected.map(|item| ShellRequest::EmbyLibraryActivate { item }),
-            Key::Char('p') if ctrl => selected.map(|item| ShellRequest::EmbyLibraryPlay { item }),
-            Key::Char('a') if ctrl => {
-                selected.map(|item| ShellRequest::EmbyLibraryEnqueue { item })
-            }
-            Key::Char('w') if ctrl => {
-                selected.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
-            }
+            Key::Enter => Some(ShellRequest::EmbyLibraryActivate { item }),
+            Key::Char('p') if ctrl => Some(ShellRequest::EmbyLibraryPlay { item }),
+            Key::Char('a') if ctrl => Some(ShellRequest::EmbyLibraryEnqueue { item }),
+            Key::Char('w') if ctrl => Some(ShellRequest::EmbyLibraryToggleWatched { item }),
+            Key::Char('s') if ctrl => Some(ShellRequest::EmbyLibraryShuffle { item }),
+            _ => None,
+        }
+    }
+
+    fn selected_item_request(&mut self, key: &KeyEvent) -> Option<ShellRequest> {
+        if let Some(request) = self
+            .selected_effect_item()
+            .and_then(|item| Self::selected_item_action(item, key))
+        {
+            return Some(request);
+        }
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        match key.code {
             Key::Char('.') if key.modifiers.is_empty() => {
                 let targets = match self
                     .carrier
@@ -207,9 +217,6 @@ impl EmbyLibraryContent {
                     crate::app::state::types::context_menu::ContextMenuTargets::Browser(targets),
                     None,
                 ))
-            }
-            Key::Char('s') if ctrl => {
-                selected.map(|item| ShellRequest::EmbyLibraryShuffle { item })
             }
             Key::Char('r') if ctrl => Some(ShellRequest::EmbyLibraryRescan),
             Key::Char('r') => Some(ShellRequest::EmbyLibraryRefresh),
