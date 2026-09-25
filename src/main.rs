@@ -215,7 +215,7 @@ fn print_usage() {
     println!("  -h, --help                 Print this help message and exit.");
 }
 
-fn main() {
+fn pre_config_startup() -> Option<(Option<applog::Level>, Option<String>)> {
     cap_glibc_arenas();
     install_panic_hook();
     install_signal_handlers();
@@ -224,7 +224,7 @@ fn main() {
 
     if has_flag(&args, "-h") || has_flag(&args, "--help") {
         print_usage();
-        return;
+        return None;
     }
 
     let log_level = match parse_log_level_arg(&args) {
@@ -236,10 +236,7 @@ fn main() {
         }
     };
 
-    // Hidden local-daemon self-spawn subcommand (T2, design.md decision 1):
-    // `mbv --__local-daemon` re-execs itself to run the local daemon in this
-    // process and never returns. Checked early, before any other CLI
-    // parsing.
+    // Hidden local-daemon self-spawn is checked before other CLI parsing.
     if has_flag(&args, "--__local-daemon") {
         local_daemon::run_local_daemon_main();
     }
@@ -254,46 +251,50 @@ fn main() {
 
     if has_flag(&args, "--version") || has_flag(&args, "-V") {
         println!("mbv {}", env!("CARGO_PKG_VERSION"));
-        return;
+        return None;
     }
 
-    // `mbv -q`: stop the running Player owner (bare `mbv`, or the local
-    // daemon in stay-alive mode) (ADR 0006). Reads the PID out of the
-    // single-instance lock file and SIGTERMs it for a graceful,
-    // non-interactive shutdown -- the tray's Quit item does the same thing.
     if has_flag(&args, "-q") {
-        let lock = single_instance::lock_path();
-        match single_instance::read_pid(&lock) {
-            Some(pid) => {
-                let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
-                if ok {
-                    println!("mbv: quit signal sent (pid {pid})");
-                } else {
-                    eprintln!(
-                        "mbv: failed to signal pid {pid}: {}",
-                        std::io::Error::last_os_error()
-                    );
-                    std::process::exit(1);
-                }
-            }
-            None => {
-                eprintln!(
-                    "mbv: no running instance found; if one just started, try again in a moment"
-                );
-                std::process::exit(1);
-            }
-        }
-        return;
+        stop_running_instance();
+        return None;
     }
 
-    // Reject the legacy `-d` argument before startup side effects.
-    // The `-d` flag has been removed; users should enable `stay_alive` in
-    // config or the settings overlay instead.
+    // Reject the removed -d argument before startup side effects.
     if has_flag(&args, "-d") {
         eprintln!("mbv: the `-d` flag has been removed.");
         eprintln!("mbv: to keep the local daemon running after quit, enable `stay_alive` in config or the settings overlay.");
         std::process::exit(1);
     }
+
+    Some((log_level, cli_daemon_endpoint))
+}
+
+fn stop_running_instance() {
+    let lock = single_instance::lock_path();
+    match single_instance::read_pid(&lock) {
+        Some(pid) => {
+            let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
+            if ok {
+                println!("mbv: quit signal sent (pid {pid})");
+            } else {
+                eprintln!(
+                    "mbv: failed to signal pid {pid}: {}",
+                    std::io::Error::last_os_error()
+                );
+                std::process::exit(1);
+            }
+        }
+        None => {
+            eprintln!("mbv: no running instance found; if one just started, try again in a moment");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn main() {
+    let Some((log_level, cli_daemon_endpoint)) = pre_config_startup() else {
+        return;
+    };
 
     applog::init(
         config::is_system_instance(),
@@ -312,6 +313,14 @@ fn main() {
         }
     };
     log::info!(target: "startup", "{}", config_diagnostic_summary(&config));
+    run_configured_startup(log_level, cli_daemon_endpoint, config);
+}
+
+fn run_configured_startup(
+    log_level: Option<applog::Level>,
+    cli_daemon_endpoint: Option<String>,
+    config: config::Config,
+) {
     let explicit_daemon_endpoint = cli_daemon_endpoint
         .or_else(|| {
             let endpoint = config.daemon_client_endpoint.trim();
@@ -346,6 +355,10 @@ fn main() {
         }
     }
 
+    run_local_instance(config, log_level);
+}
+
+fn run_local_instance(config: config::Config, log_level: Option<applog::Level>) {
     // Single-instance resolution (ADR 0006): advisory flock + control-socket
     // connectability. Independent of stay-alive; always on.
     let lock_path = single_instance::lock_path();
