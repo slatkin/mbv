@@ -195,52 +195,30 @@ pub(super) fn handle_queue_play_slot(
     lineage: crate::ctrl::QueueLineage,
     slot_id: u64,
 ) {
-    let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
-        queued_transition_origin,
-        ..
-    } = &mut *ctx.owner;
     let sid = QueueSlotId::from_raw(slot_id);
-    match queue.slot(sid) {
-        Some(_) => {
-            // No client request id on this command, so the owner mints
-            // one to correlate the settling observation.
-            let (request_id, generation) = transitions.mint_local_id();
-            // `dispatch_slot_jump` publishes the snapshot after
-            // accepting, so the pending slot reaches Clients.
-            dispatch_slot_jump(
-                transitions,
-                queued_transition_origin,
-                ctx.ctrl_clients,
-                ctx.player,
-                ctx.shared_queue,
-                queue,
-                source,
-                ctx.client_id,
-                crate::playback_transition::Transition::new(request_id, generation, sid),
-            );
-        }
-        None => {
-            reject_command(
-                RejectContext {
-                    reply_tx: ctx.reply_tx,
-                    ctrl_clients: ctx.ctrl_clients,
-                    client_id: ctx.client_id,
-                    player: ctx.player,
-                    queue: &*queue,
-                    source: &*source,
-                    lineage,
-                },
-                "slot not found; play skipped".to_string(),
-            );
-        }
+    // No client request id on this command, so the owner mints
+    // one to correlate the settling observation.
+    if ctx.owner.core.queue.slot(sid).is_none() {
+        reject_command(
+            ctx.rejection_context(lineage),
+            "slot not found; play skipped".to_string(),
+        );
+        return;
     }
+    let (request_id, generation) = ctx.owner.core.transitions.mint_local_id();
+    // `dispatch_slot_jump` publishes the snapshot after
+    // accepting, so the pending slot reaches Clients.
+    dispatch_slot_jump(
+        &mut DaemonOwnerContext {
+            player: ctx.player,
+            client: ctx.client,
+            owner: &mut *ctx.owner,
+            shared_queue: ctx.shared_queue,
+            ctrl_clients: ctx.ctrl_clients,
+        },
+        ctx.client_id,
+        crate::playback_transition::Transition::new(request_id, generation, sid),
+    );
 }
 
 /// `CtrlCmd::UnifiedQueueClear`: clear all slots and stop playback.

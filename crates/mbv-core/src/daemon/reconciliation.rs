@@ -3,7 +3,7 @@ use crate::config::{EmbySetup, QueueSource};
 use crate::ctrl::ServiceSetupRejection;
 use crate::playback_execution_sequence::ExecSlot;
 use crate::playback_queue::{PlaybackQueue, QueueItem};
-use crate::player::Player;
+use crate::player::{Player, PlayerOwnerState};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -71,22 +71,25 @@ fn update_player_queue(
     let _ = player.submit_queue_slots(items, active_index, Some(client), headless, 100);
 }
 
-#[allow(clippy::too_many_arguments)]
 pub(super) fn reconcile_packaged_emby(
     requested_revision: u64,
     current: &mut Option<EmbyOwnerContext>,
     ws_send_tx: &mut Option<crate::ws::WsSender>,
-    client: &Arc<Mutex<crate::api::EmbyClient>>,
-    player: &Player,
-    queue: &mut PlaybackQueue,
-    source: &mut QueueSource,
-    transitions: &mut crate::playback_transition::OwnerTransitionState,
-    shared_queue: &SharedQueueState,
-    ctrl_clients: &ClientRegistry,
     merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,
     direct_commands: &[String],
     audio_only: bool,
+    ctx: &mut DaemonOwnerContext<'_>,
 ) -> Result<(), ServiceSetupRejection> {
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        ..
+    } = &mut *ctx.owner;
     let owner_config =
         crate::config::load_config().map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
     let setup = owner_config
@@ -104,7 +107,7 @@ pub(super) fn reconcile_packaged_emby(
         let active_old_emby = queue
             .active_slot()
             .is_some_and(|slot| matches!(slot.item, QueueItem::Emby(_)));
-        if active_old_emby && !stop_old_emby_run(player) {
+        if active_old_emby && !stop_old_emby_run(ctx.player) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
         let items = purge_queue(queue, |item| matches!(item, QueueItem::Emby(_)));
@@ -114,23 +117,23 @@ pub(super) fn reconcile_packaged_emby(
         } else {
             source.clone()
         };
-        *shared_queue.queue.lock().unwrap() = queue.clone();
-        *shared_queue.source.lock().unwrap() = source.clone();
+        *ctx.shared_queue.queue.lock().unwrap() = queue.clone();
+        *ctx.shared_queue.source.lock().unwrap() = source.clone();
         // Purging a service's slots interrupts any slot jump; a reset here
         // cannot strand a queued-transition origin (see daemon_ws).
         transitions.reset();
         broadcast_queue_state(
-            ctrl_clients,
-            player,
-            shared_queue,
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
             queue,
             source,
             transitions,
         );
-        *client.lock().unwrap() = next.client.lock().unwrap().clone();
-        update_player_queue(player, items, active_index, client);
+        *ctx.client.lock().unwrap() = next.client.lock().unwrap().clone();
+        update_player_queue(ctx.player, items, active_index, ctx.client);
     } else {
-        *client.lock().unwrap() = next.client.lock().unwrap().clone();
+        *ctx.client.lock().unwrap() = next.client.lock().unwrap().clone();
     }
 
     let generation = current
@@ -148,7 +151,7 @@ pub(super) fn reconcile_packaged_emby(
     let (ws_tx, ws_rx) = std::sync::mpsc::channel();
     let ws_sender = crate::ws::start(next.client.lock().unwrap().ws_url(), ws_tx);
     *ws_send_tx = Some(ws_sender.clone());
-    player.update_emby_runtime(
+    ctx.player.update_emby_runtime(
         setup.server_url.clone(),
         next.client.lock().unwrap().token.clone(),
         ws_sender.clone(),
@@ -176,22 +179,25 @@ pub(super) fn reconcile_packaged_emby(
 /// revision installs a fresh context with an advanced generation; a
 /// mismatched revision or unreadable storage rejects without changing the
 /// runtime.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn reconcile_packaged_audiobookshelf(
+pub(super) fn reconcile_packaged_audiobookshelf(
     requested_revision: u64,
     current: &mut Option<AudiobookshelfOwnerContext>,
-    player: &Player,
-    queue: &mut PlaybackQueue,
-    source: &mut QueueSource,
-    transitions: &mut crate::playback_transition::OwnerTransitionState,
-    shared_queue: &SharedQueueState,
-    ctrl_clients: &ClientRegistry,
-    client: &Arc<Mutex<crate::api::EmbyClient>>,
+    ctx: &mut DaemonOwnerContext<'_>,
 ) -> Result<(), ServiceSetupRejection> {
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        ..
+    } = &mut *ctx.owner;
     let owner_config =
         crate::config::load_config().map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
     let Some(setup) = owner_config.audiobookshelf_setup.as_ref() else {
-        if !finalize_active_audiobookshelf(player, queue) {
+        if !finalize_active_audiobookshelf(ctx.player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
         let items = purge_queue(queue, |item| item.is_audiobookshelf_any());
@@ -201,20 +207,20 @@ pub(crate) fn reconcile_packaged_audiobookshelf(
         } else {
             source.clone()
         };
-        *shared_queue.queue.lock().unwrap() = queue.clone();
-        *shared_queue.source.lock().unwrap() = source.clone();
+        *ctx.shared_queue.queue.lock().unwrap() = queue.clone();
+        *ctx.shared_queue.source.lock().unwrap() = source.clone();
         // Purging a service's slots interrupts any slot jump; a reset here
         // cannot strand a queued-transition origin (see daemon_ws).
         transitions.reset();
         broadcast_queue_state(
-            ctrl_clients,
-            player,
-            shared_queue,
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
             queue,
             source,
             transitions,
         );
-        update_player_queue(player, items, active_index, client);
+        update_player_queue(ctx.player, items, active_index, ctx.client);
         *current = None;
         return Ok(());
     };
@@ -227,7 +233,7 @@ pub(crate) fn reconcile_packaged_audiobookshelf(
         .as_ref()
         .is_some_and(|old| !same_audiobookshelf_server(old, setup));
     if is_replacement {
-        if !finalize_active_audiobookshelf(player, queue) {
+        if !finalize_active_audiobookshelf(ctx.player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
         let items = purge_queue(queue, |item| item.is_audiobookshelf_any());
@@ -237,20 +243,20 @@ pub(crate) fn reconcile_packaged_audiobookshelf(
         } else {
             source.clone()
         };
-        *shared_queue.queue.lock().unwrap() = queue.clone();
-        *shared_queue.source.lock().unwrap() = source.clone();
+        *ctx.shared_queue.queue.lock().unwrap() = queue.clone();
+        *ctx.shared_queue.source.lock().unwrap() = source.clone();
         // Purging a service's slots interrupts any slot jump; a reset here
         // cannot strand a queued-transition origin (see daemon_ws).
         transitions.reset();
         broadcast_queue_state(
-            ctrl_clients,
-            player,
-            shared_queue,
+            ctx.ctrl_clients,
+            ctx.player,
+            ctx.shared_queue,
             queue,
             source,
             transitions,
         );
-        update_player_queue(player, items, active_index, client);
+        update_player_queue(ctx.player, items, active_index, ctx.client);
     }
     let generation = current
         .as_ref()

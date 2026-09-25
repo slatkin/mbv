@@ -25,20 +25,23 @@ pub(super) fn spawn_item_lookup<F>(
 /// wire command, which carried both the wire shape and this internal
 /// control-flow re-entry; the wire variant is gone (ADR 0020), so the
 /// resolved-play path now lives here as a plain function.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn play_resolved_items(
+pub(in crate::daemon) fn play_resolved_items(
+    ctx: &mut DaemonOwnerContext<'_>,
     fetched: Vec<EmbyItem>,
     start_idx: usize,
     start_ticks: i64,
     new_source: crate::config::QueueSource,
-    client: &Arc<Mutex<EmbyClient>>,
-    player: &Player,
-    queue: &mut PlaybackQueue,
-    source: &mut crate::config::QueueSource,
-    shared_queue: &SharedQueueState,
-    ctrl_clients: &ClientRegistry,
-    transitions: &crate::playback_transition::OwnerTransitionState,
 ) {
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        ..
+    } = &mut *ctx.owner;
     let queue_items: Vec<QueueItem> = fetched
         .iter()
         .cloned()
@@ -47,11 +50,11 @@ pub(crate) fn play_resolved_items(
     let start_idx = start_idx.min(queue_items.len().saturating_sub(1));
     *queue = PlaybackQueue::from_queue_items(queue_items, Some(start_idx));
     *source = new_source;
-    mint_queue_lineage(shared_queue);
+    mint_queue_lineage(ctx.shared_queue);
     broadcast_queue_state(
-        ctrl_clients,
-        player,
-        shared_queue,
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
         queue,
         source,
         transitions,
@@ -61,15 +64,15 @@ pub(crate) fn play_resolved_items(
         if start_ticks > 0 {
             play_item.playback_position_ticks = start_ticks;
         }
-        let c = Arc::new(client.lock().unwrap().clone());
-        player.play(&play_item, c, 100);
+        let c = Arc::new(ctx.client.lock().unwrap().clone());
+        ctx.player.play(&play_item, c, 100);
     } else {
         let mut play_items = fetched;
         if start_ticks > 0 {
             play_items[start_idx].playback_position_ticks = start_ticks;
         }
-        let c = Arc::new(client.lock().unwrap().clone());
-        player.play_queue(play_items, start_idx, c, 100);
+        let c = Arc::new(ctx.client.lock().unwrap().clone());
+        ctx.player.play_queue(play_items, start_idx, c, 100);
     }
 }
 
@@ -170,58 +173,55 @@ fn resolve_play_intent(
 /// published `current_idx` mirror instead recomputes the neighbor from a
 /// coordinate that lags one transition behind while a jump settles, so
 /// rapid Next presses kept landing on (or re-issuing) the wrong slot.
+/// A relative Next/Previous step advances from the *desired* active slot
+/// — the newest queued or in-flight transition, else the slot the run
+/// observes playing, else the queue's active marker. Stepping from the
+/// published `current_idx` mirror instead recomputes the neighbor from a
+/// coordinate that lags one transition behind while a jump settles, so
+/// rapid Next presses kept landing on (or re-issuing) the wrong slot.
 fn step_to_neighbor_slot(
     ctx: &mut CtrlContext<'_>,
     action: crate::ctrl::PlaybackIntentAction,
     request_id: crate::ctrl::PlaybackRequestId,
     generation: crate::ctrl::PlaybackGeneration,
 ) {
-    let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
-        queued_transition_origin,
-        ..
-    } = &mut *ctx.owner;
-    let base_idx = transitions
+    let base_idx = ctx
+        .owner
+        .core
+        .transitions
         .queued_latest()
-        .or_else(|| transitions.in_flight())
+        .or_else(|| ctx.owner.core.transitions.in_flight())
         .map(|t| t.target)
-        .or_else(|| {
-            let observed = *ctx.shared_queue.observed_active_slot.lock().unwrap();
-            observed
-        })
-        .or_else(|| queue.active_slot_id())
-        .and_then(|slot| queue.slot_index(slot));
+        .or_else(|| *ctx.shared_queue.observed_active_slot.lock().unwrap())
+        .or_else(|| ctx.owner.core.queue.active_slot_id())
+        .and_then(|slot| ctx.owner.core.queue.slot_index(slot));
     let neighbor_idx = base_idx.and_then(|idx| match action {
         crate::ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
-        _ => Some(idx + 1).filter(|&next| next < queue.len()),
+        _ => Some(idx + 1).filter(|&next| next < ctx.owner.core.queue.len()),
     });
     log::info!(
         target: "transition",
         "playback intent: action={:?} queued_latest={:?} in_flight={:?} observed_active_slot={:?} queue_active_slot={:?} base_idx={:?} neighbor_idx={:?} queue_len={}",
         action,
-        transitions.queued_latest().map(|t| t.target),
-        transitions.in_flight().map(|t| t.target),
+        ctx.owner.core.transitions.queued_latest().map(|t| t.target),
+        ctx.owner.core.transitions.in_flight().map(|t| t.target),
         *ctx.shared_queue.observed_active_slot.lock().unwrap(),
-        queue.active_slot_id(),
+        ctx.owner.core.queue.active_slot_id(),
         base_idx,
         neighbor_idx,
-        queue.len(),
+        ctx.owner.core.queue.len(),
     );
-    if let Some(slot_id) = neighbor_idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id)) {
+    if let Some(slot_id) =
+        neighbor_idx.and_then(|idx| ctx.owner.core.queue.slots().get(idx).map(|s| s.slot_id))
+    {
         dispatch_slot_jump(
-            transitions,
-            queued_transition_origin,
-            ctx.ctrl_clients,
-            ctx.player,
-            ctx.shared_queue,
-            queue,
-            source,
+            &mut DaemonOwnerContext {
+                player: ctx.player,
+                client: ctx.client,
+                owner: &mut *ctx.owner,
+                shared_queue: ctx.shared_queue,
+                ctrl_clients: ctx.ctrl_clients,
+            },
             ctx.client_id,
             crate::playback_transition::Transition::new(request_id, generation, slot_id),
         );

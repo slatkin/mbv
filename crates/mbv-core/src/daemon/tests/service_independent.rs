@@ -227,18 +227,23 @@ fn reconcile_abs_with_queue(
     let shared = shared_queue_state();
     let clients = Arc::new(Mutex::new(CtrlClients::default()));
     let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
-    let mut transitions = crate::playback_transition::OwnerTransitionState::default();
-    reconcile_packaged_audiobookshelf(
+    let mut owner = DaemonPlayerOwner::default();
+    owner.core.queue = std::mem::take(queue);
+    owner.core.source = std::mem::replace(source, QueueSource::Unknown);
+    let result = reconcile_packaged_audiobookshelf(
         revision,
         current,
-        &player,
-        queue,
-        source,
-        &mut transitions,
-        &shared,
-        &clients,
-        &client,
-    )
+        &mut DaemonOwnerContext {
+            player: &player,
+            client: &client,
+            owner: &mut owner,
+            shared_queue: &shared,
+            ctrl_clients: &clients,
+        },
+    );
+    *queue = owner.core.queue;
+    *source = owner.core.source;
+    result
 }
 
 #[test]

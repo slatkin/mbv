@@ -17,7 +17,7 @@ mod queue_edit;
 mod queue_load;
 mod queue_setup;
 
-pub(crate) use playback::play_resolved_items;
+pub(in crate::daemon) use playback::play_resolved_items;
 pub(in crate::daemon) use queue_load::{
     cancel_pending_idle_queue_load, cancel_pending_idle_queue_load_if_run_changed,
     complete_pending_idle_queue_load, expire_pending_idle_queue_load,

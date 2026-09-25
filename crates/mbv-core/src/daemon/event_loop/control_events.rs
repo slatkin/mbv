@@ -31,28 +31,28 @@ impl DaemonLoop {
                         revision,
                         &mut self.emby_runtime,
                         &mut self.ws_send_tx,
-                        &self.client,
-                        &self.player,
-                        &mut self.owner.core.queue,
-                        &mut self.owner.core.source,
-                        &mut self.owner.core.transitions,
-                        &self.shared_queue,
-                        &self.ctrl_clients,
                         &self.merged_tx,
                         &self.direct_commands,
                         self.audio_only,
+                        &mut DaemonOwnerContext {
+                            player: &self.player,
+                            client: &self.client,
+                            owner: &mut self.owner,
+                            shared_queue: &self.shared_queue,
+                            ctrl_clients: &self.ctrl_clients,
+                        },
                     ),
                     crate::config::ServiceKind::Audiobookshelf => {
                         reconcile_packaged_audiobookshelf(
                             revision,
                             &mut self.audiobookshelf_runtime,
-                            &self.player,
-                            &mut self.owner.core.queue,
-                            &mut self.owner.core.source,
-                            &mut self.owner.core.transitions,
-                            &self.shared_queue,
-                            &self.ctrl_clients,
-                            &self.client,
+                            &mut DaemonOwnerContext {
+                                player: &self.player,
+                                client: &self.client,
+                                owner: &mut self.owner,
+                                shared_queue: &self.shared_queue,
+                                ctrl_clients: &self.ctrl_clients,
+                            },
                         )
                     }
                 }
@@ -189,17 +189,17 @@ impl DaemonLoop {
                 &mut self.owner.queued_transition_origin,
             );
             play_resolved_items(
+                &mut DaemonOwnerContext {
+                    player: &self.player,
+                    client: &self.client,
+                    owner: &mut self.owner,
+                    shared_queue: &self.shared_queue,
+                    ctrl_clients: &self.ctrl_clients,
+                },
                 fetched_items,
                 start_idx,
                 start_ticks,
                 new_source,
-                &self.client,
-                &self.player,
-                &mut self.owner.core.queue,
-                &mut self.owner.core.source,
-                &self.shared_queue,
-                &self.ctrl_clients,
-                &self.owner.core.transitions,
             );
             return EventOutcome::DIRTY;
         }

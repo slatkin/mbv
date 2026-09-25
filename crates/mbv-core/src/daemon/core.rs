@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 
 use super::control_queue::broadcast_queue_state;
 use super::ws::all_audio;
-use crate::api::EmbyItem;
+use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{
     AudiobookshelfBookProgressEvent, AudiobookshelfProgressEvent, CtrlCmd, CtrlEvent,
     PlaybackGeneration, PlaybackIntent, PlaybackIntentAction, PlaybackIntentEvent,
@@ -375,21 +375,41 @@ pub(crate) struct PendingIdleQueueLoad {
     pub(super) started_at: Instant,
 }
 
+/// The daemon's owner-side playback authority: everything the paths that
+/// read or mutate the Bound queue, playback transitions, or the ctrl client
+/// registry (`dispatch_slot_jump`, `play_resolved_items`, the packaged
+/// service reconciles) take whole instead of repeating the same fields as a
+/// positional argument list. Many of the fields share types (`&mut` into
+/// owner state), so two of them could silently swap positionally. Built per
+/// call: handlers and the event loop hold disjoint borrows into `owner`, so
+/// a longer-lived context cannot coexist with them.
+pub(super) struct DaemonOwnerContext<'a> {
+    pub(super) player: &'a Player,
+    pub(super) client: &'a Arc<Mutex<EmbyClient>>,
+    pub(super) owner: &'a mut DaemonPlayerOwner,
+    pub(super) shared_queue: &'a SharedQueueState,
+    pub(super) ctrl_clients: &'a ClientRegistry,
+}
+
 /// Route one slot-jump transition through the owner's one-in-flight dispatch
 /// gate (design D4): dispatch it now, or hold it behind the in-flight one and
 /// report `Superseded` for whatever queued transition it displaced.
-#[allow(clippy::too_many_arguments)]
 pub(super) fn dispatch_slot_jump(
-    transitions: &mut crate::playback_transition::OwnerTransitionState,
-    queued_origin: &mut Option<(PlaybackRequestId, CtrlClientId)>,
-    ctrl_clients: &ClientRegistry,
-    player: &Player,
-    shared_queue: &SharedQueueState,
-    queue: &PlaybackQueue,
-    source: &crate::config::QueueSource,
+    ctx: &mut DaemonOwnerContext<'_>,
     client_id: CtrlClientId,
     transition: crate::playback_transition::Transition,
 ) {
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        queued_transition_origin: queued_origin,
+        ..
+    } = &mut *ctx.owner;
     let transition_target = transition.target;
     let transition_request_id = transition.request_id;
     let transition_generation = transition.generation;
@@ -403,7 +423,7 @@ pub(super) fn dispatch_slot_jump(
                 transition_generation,
             );
             let resume_ticks = crate::player::resume_ticks_for_slot(queue, transition_target);
-            player.send_command(t.into_jump(resume_ticks));
+            ctx.player.send_command(t.into_jump(resume_ticks));
         }
         crate::playback_transition::DispatchDecision::Queued { superseded } => {
             log::info!(
@@ -417,7 +437,7 @@ pub(super) fn dispatch_slot_jump(
                 (superseded, *queued_origin)
             {
                 if origin_request_id == s.request_id {
-                    ctrl_clients.lock().unwrap().send_to_client(
+                    ctx.ctrl_clients.lock().unwrap().send_to_client(
                         origin_client,
                         &CtrlEvent::PlaybackIntent(PlaybackIntentEvent {
                             request_id: s.request_id,
@@ -434,9 +454,9 @@ pub(super) fn dispatch_slot_jump(
     // queued_latest); publish the coherent snapshot so Clients can render the
     // pending slot before it settles (task 4.1, design D5).
     broadcast_queue_state(
-        ctrl_clients,
-        player,
-        shared_queue,
+        ctx.ctrl_clients,
+        ctx.player,
+        ctx.shared_queue,
         queue,
         source,
         transitions,
