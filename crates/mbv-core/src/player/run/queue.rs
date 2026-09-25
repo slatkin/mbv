@@ -426,83 +426,15 @@ impl PlaybackRun {
     }
 
     pub(in crate::player) fn load_active_item_state(&mut self) {
-        let Some(item) = self.active_item().cloned() else {
-            self.osd_title.clear();
-            self.last_valid_pos = 0;
-            self.series_id.clear();
-            self.season = 0;
-            self.episode = 0;
-            self.intro_start = 0;
-            self.intro_end = 0;
-            self.intro_state = IntroState::Pending;
-            return;
-        };
-
-        match &item {
-            QueueItem::Emby(emby) => {
-                self.osd_title = emby.display_name();
-                self.last_valid_pos = if emby.is_audio() {
-                    0
-                } else {
-                    emby.playback_position_ticks
-                };
-                if emby.item_type == "Episode" {
-                    self.series_id = ItemId::new(emby.series_id.clone());
-                    self.season = emby.parent_index_number;
-                    self.episode = emby.index_number;
-                } else {
-                    self.series_id.clear();
-                    self.season = 0;
-                    self.episode = 0;
-                }
-                self.set_intro(0, 0, emby.playback_position_ticks);
-            }
-            QueueItem::Feed(entry) => {
-                self.osd_title = entry.title.clone();
-                let runtime = entry.duration_ticks.unwrap_or(0) as i64;
-                self.last_valid_pos = if crate::api::should_resume(entry.position_ticks, runtime) {
-                    entry.position_ticks
-                } else {
-                    0
-                };
-                self.series_id.clear();
-                self.season = 0;
-                self.episode = 0;
-                self.intro_start = 0;
-                self.intro_end = 0;
-                self.intro_state = IntroState::Pending;
-            }
-            QueueItem::Audiobookshelf(ep) => {
-                self.osd_title = ep.title.clone();
-                let runtime = ep.duration_ticks.unwrap_or(0) as i64;
-                self.last_valid_pos = if crate::api::should_resume(ep.position_ticks, runtime) {
-                    ep.position_ticks
-                } else {
-                    0
-                };
-                self.series_id.clear();
-                self.season = 0;
-                self.episode = 0;
-                self.intro_start = 0;
-                self.intro_end = 0;
-                self.intro_state = IntroState::Pending;
-            }
-            QueueItem::AudiobookshelfBook(book) => {
-                self.osd_title = book.title.clone();
-                let runtime = book.duration_ticks.unwrap_or(0) as i64;
-                self.last_valid_pos = if crate::api::should_resume(book.position_ticks, runtime) {
-                    book.position_ticks
-                } else {
-                    0
-                };
-                self.series_id.clear();
-                self.season = 0;
-                self.episode = 0;
-                self.intro_start = 0;
-                self.intro_end = 0;
-                self.intro_state = IntroState::Pending;
-            }
-        }
+        let state = active_item_state(self.active_item());
+        self.osd_title = state.osd_title;
+        self.last_valid_pos = state.last_valid_pos;
+        self.series_id = state.series_id;
+        self.season = state.season;
+        self.episode = state.episode;
+        self.intro_start = 0;
+        self.intro_end = 0;
+        self.intro_state = state.intro_state;
     }
 
     /// Construct a `PlaybackRun` from the Player owner's canonical slots.
@@ -663,12 +595,38 @@ impl PlaybackRun {
             osd_title,
         }
     }
+}
 
-    fn set_intro(&mut self, start: i64, end: i64, pos: i64) {
-        self.intro_start = start;
-        self.intro_end = end;
-        let past = end > 0 && pos >= end;
-        self.intro_state.reset(past);
+pub(in crate::player) fn reject_stale_jump(
+    event_tx: &mpsc::Sender<PlayerEvent>,
+    slot_id: QueueSlotId,
+) {
+    let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
+    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
+    let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
+}
+
+/// Constructs the mpv loadfile URL for a queued item.
+pub(in crate::player) fn mpv_url_for_queue_item(
+    item: &QueueItem,
+    server_url: &str,
+    token: &str,
+) -> String {
+    match item {
+        QueueItem::Emby(emby) => {
+            let ep = if emby.is_audio() { "Audio" } else { "Videos" };
+            format!(
+                "{}/{}/{}/stream?static=true&api_key={}",
+                server_url, ep, emby.id, token
+            )
+        }
+        QueueItem::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
+        QueueItem::Audiobookshelf(_) => {
+            unreachable!("Audiobookshelf admission must precede URL resolution")
+        }
+        QueueItem::AudiobookshelfBook(_) => {
+            unreachable!("Audiobookshelf book admission must precede URL resolution")
+        }
     }
 }
 

@@ -1,14 +1,5 @@
 use super::*;
 
-pub(in crate::player) fn reject_stale_jump(
-    event_tx: &mpsc::Sender<PlayerEvent>,
-    slot_id: QueueSlotId,
-) {
-    let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
-    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
-    let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
-}
-
 impl PlaybackRun {
     pub(in crate::player) fn handle_command(
         &mut self,
@@ -71,18 +62,19 @@ impl PlaybackRun {
             }
             PlayerCommand::SetVolume(v) => {
                 let vol_max = self.status.lock().unwrap().volume_max;
-                let v = v.clamp(0, vol_max);
-                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+                let (v, raw) = volume_decision(v, vol_max);
                 let _ = mpv.set_property("volume", raw as f64);
                 self.status.lock().unwrap().volume = v;
                 let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
             }
             PlayerCommand::Seek(secs) => {
-                let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
+                let (mode, seconds) = seek_decision(secs, false);
+                let _ = mpv.command("seek", &[&seconds, mode]);
                 self.last_seek_at = Some(Instant::now());
             }
             PlayerCommand::SeekAbsolute(secs) => {
-                let _ = mpv.command("seek", &[&secs.to_string(), "absolute"]);
+                let (mode, seconds) = seek_decision(secs, true);
+                let _ = mpv.command("seek", &[&seconds, mode]);
                 self.last_seek_at = Some(Instant::now());
             }
             PlayerCommand::SetAudio(id) => {
@@ -151,7 +143,13 @@ impl PlaybackRun {
         resume_ticks: Option<i64>,
         mpv: &Mpv,
     ) {
-        let Some(idx) = self.queue.slot_index(slot_id) else {
+        let slot_ids = self
+            .queue
+            .slots()
+            .iter()
+            .map(|slot| slot.slot_id)
+            .collect::<Vec<_>>();
+        let Some(idx) = resolve_jump_target(&slot_ids, slot_id) else {
             log::info!(
                 target: "transition",
                 "jump-to reject_stale_jump: slot_id={:?} unresolvable",
@@ -789,33 +787,5 @@ impl PlaybackRun {
             progress_report_accepted: false,
             error: Some(error),
         });
-    }
-}
-
-/// Constructs the mpv loadfile URL for a `QueueItem`.
-/// - Emby: the standard Emby streaming URL.
-/// - Feed: the enclosure/link URL handed directly to mpv.
-/// - Audiobookshelf: not yet playable; returns empty (will fail visibly
-///   rather than crash; owner admission will reject before this path).
-pub(in crate::player) fn mpv_url_for_queue_item(
-    item: &QueueItem,
-    server_url: &str,
-    token: &str,
-) -> String {
-    match item {
-        QueueItem::Emby(emby) => {
-            let ep = if emby.is_audio() { "Audio" } else { "Videos" };
-            format!(
-                "{}/{}/{}/stream?static=true&api_key={}",
-                server_url, ep, emby.id, token
-            )
-        }
-        QueueItem::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
-        QueueItem::Audiobookshelf(_) => {
-            unreachable!("Audiobookshelf admission must precede URL resolution")
-        }
-        QueueItem::AudiobookshelfBook(_) => {
-            unreachable!("Audiobookshelf book admission must precede URL resolution")
-        }
     }
 }

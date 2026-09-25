@@ -28,60 +28,34 @@ impl PlaybackRun {
     /// Playlist next-up: match Emby Web's timing from videoosd.js.
     /// 60 s before end. Minimum episode: 10 min. Minimum remaining when shown: 20 s.
     fn maybe_fire_queue_next_up(&mut self, ticks: i64) {
-        const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
-        const MIN_REMAIN_TICKS: i64 = 20 * TICKS_PER_SECOND;
-        if self.current_idx + 1 >= self.queue_len() {
-            return;
-        }
-        if !self.active_item().is_some_and(QueueItem::is_tv_episode) {
-            return;
-        }
-        if !self
-            .item_at(self.current_idx + 1)
-            .is_some_and(QueueItem::is_tv_episode)
-        {
-            return;
-        }
         let runtime = self.status.lock().unwrap().runtime_ticks;
-        if runtime <= 0 {
-            return;
-        }
-        let show_at = runtime - 60 * TICKS_PER_SECOND;
-        let remaining = runtime - ticks;
-        if self.queue_next_up.is_fired() && ticks < show_at {
+        let decision = queue_next_up_decision(
+            self.queue_next_up,
+            self.current_idx,
+            self.queue_len(),
+            self.active_item().is_some_and(QueueItem::is_tv_episode),
+            self.item_at(self.current_idx + 1)
+                .is_some_and(QueueItem::is_tv_episode),
+            runtime,
+            ticks,
+        );
+        if decision.reset {
             self.queue_next_up.reset();
         }
-        if self.queue_next_up.is_fired() || runtime < MIN_RUNTIME_TICKS {
-            return;
-        }
-        if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
+        if let Some(NextUpFire::Queue(next_idx)) = decision.fire {
             self.queue_next_up.fire();
-            let _ = self.event_tx.send(PlayerEvent::QueueNextUp {
-                next_idx: self.current_idx + 1,
-            });
-            return;
+            let _ = self.event_tx.send(PlayerEvent::QueueNextUp { next_idx });
+        } else if decision.arm {
+            self.queue_next_up.arm();
+            log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
         }
-        if self.queue_next_up != NextUp::Idle || ticks <= 0 || ticks >= TICKS_PER_SECOND * 5 {
-            return;
-        }
-        self.queue_next_up.arm();
-        log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
     }
 
     fn maybe_fire_standalone_next_up(&mut self, ticks: i64) {
-        const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
-        if self.next_up.is_fired() {
-            return;
-        }
-        if self.series_id.as_str().is_empty() {
-            if self.next_up == NextUp::Idle && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                self.next_up.arm();
-                log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
-            }
-            return;
-        }
         let runtime = self.status.lock().unwrap().runtime_ticks;
-        if runtime > NEXT_UP_TICKS && ticks > runtime - NEXT_UP_TICKS {
+        let has_series = !self.series_id.as_str().is_empty();
+        let decision = standalone_next_up_decision(self.next_up, has_series, runtime, ticks);
+        if let Some(NextUpFire::Standalone) = decision.fire {
             self.next_up.fire();
             log::warn!(target: "player", "next-up: threshold reached series={}", self.series_id);
             let _ = self.event_tx.send(PlayerEvent::NextUpThreshold {
@@ -89,13 +63,14 @@ impl PlaybackRun {
                 season: self.season,
                 episode: self.episode,
             });
-            return;
+        } else if decision.arm {
+            self.next_up.arm();
+            if has_series {
+                log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
+            } else {
+                log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
+            }
         }
-        if self.next_up != NextUp::Idle || ticks <= 0 || ticks >= TICKS_PER_SECOND * 5 {
-            return;
-        }
-        self.next_up.arm();
-        log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
     }
 
     pub(in crate::player) fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {

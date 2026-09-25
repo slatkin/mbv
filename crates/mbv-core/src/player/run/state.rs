@@ -119,14 +119,6 @@ impl IntroState {
         *self = IntroState::Dismissed;
     }
 
-    pub(crate) fn reset(&mut self, past: bool) {
-        if past {
-            *self = IntroState::Dismissed;
-        } else {
-            *self = IntroState::Pending;
-        }
-    }
-
     pub(crate) fn is_pending(&self) -> bool {
         matches!(self, IntroState::Pending)
     }

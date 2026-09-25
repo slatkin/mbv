@@ -72,22 +72,24 @@ impl PlaybackRun {
             completed_runtime,
         );
         let was_next_up = std::mem::replace(&mut self.next_up_jump, false);
-        let track_finished = natural || near_end || was_next_up;
+        let (track_finished, played_out, consume_track, completed_pos) = advance_decision(
+            completed_is_audio,
+            natural,
+            near_end,
+            was_next_up,
+            self.last_valid_pos,
+        );
         if is_superseded_jump_end_file(reason, self.forced_slot_id.is_some(), track_finished) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
         }
         // played_out drives mark-played/Emby watched-status and stays video-only;
         // consume_track drives queue auto-removal and is type-agnostic — the app layer
         // gates it per-type against consume_videos/consume_audio.
-        let played_out = track_finished && !completed_is_audio;
-        let consume_track = track_finished;
         log::info!(target: "consume", "on_end_file decision: idx={completed_idx:?} reason={reason:?} \
             natural={natural} near_end={near_end} was_next_up={was_next_up} \
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
             => played_out={played_out} consume_track={consume_track}",
             self.last_valid_pos, completed_runtime);
-        let completed_pos =
-            queue_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
         // Keep this run's own queue mirror current too: it is never refreshed
         // from the owner's canonical queue mid-session, so a later relative
         // Next/Previous step (which resolves resume position locally, not via

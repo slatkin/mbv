@@ -442,102 +442,193 @@ fn label_matches_lang(label: &str, lang_pref: &str) -> bool {
     l.starts_with(&p)
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct TrackInfo {
+    pub(super) kind: String,
+    pub(super) id: i64,
+    pub(super) lang: String,
+    pub(super) title: String,
+    pub(super) codec: String,
+    pub(super) selected: bool,
+    pub(super) channels: i64,
+    pub(super) forced: bool,
+    pub(super) stream_index: i64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct ParsedTracks {
+    pub(super) audio_tracks: Vec<(i64, String)>,
+    pub(super) sub_tracks: Vec<(i64, String, bool)>,
+    pub(super) sub_track_stream_indexes: Vec<(i64, i64)>,
+    pub(super) audio_id: i64,
+    pub(super) audio_lang: String,
+    pub(super) sub_id: i64,
+    pub(super) sub_lang: String,
+}
+
+pub(super) fn parse_tracks(tracks: &[TrackInfo]) -> ParsedTracks {
+    let mut parsed = ParsedTracks::default();
+    for (index, track) in tracks.iter().enumerate() {
+        let fallback = index as i64 + 1;
+        match track.kind.as_str() {
+            "audio" => {
+                if track.selected {
+                    parsed.audio_id = track.id;
+                    parsed.audio_lang.clone_from(&track.lang);
+                }
+                let language = lang_code_to_name(&track.lang);
+                let label = if !language.is_empty() {
+                    let mut parts = vec![language.to_string(), track.codec.to_uppercase()];
+                    let channels = fmt_channels(track.channels);
+                    parts.extend((!channels.is_empty()).then(|| channels.to_string()));
+                    parts.join(" ")
+                } else if !track.title.is_empty() {
+                    track.title.clone()
+                } else if !track.lang.is_empty() {
+                    track.lang.to_uppercase()
+                } else {
+                    format!("#{fallback}")
+                };
+                parsed.audio_tracks.push((track.id, label));
+            }
+            "sub" if !is_image_sub(&track.codec) => {
+                if track.selected {
+                    parsed.sub_id = track.id;
+                    parsed.sub_lang.clone_from(&track.lang);
+                }
+                let language = lang_code_to_name(&track.lang);
+                let base = if !track.title.is_empty() {
+                    track.title.clone()
+                } else if !language.is_empty() {
+                    language.to_string()
+                } else if !track.lang.is_empty() {
+                    track.lang.to_uppercase()
+                } else {
+                    format!("#{fallback}")
+                };
+                let label = if track.forced {
+                    format!("{base} (Forced)")
+                } else {
+                    base
+                };
+                parsed.sub_tracks.push((track.id, label, track.forced));
+                if track.stream_index >= 0 {
+                    parsed
+                        .sub_track_stream_indexes
+                        .push((track.id, track.stream_index));
+                }
+            }
+            _ => {}
+        }
+    }
+    parsed
+}
+
+/// Returns `(audio_id, subtitle_id)`. `None` means leave that mpv selection unchanged.
+pub(super) fn select_tracks(
+    audio_tracks: &[(i64, String)],
+    sub_tracks: &[(i64, String, bool)],
+    audio_id: i64,
+    audio_lang: &str,
+    prefs: &SubtitlePrefs,
+) -> (Option<i64>, Option<Option<i64>>) {
+    let audio = if prefs.audio_lang.is_empty()
+        || audio_tracks
+            .iter()
+            .find(|(id, _)| *id == audio_id)
+            .is_some_and(|(_, label)| label_matches_lang(label, &prefs.audio_lang))
+    {
+        None
+    } else {
+        audio_tracks
+            .iter()
+            .find(|(_, label)| label_matches_lang(label, &prefs.audio_lang))
+            .map(|(id, _)| *id)
+    };
+    let subtitle = match prefs.mode.as_str() {
+        "" | "Default" => None,
+        "None" => Some(None),
+        "OnlyForced" => Some(
+            sub_tracks
+                .iter()
+                .find(|(_, label, forced)| {
+                    *forced && label_matches_lang(label, &prefs.subtitle_lang)
+                })
+                .or_else(|| sub_tracks.iter().find(|(_, _, forced)| *forced))
+                .map(|(id, _, _)| *id),
+        ),
+        "Always" => Some(
+            sub_tracks
+                .iter()
+                .find(|(_, label, _)| label_matches_lang(label, &prefs.subtitle_lang))
+                .or_else(|| sub_tracks.first())
+                .map(|(id, _, _)| *id),
+        ),
+        "Smart" => {
+            let audio_name = lang_code_to_name(audio_lang).to_lowercase();
+            if !prefs.subtitle_lang.is_empty() && audio_name == prefs.subtitle_lang.to_lowercase() {
+                Some(None)
+            } else {
+                Some(
+                    sub_tracks
+                        .iter()
+                        .find(|(_, label, _)| label_matches_lang(label, &prefs.subtitle_lang))
+                        .or_else(|| sub_tracks.first())
+                        .map(|(id, _, _)| *id),
+                )
+            }
+        }
+        "HearingImpaired" => Some(
+            sub_tracks
+                .iter()
+                .find(|(_, label, _)| {
+                    let label = label.to_lowercase();
+                    label.contains("sdh") || label.contains(" cc") || label.contains("(cc)")
+                })
+                .or_else(|| {
+                    sub_tracks
+                        .iter()
+                        .find(|(_, label, _)| label_matches_lang(label, &prefs.subtitle_lang))
+                })
+                .or_else(|| sub_tracks.first())
+                .map(|(id, _, _)| *id),
+        ),
+        _ => None,
+    };
+    (audio, subtitle)
+}
+
 pub(super) fn auto_select_tracks(
     mpv: &Mpv,
     status: &Arc<Mutex<PlayerStatus>>,
     prefs: &SubtitlePrefs,
 ) {
     refresh_tracks(mpv, status);
-
-    // Audio: select track matching AudioLanguagePreference
-    if !prefs.audio_lang.is_empty() {
-        let (audio_tracks, audio_id) = {
-            let s = status.lock().unwrap();
-            (s.audio_tracks.clone(), s.audio_id)
-        };
-        let current_matches = audio_tracks
-            .iter()
-            .find(|(id, _)| *id == audio_id)
-            .is_some_and(|(_, l)| label_matches_lang(l, &prefs.audio_lang));
-        if !current_matches {
-            if let Some((id, _)) = audio_tracks
-                .iter()
-                .find(|(_, l)| label_matches_lang(l, &prefs.audio_lang))
-            {
-                let _ = mpv.set_property("aid", *id);
-                status.lock().unwrap().audio_id = *id;
+    let (audio_tracks, audio_id, audio_lang, sub_tracks) = {
+        let status = status.lock().unwrap();
+        (
+            status.audio_tracks.clone(),
+            status.audio_id,
+            status.audio_lang.clone(),
+            status.sub_tracks.clone(),
+        )
+    };
+    let (audio, subtitle) = select_tracks(&audio_tracks, &sub_tracks, audio_id, &audio_lang, prefs);
+    if let Some(id) = audio {
+        let _ = mpv.set_property("aid", id);
+        status.lock().unwrap().audio_id = id;
+    }
+    if let Some(id) = subtitle {
+        match id {
+            Some(id) => {
+                let _ = mpv.set_property("sid", id);
+            }
+            None => {
+                let _ = mpv.set_property("sid", "no".to_string());
             }
         }
+        status.lock().unwrap().sub_id = id.unwrap_or(0);
     }
-
-    // Subtitle: apply SubtitleMode
-    // For "Default" mode, let mpv honour the stream's default/forced flags without interference.
-    if prefs.mode == "Default" || prefs.mode.is_empty() {
-        refresh_tracks(mpv, status);
-        return;
-    }
-
-    let sub_tracks: Vec<(i64, String, bool)> = status.lock().unwrap().sub_tracks.clone();
-    let audio_lang_name = {
-        let raw = status.lock().unwrap().audio_lang.clone();
-        lang_code_to_name(&raw).to_lowercase()
-    };
-    let sub_pref = prefs.subtitle_lang.to_lowercase();
-
-    let sid: Option<i64> = match prefs.mode.as_str() {
-        "None" => None,
-        "OnlyForced" => sub_tracks
-            .iter()
-            .find(|(_, l, forced)| *forced && label_matches_lang(l, &prefs.subtitle_lang))
-            .or_else(|| sub_tracks.iter().find(|(_, _, forced)| *forced))
-            .map(|(id, _, _)| *id),
-        "Always" => sub_tracks
-            .iter()
-            .find(|(_, l, _)| label_matches_lang(l, &prefs.subtitle_lang))
-            .or_else(|| sub_tracks.first())
-            .map(|(id, _, _)| *id),
-        "Smart" => {
-            if !sub_pref.is_empty() && audio_lang_name == sub_pref {
-                None
-            } else {
-                sub_tracks
-                    .iter()
-                    .find(|(_, l, _)| label_matches_lang(l, &prefs.subtitle_lang))
-                    .or_else(|| sub_tracks.first())
-                    .map(|(id, _, _)| *id)
-            }
-        }
-        "HearingImpaired" => sub_tracks
-            .iter()
-            .find(|(_, l, _)| {
-                let ll = l.to_lowercase();
-                ll.contains("sdh") || ll.contains(" cc") || ll.contains("(cc)")
-            })
-            .or_else(|| {
-                sub_tracks
-                    .iter()
-                    .find(|(_, l, _)| label_matches_lang(l, &prefs.subtitle_lang))
-            })
-            .or_else(|| sub_tracks.first())
-            .map(|(id, _, _)| *id),
-        _ => {
-            // Unknown mode: treat like Default, don't interfere
-            refresh_tracks(mpv, status);
-            return;
-        }
-    };
-
-    match sid {
-        None => {
-            let _ = mpv.set_property("sid", "no".to_string());
-            status.lock().unwrap().sub_id = 0;
-        }
-        Some(id) => {
-            let _ = mpv.set_property("sid", id);
-            status.lock().unwrap().sub_id = id;
-        }
-    }
-
     refresh_tracks(mpv, status);
 }
 
@@ -546,105 +637,45 @@ pub(super) fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
         Ok(n) => n,
         Err(_) => return,
     };
-    let mut audio: Vec<(i64, String)> = Vec::new();
-    let mut subs: Vec<(i64, String, bool)> = Vec::new();
-    let mut sub_stream_indexes: Vec<(i64, i64)> = Vec::new();
-    let mut audio_id: i64 = 0;
-    let mut audio_lang: String = String::new();
-    let mut sub_id: i64 = 0;
-    let mut sub_lang: String = String::new();
-
-    for i in 0..count {
-        let ttype: String = mpv
-            .get_property(&format!("track-list/{i}/type"))
-            .unwrap_or_default();
-        let id: i64 = mpv
-            .get_property(&format!("track-list/{i}/id"))
-            .unwrap_or(i + 1);
-        let lang: String = mpv
-            .get_property(&format!("track-list/{i}/lang"))
-            .unwrap_or_default();
-        let title: String = mpv
-            .get_property(&format!("track-list/{i}/title"))
-            .unwrap_or_default();
-        let codec: String = mpv
-            .get_property(&format!("track-list/{i}/codec"))
-            .unwrap_or_default();
-        let sel: bool = mpv
-            .get_property(&format!("track-list/{i}/selected"))
-            .unwrap_or(false);
-
-        match ttype.as_str() {
-            "audio" => {
-                if sel {
-                    audio_id = id;
-                    audio_lang = lang.clone();
-                }
-                // Build label from lang+codec+channels to avoid scene-branded titles
-                let ch: i64 = mpv
-                    .get_property(&format!("track-list/{i}/demux-channel-count"))
-                    .unwrap_or(0);
-                let name = lang_code_to_name(&lang);
-                let label = if !name.is_empty() {
-                    let mut parts = vec![name.to_string(), codec.to_uppercase()];
-                    let ch_str = fmt_channels(ch);
-                    if !ch_str.is_empty() {
-                        parts.push(ch_str.to_string());
-                    }
-                    parts.join(" ")
-                } else if !title.is_empty() {
-                    title
-                } else if !lang.is_empty() {
-                    lang.to_uppercase()
-                } else {
-                    format!("#{}", i + 1)
-                };
-                audio.push((id, label));
+    let tracks = (0..count)
+        .map(|index| {
+            let property = |name: &str| format!("track-list/{index}/{name}");
+            let kind = mpv.get_property(&property("type")).unwrap_or_default();
+            let id = mpv.get_property(&property("id")).unwrap_or(index + 1);
+            let lang = mpv.get_property(&property("lang")).unwrap_or_default();
+            let title = mpv.get_property(&property("title")).unwrap_or_default();
+            let codec = mpv.get_property(&property("codec")).unwrap_or_default();
+            let selected = mpv.get_property(&property("selected")).unwrap_or(false);
+            let channels = mpv
+                .get_property(&property("demux-channel-count"))
+                .unwrap_or(0);
+            let forced = mpv.get_property(&property("forced")).unwrap_or(false);
+            let stream_index = mpv
+                .get_property(&property("ff-index"))
+                .or_else(|_| mpv.get_property(&property("src-id")))
+                .unwrap_or(-1);
+            TrackInfo {
+                kind,
+                id,
+                lang,
+                title,
+                codec,
+                selected,
+                channels,
+                forced,
+                stream_index,
             }
-            "sub" if !is_image_sub(&codec) => {
-                if sel {
-                    sub_id = id;
-                    sub_lang = lang.clone();
-                }
-                let forced: bool = mpv
-                    .get_property(&format!("track-list/{i}/forced"))
-                    .unwrap_or(false);
-                let name = lang_code_to_name(&lang);
-                let base_label = if !title.is_empty() {
-                    title.clone()
-                } else if !name.is_empty() {
-                    name.to_string()
-                } else if !lang.is_empty() {
-                    lang.to_uppercase()
-                } else {
-                    format!("#{}", i + 1)
-                };
-                let label = if forced {
-                    format!("{base_label} (Forced)")
-                } else {
-                    base_label
-                };
-                subs.push((id, label, forced));
-                let stream_index: i64 = mpv
-                    .get_property(&format!("track-list/{i}/ff-index"))
-                    .or_else(|_| mpv.get_property(&format!("track-list/{i}/src-id")))
-                    .unwrap_or(-1);
-                if stream_index >= 0 {
-                    sub_stream_indexes.push((id, stream_index));
-                }
-            }
-            _ => {}
-        }
-    }
-
-    let mut s = status.lock().unwrap();
-    s.audio_tracks = audio;
-    s.sub_tracks = subs;
-    s.sub_track_stream_indexes = sub_stream_indexes;
-    s.audio_id = audio_id;
-    s.audio_lang = audio_lang;
-    s.sub_id = sub_id;
-    s.sub_lang = sub_lang;
+        })
+        .collect::<Vec<_>>();
+    let parsed = parse_tracks(&tracks);
+    let mut status = status.lock().unwrap();
+    status.audio_tracks = parsed.audio_tracks;
+    status.sub_tracks = parsed.sub_tracks;
+    status.sub_track_stream_indexes = parsed.sub_track_stream_indexes;
+    status.audio_id = parsed.audio_id;
+    status.audio_lang = parsed.audio_lang;
+    status.sub_id = parsed.sub_id;
+    status.sub_lang = parsed.sub_lang;
 }
 
 // ── Session infrastructure ────────────────────────────────────────────────────

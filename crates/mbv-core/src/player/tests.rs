@@ -2,6 +2,7 @@ use super::*;
 
 mod active_file;
 mod basic;
+mod decisions;
 mod proxy;
 mod session;
 mod session_feed;
