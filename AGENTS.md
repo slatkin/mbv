@@ -122,7 +122,7 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
 * format: `cargo fmt` per Rust change (stock edition-2021, max-width-100); accept
   all reflow, never revert it; `cargo fmt --all -- --check` = read-only check.
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
-* module layout: one file per module via `mod`, never `include!`/`#[path]` to splice a module across files; a family with tests gets a directory with `mod.rs` plus `tests/` alongside it
+* module layout: one file per module via `mod`, never `include!`/`#[path]` to splice a module across files; a module with children is `foo.rs` plus a `foo/` directory holding them (tests as `foo/tests.rs`, or `foo/tests.rs` + `foo/tests/` when split); never `mod.rs`
 * async: sync-first; `tokio` is edge-only (`src/mpris.rs`, `zbus`) — do not spread it
 * sharing: prefer owned data + `Msg` identities over new `Arc`/`Rc`
 * anything web related: `ketch` not curl
