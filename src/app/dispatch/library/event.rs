@@ -14,18 +14,34 @@ impl App {
         let Some(ev) = self.handle_audiobookshelf_event(ev) else {
             return;
         };
+        let Some(ev) = self.handle_browse_event(ev) else {
+            return;
+        };
+        let Some(ev) = self.handle_music_event(ev) else {
+            return;
+        };
+        self.handle_playlist_event(ev);
+    }
+
+    fn handle_browse_event(&mut self, ev: LibEvent) -> Option<LibEvent> {
         match ev {
             LibEvent::Loaded {
                 lib_idx,
                 parent_id,
                 level,
-            } => self.handle_lib_loaded(lib_idx, parent_id, *level),
+            } => {
+                self.handle_lib_loaded(lib_idx, parent_id, *level);
+                None
+            }
             LibEvent::PageAppended {
                 lib_idx,
                 parent_id,
                 items,
                 total_count,
-            } => self.handle_lib_page_appended(lib_idx, parent_id, items, total_count),
+            } => {
+                self.handle_lib_page_appended(lib_idx, parent_id, items, total_count);
+                None
+            }
             LibEvent::Refreshed {
                 lib_idx,
                 parent_id,
@@ -33,37 +49,50 @@ impl App {
                 unplayed_only,
                 items,
                 total_count,
-            } => self.handle_lib_refreshed(
-                lib_idx,
-                parent_id,
-                item_types,
-                unplayed_only,
-                items,
-                total_count,
-            ),
+            } => {
+                self.handle_lib_refreshed(
+                    lib_idx,
+                    parent_id,
+                    item_types,
+                    unplayed_only,
+                    items,
+                    total_count,
+                );
+                None
+            }
             LibEvent::RestoreLibraryPosition {
                 lib_idx,
                 requested_position,
                 position,
                 nav_stack,
-            } => self.handle_restored_library_position(
-                lib_idx,
-                requested_position,
-                position,
-                nav_stack,
-            ),
+            } => {
+                self.handle_restored_library_position(
+                    lib_idx,
+                    requested_position,
+                    position,
+                    nav_stack,
+                );
+                None
+            }
             LibEvent::SearchItemsLoaded {
                 lib_idx,
                 parent_id,
                 items,
-            } => self.handle_search_items_loaded(lib_idx, parent_id, items),
+            } => {
+                self.handle_search_items_loaded(lib_idx, parent_id, items);
+                None
+            }
             LibEvent::AlbumIndexBuilt { library_id, result } => {
-                self.handle_album_index_built(library_id, result)
+                self.handle_album_index_built(library_id, result);
+                None
             }
             LibEvent::RecursiveAlbumActivated {
                 library_id,
                 nav_stack,
-            } => self.handle_recursive_album_activated(library_id, nav_stack),
+            } => {
+                self.handle_recursive_album_activated(library_id, nav_stack);
+                None
+            }
             LibEvent::AllItemsPrefetched {
                 lib_idx,
                 parent_id,
@@ -79,6 +108,7 @@ impl App {
                 // The whole-library corpus is exactly what a pending Series
                 // landing was waiting for (U2 correction).
                 self.retry_pending_series_landing(lib_idx, &parent_id);
+                None
             }
             LibEvent::FeedHomeVideoAggregated {
                 lib_idx,
@@ -112,7 +142,22 @@ impl App {
                 }
                 self.clamp_feed_home_video_state(lib_idx);
                 self.log_feed_home_video_state(lib_idx, "aggregated");
+                None
             }
+            LibEvent::NavigateTo {
+                lib_idx,
+                landing,
+                switch_tab,
+            } => {
+                self.handle_navigate_to_event(lib_idx, landing, switch_tab);
+                None
+            }
+            ev => Some(ev),
+        }
+    }
+
+    fn handle_music_event(&mut self, ev: LibEvent) -> Option<LibEvent> {
+        match ev {
             LibEvent::AlbumTracksFetched {
                 album_id,
                 mut tracks,
@@ -132,6 +177,7 @@ impl App {
                 if fallback_completed {
                     self.drain_artist_album_track_fetches();
                 }
+                None
             }
             LibEvent::ArtistTracksFetched {
                 destination,
@@ -139,13 +185,16 @@ impl App {
                 artist_id,
                 revision,
                 result,
-            } => self.handle_artist_tracks_fetched(
-                destination,
-                generation,
-                artist_id,
-                revision,
-                result,
-            ),
+            } => {
+                self.handle_artist_tracks_fetched(
+                    destination,
+                    generation,
+                    artist_id,
+                    revision,
+                    result,
+                );
+                None
+            }
             LibEvent::ArtistArtworkFetched {
                 destination,
                 generation,
@@ -153,34 +202,36 @@ impl App {
                 revision,
                 cache_key,
                 available,
-            } => self.handle_artist_artwork_fetched(
-                destination,
-                generation,
-                artist_id,
-                revision,
-                cache_key,
-                available,
-            ),
+            } => {
+                self.handle_artist_artwork_fetched(
+                    destination,
+                    generation,
+                    artist_id,
+                    revision,
+                    cache_key,
+                    available,
+                );
+                None
+            }
             LibEvent::SeriesDetailFetched {
                 series_id,
                 seasons,
                 episodes,
-            } => self.handle_series_detail_fetched(
-                series_id,
-                crate::app::SeriesDetail { seasons, episodes },
-            ),
+            } => {
+                self.handle_series_detail_fetched(
+                    series_id,
+                    crate::app::SeriesDetail { seasons, episodes },
+                );
+                None
+            }
             LibEvent::SeriesSeasonEpisodesFetched {
                 series_id,
                 season_id,
                 episodes,
-            } => self.handle_series_season_episodes_fetched(series_id, season_id, episodes),
-            LibEvent::AudiobookshelfDetailFetched { .. }
-            | LibEvent::AudiobookshelfShowsFetched { .. }
-            | LibEvent::AudiobookshelfBooksFetched { .. }
-            | LibEvent::AudiobookshelfBookDetailFetched { .. }
-            | LibEvent::AudiobookshelfShelfFetched { .. }
-            | LibEvent::AudiobookshelfProgressAcknowledged(_)
-            | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
+            } => {
+                self.handle_series_season_episodes_fetched(series_id, season_id, episodes);
+                None
+            }
             LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
                 let warmup_completed = self.level_artist_warmups_in_flight.remove(&level_id);
                 let orphan_risk = matches!(
@@ -211,11 +262,9 @@ impl App {
                 if warmup_completed {
                     self.drain_level_artist_warmups();
                 }
+                None
             }
             LibEvent::MusicGroupWarmupListed { generation, groups } => {
-                if !self.emby_runtime.accepts(generation) {
-                    return;
-                }
                 // One level fill per group-level child (design D5), deduped
                 // through the same `LevelFillState::action_for` decision
                 // candidate creation uses (`spawn_level_artist_fetch`'s
@@ -226,15 +275,27 @@ impl App {
                 // level is later browsed. A fill failure arrives as an empty
                 // `AlbumArtistLevelFetched`, marking the level `Failed`
                 // (retryable) with no UI error; browsing state is untouched.
+                if !self.emby_runtime.accepts(generation) {
+                    return None;
+                }
                 for group in groups {
                     self.enqueue_level_artist_warmup(group.id);
                 }
+                None
             }
-            LibEvent::NavigateTo {
-                lib_idx,
-                landing,
-                switch_tab,
-            } => self.handle_navigate_to_event(lib_idx, landing, switch_tab),
+            ev => Some(ev),
+        }
+    }
+
+    fn handle_playlist_event(&mut self, ev: LibEvent) {
+        match ev {
+            LibEvent::AudiobookshelfDetailFetched { .. }
+            | LibEvent::AudiobookshelfShowsFetched { .. }
+            | LibEvent::AudiobookshelfBooksFetched { .. }
+            | LibEvent::AudiobookshelfBookDetailFetched { .. }
+            | LibEvent::AudiobookshelfShelfFetched { .. }
+            | LibEvent::AudiobookshelfProgressAcknowledged(_)
+            | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
             LibEvent::PlaylistsLoaded(items) => {
                 self.playlists = items;
                 self.playlists_loading = false;
@@ -287,17 +348,27 @@ impl App {
             | LibEvent::HomeContentRefreshed(_)
             | LibEvent::HomeContentCleared => {}
             LibEvent::Error(e) => {
-                // A failed per-kind activation reports through here; drop the
-                // deferred tab switch and the pending Series landing so
-                // neither can fire on a later, unrelated drain (U2
-                // correction). `pending_series_handoff` deliberately survives:
-                // it is only armed once the landing already succeeded, and an
-                // unscoped later error must not swallow the pending workspace/
-                // overlay open -- it is consumed by the next sync pass.
                 self.pending_navigate_tab_switch = None;
                 self.pending_series_landing = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
+            LibEvent::Loaded { .. }
+            | LibEvent::PageAppended { .. }
+            | LibEvent::Refreshed { .. }
+            | LibEvent::RestoreLibraryPosition { .. }
+            | LibEvent::SearchItemsLoaded { .. }
+            | LibEvent::AlbumIndexBuilt { .. }
+            | LibEvent::RecursiveAlbumActivated { .. }
+            | LibEvent::AllItemsPrefetched { .. }
+            | LibEvent::FeedHomeVideoAggregated { .. }
+            | LibEvent::AlbumTracksFetched { .. }
+            | LibEvent::ArtistTracksFetched { .. }
+            | LibEvent::ArtistArtworkFetched { .. }
+            | LibEvent::SeriesDetailFetched { .. }
+            | LibEvent::SeriesSeasonEpisodesFetched { .. }
+            | LibEvent::AlbumArtistLevelFetched { .. }
+            | LibEvent::MusicGroupWarmupListed { .. }
+            | LibEvent::NavigateTo { .. } => unreachable!(),
         }
     }
 
