@@ -244,6 +244,13 @@ pub(in crate::app) fn arbitrate_key(
     focused: Option<&ComponentId>,
     router: &RouterOutcome,
 ) -> (Vec<Msg>, ArbitrationDiagnostic) {
+    let (chord, observed_key, claims) = observe_key_messages(&messages);
+    let out = retain_arbitrated_messages(messages, focused, router, observed_key);
+    let diagnostic = arbitration_diagnostic(chord, focused, router, claims, &out);
+    (out, diagnostic)
+}
+
+fn observe_key_messages(messages: &[Msg]) -> (Option<String>, bool, usize) {
     let chord = messages.iter().find_map(|m| match m {
         Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(format!("{key:?}")),
         _ => None,
@@ -264,7 +271,15 @@ pub(in crate::app) fn arbitrate_key(
         claims <= 1,
         "malformed arbitration: multiple focused key claims"
     );
-    let observed_key = key_count == 1;
+    (chord, key_count == 1, claims)
+}
+
+fn retain_arbitrated_messages(
+    messages: Vec<Msg>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+    observed_key: bool,
+) -> Vec<Msg> {
     let mut out = Vec::with_capacity(messages.len());
     for msg in messages {
         match msg {
@@ -297,6 +312,16 @@ pub(in crate::app) fn arbitrate_key(
             }
         }
     }
+    out
+}
+
+fn arbitration_diagnostic(
+    chord: Option<String>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+    claims: usize,
+    out: &[Msg],
+) -> ArbitrationDiagnostic {
     let leaf_disposition = if claims > 0 || out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_)))
     {
         "consumed"
@@ -323,15 +348,14 @@ pub(in crate::app) fn arbitrate_key(
         _ if out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_))) => "request",
         _ => "none",
     };
-    let diagnostic = ArbitrationDiagnostic {
+    ArbitrationDiagnostic {
         chord,
         captured_focus: focused.map(|f| format!("{f:?}")),
         router_result: format!("{router:?}"),
         leaf_disposition,
         final_disposition,
         dispatch_kind,
-    };
-    (out, diagnostic)
+    }
 }
 
 /// ADR 0024: the mouse fold, applied to a `tick()` message list beside the
