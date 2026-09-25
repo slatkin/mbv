@@ -1,13 +1,13 @@
 use super::*;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SubtitlePrefs {
     pub mode: String, // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"
     pub subtitle_lang: String, // full language name, e.g. "English"
     pub audio_lang: String, // full language name, e.g. "English"
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct PlayerStatus {
     pub position_ticks: i64,
     #[serde(default)]
@@ -185,7 +185,7 @@ impl Default for PlayerStatus {
 
 pub const CONNECTION_LOST_MESSAGE: &str = "Lost connection to the daemon's device";
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
     Stopped {
         /// Owner-assigned identity of the occurrence that stopped, or `None`

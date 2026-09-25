@@ -41,6 +41,7 @@ pub(super) fn make_wakeup_pipe() -> Option<(RawFd, WakeupWriter)> {
     Some((fds[0], WakeupWriter(fds[1])))
 }
 
+#[derive(Debug)]
 pub struct QuitHandle {
     pub(super) stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     pub(super) shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
@@ -91,6 +92,28 @@ pub struct Player {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub(super) thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
     pub(super) ws_tx: Arc<Mutex<Option<crate::ws::WsSender>>>,
+}
+
+impl std::fmt::Debug for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Server URL + token are never rendered; thread/mpv handles and
+        // channels have no useful Debug form.
+        let has_credentials = self
+            .credentials
+            .lock()
+            .map(|credentials| credentials.is_some())
+            .unwrap_or(false);
+        f.debug_struct("Player")
+            .field("has_credentials", &has_credentials)
+            .field("show_audio_window", &self.show_audio_window)
+            .field("use_mpv_config", &self.use_mpv_config)
+            .field("video_cache_forward_mb", &self.video_cache_forward_mb)
+            .field("video_cache_back_mb", &self.video_cache_back_mb)
+            .field("no_scripts", &self.no_scripts)
+            .field("audio_device", &self.audio_device)
+            .field("always_skip_intro", &self.always_skip_intro)
+            .finish_non_exhaustive()
+    }
 }
 
 impl Player {
@@ -336,5 +359,29 @@ impl Player {
     pub fn stop_for_shutdown(&self, timeout: Duration) {
         *self.shutdown_report_timeout.lock().unwrap() = Some(timeout);
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn player_debug_redacts_credentials() {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let player = Player::new(
+            "http://emby:8096".to_string(),
+            "emby-secret-token".to_string(),
+            false,
+            false,
+            false,
+            false,
+            SubtitlePrefs::default(),
+            tx,
+            None,
+        );
+        let rendered = format!("{:?}", player);
+        assert!(rendered.contains("Player"));
+        assert!(!rendered.contains("emby-secret-token"));
     }
 }

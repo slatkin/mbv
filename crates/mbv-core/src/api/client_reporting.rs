@@ -5,6 +5,7 @@ use super::*;
 /// `runtime_ticks`) positionally, so a swap compiled silently and corrupted
 /// reported progress; named fields make that impossible. `runtime_ticks`
 /// is only read by the ws transport (log line); http ignores it.
+#[derive(Debug)]
 pub struct ProgressReport {
     pub item_id: ItemId,
     pub media_source_id: MediaSourceId,

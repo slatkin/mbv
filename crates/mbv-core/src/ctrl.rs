@@ -254,7 +254,7 @@ impl CtrlCompatibility {
 
 /// One slot in the unified queue representation.  The `slot_id` is the
 /// stable runtime identity of the occurrence (not the item's content ID).
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UnifiedQueueSlot {
     pub slot_id: u64,
     pub item: QueueItem,
@@ -271,7 +271,7 @@ pub struct TransitionSummary {
 }
 
 /// Full queue state exchanged between unified-queue-capable peers.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UnifiedQueueStateData {
     pub status: PlayerStatus,
     pub slots: Vec<UnifiedQueueSlot>,
@@ -302,7 +302,7 @@ pub fn slot_id_to_u64(id: QueueSlotId) -> u64 {
 
 // ── CtrlCmd ──────────────────────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CtrlCmd {
     Hello(CtrlHello),
     PlayerCmd(WireCommand),
@@ -391,6 +391,7 @@ pub enum CtrlCmd {
 /// [`OwnerGate::OwnerOnly`]/[`OwnerGate::NonOwnerOnly`] so
 /// `send_role_gate_rejection` (daemon_control.rs) can match on it
 /// exhaustively with no wildcard arm.
+#[derive(Debug)]
 pub enum OwnerGateRejection {
     AdoptQueue,
     QueueLoadIdle { request_id: QueueLoadRequestId },
@@ -399,6 +400,7 @@ pub enum OwnerGateRejection {
 
 /// Owner-role gate for a ctrl command: whether acceptance depends on the
 /// daemon being the Stay-alive owner (`DaemonRole::Local`).
+#[derive(Debug)]
 pub enum OwnerGate {
     /// Accepted only from the owner.
     OwnerOnly(OwnerGateRejection),
@@ -512,7 +514,7 @@ pub enum PlaybackIntentAction {
 /// to/from `PlayerCommand` are exhaustive matches with no wildcard arm, so
 /// adding a new `PlayerCommand` variant is a compile error until this type
 /// (and its conversions) are updated too.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum WireCommand {
     #[serde(rename = "TogglePause")]
     TogglePause,
@@ -638,7 +640,7 @@ impl From<WireCommand> for PlayerCommand {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum CtrlEvent {
     Hello(CtrlHello),
     Player(PlayerEvent),

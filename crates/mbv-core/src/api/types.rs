@@ -568,3 +568,31 @@ pub struct EmbyClient {
     /// `with_request_timeout`.
     pub(super) mock_agent: bool,
 }
+
+impl std::fmt::Debug for EmbyClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The auth token is never rendered; `agent` has no stable redaction.
+        f.debug_struct("EmbyClient")
+            .field("config", &self.config)
+            .field("user_id", &self.user_id)
+            .field("token", &"<redacted>")
+            .field("device_name", &self.device_name)
+            .field("device_id", &self.device_id)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn debug_redacts_token() {
+        let mut client = EmbyClient::new(Config::default());
+        let token = "emby-secret-token-123";
+        client.token = token.to_string();
+        let rendered = format!("{:?}", client);
+        assert!(rendered.contains("EmbyClient"));
+        assert!(!rendered.contains(token));
+    }
+}

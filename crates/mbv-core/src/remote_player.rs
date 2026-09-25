@@ -23,7 +23,7 @@ pub enum ShutdownResponse {
     Unsupported,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,

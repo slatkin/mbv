@@ -26,6 +26,19 @@ pub struct CastClient {
     dispatched_queue: Option<DispatchedQueue>,
 }
 
+impl std::fmt::Debug for CastClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `device` (rust_cast) and `dispatched_queue` have no Debug; the
+        // queue is summarized by presence only.
+        f.debug_struct("CastClient")
+            .field("transport_id", &self.transport_id)
+            .field("session_id", &self.session_id)
+            .field("media_session_id", &self.media_session_id)
+            .field("has_dispatched_queue", &self.dispatched_queue.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 /// The last queue this client loaded, kept only so `next`/`previous` can
 /// replay it with a shifted `start_index` -- not a projection of mbv's
 /// queue, and never reissued except on an explicit transport action.

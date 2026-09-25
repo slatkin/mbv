@@ -573,7 +573,7 @@ pub(super) fn expire_and_redispatch(
 /// Snapshot of the daemon's canonical queue used to seed newly-connecting
 /// ctrl-socket clients.  The queue itself is the single source of truth;
 /// `UnifiedQueueState` is derived from it at the broadcast boundary.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct SharedQueueState {
     pub(super) queue: Arc<Mutex<PlaybackQueue>>,
     pub(super) source: Arc<Mutex<crate::config::QueueSource>>,
@@ -581,6 +581,7 @@ pub(crate) struct SharedQueueState {
     pub(super) observed_active_slot: Arc<Mutex<Option<QueueSlotId>>>,
 }
 
+#[derive(Debug)]
 pub struct DaemonPlayerHandle {
     pub status: Arc<Mutex<crate::player::PlayerStatus>>,
     pub command_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
@@ -592,6 +593,16 @@ type OnTrayReady = Box<dyn FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>
 pub struct DaemonRuntimeHooks {
     pub on_player_ready: OnPlayerReady,
     pub on_tray_ready: OnTrayReady,
+}
+
+impl std::fmt::Debug for DaemonRuntimeHooks {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // One-shot callbacks have no Debug form; presence is structural.
+        f.debug_struct("DaemonRuntimeHooks")
+            .field("on_player_ready", &"<callback>")
+            .field("on_tray_ready", &"<callback>")
+            .finish()
+    }
 }
 
 pub fn pid_file() -> std::path::PathBuf {

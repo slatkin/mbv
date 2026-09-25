@@ -51,7 +51,7 @@ impl From<log::Level> for Level {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct LogEntry {
     pub level: Level,
     pub ts: String,
@@ -72,7 +72,7 @@ fn now_ts() -> String {
     format!("{:02}:{:02}:{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AppLog {
     stderr: bool,
     file: Arc<Mutex<Option<std::fs::File>>>,

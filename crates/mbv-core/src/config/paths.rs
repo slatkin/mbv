@@ -58,6 +58,7 @@ pub(super) fn migrate_to_state(filename: &str) -> PathBuf {
 /// The outcome of resolving the mpv overlay script set (or its fonts):
 /// the source handed to mpv, plus any ignored copy at the removed
 /// installer's user-directory path (named in a startup warning, never used).
+#[derive(Debug)]
 pub struct ScriptSource {
     pub chosen: PathBuf,
     pub unused_legacy: Option<PathBuf>,

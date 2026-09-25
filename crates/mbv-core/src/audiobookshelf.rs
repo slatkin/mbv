@@ -21,12 +21,22 @@ pub struct AudiobookshelfUser {
 }
 
 /// The validated setup handed to the later transactional lifecycle seam.
-/// This type intentionally has no Debug or Display implementation because it
-/// retains the candidate API key until the commit seam consumes it.
+/// Its Debug implementation redacts the candidate API key, which this type
+/// retains until the commit seam consumes it.
 pub struct AudiobookshelfValidatedSetup {
     pub setup: crate::config::AudiobookshelfSetup,
     pub user: AudiobookshelfUser,
     api_key: String,
+}
+
+impl std::fmt::Debug for AudiobookshelfValidatedSetup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudiobookshelfValidatedSetup")
+            .field("setup", &self.setup)
+            .field("user", &self.user)
+            .field("api_key", &"<redacted>")
+            .finish()
+    }
 }
 
 impl AudiobookshelfValidatedSetup {
@@ -130,7 +140,7 @@ struct AudiobookshelfMeResponse {
     is_active: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AudiobookshelfClient {
     server_url: String,
     agent: ureq::Agent,

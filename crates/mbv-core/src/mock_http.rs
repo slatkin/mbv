@@ -36,7 +36,7 @@ struct Shared {
 }
 
 /// Handle to the scripted responses and recorded requests of one mock agent.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MockHttp {
     shared: Arc<Shared>,
 }

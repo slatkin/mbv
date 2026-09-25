@@ -10,6 +10,7 @@ use std::path::PathBuf;
 /// Removes itself on drop -- including when the test panics -- so a failing
 /// run cannot accumulate directories under the system temp dir.
 #[cfg(any(test, feature = "test-support"))]
+#[derive(Debug)]
 pub struct TestTempDir {
     dir: PathBuf,
     xdg_home: bool,
@@ -127,6 +128,7 @@ thread_local! {
 pub(super) static TEST_DEFAULT_STATE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
 #[cfg(any(test, feature = "test-support"))]
+#[derive(Debug)]
 pub struct TestStateDirGuard;
 
 #[cfg(any(test, feature = "test-support"))]

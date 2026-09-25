@@ -9,7 +9,7 @@
 use crate::playback_queue::{PlaybackQueue, QueueSlotId};
 use crate::playback_transition::OwnerTransitionState;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct PlayerOwnerState {
     pub(crate) queue: PlaybackQueue,
     pub(crate) source: crate::config::QueueSource,

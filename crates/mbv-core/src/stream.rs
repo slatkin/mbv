@@ -3,6 +3,7 @@
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::os::unix::net::UnixStream;
+#[derive(Debug)]
 pub(crate) enum SocketStream {
     Unix(UnixStream),
     Tcp(TcpStream),

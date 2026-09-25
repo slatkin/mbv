@@ -41,7 +41,7 @@ pub(super) fn load_json<T: serde::de::DeserializeOwned>(
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct StayAliveQueueState {
     pub queue: QueueState,
     pub lineage: crate::ctrl::QueueLineage,

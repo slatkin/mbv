@@ -7,7 +7,7 @@ pub enum DaemonRole {
 
 /// Owner-local Emby state. Constructing this value never authenticates; the
 /// daemon may start even when the configured server is unavailable.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EmbyOwnerContext {
     pub client: std::sync::Arc<std::sync::Mutex<crate::api::EmbyClient>>,
     pub generation: crate::service_runtime::SetupGeneration,
@@ -44,7 +44,7 @@ impl EmbyOwnerContext {
 /// Owner-local Audiobookshelf state. Constructing this value never
 /// authenticates; the daemon may start even when the configured server is
 /// unavailable.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AudiobookshelfOwnerContext {
     pub setup: crate::config::AudiobookshelfSetup,
     pub device_id: String,
@@ -72,7 +72,7 @@ impl AudiobookshelfOwnerContext {
 }
 
 /// Common startup input for Local and packaged daemons.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct DaemonStartupContext {
     pub role: DaemonRole,
     pub config: crate::config::Config,

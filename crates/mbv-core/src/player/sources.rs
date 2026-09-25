@@ -31,7 +31,7 @@ pub struct AudiobookshelfBookProgressUpdate {
 }
 
 /// In-process Audiobookshelf access owned by a Player. The credential is
-/// intentionally absent from Debug and every serializable boundary.
+/// redacted from Debug and absent from every serializable boundary.
 #[derive(Clone)]
 pub struct AudiobookshelfPlayerContext {
     generation: SetupGeneration,
@@ -40,6 +40,17 @@ pub struct AudiobookshelfPlayerContext {
     device_id: String,
     progress_updates: Option<std::sync::mpsc::Sender<AudiobookshelfProgressUpdate>>,
     book_progress_updates: Option<std::sync::mpsc::Sender<AudiobookshelfBookProgressUpdate>>,
+}
+
+impl std::fmt::Debug for AudiobookshelfPlayerContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudiobookshelfPlayerContext")
+            .field("generation", &self.generation)
+            .field("setup", &self.setup)
+            .field("device_id", &self.device_id)
+            .field("credential", &"<redacted>")
+            .finish_non_exhaustive()
+    }
 }
 
 impl AudiobookshelfPlayerContext {
@@ -273,4 +284,24 @@ fn prepare_book_source(
         }
     }
     Ok(prepared)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn player_context_debug_redacts_credential() {
+        let Some(context) = AudiobookshelfPlayerContext::new(
+            SetupGeneration::default(),
+            AudiobookshelfSetup::new("http://abs:13378"),
+            "abs-secret-credential".to_string(),
+            "device-1".to_string(),
+        ) else {
+            panic!("valid context");
+        };
+        let rendered = format!("{:?}", context);
+        assert!(rendered.contains("AudiobookshelfPlayerContext"));
+        assert!(!rendered.contains("abs-secret-credential"));
+    }
 }

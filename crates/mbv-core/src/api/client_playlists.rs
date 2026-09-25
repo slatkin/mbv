@@ -3,6 +3,7 @@ use serde_json::Value;
 
 /// The resolved cast-bound media plus the Emby session/media-source identity
 /// it was negotiated under, so progress can be reported for it later.
+#[derive(Debug)]
 pub struct CastPlaybackInfo {
     pub item: crate::cast::client::CastMediaItem,
     pub media_source_id: MediaSourceId,

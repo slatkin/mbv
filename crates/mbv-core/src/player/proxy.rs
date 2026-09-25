@@ -1,10 +1,12 @@
 use super::*;
 
+#[derive(Debug)]
 enum PlayerProxyInner {
     Local(Player),
     Remote(crate::remote_player::RemotePlayer),
 }
 
+#[derive(Debug)]
 pub struct PlayerProxy {
     pub always_play_next: bool,
     pub status: Arc<Mutex<PlayerStatus>>,

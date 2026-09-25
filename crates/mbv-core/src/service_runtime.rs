@@ -75,6 +75,7 @@ impl SetupGeneration {
 
 /// The concrete Emby runtime. No placeholder client is created when Emby is
 /// absent; `client` is populated only after a real setup is selected.
+#[derive(Debug)]
 pub struct EmbyRuntime {
     pub client: Option<Arc<Mutex<EmbyClient>>>,
     pub state: ServiceState,
@@ -165,6 +166,7 @@ impl EmbyRuntime {
 
 /// Runtime-only Audiobookshelf identity and availability. The API key is
 /// intentionally absent; callers load it from the Service secret boundary.
+#[derive(Debug)]
 pub struct AudiobookshelfRuntime {
     pub user: Option<AudiobookshelfUser>,
     pub state: ServiceState,

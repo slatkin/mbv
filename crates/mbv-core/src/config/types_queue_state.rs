@@ -19,7 +19,7 @@ pub enum QueueSource {
     Unknown,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct QueueState {
     #[serde(default)]
     pub source: QueueSource,

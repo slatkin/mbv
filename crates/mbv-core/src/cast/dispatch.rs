@@ -118,6 +118,7 @@ pub fn resolve_audiobookshelf_book_dispatch(
 /// One item's outcome when deciding whether it can be dispatched to a cast
 /// receiver: its display name paired with either the media to load or the
 /// reason it can't be.
+#[derive(Debug)]
 pub struct CastDispatchItem {
     pub name: String,
     pub result: Result<CastMediaItem, String>,

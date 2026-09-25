@@ -9,13 +9,14 @@ use std::time::{Duration, Instant};
 use serde_json::Value;
 use tungstenite::Message;
 
+#[derive(Debug)]
 pub enum OutboundMessage {
     Text(String),
     Flush(mpsc::Sender<()>),
     Shutdown,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct WsSender {
     tx: mpsc::Sender<OutboundMessage>,
     connected: Arc<AtomicBool>,
@@ -51,6 +52,7 @@ fn drop_stale_outbound(out_rx: &mpsc::Receiver<OutboundMessage>) {
     }
 }
 
+#[derive(Debug)]
 pub enum WsEvent {
     Play {
         item_ids: Vec<String>,
