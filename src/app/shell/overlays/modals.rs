@@ -44,75 +44,18 @@ impl Model {
             OverlayRequest::DismissSidebar(sidebar) => self.dismiss_sidebar(sidebar),
             OverlayRequest::ToggleSidebar(sidebar) => self.toggle_sidebar(sidebar),
             OverlayRequest::Confirm(modal) => {
-                self.dismiss_modal(&Self::confirm_id());
-                let id = Self::confirm_id();
-                self.application
-                    .mount(id.clone(), Box::new(ConfirmComponent::new()), vec![])
-                    .expect("mount Confirm");
-                self.application.active(&id).expect("activate Confirm");
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    comp.as_any_mut()
-                        .downcast_mut::<ConfirmComponent>()
-                        .expect("Confirm component")
-                        .set_modal(&modal);
-                }
+                self.mount_confirm_modal(&modal);
             }
             OverlayRequest::DaemonLost(modal) => {
-                self.dismiss_blocking_modals();
-                let id = Self::daemon_lost_id();
-                self.application
-                    .mount(id.clone(), Box::new(DaemonLostComponent::new()), vec![])
-                    .expect("mount DaemonLost");
-                self.application.active(&id).expect("activate DaemonLost");
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    comp.as_any_mut()
-                        .downcast_mut::<DaemonLostComponent>()
-                        .expect("DaemonLost component")
-                        .set_content(
-                            modal.last_playing_title.as_deref(),
-                            &modal.daemon_log_path,
-                            modal.restart_error.as_deref(),
-                        );
-                }
+                self.mount_daemon_lost_modal(&modal);
             }
-            OverlayRequest::SavePlaylist(dialog) => {
-                self.dismiss_blocking_modals();
-                let id = ComponentId::Modal(ModalId::SavePlaylist);
-                self.application
-                    .mount(id.clone(), Box::new(SavePlaylistComponent::new()), vec![])
-                    .expect("mount SavePlaylist");
-                self.application.active(&id).expect("activate SavePlaylist");
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    comp.as_any_mut()
-                        .downcast_mut::<SavePlaylistComponent>()
-                        .expect("SavePlaylist component")
-                        .set_dialog(dialog.input, dialog.stage);
-                }
-            }
+            OverlayRequest::SavePlaylist(dialog) => self.mount_save_playlist_modal(dialog),
             OverlayRequest::DismissConfirm => self.dismiss_modal(&Self::confirm_id()),
             OverlayRequest::DismissDaemonLost => self.dismiss_modal(&Self::daemon_lost_id()),
             OverlayRequest::DismissSavePlaylist => {
                 self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist))
             }
-            OverlayRequest::ContextMenu(menu) => {
-                // An open context menu replaces any sidebar surface (the old
-                // `sync_context_menu` dismissed sidebars before mounting).
-                self.dismiss_sidebars();
-                let id = ComponentId::Overlay(OverlayId::ContextMenu);
-                if !self.application.mounted(&id) {
-                    self.application
-                        .mount(id.clone(), Box::new(ContextMenuComponent::new()), vec![])
-                        .expect("mount ContextMenu");
-                    self.application.active(&id).expect("activate ContextMenu");
-                }
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    if let Some(context_menu) =
-                        comp.as_any_mut().downcast_mut::<ContextMenuComponent>()
-                    {
-                        context_menu.set_content(menu.anchor, menu.entries, menu.cursor);
-                    }
-                }
-            }
+            OverlayRequest::ContextMenu(menu) => self.mount_context_menu(menu),
             OverlayRequest::OpenMultiselect(kind) => self.open_multiselect(kind),
             OverlayRequest::OpenLibraryRoutes => self.open_library_routes(),
             OverlayRequest::OpenFeedsManage => self.open_feeds_manage(),
@@ -121,6 +64,79 @@ impl Model {
             }
         }
         self.assert_modal_mount_exclusive();
+    }
+
+    fn mount_confirm_modal(&mut self, modal: &crate::app::state::types::confirm::ConfirmModal) {
+        self.dismiss_modal(&Self::confirm_id());
+        let id = Self::confirm_id();
+        self.application
+            .mount(id.clone(), Box::new(ConfirmComponent::new()), vec![])
+            .expect("mount Confirm");
+        self.application.active(&id).expect("activate Confirm");
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            comp.as_any_mut()
+                .downcast_mut::<ConfirmComponent>()
+                .expect("Confirm component")
+                .set_modal(modal);
+        }
+    }
+
+    fn mount_daemon_lost_modal(
+        &mut self,
+        modal: &crate::app::state::types::daemon_lost::DaemonLostModal,
+    ) {
+        self.dismiss_blocking_modals();
+        let id = Self::daemon_lost_id();
+        self.application
+            .mount(id.clone(), Box::new(DaemonLostComponent::new()), vec![])
+            .expect("mount DaemonLost");
+        self.application.active(&id).expect("activate DaemonLost");
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            comp.as_any_mut()
+                .downcast_mut::<DaemonLostComponent>()
+                .expect("DaemonLost component")
+                .set_content(
+                    modal.last_playing_title.as_deref(),
+                    &modal.daemon_log_path,
+                    modal.restart_error.as_deref(),
+                );
+        }
+    }
+
+    fn mount_save_playlist_modal(
+        &mut self,
+        dialog: crate::app::state::types::feed::SavePlaylistDialog,
+    ) {
+        self.dismiss_blocking_modals();
+        let id = ComponentId::Modal(ModalId::SavePlaylist);
+        self.application
+            .mount(id.clone(), Box::new(SavePlaylistComponent::new()), vec![])
+            .expect("mount SavePlaylist");
+        self.application.active(&id).expect("activate SavePlaylist");
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            comp.as_any_mut()
+                .downcast_mut::<SavePlaylistComponent>()
+                .expect("SavePlaylist component")
+                .set_dialog(dialog.input, dialog.stage);
+        }
+    }
+
+    fn mount_context_menu(&mut self, menu: crate::app::state::types::context_menu::ContextMenu) {
+        // An open context menu replaces any sidebar surface (the old
+        // `sync_context_menu` dismissed sidebars before mounting).
+        self.dismiss_sidebars();
+        let id = ComponentId::Overlay(OverlayId::ContextMenu);
+        if !self.application.mounted(&id) {
+            self.application
+                .mount(id.clone(), Box::new(ContextMenuComponent::new()), vec![])
+                .expect("mount ContextMenu");
+            self.application.active(&id).expect("activate ContextMenu");
+        }
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(context_menu) = comp.as_any_mut().downcast_mut::<ContextMenuComponent>() {
+                context_menu.set_content(menu.anchor, menu.entries, menu.cursor);
+            }
+        }
     }
 
     fn assert_modal_mount_exclusive(&self) {
