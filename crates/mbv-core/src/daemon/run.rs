@@ -120,15 +120,25 @@ pub(super) fn apply_queue_enriched(
     }
 }
 
-pub fn run_with_options(
-    startup: DaemonStartupContext,
-    audio_only: bool,
-    hooks: DaemonRuntimeHooks,
-) -> ! {
+struct DaemonStarted {
+    config: crate::config::Config,
+    role: DaemonRole,
+    emby_runtime: Option<EmbyOwnerContext>,
+    audiobookshelf_runtime: Option<AudiobookshelfOwnerContext>,
+    client: Arc<Mutex<EmbyClient>>,
+    control_credential: Option<String>,
+    player: Player,
+    merged_tx: mpsc::Sender<DaemonEvent>,
+    merged_rx: mpsc::Receiver<DaemonEvent>,
+    ws_send_tx: Option<crate::ws::WsSender>,
+    _tray: Option<Box<dyn Send>>,
+}
+
+fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> DaemonStarted {
+    let role = startup.role;
+    let config = startup.config;
     let emby_runtime = startup.emby;
     let audiobookshelf_runtime = startup.audiobookshelf;
-    let config = startup.config;
-    let role = startup.role;
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
 
@@ -226,6 +236,22 @@ pub fn run_with_options(
     // acknowledged-progress sender into the daemon event loop.
     install_daemon_audiobookshelf_context(&player, &audiobookshelf_runtime, &merged_tx);
 
+    DaemonStarted {
+        config,
+        role,
+        emby_runtime,
+        audiobookshelf_runtime,
+        client,
+        control_credential,
+        player,
+        merged_tx,
+        merged_rx,
+        ws_send_tx,
+        _tray,
+    }
+}
+
+fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, SharedQueueState) {
     // Shared state for ctrl socket initial-state snapshots — stores the
     // canonical queue so all ctrl peers are seeded from one source.
     let owner_state = if role == DaemonRole::Local {
@@ -282,8 +308,21 @@ pub fn run_with_options(
         lineage: Arc::new(Mutex::new(initial_lineage)),
         observed_active_slot: Arc::new(Mutex::new(None)),
     };
-    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
+    let owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(initial_queue, initial_source),
+        ..Default::default()
+    };
+    (owner, shared_queue)
+}
 
+fn start_local_control_server(
+    audio_only: bool,
+    merged_tx: &mpsc::Sender<DaemonEvent>,
+    ctrl_clients: &ClientRegistry,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    control_credential: &Option<String>,
+) {
     // Bind and start the control socket only once the daemon can immediately
     // accept and speak the protocol, so local clients never connect and hang
     // waiting for the daemon hello.
@@ -293,7 +332,6 @@ pub fn run_with_options(
         let player_status = player.status.clone();
         let shared_queue = shared_queue.clone();
         let control_credential = control_credential.clone();
-
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
@@ -310,18 +348,13 @@ pub fn run_with_options(
             }
         });
     }
+}
 
-    let mut direct_commands = Vec::new();
-
-    // --- From here on: network/Emby-session-visibility setup (protocol
-    // negotiation metadata, capability registration). Local control is
-    // already up and serving connections above. ---
-
-    let daemon_tcp_listen = config.daemon_server_tcp_listen.clone();
-    let tcp_listener = if daemon_tcp_listen.trim().is_empty() {
+fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<TcpListener> {
+    let tcp_listener = if listen.trim().is_empty() {
         None
     } else {
-        match TcpListener::bind(daemon_tcp_listen.trim()) {
+        match TcpListener::bind(listen.trim()) {
             Ok(listener) => {
                 let port = listener.local_addr().map(|addr| addr.port()).unwrap_or(0);
                 if port > 0 {
@@ -332,7 +365,7 @@ pub fn run_with_options(
                         listener
                             .local_addr()
                             .map(|addr| addr.to_string())
-                            .unwrap_or_else(|_| daemon_tcp_listen.clone())
+                            .unwrap_or_else(|_| listen.to_string())
                     );
                 }
                 Some(listener)
@@ -341,24 +374,43 @@ pub fn run_with_options(
                 log::warn!(
                     target: "daemon",
                     "daemon tcp control bind failed for {}: {e}",
-                    daemon_tcp_listen
+                    listen
                 );
                 None
             }
         }
     };
 
+    tcp_listener
+}
+
+fn register_capabilities(
+    client: &Arc<Mutex<EmbyClient>>,
+    emby_runtime: &Option<EmbyOwnerContext>,
+    direct_commands: &[String],
+    audio_only: bool,
+) {
     // Register capabilities off the startup path so it doesn't block on the
     // Emby HTTP round trip.
     if emby_runtime.is_some() {
         let client = client.lock().unwrap().clone();
-        let direct_commands = direct_commands.clone();
+        let direct_commands = direct_commands.to_vec();
         std::thread::spawn(move || {
             client.register_capabilities_with_options(&direct_commands, audio_only);
         });
     }
+}
 
-    if let Some(listener) = tcp_listener {
+fn serve_tcp_control(
+    listener: Option<TcpListener>,
+    audio_only: bool,
+    ctrl_clients: &ClientRegistry,
+    merged_tx: &mpsc::Sender<DaemonEvent>,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    control_credential: &Option<String>,
+) {
+    if let Some(listener) = listener {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();
         let player_status = player.status.clone();
@@ -380,29 +432,75 @@ pub fn run_with_options(
             }
         });
     }
+}
 
+fn spawn_status_broadcast(
+    client: &Arc<Mutex<EmbyClient>>,
+    player: &Player,
+    clients: &ClientRegistry,
+) {
     // Broadcast current PlayerStatus to connected TUIs so the
     // seekbar and toggle state stay in sync without sending the full queue.
-    {
-        let broadcast_interval =
-            std::time::Duration::from_millis(client.lock().unwrap().config.daemon_broadcast_ms);
-        let player_status = player.status.clone();
-        let ctrl_clients = ctrl_clients.clone();
-        std::thread::spawn(move || loop {
-            std::thread::sleep(broadcast_interval);
-            if !ctrl_clients.lock().unwrap().has_driver() {
-                continue;
-            }
-            let status = player_status.lock().unwrap().clone();
-            broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
-        });
-    }
+    let broadcast_interval =
+        std::time::Duration::from_millis(client.lock().unwrap().config.daemon_broadcast_ms);
+    let player_status = player.status.clone();
+    let ctrl_clients = clients.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(broadcast_interval);
+        if !ctrl_clients.lock().unwrap().has_driver() {
+            continue;
+        }
+        let status = player_status.lock().unwrap().clone();
+        broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
+    });
+}
 
-    // ── Canonical queue authority — single source of truth ──────────────
-    let owner = DaemonPlayerOwner {
-        core: PlayerOwnerState::new(initial_queue, initial_source),
-        ..Default::default()
-    };
+pub fn run_with_options(
+    startup: DaemonStartupContext,
+    audio_only: bool,
+    hooks: DaemonRuntimeHooks,
+) -> ! {
+    let started = start_daemon(startup, hooks);
+    let DaemonStarted {
+        config,
+        role,
+        emby_runtime,
+        audiobookshelf_runtime,
+        client,
+        control_credential,
+        player,
+        merged_tx,
+        merged_rx,
+        ws_send_tx,
+        _tray,
+    } = started;
+    let (owner, shared_queue) = initialize_queue(role, &player);
+    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
+    start_local_control_server(
+        audio_only,
+        &merged_tx,
+        &ctrl_clients,
+        &player,
+        &shared_queue,
+        &control_credential,
+    );
+
+    let mut direct_commands = Vec::new();
+    // --- From here on: network/Emby-session-visibility setup (protocol
+    // negotiation metadata, capability registration). Local control is
+    // already up and serving connections above. ---
+    let tcp_listener = bind_tcp_control(&config.daemon_server_tcp_listen, &mut direct_commands);
+    register_capabilities(&client, &emby_runtime, &direct_commands, audio_only);
+    serve_tcp_control(
+        tcp_listener,
+        audio_only,
+        &ctrl_clients,
+        &merged_tx,
+        &player,
+        &shared_queue,
+        &control_credential,
+    );
+    spawn_status_broadcast(&client, &player, &ctrl_clients);
 
     let mut daemon_loop = DaemonLoop {
         owner,
@@ -422,7 +520,10 @@ pub fn run_with_options(
         last_capabilities: Instant::now(),
         store: Box::new(crate::config::save_stay_alive_queue_state),
     };
+    run_daemon_loop(&mut daemon_loop, merged_rx)
+}
 
+fn run_daemon_loop(daemon_loop: &mut DaemonLoop, merged_rx: mpsc::Receiver<DaemonEvent>) -> ! {
     loop {
         daemon_loop.tick(Instant::now());
         match merged_rx.recv_timeout(Duration::from_millis(25)) {
