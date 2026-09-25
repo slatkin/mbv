@@ -113,92 +113,78 @@ impl EmbyLibraryContent {
         }
     }
 
-    /// This owner's local key interpretation, forwarded by the focused panel
-    /// (the embedded owner's local key-handling contract, unchanged —
-    /// the router owns every global chord and keeps precedence).
-    pub(super) fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if self.inline_search.is_active() {
-            return match self.inline_search.handle_key(key) {
-                Some(InlineSearchAction::Activate { id, item_type }) => {
-                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
-                        id,
-                        item_type,
-                    })))
-                }
-                Some(InlineSearchAction::Dismiss) => {
-                    self.inline_search.close();
-                    None
-                }
-                Some(InlineSearchAction::QueryStarted) => {
-                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted)))
-                }
-                None => self.inline_search_result_action(key),
-            };
+    fn handle_active_search_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        match self.inline_search.handle_key(key) {
+            Some(InlineSearchAction::Activate { id, item_type }) => {
+                Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
+                    id,
+                    item_type,
+                })))
+            }
+            Some(InlineSearchAction::Dismiss) => {
+                self.inline_search.close();
+                None
+            }
+            Some(InlineSearchAction::QueryStarted) => {
+                Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted)))
+            }
+            None => self.inline_search_result_action(key),
         }
-        if key.modifiers.is_empty() && matches!(key.code, Key::Char('/')) {
-            self.inline_search.open();
-            return Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)));
-        }
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
-        if self.carrier.handle_visual_key(key).is_some() {
-            return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
-                self.carrier.selection_summary(),
-            ))));
-        }
-        if alt && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down) {
+    }
+
+    fn handle_navigation_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let operation = match key.code {
+            Key::Up | Key::Char('k') => MediaListOperation::Move(-1),
+            Key::Down | Key::Char('j') => MediaListOperation::Move(1),
+            Key::PageUp => MediaListOperation::Page(-1),
+            Key::PageDown => MediaListOperation::Page(1),
+            Key::Home => MediaListOperation::First,
+            Key::End => MediaListOperation::Last,
+            _ => return None,
+        };
+        self.carrier.delegate_operation(operation);
+        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
+            index: self.cursor(),
+        })))
+    }
+
+    fn handle_selector_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let Key::Char(c @ ('[' | ']')) = key.code else {
             return None;
-        }
-        // Local keyboard navigation routes through the same typed
-        // `ShellRequest` the embedded owner emits
-        // (`browser/keyboard.rs`): this owner mutates only its own selection,
-        // then returns the resolved index in place of the raw key so the
-        // shell drives persistence/pagination through the same arm as TV's
-        // still-mounted browser — never by recomputing the App cursor here
-        // (design D3: local movement sends the resolved value).
-        match key.code {
-            Key::Up | Key::Char('k') => {
-                self.carrier
-                    .delegate_operation(MediaListOperation::Move(-1));
-                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                })));
-            }
-            Key::Down | Key::Char('j') => {
-                self.carrier.delegate_operation(MediaListOperation::Move(1));
-                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                })));
-            }
-            Key::PageUp => {
-                self.carrier
-                    .delegate_operation(MediaListOperation::Page(-1));
-                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                })));
-            }
-            Key::PageDown => {
-                self.carrier.delegate_operation(MediaListOperation::Page(1));
-                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                })));
-            }
-            Key::Home => {
-                self.carrier.delegate_operation(MediaListOperation::First);
-                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                })));
-            }
-            Key::End => {
-                self.carrier.delegate_operation(MediaListOperation::Last);
-                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                })));
-            }
-            _ => {}
-        }
+        };
+        let (current, count) = if self.group_pills {
+            (
+                if self.latest_mode {
+                    0
+                } else {
+                    self.feed_group_cursor + 1
+                },
+                self.feed_groups.len() + 2,
+            )
+        } else if self.show_letter_pills {
+            (
+                if self.latest_mode {
+                    0
+                } else {
+                    self.letter_filter
+                        .as_ref()
+                        .map(|filter| filter.index + 1)
+                        .unwrap_or(1)
+                },
+                LetterFilter::labels().len() + 1,
+            )
+        } else {
+            return None;
+        };
+        let delta = if c == '[' { -1 } else { 1 };
+        let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+        self.pick_selector(next)
+    }
+
+    fn selected_item_request(&mut self, key: &KeyEvent) -> Option<ShellRequest> {
         let selected = self.selected_effect_item();
-        let request = match key.code {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        match key.code {
             Key::Enter => selected.map(|item| ShellRequest::EmbyLibraryActivate { item }),
             Key::Char('p') if ctrl => selected.map(|item| ShellRequest::EmbyLibraryPlay { item }),
             Key::Char('a') if ctrl => {
@@ -207,61 +193,65 @@ impl EmbyLibraryContent {
             Key::Char('w') if ctrl => {
                 selected.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
             }
-            Key::Char('.') if key.modifiers.is_empty() => match self
-                .carrier
-                .delegate_operation(MediaListOperation::ContextCurrent)
-                .external_intent
-            {
-                Some(RowIntent::ContextSelection(targets)) => Some(ShellRequest::RowContextMenu(
+            Key::Char('.') if key.modifiers.is_empty() => {
+                let targets = match self
+                    .carrier
+                    .delegate_operation(MediaListOperation::ContextCurrent)
+                    .external_intent
+                {
+                    Some(RowIntent::ContextSelection(targets)) => targets,
+                    Some(RowIntent::Context(target)) => vec![target],
+                    _ => return None,
+                };
+                Some(ShellRequest::RowContextMenu(
                     crate::app::state::types::context_menu::ContextMenuTargets::Browser(targets),
                     None,
-                )),
-                Some(RowIntent::Context(target)) => Some(ShellRequest::RowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Browser(vec![
-                        target,
-                    ]),
-                    None,
-                )),
-                _ => None,
-            },
+                ))
+            }
             Key::Char('s') if ctrl => {
                 selected.map(|item| ShellRequest::EmbyLibraryShuffle { item })
             }
             Key::Char('r') if ctrl => Some(ShellRequest::EmbyLibraryRescan),
             Key::Char('r') => Some(ShellRequest::EmbyLibraryRefresh),
             Key::Esc | Key::Backspace => Some(ShellRequest::EmbyLibraryBack),
-            Key::Char(c @ ('[' | ']')) if !ctrl && !alt => {
-                let (current, count) = if self.group_pills {
-                    (
-                        if self.latest_mode {
-                            0
-                        } else {
-                            self.feed_group_cursor + 1
-                        },
-                        self.feed_groups.len() + 2,
-                    )
-                } else if self.show_letter_pills {
-                    (
-                        if self.latest_mode {
-                            0
-                        } else {
-                            self.letter_filter
-                                .as_ref()
-                                .map(|filter| filter.index + 1)
-                                .unwrap_or(1)
-                        },
-                        LetterFilter::labels().len() + 1,
-                    )
-                } else {
-                    return None;
-                };
-                let delta = if c == '[' { -1 } else { 1 };
-                let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
-                return self.pick_selector(next);
-            }
             _ => None,
-        };
-        request.map(|request| Msg::Shell(Box::new(request)))
+        }
+    }
+
+    /// This owner's local key interpretation, forwarded by the focused panel
+    /// (the embedded owner's local key-handling contract, unchanged —
+    /// the router owns every global chord and keeps precedence).
+    pub(super) fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if self.inline_search.is_active() {
+            return self.handle_active_search_key(key);
+        }
+        if key.modifiers.is_empty() && matches!(key.code, Key::Char('/')) {
+            self.inline_search.open();
+            return Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)));
+        }
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            ))));
+        }
+        if key.modifiers.contains(KeyModifiers::ALT)
+            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
+        {
+            return None;
+        }
+        // Local keyboard navigation returns the resolved index so the shell
+        // drives persistence/pagination through the ordinary cursor request.
+        if let Some(message) = self.handle_navigation_key(key) {
+            return Some(message);
+        }
+        if matches!(key.code, Key::Char('[' | ']'))
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
+            && !key.modifiers.contains(KeyModifiers::ALT)
+        {
+            return self.handle_selector_key(key);
+        }
+        self.selected_item_request(key)
+            .map(|request| Msg::Shell(Box::new(request)))
     }
 }
 
