@@ -53,54 +53,75 @@ fn clear_audiobookshelf_setup_at(path: &std::path::Path) -> Result<(), String> {
     write_config_text_at(path, &text)
 }
 
+fn snapshot_file(path: &std::path::Path) -> Result<Option<Vec<u8>>, String> {
+    match std::fs::read(path) {
+        Ok(bytes) => Ok(Some(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("read {} for rollback: {error}", path.display())),
+    }
+}
+
+fn restore_file(
+    path: &std::path::Path,
+    bytes: Option<&[u8]>,
+    secret_path: &std::path::Path,
+) -> Result<(), String> {
+    match bytes {
+        Some(bytes) => {
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            }
+            let tmp = path.with_extension("rollback.tmp");
+            std::fs::write(&tmp, bytes).map_err(|error| error.to_string())?;
+            #[cfg(unix)]
+            if path == secret_path {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+                    .map_err(|error| error.to_string())?;
+            }
+            std::fs::rename(tmp, path).map_err(|error| error.to_string())
+        }
+        None => match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error.to_string()),
+        },
+    }
+}
+
+fn rollback(
+    config: &std::path::Path,
+    old_config: Option<&[u8]>,
+    secret: &std::path::Path,
+    old_secret: Option<&[u8]>,
+    reason: String,
+) -> Result<(), String> {
+    let config_result = restore_file(config, old_config, secret);
+    let secret_result = restore_file(secret, old_secret, secret);
+    match (config_result, secret_result) {
+        (Ok(()), Ok(())) => Err(reason),
+        (config, secret) => Err(format!(
+            "{reason}; rollback failed (config={config:?}, secret={secret:?})"
+        )),
+    }
+}
+
 pub(super) fn audiobookshelf_transaction<F>(operation: F) -> Result<(), String>
 where
     F: FnOnce(&std::path::Path, &std::path::Path) -> Result<(), String>,
 {
     let config = config_path();
     let secret = service_secret_path(ServiceKind::Audiobookshelf);
-    let snapshot = |path: &std::path::Path| match std::fs::read(path) {
-        Ok(bytes) => Ok(Some(bytes)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(format!("read {} for rollback: {error}", path.display())),
-    };
-    let old_config = snapshot(&config)?;
-    let old_secret = snapshot(&secret)?;
-    let restore = |path: &std::path::Path, bytes: &Option<Vec<u8>>| -> Result<(), String> {
-        match bytes {
-            Some(bytes) => {
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-                }
-                let tmp = path.with_extension("rollback.tmp");
-                std::fs::write(&tmp, bytes).map_err(|error| error.to_string())?;
-                #[cfg(unix)]
-                if path == secret {
-                    use std::os::unix::fs::PermissionsExt;
-                    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
-                        .map_err(|error| error.to_string())?;
-                }
-                std::fs::rename(tmp, path).map_err(|error| error.to_string())
-            }
-            None => match std::fs::remove_file(path) {
-                Ok(()) => Ok(()),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(error.to_string()),
-            },
-        }
-    };
-    let rollback = |reason: String| {
-        let config_result = restore(&config, &old_config);
-        let secret_result = restore(&secret, &old_secret);
-        match (config_result, secret_result) {
-            (Ok(()), Ok(())) => Err(reason),
-            (config, secret) => Err(format!(
-                "{reason}; rollback failed (config={config:?}, secret={secret:?})"
-            )),
-        }
-    };
+    let old_config = snapshot_file(&config)?;
+    let old_secret = snapshot_file(&secret)?;
     if let Err(error) = operation(&config, &secret) {
-        return rollback(error);
+        return rollback(
+            &config,
+            old_config.as_deref(),
+            &secret,
+            old_secret.as_deref(),
+            error,
+        );
     }
     Ok(())
 }
