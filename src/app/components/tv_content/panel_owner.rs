@@ -47,42 +47,7 @@ impl TvContent {
                 active: Some(self.season_cursor.min(detail.seasons.len() - 1)),
             });
         let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
-        let selector = if !searching && self.context.show_letter_pills {
-            let large = self
-                .context
-                .list
-                .library_total
-                .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
-            let mut pills = vec!["Latest".to_string(), "Upcoming".to_string()];
-            let latest_marker = self.latest_marker;
-            if large {
-                pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));
-            } else {
-                pills.push("All".to_string());
-            }
-            let active = match self.context.tv_content_mode.as_ref() {
-                Some(mbv_core::config::TvContentMode::Latest) => 0,
-                Some(mbv_core::config::TvContentMode::Upcoming) => 1,
-                Some(mbv_core::config::TvContentMode::All) => 2,
-                Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
-                None => {
-                    if large {
-                        0
-                    } else {
-                        2
-                    }
-                }
-            };
-            Some(SelectorRow {
-                markers: std::iter::once(latest_marker)
-                    .chain(std::iter::repeat_n(false, pills.len().saturating_sub(1)))
-                    .collect(),
-                pills,
-                active: Some(active),
-            })
-        } else {
-            None
-        };
+        let selector = self.selector_row(searching);
         let hero = hero_data.map(|data| HeroContent {
             facts: data.facts,
             overview: data.overview,
@@ -106,6 +71,38 @@ impl TvContent {
             list,
             hero,
         }
+    }
+
+    fn selector_row(&self, searching: bool) -> Option<SelectorRow> {
+        if searching || !self.context.show_letter_pills {
+            return None;
+        }
+        let large = self
+            .context
+            .list
+            .library_total
+            .is_some_and(|total| total > crate::app::render::LIBRARY_PILL_THRESHOLD);
+        let mut pills = vec!["Latest".to_string(), "Upcoming".to_string()];
+        if large {
+            pills.extend(LetterFilter::labels_for_kind(LetterFilterKind::Tv));
+        } else {
+            pills.push("All".to_string());
+        }
+        let active = match self.context.tv_content_mode.as_ref() {
+            Some(mbv_core::config::TvContentMode::Latest) => 0,
+            Some(mbv_core::config::TvContentMode::Upcoming) => 1,
+            Some(mbv_core::config::TvContentMode::All) => 2,
+            Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
+            None if large => 0,
+            None => 2,
+        };
+        Some(SelectorRow {
+            markers: std::iter::once(self.latest_marker)
+                .chain(std::iter::repeat_n(false, pills.len().saturating_sub(1)))
+                .collect(),
+            pills,
+            active: Some(active),
+        })
     }
 }
 
