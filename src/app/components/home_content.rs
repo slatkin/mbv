@@ -470,6 +470,36 @@ mod tests {
     }
 
     #[test]
+    fn key_intents_use_selected_home_item_and_ctrl_enqueue() {
+        let item = QueueItem::Emby(Box::new(make_item("Film", "Movie")));
+        let mut owner = owner_with_items(vec![item]);
+        let key = |code, modifiers| KeyEvent { code, modifiers };
+
+        assert!(matches!(
+            owner.handle_key(&key(Key::Enter, KeyModifiers::NONE)),
+            Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomePlay(_))
+        ));
+        assert!(matches!(
+            owner.handle_key(&key(Key::Char('a'), KeyModifiers::CONTROL)),
+            Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomeEnqueue(_))
+        ));
+    }
+
+    #[test]
+    fn list_wheel_event_is_claimed_by_home() {
+        let mut owner = owner_with_items(vec![]);
+        assert_eq!(
+            owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+                at: ratatui::layout::Position::new(1, 1),
+                delta: -1,
+            })),
+            Some(Msg::TerminalEvent(
+                super::super::msg::TerminalObserverEvent::MouseClaimed
+            ))
+        );
+    }
+
+    #[test]
     fn the_continue_list_opens_with_a_keep_watching_group_heading() {
         let owner = owner_with_items(vec![QueueItem::Emby(Box::new(make_item("Film", "Movie")))]);
         let rows = owner.test_active_rows();

@@ -21,6 +21,10 @@ fn book(id: &str, author_sort_key: &str) -> AudiobookshelfBook {
     }
 }
 
+fn key(code: Key, modifiers: KeyModifiers) -> KeyEvent {
+    KeyEvent { code, modifiers }
+}
+
 fn state_with_books(books: Vec<AudiobookshelfBook>) -> AudiobookshelfBookBrowseState {
     let mut state = AudiobookshelfBookBrowseState::new(AudiobookshelfLibrary {
         id: "lib".into(),
@@ -30,6 +34,75 @@ fn state_with_books(books: Vec<AudiobookshelfBook>) -> AudiobookshelfBookBrowseS
     state.append_page_books(0, books.len(), books);
     state.select(0);
     state
+}
+
+#[test]
+fn book_slot_selector_and_hero_activation_emit_typed_intents() {
+    let mut owner = BookContent::new();
+    owner.set_content(
+        &state_with_books(vec![book("book-a", "Adams"), book("book-z", "Zed")]),
+        false,
+    );
+
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::SelectorPicked(1)),
+        Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Bucket(1)))
+    ));
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::HeroActivate),
+        Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate))
+    ));
+}
+
+#[test]
+fn book_keys_emit_play_activate_enqueue_and_chapter_focus_intents() {
+    let mut owner = BookContent::new();
+    owner.set_content(&state_with_books(vec![book("book-a", "Adams")]), false);
+
+    assert_eq!(
+        owner.on_key(&key(Key::Char(' '), KeyModifiers::NONE)),
+        Some(Msg::Shell(Box::new(
+            ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Play,)
+        )))
+    );
+    assert_eq!(
+        owner.on_key(&key(Key::Enter, KeyModifiers::NONE)),
+        Some(Msg::Shell(Box::new(
+            ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate,)
+        )))
+    );
+    assert_eq!(
+        owner.on_key(&key(Key::Char('a'), KeyModifiers::CONTROL)),
+        Some(Msg::Shell(Box::new(
+            ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Enqueue,)
+        )))
+    );
+}
+
+#[test]
+fn enter_focuses_chapters_when_the_selected_book_has_chapters() {
+    let mut owner = BookContent::new();
+    let mut state = state_with_books(vec![book("book-a", "Adams")]);
+    state.detail_cache.insert(
+        "book-a".into(),
+        (
+            vec![mbv_core::audiobookshelf::AudiobookshelfChapter {
+                id: 0,
+                start: 0.0,
+                end: 30.0,
+                title: "Chapter one".into(),
+            }],
+            Vec::new(),
+        ),
+    );
+    owner.set_content(&state, false);
+
+    assert_eq!(
+        owner.on_key(&key(Key::Enter, KeyModifiers::NONE)),
+        Some(Msg::Shell(Box::new(
+            ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::FocusChapters,)
+        )))
+    );
 }
 
 #[test]

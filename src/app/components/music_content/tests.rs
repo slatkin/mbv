@@ -27,6 +27,40 @@ fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
 }
 
 #[test]
+fn filter_escape_closes_search_and_tree_navigation_returns_selection() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    owner.inline_search.open();
+
+    assert_eq!(
+        owner.on_filter_key(&KeyEvent {
+            code: Key::Esc,
+            modifiers: KeyModifiers::NONE,
+        }),
+        None
+    );
+    assert!(!owner.inline_search.is_active());
+
+    assert!(owner
+        .on_filter_key(&KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        })
+        .is_some());
+}
+
+#[test]
+fn filter_control_shortcut_without_selected_item_emits_nothing() {
+    let mut owner = MusicContent::new();
+    assert_eq!(
+        owner.on_filter_key(&KeyEvent {
+            code: Key::Char('p'),
+            modifiers: KeyModifiers::CONTROL,
+        }),
+        None
+    );
+}
+
+#[test]
 fn grouped_music_launch_snapshot_uses_group_and_tree_target_identities() {
     let mut album = make_item("Album", "Folder");
     album.id = "album-stable".into();

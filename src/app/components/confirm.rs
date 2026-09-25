@@ -174,6 +174,7 @@ fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmInt
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> tuirealm::event::KeyEvent {
@@ -217,6 +218,46 @@ mod tests {
             );
         }
         assert_eq!(confirm_intent_for_key(&action, Key::Char('x')), None);
+    }
+
+    #[rstest]
+    #[case::clear_queue_dismisses_unknown(
+        Key::Char('x'),
+        ConfirmAction::ClearQueue,
+        Some(ConfirmIntent::Dismiss)
+    )]
+    #[case::remove_item_dismisses_unknown(
+        Key::Enter,
+        ConfirmAction::RemoveActiveQueueItem(1),
+        Some(ConfirmIntent::Dismiss)
+    )]
+    #[case::service_removal_leaves_unknown_unhandled(
+        Key::Char('x'),
+        ConfirmAction::RemoveEmby,
+        None
+    )]
+    #[case::playlist_overwrite_leaves_unknown_unhandled(Key::Enter, ConfirmAction::SaveOverwritePlaylist { existing_id: "id".into(), name: "name".into() }, None)]
+    #[case::dirty_playlist_saves(
+        Key::Char('S'),
+        ConfirmAction::DiscardOrSaveDirtyPlaylist,
+        Some(ConfirmIntent::Save)
+    )]
+    #[case::dirty_playlist_discards(
+        Key::Char('D'),
+        ConfirmAction::DiscardOrSaveDirtyPlaylist,
+        Some(ConfirmIntent::Discard)
+    )]
+    #[case::queue_replacement_dismisses_unknown(
+        Key::Char('x'),
+        ConfirmAction::ReplacePopulatedQueue,
+        Some(ConfirmIntent::Dismiss)
+    )]
+    fn action_specific_key_intents(
+        #[case] key: Key,
+        #[case] action: ConfirmAction,
+        #[case] expected: Option<ConfirmIntent>,
+    ) {
+        assert_eq!(confirm_intent_for_key(&action, key), expected);
     }
 
     #[test]

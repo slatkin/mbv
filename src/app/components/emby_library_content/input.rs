@@ -264,3 +264,36 @@ impl EmbyLibraryContent {
         request.map(|request| Msg::Shell(Box::new(request)))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::components::library_panel::LibraryKind;
+
+    fn key(code: Key) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn refresh_and_inline_search_keys_emit_their_intents() {
+        let mut owner = super::super::EmbyLibraryContent::new(LibraryKind::Movies);
+        assert_eq!(
+            owner.handle_key(&key(Key::Char('r'))),
+            Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRefresh)))
+        );
+        assert_eq!(
+            owner.handle_key(&key(Key::Char('/'))),
+            Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)))
+        );
+        assert!(owner.inline_search.is_active());
+    }
+
+    #[test]
+    fn empty_selection_does_not_emit_an_activation() {
+        let mut owner = super::super::EmbyLibraryContent::new(LibraryKind::Movies);
+        assert_eq!(owner.handle_key(&key(Key::Enter)), None);
+    }
+}
