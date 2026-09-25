@@ -9,23 +9,6 @@ impl PlaybackRun {
     ) -> bool {
         let mut cancel_stop = false;
         match cmd {
-            PlayerCommand::NextUpShow {
-                item_id,
-                show_title,
-                ep_title,
-                artist,
-            } => {
-                log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
-                let r = mpv.command(
-                    "script-message",
-                    &["mbv-next-up", &item_id, &show_title, &ep_title, &artist],
-                );
-                log::warn!(target: "player", "next-up: script-message result={r:?}");
-            }
-            PlayerCommand::TogglePause => {
-                let p = self.status.lock().unwrap().paused;
-                let _ = mpv.set_property("pause", !p);
-            }
             PlayerCommand::JumpTo {
                 slot_id,
                 request_id,
@@ -33,17 +16,6 @@ impl PlaybackRun {
                 resume_ticks,
             } => {
                 self.cmd_jump_to(slot_id, request_id, generation, resume_ticks, mpv);
-            }
-            PlayerCommand::Next => {
-                let target = self.relative_step_base() + 1;
-                if target < self.queue_len() {
-                    self.step_to_index(target, mpv);
-                }
-            }
-            PlayerCommand::Previous => {
-                if let Some(target) = self.relative_step_base().checked_sub(1) {
-                    self.step_to_index(target, mpv);
-                }
             }
             PlayerCommand::QueueAppend { items } => {
                 self.cmd_append_queue(items, mpv);
@@ -53,29 +25,6 @@ impl PlaybackRun {
             }
             PlayerCommand::QueueMove(slot_id, to) => {
                 self.cmd_queue_move(slot_id, to, mpv);
-            }
-            PlayerCommand::NextUpDismiss => {
-                let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-            }
-            PlayerCommand::SkipIntroDismiss => {
-                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-            }
-            PlayerCommand::SetVolume(v) => {
-                let vol_max = self.status.lock().unwrap().volume_max;
-                let (v, raw) = volume_decision(v, vol_max);
-                let _ = mpv.set_property("volume", raw as f64);
-                self.status.lock().unwrap().volume = v;
-                let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
-            }
-            PlayerCommand::Seek(secs) => {
-                let (mode, seconds) = seek_decision(secs, false);
-                let _ = mpv.command("seek", &[&seconds, mode]);
-                self.last_seek_at = Some(Instant::now());
-            }
-            PlayerCommand::SeekAbsolute(secs) => {
-                let (mode, seconds) = seek_decision(secs, true);
-                let _ = mpv.command("seek", &[&seconds, mode]);
-                self.last_seek_at = Some(Instant::now());
             }
             PlayerCommand::SetAudio(id) => {
                 if id > 0 {
@@ -128,8 +77,71 @@ impl PlaybackRun {
                 self.cmd_submit_queue(items, start_idx, mpv, progress);
                 cancel_stop = true;
             }
+            command => {
+                let _ = self.handle_simple_command(command, mpv);
+            }
         }
         cancel_stop
+    }
+
+    fn handle_simple_command(
+        &mut self,
+        cmd: PlayerCommand,
+        mpv: &Mpv,
+    ) -> Result<(), PlayerCommand> {
+        match cmd {
+            PlayerCommand::NextUpShow {
+                item_id,
+                show_title,
+                ep_title,
+                artist,
+            } => {
+                log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
+                let result = mpv.command(
+                    "script-message",
+                    &["mbv-next-up", &item_id, &show_title, &ep_title, &artist],
+                );
+                log::warn!(target: "player", "next-up: script-message result={result:?}");
+            }
+            PlayerCommand::TogglePause => {
+                let paused = self.status.lock().unwrap().paused;
+                let _ = mpv.set_property("pause", !paused);
+            }
+            PlayerCommand::Next => {
+                let target = self.relative_step_base() + 1;
+                if target < self.queue_len() {
+                    self.step_to_index(target, mpv);
+                }
+            }
+            PlayerCommand::Previous => {
+                if let Some(target) = self.relative_step_base().checked_sub(1) {
+                    self.step_to_index(target, mpv);
+                }
+            }
+            command @ (PlayerCommand::NextUpDismiss | PlayerCommand::SkipIntroDismiss) => {
+                let message = if matches!(command, PlayerCommand::NextUpDismiss) {
+                    "mbv-next-up-dismiss"
+                } else {
+                    "mbv-skip-intro-dismiss"
+                };
+                let _ = mpv.command("script-message", &[message]);
+            }
+            PlayerCommand::SetVolume(volume) => {
+                let vol_max = self.status.lock().unwrap().volume_max;
+                let (volume, raw) = volume_decision(volume, vol_max);
+                let _ = mpv.set_property("volume", raw as f64);
+                self.status.lock().unwrap().volume = volume;
+                let _ = mpv.command("show-text", &[&format!("Volume: {volume}%"), "1500"]);
+            }
+            command @ (PlayerCommand::Seek(secs) | PlayerCommand::SeekAbsolute(secs)) => {
+                let absolute = matches!(command, PlayerCommand::SeekAbsolute(_));
+                let (mode, seconds) = seek_decision(secs, absolute);
+                let _ = mpv.command("seek", &[&seconds, mode]);
+                self.last_seek_at = Some(Instant::now());
+            }
+            command => return Err(command),
+        }
+        Ok(())
     }
 
     /// Explicit jump to an owner-assigned slot. Resolves the slot to this
