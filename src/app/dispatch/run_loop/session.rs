@@ -12,87 +12,37 @@ impl App {
     /// `sessions_rx` drain loop (see `drain_session_events`).
     pub(in crate::app) fn handle_session_event(&mut self, ev: SessionEvent) {
         match ev {
-            SessionEvent::Loaded { sessions } => {
-                self.sessions = sessions;
-                self.sessions_loading = false;
-                self.last_session_poll = Instant::now();
-                // Rebuilds the F3 panel's merged Emby+Cast list and
-                // re-locates the panel cursor by identity (8.1); this
-                // supersedes what used to be a `self.sessions`-only
-                // old_id/cursor-clamp here.
-                self.rebuild_panel_targets();
-                // Update connected session state; auto-disconnect if gone
-                if let Some(ref conn_id) = self.connected_session_id.clone() {
-                    if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id).cloned() {
-                        self.reconcile_connected_session_position(&s);
-                    } else {
-                        self.handle_connected_session_miss();
-                    }
-                }
-            }
-            SessionEvent::CommandError { error } => {
-                self.flash(
-                    format!("Remote command failed: {error}"),
-                    ToastSeverity::Error,
-                );
-            }
+            SessionEvent::Loaded { sessions } => self.handle_sessions_loaded(sessions),
+            SessionEvent::CommandError { error } => self.flash(
+                format!("Remote command failed: {error}"),
+                ToastSeverity::Error,
+            ),
             SessionEvent::PlaylistMutationComplete {
                 mutation_id,
                 playlist_id,
                 origin,
                 source_playlist_id,
                 result,
-            } => {
-                let succeeded = result.is_ok();
-                if let Err(error) = result {
-                    self.flash(
-                        format!("Playlist save failed: {error}"),
-                        ToastSeverity::Error,
-                    );
-                } else if self.origin_is_current(origin)
-                    && self.queue_playlist_id() == Some(source_playlist_id.as_str())
-                {
-                    self.queue_dirty = false;
-                    // A successful Save recreated server entry identities
-                    // (cleared locally at the mutation boundary); persist that
-                    // cleared state so stale identities cannot survive restart.
-                    self.save_queue_state();
-                }
-                self.finish_playlist_mutation(&playlist_id, mutation_id);
-                if succeeded
-                    && self.origin_is_current(origin)
-                    && self.queue_playlist_id() == Some(playlist_id.as_str())
-                    && self.pending_queue_action.is_some()
-                {
-                    if let Some(action) = self.pending_queue_action.take() {
-                        self.execute_pending_queue_action(action);
-                    }
-                    self.request_sidebar_dismiss(SidebarId::Playlists);
-                    self.set_panel_focus(PanelFocus::Queue);
-                }
-            }
+            } => self.handle_playlist_mutation_complete(
+                mutation_id,
+                &playlist_id,
+                origin,
+                &source_playlist_id,
+                result,
+            ),
             SessionEvent::PlaylistReplacementComplete {
                 mutation_id,
                 playlist_id,
                 origin,
                 name,
                 result,
-            } => {
-                match result {
-                    Ok(id) if self.origin_is_current(origin) => {
-                        let source = crate::config::QueueSource::Playlist { id: Some(id), name };
-                        self.apply_saved_playlist_source(source, origin);
-                    }
-                    Ok(_) => {
-                        log::debug!(target: "playlist", "discarding stale playlist replacement completion")
-                    }
-                    Err(error) => self.flash(
-                        format!("Playlist overwrite failed: {error}"),
-                        ToastSeverity::Error,
-                    ),
-                }
-                self.finish_playlist_mutation(&playlist_id, mutation_id);
-            }
+            } => self.handle_playlist_replacement_complete(
+                mutation_id,
+                &playlist_id,
+                origin,
+                &name,
+                result,
+            ),
             SessionEvent::PlaylistCreateComplete {
                 mutation_id,
                 coordinator_key,
@@ -100,42 +50,142 @@ impl App {
                 origin,
                 source_playlist_id,
                 result,
-            } => {
-                match result {
-                    Ok(id)
-                        if self.origin_is_current(origin)
-                            && self.queue_playlist_id() == source_playlist_id.as_deref() =>
-                    {
-                        let source = crate::config::QueueSource::Playlist {
-                            id: Some(id),
-                            name: name.clone(),
-                        };
-                        let applied = self.apply_saved_playlist_source(source, origin);
-                        // The success toast stays a ThisProcess-only signal:
-                        // a Stay-alive owner confirms the save through its own
-                        // snapshot, without a toast.
-                        if applied && matches!(origin, QueueOrigin::ThisProcess { .. }) {
-                            self.flash(
-                                format!("Saved as playlist \"{name}\""),
-                                ToastSeverity::Success,
-                            );
-                        }
-                    }
-                    Ok(_) => {
-                        log::debug!(target: "playlist", "discarding stale Save As completion");
-                    }
-                    Err(error) => self.flash(
-                        format!("Playlist save failed: {error}"),
-                        ToastSeverity::Error,
-                    ),
-                }
-                self.finish_playlist_mutation(&coordinator_key, mutation_id);
-            }
+            } => self.handle_playlist_create_complete(
+                mutation_id,
+                &coordinator_key,
+                &name,
+                origin,
+                source_playlist_id.as_deref(),
+                result,
+            ),
             SessionEvent::Error(e) => {
                 self.sessions_loading = false;
                 self.flash(format!("Sessions error: {e}"), ToastSeverity::Error);
             }
         }
+    }
+
+    fn handle_sessions_loaded(&mut self, sessions: Vec<mbv_core::api::SessionInfo>) {
+        self.sessions = sessions;
+        self.sessions_loading = false;
+        self.last_session_poll = Instant::now();
+        // Rebuilds the F3 panel's merged Emby+Cast list and
+        // re-locates the panel cursor by identity (8.1); this
+        // supersedes what used to be a `self.sessions`-only
+        // old_id/cursor-clamp here.
+        self.rebuild_panel_targets();
+        // Update connected session state; auto-disconnect if gone
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id).cloned() {
+                self.reconcile_connected_session_position(&s);
+            } else {
+                self.handle_connected_session_miss();
+            }
+        }
+    }
+
+    fn handle_playlist_mutation_complete(
+        &mut self,
+        mutation_id: u64,
+        playlist_id: &str,
+        origin: QueueOrigin,
+        source_playlist_id: &str,
+        result: Result<(), String>,
+    ) {
+        let succeeded = result.is_ok();
+        if let Err(error) = result {
+            self.flash(
+                format!("Playlist save failed: {error}"),
+                ToastSeverity::Error,
+            );
+        } else if self.origin_is_current(origin)
+            && self.queue_playlist_id() == Some(source_playlist_id)
+        {
+            self.queue_dirty = false;
+            // A successful Save recreated server entry identities
+            // (cleared locally at the mutation boundary); persist that
+            // cleared state so stale identities cannot survive restart.
+            self.save_queue_state();
+        }
+        self.finish_playlist_mutation(playlist_id, mutation_id);
+        if succeeded
+            && self.origin_is_current(origin)
+            && self.queue_playlist_id() == Some(playlist_id)
+            && self.pending_queue_action.is_some()
+        {
+            if let Some(action) = self.pending_queue_action.take() {
+                self.execute_pending_queue_action(action);
+            }
+            self.request_sidebar_dismiss(SidebarId::Playlists);
+            self.set_panel_focus(PanelFocus::Queue);
+        }
+    }
+
+    fn handle_playlist_replacement_complete(
+        &mut self,
+        mutation_id: u64,
+        playlist_id: &str,
+        origin: QueueOrigin,
+        name: &str,
+        result: Result<String, String>,
+    ) {
+        match result {
+            Ok(id) if self.origin_is_current(origin) => {
+                let source = crate::config::QueueSource::Playlist {
+                    id: Some(id),
+                    name: name.to_string(),
+                };
+                self.apply_saved_playlist_source(source, origin);
+            }
+            Ok(_) => {
+                log::debug!(target: "playlist", "discarding stale playlist replacement completion");
+            }
+            Err(error) => self.flash(
+                format!("Playlist overwrite failed: {error}"),
+                ToastSeverity::Error,
+            ),
+        }
+        self.finish_playlist_mutation(playlist_id, mutation_id);
+    }
+
+    fn handle_playlist_create_complete(
+        &mut self,
+        mutation_id: u64,
+        coordinator_key: &str,
+        name: &str,
+        origin: QueueOrigin,
+        source_playlist_id: Option<&str>,
+        result: Result<String, String>,
+    ) {
+        match result {
+            Ok(id)
+                if self.origin_is_current(origin)
+                    && self.queue_playlist_id() == source_playlist_id =>
+            {
+                let source = crate::config::QueueSource::Playlist {
+                    id: Some(id),
+                    name: name.to_string(),
+                };
+                let applied = self.apply_saved_playlist_source(source, origin);
+                // The success toast stays a ThisProcess-only signal:
+                // a Stay-alive owner confirms the save through its own
+                // snapshot, without a toast.
+                if applied && matches!(origin, QueueOrigin::ThisProcess { .. }) {
+                    self.flash(
+                        format!("Saved as playlist \"{name}\""),
+                        ToastSeverity::Success,
+                    );
+                }
+            }
+            Ok(_) => {
+                log::debug!(target: "playlist", "discarding stale Save As completion");
+            }
+            Err(error) => self.flash(
+                format!("Playlist save failed: {error}"),
+                ToastSeverity::Error,
+            ),
+        }
+        self.finish_playlist_mutation(coordinator_key, mutation_id);
     }
 
     /// The found-connected-session half of `SessionEvent::Loaded`: maintain
