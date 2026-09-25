@@ -166,78 +166,128 @@ impl TvContent {
 
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
-        let episode_mode = matches!(
+        let episode_mode = Self::is_episode_mode(&context);
+        let rows = Self::content_rows(&context, self.inline_search.is_active());
+        self.refresh_tree(&context, episode_mode);
+        let seed_series_id = self.project_series_rows(rows, &context);
+        let series_changed = self.update_selected_series(&context);
+        self.initialize_selection(&context, series_changed);
+        self.replace_context(context);
+        // First mount seeds the tree from the same shell stable target the
+        // carrier seeds from: `reconcile_selection` otherwise defaults the
+        // tree onto root 0 and the next push resolves (and fetches) that
+        // show instead. Flat episode modes and Inline Search reconcile no
+        // tree, so there the select finds no matching root and no-ops.
+        if let Some(target) = seed_series_id {
+            self.select_series_target(&target);
+        }
+        self.refresh_current_season();
+    }
+
+    fn is_episode_mode(context: &TvWideRenderCtx) -> bool {
+        matches!(
             context.tv_content_mode,
             Some(
                 mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
             )
-        );
-        let rows = if episode_mode {
-            if context.tv_content_mode == Some(mbv_core::config::TvContentMode::Upcoming) {
-                let today = time::OffsetDateTime::now_utc().date();
-                upcoming_episode_rows(&context.list.items, today)
-            } else {
+        )
+    }
+
+    fn content_rows(
+        context: &TvWideRenderCtx,
+        inline_search_active: bool,
+    ) -> Vec<MediaListRow<String>> {
+        match context.tv_content_mode {
+            Some(mbv_core::config::TvContentMode::Latest) => {
                 build_latest_episode_rows(&context.list.items)
             }
+            Some(mbv_core::config::TvContentMode::Upcoming) => {
+                upcoming_episode_rows(&context.list.items, time::OffsetDateTime::now_utc().date())
+            }
+            Some(
+                mbv_core::config::TvContentMode::All | mbv_core::config::TvContentMode::Range(_),
+            )
+            | None => Self::series_rows(context, inline_search_active),
+        }
+    }
+
+    fn series_rows(
+        context: &TvWideRenderCtx,
+        inline_search_active: bool,
+    ) -> Vec<MediaListRow<String>> {
+        let grouped = !inline_search_active
+            && (context.show_letter_pills
+                || context.list.has_letter_filter()
+                || context.list.true_total() >= 50);
+        let bucket_total = if context.list.has_letter_filter() {
+            usize::MAX
         } else {
-            let grouped = !self.inline_search.is_active()
-                && (context.show_letter_pills
-                    || context.list.has_letter_filter()
-                    || context.list.true_total() >= 50);
-            let bucket_total = if context.list.has_letter_filter() {
-                usize::MAX
-            } else {
-                context.list.true_total()
-            };
-            let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
-            sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-            sorted_items
-                .iter()
-                .enumerate()
-                .flat_map(|(index, item)| {
-                    let heading = grouped
-                        .then(|| {
-                            let current = letter_bucket(item, bucket_total);
-                            let previous = index
-                                .checked_sub(1)
-                                .map(|i| letter_bucket(sorted_items[i], bucket_total));
-                            (previous.as_deref() != Some(current.as_str())).then(|| {
-                                let heading = MediaListRow::Heading { text: current };
-                                if previous.is_some() {
-                                    vec![MediaListRow::Spacer, heading]
-                                } else {
-                                    vec![heading]
-                                }
-                            })
-                        })
-                        .flatten();
-                    heading
-                        .into_iter()
-                        .flatten()
-                        .chain(std::iter::once(MediaListRow::Item {
-                            target: item.id.clone(),
-                            primary: item.display_name(),
-                            secondary: None,
-                            trailing: (item.production_year > 0).then(|| {
-                                MediaListTrailing::Gutter(item.production_year.to_string())
-                            }),
-                            duration: None,
-                            kind: MediaKind::Collection,
-                            semantic_state: MediaSemanticState::from_emby(item),
-                        }))
-                })
-                .collect::<Vec<_>>()
+            context.list.true_total()
         };
+        let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
+        sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+        sorted_items
+            .iter()
+            .enumerate()
+            .flat_map(|(index, item)| {
+                Self::series_heading(&sorted_items, index, bucket_total, grouped)
+                    .into_iter()
+                    .chain(std::iter::once(MediaListRow::Item {
+                        target: item.id.clone(),
+                        primary: item.display_name(),
+                        secondary: None,
+                        trailing: (item.production_year > 0)
+                            .then(|| MediaListTrailing::Gutter(item.production_year.to_string())),
+                        duration: None,
+                        kind: MediaKind::Collection,
+                        semantic_state: MediaSemanticState::from_emby(item),
+                    }))
+            })
+            .collect()
+    }
+
+    fn series_heading(
+        sorted_items: &[&EmbyItem],
+        index: usize,
+        bucket_total: usize,
+        grouped: bool,
+    ) -> Vec<MediaListRow<String>> {
+        if !grouped {
+            return Vec::new();
+        }
+        let current = letter_bucket(sorted_items[index], bucket_total);
+        let previous = index
+            .checked_sub(1)
+            .map(|i| letter_bucket(sorted_items[i], bucket_total));
+        if previous.as_deref() == Some(current.as_str()) {
+            return Vec::new();
+        }
+        let heading = MediaListRow::Heading { text: current };
+        if previous.is_some() {
+            vec![MediaListRow::Spacer, heading]
+        } else {
+            vec![heading]
+        }
+    }
+
+    fn refresh_tree(&mut self, context: &TvWideRenderCtx, episode_mode: bool) {
         // Keep the show hierarchy settled beside (not instead of) the flat
         // Library Panel slot. Flat episode modes and Inline Search must not
         // disturb the retained tree's selection or expansion.
         if !episode_mode && !self.inline_search.is_active() {
-            let projection = Self::tree_projection(&context);
+            let projection = Self::tree_projection(context);
             // Reconciliation is atomic; if malformed service data still
             // produces a collision, keep the last valid tree instead of
             // taking down the TUI during refresh.
             let _ = self.browser.reconcile(projection);
         }
+    }
+
+    fn project_series_rows(
+        &mut self,
+        rows: Vec<MediaListRow<String>>,
+        context: &TvWideRenderCtx,
+    ) -> Option<String> {
         // The canonical cursor is in the rendered (natural-sort) order. Seed
         // the local list from that stable target on first mount; thereafter
         // preserve the stable target already owned by the component.
@@ -248,17 +298,22 @@ impl TvContent {
             self.carrier.set_content(rows.clone());
             self.last_series_rows = Some(rows);
         }
-        let mut seed_series_id = None;
-        if !self.initialized {
+        if self.initialized {
+            if let Some(target) = restore_target {
+                self.carrier.select_target(&target);
+            }
+            None
+        } else {
             // First mount seeds from the shell's stable target, not its
             // numeric display cursor (design.md D4/D5).
-            if let Some(item) = context.list.items.get(context.list.cursor()) {
+            context.list.items.get(context.list.cursor()).map(|item| {
                 self.carrier.select_target(&item.id);
-                seed_series_id = Some(item.id.clone());
-            }
-        } else if let Some(target) = restore_target {
-            self.carrier.select_target(&target);
+                item.id.clone()
+            })
         }
+    }
+
+    fn update_selected_series(&mut self, context: &TvWideRenderCtx) -> bool {
         let series_changed =
             context.selected_series.as_ref().map(|item| &item.id) != self.last_series_id.as_ref();
         if series_changed {
@@ -267,6 +322,10 @@ impl TvContent {
             self.pane = Pane::Series;
             self.last_series_id = context.selected_series.as_ref().map(|item| item.id.clone());
         }
+        series_changed
+    }
+
+    fn initialize_selection(&mut self, context: &TvWideRenderCtx, series_changed: bool) {
         if !self.initialized {
             if !series_changed {
                 self.season_cursor = context.season_cursor;
@@ -278,19 +337,17 @@ impl TvContent {
             }
             self.initialized = true;
         }
+    }
+
+    fn replace_context(&mut self, context: TvWideRenderCtx) {
         // Content projection never carries framework focus; preserve the
         // component-owned value across the shell snapshot swap.
         let focused = self.context.focused;
         self.context = context;
         self.context.focused = focused;
-        // First mount seeds the tree from the same shell stable target the
-        // carrier seeds from: `reconcile_selection` otherwise defaults the
-        // tree onto root 0 and the next push resolves (and fetches) that
-        // show instead. Flat episode modes and Inline Search reconcile no
-        // tree, so there the select finds no matching root and no-ops.
-        if let Some(target) = seed_series_id {
-            self.select_series_target(&target);
-        }
+    }
+
+    fn refresh_current_season(&mut self) {
         let season_count = self
             .context
             .series_detail
