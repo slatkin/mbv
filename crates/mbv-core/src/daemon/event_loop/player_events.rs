@@ -219,85 +219,58 @@ impl DaemonLoop {
         EventOutcome::DIRTY
     }
 
-    /// Any other `PlayerEvent`: settle `Stopped`/`PausedChanged` intents and
-    /// observations, then relay the event unless a committed replacement
-    /// already published the new queue.
-    pub(super) fn handle_player_event(&mut self, pe: PlayerEvent) -> EventOutcome {
-        let stopped = if let PlayerEvent::Stopped {
+    fn handle_stopped_event(&mut self, pe: &PlayerEvent) -> Option<(bool, bool)> {
+        let PlayerEvent::Stopped {
             slot_id,
             run_identity,
             position_ticks,
             played,
             error,
             ..
-        } = &pe
-        {
-            Some((
-                *slot_id,
-                *run_identity,
-                *position_ticks,
-                *played,
-                error.clone(),
-            ))
-        } else {
-            None
+        } = pe
+        else {
+            return Some((false, false));
         };
-        let stopped_run = stopped.as_ref().map(|(_, run_identity, ..)| *run_identity);
-        if stopped_run.is_some_and(|run_identity| {
-            self.owner
-                .pending_idle_load
-                .as_ref()
-                .is_some_and(|pending| pending.stopped_run != run_identity)
-        }) {
+
+        if self
+            .owner
+            .pending_idle_load
+            .as_ref()
+            .is_some_and(|pending| pending.stopped_run != *run_identity)
+        {
             cancel_pending_idle_queue_load(
                 &mut self.owner,
                 "playback stopped for a different run during queue load",
             );
         }
-        let pending_idle_load_matches = stopped_run.is_some_and(|run_identity| {
-            self.owner
-                .pending_idle_load
-                .as_ref()
-                .is_some_and(|pending| pending.stopped_run == run_identity)
-        });
-        let stopped_queue_updated =
-            if let Some((slot_id, run_identity, position_ticks, played, _)) = stopped.as_ref() {
-                let Some(updated) = apply_stopped_observation(
-                    &mut self.owner,
-                    &self.player,
-                    *run_identity,
-                    *slot_id,
-                    *position_ticks,
-                    *played,
-                ) else {
-                    return EventOutcome::CONTINUE;
-                };
-                updated
-            } else {
-                false
-            };
-        let replacement_committed = if pending_idle_load_matches {
-            let (_, run_identity, _, _, error) = stopped.as_ref().unwrap();
-            complete_pending_idle_queue_load(
+        let pending_idle_load_matches = self
+            .owner
+            .pending_idle_load
+            .as_ref()
+            .is_some_and(|pending| pending.stopped_run == *run_identity);
+        let stopped_queue_updated = apply_stopped_observation(
+            &mut self.owner,
+            &self.player,
+            *run_identity,
+            *slot_id,
+            *position_ticks,
+            *played,
+        )?;
+        let replacement_committed = pending_idle_load_matches
+            && complete_pending_idle_queue_load(
                 *run_identity,
                 error.clone(),
                 &mut self.owner,
                 &self.player,
                 &self.shared_queue,
                 &self.ctrl_clients,
-            ) && error.is_none()
-        } else {
-            false
-        };
-        if stopped_queue_updated && !replacement_committed {
-            // Unlike TrackCompleted (which broadcasts unconditionally
-            // below via the raw player event too), a full Stopped has
-            // no other broadcast carrying the corrected queue. The
-            // successful pending-load commit publishes the new stopped
-            // queue once instead of first publishing this old queue.
-            self.broadcast_owner_queue_state();
-        }
-        if let PlayerEvent::PausedChanged(paused) = &pe {
+            )
+            && error.is_none();
+        Some((stopped_queue_updated, replacement_committed))
+    }
+
+    fn settle_player_event_intent(&mut self, pe: &PlayerEvent) {
+        if let PlayerEvent::PausedChanged(paused) = pe {
             if let Some((connection_id, request_id, generation)) = self
                 .owner
                 .intents
@@ -353,6 +326,25 @@ impl DaemonLoop {
                 }
             }
         }
+    }
+
+    /// Any other `PlayerEvent`: settle `Stopped`/`PausedChanged` intents and
+    /// observations, then relay the event unless a committed replacement
+    /// already published the new queue.
+    pub(super) fn handle_player_event(&mut self, pe: PlayerEvent) -> EventOutcome {
+        let Some((stopped_queue_updated, replacement_committed)) = self.handle_stopped_event(&pe)
+        else {
+            return EventOutcome::CONTINUE;
+        };
+        if stopped_queue_updated && !replacement_committed {
+            // Unlike TrackCompleted (which broadcasts unconditionally
+            // below via the raw player event too), a full Stopped has
+            // no other broadcast carrying the corrected queue. The
+            // successful pending-load commit publishes the new stopped
+            // queue once instead of first publishing this old queue.
+            self.broadcast_owner_queue_state();
+        }
+        self.settle_player_event_intent(&pe);
         broadcast_player_event_if_not_replaced(&self.ctrl_clients, pe, replacement_committed);
         if stopped_queue_updated || replacement_committed {
             return EventOutcome::DIRTY;
