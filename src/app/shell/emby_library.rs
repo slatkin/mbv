@@ -90,50 +90,57 @@ impl Model {
             // arrives here already resolved. Keep the resting-position write
             // and its navigation effects in this shell arm.
             ShellRequest::EmbyLibraryCursorIndex { index } => {
-                if self.active_emby_library_owner_is_latest() {
-                    return;
-                }
-                if lib_idx >= self.app.libs.len() {
-                    return;
-                }
-                let now = Instant::now();
-                let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
-                self.app.last_nav_at = now;
-                self.app.mark_library_navigation(now);
-                // Keep only the persistence-facing resting value, using the
-                // index already resolved by the active control. This is not a
-                // live mirror: ordinary content pushes never read it back.
-                let valid_index = if self.app.is_feed_home_video_group_view(lib_idx) {
-                    self.app.libs[lib_idx]
-                        .feed_home_video
-                        .as_ref()
-                        .is_some_and(|state| index < state.selected_len())
-                } else {
-                    self.app.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .is_some_and(|level| index < level.items.len())
-                };
-                if valid_index {
-                    if self.app.is_feed_home_video_group_view(lib_idx) {
-                        if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
-                            state.video_cursor = index;
-                        }
-                    } else if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
-                        level.set_resting_cursor(index);
-                    }
-                    self.app.save_default_library_position(lib_idx);
-                }
-                // Group pickers are a fixed local list and never paginate.
-                if idle && !self.app.is_feed_home_video_group_view(lib_idx) {
-                    self.app.maybe_fetch_next_page(lib_idx, index);
-                }
+                self.handle_emby_library_cursor_index(lib_idx, index);
             }
             // unreachable: shell/messages.rs top-level dispatch routes only the
             // EmbyLibrary* activate/effect group plus
             // EmbyLibraryCursorIndex into handle_emby_library_request; every one has
             // an arm above.
             _ => {}
+        }
+    }
+
+    /// Keep the component-resolved cursor index as the persistence-facing
+    /// resting value, without mirroring it back into component state. Navigation
+    /// activity and page fetching remain ordered with that resting-position write.
+    fn handle_emby_library_cursor_index(&mut self, lib_idx: usize, index: usize) {
+        if self.active_emby_library_owner_is_latest() {
+            return;
+        }
+        if lib_idx >= self.app.libs.len() {
+            return;
+        }
+        let now = Instant::now();
+        let idle = now.duration_since(self.app.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
+        self.app.last_nav_at = now;
+        self.app.mark_library_navigation(now);
+        // Keep only the persistence-facing resting value, using the index
+        // already resolved by the active control. This is not a live mirror:
+        // ordinary content pushes never read it back.
+        let valid_index = if self.app.is_feed_home_video_group_view(lib_idx) {
+            self.app.libs[lib_idx]
+                .feed_home_video
+                .as_ref()
+                .is_some_and(|state| index < state.selected_len())
+        } else {
+            self.app.libs[lib_idx]
+                .nav_stack
+                .last()
+                .is_some_and(|level| index < level.items.len())
+        };
+        if valid_index {
+            if self.app.is_feed_home_video_group_view(lib_idx) {
+                if let Some(state) = self.app.libs[lib_idx].feed_home_video.as_mut() {
+                    state.video_cursor = index;
+                }
+            } else if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
+                level.set_resting_cursor(index);
+            }
+            self.app.save_default_library_position(lib_idx);
+        }
+        // Group pickers are a fixed local list and never paginate.
+        if idle && !self.app.is_feed_home_video_group_view(lib_idx) {
+            self.app.maybe_fetch_next_page(lib_idx, index);
         }
     }
 }
