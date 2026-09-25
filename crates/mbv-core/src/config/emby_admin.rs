@@ -13,10 +13,20 @@ use super::*;
 /// Migrate legacy setup metadata and token without prompting. Existing new
 /// data is authoritative: stale legacy data is never used to overwrite it.
 pub fn migrate_legacy_emby_token() -> Result<(), String> {
+    let Some((legacy_path, token, legacy_setup)) = read_legacy_emby_setup_and_token()? else {
+        return Ok(());
+    };
+    migrate_legacy_emby_setup_and_token(&legacy_path, &token, &legacy_setup)?;
+    remove_migrated_legacy_emby_token(&legacy_path)
+}
+
+// Read and validate the legacy record before inspecting or writing new state.
+fn read_legacy_emby_setup_and_token(
+) -> Result<Option<(std::path::PathBuf, String, EmbySetup)>, String> {
     let legacy_path = token_cache_path();
     let text = match std::fs::read_to_string(&legacy_path) {
         Ok(t) => t,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(format!("read legacy token {}: {e}", legacy_path.display())),
     };
 
@@ -24,7 +34,6 @@ pub fn migrate_legacy_emby_token() -> Result<(), String> {
         Ok(v) => v,
         Err(e) => return Err(format!("parse legacy token {}: {e}", legacy_path.display())),
     };
-
     let token = match v["token"].as_str() {
         Some(t) if !t.is_empty() => t.to_string(),
         _ => {
@@ -44,6 +53,18 @@ pub fn migrate_legacy_emby_token() -> Result<(), String> {
         ));
     }
 
+    Ok(Some((
+        legacy_path,
+        token,
+        EmbySetup::new(server_url, user_id),
+    )))
+}
+
+fn migrate_legacy_emby_setup_and_token(
+    legacy_path: &std::path::Path,
+    token: &str,
+    legacy_setup: &EmbySetup,
+) -> Result<(), String> {
     let setup_path = config_path();
     let setup = load_config()?.emby_setup;
     let secret_path = service_secret_path(ServiceKind::Emby);
@@ -57,13 +78,12 @@ pub fn migrate_legacy_emby_token() -> Result<(), String> {
         ));
     }
 
-    let legacy_setup = EmbySetup::new(server_url, user_id);
     match (setup, secret) {
         (Some(_), Some(_)) => {
             // Already migrated. Neither authoritative record is touched.
         }
         (Some(existing), None) => {
-            if existing != legacy_setup {
+            if existing != *legacy_setup {
                 return Err(format!(
                     "cannot migrate {}: legacy setup ({}, {}) conflicts with existing setup in {}; secret not written and legacy data retained",
                     legacy_path.display(),
@@ -73,7 +93,7 @@ pub fn migrate_legacy_emby_token() -> Result<(), String> {
                 ));
             }
             // Resume a setup-first migration only when its identity matches.
-            save_service_secret(ServiceKind::Emby, &token)
+            save_service_secret(ServiceKind::Emby, token)
                 .map_err(|e| format!("migrate token from {}: {e}", legacy_path.display()))?;
         }
         (None, Some(_)) => {
@@ -85,16 +105,19 @@ pub fn migrate_legacy_emby_token() -> Result<(), String> {
         }
         (None, None) => {
             // Write setup first, then secret; legacy removal happens below.
-            save_emby_setup(&legacy_setup)
+            save_emby_setup(legacy_setup)
                 .map_err(|e| format!("migrate setup into {}: {e}", setup_path.display()))?;
-            save_service_secret(ServiceKind::Emby, &token)
+            save_service_secret(ServiceKind::Emby, token)
                 .map_err(|e| format!("migrate token from {}: {e}", legacy_path.display()))?;
         }
     }
+    Ok(())
+}
 
-    // Only now remove the legacy file. If this fails the new secret
-    // is already safe on disk; inform the caller but do not roll back.
-    if let Err(e) = std::fs::remove_file(&legacy_path) {
+// Delete the old record only after the new setup and secret are durable.
+fn remove_migrated_legacy_emby_token(legacy_path: &std::path::Path) -> Result<(), String> {
+    // If removal fails the new secret is already safe on disk; inform the caller but do not roll back.
+    if let Err(e) = std::fs::remove_file(legacy_path) {
         if e.kind() != std::io::ErrorKind::NotFound {
             return Err(format!(
                 "token migrated to {}, but could not remove legacy {}: {e}",
@@ -103,7 +126,6 @@ pub fn migrate_legacy_emby_token() -> Result<(), String> {
             ));
         }
     }
-
     Ok(())
 }
 
