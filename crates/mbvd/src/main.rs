@@ -376,41 +376,56 @@ fn wait_for_reconcile_outcome(reader: impl BufRead) -> Result<(), String> {
     Err("mbvd: restart required (setup acknowledgement unavailable)".into())
 }
 
-fn reconcile_running_owner(kind: config::ServiceKind, revision: u64) -> Result<(), String> {
-    let stream = UnixStream::connect(config::control_socket_path())
-        .map_err(|_| "mbvd: restart required (packaged daemon ctrl unavailable)".to_string())?;
+fn connect_running_owner() -> Result<(UnixStream, BufReader<UnixStream>), String> {
+    let stream = UnixStream::connect(config::control_socket_path()).map_err(|_error| {
+        "mbvd: restart required (packaged daemon ctrl unavailable)".to_string()
+    })?;
     stream
         .set_read_timeout(Some(Duration::from_secs(6)))
-        .map_err(|_| "mbvd: restart required (cannot read packaged daemon ctrl)".to_string())?;
-    let mut writer = stream
-        .try_clone()
-        .map_err(|_| "mbvd: restart required (cannot write packaged daemon ctrl)".to_string())?;
+        .map_err(|_error| {
+            "mbvd: restart required (cannot read packaged daemon ctrl)".to_string()
+        })?;
+    let writer = stream.try_clone().map_err(|_error| {
+        "mbvd: restart required (cannot write packaged daemon ctrl)".to_string()
+    })?;
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
-    reader
-        .read_line(&mut line)
-        .map_err(|_| "mbvd: restart required (packaged daemon did not acknowledge)".to_string())?;
+    reader.read_line(&mut line).map_err(|_error| {
+        "mbvd: restart required (packaged daemon did not acknowledge)".to_string()
+    })?;
     match serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line) {
         Ok(mbv_core::ctrl::CtrlEvent::Hello(hello)) => hello
             .validate_peer()
-            .map_err(|_| "mbvd: restart required (ctrl protocol mismatch)".to_string())?,
+            .map_err(|_error| "mbvd: restart required (ctrl protocol mismatch)".to_string())?,
         _ => return Err("mbvd: restart required (invalid packaged daemon ctrl hello)".into()),
     }
+    Ok((writer, reader))
+}
+
+fn send_reconcile_request(
+    writer: &mut UnixStream,
+    kind: config::ServiceKind,
+    revision: u64,
+) -> Result<(), String> {
     let hello = serde_json::to_string(&mbv_core::ctrl::CtrlCmd::Hello(
         mbv_core::ctrl::CtrlHello::current(),
     ))
-    .map_err(|_| "mbvd: restart required (cannot serialize ctrl hello)".to_string())?;
+    .map_err(|_error| "mbvd: restart required (cannot serialize ctrl hello)".to_string())?;
     writeln!(writer, "{hello}")
-        .and_then(|_| {
+        .and_then(|()| {
             serde_json::to_string(&mbv_core::ctrl::CtrlCmd::ApplyServiceSetup { kind, revision })
-                .map_err(|_| io::Error::other("cannot serialize setup request"))
+                .map_err(|_error| io::Error::other("cannot serialize setup request"))
                 .and_then(|request| writeln!(writer, "{request}"))
         })
-        .map_err(|_| "mbvd: restart required (cannot send setup request)".to_string())?;
+        .map_err(|_error| "mbvd: restart required (cannot send setup request)".to_string())?;
     writer
         .flush()
-        .map_err(|_| "mbvd: restart required (cannot flush setup request)".to_string())?;
+        .map_err(|_error| "mbvd: restart required (cannot flush setup request)".to_string())
+}
 
+fn reconcile_running_owner(kind: config::ServiceKind, revision: u64) -> Result<(), String> {
+    let (mut writer, reader) = connect_running_owner()?;
+    send_reconcile_request(&mut writer, kind, revision)?;
     wait_for_reconcile_outcome(reader)
 }
 
