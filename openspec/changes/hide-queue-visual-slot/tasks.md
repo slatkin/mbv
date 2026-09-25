@@ -38,13 +38,13 @@
 
 ## 3. Visualizer and artwork
 
-- [ ] 3.1 `toggle_visualizer` returns immediately while hidden (no selection change, no prefs
+- [x] 3.1 `toggle_visualizer` returns immediately while hidden (no selection change, no prefs
   write). `visualizer_should_run` adds `!visual_slot_hidden`. Verify with unit tests in
   `src/app/infra/visualizer.rs`:
   - `v` while hidden leaves `visualizer_enabled` unchanged.
   - A hidden slot makes `visualizer_should_run` false with the visualizer selected and playback
     active.
-- [ ] 3.2 Add the hidden check next to the active check that gates `refresh_queue_card_image`
+- [x] 3.2 Add the hidden check next to the active check that gates `refresh_queue_card_image`
   in `src/app/shell/queue.rs`. Verify with a unit test: with playback active and the slot hidden
   the projection pass issues no card fetch, and after un-hiding it does.
 
