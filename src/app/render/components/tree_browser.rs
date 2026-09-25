@@ -54,111 +54,30 @@ pub(in crate::app) fn render_tree_browser(
     marquee_text: &mut String,
     marquee_started_at: &mut Instant,
 ) {
-    let zebra = palette::surface_colors(palette::Surface::QueueColumn, focused).fill;
-    let base = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
-    let left_inset = usize::from(content_rect.x.saturating_sub(claim_rect.x));
-    let right_inset = usize::from(claim_rect.right().saturating_sub(content_rect.right()));
-    let content_width = usize::from(content_rect.width);
+    let mut context = TreeBrowserPaintContext {
+        claim_rect,
+        content_rect,
+        left_inset: usize::from(content_rect.x.saturating_sub(claim_rect.x)),
+        right_inset: usize::from(claim_rect.right().saturating_sub(content_rect.right())),
+        content_width: usize::from(content_rect.width),
+        zebra: palette::surface_colors(palette::Surface::QueueColumn, focused).fill,
+        base: palette::surface_colors(palette::Surface::QueuePanel, focused).fill,
+        focused,
+        marquee_text,
+        marquee_started_at,
+    };
 
     for (index, row) in rows.iter().enumerate() {
-        let Some(y) = content_rect.y.checked_add(index as u16) else {
+        let Ok(row_offset) = u16::try_from(index) else {
             break;
         };
-        if y >= content_rect.bottom() || content_width == 0 {
+        let Some(y) = content_rect.y.checked_add(row_offset) else {
+            break;
+        };
+        if y >= content_rect.bottom() || context.content_width == 0 {
             break;
         }
-        // Selected and directly marked rows claim the complete panel width.
-        // Ordinary rows remain inside the parent's text insets, so the
-        // panel—not a destination—owns the side bands around a tree. The bar
-        // is the focused selected row's canonical claim; aggregate states
-        // resolve title roles, not bars (design D5).
-        let full_width = tree_row_is_full_width(focused && row.selected, row.marked);
-        let row_area = if full_width {
-            Rect::new(claim_rect.x, y, claim_rect.width, 1)
-        } else {
-            Rect::new(content_rect.x, y, content_rect.width, 1)
-        };
-        let fill = if full_width {
-            palette::SELECTED_ROW_BG
-        } else {
-            match row.kind {
-                TreePaintRowKind::Heading => base,
-                TreePaintRowKind::Node if row.zebra_striped => zebra,
-                TreePaintRowKind::Node | TreePaintRowKind::Spacer => base,
-            }
-        };
-        let (prefix, title) = match row.kind {
-            TreePaintRowKind::Node => (" ".repeat(row.depth.saturating_mul(2)), row.title.clone()),
-            TreePaintRowKind::Heading => (String::new(), row.title.to_uppercase()),
-            TreePaintRowKind::Spacer => (String::new(), String::new()),
-        };
-        let gutter = row
-            .trailing
-            .as_deref()
-            .map_or(0, tree_metadata_gutter_width);
-        let budget = content_width.saturating_sub(prefix.width() + gutter);
-        let title_color = if full_width {
-            palette::SELECTED_ROW_FG
-        } else if row.kind == TreePaintRowKind::Heading {
-            palette::TEXT_METADATA
-        } else {
-            title_color(row)
-        };
-        let mut spans = if full_width && left_inset > 0 {
-            vec![Span::raw(" ".repeat(left_inset))]
-        } else {
-            Vec::new()
-        };
-        spans.push(Span::raw(prefix));
-        if focused && row.selected {
-            spans.extend(marquee_spans(
-                &title,
-                &[(title.as_str(), title_color)],
-                budget,
-                marquee_text,
-                marquee_started_at,
-                false,
-            ));
-        } else if row.kind != TreePaintRowKind::Spacer {
-            let mut title_style = Style::default().fg(title_color);
-            if row.kind == TreePaintRowKind::Heading {
-                title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
-            }
-            spans.push(Span::styled(
-                crate::app::ui_util::trunc_str(&title, budget),
-                title_style,
-            ));
-        }
-        let painted = spans.iter().map(|span| span.content.width()).sum::<usize>();
-        let target_width = content_width
-            .saturating_sub(gutter)
-            .saturating_add(if full_width { left_inset } else { 0 });
-        if painted < target_width {
-            spans.push(Span::raw(" ".repeat(target_width - painted)));
-        }
-        if let Some(trailing) = &row.trailing {
-            spans.push(Span::styled(
-                format!(
-                    "{:>width$}{}",
-                    trailing,
-                    " ".repeat(TREE_METADATA_TRAILING_SPACE),
-                    width = trailing.width().max(TREE_METADATA_SLOT_WIDTH)
-                ),
-                Style::default().fg(if full_width {
-                    palette::SELECTED_ROW_FG
-                } else {
-                    palette::STATUS_AVAILABLE
-                }),
-            ));
-        }
-        if full_width && right_inset > 0 {
-            spans.push(Span::raw(" ".repeat(right_inset)));
-        }
-        let mut style = Style::default().bg(fill);
-        if full_width {
-            style = style.fg(palette::SELECTED_ROW_FG);
-        }
-        frame.render_widget(Paragraph::new(Line::from(spans)).style(style), row_area);
+        render_tree_browser_row(frame, row, y, &mut context);
     }
 
     // The tree uses the same focus-gated scrollbar policy as the flat list.
@@ -172,6 +91,172 @@ pub(in crate::app) fn render_tree_browser(
             palette::SCROLLBAR,
         );
     }
+}
+
+struct TreeBrowserPaintContext<'a> {
+    claim_rect: Rect,
+    content_rect: Rect,
+    left_inset: usize,
+    right_inset: usize,
+    content_width: usize,
+    zebra: ratatui::style::Color,
+    base: ratatui::style::Color,
+    focused: bool,
+    marquee_text: &'a mut String,
+    marquee_started_at: &'a mut Instant,
+}
+
+fn render_tree_browser_row(
+    frame: &mut Frame,
+    row: &TreePaintRow,
+    y: u16,
+    context: &mut TreeBrowserPaintContext<'_>,
+) {
+    // Selected and directly marked rows claim the complete panel width.
+    // Ordinary rows remain inside the parent's text insets, so the
+    // panel—not a destination—owns the side bands around a tree. The bar
+    // is the focused selected row's canonical claim; aggregate states
+    // resolve title roles, not bars (design D5).
+    let full_width = tree_row_is_full_width(context.focused && row.selected, row.marked);
+    let row_area = if full_width {
+        Rect::new(context.claim_rect.x, y, context.claim_rect.width, 1)
+    } else {
+        Rect::new(context.content_rect.x, y, context.content_rect.width, 1)
+    };
+    let fill = tree_row_fill(row, full_width, context.zebra, context.base);
+    let (prefix, title) = tree_row_title(row);
+    let gutter = row
+        .trailing
+        .as_deref()
+        .map_or(0, tree_metadata_gutter_width);
+    let budget = context
+        .content_width
+        .saturating_sub(prefix.width() + gutter);
+    let title_color = if full_width {
+        palette::SELECTED_ROW_FG
+    } else if row.kind == TreePaintRowKind::Heading {
+        palette::TEXT_METADATA
+    } else {
+        title_color(row)
+    };
+    let spans = tree_row_spans(
+        TreeRowSpans {
+            row,
+            prefix,
+            title: &title,
+            title_color,
+            budget,
+            gutter,
+            full_width,
+        },
+        context,
+    );
+    let mut style = Style::default().bg(fill);
+    if full_width {
+        style = style.fg(palette::SELECTED_ROW_FG);
+    }
+    frame.render_widget(Paragraph::new(Line::from(spans)).style(style), row_area);
+}
+
+fn tree_row_fill(
+    row: &TreePaintRow,
+    full_width: bool,
+    zebra: ratatui::style::Color,
+    base: ratatui::style::Color,
+) -> ratatui::style::Color {
+    if full_width {
+        palette::SELECTED_ROW_BG
+    } else {
+        match row.kind {
+            TreePaintRowKind::Node if row.zebra_striped => zebra,
+            _ => base,
+        }
+    }
+}
+
+fn tree_row_title(row: &TreePaintRow) -> (String, String) {
+    match row.kind {
+        TreePaintRowKind::Node => (" ".repeat(row.depth.saturating_mul(2)), row.title.clone()),
+        TreePaintRowKind::Heading => (String::new(), row.title.to_uppercase()),
+        TreePaintRowKind::Spacer => (String::new(), String::new()),
+    }
+}
+
+struct TreeRowSpans<'a> {
+    row: &'a TreePaintRow,
+    prefix: String,
+    title: &'a str,
+    title_color: ratatui::style::Color,
+    budget: usize,
+    gutter: usize,
+    full_width: bool,
+}
+
+fn tree_row_spans(
+    row: TreeRowSpans<'_>,
+    context: &mut TreeBrowserPaintContext<'_>,
+) -> Vec<Span<'static>> {
+    let TreeRowSpans {
+        row,
+        prefix,
+        title,
+        title_color,
+        budget,
+        gutter,
+        full_width,
+    } = row;
+    let mut spans = if full_width && context.left_inset > 0 {
+        vec![Span::raw(" ".repeat(context.left_inset))]
+    } else {
+        Vec::new()
+    };
+    spans.push(Span::raw(prefix));
+    if context.focused && row.selected {
+        spans.extend(marquee_spans(
+            title,
+            &[(title, title_color)],
+            budget,
+            context.marquee_text,
+            context.marquee_started_at,
+            false,
+        ));
+    } else if row.kind != TreePaintRowKind::Spacer {
+        let mut title_style = Style::default().fg(title_color);
+        if row.kind == TreePaintRowKind::Heading {
+            title_style = title_style.add_modifier(ratatui::style::Modifier::BOLD);
+        }
+        spans.push(Span::styled(
+            crate::app::ui_util::trunc_str(title, budget),
+            title_style,
+        ));
+    }
+    let painted = spans.iter().map(|span| span.content.width()).sum::<usize>();
+    let target_width = context
+        .content_width
+        .saturating_sub(gutter)
+        .saturating_add(if full_width { context.left_inset } else { 0 });
+    if painted < target_width {
+        spans.push(Span::raw(" ".repeat(target_width - painted)));
+    }
+    if let Some(trailing) = &row.trailing {
+        spans.push(Span::styled(
+            format!(
+                "{:>width$}{}",
+                trailing,
+                " ".repeat(TREE_METADATA_TRAILING_SPACE),
+                width = trailing.width().max(TREE_METADATA_SLOT_WIDTH)
+            ),
+            Style::default().fg(if full_width {
+                palette::SELECTED_ROW_FG
+            } else {
+                palette::STATUS_AVAILABLE
+            }),
+        ));
+    }
+    if full_width && context.right_inset > 0 {
+        spans.push(Span::raw(" ".repeat(context.right_inset)));
+    }
+    spans
 }
 
 fn title_color(row: &TreePaintRow) -> ratatui::style::Color {
