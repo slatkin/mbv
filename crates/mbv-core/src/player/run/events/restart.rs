@@ -44,6 +44,80 @@ impl PlaybackRun {
         Some((slot_id, transition))
     }
 
+    fn init_tracks_once(&mut self, mpv: &Mpv) {
+        let prefs = self.subtitle_prefs.lock().unwrap().clone();
+        for url in &self.ext_sub_urls {
+            if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
+                log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
+            }
+        }
+        auto_select_tracks(mpv, &self.status, &prefs);
+        self.tracks_initialized = true;
+        self.apply_forced_resume(mpv);
+        if let Some(item) = self.active_item().cloned() {
+            if let Some(emby) = item.as_emby() {
+                send_ep_info(mpv, emby);
+            }
+        }
+        if self.config.use_mpv_config {
+            let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
+        }
+    }
+
+    /// A re-visited playlist entry only honors its baked `start=` option the
+    /// first time it ever loads; mpv reopens it from scratch on a later
+    /// `playlist-pos` jump, discarding whatever was watched in this session.
+    /// `forced_resume_ticks` (armed by the JumpTo handler from the canonical
+    /// queue's current position) repairs that with an explicit seek now that
+    /// the entry is actually loaded and seekable.
+    fn apply_forced_resume(&mut self, mpv: &Mpv) {
+        let Some(ticks) = self.forced_resume_ticks.take() else {
+            return;
+        };
+        let seconds = ticks as f64 / TICKS_PER_SECOND as f64;
+        if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
+            log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
+            return;
+        }
+        // Arms the same seek-settle guard below, so this restart
+        // (still reporting position 0, since status hasn't caught
+        // up to the seek yet) does not report progress to Emby
+        // before the seek actually lands.
+        self.last_seek_at = Some(Instant::now());
+    }
+
+    fn settle_seek_osd(&mut self, mpv: &Mpv, event_name: &'static str) -> &'static str {
+        if self.origin == PlaybackOrigin::Standalone {
+            self.next_up.reset();
+            self.show_seek_osd(mpv);
+            return "Seek";
+        }
+        self.show_seek_osd(mpv);
+        event_name
+    }
+
+    fn show_seek_osd(&mut self, mpv: &Mpv) {
+        if self.last_seek_at.take().is_none() || !self.config.use_mpv_config {
+            return;
+        }
+        let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+    }
+
+    fn report_restart_progress(&mut self, event_name: &str) {
+        let seek_settled = self
+            .last_seek_at
+            .is_none_or(|t| t.elapsed() > Duration::from_millis(500));
+        if self.quit_at.is_some() || !seek_settled {
+            return;
+        }
+        self.last_seek_at = None;
+        if self.origin == PlaybackOrigin::Standalone {
+            self.reporter.report_progress(event_name);
+        } else if !self.reporter.is_audio.load(Ordering::Relaxed) {
+            self.reporter.report_progress("TimeUpdate");
+        }
+    }
+
     pub(in crate::player) fn on_playback_restart(&mut self, mpv: &Mpv) {
         let settled_idle_jump = self.settle_idle_jump_on_restart(mpv_position_ticks(mpv));
         let was_seek = self.last_seek_at.is_some();
@@ -74,61 +148,11 @@ impl PlaybackRun {
         }
         let mut event_name = "TimeUpdate";
         if !self.tracks_initialized {
-            let prefs = self.subtitle_prefs.lock().unwrap().clone();
-            for url in &self.ext_sub_urls {
-                if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
-                    log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
-                }
-            }
-            auto_select_tracks(mpv, &self.status, &prefs);
-            self.tracks_initialized = true;
-            // A re-visited playlist entry only honors its baked `start=`
-            // option the first time it ever loads; mpv reopens it from
-            // scratch on a later `playlist-pos` jump, discarding whatever was
-            // watched in this session. `forced_resume_ticks` (armed by the
-            // JumpTo handler from the canonical queue's current position)
-            // repairs that with an explicit seek now that the entry is
-            // actually loaded and seekable.
-            if let Some(ticks) = self.forced_resume_ticks.take() {
-                let seconds = ticks as f64 / TICKS_PER_SECOND as f64;
-                if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
-                    log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
-                } else {
-                    // Arms the same seek-settle guard below, so this restart
-                    // (still reporting position 0, since status hasn't caught
-                    // up to the seek yet) does not report progress to Emby
-                    // before the seek actually lands.
-                    self.last_seek_at = Some(Instant::now());
-                }
-            }
-            if let Some(item) = self.active_item().cloned() {
-                if let Some(emby) = item.as_emby() {
-                    send_ep_info(mpv, emby);
-                }
-            }
-            if self.config.use_mpv_config {
-                let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
-            }
+            self.init_tracks_once(mpv);
         } else {
-            if self.origin == PlaybackOrigin::Standalone {
-                self.next_up.reset();
-                event_name = "Seek";
-            }
-            if self.last_seek_at.take().is_some() && self.config.use_mpv_config {
-                let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
-            }
+            event_name = self.settle_seek_osd(mpv, event_name);
         }
-        let seek_settled = self
-            .last_seek_at
-            .is_none_or(|t| t.elapsed() > Duration::from_millis(500));
-        if self.quit_at.is_none() && seek_settled {
-            self.last_seek_at = None;
-            if self.origin == PlaybackOrigin::Standalone {
-                self.reporter.report_progress(event_name);
-            } else if !self.reporter.is_audio.load(Ordering::Relaxed) {
-                self.reporter.report_progress("TimeUpdate");
-            }
-        }
+        self.report_restart_progress(event_name);
         if was_seek {
             self.observe_reporting(true);
         }

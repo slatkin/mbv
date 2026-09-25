@@ -38,6 +38,31 @@ impl PlaybackRun {
     /// queue paths, no Shutdown or TrackChanged will refresh it. A daemon
     /// client attaching later would otherwise inherit a "still playing"
     /// now-playing panel frozen at the final position.
+    fn report_for_end_file(&mut self, reason: EndFileReason, progress: &mut ProgressGuard) {
+        if reason == mpv_end_file_reason::Quit {
+            // Keep an external window close off the mpv event loop. Natural
+            // EOF still reports synchronously before its completion event.
+            self.report_stop_now_or_background(progress);
+            return;
+        }
+        progress.stop_and_join(self.progress_join_budget());
+        self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
+    }
+
+    fn retry_natural_mark_played(&mut self, natural_end: bool, completed_is_audio: bool) {
+        if !natural_end || completed_is_audio || !self.reporter.has_session() {
+            return;
+        }
+        let id = self.reporter.ids.lock().unwrap().0.clone();
+        match self.reporter.client.mark_played(id.as_str()) {
+            Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
+            Err(e) => {
+                log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
+                self.mark_played_id = Some(id.clone());
+            }
+        }
+    }
+
     pub(in crate::player) fn on_end_file_standalone(
         &mut self,
         reason: EndFileReason,
@@ -51,14 +76,7 @@ impl PlaybackRun {
         let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
         let completed_slot_id = self.active_slot_id();
 
-        if reason == mpv_end_file_reason::Quit {
-            // Keep an external window close off the mpv event loop. Natural
-            // EOF still reports synchronously before its completion event.
-            self.report_stop_now_or_background(progress);
-        } else {
-            progress.stop_and_join(self.progress_join_budget());
-            self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
-        }
+        self.report_for_end_file(reason, progress);
 
         let lifecycle_pos = self.active_item().map_or(self.last_valid_pos, |item| {
             provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
@@ -66,18 +84,7 @@ impl PlaybackRun {
         self.close_prepared_source_at(lifecycle_pos);
         self.status.lock().unwrap().active = false;
 
-        if natural_end && self.reporter.has_session() {
-            let id = self.reporter.ids.lock().unwrap().0.clone();
-            if !completed_is_audio {
-                match self.reporter.client.mark_played(id.as_str()) {
-                    Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
-                    Err(e) => {
-                        log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
-                        self.mark_played_id = Some(id.clone());
-                    }
-                }
-            }
-        }
+        self.retry_natural_mark_played(natural_end, completed_is_audio);
         if !self.stopped_event_sent {
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 slot_id: completed_slot_id,
@@ -107,42 +114,54 @@ impl PlaybackRun {
         }
         let client = self.reporter.client.clone();
         if self.origin == PlaybackOrigin::Standalone {
-            // Retry mark_played in a detached thread so Shutdown never blocks.
-            if let Some(mid) = self.mark_played_id.take() {
-                retry_mark_played(client.clone(), mid);
-            }
-            let completed_runtime = self
-                .stop_runtime
-                .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
-                .unwrap_or(0);
-            let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
-            let near_end = self.reporter.has_session()
-                && is_near_end(is_audio, false, self.last_valid_pos, completed_runtime);
-            if near_end {
-                let id = self.reporter.ids.lock().unwrap().0.clone();
-                retry_mark_played(client.clone(), id);
-            }
-            self.status.lock().unwrap().active = false;
-            if !self.stopped_event_sent {
-                let _ = self.event_tx.send(PlayerEvent::Stopped {
-                    slot_id: stopped_slot,
-                    run_identity: self.run_identity,
-                    position_ticks: self.last_valid_pos,
-                    played: near_end,
-                    consume: false,
-                    progress_report_accepted: self.stop_report.is_accepted(),
-                    error: None,
-                });
-            }
-            // mpv exited on its own (not via our stop command, e.g. the user
-            // closed the mpv window directly) — despite the event name,
-            // App::handle_player_event's PlayerEvent::MpvQuit arm does not
-            // quit the app; it just clears some UI state and returns false.
-            if self.quit_at.is_none() {
-                let _ = self.event_tx.send(PlayerEvent::MpvQuit);
-            }
+            self.shutdown_standalone(stopped_slot, &client);
             return;
         }
+        self.shutdown_queue(stopped_slot);
+    }
+
+    fn shutdown_standalone(
+        &mut self,
+        stopped_slot: Option<QueueSlotId>,
+        client: &Arc<crate::api::EmbyClient>,
+    ) {
+        // Retry mark_played in a detached thread so Shutdown never blocks.
+        if let Some(mid) = self.mark_played_id.take() {
+            retry_mark_played(client.clone(), mid);
+        }
+        let completed_runtime = self
+            .stop_runtime
+            .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
+            .unwrap_or(0);
+        let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+        let near_end = self.reporter.has_session()
+            && is_near_end(is_audio, false, self.last_valid_pos, completed_runtime);
+        if near_end {
+            let id = self.reporter.ids.lock().unwrap().0.clone();
+            retry_mark_played(client.clone(), id);
+        }
+        self.status.lock().unwrap().active = false;
+        if !self.stopped_event_sent {
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                slot_id: stopped_slot,
+                run_identity: self.run_identity,
+                position_ticks: self.last_valid_pos,
+                played: near_end,
+                consume: false,
+                progress_report_accepted: self.stop_report.is_accepted(),
+                error: None,
+            });
+        }
+        // mpv exited on its own (not via our stop command, e.g. the user
+        // closed the mpv window directly) — despite the event name,
+        // App::handle_player_event's PlayerEvent::MpvQuit arm does not
+        // quit the app; it just clears some UI state and returns false.
+        if self.quit_at.is_none() {
+            let _ = self.event_tx.send(PlayerEvent::MpvQuit);
+        }
+    }
+
+    fn shutdown_queue(&mut self, stopped_slot: Option<QueueSlotId>) {
         self.status.lock().unwrap().active = false;
         // played and consume are deliberately the same value here: stopped_near_end
         // is already video-only (see is_near_end's !is_audio gate), so a quit/cancel
