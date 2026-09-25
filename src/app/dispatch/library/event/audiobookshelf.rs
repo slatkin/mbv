@@ -256,3 +256,213 @@ impl App {
         Some(ev)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState;
+    use crate::app::state::types::events::LibEvent;
+    use mbv_core::audiobookshelf::{
+        AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookPage, AudiobookshelfChapter,
+        AudiobookshelfError, AudiobookshelfFailureClass, AudiobookshelfLibrary,
+    };
+    use mbv_core::service_runtime::SetupGeneration;
+    use rstest::rstest;
+
+    fn book(id: &str) -> AudiobookshelfBook {
+        AudiobookshelfBook {
+            library_item_id: id.into(),
+            title: id.into(),
+            author_display: None,
+            author_sort_key: "Author".into(),
+            cover_path: None,
+            duration_seconds: 1.0,
+            narrator: None,
+            published_year: None,
+            genres: Vec::new(),
+            description: None,
+            series_name: None,
+            chapters: Vec::new(),
+            audio_files: Vec::new(),
+        }
+    }
+
+    fn app_with_book_state() -> crate::app::App {
+        let mut app = crate::app::tests::make_app_stub();
+        let library = AudiobookshelfLibrary {
+            id: "books".into(),
+            name: "Books".into(),
+            media_type: "book".into(),
+        };
+        app.audiobookshelf_libraries.push(library.clone());
+        app.audiobookshelf_book_browse
+            .push(AudiobookshelfBookBrowseState::new(library));
+        app
+    }
+
+    #[test]
+    fn books_fetched_appends_page_and_selects_first_book() {
+        let mut app = app_with_book_state();
+        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBooksFetched {
+            generation: SetupGeneration::default(),
+            library_id: "books".into(),
+            result: Ok(AudiobookshelfBookPage {
+                page: 0,
+                limit: 20,
+                total: 21,
+                items: vec![book("book-a")],
+            }),
+        });
+
+        let state = &app.audiobookshelf_book_browse[0];
+        assert_eq!(state.books.len(), 1);
+        assert_eq!(state.selected_id.as_deref(), Some("book-a"));
+        assert_eq!(state.total, 21);
+        assert_eq!(state.next_page, 1);
+        assert!(state.error.is_none());
+    }
+
+    fn books_fetched_does_not_apply(app: &mut crate::app::App, library_id: &str, stale: bool) {
+        if stale {
+            app.audiobookshelf_runtime.begin_setup();
+        }
+        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBooksFetched {
+            generation: SetupGeneration::default(),
+            library_id: library_id.into(),
+            result: Ok(AudiobookshelfBookPage {
+                page: 0,
+                limit: 20,
+                total: 1,
+                items: vec![book("book-a")],
+            }),
+        });
+    }
+
+    #[rstest]
+    #[case::unknown_library("missing", false)]
+    #[case::stale_generation("books", true)]
+    fn books_fetched_ignores_unknown_library_or_stale_generation(
+        #[case] library_id: &str,
+        #[case] stale_generation: bool,
+    ) {
+        let mut app = app_with_book_state();
+
+        books_fetched_does_not_apply(&mut app, library_id, stale_generation);
+
+        assert!(app.audiobookshelf_book_browse[0].books.is_empty());
+    }
+
+    #[test]
+    fn books_fetch_failure_is_recorded_on_matching_browse_state() {
+        let mut app = app_with_book_state();
+        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBooksFetched {
+            generation: SetupGeneration::default(),
+            library_id: "books".into(),
+            result: Err(AudiobookshelfError {
+                class: AudiobookshelfFailureClass::Connectivity,
+            }),
+        });
+
+        assert!(app.audiobookshelf_book_browse[0].error.is_some());
+    }
+
+    fn detail_result(
+        succeeds: bool,
+    ) -> Result<(Vec<AudiobookshelfChapter>, Vec<AudiobookshelfAudioFile>), AudiobookshelfError>
+    {
+        if succeeds {
+            Ok((
+                vec![AudiobookshelfChapter {
+                    id: 2,
+                    start: 0.0,
+                    end: 1.0,
+                    title: "Chapter".into(),
+                }],
+                vec![AudiobookshelfAudioFile {
+                    index: 0,
+                    ino: "file".into(),
+                    duration: 1.0,
+                }],
+            ))
+        } else {
+            Err(AudiobookshelfError {
+                class: AudiobookshelfFailureClass::Connectivity,
+            })
+        }
+    }
+
+    #[rstest]
+    #[case::success(true)]
+    #[case::failure(false)]
+    fn book_detail_completion_retires_loading_and_caches_only_success(#[case] succeeds: bool) {
+        let mut app = app_with_book_state();
+        let state = &mut app.audiobookshelf_book_browse[0];
+        state.books.push(book("book-a"));
+        state.selected_id = Some("book-a".into());
+        state.detail_loading_ids.insert("book-a".into());
+        state.detail_loading = true;
+        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBookDetailFetched {
+            generation: SetupGeneration::default(),
+            library_item_id: "book-a".into(),
+            result: detail_result(succeeds),
+        });
+
+        let state = &app.audiobookshelf_book_browse[0];
+        assert!(!state.detail_loading);
+        assert!(!state.detail_loading_ids.contains("book-a"));
+        assert_eq!(state.detail_cache.contains_key("book-a"), succeeds);
+    }
+
+    fn detail_completion_does_not_apply(app: &mut crate::app::App, stale_generation: bool) {
+        if stale_generation {
+            app.audiobookshelf_runtime.begin_setup();
+        }
+        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBookDetailFetched {
+            generation: SetupGeneration::default(),
+            library_item_id: if stale_generation {
+                "book-a"
+            } else {
+                "missing"
+            }
+            .into(),
+            result: Ok((Vec::new(), Vec::new())),
+        });
+    }
+
+    #[rstest]
+    #[case::stale_generation(true)]
+    #[case::unowned_book(false)]
+    fn book_detail_completion_ignores_stale_or_unowned_result(#[case] stale_generation: bool) {
+        let mut app = app_with_book_state();
+        app.audiobookshelf_book_browse[0].books.push(book("book-a"));
+
+        detail_completion_does_not_apply(&mut app, stale_generation);
+
+        assert!(app.audiobookshelf_book_browse[0].detail_cache.is_empty());
+    }
+
+    #[test]
+    fn books_page_does_not_restart_selected_detail_while_loading() {
+        let mut app = app_with_book_state();
+        let state = &mut app.audiobookshelf_book_browse[0];
+        state.detail_loading = true;
+        state.selected_id = Some("book-a".into());
+        app.handle_audiobookshelf_event(LibEvent::AudiobookshelfBooksFetched {
+            generation: SetupGeneration::default(),
+            library_id: "books".into(),
+            result: Ok(AudiobookshelfBookPage {
+                page: 0,
+                limit: 20,
+                total: 1,
+                items: vec![book("book-a")],
+            }),
+        });
+
+        assert!(app.audiobookshelf_book_browse[0]
+            .detail_loading_ids
+            .is_empty());
+        assert_eq!(
+            app.audiobookshelf_book_browse[0].selected_id.as_deref(),
+            Some("book-a")
+        );
+    }
+}
