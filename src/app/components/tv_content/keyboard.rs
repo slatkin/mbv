@@ -333,34 +333,47 @@ impl TvContent {
         ))
     }
 
-    /// Wide pane-based keyboard handling (unchanged from before the merge).
-    ///
-    /// Shared library effects resolve against the component's selected item
-    /// via [`Self::shared_library_effect`]; the match below keeps only
-    /// branch-specific navigation/activation/context. The Episodes-pane
-    /// season-pill `[`/`]` arms stay here so they shadow the shared
-    /// letter-pill cycle, and `.` stays caller-specific like show-tree.
+    /// Wide pane-based keyboard handling: keep activation/context here and
+    /// delegate movement to its focused-pane helpers. Shared library effects
+    /// still resolve against the selected series item, including in Episodes.
     fn handle_key_wide(&mut self, key: &KeyEvent) -> Option<Msg> {
         let request = match key.code {
-            Key::Enter if self.pane == Pane::Series && self.flat_episode_mode() => self
-                .selected_episode_item()
-                .map(|episode| ShellRequest::TvEpisodeActivate { episode }),
-            Key::Enter if self.pane == Pane::Series => {
-                self.episodes.select_first();
-                self.pane = Pane::Episodes;
-                // Resolve the selected Series from the component's own cursor
-                // and carry it in the typed request; if nothing is resolvable
-                // (defensive), do not emit the request.
-                self.selected_item()
-                    .map(|item| ShellRequest::TvActivate { item })
-            }
-            Key::Enter => self
-                .selected_episode_item()
-                .map(|episode| ShellRequest::TvEpisodeActivate { episode }),
+            Key::Enter => self.wide_activation_request(),
             Key::Esc | Key::Backspace => {
                 self.pane = Pane::Series;
                 Some(ShellRequest::TvBack)
             }
+            Key::Char('.') => self.context_menu_request(),
+            _ => self.wide_movement_request(key),
+        };
+        if let Some(request) = request {
+            return Some(Msg::Shell(Box::new(request)));
+        }
+        // The series-list selection remains authoritative even while the
+        // local Episodes pane is focused, matching the legacy stack target.
+        self.shared_library_effect(key, self.selected_item())
+    }
+
+    fn wide_activation_request(&mut self) -> Option<ShellRequest> {
+        if self.pane == Pane::Series && !self.flat_episode_mode() {
+            self.episodes.select_first();
+            self.pane = Pane::Episodes;
+            // Resolve the Series from its own cursor; emit nothing if absent.
+            self.selected_item()
+                .map(|item| ShellRequest::TvActivate { item })
+        } else {
+            self.selected_episode_item()
+                .map(|episode| ShellRequest::TvEpisodeActivate { episode })
+        }
+    }
+
+    fn wide_movement_request(&mut self, key: &KeyEvent) -> Option<ShellRequest> {
+        self.wide_episode_movement_request(key)
+            .or_else(|| self.wide_row_movement_request(key))
+    }
+
+    fn wide_episode_movement_request(&mut self, key: &KeyEvent) -> Option<ShellRequest> {
+        match key.code {
             Key::Up | Key::Char('k') if self.pane == Pane::Episodes => {
                 self.move_episode(-1);
                 Some(ShellRequest::TvEpisodeMove { delta: -1 })
@@ -385,6 +398,12 @@ impl TvContent {
                 self.move_season(1);
                 Some(ShellRequest::TvSeasonMove { delta: 1 })
             }
+            _ => None,
+        }
+    }
+
+    fn wide_row_movement_request(&mut self, key: &KeyEvent) -> Option<ShellRequest> {
+        match key.code {
             Key::Up | Key::Char('k') => {
                 self.move_rows(-1);
                 Some(ShellRequest::TvMoveRows { rows: -1 })
@@ -411,16 +430,8 @@ impl TvContent {
                 self.jump_cursor(true);
                 Some(ShellRequest::TvJumpCursor { to_end: true })
             }
-            Key::Char('.') => self.context_menu_request(),
             _ => None,
-        };
-        if let Some(request) = request {
-            return Some(Msg::Shell(Box::new(request)));
         }
-        // Library effects use the component's selected item. TV keeps
-        // the series-list selection authoritative even while the local
-        // Episodes pane is focused, matching the legacy stack target.
-        self.shared_library_effect(key, self.selected_item())
     }
 
     /// Narrow flat-list keyboard handling (mirrors the prior TV browse
