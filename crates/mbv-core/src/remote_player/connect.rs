@@ -147,13 +147,17 @@ pub fn signal_local_daemon_service_setup(
     let request = serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision })
         .map_err(|_| "restart required (cannot serialize setup request)".to_string())?;
     writeln!(reader.get_mut(), "{request}")
-        .and_then(|_| reader.get_mut().flush())
+        .and_then(|()| reader.get_mut().flush())
         .map_err(|_| "restart required (cannot send setup request)".to_string())?;
+    await_service_setup_acknowledgement(&mut reader)
+}
+
+fn await_service_setup_acknowledgement(reader: &mut BufReader<SocketStream>) -> Result<(), String> {
     for next in reader.lines() {
-        let line =
-            next.map_err(|_| "restart required (setup acknowledgement unavailable)".to_string())?;
+        let line = next
+            .map_err(|_error| "restart required (setup acknowledgement unavailable)".to_string())?;
         let event = serde_json::from_str::<CtrlEvent>(&line)
-            .map_err(|_| "restart required (invalid setup acknowledgement)".to_string())?;
+            .map_err(|_error| "restart required (invalid setup acknowledgement)".to_string())?;
         match event {
             CtrlEvent::ServiceSetupApplied { .. } => return Ok(()),
             CtrlEvent::ServiceSetupRejected { reason, .. } => {
