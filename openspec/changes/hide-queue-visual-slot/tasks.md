@@ -50,8 +50,8 @@
 
 ## 4. Gates
 
-- [ ] 4.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+- [x] 4.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and
   `cargo nextest run -p mbv -p mbv-core`. All must pass.
-- [ ] 4.2 Manual check in the running app on a short terminal: `h` hides and shows the slot at
+- [x] 4.2 Manual check in the running app on a short terminal: `h` hides and shows the slot at
   both breakpoints, the transport stays usable by mouse, `v` does nothing while hidden, and the
   hidden state survives a restart.
