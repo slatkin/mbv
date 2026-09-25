@@ -214,31 +214,58 @@ impl App {
     /// #78 follow-up).
     pub(in crate::app) fn dispatch(&mut self, command: Command) -> bool {
         match command {
-            Command::OpenIdleFeedLink => {
-                self.open_idle_feed_link();
+            Command::OpenIdleFeedLink
+            | Command::ToggleVisualizer
+            | Command::ToggleVisualSlotHidden => self.dispatch_visual_command(command),
+            Command::TogglePlayPause
+            | Command::Stop
+            | Command::SeekRelative(_)
+            | Command::NextTrack
+            | Command::PreviousTrack
+            | Command::CycleOrToggleSubtitle
+            | Command::AdjustVolume(_)
+            | Command::ToggleMute
+            | Command::ToggleMuteOrCycleAudio => self.dispatch_playback_command(command),
+            Command::QueuePlayCursor(t) => self.dispatch_queue_play_cursor(t),
+            Command::Quit => return self.try_quit(),
+            Command::NextLibraryTab
+            | Command::PreviousLibraryTab
+            | Command::SetLibraryTab(_)
+            | Command::ForceClear
+            | Command::RequestClearQueue
+            | Command::RefreshCurrentView
+            | Command::ToggleSettings
+            | Command::OpenSessions
+            | Command::OpenPlaylists
+            | Command::OpenSearch
+            | Command::OpenHelp => self.dispatch_navigation_command(command),
+            Command::FocusPanel(_) | Command::CyclePanelMode => {
+                self.dispatch_panel_command(command)
             }
+        }
+        false
+    }
+
+    fn dispatch_visual_command(&mut self, command: Command) {
+        match command {
+            Command::OpenIdleFeedLink => self.open_idle_feed_link(),
             Command::ToggleVisualizer => self.toggle_visualizer(),
             Command::ToggleVisualSlotHidden => {
                 self.visual_slot_hidden = !self.visual_slot_hidden;
                 self.sync_visualizer();
                 self.save_prefs();
             }
+            _ => unreachable!("dispatch_visual_command only accepts visual commands"),
+        }
+    }
 
-            Command::TogglePlayPause => {
-                self.playback_target().toggle_play_pause(self);
-            }
-            Command::Stop => {
-                self.playback_target().stop(self);
-            }
-            Command::SeekRelative(delta) => {
-                self.playback_target().seek_relative(self, delta);
-            }
-            Command::NextTrack => {
-                self.playback_target().jump_track(self, 1, "NextTrack");
-            }
-            Command::PreviousTrack => {
-                self.playback_target().jump_track(self, -1, "PreviousTrack");
-            }
+    fn dispatch_playback_command(&mut self, command: Command) {
+        match command {
+            Command::TogglePlayPause => self.playback_target().toggle_play_pause(self),
+            Command::Stop => self.playback_target().stop(self),
+            Command::SeekRelative(delta) => self.playback_target().seek_relative(self, delta),
+            Command::NextTrack => self.playback_target().jump_track(self, 1, "NextTrack"),
+            Command::PreviousTrack => self.playback_target().jump_track(self, -1, "PreviousTrack"),
             Command::CycleOrToggleSubtitle => {
                 // cycle_sub() branches internally on connected_session_id,
                 // and falls back to the idle subtitle-mode cycle itself when
@@ -249,9 +276,7 @@ impl App {
                 // adjust_volume already branches session vs. local internally.
                 self.adjust_volume(delta);
             }
-            Command::ToggleMute => {
-                self.playback_target().toggle_command_mute(self);
-            }
+            Command::ToggleMute => self.playback_target().toggle_command_mute(self),
             Command::ToggleMuteOrCycleAudio => {
                 if self.is_audio_item() {
                     self.toggle_mute();
@@ -259,10 +284,12 @@ impl App {
                     self.cycle_audio();
                 }
             }
+            _ => unreachable!("dispatch_playback_command only accepts playback commands"),
+        }
+    }
 
-            Command::QueuePlayCursor(t) => self.dispatch_queue_play_cursor(t),
-
-            Command::Quit => return self.try_quit(),
+    fn dispatch_navigation_command(&mut self, command: Command) {
+        match command {
             Command::NextLibraryTab => self.library_tab_next(),
             Command::PreviousLibraryTab => self.library_tab_prev(),
             Command::SetLibraryTab(index) => {
@@ -280,6 +307,12 @@ impl App {
             // Model handles this shell-only command before delegating the
             // remaining commands to App::dispatch.
             Command::OpenHelp => unreachable!("OpenHelp is dispatched by Model"),
+            _ => unreachable!("dispatch_navigation_command only accepts navigation commands"),
+        }
+    }
+
+    fn dispatch_panel_command(&mut self, command: Command) {
+        match command {
             Command::FocusPanel(focus) => {
                 self.set_panel_focus(focus);
                 // No card-checkpoint reset: `last_card_*` is the measured
@@ -289,39 +322,44 @@ impl App {
                 // for a frame -- the now-playing panel visibly grew then
                 // shrank between image and seekbar.
             }
+            Command::CyclePanelMode => self.cycle_panel_mode(),
+            _ => unreachable!("dispatch_panel_command only accepts panel commands"),
+        }
+    }
 
-            Command::CyclePanelMode => {
-                // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view
-                // toggles exactly two states, library-only ⇄ queue-only.
-                if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
-                    self.mini_view_focus = match self.mini_view_focus {
-                        crate::app::PanelFocus::Library => crate::app::PanelFocus::Queue,
-                        crate::app::PanelFocus::Queue => crate::app::PanelFocus::Library,
-                    };
-                    if matches!(self.mini_view_focus, crate::app::PanelFocus::Queue) {
-                        self.focus_queue_initial_item();
-                    }
-                } else {
-                    self.panel_mode = match self.panel_mode {
-                        crate::app::PanelMode::Both => crate::app::PanelMode::QueueOnly,
-                        crate::app::PanelMode::QueueOnly => crate::app::PanelMode::LibraryOnly,
-                        crate::app::PanelMode::LibraryOnly => crate::app::PanelMode::Both,
-                    };
-                    match self.panel_mode {
-                        crate::app::PanelMode::LibraryOnly => {
-                            if matches!(self.panel_focus, crate::app::PanelFocus::Queue) {
-                                self.set_panel_focus(crate::app::PanelFocus::Library);
-                            }
-                        }
-                        crate::app::PanelMode::QueueOnly => {
-                            self.set_panel_focus(crate::app::PanelFocus::Queue);
-                        }
-                        crate::app::PanelMode::Both => {}
-                    }
+    fn cycle_panel_mode(&mut self) {
+        // Narrow terminal (< MINI_VIEW_THRESHOLD columns): mini view toggles
+        // exactly two states, library-only ⇄ queue-only.
+        if self.terminal_width < crate::app::MINI_VIEW_THRESHOLD {
+            self.mini_view_focus = match self.mini_view_focus {
+                crate::app::PanelFocus::Library => crate::app::PanelFocus::Queue,
+                crate::app::PanelFocus::Queue => crate::app::PanelFocus::Library,
+            };
+            if matches!(self.mini_view_focus, crate::app::PanelFocus::Queue) {
+                self.focus_queue_initial_item();
+            }
+        } else {
+            self.cycle_wide_panel_mode();
+        }
+    }
+
+    fn cycle_wide_panel_mode(&mut self) {
+        self.panel_mode = match self.panel_mode {
+            crate::app::PanelMode::Both => crate::app::PanelMode::QueueOnly,
+            crate::app::PanelMode::QueueOnly => crate::app::PanelMode::LibraryOnly,
+            crate::app::PanelMode::LibraryOnly => crate::app::PanelMode::Both,
+        };
+        match self.panel_mode {
+            crate::app::PanelMode::LibraryOnly => {
+                if matches!(self.panel_focus, crate::app::PanelFocus::Queue) {
+                    self.set_panel_focus(crate::app::PanelFocus::Library);
                 }
             }
+            crate::app::PanelMode::QueueOnly => {
+                self.set_panel_focus(crate::app::PanelFocus::Queue);
+            }
+            crate::app::PanelMode::Both => {}
         }
-        false
     }
     /// Own the `Command::QueuePlayCursor` state transitions (extracted from
     /// `dispatch`; every early exit there returned `false`, i.e. fell through
