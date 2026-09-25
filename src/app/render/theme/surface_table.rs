@@ -47,6 +47,31 @@ use super::*;
 /// The row for one surface: its level, which column's focus (if any) drove
 /// its focused appearance in main, whether it takes the soft content-body
 /// variant, and the value it paints while resting.
+const fn recess_backdrop_row() -> Row {
+    Row {
+        level: Level::Recess,
+        focus: FocusSource::Fixed,
+        soft: false,
+        resting: SURFACE_BACKDROP,
+    }
+}
+
+// The queue card's visualizer fills the same band the queue playback panel
+// paints, so it takes that band's value in both focus states rather than
+// following the queue column's: the reserved slot never flashes a fill the
+// panel around it does not have (`render/components/card.rs:233-236`). The
+// Queue-only playback strip is also fixed chrome (`shell/draw.rs`): the
+// no-right-column mode paints its panel and recesses as a chrome band in every
+// frame, so the value follows the band's palette rather than panel focus.
+const fn chrome_band_row() -> Row {
+    Row {
+        level: Level::ChromeBand,
+        focus: FocusSource::Fixed,
+        soft: false,
+        resting: SURFACE_CHROME,
+    }
+}
+
 pub(super) const fn row(surface: Surface) -> Row {
     match surface {
         // --- column/pane ---
@@ -138,18 +163,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // The Queue-only playback strip (`shell/draw.rs`): with no
-        // right column on screen, the shell paints the panel body and its
-        // recess rows as a chrome band in every frame — the recess rects take
-        // the value through the panel context (`ctx.panel_bg`), not from their
-        // own focus. The value is the chrome band's (`DARK_BG`), so a chrome
-        // band edit reaches it; the fixed row pins focused == resting.
-        Surface::QueueOnlyPlaybackPanel => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_CHROME,
-        },
         // The expanded (F1-F4) sidebar body paints the sidebar fill
         // (`render/components/chrome.rs:166-170`).
         Surface::SidebarBody => Row {
@@ -159,18 +172,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: SURFACE_SIDEBAR,
         },
         // --- recess ---
-        Surface::PlaybackStatusPill => Row {
-            level: Level::Recess,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_BACKDROP,
-        },
-        Surface::ArtworkPlaceholder => Row {
-            level: Level::Recess,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_BACKDROP,
-        },
+        Surface::PlaybackStatusPill | Surface::ArtworkPlaceholder => recess_backdrop_row(),
         // Main paints the artwork-loading inset's fill (the muted grey
         // value): `card.rs:111`, `album_art.rs:183`, the panel inline-hero
         // painter, `home_hero_emby.rs:121,272,286`. The row resolves through
@@ -184,35 +186,11 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: Palette::Grey2.color(),
         },
         // --- chrome band ---
-        // The queue card's visualizer fills the same band the queue playback
-        // panel paints, so it takes that band's value in both focus states
-        // rather than following the queue column's: the reserved slot never
-        // flashes a fill the panel around it does not have
-        // (`render/components/card.rs:233-236`).
-        Surface::QueueCardVisualizer => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_CHROME,
-        },
-        Surface::StatusBar => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_CHROME,
-        },
-        Surface::StatusBarPill => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_CHROME,
-        },
-        Surface::QueuePanelBand => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_CHROME,
-        },
+        Surface::QueueCardVisualizer
+        | Surface::StatusBar
+        | Surface::StatusBarPill
+        | Surface::QueuePanelBand
+        | Surface::QueueOnlyPlaybackPanel => chrome_band_row(),
         Surface::PillRow => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
@@ -254,18 +232,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_BACKDROP,
         },
-        Surface::SidebarBand => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_CHROME,
-        },
-        Surface::TabBar => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_CHROME,
-        },
+        Surface::SidebarBand | Surface::TabBar => chrome_band_row(),
         // --- popup ---
         // Every modal caller passes `SURFACE_FOCUSED` as its frame background
         // (`render/components/modal_frame.rs:47` and its remaining callers).
