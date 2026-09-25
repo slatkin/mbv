@@ -28,117 +28,133 @@ impl App {
 
     pub(in crate::app) fn select_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
-            let lib = &mut self.libs[lib_idx];
-            lib.nav_stack.push(BrowseLevel {
-                fetched_rows: 0,
-                parent_id: item.id.clone(),
-                title: item.name.clone(),
-                items: vec![],
-                total_count: 0,
-                resting: BrowseResting::new(0, 0),
-                item_types: None,
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                loading: true,
-
-                all_items: None,
-                letter_filter: None,
-                tv_content_mode: None,
-                music_grouping: None,
-            });
-            self.save_default_library_position(lib_idx);
-            self.spawn_browse(
-                lib_idx,
-                item.id,
-                item.name,
-                None,
-                false,
-                "SortName".into(),
-                "Ascending".into(),
-            );
+            self.open_browse_folder(lib_idx, item);
         } else if is_playable(&item) {
-            if self.is_feed_home_video_group_view(lib_idx) {
-                let pos = self
-                    .feed_home_video_selected_items(lib_idx)
-                    .iter()
-                    .position(|i| i.id == item.id);
-                if let (Some(pos), Some(state)) = (pos, self.libs[lib_idx].feed_home_video.as_mut())
-                {
-                    state.video_cursor = pos;
-                }
-            } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
-                    lvl.set_resting_cursor(pos);
-                }
-            }
-            let fresh = {
-                let Some(client) = self.emby_client() else {
-                    self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                    return;
-                };
-                let c = client.lock().unwrap();
-                c.get_items_by_ids(std::slice::from_ref(&item.id))
-                    .ok()
-                    .and_then(|mut v| {
-                        if v.is_empty() {
-                            None
-                        } else {
-                            Some(v.remove(0))
-                        }
-                    })
-                    .unwrap_or(item)
+            self.restore_playable_cursor(lib_idx, &item);
+            let Some(fresh) = self.fetch_fresh_item(item) else {
+                return;
             };
-            let autoload = self.config.lock().unwrap().autoload;
-            if autoload {
-                let parent_id = if self.is_feed_home_video_group_view(lib_idx) {
-                    self.feed_home_video_selected_parent_id(lib_idx)
-                } else {
-                    self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .map(|l| l.parent_id.clone())
-                };
-                if let Some(parent_id) = parent_id {
-                    let Some(client) = self.emby_client() else {
-                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                        return;
-                    };
-                    let client = client.lock().unwrap();
-                    match client.get_direct_playable(&parent_id) {
-                        Ok(mut siblings) => {
-                            siblings.retain(|i| !i.is_folder);
-                            siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
-                            if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id)
-                            {
-                                let ct = self.libs[lib_idx].library.collection_type.clone();
-                                drop(client);
-                                self.replace_playback_queue(siblings.clone(), start_idx);
-                                self.set_queue_source_if_not_local_daemon(
-                                    crate::config::QueueSource::Collection {
-                                        collection_type: ct,
-                                    },
-                                );
-                                if !self.has_direct_remote_queue() {
-                                    self.save_queue_state();
-                                }
-                                self.play_items_routed(
-                                    siblings,
-                                    start_idx,
-                                    self.queue_source.clone(),
-                                );
-                                return;
-                            }
-                            drop(client);
-                        }
-                        Err(_) => {
-                            drop(client);
-                        }
-                    }
-                }
+            if self.play_autoloaded_siblings(lib_idx, &fresh) {
+                return;
             }
             self.play_item(fresh);
         }
+    }
+
+    fn open_browse_folder(&mut self, lib_idx: usize, item: EmbyItem) {
+        let lib = &mut self.libs[lib_idx];
+        lib.nav_stack.push(BrowseLevel {
+            fetched_rows: 0,
+            parent_id: item.id.clone(),
+            title: item.name.clone(),
+            items: vec![],
+            total_count: 0,
+            resting: BrowseResting::new(0, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: true,
+
+            all_items: None,
+            letter_filter: None,
+            tv_content_mode: None,
+            music_grouping: None,
+        });
+        self.save_default_library_position(lib_idx);
+        self.spawn_browse(
+            lib_idx,
+            item.id,
+            item.name,
+            None,
+            false,
+            "SortName".into(),
+            "Ascending".into(),
+        );
+    }
+
+    fn restore_playable_cursor(&mut self, lib_idx: usize, item: &EmbyItem) {
+        if self.is_feed_home_video_group_view(lib_idx) {
+            let pos = self
+                .feed_home_video_selected_items(lib_idx)
+                .iter()
+                .position(|i| i.id == item.id);
+            if let (Some(pos), Some(state)) = (pos, self.libs[lib_idx].feed_home_video.as_mut()) {
+                state.video_cursor = pos;
+            }
+        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
+                lvl.set_resting_cursor(pos);
+            }
+        }
+    }
+
+    fn fetch_fresh_item(&mut self, item: EmbyItem) -> Option<EmbyItem> {
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return None;
+        };
+        let c = client.lock().unwrap();
+        Some(
+            c.get_items_by_ids(std::slice::from_ref(&item.id))
+                .ok()
+                .and_then(|mut v| {
+                    if v.is_empty() {
+                        None
+                    } else {
+                        Some(v.remove(0))
+                    }
+                })
+                .unwrap_or(item),
+        )
+    }
+
+    fn play_autoloaded_siblings(&mut self, lib_idx: usize, fresh: &EmbyItem) -> bool {
+        if !self.config.lock().unwrap().autoload {
+            return false;
+        }
+        let parent_id = if self.is_feed_home_video_group_view(lib_idx) {
+            self.feed_home_video_selected_parent_id(lib_idx)
+        } else {
+            self.libs[lib_idx]
+                .nav_stack
+                .last()
+                .map(|l| l.parent_id.clone())
+        };
+        let Some(parent_id) = parent_id else {
+            return false;
+        };
+        let Some(client) = self.emby_client() else {
+            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
+            return false;
+        };
+        let client = client.lock().unwrap();
+        match client.get_direct_playable(&parent_id) {
+            Ok(mut siblings) => {
+                siblings.retain(|i| !i.is_folder);
+                siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
+                if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
+                    let ct = self.libs[lib_idx].library.collection_type.clone();
+                    drop(client);
+                    self.replace_playback_queue(siblings.clone(), start_idx);
+                    self.set_queue_source_if_not_local_daemon(
+                        crate::config::QueueSource::Collection {
+                            collection_type: ct,
+                        },
+                    );
+                    if !self.has_direct_remote_queue() {
+                        self.save_queue_state();
+                    }
+                    self.play_items_routed(siblings, start_idx, self.queue_source.clone());
+                    return true;
+                }
+                drop(client);
+            }
+            Err(_) => {
+                drop(client);
+            }
+        }
+        false
     }
 
     /// Candidate track sources for one album Workspace row, in resolution
