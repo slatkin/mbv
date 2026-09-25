@@ -97,6 +97,11 @@ Activating a `Latest` or `Upcoming` row that carries a playable episode id SHALL
 - **THEN** the episode's hero is shown
 - **AND** the same selection in any other geometry shows no episode hero and reserves no hero pane
 
+#### Scenario: Keyboard actions address the displayed row at every geometry
+- **WHEN** a `Latest` list is shown newest-first in any geometry, including narrow, and the user selects a row whose episode is not first in alphabetical order and presses Enter, Ctrl+P or Ctrl+A
+- **THEN** the action addresses the episode displayed in the selected row
+- **AND** no other episode in the list plays or is enqueued
+
 ### Requirement: The content mode is part of the sticky library position
 
 The selected TV content mode SHALL be saved with the library's navigation
