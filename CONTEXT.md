@@ -313,6 +313,14 @@ update (Save As) applies only to the lineage the owner held when it was
 requested; Clients echo owner-minted lineage and never self-authorize it.
 _Avoid_: generation stamp, client lineage, fence token
 
+**Queue epoch**:
+A Client-local counter (`QueueEpoch`) advanced on each Client-side queue
+replace, clear, or attach. It fences async completions (playlist saves, idle
+loads) against queue changes this Client itself made; it is never sent over
+ctrl. Captured alongside the owner lineage as a `QueueOrigin` when a request
+is made, so the fence value's shape follows the owner.
+_Avoid_: remote queue lineage, client lineage
+
 **Unplayable item**:
 An item a Player owner lacks the capability to play, because of media kind,
 required Service availability, or playback support. It never enters that

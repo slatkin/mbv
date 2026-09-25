@@ -21,7 +21,7 @@ impl QueueComponent {
 
     pub(super) fn handle_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.handle_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if matches!(
                 key.code,
                 Key::Up
@@ -45,9 +45,9 @@ impl QueueComponent {
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.carrier.handle_visual_key(key).is_some() {
-            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+            return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
                 self.carrier.selection_summary(),
-            )));
+            ))));
         }
         match key.code {
             Key::Char('[')
@@ -77,13 +77,13 @@ impl QueueComponent {
                 return Some(Msg::Queue(QueueRequest::Scope(self.scope)));
             }
             Key::Left | Key::Right if key.modifiers == tuirealm::event::KeyModifiers::SHIFT => {
-                return Some(Msg::Shell(ShellRequest::QueueIntent(
+                return Some(Msg::Shell(Box::new(ShellRequest::QueueIntent(
                     QueueIntent::ResizeColumn(if key.code == Key::Left {
                         QueueColumnResize::Narrower
                     } else {
                         QueueColumnResize::Wider
                     }),
-                )));
+                ))));
             }
             Key::Up if key.modifiers.is_empty() => {
                 return self.move_cursor(-1);
@@ -165,42 +165,46 @@ impl QueueComponent {
                     .external_intent
                 {
                     Some(RowIntent::Context(slot_id)) => {
-                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                             ContextMenuTargets::Queue(vec![slot_id]),
                             None,
-                        )))
+                        ))))
                     }
-                    Some(RowIntent::ContextSelection(slot_ids)) => Some(Msg::Shell(
+                    Some(RowIntent::ContextSelection(slot_ids)) => Some(Msg::Shell(Box::new(
                         ShellRequest::RowContextMenu(ContextMenuTargets::Queue(slot_ids), None),
-                    )),
-                    _ => Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    ))),
+                    _ => Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                         ContextMenuTargets::Queue(vec![]),
                         None,
-                    ))),
+                    )))),
                 };
             }
             Key::Char('i') => {
                 return self.selected_slot().map(|(scope, slot_id)| {
-                    Msg::Shell(ShellRequest::QueueIntent(QueueIntent::Navigate {
+                    Msg::Shell(Box::new(ShellRequest::QueueIntent(QueueIntent::Navigate {
                         scope,
                         slot_id,
-                    }))
+                    })))
                 });
             }
             Key::Char('p') => {
-                return Some(Msg::Shell(ShellRequest::QueueIntent(QueueIntent::PlayNow)));
+                return Some(Msg::Shell(Box::new(ShellRequest::QueueIntent(
+                    QueueIntent::PlayNow,
+                ))));
             }
             Key::Char('s')
                 if key
                     .modifiers
                     .contains(tuirealm::event::KeyModifiers::CONTROL) =>
             {
-                return Some(Msg::Shell(ShellRequest::QueueIntent(
+                return Some(Msg::Shell(Box::new(ShellRequest::QueueIntent(
                     QueueIntent::SavePlaylist,
-                )));
+                ))));
             }
             Key::Char('c') if !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) => {
-                return Some(Msg::Shell(ShellRequest::QueueIntent(QueueIntent::Clear)));
+                return Some(Msg::Shell(Box::new(ShellRequest::QueueIntent(
+                    QueueIntent::Clear,
+                ))));
             }
             _ => {}
         }

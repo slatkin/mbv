@@ -72,7 +72,10 @@ fn enter_activates_an_artist_workspace_track_from_its_group() {
     assert!(owner.track_focused(), "the artist Workspace holds focus");
 
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistTrackActivate { target, track_id } = *shell_boxed else {
+                panic!("expected artist track activation, got {shell_boxed:?}")
+            };
             assert_eq!(target.artist_name, "Alpha");
             assert_eq!(target.album_targets, ["a-0", "a-1"]);
             assert_eq!(track_id, "alpha-track-1");
@@ -88,7 +91,10 @@ fn hero_activate_activates_an_artist_workspace_track() {
     owner.enter_track_focus();
 
     match owner.on_slot_event(LibrarySlotEvent::HeroActivate) {
-        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistTrackActivate { target, track_id } = *shell_boxed else {
+                panic!("expected artist Hero activation, got {shell_boxed:?}")
+            };
             assert_eq!(target.artist_name, "Alpha");
             assert_eq!(track_id, "alpha-track-1");
         }
@@ -107,10 +113,14 @@ fn enter_activates_a_cached_tree_track_through_the_grouped_resolver() {
     // A tree track carries only stable identities: the shell-owned grouped
     // resolver picks the cached queue according to the autoload policy.
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
-            album_target,
-            track_id,
-        })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicTreeTrackActivate {
+                album_target,
+                track_id,
+            } = *shell_boxed
+            else {
+                panic!("expected grouped tree track activation, got {shell_boxed:?}")
+            };
             assert_eq!(album_target, "a-0");
             assert_eq!(track_id, "alpha-track-1");
         }
@@ -128,7 +138,10 @@ fn hero_double_click_activates_an_artist_workspace_track() {
         MediaListSurfaceInput::DoubleClick(Position { x: 0, y: 1 }),
     ));
     match message {
-        Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate { target, track_id })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistTrackActivate { target, track_id } = *shell_boxed else {
+                panic!("expected artist track activation, got {shell_boxed:?}")
+            };
             assert_eq!(target.artist_name, "Alpha");
             assert_eq!(target.album_targets, ["a-0", "a-1"]);
             assert_eq!(track_id, "alpha-track-1");
@@ -144,10 +157,14 @@ fn artist_workspace_track_context_menu_resolves_projected_groups() {
     owner.enter_track_focus();
 
     match press(&mut owner, Key::Char('.')) {
-        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-            None,
-        ))) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicRowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                None,
+            ) = *shell_boxed
+            else {
+                panic!("expected an artist track context menu, got {shell_boxed:?}")
+            };
             assert_eq!(items.len(), 1, "the focused artist track is a real target");
             assert_eq!(items[0].id, "alpha-track-1");
         }
@@ -165,10 +182,14 @@ fn hero_context_click_resolves_an_artist_workspace_track() {
         MediaListSurfaceInput::ContextClick(Position { x: 0, y: 1 }),
     ));
     match message {
-        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-            Some((0, 1)),
-        ))) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicRowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                Some((0, 1)),
+            ) = *shell_boxed
+            else {
+                panic!("expected an artist track context menu, got {shell_boxed:?}")
+            };
             assert_eq!(items.len(), 1);
             assert_eq!(items[0].id, "alpha-track-1");
         }
@@ -216,7 +237,10 @@ fn left_collapses_an_expanded_root_and_returns_a_leaf_to_its_parent() {
     // album persistence); the resolved root focus crosses as the typed
     // artist-track request (design D7).
     match press(&mut owner, Key::Left) {
-        Some(Msg::Shell(ShellRequest::MusicArtistTracks { target })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistTracks { target } = *shell_boxed else {
+                panic!("expected the typed artist-track request, got {shell_boxed:?}")
+            };
             assert_eq!(target.artist_name, "Alpha");
         }
         other => panic!("expected the typed artist-track request, got {other:?}"),
@@ -266,7 +290,10 @@ fn right_expands_a_collapsed_artist_root_then_enters_its_workspace() {
     // Workspace: non-Wide asks the shell to open its Library Hero overlay for
     // the component-resolved root; it never re-expands or collapses.
     match press(&mut owner, Key::Right) {
-        Some(Msg::Shell(ShellRequest::MusicArtistActivate { target })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistActivate { target } = *shell_boxed else {
+                panic!("expected the artist Workspace entry, got {shell_boxed:?}")
+            };
             assert_eq!(target.artist_name, "Beta");
             assert_eq!(target.album_targets, vec!["b-0".to_string()]);
         }

@@ -68,11 +68,13 @@ fn tick_context_menu_overlay_does_not_clear_multi_selection() {
     // Dispatch the same typed request produced by a selected-row context
     // click. Opening the overlay changes TuiRealm's active component, but it
     // must not run the destination-identity clearing hook.
-    let request = Msg::Shell(crate::app::components::msg::ShellRequest::RowContextMenu(
-        crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
-            crate::app::tests::make_item("context", "Movie"),
-        ]),
-        Some((10, 10)),
+    let request = Msg::Shell(Box::new(
+        crate::app::components::msg::ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
+                crate::app::tests::make_item("context", "Movie"),
+            ]),
+            Some((10, 10)),
+        ),
     ));
     let mut music_resize = false;
     let mut tv_resize = false;

@@ -80,11 +80,10 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::RowContextMenu(
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Queue(_),
             Some((x, y)),
-        )) if *x == queue_point.x && *y == queue_point.y
-    )));
+        ) if *x == queue_point.x && *y == queue_point.y))));
     assert_eq!(
         harness.model().app.effective_panel_focus(),
         PanelFocus::Queue
@@ -94,8 +93,8 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     let outcome = harness.step();
     assert!(
         outcome.raw_messages.iter().any(|message| {
-            matches!(message, Msg::Shell(ShellRequest::LibraryPanelFocus))
-                || matches!(message, Msg::Shell(ShellRequest::MusicArtistTracks { .. }))
+            matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus))
+                || matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicArtistTracks { .. }))
         }),
         "tree click messages: {:?}",
         outcome.raw_messages
@@ -119,9 +118,8 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::MusicRowContextMenu(_, Some((x, y))))
-            if *x == tree_point.0 && *y == tree_point.1
-    )));
+        Msg::Shell(ref shell_boxed)
+             if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(_, Some((x, y))) if *x == tree_point.0 && *y == tree_point.1))));
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in outcome.messages {
         harness
@@ -202,7 +200,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     assert!(outcome
         .messages
         .iter()
-        .all(|message| { !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. })) }));
+        .all(|message| { !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. })) }));
     assert!(harness.model().test_music_owner().selected_is_artist());
 
     // The root click's mutation invalidated the completed frame; re-paint so
@@ -212,8 +210,8 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     let outcome = harness.step();
     assert!(outcome.messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::MusicAlbumCursor { target: 0, .. })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { target: 0, .. }))));
     assert_eq!(
         harness
             .model()
@@ -238,7 +236,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     assert!(outcome
         .messages
         .iter()
-        .all(|message| { !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. })) }));
+        .all(|message| { !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. })) }));
     assert_eq!(
         harness
             .model()

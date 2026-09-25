@@ -26,10 +26,9 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     let left = panel.on(&mouse(MouseEventKind::Down(MouseButton::Left), col, row));
     assert!(matches!(
         left,
-        Some(Msg::Shell(ShellRequest::TvHitClick {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
             hit: TvHit::SeriesRow(ref target),
-        })) if target == "id"
-    ));
+        } if target == "id")));
 
     // Selection invalidates the tree's retained hit geometry; the next input
     // must resolve against a newly painted frame.
@@ -37,8 +36,7 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     let right = panel.on(&mouse(MouseEventKind::Down(MouseButton::Right), col, row));
     assert!(matches!(
         right,
-        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(ref items), _))) if items.len() == 1 && items[0].id == "id"
-    ));
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(ref items), _) if items.len() == 1 && items[0].id == "id")));
 }
 
 #[test]
@@ -62,21 +60,19 @@ fn tv_keyboard_context_menu_uses_all_selected_rows_and_single_row_without_select
     selected.select_targets_for_test(&["series-a".into(), "series-b".into()]);
     assert!(matches!(
         down(&mut selected, Key::Char('.')),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             None
-        ))) if items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>() == vec!["series-a", "series-b"]
-    ));
+        ) if items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>() == vec!["series-a", "series-b"])));
 
     let mut single = TvContent::new();
     single.set_content(content);
     assert!(matches!(
         down(&mut single, Key::Char('.')),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             None
-        ))) if items.len() == 1 && items[0].id == "series-a"
-    ));
+        ) if items.len() == 1 && items[0].id == "series-a")));
 }
 
 #[test]
@@ -130,10 +126,9 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
     ));
     assert!(matches!(
         click,
-        Some(Msg::Shell(ShellRequest::TvHitClick {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
             hit: TvHit::SeriesRow(ref target),
-        })) if target == "series-b"
-    ));
+        } if target == "series-b")));
     assert_eq!(
         tv(&panel).selected_tree_target(),
         Some(&crate::app::components::tv_tree_target::TvTreeTarget::Show(

@@ -205,8 +205,8 @@ fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
     let movement = harness.step();
     assert!(movement.messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryCursorIndex { index: 1 }))));
     assert_eq!(
         tv(&harness).selected_item_id(),
         Some("upcoming-episode".into())
@@ -220,12 +220,12 @@ fn flat_episode_mini_view_routes_keys_to_the_browser_carrier() {
     let cycle = harness.step();
     assert!(cycle.messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::TvCycleLetterPill { delta: 1 })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvCycleLetterPill { delta: 1 }))));
     assert!(!cycle
         .messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::TvSeasonMove { .. }))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { .. }))));
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Esc,
@@ -366,11 +366,11 @@ fn tv_wide_tick_click_resolves_season_pill() {
     let outcome = harness.step();
     assert!(
         outcome.messages.iter().any(|message| matches!(
-            message,
-            Msg::Shell(ShellRequest::TvHitClick {
-                hit: TvHit::SeasonTab(0)
-            })
-        )),
+           message,
+           Msg::Shell(ref shell_boxed)
+        if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
+               hit: TvHit::SeasonTab(0)
+           }))),
         "tick messages: {:?}",
         outcome.messages
     );
@@ -402,10 +402,9 @@ fn tv_wide_tick_click_resolves_episode_row() {
     assert!(
         messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(ShellRequest::TvHitClick {
+            Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
                 hit: TvHit::EpisodeRow(target)
-            }) if target == "episode-1"
-        )),
+            } if target == "episode-1"))),
         "tick messages: {:?}",
         messages
     );

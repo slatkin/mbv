@@ -114,8 +114,8 @@ fn library_panel_wheel_at_loaded_edge_fetches_next_page() {
     assert!(outcome.raw_messages.iter().any(|message| {
         matches!(
             message,
-            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { .. })
-        )
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryCursorIndex { .. }))
     }));
     apply(&mut harness, outcome);
     assert!(

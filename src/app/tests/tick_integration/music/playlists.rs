@@ -37,12 +37,12 @@ fn playlist_enter_replaces_queue_dismisses_sidebar_and_focuses_queue() {
     assert!(matches!(outcome.router, RouterOutcome::FallThrough));
     assert!(
         outcome.messages.iter().any(|m| matches!(
-            m,
-            Msg::Shell(ShellRequest::PlaylistsActivate {
-                open: true,
-                index: 0
-            })
-        )),
+           m,
+           Msg::Shell(ref shell_boxed)
+        if matches!(shell_boxed.as_ref(), ShellRequest::PlaylistsActivate {
+               open: true,
+               index: 0
+           }))),
         "Enter on the open playlist item emits PlaylistsActivate"
     );
 
@@ -133,7 +133,7 @@ fn playlist_activation_on_a_populated_dirty_queue_asks_then_reaches_the_save_pro
 
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)),
+        Msg::Shell(Box::new(ShellRequest::ConfirmIntent(ConfirmIntent::Accept))),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -181,7 +181,7 @@ fn mount_playlists_sidebar(harness: &mut TickHarness) -> ComponentId {
 fn answer_confirm(harness: &mut TickHarness, intent: ConfirmIntent) {
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ConfirmIntent(intent)),
+        Msg::Shell(Box::new(ShellRequest::ConfirmIntent(intent))),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -366,7 +366,7 @@ fn playlist_load_on_dirty_saved_playlist_keeps_the_sidebar_at_the_save_prompt() 
 
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)),
+        Msg::Shell(Box::new(ShellRequest::ConfirmIntent(ConfirmIntent::Accept))),
         &mut music_resize,
         &mut tv_resize,
     );

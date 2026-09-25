@@ -80,11 +80,11 @@ fn feeds_manage_row_double_click_edits_like_enter() {
     assert_eq!(component.on(&click(rect.x, rect.y)), None);
     assert!(
         matches!(
-            component.on(&click(rect.x, rect.y)),
-            Some(Msg::Shell(ShellRequest::FeedsManageIntent(
-                FeedsManageIntent::Edit
-            )))
-        ),
+           component.on(&click(rect.x, rect.y)),
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
+               FeedsManageIntent::Edit
+           ))),
         "double-click must emit the Enter-equivalent Edit intent"
     );
     assert_eq!(component.cursor(), 1);
@@ -100,11 +100,11 @@ fn feeds_manage_outside_click_dismisses_like_esc() {
     component.reset_mouse_gestures_for_test();
     assert!(
         matches!(
-            component.on(&click(outside.x, outside.y)),
-            Some(Msg::Shell(ShellRequest::FeedsManageIntent(
-                FeedsManageIntent::Dismiss
-            )))
-        ),
+           component.on(&click(outside.x, outside.y)),
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
+               FeedsManageIntent::Dismiss
+           ))),
         "outside click must mirror the Esc dismiss path"
     );
 }
@@ -190,11 +190,11 @@ fn feeds_manage_form_outside_click_cancels_like_esc() {
     component.reset_mouse_gestures_for_test();
     assert!(
         matches!(
-            component.on(&click(0, 0)),
-            Some(Msg::Shell(ShellRequest::FeedsManageIntent(
-                FeedsManageIntent::Cancel
-            )))
-        ),
+           component.on(&click(0, 0)),
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
+               FeedsManageIntent::Cancel
+           ))),
         "outside click on the form must mirror its Esc (Cancel) path"
     );
     let _ = frame;
@@ -205,9 +205,9 @@ fn feeds_manage_keyboard_paths_still_work_alongside_mouse() {
     let mut component = list_component();
     assert_eq!(
         component.on(&key(Key::Esc)),
-        Some(Msg::Shell(ShellRequest::FeedsManageIntent(
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsManageIntent(
             FeedsManageIntent::Dismiss
-        )))
+        ))))
     );
 }
 
@@ -221,11 +221,11 @@ fn feeds_manage_outside_double_click_emits_nothing_after_the_first_dismiss() {
 
     component.reset_mouse_gestures_for_test();
     assert!(matches!(
-        component.on(&click(outside.x, outside.y)),
-        Some(Msg::Shell(ShellRequest::FeedsManageIntent(
-            FeedsManageIntent::Dismiss
-        )))
-    ));
+       component.on(&click(outside.x, outside.y)),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
+           FeedsManageIntent::Dismiss
+       ))));
     // The double-click arm must not re-fire the dismiss (or anything else):
     // in the real flow the first click already closed the popup.
     assert_eq!(component.on(&click(outside.x, outside.y)), None);

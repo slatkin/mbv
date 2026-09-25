@@ -166,44 +166,50 @@ impl PlaylistsComponent {
             Key::Left if self.open.is_some() => {
                 self.open = None;
                 self.open_items.clear();
-                return Some(Msg::Shell(ShellRequest::PlaylistsBack));
+                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)));
             }
             Key::Esc | Key::Backspace | Key::Function(4) if self.open.is_some() => {
                 self.open = None;
                 self.open_items.clear();
-                return Some(Msg::Shell(ShellRequest::PlaylistsBack));
+                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)));
             }
             Key::Esc | Key::Function(4) => {
-                return Some(Msg::Shell(ShellRequest::DismissPlaylists));
+                return Some(Msg::Shell(Box::new(ShellRequest::DismissPlaylists)));
             }
-            Key::Function(2) => return Some(Msg::Shell(ShellRequest::OpenSettings)),
-            Key::Function(3) => return Some(Msg::Shell(ShellRequest::OpenSessions)),
+            Key::Function(2) => return Some(Msg::Shell(Box::new(ShellRequest::OpenSettings))),
+            Key::Function(3) => return Some(Msg::Shell(Box::new(ShellRequest::OpenSessions))),
             Key::Char('q') if key.modifiers.is_empty() => {
-                return Some(Msg::Shell(ShellRequest::Quit));
+                return Some(Msg::Shell(Box::new(ShellRequest::Quit)));
             }
             Key::Right if self.open.is_none() => {
-                return (self.cursor < self.playlists.len())
-                    .then_some(Msg::Shell(ShellRequest::PlaylistsOpen(self.cursor)));
+                return (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
+                    ShellRequest::PlaylistsOpen(self.cursor),
+                )));
             }
             Key::Enter => {
                 let open = self.open.is_some();
                 let index = if open { self.open_cursor } else { self.cursor };
-                return Some(Msg::Shell(ShellRequest::PlaylistsActivate { open, index }));
+                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsActivate {
+                    open,
+                    index,
+                })));
             }
             Key::Char('n') if key.modifiers.is_empty() && self.open.is_none() => {
-                return (self.cursor < self.playlists.len())
-                    .then_some(Msg::Shell(ShellRequest::PlaylistsRename(self.cursor)));
+                return (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
+                    ShellRequest::PlaylistsRename(self.cursor),
+                )));
             }
             Key::Char('d') if key.modifiers.is_empty() && self.open.is_none() => {
-                return (self.cursor < self.playlists.len())
-                    .then_some(Msg::Shell(ShellRequest::PlaylistsDelete(self.cursor)));
+                return (self.cursor < self.playlists.len()).then_some(Msg::Shell(Box::new(
+                    ShellRequest::PlaylistsDelete(self.cursor),
+                )));
             }
             Key::Char('r') => {
                 if self.open.is_some() {
                     self.open = None;
                     self.open_items.clear();
                 }
-                return Some(Msg::Shell(ShellRequest::PlaylistsRefresh));
+                return Some(Msg::Shell(Box::new(ShellRequest::PlaylistsRefresh)));
             }
             _ => return Self::local_change(),
         }
@@ -263,11 +269,11 @@ impl PlaylistsComponent {
             MouseGesture::RightClick(_) if self.open.is_some() => {
                 self.open = None;
                 self.open_items.clear();
-                Some(Msg::Shell(ShellRequest::PlaylistsBack))
+                Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)))
             }
             gesture @ (MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at)) => {
                 if !self.geometry.panel_area.contains(at) {
-                    return Some(Msg::Shell(ShellRequest::DismissPlaylists));
+                    return Some(Msg::Shell(Box::new(ShellRequest::DismissPlaylists)));
                 }
                 let &(open, index) = self.hit_rows.resolve(at)?;
                 if open {
@@ -275,8 +281,9 @@ impl PlaylistsComponent {
                 } else {
                     self.cursor = index;
                 }
-                matches!(gesture, MouseGesture::DoubleClick(_))
-                    .then_some(Msg::Shell(ShellRequest::PlaylistsActivate { open, index }))
+                matches!(gesture, MouseGesture::DoubleClick(_)).then_some(Msg::Shell(Box::new(
+                    ShellRequest::PlaylistsActivate { open, index },
+                )))
             }
             _ => None,
         }
@@ -337,7 +344,7 @@ impl AppComponent<Msg, UserEvent> for PlaylistsComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
                     key.code,
                     Key::Up

@@ -36,20 +36,20 @@ impl BookContent {
                             .expect("resolved media-list pointer target"),
                     );
                     self.sync_book_from_owner();
-                    Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
-                        AudiobookshelfBookIntent::Activate,
+                    Some(Msg::Shell(Box::new(
+                        ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::Activate),
                     )))
                 }
                 _ => None,
             },
             LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
-            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
+            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(Box::new(
                 ShellRequest::AudiobookshelfBookIntent(if self.chapter_focused {
                     AudiobookshelfBookIntent::ActivateChapter(self.chapter_target())
                 } else {
                     AudiobookshelfBookIntent::Activate
                 }),
-            )),
+            ))),
             LibrarySlotEvent::HeroPane(input) => match input {
                 MediaListSurfaceInput::Wheel { at, delta } => {
                     if self.chapter_list.claims_current_point(at) {
@@ -82,8 +82,10 @@ impl BookContent {
                             .into_operation(Some(target))
                             .expect("resolved media-list pointer target"),
                     );
-                    Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
-                        AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
+                    Some(Msg::Shell(Box::new(
+                        ShellRequest::AudiobookshelfBookIntent(
+                            AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
+                        ),
                     )))
                 }
                 _ => None,

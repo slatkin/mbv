@@ -52,7 +52,10 @@ fn browser_owner_slash_opens_inline_search_as_a_list_slot() {
         code: Key::Char('/'),
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(message, Some(Msg::Shell(ShellRequest::OpenInlineSearch)));
+    assert_eq!(
+        message,
+        Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)))
+    );
     assert!(matches!(owner.content().list, ListSlot::Search(_)));
 }
 
@@ -77,7 +80,7 @@ fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
     assert_eq!(owner.inline_search().query(), "r");
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted)),
+        Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted))),
         "the first keystroke reports the query-start edge"
     );
     // Subsequent keystrokes are not edges: no repeat corpus-load request.
@@ -175,10 +178,10 @@ fn browser_owner_search_pointer_resolves_against_the_latest_repaint() {
     )));
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+        Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
             id: "idb".into(),
             item_type: "Movie".into(),
-        })),
+        }))),
         "the double-click activated the row the latest paint retained"
     );
 }
@@ -253,10 +256,10 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
     )));
     assert_eq!(
         message,
-        Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+        Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
             id: "id".into(),
             item_type: "Movie".into(),
-        })),
+        }))),
         "double-click activates the row it selected"
     );
 
@@ -266,9 +269,8 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
     assert!(
         matches!(
             message,
-            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Browser(ref items), _)))
-                if items.len() == 1 && items[0] == "id"
-        ),
+            Some(Msg::Shell(ref shell_boxed))
+                 if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Browser(ref items), _) if items.len() == 1 && items[0] == "id")),
         "a right click on a result row opens its context menu: {message:?}"
     );
 }
@@ -329,7 +331,9 @@ fn browser_owner_latest_pill_switches_rows_and_restores_home_video_group_positio
     let selected = owner.on_slot_event(LibrarySlotEvent::SelectorPicked(0));
     assert_eq!(
         selected,
-        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))
+        Some(Msg::Shell(Box::new(
+            ShellRequest::EmbyLibraryLatestSelected
+        )))
     );
     assert!(owner.latest_mode());
     assert_eq!(
@@ -344,9 +348,9 @@ fn browser_owner_latest_pill_switches_rows_and_restores_home_video_group_positio
     let selected = owner.on_slot_event(LibrarySlotEvent::SelectorPicked(2));
     assert_eq!(
         selected,
-        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestExit {
+        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryLatestExit {
             target: 1
-        }))
+        })))
     );
     assert!(!owner.latest_mode());
     owner.set_content({
@@ -393,7 +397,9 @@ fn browser_owner_latest_participates_in_letter_and_group_cycle() {
             code: Key::Char('['),
             modifiers: KeyModifiers::NONE,
         }),
-        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))
+        Some(Msg::Shell(Box::new(
+            ShellRequest::EmbyLibraryLatestSelected
+        )))
     );
     assert!(owner.latest_mode());
     assert_eq!(
@@ -401,9 +407,9 @@ fn browser_owner_latest_participates_in_letter_and_group_cycle() {
             code: Key::Char(']'),
             modifiers: KeyModifiers::NONE,
         }),
-        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestExit {
+        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryLatestExit {
             target: usize::MAX
-        }))
+        })))
     );
     assert!(!owner.latest_mode());
 
@@ -418,7 +424,9 @@ fn browser_owner_latest_participates_in_letter_and_group_cycle() {
             code: Key::Char('['),
             modifiers: KeyModifiers::NONE,
         }),
-        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))
+        Some(Msg::Shell(Box::new(
+            ShellRequest::EmbyLibraryLatestSelected
+        )))
     );
     assert!(owner.latest_mode());
     assert_eq!(
@@ -426,9 +434,9 @@ fn browser_owner_latest_participates_in_letter_and_group_cycle() {
             code: Key::Char(']'),
             modifiers: KeyModifiers::NONE,
         }),
-        Some(Msg::Shell(ShellRequest::EmbyLibraryLatestExit {
+        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryLatestExit {
             target: 0
-        }))
+        })))
     );
     assert!(!owner.latest_mode());
 }

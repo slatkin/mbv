@@ -74,7 +74,7 @@ fn library_routes_row_double_click_enters_like_enter_key() {
     assert_eq!(component.on(&click(rect.x, rect.y)), None);
     assert_eq!(
         component.on(&click(rect.x, rect.y)),
-        Some(Msg::Shell(ShellRequest::LibraryRoutesEnter))
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEnter)))
     );
     assert_eq!(component.cursor(), 1);
 }
@@ -90,7 +90,7 @@ fn library_routes_outside_click_follows_the_esc_path() {
     component.reset_mouse_gestures_for_test();
     assert_eq!(
         component.on(&click(frame.x - 1, frame.y - 1)),
-        Some(Msg::Shell(ShellRequest::LibraryRoutesEsc))
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc)))
     );
 }
 
@@ -125,11 +125,11 @@ fn library_routes_keyboard_paths_still_work_alongside_mouse() {
     component.set_content(&library_popup());
     assert_eq!(
         component.on(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::LibraryRoutesEnter))
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEnter)))
     );
     assert_eq!(
         component.on(&key(Key::Esc)),
-        Some(Msg::Shell(ShellRequest::LibraryRoutesEsc))
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc)))
     );
 }
 
@@ -144,7 +144,7 @@ fn library_routes_outside_double_click_emits_nothing_after_the_first_esc() {
     component.reset_mouse_gestures_for_test();
     assert_eq!(
         component.on(&click(frame.x - 1, frame.y - 1)),
-        Some(Msg::Shell(ShellRequest::LibraryRoutesEsc))
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc)))
     );
     // The double-click arm must not re-fire the Esc path (or anything else):
     // in the real flow the first click already closed the popup.

@@ -85,9 +85,8 @@ fn multiselect_row_double_click_commits_like_enter() {
     assert!(
         matches!(
             component.on(&click(rect.x, rect.y)),
-            Some(Msg::Shell(ShellRequest::MultiselectCommit { kind, items }))
-                if kind == MultiSelectKind::HiddenLibraries && items.len() == 2
-        ),
+            Some(Msg::Shell(ref shell_boxed))
+                 if matches!(shell_boxed.as_ref(), ShellRequest::MultiselectCommit { kind, items } if *kind == MultiSelectKind::HiddenLibraries && items.len() == 2)),
         "double-click must emit the Enter-equivalent commit"
     );
 }
@@ -104,8 +103,8 @@ fn multiselect_outside_click_commits_like_esc() {
     assert!(
         matches!(
             component.on(&click(frame.x - 1, frame.y - 1)),
-            Some(Msg::Shell(ShellRequest::MultiselectCommit { .. }))
-        ),
+            Some(Msg::Shell(ref shell_boxed))
+         if matches!(shell_boxed.as_ref(), ShellRequest::MultiselectCommit { .. })),
         "outside click must follow the popup's only dismiss path, which is a commit"
     );
     // The single click must not have toggled anything: the first commit is
@@ -139,8 +138,8 @@ fn multiselect_keyboard_paths_still_work_alongside_mouse() {
     assert!(component.test_items()[0].2);
     assert!(matches!(
         component.on(&key(Key::Esc)),
-        Some(Msg::Shell(ShellRequest::MultiselectCommit { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MultiselectCommit { .. })));
 }
 
 #[test]
@@ -154,8 +153,8 @@ fn multiselect_outside_double_click_does_not_commit_twice() {
     component.reset_mouse_gestures_for_test();
     assert!(matches!(
         component.on(&click(frame.x - 1, frame.y - 1)),
-        Some(Msg::Shell(ShellRequest::MultiselectCommit { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MultiselectCommit { .. })));
     // The double-click arm must not produce a second MultiselectCommit: in
     // the real flow the first click already closed the popup.
     assert_eq!(component.on(&click(frame.x - 1, frame.y - 1)), None);

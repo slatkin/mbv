@@ -46,7 +46,10 @@ fn neighbour_prefetch_payload_is_the_painted_trees_order_in_both_presentations()
         draw_music_frame(&mut harness);
 
         match music_panel_mut(&mut harness).take_deferred_msg() {
-            Some(Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets, .. })) => {
+            Some(Msg::Shell(shell_boxed)) => {
+                let ShellRequest::MusicNeighbourPrefetch { targets, .. } = *shell_boxed else {
+                    panic!("{width}x{height}: expected the neighbour request, got {shell_boxed:?}")
+                };
                 assert_eq!(
                     targets,
                     vec![
@@ -114,11 +117,14 @@ fn neighbour_prefetch_is_idle_gated_and_suppressed_on_an_artist_root() {
     draw_music_frame(&mut harness);
     let before = harness.model().app.card_image_fetch_calls;
     let targets = match music_panel_mut(&mut harness).take_deferred_msg() {
-        Some(Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets, .. })) => targets,
+        Some(Msg::Shell(shell_boxed)) => match *shell_boxed {
+            ShellRequest::MusicNeighbourPrefetch { targets, .. } => targets,
+            other => panic!("expected the neighbour request, got {other:?}"),
+        },
         other => panic!("expected the neighbour request, got {other:?}"),
     };
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets }),
+        Msg::Shell(Box::new(ShellRequest::MusicNeighbourPrefetch { targets })),
         &mut music_resize,
         &mut tv_resize,
     );

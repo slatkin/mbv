@@ -176,7 +176,7 @@ impl LibraryContentOwner for TvContent {
     }
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.on_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if self.inline_search.is_active()
                 && matches!(
                     key.code,

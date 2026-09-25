@@ -123,11 +123,13 @@ impl ContextMenuComponent {
                     let idx = (pos.y - inner_y) as usize;
                     if let Some(entry) = self.entries.get(idx) {
                         if entry.action.is_some() {
-                            return Some(Msg::Shell(ShellRequest::ContextMenuSelect(idx)));
+                            return Some(Msg::Shell(Box::new(ShellRequest::ContextMenuSelect(
+                                idx,
+                            ))));
                         }
                     }
                 }
-                Some(Msg::Shell(ShellRequest::ContextMenuDismiss))
+                Some(Msg::Shell(Box::new(ShellRequest::ContextMenuDismiss)))
             }
             MouseEventKind::Moved | MouseEventKind::Drag(MouseButton::Right) => {
                 if inside
@@ -193,7 +195,9 @@ impl ContextMenuComponent {
             tuirealm::event::Key::Esc => super::msg::ContextMenuIntent::Dismiss,
             _ => return LeafKeyResult::Unhandled,
         };
-        LeafKeyResult::Consumed(Some(Msg::Shell(ShellRequest::ContextMenuIntent(intent))))
+        LeafKeyResult::Consumed(Some(Box::new(Msg::Shell(Box::new(
+            ShellRequest::ContextMenuIntent(intent),
+        )))))
     }
 }
 
@@ -222,9 +226,9 @@ mod tests {
         let msg = comp.on(&Event::Keyboard(make_key(Key::Down, KeyModifiers::NONE)));
         assert_eq!(
             msg,
-            Some(Msg::Shell(ShellRequest::ContextMenuIntent(
+            Some(Msg::Shell(Box::new(ShellRequest::ContextMenuIntent(
                 crate::app::components::msg::ContextMenuIntent::MoveDown
-            )))
+            ))))
         );
     }
 
@@ -277,8 +281,8 @@ mod tests {
         }));
         assert!(matches!(
             msg,
-            Some(Msg::Shell(ShellRequest::ContextMenuSelect(0)))
-        ));
+            Some(Msg::Shell(ref shell_boxed))
+         if matches!(shell_boxed.as_ref(), ShellRequest::ContextMenuSelect(0))));
     }
 
     fn dismissable_menu() -> ContextMenuComponent {
@@ -311,8 +315,8 @@ mod tests {
         }));
         assert!(matches!(
             msg,
-            Some(Msg::Shell(ShellRequest::ContextMenuDismiss))
-        ));
+            Some(Msg::Shell(ref shell_boxed))
+         if matches!(shell_boxed.as_ref(), ShellRequest::ContextMenuDismiss)));
     }
 
     #[test]

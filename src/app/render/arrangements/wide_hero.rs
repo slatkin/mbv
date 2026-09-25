@@ -86,8 +86,110 @@ pub(in crate::app::render) fn wide_hero_presentation(
     WideHeroPanes { browser, hero }
 }
 
+/// The Wide hero arrangement's right (list) pane geometry: a one-row pill
+/// bar flush with the pane's top, then the list panel below it (decision
+/// 6's "pill row at top of list pane"). `right_panel` is the pane's full
+/// rect (its `y`/`height` anchor the pill row and the panel's bottom);
+/// `right_area` is the vertically-inset pane used for the pill row's
+/// x/width. The pane's own status-row reserve is owned by
+/// [`wide_hero_presentation`]; callers must not re-derive it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct WideHeroBrowserPane {
+    pub pills_area: Rect,
+    pub spacer_area: Rect,
+    pub list_panel: Rect,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) struct PillBarAreas {
+    pub pills_area: Rect,
+    pub spacer_area: Rect,
+    pub content_area: Rect,
+}
+
+/// Places the shared one-row pill bar, its one-row parent-background spacer,
+/// and the content below them.
+pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
+    let reserved = WIDE_HERO_PILL_BAND_HEIGHT;
+    PillBarAreas {
+        pills_area: Rect {
+            height: WIDE_HERO_PILLS_ROW_HEIGHT.min(area.height),
+            ..area
+        },
+        spacer_area: Rect {
+            y: area.y.saturating_add(WIDE_HERO_PILLS_ROW_HEIGHT),
+            height: WIDE_HERO_PILLS_GAP_ROWS.min(area.height.saturating_sub(1)),
+            ..area
+        },
+        content_area: Rect {
+            y: area.y.saturating_add(reserved),
+            height: area.height.saturating_sub(reserved),
+            ..area
+        },
+    }
+}
+
+/// Omits both the Selector row and its gap, giving all of the area to content.
+pub(in crate::app) fn no_selector_areas(area: Rect) -> PillBarAreas {
+    PillBarAreas {
+        pills_area: Rect::new(area.x, area.y, area.width, 0),
+        spacer_area: Rect::new(area.x, area.y, area.width, 0),
+        content_area: area,
+    }
+}
+
+pub(in crate::app) fn wide_hero_browser_pane_with_selector(
+    right_panel: Rect,
+    right_area: Rect,
+    has_selector: bool,
+) -> WideHeroBrowserPane {
+    let area = Rect {
+        x: right_area.x,
+        y: right_panel.y,
+        width: right_area.width,
+        height: right_panel.height,
+    };
+    let areas = if has_selector {
+        pill_bar_areas(area)
+    } else {
+        no_selector_areas(area)
+    };
+    WideHeroBrowserPane {
+        pills_area: areas.pills_area,
+        spacer_area: areas.spacer_area,
+        list_panel: areas.content_area,
+    }
+}
+
+/// Paints the Wide hero left pane and returns the shared content inset
+/// (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill, extent, inset, and focus
+/// resolution -- callers must not resize, re-derive, or conditionally skip the
+/// fill, and must not apply a destination-specific inset.
+///
+/// Takes `content_area` rather than a pane rect so a caller has nothing to
+/// hand in but the rect the arrangement already consumes -- it cannot supply
+/// a mutated hero pane rect. `wide_hero_presentation` is pure and cheap, so
+/// recomputing it here costs nothing. It is split-only: `content_area` may
+/// already be the band-reduced area, so this painter must not re-run the
+/// Wide/Narrow breakpoint (design D1/D2).
+pub(in crate::app) fn wide_hero_hero_pane(
+    f: &mut Frame,
+    content_area: Rect,
+    focused: bool,
+    override_width: Option<u16>,
+) -> Rect {
+    let WideHeroPanes {
+        hero: hero_panel, ..
+    } = wide_hero_presentation(content_area, override_width);
+    let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
+    f.render_widget(
+        Block::default().style(Style::default().bg(background)),
+        hero_panel,
+    );
+    padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y)
+}
+
 #[cfg(test)]
-#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
 
@@ -215,111 +317,7 @@ mod split_override_tests {
     }
 }
 
-/// The Wide hero arrangement's right (list) pane geometry: a one-row pill
-/// bar flush with the pane's top, then the list panel below it (decision
-/// 6's "pill row at top of list pane"). `right_panel` is the pane's full
-/// rect (its `y`/`height` anchor the pill row and the panel's bottom);
-/// `right_area` is the vertically-inset pane used for the pill row's
-/// x/width. The pane's own status-row reserve is owned by
-/// [`wide_hero_presentation`]; callers must not re-derive it.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct WideHeroBrowserPane {
-    pub pills_area: Rect,
-    pub spacer_area: Rect,
-    pub list_panel: Rect,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct PillBarAreas {
-    pub pills_area: Rect,
-    pub spacer_area: Rect,
-    pub content_area: Rect,
-}
-
-/// Places the shared one-row pill bar, its one-row parent-background spacer,
-/// and the content below them.
-pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
-    let reserved = WIDE_HERO_PILL_BAND_HEIGHT;
-    PillBarAreas {
-        pills_area: Rect {
-            height: WIDE_HERO_PILLS_ROW_HEIGHT.min(area.height),
-            ..area
-        },
-        spacer_area: Rect {
-            y: area.y.saturating_add(WIDE_HERO_PILLS_ROW_HEIGHT),
-            height: WIDE_HERO_PILLS_GAP_ROWS.min(area.height.saturating_sub(1)),
-            ..area
-        },
-        content_area: Rect {
-            y: area.y.saturating_add(reserved),
-            height: area.height.saturating_sub(reserved),
-            ..area
-        },
-    }
-}
-
-/// Omits both the Selector row and its gap, giving all of the area to content.
-pub(in crate::app) fn no_selector_areas(area: Rect) -> PillBarAreas {
-    PillBarAreas {
-        pills_area: Rect::new(area.x, area.y, area.width, 0),
-        spacer_area: Rect::new(area.x, area.y, area.width, 0),
-        content_area: area,
-    }
-}
-
-pub(in crate::app) fn wide_hero_browser_pane_with_selector(
-    right_panel: Rect,
-    right_area: Rect,
-    has_selector: bool,
-) -> WideHeroBrowserPane {
-    let area = Rect {
-        x: right_area.x,
-        y: right_panel.y,
-        width: right_area.width,
-        height: right_panel.height,
-    };
-    let areas = if has_selector {
-        pill_bar_areas(area)
-    } else {
-        no_selector_areas(area)
-    };
-    WideHeroBrowserPane {
-        pills_area: areas.pills_area,
-        spacer_area: areas.spacer_area,
-        list_panel: areas.content_area,
-    }
-}
-
-/// Paints the Wide hero left pane and returns the shared content inset
-/// (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill, extent, inset, and focus
-/// resolution -- callers must not resize, re-derive, or conditionally skip the
-/// fill, and must not apply a destination-specific inset.
-///
-/// Takes `content_area` rather than a pane rect so a caller has nothing to
-/// hand in but the rect the arrangement already consumes -- it cannot supply
-/// a mutated hero pane rect. `wide_hero_presentation` is pure and cheap, so
-/// recomputing it here costs nothing. It is split-only: `content_area` may
-/// already be the band-reduced area, so this painter must not re-run the
-/// Wide/Narrow breakpoint (design D1/D2).
-pub(in crate::app) fn wide_hero_hero_pane(
-    f: &mut Frame,
-    content_area: Rect,
-    focused: bool,
-    override_width: Option<u16>,
-) -> Rect {
-    let WideHeroPanes {
-        hero: hero_panel, ..
-    } = wide_hero_presentation(content_area, override_width);
-    let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
-    f.render_widget(
-        Block::default().style(Style::default().bg(background)),
-        hero_panel,
-    );
-    padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y)
-}
-
 #[cfg(test)]
-#[allow(clippy::items_after_test_module)]
 mod wide_hero_hero_pane_tests {
     use super::*;
     use ratatui::backend::TestBackend;
@@ -466,7 +464,6 @@ pub(in crate::app) fn place_media_list_below(
 }
 
 #[cfg(test)]
-#[allow(clippy::items_after_test_module)]
 mod wide_hero_slots_tests {
     use super::*;
 

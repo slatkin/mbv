@@ -3,6 +3,7 @@
 //! within the repository's file-size limit.
 
 use super::*;
+use crate::app::state::queue_owner::QueueOrigin;
 
 impl App {
     pub(super) fn start_playlist_mutation(&mut self, playlist_id: &str) {
@@ -12,24 +13,22 @@ impl App {
             .and_then(|state| state.active.as_ref())
             .is_some_and(|mutation| match mutation {
                 PlaylistMutation::Save {
-                    queue_lineage,
+                    origin,
                     source_playlist_id,
                     ..
                 } => {
-                    *queue_lineage != self.remote_queue_lineage
+                    !self.origin_is_current(*origin)
                         || self.queue_playlist_id() != Some(source_playlist_id.as_str())
                 }
                 PlaylistMutation::CreateAs {
-                    queue_lineage,
+                    origin,
                     source_playlist_id,
                     ..
                 } => {
-                    *queue_lineage != self.remote_queue_lineage
+                    !self.origin_is_current(*origin)
                         || self.queue_playlist_id() != source_playlist_id.as_deref()
                 }
-                PlaylistMutation::Replace { queue_lineage, .. } => {
-                    *queue_lineage != self.remote_queue_lineage
-                }
+                PlaylistMutation::Replace { origin, .. } => !self.origin_is_current(*origin),
             });
         if stale {
             log::debug!(target: "playlist", "discarding stale queued playlist mutation for {playlist_id}");
@@ -88,7 +87,7 @@ impl App {
         let mutation_id = mutation.mutation_id();
         match mutation {
             PlaylistMutation::Save {
-                queue_lineage,
+                origin,
                 source_playlist_id,
                 item_ids,
                 ..
@@ -101,14 +100,14 @@ impl App {
                         .collect(),
                 );
                 let ids = item_ids.clone().unwrap_or_default();
-                let queue_lineage = *queue_lineage;
+                let origin = *origin;
                 let source_playlist_id = source_playlist_id.clone();
                 std::thread::spawn(move || {
                     let result = client.update_playlist_items(&playlist_id, &ids);
                     let _ = tx.send(SessionEvent::PlaylistMutationComplete {
                         mutation_id,
                         playlist_id,
-                        queue_lineage,
+                        origin,
                         source_playlist_id,
                         result,
                     });
@@ -118,9 +117,8 @@ impl App {
                 name,
                 coordinator_key,
                 item_ids,
-                queue_lineage,
+                origin,
                 source_playlist_id,
-                owner_queue_lineage,
                 ..
             } => {
                 *item_ids = Some(
@@ -134,24 +132,22 @@ impl App {
                 let name = name.clone();
                 let coordinator_key = coordinator_key.clone();
                 let source_playlist_id = source_playlist_id.clone();
-                let owner_queue_lineage = *owner_queue_lineage;
-                let queue_lineage = *queue_lineage;
+                let origin = *origin;
                 std::thread::spawn(move || {
                     let result = client.create_playlist(&name, &ids);
                     let _ = tx.send(SessionEvent::PlaylistCreateComplete {
                         mutation_id,
                         coordinator_key,
                         name,
-                        queue_lineage,
+                        origin,
                         source_playlist_id,
-                        owner_queue_lineage,
                         result,
                     });
                 });
             }
             PlaylistMutation::Replace {
                 name,
-                queue_lineage,
+                origin,
                 item_ids,
                 ..
             } => {
@@ -164,7 +160,7 @@ impl App {
                 );
                 let replacement_name = name.to_string();
                 let ids = item_ids.clone().unwrap_or_default();
-                let queue_lineage = *queue_lineage;
+                let origin = *origin;
                 std::thread::spawn(move || {
                     let result = client
                         .delete_playlist(&playlist_id)
@@ -172,11 +168,48 @@ impl App {
                     let _ = tx.send(SessionEvent::PlaylistReplacementComplete {
                         mutation_id,
                         playlist_id,
-                        queue_lineage,
+                        origin,
                         name: replacement_name,
                         result,
                     });
                 });
+            }
+        }
+    }
+
+    /// Apply a completed Save As/Overwrite's new queue source (design D5).
+    /// Returns `true` when the source was applied locally or sent to the
+    /// Stay-alive owner. `ThisProcess` adopts it directly; `StayAlive` sends
+    /// a lineage-guarded source-only update and leaves the queue dirty until
+    /// the owner's snapshot confirms it.
+    pub(in crate::app) fn apply_saved_playlist_source(
+        &mut self,
+        source: crate::config::QueueSource,
+        origin: QueueOrigin,
+    ) -> bool {
+        match origin {
+            QueueOrigin::ThisProcess { .. } => {
+                self.set_queue_source_if_not_local_daemon(source);
+                self.queue_dirty = false;
+                // The new source must never retain entry identities from the
+                // old playlist.
+                self.clear_local_playlist_entry_ids();
+                self.save_queue_state();
+                true
+            }
+            QueueOrigin::StayAlive { lineage, .. } => {
+                let sent = self.player.as_remote().is_some_and(|remote| {
+                    remote.update_queue_source(source.clone(), lineage).is_ok()
+                });
+                if !sent {
+                    self.flash(
+                        "Could not update the Stay-alive queue source".into(),
+                        ToastSeverity::Error,
+                    );
+                    return false;
+                }
+                self.pending_owner_source_update = Some((source, lineage));
+                true
             }
         }
     }
@@ -214,7 +247,7 @@ impl App {
     }
 
     pub(in crate::app) fn save_queue_state(&mut self) {
-        if self.stay_alive_owner_is_queue_authority() {
+        if !self.local_queue_owner().owns_local_persistence() {
             return;
         }
         let state = self.build_queue_state();
@@ -242,7 +275,7 @@ impl App {
     /// session with no recovery path. Only an explicit `ClearQueue` action (which
     /// goes through `save_queue_state`) should ever delete the file.
     pub(in crate::app) fn save_queue_state_no_clear(&mut self) {
-        if self.stay_alive_owner_is_queue_authority() {
+        if !self.local_queue_owner().owns_local_persistence() {
             return;
         }
         let state = self.build_queue_state();
@@ -259,20 +292,13 @@ impl App {
 
     /// Restore the saved queue only for an owner this Client owns. A
     /// Stay-alive Client always takes its queue from the attached owner.
-    pub(in crate::app) fn maybe_restore_queue_state(&mut self) {
-        if self.stay_alive_owner_is_queue_authority() {
-            return;
-        }
-        self.restore_queue_state();
-    }
-
     /// Restore the queue from disk immediately and synchronously — the file
     /// already holds full `EmbyItem`s, so this is a local read, no network
     /// round-trip, no in-flight window where the queue could be superseded
     /// by a real user action before it lands. See `spawn_enrich_queue_state`
     /// for the separate, best-effort refresh of played/position state.
     pub(in crate::app) fn restore_queue_state(&mut self) {
-        if self.stay_alive_owner_is_queue_authority() {
+        if !self.local_queue_owner().owns_local_persistence() {
             return;
         }
         let Some(state) = crate::config::load_queue_state() else {
@@ -416,7 +442,7 @@ impl App {
         }
         if self.sync_playback_queue_items_after_append(scope, vec![appended_slot]) {
             self.persist_local_queue_state_if_needed(scope);
-            self.advance_remote_queue_lineage();
+            self.advance_queue_epoch();
         } else {
             self.queue_dirty = previous_dirty;
             *self.queue_for_scope_mut(scope) = previous_queue;

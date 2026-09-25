@@ -229,9 +229,9 @@ fn visual_mode_status_bar_click_clears_selection_through_tick() {
     assert!(
         outcome
             .messages
-            .contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
+            .contains(&Msg::Shell(Box::new(ShellRequest::ClearMultiSelection(
                 SelectionOrigin::Library(LibrarySelectionOrigin::Home),
-            ))),
+            )))),
         "clear request must reach the shell: {:?}",
         outcome.messages
     );
@@ -257,7 +257,7 @@ fn home_bulk_context_action_clears_home_multi_selection() {
     assert_eq!(home_owner(&harness).test_multi_selection_len(), 2);
 
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::RowContextMenu(
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Home(vec![
                 HomeRowTarget {
                     item_id: Some("home-0".into()),
@@ -271,7 +271,7 @@ fn home_bulk_context_action_clears_home_multi_selection() {
                 },
             ]),
             None,
-        )),
+        ))),
         &mut false,
         &mut false,
     );
@@ -350,8 +350,8 @@ fn clear_multi_selection_routes_by_origin_not_dispatch_focus() {
     // The captured origin still names the Library, so the clear must route
     // there rather than to the focused Queue.
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ClearMultiSelection(SelectionOrigin::Library(
-            LibrarySelectionOrigin::Home,
+        Msg::Shell(Box::new(ShellRequest::ClearMultiSelection(
+            SelectionOrigin::Library(LibrarySelectionOrigin::Home),
         ))),
         &mut false,
         &mut false,
@@ -429,9 +429,9 @@ fn status_bar_clear_with_queue_origin_clears_queue() {
     assert!(
         outcome
             .messages
-            .contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
+            .contains(&Msg::Shell(Box::new(ShellRequest::ClearMultiSelection(
                 SelectionOrigin::Queue,
-            ))),
+            )))),
         "clear request must carry the projected Queue origin: {:?}",
         outcome.messages
     );
@@ -568,8 +568,8 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
     let outcome = harness.step();
     assert!(outcome.messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::HomeRowClick { target: _ })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::HomeRowClick { target: _ }))));
     assert_eq!(home_owner(&harness).cursor(), 2);
     let _ = draw(&mut harness, 60, 20);
     assert_eq!(home_owner(&harness).cursor(), 2);

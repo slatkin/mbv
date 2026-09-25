@@ -455,7 +455,6 @@ pub(in crate::app) trait InlineSearchHost {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::app::tests::make_item;

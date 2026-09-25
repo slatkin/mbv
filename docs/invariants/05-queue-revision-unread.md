@@ -1,7 +1,7 @@
 # Invariant 5 — `QueueRevision` is written everywhere, read nowhere
 
 **Scope:** `QueueRevision::bump` sites (`crates/mbv-core/src/playback_queue.rs`),
-`UnifiedQueueStateData.revision` (`crates/mbv-core/src/ctrl/mod.rs:275`),
+`UnifiedQueueStateData.revision` (`crates/mbv-core/src/ctrl.rs:275`),
 `unified_queue_state_for_peer` / `broadcast_queue_state`
 (`daemon/control_queue.rs:89,136`), `PlayerTab::from_unified_state`
 (`src/app/state/types/player_tab.rs:26`), `apply_unified_queue_state`

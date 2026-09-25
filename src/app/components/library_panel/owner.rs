@@ -228,7 +228,7 @@ pub(in crate::app) trait LibraryContentOwner {
 
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         self.on_key(key)
-            .map(|message| LeafKeyResult::Consumed(Some(message)))
+            .map(|message| LeafKeyResult::Consumed(Some(Box::new(message))))
             .unwrap_or(LeafKeyResult::Unhandled)
     }
 
@@ -310,7 +310,7 @@ pub(in crate::app) trait LibraryContentOwner {
     /// a fabricated keyboard event.
     fn activate_hero_selection(&mut self) -> LeafKeyResult {
         match self.on_slot_event(LibrarySlotEvent::HeroActivate) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None => LeafKeyResult::Unhandled,
         }
     }

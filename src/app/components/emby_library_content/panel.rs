@@ -173,9 +173,9 @@ impl LibraryContentOwner for EmbyLibraryContent {
                                 MediaListSurfaceInput::Wheel { delta, .. } => delta,
                                 _ => 0,
                             }));
-                        Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
                             index: self.cursor(),
-                        }))
+                        })))
                     }
                     MediaListSurfaceInput::Click(_at)
                     | MediaListSurfaceInput::ToggleClick(_at)
@@ -184,17 +184,17 @@ impl LibraryContentOwner for EmbyLibraryContent {
                         self.carrier
                             .delegate_operation(input.into_operation(Some(target.clone()))?);
                         let _ = ();
-                        Some(Msg::Shell(ShellRequest::EmbyLibraryRowClick {
+                        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRowClick {
                             target: Some(target),
-                        }))
+                        })))
                     }
                     MediaListSurfaceInput::DoubleClick(_at) => {
                         let target = target?;
                         self.carrier
                             .delegate_operation(MediaListOperation::Activate(target.clone()));
-                        Some(Msg::Shell(ShellRequest::EmbyLibraryRowActivate {
+                        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRowActivate {
                             target: Some(target),
-                        }))
+                        })))
                     }
                     MediaListSurfaceInput::ContextClick(at) => {
                         let target = target?;
@@ -206,12 +206,12 @@ impl LibraryContentOwner for EmbyLibraryContent {
                             Some(RowIntent::ContextSelection(targets)) => targets,
                             _ => vec![target],
                         };
-                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                             crate::app::state::types::context_menu::ContextMenuTargets::Browser(
                                 targets,
                             ),
                             Some((at.x, at.y)),
-                        )))
+                        ))))
                     }
                     _ => None,
                 }
@@ -221,7 +221,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
             LibrarySlotEvent::HeroActivate => self
                 .selected_effect_item()
-                .map(|item| Msg::Shell(ShellRequest::EmbyLibraryActivate { item })),
+                .map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryActivate { item }))),
         }
     }
 
@@ -232,7 +232,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         let active = self.inline_search.is_active();
         match self.handle_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if active
                 && matches!(
                     key.code,

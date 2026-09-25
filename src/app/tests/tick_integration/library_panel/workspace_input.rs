@@ -35,8 +35,8 @@ fn overlay_workspace_keys_move_the_episode_list_not_the_browser() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 1 })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 1 }))));
     assert_eq!(
         tv_owner_of(&harness).episode_cursor(),
         1,
@@ -120,10 +120,9 @@ fn overlay_workspace_click_selects_and_is_claimed() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(crate::app::components::msg::ShellRequest::TvHitClick {
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::TvHitClick {
             hit: crate::app::components::msg::TvHit::EpisodeRow(target),
-        }) if target == "episode-2"
-    )));
+        } if target == "episode-2"))));
     assert_eq!(
         tv_owner_of(&harness).episode_cursor(),
         1,

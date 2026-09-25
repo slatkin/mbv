@@ -139,7 +139,7 @@ TuiRealm bump.
 Before writing rendering code for a screen:
 
 1. **Look for an existing component or arrangement first.** Check
-   `src/app/render/components/mod.rs` and `src/app/render/arrangements/mod.rs`
+   `src/app/render/components.rs` and `src/app/render/arrangements.rs`
    for something that already paints this shape (a row, a card, a modal
    frame, a hero pane). Reuse it before writing a new painter — for a
    hero-bearing surface this means `hero_on_left_pane`/`LeftPaneFocus`

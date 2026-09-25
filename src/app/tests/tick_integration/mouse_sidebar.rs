@@ -209,7 +209,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     assert!(outcome
         .raw_messages
         .iter()
-        .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::QueueIntent(_)))));
+        .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(_)))));
     assert_eq!(
         {
             let (_, key, _) = harness

@@ -67,9 +67,9 @@ impl BookContent {
         ))
     }
     pub(in crate::app) fn chapter_focus_request(&self) -> Option<Msg> {
-        Some(Msg::Shell(ShellRequest::AudiobookshelfBookMove(
+        Some(Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::ChapterFocus(self.chapter_target()),
-        )))
+        ))))
     }
     /// Project the selected book's canonical chapter/audio-part rows into the
     /// chapter owner before view (design.md D6). The row's stable target is the

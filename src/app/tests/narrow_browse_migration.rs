@@ -453,7 +453,11 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     assert!(
         matches!(
             wheel,
-            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index }) if index == total_rows - 2
+            Msg::Shell(ref shell_boxed)
+                if matches!(
+                    shell_boxed.as_ref(),
+                    ShellRequest::EmbyLibraryCursorIndex { index } if *index == total_rows - 2
+                )
         ),
         "the wheel echo carries the control's resolved index: {wheel:?}"
     );

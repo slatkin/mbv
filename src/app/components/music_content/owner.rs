@@ -196,7 +196,7 @@ impl LibraryContentOwner for MusicContent {
                     if let Some(request) = request {
                         self.inline_search.close();
                         self.browser.apply(TreeOperation::ClearFilter);
-                        return Some(Msg::Shell(request));
+                        return Some(Msg::Shell(Box::new(request)));
                     }
                 }
             }
@@ -204,17 +204,17 @@ impl LibraryContentOwner for MusicContent {
                 Some(crate::app::components::inline_search::InlineSearchAction::Activate {
                     id,
                     item_type,
-                }) => Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                }) => Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
                     id,
                     item_type,
-                })),
+                }))),
                 Some(crate::app::components::inline_search::InlineSearchAction::Dismiss) => {
                     self.inline_search.close();
                     self.browser.apply(TreeOperation::ClearFilter);
                     None
                 }
                 Some(crate::app::components::inline_search::InlineSearchAction::QueryStarted) => {
-                    Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
+                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted)))
                 }
                 None => None,
             };
@@ -231,25 +231,25 @@ impl LibraryContentOwner for MusicContent {
                     // unavailable while the library-wide rescan remains
                     // available from every focused library row.
                     Key::Char('w') => None,
-                    Key::Char('r') => Some(Msg::Shell(ShellRequest::EmbyLibraryRescan)),
+                    Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan))),
                     _ => None,
                 };
             }
             let item = self.selected_item();
             return match key.code {
                 Key::Char('p') => {
-                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryPlay { item }))
+                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryPlay { item })))
                 }
                 Key::Char('a') => {
-                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }))
+                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryEnqueue { item })))
                 }
                 Key::Char('s') => {
-                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryShuffle { item }))
+                    item.map(|item| Msg::Shell(Box::new(ShellRequest::EmbyLibraryShuffle { item })))
                 }
-                Key::Char('w') => {
-                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryToggleWatched { item }))
-                }
-                Key::Char('r') => Some(Msg::Shell(ShellRequest::EmbyLibraryRescan)),
+                Key::Char('w') => item.map(|item| {
+                    Msg::Shell(Box::new(ShellRequest::EmbyLibraryToggleWatched { item }))
+                }),
+                Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan))),
                 _ => None,
             };
         }
@@ -270,14 +270,14 @@ impl LibraryContentOwner for MusicContent {
             Key::Enter if self.track_focused => self.workspace_track_activation(),
             Key::Enter if self.selected_is_track() => {
                 let (album_target, track_id) = self.selected_tree_track()?;
-                Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                Some(Msg::Shell(Box::new(ShellRequest::MusicTreeTrackActivate {
                     album_target,
                     track_id,
-                }))
+                })))
             }
             Key::Enter if self.track_list.rows().is_empty() => self
                 .selected_item()
-                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
+                .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item }))),
             // Narrow geometry has no inline track pane: the chord opens (or
             // re-focuses) the Library Hero overlay instead of focusing a list
             // nothing paints.
@@ -287,7 +287,7 @@ impl LibraryContentOwner for MusicContent {
             }
             Key::Enter => self
                 .selected_item()
-                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
+                .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item }))),
             Key::Esc | Key::Backspace if self.track_focused => {
                 self.clear_track_focus();
                 None
@@ -340,7 +340,7 @@ impl LibraryContentOwner for MusicContent {
                     self.inline_search.open();
                     self.browser.apply(TreeOperation::EditFilter(String::new()));
                 }
-                Some(Msg::Shell(ShellRequest::OpenInlineSearch))
+                Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)))
             }
             // Context menu: the focused track's own menu while the track
             // pane holds local focus, otherwise the selected album's
@@ -361,23 +361,23 @@ impl LibraryContentOwner for MusicContent {
                             .into_iter()
                             .filter_map(|target| self.workspace_track_item(&target))
                             .collect();
-                        (!items.is_empty()).then_some(Msg::Shell(
+                        (!items.is_empty()).then_some(Msg::Shell(Box::new(
                             ShellRequest::MusicRowContextMenu(
                                 crate::app::state::types::context_menu::ContextMenuTargets::Emby(
                                     items,
                                 ),
                                 None,
                             ),
-                        ))
+                        )))
                     }
                     Some(RowIntent::Context(target)) => {
                         self.workspace_track_item(&target).map(|track| {
-                            Msg::Shell(ShellRequest::MusicRowContextMenu(
+                            Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                                 crate::app::state::types::context_menu::ContextMenuTargets::Emby(
                                     vec![track],
                                 ),
                                 None,
-                            ))
+                            )))
                         })
                     }
                     _ => None,
@@ -389,18 +389,18 @@ impl LibraryContentOwner for MusicContent {
                     if items.is_empty() {
                         return None;
                     }
-                    Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+                    Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                         crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                         None,
-                    )))
+                    ))))
                 } else {
                     self.selected_item().map(|item| {
-                        Msg::Shell(ShellRequest::MusicRowContextMenu(
+                        Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                             crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![
                                 item,
                             ]),
                             None,
-                        ))
+                        )))
                     })
                 }
             }
@@ -409,7 +409,7 @@ impl LibraryContentOwner for MusicContent {
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                Some(Msg::Shell(ShellRequest::EmbyLibraryRefresh))
+                Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRefresh)))
             }
             Key::Char('[' | ']')
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -498,8 +498,9 @@ impl LibraryContentOwner for MusicContent {
                     self.enter_artist_workspace_focus();
                     return None;
                 }
-                self.artist_detail_target()
-                    .map(|target| Msg::Shell(ShellRequest::MusicArtistActivate { target }))
+                self.artist_detail_target().map(|target| {
+                    Msg::Shell(Box::new(ShellRequest::MusicArtistActivate { target }))
+                })
             }
             _ => None,
         }
@@ -508,7 +509,7 @@ impl LibraryContentOwner for MusicContent {
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         let active = self.inline_search.is_active();
         match self.on_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if (active
                 && matches!(
                     key.code,
@@ -569,7 +570,7 @@ impl LibraryContentOwner for MusicContent {
         // Source pagination for this album level is unconditional and no
         // longer depends on the painted viewport.
         self.neighbour_prefetch_targets()
-            .map(|targets| Msg::Shell(ShellRequest::MusicNeighbourPrefetch { targets }))
+            .map(|targets| Msg::Shell(Box::new(ShellRequest::MusicNeighbourPrefetch { targets })))
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

@@ -93,19 +93,19 @@ fn keys_destination_is_read_only_and_back_resets_the_cursor() {
     // Enter/Space select nothing (read-only) — no Activate intent.
     assert!(!matches!(
         component.on(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::SettingsIntent(_)))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::SettingsIntent(_))));
     assert!(matches!(
         component.on(&key(Key::Enter)),
         Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
     ));
     // Back returns to the main list and zeroes the cursor.
     assert!(matches!(
-        component.on(&key(Key::Esc)),
-        Some(Msg::Shell(ShellRequest::SettingsIntent(
-            SettingsIntent::Back
-        )))
-    ));
+       component.on(&key(Key::Esc)),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::SettingsIntent(
+           SettingsIntent::Back
+       ))));
     assert_eq!(component.keys_cursor, 0);
 }
 
@@ -396,11 +396,11 @@ fn back_from_services_zeroes_the_local_services_cursor() {
     // next Services entry starts back at the top instead of remembering
     // the old position.
     assert!(matches!(
-        component.on(&key(Key::Esc)),
-        Some(Msg::Shell(ShellRequest::SettingsIntent(
-            SettingsIntent::Back
-        )))
-    ));
+       component.on(&key(Key::Esc)),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::SettingsIntent(
+           SettingsIntent::Back
+       ))));
     component.set_content(SettingsSnapshot {
         destination: SettingsDestination::Services,
         rows: Vec::new(),

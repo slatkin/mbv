@@ -232,11 +232,11 @@ fn books_panel_is_focused_and_mouse_eligible() {
         modifiers: KeyModifiers::NONE,
     }));
     assert!(h.step().raw_messages.iter().any(|m| matches!(
-        m,
-        Msg::Shell(ShellRequest::AudiobookshelfBookMove(
-            AudiobookshelfBookMove::Book(Some(_))
-        ))
-    )));
+       m,
+       Msg::Shell(ref shell_boxed)
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfBookMove(
+           AudiobookshelfBookMove::Book(Some(_))
+       )))));
 }
 
 #[test]

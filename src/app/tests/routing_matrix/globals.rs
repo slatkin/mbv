@@ -9,9 +9,9 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
 fn clear_queue_c_does_not_fire_under_open_context_menu() {
-    let leaf = Some(Msg::Shell(ShellRequest::ContextMenuIntent(
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::ContextMenuIntent(
         ContextMenuIntent::Dismiss,
-    )));
+    ))));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('c')),
@@ -25,14 +25,14 @@ fn clear_queue_c_does_not_fire_under_open_context_menu() {
 }
 #[test]
 fn ctrl_slash_both_terminal_encodings_route_identically() {
-    let leaf = Some(Msg::Shell(ShellRequest::Quit));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
     let slash_out = fold_tick(
         leaf,
         KeyEvent::new(KeyCode::Char('/'), KeyModifiers::CONTROL),
         Some(ComponentId::UiRoot),
         idle_snapshot(),
     );
-    let leaf = Some(Msg::Shell(ShellRequest::Quit));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
     let underscore_out = fold_tick(
         leaf,
         KeyEvent::new(KeyCode::Char('_'), KeyModifiers::CONTROL),

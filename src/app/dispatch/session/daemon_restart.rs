@@ -82,6 +82,7 @@ impl App {
         self.last_played_completed = bootstrap.last_played_completed;
         self.player_endpoint = Some(DaemonEndpoint::Local);
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+        self.advance_queue_epoch();
         self.sync_subtitle_prefs_to_player();
         self.next_up_item = None;
         self.dismiss_daemon_lost();

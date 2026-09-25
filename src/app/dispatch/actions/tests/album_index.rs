@@ -196,7 +196,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
     // The App handler installs the path and persists the position; entering
     // inline track focus for the activated album is the shell's trigger into
     // `MusicWorkspaceComponent` (asserted at the shell boundary in
-    // `shell/music_workspace/mod.rs`).
+    // `shell/music_workspace.rs`).
     assert_eq!(app.libs[0].nav_stack.last().unwrap().parent_id, "artist-c");
     let position = app
         .library_position_state

@@ -18,7 +18,7 @@
 //! * **Double-click window: 400 ms**, exact-position match (legacy standard).
 //! * **Wheel throttle: 30 ms** (legacy standard). The run loop ticks with
 //!   `PollStrategy::Once(poll_timeout)` where `poll_timeout` is 50 ms normally
-//!   and 8 ms while the visualizer runs (`src/app/shell/run/mod.rs`). At the
+//!   and 8 ms while the visualizer runs (`src/app/shell/run.rs`). At the
 //!   50 ms cadence a terminal wheel burst (crossterm coalesces several
 //!   `ScrollUp`/`ScrollDown` per physical notch) all arrives inside one poll;
 //!   a 30 ms throttle collapses that burst to one `Scroll` gesture per tick

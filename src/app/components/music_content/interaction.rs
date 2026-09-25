@@ -13,14 +13,16 @@ impl MusicContent {
     }
     fn pointer_album_selection_request(&mut self, kind: AlbumCursorKind) -> Option<Msg> {
         self.album_selection_request(kind)
-            .or(Some(Msg::Shell(ShellRequest::LibraryPanelFocus)))
+            .or(Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus))))
     }
 
     pub(super) fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
                 let delta = index as i64 - self.context.group_cursor as i64;
-                (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
+                (delta != 0).then_some(Msg::Shell(Box::new(ShellRequest::MusicGroupSwitch {
+                    delta,
+                })))
             }
             LibrarySlotEvent::List(input) => {
                 let filtered_tree = self.local_filter_owns_input();
@@ -69,10 +71,10 @@ impl MusicContent {
                             match outcome.external_intent {
                                 Some(RowIntent::Activate(target)) => {
                                     search.item_for_target(&target).map(|item| {
-                                        Msg::Shell(ShellRequest::InlineSearchActivate {
+                                        Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
                                             id: item.id,
                                             item_type: item.item_type,
-                                        })
+                                        }))
                                     })
                                 }
                                 // A double-click never resolves a context
@@ -96,12 +98,12 @@ impl MusicContent {
                             match outcome.external_intent {
                                 Some(RowIntent::Context(target)) => {
                                     search.item_for_target(&target).map(|item| {
-                                        Msg::Shell(ShellRequest::MusicRowContextMenu(
+                                        Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                                             crate::app::state::types::context_menu::ContextMenuTargets::Emby(
                                                 vec![item],
                                             ),
                                             None,
-                                        ))
+                                        )))
                                     })
                                 }
                                 // A context click never resolves an activate
@@ -157,16 +159,18 @@ impl MusicContent {
                                 let album_target = album.clone();
                                 let track_id = track.clone();
                                 self.browser.apply(TreeOperation::Select(target));
-                                return Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
-                                    album_target,
-                                    track_id,
-                                }));
+                                return Some(Msg::Shell(Box::new(
+                                    ShellRequest::MusicTreeTrackActivate {
+                                        album_target,
+                                        track_id,
+                                    },
+                                )));
                             }
                             self.browser.apply(TreeOperation::Select(target.clone()));
                             if matches!(target, MusicTreeTarget::Artist(_)) {
                                 self.browser
                                     .apply(TreeOperation::ToggleExpansionTarget(target));
-                                return Some(Msg::Shell(ShellRequest::LibraryPanelFocus));
+                                return Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus)));
                             }
                             if self
                                 .browser
@@ -176,7 +180,7 @@ impl MusicContent {
                                 self.browser
                                     .apply(TreeOperation::ToggleExpansionTarget(target));
                             }
-                            Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
+                            Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus)))
                         }
                         MediaListSurfaceInput::ContextClick(at) => {
                             if !self.browser.claims_current_point(at) {
@@ -202,10 +206,10 @@ impl MusicContent {
                                 if items.is_empty() && unresolved_targets.is_empty() {
                                     return None;
                                 }
-                                return Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+                                return Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                                     crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                                     Some((at.x, at.y)),
-                                )));
+                                ))));
                             }
 
                             // A context click outside the marked set has the
@@ -217,16 +221,16 @@ impl MusicContent {
                                 if items.is_empty() {
                                     return None;
                                 }
-                                Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+                                Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                                     crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                                     Some((at.x, at.y)),
-                                )))
+                                ))))
                             } else {
                                 let item = self.selected_item()?;
-                                Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+                                Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                                     crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
                                     Some((at.x, at.y)),
-                                )))
+                                ))))
                             }
                         }
                         _ => None,
@@ -239,7 +243,7 @@ impl MusicContent {
                     self.workspace_track_activation()
                 } else {
                     self.selected_item()
-                        .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                        .map(|item| Msg::Shell(Box::new(ShellRequest::MusicAlbumActivate { item })))
                 }
             }
             LibrarySlotEvent::HeroPane(input) => match input {
@@ -287,10 +291,10 @@ impl MusicContent {
                             .collect(),
                         _ => vec![item],
                     };
-                    Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+                    Some(Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
                         crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                         Some((at.x, at.y)),
-                    )))
+                    ))))
                 }
                 _ => None,
             },

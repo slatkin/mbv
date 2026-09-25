@@ -54,8 +54,11 @@ fn focused_music_track_in_track_mode_resolves_focused_track() {
         code: Key::Enter,
         modifiers: TuiKeyModifiers::NONE,
     });
-    let Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) = message else {
+    let Some(Msg::Shell(shell_boxed)) = message else {
         panic!("expected a track activation, got {message:?}");
+    };
+    let ShellRequest::MusicTrackActivate { album_id, track } = *shell_boxed else {
+        panic!("expected a track activation, got {shell_boxed:?}");
     };
     assert_eq!(album_id, "album-1");
     assert_eq!(track.id, "album-1-track-0");
@@ -95,8 +98,8 @@ fn enter_in_track_mode_with_missing_cache_does_not_panic() {
     });
     assert!(matches!(
         msg,
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MusicTrackActivate { .. })));
     assert_eq!(model.app.libs[0].nav_stack.len(), nav_len_before);
 }
 

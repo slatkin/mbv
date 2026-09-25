@@ -132,11 +132,11 @@ fn narrow_show_activation_gates_hero_on_tree_selection_not_flat_carrier() {
         modifiers: KeyModifiers::NONE,
     });
     assert!(matches!(
-        moved,
-        Some(Msg::Shell(
-            crate::app::components::ShellRequest::TvHitClick { .. }
-        ))
-    ));
+       moved,
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(),
+           crate::app::components::ShellRequest::TvHitClick { .. }
+       )));
     assert_eq!(
         model.test_tv_owner().selected_item().map(|item| item.id),
         Some("movie-focused".into()),

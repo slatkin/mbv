@@ -31,7 +31,7 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 
 * `src/app/shell/` — interactive shell + TuiRealm `Model`: `App`, mount/focus,
   runtime lifecycle, projections, dispatch, effects, and the single tick/draw
-  path (`shell/run/mod.rs`, `shell/draw.rs`).
+  path (`shell/run.rs`, `shell/draw.rs`).
 * `src/app/components/` — Interactive Components + typed `Msg`s; `media_list/`
   embedded list controls; `mouse/` pointer primitives.
 * `src/app/render/` — `screens/` prepare content, `arrangements/` place it,

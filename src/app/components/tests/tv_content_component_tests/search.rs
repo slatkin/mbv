@@ -31,37 +31,35 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
     };
     assert!(matches!(
         owner.on_key(&key(Key::Down)),
-        Some(Msg::Shell(ShellRequest::TvHitClick {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
             hit: TvHit::SeriesRow(ref id)
-        })) if id == "series-b"
-    ));
+        } if id == "series-b")));
     assert!(matches!(
         owner.on_key(&key(Key::Char('['))),
-        Some(Msg::Shell(ShellRequest::TvCycleLetterPill { delta: -1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvCycleLetterPill { delta: -1 })));
     assert!(matches!(
         owner.on_key(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvActivate { item }))
-            if item.name == "Series B" && item.item_type == "Series"
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { item } if item.name == "Series B" && item.item_type == "Series")));
     assert!(matches!(
         owner.on_key(&key(Key::Up)),
-        Some(Msg::Shell(ShellRequest::TvEpisodeMove { delta: -1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeMove { delta: -1 })));
     assert!(matches!(
         owner.on_key(&key(Key::Char(']'))),
-        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { delta: 1 })));
     assert!(matches!(
         owner.on_key(&key(Key::Esc)),
-        Some(Msg::Shell(ShellRequest::TvBack))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvBack)));
 
     owner.on_key(&key(Key::Enter));
     assert!(matches!(
         owner.on_key(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvEpisodeActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { .. })));
 }
 
 #[test]
@@ -79,8 +77,7 @@ fn dot_emits_library_context_menu() {
     ));
     assert!(matches!(
         owner.on_key(&KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE }),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), _))) if items.len() == 1 && items[0].name == "Series"
-    ));
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), _) if items.len() == 1 && items[0].name == "Series")));
 }
 
 #[test]
@@ -100,7 +97,7 @@ fn slash_emits_open_inline_search() {
             code: Key::Char('/'),
             modifiers: KeyModifiers::NONE
         }),
-        Some(Msg::Shell(ShellRequest::OpenInlineSearch))
+        Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)))
     );
 }
 
@@ -230,9 +227,8 @@ fn wide_tv_search_right_click_on_result_opens_context_menu() {
     assert!(
         matches!(
             message,
-            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(ref items), _)))
-                if items.len() == 1 && items[0].name == "Search Result Alpha"
-        ),
+            Some(Msg::Shell(ref shell_boxed))
+                 if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(ref items), _) if items.len() == 1 && items[0].name == "Search Result Alpha")),
         "right click on a result row opens its context menu: {message:?}"
     );
 }
@@ -266,9 +262,8 @@ fn dot_with_episode_focus_targets_series() {
     });
     assert!(matches!(
         owner.on_key(&KeyEvent { code: Key::Char('.'), modifiers: KeyModifiers::NONE }),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), _)))
-            if items.len() == 1 && items[0].id == "series-id" && items[0].item_type == "Series"
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), _) if items.len() == 1 && items[0].id == "series-id" && items[0].item_type == "Series")));
 }
 
 #[test]
@@ -289,7 +284,10 @@ fn ctrl_r_emits_library_rescan() {
         modifiers: KeyModifiers::CONTROL,
     });
 
-    assert_eq!(message, Some(Msg::Shell(ShellRequest::EmbyLibraryRescan)));
+    assert_eq!(
+        message,
+        Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan)))
+    );
 }
 
 #[test]
@@ -324,8 +322,8 @@ fn ctrl_w_emits_library_toggle_watched() {
             code: Key::Enter,
             modifiers: KeyModifiers::NONE,
         }),
-        Some(Msg::Shell(ShellRequest::TvActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { .. })));
     let message = owner.on_key(&KeyEvent {
         code: Key::Char('w'),
         modifiers: KeyModifiers::CONTROL,
@@ -333,7 +331,6 @@ fn ctrl_w_emits_library_toggle_watched() {
 
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::EmbyLibraryToggleWatched { item }))
-            if item.id == "series-id" && item.item_type == "Series"
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryToggleWatched { item } if item.id == "series-id" && item.item_type == "Series")));
 }

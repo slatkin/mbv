@@ -12,7 +12,7 @@ You research Emby API behavior and synthesize clear, actionable answers. You do 
 **Primary sources to consult (in order):**
 1. `src/api.rs` — the existing client is the most reliable record of what Emby actually returns in practice. Parse quirks here (e.g. `Year` vs `ProductionYear`, `IsFolder` overrides, `ChildCount` vs `RecursiveItemCount`) reflect real Emby behavior, not documentation.
 2. Emby's API documentation and community resources via web search.
-3. `src/app/actions.rs` and `src/app/mod.rs` for how API results are consumed — useful for understanding why a field matters.
+3. `src/app/actions.rs` and `src/app.rs` for how API results are consumed — useful for understanding why a field matters.
 
 **Known Emby quirks to keep in mind:**
 - `production_year` is parsed from `ProductionYear` then `Year` — Emby uses `Year` for audio items.

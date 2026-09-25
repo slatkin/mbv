@@ -31,16 +31,16 @@ fn tv_enter_selects_first_episode_for_activation() {
     // arrows never move focus between wide-library panes.
     assert!(matches!(
         owner.on_key(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { .. })));
     assert_eq!(
         owner.selected_episode_item().map(|episode| episode.id),
         Some("episode-id".into())
     );
     assert!(matches!(
         owner.on_key(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvEpisodeActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { .. })));
 }
 
 #[test]
@@ -71,11 +71,11 @@ fn tv_right_does_not_move_focus_between_panes() {
         modifiers: KeyModifiers::NONE,
     };
     assert!(matches!(
-        owner.on_key(&key(Key::Right)),
-        Some(Msg::Shell(ShellRequest::TvTreeExpand {
-            target: TvTreeTarget::Show(_)
-        }))
-    ));
+       owner.on_key(&key(Key::Right)),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand {
+           target: TvTreeTarget::Show(_)
+       })));
     assert!(matches!(
         owner.on_key(&key(Key::Left)),
         Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
@@ -84,8 +84,8 @@ fn tv_right_does_not_move_focus_between_panes() {
     // still activates the selected show.
     assert!(matches!(
         owner.on_key(&key(Key::Enter)),
-        Some(Msg::Shell(ShellRequest::TvActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { .. })));
 }
 
 #[test]
@@ -162,8 +162,8 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
             code: Key::Enter,
             modifiers: KeyModifiers::NONE
         }),
-        Some(Msg::Shell(ShellRequest::TvEpisodeActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { .. })));
 
     owner.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![series.clone()], 0),
@@ -269,8 +269,8 @@ fn tv_episode_brackets_wrap_season_selection() {
 
     assert!(matches!(
         owner.on_key(&key(Key::Char('['))),
-        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: -1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { delta: -1 })));
     assert_eq!(
         owner.selected_season(),
         Some(("series-id".into(), "season-2".into()))
@@ -278,8 +278,8 @@ fn tv_episode_brackets_wrap_season_selection() {
 
     assert!(matches!(
         owner.on_key(&key(Key::Char(']'))),
-        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { delta: 1 })));
     assert_eq!(
         owner.selected_season(),
         Some(("series-id".into(), "season-0".into()))

@@ -29,10 +29,14 @@ fn hero_double_click_activates_the_selected_track() {
         MediaListSurfaceInput::DoubleClick(Position { x: 0, y: 0 }),
     ));
     match message {
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
-            album_id,
-            track: activated,
-        })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicTrackActivate {
+                album_id,
+                track: activated,
+            } = *shell_boxed
+            else {
+                panic!("expected track activation, got {shell_boxed:?}")
+            };
             assert_eq!(album_id, album.id);
             assert_eq!(activated.id, track.id);
         }
@@ -56,12 +60,12 @@ fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
         delta: 1,
     });
     assert!(matches!(
-        owner.on_slot_event(event),
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: 0,
-            kind: AlbumCursorKind::Move,
-        }))
-    ));
+       owner.on_slot_event(event),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor {
+           target: 0,
+           kind: AlbumCursorKind::Move,
+       })));
 
     owner.context.album_targets.clear();
     // The first wheel's mutation invalidated the completed frame; re-paint so
@@ -72,7 +76,7 @@ fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
         .unwrap();
     assert_eq!(
         owner.on_slot_event(event),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
+        Some(Msg::Shell(Box::new(ShellRequest::LibraryPanelFocus)))
     );
 }
 
@@ -95,7 +99,10 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
     match owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
         root_at,
     ))) {
-        Some(Msg::Shell(ShellRequest::MusicArtistTracks { target })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistTracks { target } = *shell_boxed else {
+                panic!("expected the typed artist-track request, got {shell_boxed:?}")
+            };
             assert_eq!(target.artist_name, "Alpha");
         }
         other => panic!("expected the typed artist-track request, got {other:?}"),
@@ -109,8 +116,8 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
             album_0_at
         ))),
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target: 0, .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { target: 0, .. })));
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));
     paint_tree(&mut owner, area);
 
@@ -120,8 +127,8 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ToggleClick(
             album_0_at,
         ))),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
     assert_eq!(owner.selected_album_targets(), vec!["a-0".to_string()]);
     paint_tree(&mut owner, area);
     assert!(matches!(
@@ -129,8 +136,8 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
             at: album_0_at,
             delta: 1,
         })),
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target: 1, .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { target: 1, .. })));
     assert_eq!(owner.browser.selected_target(), Some(&album_1));
     paint_tree(&mut owner, area);
 
@@ -140,18 +147,17 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             album_0_at
         ))),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
     paint_tree(&mut owner, area);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
             album_0_at
         ))),
-        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             Some((x, y)),
-        ))) if items.len() == 1 && items[0].id == "a-0" && (x, y) == (album_0_at.x, album_0_at.y)
-    ));
+        ) if items.len() == 1 && items[0].id == "a-0" && (*x, *y) == (album_0_at.x, album_0_at.y))));
 
     // A right-click on an artist root inside a marked tree selection acts on
     // that selection, not on every descendant of the root. The grouping root
@@ -161,13 +167,12 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
             root_at
         ))),
-        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             Some((x, y)),
-        ))) if items.len() == 1
+        ) if items.len() == 1
             && items[0].id == "a-0"
-            && (x, y) == (root_at.x, root_at.y)
-    ));
+            && (*x, *y) == (root_at.x, root_at.y))));
     assert!(owner.selected_is_artist());
     paint_tree(&mut owner, area);
 
@@ -200,8 +205,8 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
             root_at
         ))),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
 
     // Double-click expansion is local and still crosses once for focus.
     let was_expanded = owner.browser.is_expanded(&root);
@@ -212,8 +217,8 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             root_at
         ))),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
     assert_ne!(owner.browser.is_expanded(&root), was_expanded);
     if !owner.browser.is_expanded(&root) {
         owner
@@ -230,8 +235,8 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             album_at
         ))),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
     let _ = owner.take_album_selection_change();
     paint_tree(&mut owner, area);
     let album_at = tree_point(&owner, &album);
@@ -240,8 +245,8 @@ fn tree_pointer_noop_and_local_expansion_requests_focus_once() {
             at: album_at,
             delta: 1,
         })),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
 }
 
 #[test]
@@ -269,8 +274,8 @@ fn tree_double_click_cached_album_toggles_expansion_and_focuses_once() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             album_at
         ))),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
     assert!(owner.browser.is_expanded(&album));
 
     paint_tree(&mut owner, area);
@@ -279,8 +284,8 @@ fn tree_double_click_cached_album_toggles_expansion_and_focuses_once() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             album_at
         ))),
-        Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
     assert!(!owner.browser.is_expanded(&album));
 }
 
@@ -402,24 +407,24 @@ fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
             let was_expanded = owner.browser.is_expanded(&id);
             assert!(matches!(
                 double_click(&mut owner),
-                Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-            ));
+                Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
             assert_ne!(owner.browser.is_expanded(&id), was_expanded);
         }
         DoubleClickNode::AlbumWithTracks => {
             assert!(!owner.browser.is_expanded(&id));
             assert!(matches!(
                 double_click(&mut owner),
-                Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-            ));
+                Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
             assert!(owner.browser.is_expanded(&id));
         }
         DoubleClickNode::ChildlessAlbum => {
             assert!(!owner.browser.is_expanded(&id));
             assert!(matches!(
                 double_click(&mut owner),
-                Some(Msg::Shell(ShellRequest::LibraryPanelFocus))
-            ));
+                Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::LibraryPanelFocus)));
             assert!(
                 !owner.browser.is_expanded(&id),
                 "a childless album claims the gesture without a state change"
@@ -429,11 +434,10 @@ fn tree_double_click_dispatches_by_node_kind_filtered_and_unfiltered(
         DoubleClickNode::Track => {
             assert!(matches!(
                 double_click(&mut owner),
-                Some(Msg::Shell(ShellRequest::MusicTreeTrackActivate {
+                Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::MusicTreeTrackActivate {
                     album_target,
                     track_id,
-                })) if album_target == "a-0" && track_id == "track-1"
-            ));
+                } if album_target == "a-0" && track_id == "track-1")));
             assert_eq!(
                 owner.browser.selected_target(),
                 Some(&id),
@@ -476,8 +480,8 @@ fn filtered_pointer_gestures_resolve_tree_geometry_not_the_flat_carrier() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
             album_0_at
         ))),
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. })));
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));
 
     // A wheel inside the painted filtered tree rectangle moves the tree's own
@@ -489,8 +493,8 @@ fn filtered_pointer_gestures_resolve_tree_geometry_not_the_flat_carrier() {
             at: album_0_at,
             delta: 1,
         })),
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. })));
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-1"));
 }
 
@@ -510,11 +514,10 @@ fn tree_context_click_outside_selection_clears_only_tree_marks() {
     let b0_at = tree_point(&owner, &b0);
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(b0_at))),
-        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
             _,
-        ))) if items.len() == 1 && items[0].id == "b-0"
-    ));
+        ) if items.len() == 1 && items[0].id == "b-0")));
     assert!(
         owner.selected_album_targets().is_empty(),
         "a context click outside the marked set clears only this tree"

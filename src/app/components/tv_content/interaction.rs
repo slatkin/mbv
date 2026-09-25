@@ -48,9 +48,11 @@ impl TvContent {
         }
         match event {
             // The letter pills are the one Selector row at both breakpoints.
-            LibrarySlotEvent::SelectorPicked(index) => Some(Msg::Shell(ShellRequest::TvHitClick {
-                hit: TvHit::LetterPill(index),
-            })),
+            LibrarySlotEvent::SelectorPicked(index) => {
+                Some(Msg::Shell(Box::new(ShellRequest::TvHitClick {
+                    hit: TvHit::LetterPill(index),
+                })))
+            }
             // The season pills ride in the hero pane's Workspace Selector
             // row (Wide only).
             LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
@@ -59,22 +61,24 @@ impl TvContent {
                     Position::new(0, 0),
                     MediaListSurfaceInput::Click(Position::new(0, 0)),
                 );
-                Some(Msg::Shell(ShellRequest::TvHitClick {
+                Some(Msg::Shell(Box::new(ShellRequest::TvHitClick {
                     hit: TvHit::SeasonTab(index),
-                }))
+                })))
             }
             // The Browser pane's series list.
             LibrarySlotEvent::List(input) => self.series_list_event(input),
             LibrarySlotEvent::HeroActivate => match self.pane {
-                Pane::Series if self.flat_episode_mode() => self
-                    .selected_episode_item()
-                    .map(|episode| Msg::Shell(ShellRequest::TvEpisodeActivate { episode })),
+                Pane::Series if self.flat_episode_mode() => {
+                    self.selected_episode_item().map(|episode| {
+                        Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode }))
+                    })
+                }
                 Pane::Series => self
                     .selected_item()
-                    .map(|item| Msg::Shell(ShellRequest::TvActivate { item })),
-                Pane::Episodes => self
-                    .selected_episode_item()
-                    .map(|episode| Msg::Shell(ShellRequest::TvEpisodeActivate { episode })),
+                    .map(|item| Msg::Shell(Box::new(ShellRequest::TvActivate { item }))),
+                Pane::Episodes => self.selected_episode_item().map(|episode| {
+                    Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode }))
+                }),
             },
             // The hero pane: the episode box's rows, or the pane itself.
             LibrarySlotEvent::HeroPane(input) => self.hero_pane_event(input),
@@ -107,12 +111,12 @@ impl TvContent {
                 let hit = self.resolve_series_hit(at)?;
                 self.apply_pane_click(hit.clone(), at, input);
                 let _ = ();
-                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
+                Some(Msg::Shell(Box::new(ShellRequest::TvHitClick { hit })))
             }
             MediaListSurfaceInput::DoubleClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
                 self.apply_pane_click(hit.clone(), at, MediaListSurfaceInput::Click(at));
-                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
+                Some(Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick { hit })))
             }
             MediaListSurfaceInput::ContextClick(at) => {
                 let target = self.carrier.resolve_current_point(at)?.clone();
@@ -143,10 +147,10 @@ impl TvContent {
                         .collect(),
                     _ => vec![item],
                 };
-                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                     crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                     Some((at.x, at.y)),
-                )))
+                ))))
             }
             _ => None,
         }
@@ -196,11 +200,11 @@ impl TvContent {
             | MediaListSurfaceInput::RangeClick(_) => {
                 self.apply_pane_click(hit.clone(), at, input);
                 let _ = ();
-                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
+                Some(Msg::Shell(Box::new(ShellRequest::TvHitClick { hit })))
             }
             MediaListSurfaceInput::DoubleClick(_) => {
                 self.apply_pane_click(hit.clone(), at, MediaListSurfaceInput::Click(at));
-                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
+                Some(Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick { hit })))
             }
             MediaListSurfaceInput::ContextClick(_) => {
                 let item = match &hit {
@@ -239,10 +243,10 @@ impl TvContent {
                         .collect(),
                     _ => vec![item],
                 };
-                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                     crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
                     Some((at.x, at.y)),
-                )))
+                ))))
             }
             _ => None,
         }
@@ -291,10 +295,10 @@ impl TvContent {
                 match outcome.external_intent {
                     Some(RowIntent::Activate(target)) => {
                         search.item_for_target(&target).map(|item| {
-                            Msg::Shell(ShellRequest::InlineSearchActivate {
+                            Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
                                 id: item.id,
                                 item_type: item.item_type,
-                            })
+                            }))
                         })
                     }
                     // A double-click never resolves a context intent, and no
@@ -316,12 +320,12 @@ impl TvContent {
                 match outcome.external_intent {
                     Some(RowIntent::Context(target)) => {
                         search.item_for_target(&target).map(|item| {
-                            Msg::Shell(ShellRequest::RowContextMenu(
+                            Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                                 crate::app::state::types::context_menu::ContextMenuTargets::Emby(
                                     vec![item],
                                 ),
                                 None,
-                            ))
+                            )))
                         })
                     }
                     // A context click never resolves an activate intent, a
@@ -357,15 +361,15 @@ impl TvContent {
                 self.browser.apply(TreeOperation::Select(target.clone()));
                 match target {
                     TvTreeTarget::Show(_) => show.map(|item| {
-                        Msg::Shell(ShellRequest::TvHitClick {
+                        Msg::Shell(Box::new(ShellRequest::TvHitClick {
                             hit: TvHit::SeriesRow(item.id),
-                        })
+                        }))
                     }),
                     TvTreeTarget::Season { .. } | TvTreeTarget::Episode { .. } => {
                         self.show_for_tree_target(&target).map(|item| {
-                            Msg::Shell(ShellRequest::TvHitClick {
+                            Msg::Shell(Box::new(ShellRequest::TvHitClick {
                                 hit: TvHit::SeriesRow(item.id),
-                            })
+                            }))
                         })
                     }
                 }
@@ -378,14 +382,16 @@ impl TvContent {
                 self.browser.apply(TreeOperation::Select(target.clone()));
                 match target {
                     TvTreeTarget::Show(_) => self.show_item_for_tree_target(&target).map(|item| {
-                        Msg::Shell(ShellRequest::TvHitDoubleClick {
+                        Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick {
                             hit: TvHit::SeriesRow(item.id),
-                        })
+                        }))
                     }),
                     TvTreeTarget::Season { .. } => self.toggle_tree_expansion(target),
-                    TvTreeTarget::Episode { .. } => self
-                        .show_item_for_tree_target(&target)
-                        .map(|episode| Msg::Shell(ShellRequest::TvEpisodeActivate { episode })),
+                    TvTreeTarget::Episode { .. } => {
+                        self.show_item_for_tree_target(&target).map(|episode| {
+                            Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode }))
+                        })
+                    }
                 }
             }
             MediaListSurfaceInput::ContextClick(at) => {
@@ -395,10 +401,10 @@ impl TvContent {
                 let target = self.browser.resolve_current_point(at)?.clone();
                 let item = self.show_item_for_tree_target(&target)?;
                 self.browser.apply(TreeOperation::Select(target));
-                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                     crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
                     Some((at.x, at.y)),
-                )))
+                ))))
             }
             _ => None,
         }
@@ -433,9 +439,9 @@ impl TvContent {
             .selected_series
             .as_ref()
             .is_some_and(|selected| selected.id == show.id && selected.name == show.name);
-        (!already_selected).then_some(Msg::Shell(ShellRequest::TvHitClick {
+        (!already_selected).then_some(Msg::Shell(Box::new(ShellRequest::TvHitClick {
             hit: TvHit::SeriesRow(show.id),
-        }))
+        })))
     }
 
     pub(super) fn show_item_for_tree_target(&self, target: &TvTreeTarget) -> Option<EmbyItem> {

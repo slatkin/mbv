@@ -67,8 +67,7 @@ fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
     assert!(
         outcome.messages.iter().any(|msg| matches!(
             msg,
-            Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }) if item.id == "result-album"
-        )),
+            Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryEnqueue { item } if item.id == "result-album"))),
         "Ctrl+A acts on the selected Inline Search result: {:?}",
         outcome.messages
     );
@@ -244,7 +243,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
     ];
 
     // Drive the production `LibEvent::RecursiveAlbumActivated` arm
-    // (shell/run/mod.rs): App installs the path, then the shell arms the re-anchor
+    // (shell/run.rs): App installs the path, then the shell arms the re-anchor
     // + track-focus one-shots and re-projects the workspace.
     harness
         .model_mut()

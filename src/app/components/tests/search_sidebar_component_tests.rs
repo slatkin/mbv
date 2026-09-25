@@ -123,9 +123,8 @@ fn search_sidebar_result_double_click_activates_like_enter() {
     assert!(
         matches!(
             msg,
-            Some(Msg::Shell(ShellRequest::SearchActivate { id, item_type }))
-                if id == "id" && item_type == "Series"
-        ),
+            Some(Msg::Shell(ref shell_boxed))
+                 if matches!(shell_boxed.as_ref(), ShellRequest::SearchActivate { id, item_type } if id == "id" && item_type == "Series")),
         "double-click must emit the Enter-equivalent SearchActivate"
     );
 }
@@ -166,7 +165,7 @@ fn search_sidebar_outside_click_dismisses_like_esc() {
     comp.reset_mouse_gestures_for_test();
     assert_eq!(
         comp.on(&click_event(frame.x + frame.width + 1, frame.y + 1)),
-        Some(Msg::Shell(ShellRequest::DismissSearch))
+        Some(Msg::Shell(Box::new(ShellRequest::DismissSearch)))
     );
 }
 
@@ -215,7 +214,7 @@ fn search_sidebar_outside_double_click_emits_nothing_after_the_first_dismiss() {
     comp.reset_mouse_gestures_for_test();
     assert_eq!(
         comp.on(&click_event(outside_x, outside_y)),
-        Some(Msg::Shell(ShellRequest::DismissSearch))
+        Some(Msg::Shell(Box::new(ShellRequest::DismissSearch)))
     );
     // The double-click arm must not re-fire the dismiss (or anything else):
     // in the real flow the first click already closed the sidebar.

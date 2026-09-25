@@ -36,7 +36,7 @@ fn music_library_queue_library_round_trip_keeps_focus_and_pane_state() {
         .expect("tick blurred music");
     assert!(!raw
         .iter()
-        .any(|msg| matches!(msg, Msg::Shell(ShellRequest::MusicTrackActivate { .. }))));
+        .any(|msg| matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicTrackActivate { .. }))));
     assert_eq!(
         music_track_focus_row(&harness, &id),
         Some(1),
@@ -98,14 +98,14 @@ fn blocking_overlay_focus_loss_and_restoration_through_live_tick() {
     assert_eq!(outcome.pre_fold_focus, Some(confirm_id.clone()));
     assert!(outcome.raw_messages.iter().any(|msg| matches!(
         msg,
-        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept))
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(ConfirmIntent::Accept)))));
 
     // Dismiss the modal the production way; the next sync pass restores focus
     // to the underlying Queue without a focus-only projection.
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept)),
+        Msg::Shell(Box::new(ShellRequest::ConfirmIntent(ConfirmIntent::Accept))),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -153,12 +153,12 @@ fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
     assert!(matches!(outcome.router, RouterOutcome::FallThrough));
     assert!(
         outcome.messages.iter().any(|m| matches!(
-            m,
-            Msg::Shell(ShellRequest::RowContextMenu(
-                crate::app::state::types::context_menu::ContextMenuTargets::Queue(_),
-                _
-            ))
-        )),
+           m,
+           Msg::Shell(ref shell_boxed)
+        if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
+               crate::app::state::types::context_menu::ContextMenuTargets::Queue(_),
+               _
+           )))),
         "`.` falls through to the focused Queue component"
     );
 

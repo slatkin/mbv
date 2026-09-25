@@ -156,7 +156,10 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     press(&mut owner, Key::Down);
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-0"));
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicAlbumActivate { item } = *shell_boxed else {
+                panic!("expected album activation, got {shell_boxed:?}")
+            };
             assert_eq!(item.id, "a-0")
         }
         other => panic!("expected album activation, got {other:?}"),
@@ -182,7 +185,10 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     press(&mut owner, Key::Down);
     assert_eq!(owner.selected_album_target().as_deref(), Some("a-1"));
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicAlbumActivate { item } = *shell_boxed else {
+                panic!("expected album activation, got {shell_boxed:?}")
+            };
             assert_eq!(item.id, "a-1")
         }
         other => panic!("expected album activation, got {other:?}"),
@@ -224,7 +230,10 @@ fn enter_preserves_unfiltered_artist_root_and_filter_enter_toggles_it() {
     press(&mut owner, Key::Down);
     assert_eq!(owner.selected_album_target().as_deref(), Some("b-0"));
     match press(&mut owner, Key::Enter) {
-        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicAlbumActivate { item } = *shell_boxed else {
+                panic!("expected album activation, got {shell_boxed:?}")
+            };
             assert_eq!(item.id, "b-0")
         }
         other => panic!("expected album activation, got {other:?}"),

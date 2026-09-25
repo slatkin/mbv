@@ -116,8 +116,8 @@ fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_sel
         .find(|message| {
             matches!(
                 message,
-                Msg::Shell(ShellRequest::MusicArtistTrackActivate { .. })
-            )
+                Msg::Shell(ref shell_boxed)
+             if matches!(shell_boxed.as_ref(), ShellRequest::MusicArtistTrackActivate { .. }))
         })
         .expect("Enter on the artist Workspace row activates its track");
     let (mut music_resize, mut tv_resize) = (false, false);

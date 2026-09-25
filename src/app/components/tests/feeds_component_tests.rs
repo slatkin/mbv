@@ -276,7 +276,7 @@ fn latest_uses_all_loaded_entries_and_restores_group_and_filter_on_selector_exit
     let selected = owner.on_slot_event(LibrarySlotEvent::SelectorPicked(0));
     assert_eq!(
         selected,
-        Some(Msg::Shell(ShellRequest::FeedsLatestSelected))
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsLatestSelected)))
     );
     assert!(owner.latest_selected());
     assert_eq!(
@@ -392,9 +392,9 @@ fn filter_cycle_resets_cursor_and_scroll() {
     assert_eq!(canonical_cursor(&owner), 0);
     assert_eq!(
         down(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry(
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(vec![entry(
             "Second", true
-        )])))
+        )]))))
     );
 }
 
@@ -498,15 +498,15 @@ fn playback_requests_use_the_selected_entry_guid() {
 
     assert_eq!(
         down(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry(
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(vec![entry(
             "Third", true
-        )])))
+        )]))))
     );
     assert_eq!(
         down(&mut owner, Key::Char('e')),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue(vec![entry(
-            "Third", true
-        )])))
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(vec![
+            entry("Third", true)
+        ]))))
     );
 }
 
@@ -528,11 +528,15 @@ fn feed_actions_preserve_the_selected_entry_when_guids_collide() {
 
     assert_eq!(
         down(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::FeedsPlay(vec![second.clone()])))
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(vec![
+            second.clone()
+        ]))))
     );
     assert_eq!(
         down(&mut owner, Key::Char('e')),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue(vec![second])))
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(vec![
+            second
+        ]))))
     );
 }
 
@@ -548,11 +552,11 @@ fn empty_feed_actions_request_shell_feedback() {
 
     assert_eq!(
         down(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::FeedsPlay(Vec::new())))
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(Vec::new()))))
     );
     assert_eq!(
         down(&mut owner, Key::Char('e')),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue(Vec::new())))
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(Vec::new()))))
     );
 }
 
@@ -734,9 +738,8 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
     );
     assert!(matches!(
         click(&mut panel, list.x, row, MouseEventKind::Down(MouseButton::Right)),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
             Some(_),
-        ))) if entries.len() == 1
-    ));
+        ) if entries.len() == 1)));
 }

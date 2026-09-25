@@ -192,7 +192,7 @@ impl Model {
                 // Enter on an album result returns to the standard library
                 // presentation. `activate_recursive_album` is fully async: it
                 // replaces the nav stack only once `LibEvent::RecursiveAlbumActivated`
-                // drains, and that arm (shell/run/mod.rs) solely owns the Music
+                // drains, and that arm (shell/run.rs) solely owns the Music
                 // workspace re-anchor, the track-selection one-shot, and the
                 // content push -- all against the updated nav stack. Do the
                 // dismiss here only on a successful spawn; on failure leave the

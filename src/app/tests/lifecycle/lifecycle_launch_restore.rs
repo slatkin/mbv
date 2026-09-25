@@ -464,7 +464,7 @@ fn mounted_tick_navigation_does_not_write_launch_snapshot() {
     for request in requests {
         let (mut music_resize, mut tv_resize) = (false, false);
         harness.model_mut().handle_terminal_message(
-            Msg::Shell(request),
+            Msg::Shell(Box::new(request)),
             &mut music_resize,
             &mut tv_resize,
         );

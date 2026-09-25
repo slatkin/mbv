@@ -2,6 +2,7 @@
 //! `tests_queue_mutation.rs` to keep that file within the repository's
 //! file-size limit.
 
+use crate::app::state::queue_owner::QueueOrigin;
 use crate::app::tests::*;
 
 // ── playlist identity + save coordination (isolate-remote-tracking-client-behavior) ──
@@ -32,15 +33,15 @@ fn stale_playlist_mutation_completion_is_rejected_after_queue_change() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();
     app.save_playlist_to_emby();
-    let stale_lineage = app.remote_queue_lineage;
+    let stale_epoch = app.queue_epoch;
     app.remove_from_queue(0);
-    assert!(app.remote_queue_lineage > stale_lineage);
+    assert!(app.queue_epoch > stale_epoch);
     app.queue_dirty = true;
 
     app.handle_session_event(SessionEvent::PlaylistMutationComplete {
         mutation_id: 1,
         playlist_id: "pl-1".into(),
-        queue_lineage: stale_lineage,
+        origin: QueueOrigin::ThisProcess { epoch: stale_epoch },
         source_playlist_id: "pl-1".into(),
         result: Ok(()),
     });
@@ -55,7 +56,7 @@ fn stale_playlist_mutation_completion_is_rejected_after_queue_change() {
 fn untracked_save_invalidates_and_persists_entry_identities() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();
-    let lineage = app.remote_queue_lineage;
+    let epoch = app.queue_epoch;
 
     app.save_playlist_to_emby();
 
@@ -66,7 +67,7 @@ fn untracked_save_invalidates_and_persists_entry_identities() {
             .all(|item| item.playlist_item_id.is_empty()),
         "an untracked save recreates server entry IDs and must still clear the local identities"
     );
-    assert_eq!(app.remote_queue_lineage, lineage);
+    assert_eq!(app.queue_epoch, epoch);
     let persisted = crate::config::load_queue_state().expect("cleared identity persisted");
     assert!(persisted
         .emby_items()
@@ -136,9 +137,10 @@ fn save_as_success_clears_old_playlist_entry_ids() {
         mutation_id,
         coordinator_key: coordinator_key.clone(),
         name: "B".into(),
-        queue_lineage: app.remote_queue_lineage,
+        origin: QueueOrigin::ThisProcess {
+            epoch: app.queue_epoch,
+        },
         source_playlist_id: Some("pl-1".into()),
-        owner_queue_lineage: None,
         result: Ok("pl-2".into()),
     });
 
@@ -214,24 +216,20 @@ fn complete_stay_alive_save_as(app: &mut App) {
     app.save_queue_as_playlist("B".into());
     let mutation_id = app.next_playlist_mutation - 1;
     let coordinator_key = format!("create:{mutation_id}");
-    let owner_queue_lineage = match app.playlist_mutations[&coordinator_key]
+    let origin = match app.playlist_mutations[&coordinator_key]
         .active
         .as_ref()
         .unwrap()
     {
-        crate::app::state::types::playback::PlaylistMutation::CreateAs {
-            owner_queue_lineage,
-            ..
-        } => *owner_queue_lineage,
+        crate::app::state::types::playback::PlaylistMutation::CreateAs { origin, .. } => *origin,
         _ => panic!("expected Save As mutation"),
     };
     app.handle_session_event(SessionEvent::PlaylistCreateComplete {
         mutation_id,
         coordinator_key,
         name: "B".into(),
-        queue_lineage: app.remote_queue_lineage,
+        origin,
         source_playlist_id: Some("pl-1".into()),
-        owner_queue_lineage,
         result: Ok("pl-2".into()),
     });
 }
@@ -320,10 +318,86 @@ fn accepted_stay_alive_save_as_cleans_and_persists_on_owner_snapshot_once() {
 }
 
 #[test]
+fn stay_alive_overwrite_sends_owner_source_update_and_waits_for_snapshot() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let (mut app, commands, snapshot) = local_daemon_save_as_fixture();
+    app.queue_dirty = true;
+
+    app.do_overwrite_playlist("pl-2", "B");
+    let mutation_id = app.next_playlist_mutation - 1;
+    let origin = match app.playlist_mutations["pl-2"].active.as_ref().unwrap() {
+        crate::app::state::types::playback::PlaylistMutation::Replace { origin, .. } => *origin,
+        _ => panic!("expected Replace mutation"),
+    };
+    app.handle_session_event(SessionEvent::PlaylistReplacementComplete {
+        mutation_id,
+        playlist_id: "pl-2".into(),
+        origin,
+        name: "B".into(),
+        result: Ok("pl-2".into()),
+    });
+
+    assert!(matches!(
+        commands.try_recv(),
+        Ok(mbv_core::ctrl::CtrlCmd::UnifiedQueueSourceUpdate {
+            lineage: mbv_core::ctrl::QueueLineage(11),
+            ..
+        })
+    ));
+    assert!(
+        app.queue_dirty,
+        "the overwrite stays dirty until the owner's snapshot confirms it"
+    );
+
+    let accepted_source = crate::config::QueueSource::Playlist {
+        id: Some("pl-2".into()),
+        name: "B".into(),
+    };
+    let mut accepted = snapshot.clone();
+    accepted.source = accepted_source.clone();
+    app.handle_player_event(mbv_core::player::PlayerEvent::UnifiedQueueUpdated(
+        Box::new(accepted),
+    ));
+    assert_eq!(app.queue_source, accepted_source);
+    assert!(!app.queue_dirty);
+}
+
+#[test]
+fn stay_alive_save_as_without_owner_snapshot_is_refused_at_request_time() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let config = crate::config::Config {
+        stay_alive: true,
+        ..Default::default()
+    };
+    let (remote, player_rx, _commands) =
+        mbv_core::remote_player::RemotePlayer::stub_owner_queue_load_with_command_rx(
+            make_items(2),
+            0,
+        );
+    let mut app = App::new_remote_with_config(
+        mbv_core::api::EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Local,
+        config,
+    );
+    assert!(app.queue_origin().is_none(), "no owner snapshot yet");
+
+    app.save_queue_as_playlist("B".into());
+
+    assert!(
+        app.playlist_mutations.is_empty(),
+        "no playlist mutation may be enqueued without an owner snapshot"
+    );
+    assert_eq!(app.status, "Stay-alive queue not available yet");
+    assert!(matches!(app.status_severity, ToastSeverity::Error));
+}
+
+#[test]
 fn replace_completion_persists_new_source_and_cleared_entry_ids() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();
-    let lineage = app.remote_queue_lineage;
+    let epoch = app.queue_epoch;
 
     app.do_overwrite_playlist("pl-2", "B");
     assert_eq!(
@@ -335,7 +409,7 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
     app.handle_session_event(SessionEvent::PlaylistReplacementComplete {
         mutation_id: 1,
         playlist_id: "pl-2".into(),
-        queue_lineage: lineage,
+        origin: QueueOrigin::ThisProcess { epoch },
         name: "B".into(),
         result: Ok("pl-2".into()),
     });
@@ -374,7 +448,9 @@ fn save_and_save_on_quit_cannot_resurrect_a_consumed_occurrence() {
     app.handle_session_event(SessionEvent::PlaylistMutationComplete {
         mutation_id: 1,
         playlist_id: "pl-1".into(),
-        queue_lineage: app.remote_queue_lineage,
+        origin: QueueOrigin::ThisProcess {
+            epoch: app.queue_epoch,
+        },
         source_playlist_id: "pl-1".into(),
         result: Ok(()),
     });

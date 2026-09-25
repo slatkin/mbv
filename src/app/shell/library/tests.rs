@@ -432,7 +432,7 @@ fn shell_skips_focus_routing_while_an_overlay_is_mounted() {
 
 /// Production-style acceptance test for #610 / #607: when Queue owns
 /// panel focus, the per-tick sync sequence (`sync_queue` followed by
-/// `sync_active_destination` in `shell/run/mod.rs`) must leave
+/// `sync_active_destination` in `shell/run.rs`) must leave
 /// `ComponentId::Queue` as the active TuiRealm component. Without the
 /// Queue-owner guard in `sync_active_destination`, the destination
 /// sync re-activates the Library child (or `UiRoot`) on top of Queue,
@@ -449,7 +449,7 @@ fn shell_preserves_queue_focus_across_destination_sync() {
     model.app.panel_focus = PanelFocus::Queue;
     model.app.panel_mode = PanelMode::Both;
 
-    // Mirror the production call order at shell/run/mod.rs.
+    // Mirror the production call order at shell/run.rs.
     model.sync_queue();
     model.sync_active_destination();
 

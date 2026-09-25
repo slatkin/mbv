@@ -6,8 +6,8 @@ mirror (`ExecutionSequence`, `crates/mbv-core/src/playback/execution_sequence.rs
 each connected shell's `PlaybackQueue` mirror (`src/app/dispatch/session/player_event.rs`), the
 shared write path (`crate::playback::queue::apply_progress_to_queue_item`),
 resume resolution (`crate::player::resume_start_pos` /
-`resume_ticks_for_item` / `resume_ticks_for_slot`, `crates/mbv-core/src/player/mod.rs`),
-jump dispatch (`crates/mbv-core/src/daemon/core.rs`, `src/app/dispatch/action/mod.rs`,
+`resume_ticks_for_item` / `resume_ticks_for_slot`, `crates/mbv-core/src/player.rs`),
+jump dispatch (`crates/mbv-core/src/daemon/core.rs`, `src/app/dispatch/action.rs`,
 `crates/mbv-core/src/playback/transition.rs`), and the Playback run's
 forced-jump/re-seek state (`crates/mbv-core/src/player/run/{types,commands,events,queue}.rs`).
 
@@ -118,14 +118,14 @@ back to an entry regardless of what was actually watched.
   meaningful-progress gate) is still duplicated by hand in `daemon_run.rs`
   (x2) and `src/app/dispatch/session/player_event.rs` (x2).
 - **One resume gate, reused both ways.** `resume_start_pos`/
-  `resume_ticks_for_item`/`resume_ticks_for_slot` (`player/mod.rs`) are the
+  `resume_ticks_for_item`/`resume_ticks_for_slot` (`player.rs`) are the
   same gate `mpv_load_opts` bakes into a fresh `loadfile`'s `start=` option,
   so a resume computed at jump time always agrees with what a *fresh* load of
   the same item would have done.
 - **`JumpTo` carries its own resume value.** `PlayerCommand::JumpTo` has a
   `resume_ticks: Option<i64>` field, resolved by the dispatcher
   (`daemon_core.rs`'s `dispatch_slot_jump`/`settle_and_redispatch`/
-  `expire_and_redispatch`, `src/app/dispatch/action/mod.rs`'s `dispatch_jump` for Bare
+  `expire_and_redispatch`, `src/app/dispatch/action.rs`'s `dispatch_jump` for Bare
   mode) from the *canonical* queue — never from `PlaybackRun`'s own copy.
 - **`forced_resume_ticks` lifecycle.** Armed alongside `forced_slot_id` in
   `commands.rs`'s `JumpTo` and `step_to_index` handlers; taken and applied as

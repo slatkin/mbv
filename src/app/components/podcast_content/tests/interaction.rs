@@ -119,17 +119,16 @@ fn keyboard_pill_walk_sends_the_same_effect_a_pointer_pick_sends() {
     }
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
             library_item_id: Some(ref id)
-        })) if id == "alpha"
-    ));
+        } if id == "alpha")));
     // A state-pill commit sends the same shape a plain row click sends.
     assert!(matches!(
-        owner.on_key(&KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: None
-        }))
-    ));
+       owner.on_key(&KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
+           library_item_id: None
+       })));
 }
 
 #[test]
@@ -146,11 +145,11 @@ fn keyboard_list_movement_persists_like_a_row_click() {
     ] {
         assert!(
             matches!(
-                owner.on_key(&KeyEvent::new(key, KeyModifiers::NONE)),
-                Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-                    library_item_id: None
-                }))
-            ),
+               owner.on_key(&KeyEvent::new(key, KeyModifiers::NONE)),
+               Some(Msg::Shell(ref shell_boxed))
+            if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
+                   library_item_id: None
+               })),
             "{key:?} movement persists like a row click"
         );
     }
@@ -200,10 +199,9 @@ fn list_movement_under_a_show_pill_carries_the_show_identity() {
     }
     assert!(matches!(
         owner.on_key(&KeyEvent::new(Key::Down, KeyModifiers::NONE)),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
             library_item_id: Some(ref id)
-        })) if id == "beta"
-    ));
+        } if id == "beta")));
 }
 
 /// The scoped loading projection (row 3.3): a state pill is loading
@@ -272,11 +270,13 @@ fn ctrl_a_emits_enqueue_with_the_selected_episode_target() {
             Key::Char('a'),
             KeyModifiers::CONTROL
         )),
-        Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(
-                Some(target)
-            ))
-        )) if target.episode_id() == "dated"
+        Some(Msg::Shell(ref shell_boxed))
+            if matches!(
+                shell_boxed.as_ref(),
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(
+                    Some(target)
+                )) if target.episode_id() == "dated"
+            )
     ));
 }
 
@@ -316,11 +316,13 @@ fn enter_emits_open_or_play_with_the_selected_episode_target() {
     owner.set_focused(true);
     assert!(matches!(
         owner.on_key(&KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
-        Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
-                Some(target)
-            ))
-        )) if target.episode_id() == "dated"
+        Some(Msg::Shell(ref shell_boxed))
+            if matches!(
+                shell_boxed.as_ref(),
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    Some(target)
+                )) if target.episode_id() == "dated"
+            )
     ));
 }
 
@@ -329,19 +331,18 @@ fn show_pill_pick_resolves_the_show_identity_for_the_shell() {
     let mut owner = owner();
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::SelectorPicked(4)),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
             library_item_id: Some(ref id)
-        })) if id == "alpha"
-    ));
+        } if id == "alpha")));
     // A state-pill pick re-projects and persists through the same
     // request shape a plain row click sends (no show identity); the
     // shell scopes the fan-out to every listed show (row 3.3).
     assert!(matches!(
-        owner.on_slot_event(LibrarySlotEvent::SelectorPicked(2)),
-        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: None
-        }))
-    ));
+       owner.on_slot_event(LibrarySlotEvent::SelectorPicked(2)),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
+           library_item_id: None
+       })));
     // A pick beyond the painted bar resolves nothing.
     assert_eq!(
         owner.on_slot_event(LibrarySlotEvent::SelectorPicked(99)),
@@ -365,11 +366,13 @@ fn pointer_click_resolves_the_episode_target_and_unknown_point_is_noop() {
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
             Position { x: 0, y: 1 }
         ))),
-        Some(Msg::Shell(
-            ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
-                Some(target)
-            ))
-        )) if target.episode_id() == "dated"
+        Some(Msg::Shell(ref shell_boxed))
+            if matches!(
+                shell_boxed.as_ref(),
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    Some(target)
+                )) if target.episode_id() == "dated"
+            )
     ));
     assert_eq!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(

@@ -40,11 +40,11 @@ fn save_playlist_key_updates_local_input_and_emits_semantic_request() {
         Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
     );
     assert!(matches!(
-        component.on(&Event::Keyboard(key(Key::Enter))),
-        Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
-            SavePlaylistIntent::Submit
-        )))
-    ));
+       component.on(&Event::Keyboard(key(Key::Enter))),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::SavePlaylistIntent(
+           SavePlaylistIntent::Submit
+       ))));
 
     let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
     terminal
@@ -85,9 +85,9 @@ fn save_playlist_outside_click_dismisses_like_esc() {
     component.reset_mouse_gestures_for_test();
     assert_eq!(
         component.on(&click(frame.x - 1, frame.y - 1)),
-        Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
+        Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
             SavePlaylistIntent::Dismiss
-        )))
+        ))))
     );
 }
 

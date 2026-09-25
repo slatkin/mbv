@@ -6,9 +6,9 @@ save/discard writer and `SessionEvent::PlaylistMutationComplete` reader
 `App::pending_queue_replacement`
 (`src/app/state/app_struct.rs:354`, typed
 `Option<(PendingQueueAction, ReplacementExecutor)>`), written only by
-`App::request_queue_replacement` (`src/app/dispatch/queue/mod.rs:391`) and
+`App::request_queue_replacement` (`src/app/dispatch/queue.rs:391`) and
 read/taken only by the `ConfirmAction::ReplacePopulatedQueue` arm
-(`src/app/input/confirm_keys/mod.rs:178` take-on-confirm, `:183`
+(`src/app/input/confirm_keys.rs:178` take-on-confirm, `:183`
 clear-on-cancel-or-dismiss, both handing the `(action, executor)` payload to
 `run_replacement`, which dispatches to the executor the entry point chose).
 
@@ -54,10 +54,10 @@ playback, because there is no signal at all.
 ## How the code maintains it today
 
 - **Two slots, two lifecycles.** `pending_queue_replacement` is written
-  only in `request_queue_replacement` (`dispatch/queue/mod.rs:391`) when the
+  only in `request_queue_replacement` (`dispatch/queue.rs:391`) when the
   gate decides confirmation is needed, as an `(action, executor)` tuple
   whose executor is the entry point's `ReplacementExecutor`. The
-  `ReplacePopulatedQueue` arm in `input/confirm_keys/mod.rs` takes it on
+  `ReplacePopulatedQueue` arm in `input/confirm_keys.rs` takes it on
   confirm (`y`/`Y`/`Enter`) and hands it to `run_replacement`, which
   dispatches `Routed(prep)` through `run_routed_replacement` (that entry
   point's pre-play prep, then `play_items_routed`) and `Pending` through
@@ -70,7 +70,7 @@ playback, because there is no signal at all.
 - **Comment-anchored intent.** Both sites state the exclusivity in place:
   `state/types/confirm.rs:32` documents that the gate uses its own
   `pending_queue_replacement` slot so the save-deferral slot stays with its
-  own callers, and `dispatch/queue/mod.rs` documents why the shared deferral
+  own callers, and `dispatch/queue.rs` documents why the shared deferral
   slot must not carry a gated replacement. These comments are the only
   barrier against a future "simplification" back into one slot.
 - **Tests.** `input/confirm_keys/tests.rs` pins both slots' independence

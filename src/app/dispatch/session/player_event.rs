@@ -433,18 +433,7 @@ impl App {
 
                 let queue = self.playback_queue_mut();
                 queue.set_unified_state(&unified, cursor);
-                if self.stay_alive_owner_is_queue_authority() {
-                    self.queue_source = unified.source.clone();
-                    if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
-                        if unified.lineage != lineage {
-                            self.pending_owner_source_update = None;
-                        } else if unified.source == source {
-                            self.pending_owner_source_update = None;
-                            self.queue_dirty = false;
-                            self.clear_local_playlist_entry_ids();
-                        }
-                    }
-                }
+                self.adopt_owner_source(&unified);
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 // mbvd never auto-seeks on this event itself — it always

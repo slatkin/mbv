@@ -51,8 +51,8 @@ fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
     });
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::TvEpisodeMove { delta: 1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeMove { delta: 1 })));
     assert_eq!(component.episodes.cursor(), 1);
 
     component.set_content(TvWideRenderCtx::new(

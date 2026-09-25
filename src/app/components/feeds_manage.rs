@@ -141,7 +141,9 @@ impl FeedsManageComponent {
     }
 
     fn shell_intent(intent: FeedsManageIntent) -> Option<Msg> {
-        Some(Msg::Shell(ShellRequest::FeedsManageIntent(intent)))
+        Some(Msg::Shell(Box::new(ShellRequest::FeedsManageIntent(
+            intent,
+        ))))
     }
 
     /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
@@ -353,7 +355,7 @@ impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
                     key.code,
                     Key::Up
@@ -410,11 +412,11 @@ mod tests {
         component.set_stage(FeedsManageStage::Form(FeedForm::new_add()));
 
         assert!(matches!(
-            component.on(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::FeedsManageIntent(
-                FeedsManageIntent::Submit
-            )))
-        ));
+           component.on(&key(Key::Enter)),
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
+               FeedsManageIntent::Submit
+           ))));
     }
 
     #[test]

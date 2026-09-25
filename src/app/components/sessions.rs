@@ -88,10 +88,14 @@ impl SessionsComponent {
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         match key.code {
-            Key::Char('q') if key.modifiers.is_empty() => Some(Msg::Shell(ShellRequest::Quit)),
-            Key::Esc | Key::Function(3) => Some(Msg::Shell(ShellRequest::DismissSessions)),
-            Key::Function(2) => Some(Msg::Shell(ShellRequest::OpenSettings)),
-            Key::Function(4) => Some(Msg::Shell(ShellRequest::OpenPlaylists)),
+            Key::Char('q') if key.modifiers.is_empty() => {
+                Some(Msg::Shell(Box::new(ShellRequest::Quit)))
+            }
+            Key::Esc | Key::Function(3) => {
+                Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)))
+            }
+            Key::Function(2) => Some(Msg::Shell(Box::new(ShellRequest::OpenSettings))),
+            Key::Function(4) => Some(Msg::Shell(Box::new(ShellRequest::OpenPlaylists))),
             Key::Up => {
                 self.list.move_selection(-1);
                 None
@@ -100,14 +104,14 @@ impl SessionsComponent {
                 self.list.move_selection(1);
                 None
             }
-            Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshSessions)),
+            Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::RefreshSessions))),
             Key::Enter => self
                 .list
                 .selected_target()
                 .cloned()
-                .map(|key| Msg::Shell(ShellRequest::SelectSession(key))),
+                .map(|key| Msg::Shell(Box::new(ShellRequest::SelectSession(key)))),
             Key::Char('d') if self.can_disconnect || self.cast_attachment_id.is_some() => {
-                Some(Msg::Shell(ShellRequest::DetachSessions))
+                Some(Msg::Shell(Box::new(ShellRequest::DetachSessions)))
             }
             _ => None,
         }
@@ -129,11 +133,11 @@ impl SessionsComponent {
                     .painted_panel_area
                     .is_some_and(|area| area.contains(at))
                 {
-                    return Some(Msg::Shell(ShellRequest::DismissSessions));
+                    return Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)));
                 }
                 let target = self.list.resolve_point(at).cloned()?;
                 if self.list.selected_target() == Some(&target) {
-                    Some(Msg::Shell(ShellRequest::SelectSession(target)))
+                    Some(Msg::Shell(Box::new(ShellRequest::SelectSession(target))))
                 } else {
                     self.list.select_target(&target);
                     None
@@ -320,7 +324,7 @@ impl AppComponent<Msg, UserEvent> for SessionsComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
                     key.code,
                     Key::Up | Key::Down | Key::Enter | Key::Esc | Key::Char(_)
@@ -383,7 +387,7 @@ mod tests {
         component.cast_attachment_id = Some("cast-1".to_string());
         assert_eq!(
             component.handle_key(&key(Key::Char('d'))),
-            Some(Msg::Shell(ShellRequest::DetachSessions))
+            Some(Msg::Shell(Box::new(ShellRequest::DetachSessions)))
         );
     }
 
@@ -392,11 +396,11 @@ mod tests {
         let mut component = SessionsComponent::new();
         assert_eq!(
             component.handle_key(&key(Key::Esc)),
-            Some(Msg::Shell(ShellRequest::DismissSessions))
+            Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)))
         );
         assert_eq!(
             component.handle_key(&key(Key::Char('r'))),
-            Some(Msg::Shell(ShellRequest::RefreshSessions))
+            Some(Msg::Shell(Box::new(ShellRequest::RefreshSessions)))
         );
         component.list.set_content(vec![ThreeLineItem::new(
             SessionTargetKey::Cast("cast-1".into()),
@@ -404,9 +408,9 @@ mod tests {
         )]);
         assert_eq!(
             component.handle_key(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::SelectSession(
+            Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Cast("cast-1".into())
-            )))
+            ))))
         );
     }
 
@@ -552,9 +556,9 @@ mod tests {
         let content = component.painted_content_area.unwrap();
         assert_eq!(
             component.handle_mouse(&left_down(content.x, content.y)),
-            Some(Msg::Shell(ShellRequest::SelectSession(
+            Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Emby("a".into())
-            )))
+            ))))
         );
     }
 
@@ -575,9 +579,9 @@ mod tests {
         component.reset_mouse_gestures_for_test();
         assert_eq!(
             component.handle_mouse(&left_down(point.x, point.y)),
-            Some(Msg::Shell(ShellRequest::SelectSession(
+            Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Emby("b".into())
-            )))
+            ))))
         );
     }
 
@@ -586,7 +590,7 @@ mod tests {
         let mut component = painted_component();
         assert_eq!(
             component.handle_mouse(&left_down(100, 100)),
-            Some(Msg::Shell(ShellRequest::DismissSessions))
+            Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)))
         );
     }
 

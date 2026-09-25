@@ -212,11 +212,11 @@ fn narrow_enter_plays_the_selected_episode_without_an_overlay() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-            crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
-        ))
-    )));
+       message,
+       Msg::Shell(ref shell_boxed)
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+           crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
+       )))));
     let panel = harness
         .model()
         .application
@@ -256,11 +256,11 @@ fn narrow_double_click_plays_the_selected_episode_without_an_overlay() {
     ));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-            crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
-        ))
-    )));
+       message,
+       Msg::Shell(ref shell_boxed)
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+           crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
+       )))));
     let panel = harness
         .model()
         .application

@@ -134,7 +134,7 @@ impl AppComponent<Msg, UserEvent> for TabPanel {
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                 let pos = Position::new(mouse.column, mouse.row);
                 self.resolve_click(pos)
-                    .map(|tab_pos| Msg::Shell(ShellRequest::TabSelect(tab_pos)))
+                    .map(|tab_pos| Msg::Shell(Box::new(ShellRequest::TabSelect(tab_pos))))
             }
             _ => None,
         }
@@ -219,7 +219,7 @@ mod tests {
         }));
         assert_eq!(
             msg,
-            Some(Msg::Shell(ShellRequest::TabSelect(2))),
+            Some(Msg::Shell(Box::new(ShellRequest::TabSelect(2)))),
             "clicking the third tab selects it"
         );
     }

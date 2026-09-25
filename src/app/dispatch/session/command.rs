@@ -19,8 +19,8 @@ impl App {
 
     /// Advances whenever queue identity or state is replaced, so in-flight
     /// playlist mutations can detect stale completions.
-    pub(in crate::app) fn advance_remote_queue_lineage(&mut self) {
-        self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
+    pub(in crate::app) fn advance_queue_epoch(&mut self) {
+        self.queue_epoch.advance();
     }
 
     pub(in crate::app) fn spawn_sessions_load(&mut self) {

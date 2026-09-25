@@ -124,11 +124,13 @@ pub(crate) fn text_entry_snapshot() -> RouterSnapshot {
 
 #[test]
 fn stale_summary_does_not_change_current_leaf_arbitration() {
-    let stale_summary = Msg::Shell(crate::app::components::ShellRequest::SelectionProjection(
-        crate::app::components::media_list::SelectionSummary {
-            count: 99,
-            origin: crate::app::components::media_list::SelectionOrigin::Queue,
-        },
+    let stale_summary = Msg::Shell(Box::new(
+        crate::app::components::ShellRequest::SelectionProjection(
+            crate::app::components::media_list::SelectionSummary {
+                count: 99,
+                origin: crate::app::components::media_list::SelectionOrigin::Queue,
+            },
+        ),
     ));
     let focused = Some(ComponentId::Library);
     let messages = fold_tick_with_outcome(
@@ -150,7 +152,9 @@ fn stale_summary_does_not_change_current_leaf_arbitration() {
 
 #[test]
 fn immediate_router_outcomes_have_distinct_fold_behavior() {
-    let leaf = Some(Msg::Shell(crate::app::components::ShellRequest::Quit));
+    let leaf = Some(Msg::Shell(Box::new(
+        crate::app::components::ShellRequest::Quit,
+    )));
     let focused = Some(ComponentId::Library);
 
     let command = fold_tick_with_outcome(

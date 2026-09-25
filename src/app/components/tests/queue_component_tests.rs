@@ -173,15 +173,15 @@ fn queue_component_emits_typed_keyboard_intents() {
         }))
     ));
     assert!(matches!(
-        component.on(&Event::Keyboard(chord(Key::Left, KeyModifiers::SHIFT))),
-        Some(Msg::Shell(ShellRequest::QueueIntent(
-            QueueIntent::ResizeColumn(QueueColumnResize::Narrower)
-        )))
-    ));
+       component.on(&Event::Keyboard(chord(Key::Left, KeyModifiers::SHIFT))),
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(
+           QueueIntent::ResizeColumn(QueueColumnResize::Narrower)
+       ))));
     assert!(matches!(
         component.on(&Event::Keyboard(chord(Key::Char('c'), KeyModifiers::NONE))),
-        Some(Msg::Shell(ShellRequest::QueueIntent(QueueIntent::Clear)))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(QueueIntent::Clear))));
     assert!(
         component
             .on(&Event::Keyboard(chord(Key::Char('x'), KeyModifiers::NONE)))
@@ -241,9 +241,9 @@ fn queue_right_click_uses_the_rendered_slot_target() {
         modifiers: KeyModifiers::NONE,
     }));
     assert!(
-        matches!(message, Some(Msg::Shell(super::msg::ShellRequest::RowContextMenu(
+        matches!(message, Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), super::msg::ShellRequest::RowContextMenu(
         crate::app::state::types::context_menu::ContextMenuTargets::Queue(ids), Some(_)
-    ))) if ids == vec![second])
+    ) if *ids == vec![second]))
     );
 }
 
@@ -261,10 +261,9 @@ fn queue_dot_opens_the_context_menu_for_the_selected_row() {
     component.set_focused(true);
     assert!(matches!(
         component.on(&Event::Keyboard(key(Key::Char('.')))),
-        Some(Msg::Shell(ShellRequest::RowContextMenu(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Queue(ids), None
-        ))) if ids == vec![first]
-    ));
+        ) if *ids == vec![first])));
 }
 
 #[test]
@@ -695,15 +694,15 @@ fn click_on_a_footer_scope_pill_emits_the_scope_click() {
     let remote = remote.expect("remote region");
     assert_eq!(
         component.on(&click(local.x + 1, local.y)),
-        Some(Msg::Shell(ShellRequest::QueueScopeClick {
+        Some(Msg::Shell(Box::new(ShellRequest::QueueScopeClick {
             scope: QueueScope::Local
-        }))
+        })))
     );
     assert_eq!(
         component.on(&click(remote.x + 1, remote.y)),
-        Some(Msg::Shell(ShellRequest::QueueScopeClick {
+        Some(Msg::Shell(Box::new(ShellRequest::QueueScopeClick {
             scope: QueueScope::Remote
-        }))
+        })))
     );
 }
 

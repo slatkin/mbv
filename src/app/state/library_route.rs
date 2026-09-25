@@ -1,10 +1,10 @@
 //! Library-scoped daemon routing resolvers (#223).
 //!
-//! Extracted out of `app/mod.rs` (which had grown very large) as a review
+//! Extracted out of `app.rs` (which had grown very large) as a review
 //! follow-up: these methods are the pure route-resolution layer -- they
 //! decide *which* daemon (if any) a play/enqueue action should target, but
 //! don't themselves perform the connect/swap (that's `apply_route_for_playback`
-//! and `switch_to_library_route`, which stay in `app/mod.rs` since they're
+//! and `switch_to_library_route`, which stay in `app.rs` since they're
 //! entangled with the same suspend/restore machinery the Sessions-panel
 //! direct-remote path uses).
 

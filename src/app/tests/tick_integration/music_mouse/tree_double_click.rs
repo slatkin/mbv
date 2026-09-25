@@ -73,9 +73,9 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
     assert!(
         outcome.raw_messages.iter().all(|message| !matches!(
             message,
-            Msg::Shell(ShellRequest::MusicAlbumActivate { .. })
-                | Msg::Shell(ShellRequest::InlineSearchActivate { .. })
-        )),
+            Msg::Shell(ref shell_boxed)
+                | Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumActivate { .. } | ShellRequest::InlineSearchActivate { .. }))),
         "{width}x{height} {node:?} filtered={filtered}: double-click keeps tree semantics: {:?}",
         outcome.raw_messages
     );
@@ -143,8 +143,8 @@ fn double_click_a_childless_album_claims_the_gesture_unchanged() {
     assert!(
         outcome.raw_messages.iter().all(|message| !matches!(
             message,
-            Msg::Shell(ShellRequest::MusicTreeTrackActivate { .. })
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), ShellRequest::MusicTreeTrackActivate { .. }))),
         "a childless album claims the gesture without a track activation: {:?}",
         outcome.raw_messages
     );

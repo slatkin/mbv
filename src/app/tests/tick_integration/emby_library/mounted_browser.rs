@@ -19,8 +19,8 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor() {
     assert!(outcome.raw_messages.iter().any(|message| {
         matches!(
             message,
-            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 })
-        )
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
     assert_eq!(
@@ -56,7 +56,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
         outcome
             .messages
             .iter()
-            .any(|message| matches!(message, Msg::Shell(ShellRequest::OpenInlineSearch))),
+            .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::OpenInlineSearch))),
         "\"/\" emits the shell open request: {:?}",
         outcome.messages
     );
@@ -89,7 +89,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
         outcome
             .messages
             .iter()
-            .any(|message| matches!(message, Msg::Shell(ShellRequest::InlineSearchQueryStarted))),
+            .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::InlineSearchQueryStarted))),
         "the first keystroke emits the corpus-load request: {:?}",
         outcome.messages
     );
@@ -187,9 +187,8 @@ fn browser_narrow_tick_click_uses_retained_geometry() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(ShellRequest::EmbyLibraryRowClick { target: Some(target) })
-                if target == "movie-focused"
-        )),
+            Msg::Shell(ref shell_boxed)
+                 if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryRowClick { target: Some(target) } if target == "movie-focused"))),
         "the painted fixed-row browser resolves to the selected row: {:?}",
         outcome.raw_messages
     );
@@ -222,8 +221,8 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     assert!(outcome.raw_messages.iter().any(|message| {
         matches!(
             message,
-            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 })
-        )
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
 
@@ -272,9 +271,8 @@ fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
     assert!(outcome.raw_messages.iter().any(|message| {
         matches!(
             message,
-            Msg::Shell(ShellRequest::EmbyLibraryPlay { item })
-                if item.id == "movie-focused"
-        )
+            Msg::Shell(ref shell_boxed)
+                 if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryPlay { item } if item.id == "movie-focused"))
     }));
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in outcome.messages.iter().cloned() {

@@ -2,18 +2,11 @@
 //! file within the repository's file-size limit.
 
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::queue_owner::QueueOrigin;
 use crate::app::{App, PanelFocus, SessionEvent, SidebarId};
 use std::time::{Duration, Instant};
 
 impl App {
-    fn reject_stay_alive_queue_source_update(&mut self, coordinator_key: &str, mutation_id: u64) {
-        self.flash(
-            "Could not update the Stay-alive queue source".into(),
-            ToastSeverity::Error,
-        );
-        self.finish_playlist_mutation(coordinator_key, mutation_id);
-    }
-
     /// Handle a single `SessionEvent` from the sessions-poll channel. Faithful
     /// transcription of the match arms previously inlined in `run()`'s
     /// `sessions_rx` drain loop (see `drain_session_events`).
@@ -165,7 +158,7 @@ impl App {
             SessionEvent::PlaylistMutationComplete {
                 mutation_id,
                 playlist_id,
-                queue_lineage,
+                origin,
                 source_playlist_id,
                 result,
             } => {
@@ -175,7 +168,7 @@ impl App {
                         format!("Playlist save failed: {error}"),
                         ToastSeverity::Error,
                     );
-                } else if queue_lineage == self.remote_queue_lineage
+                } else if self.origin_is_current(origin)
                     && self.queue_playlist_id() == Some(source_playlist_id.as_str())
                 {
                     self.queue_dirty = false;
@@ -186,7 +179,7 @@ impl App {
                 }
                 self.finish_playlist_mutation(&playlist_id, mutation_id);
                 if succeeded
-                    && queue_lineage == self.remote_queue_lineage
+                    && self.origin_is_current(origin)
                     && self.queue_playlist_id() == Some(playlist_id.as_str())
                     && self.pending_queue_action.is_some()
                 {
@@ -200,22 +193,14 @@ impl App {
             SessionEvent::PlaylistReplacementComplete {
                 mutation_id,
                 playlist_id,
-                queue_lineage,
+                origin,
                 name,
                 result,
             } => {
                 match result {
-                    Ok(id) if queue_lineage == self.remote_queue_lineage => {
-                        self.set_queue_source_if_not_local_daemon(
-                            crate::config::QueueSource::Playlist { id: Some(id), name },
-                        );
-                        self.queue_dirty = false;
-                        // The queue now identifies the replacement playlist; its
-                        // items must not retain entry identities from a previously
-                        // current source. Persist before reporting the overwrite
-                        // clean so stale identities cannot survive restart.
-                        self.clear_local_playlist_entry_ids();
-                        self.save_queue_state();
+                    Ok(id) if self.origin_is_current(origin) => {
+                        let source = crate::config::QueueSource::Playlist { id: Some(id), name };
+                        self.apply_saved_playlist_source(source, origin);
                     }
                     Ok(_) => {
                         log::debug!(target: "playlist", "discarding stale playlist replacement completion")
@@ -231,46 +216,24 @@ impl App {
                 mutation_id,
                 coordinator_key,
                 name,
-                queue_lineage,
+                origin,
                 source_playlist_id,
-                owner_queue_lineage,
                 result,
             } => {
                 match result {
                     Ok(id)
-                        if queue_lineage == self.remote_queue_lineage
+                        if self.origin_is_current(origin)
                             && self.queue_playlist_id() == source_playlist_id.as_deref() =>
                     {
                         let source = crate::config::QueueSource::Playlist {
                             id: Some(id),
                             name: name.clone(),
                         };
-                        if self.stay_alive_owner_is_queue_authority() {
-                            let Some(lineage) = owner_queue_lineage else {
-                                self.reject_stay_alive_queue_source_update(
-                                    &coordinator_key,
-                                    mutation_id,
-                                );
-                                return;
-                            };
-                            let sent = self.player.as_remote().is_some_and(|remote| {
-                                remote.update_queue_source(source.clone(), lineage).is_ok()
-                            });
-                            if !sent {
-                                self.reject_stay_alive_queue_source_update(
-                                    &coordinator_key,
-                                    mutation_id,
-                                );
-                                return;
-                            }
-                            self.pending_owner_source_update = Some((source, lineage));
-                        } else {
-                            self.set_queue_source_if_not_local_daemon(source);
-                            self.queue_dirty = false;
-                            // The new source must never retain entry identities
-                            // from the old playlist.
-                            self.clear_local_playlist_entry_ids();
-                            self.save_queue_state();
+                        let applied = self.apply_saved_playlist_source(source, origin);
+                        // The success toast stays a ThisProcess-only signal:
+                        // a Stay-alive owner confirms the save through its own
+                        // snapshot, without a toast.
+                        if applied && matches!(origin, QueueOrigin::ThisProcess { .. }) {
                             self.flash(
                                 format!("Saved as playlist \"{name}\""),
                                 ToastSeverity::Success,

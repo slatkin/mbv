@@ -261,7 +261,7 @@ impl App {
             cast_rx,
             last_cast_poll: Instant::now() - Duration::from_secs(60),
             cast_status_loading: false,
-            remote_queue_lineage: 0,
+            queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
             next_playlist_mutation: 1,
             next_owner_queue_load_request: 1,

@@ -89,7 +89,10 @@ fn enter_request(harness: &mut TickHarness) -> SessionTargetKey {
         .raw_messages
         .iter()
         .find_map(|message| match message {
-            Msg::Shell(ShellRequest::SelectSession(key)) => Some(key.clone()),
+            Msg::Shell(shell_boxed) => match shell_boxed.as_ref() {
+                ShellRequest::SelectSession(key) => Some((*key).clone()),
+                _ => None,
+            },
             _ => None,
         })
         .expect("Enter emits an identity-bearing activation")
@@ -175,7 +178,7 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
     assert!(first_click
         .messages
         .iter()
-        .all(|message| !matches!(message, Msg::Shell(ShellRequest::SelectSession(_)))));
+        .all(|message| !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
     assert_eq!(
         sessions_component_mut(&mut harness)
             .selection_and_offset_for_test()
@@ -192,8 +195,7 @@ fn tick_sessions_pointer_selects_then_reclick_activates() {
     let second_click = harness.step();
     assert!(second_click.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::SelectSession(SessionTargetKey::Emby(id))) if id == "second"
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(SessionTargetKey::Emby(id)) if id == "second"))));
 }
 
 #[test]
@@ -232,7 +234,7 @@ fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
     assert!(stale_click
         .raw_messages
         .iter()
-        .all(|message| !matches!(message, Msg::Shell(ShellRequest::SelectSession(_)))));
+        .all(|message| !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
 
     draw(&mut harness, 100, 24);
     assert_eq!(
@@ -249,8 +251,7 @@ fn tick_sessions_changed_snapshot_invalidates_stale_hits_until_repaint() {
     let repainted_click = harness.step();
     assert!(repainted_click.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::SelectSession(SessionTargetKey::Emby(id))) if id == "replacement"
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(SessionTargetKey::Emby(id)) if id == "replacement"))));
 }
 
 #[test]
@@ -294,7 +295,7 @@ fn tick_sessions_unchanged_sync_keeps_painted_pointer_target_without_redraw() {
     assert!(click
         .raw_messages
         .iter()
-        .all(|message| !matches!(message, Msg::Shell(ShellRequest::SelectSession(_)))));
+        .all(|message| !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::SelectSession(_)))));
 }
 
 #[test]
@@ -320,7 +321,7 @@ fn tick_sessions_reordered_snapshot_activates_selected_identity() {
     harness.model_mut().app.panel_targets = sessions(&["selected", "first"]);
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::SelectSession(request)),
+        Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -342,7 +343,7 @@ fn tick_sessions_removed_target_request_is_noop_not_former_index_replacement() {
     harness.model_mut().app.panel_targets = sessions(&["replacement"]);
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::SelectSession(request)),
+        Msg::Shell(Box::new(ShellRequest::SelectSession(request))),
         &mut music_resize,
         &mut tv_resize,
     );

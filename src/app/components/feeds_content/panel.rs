@@ -193,7 +193,7 @@ impl LibraryContentOwner for FeedsContent {
                     self.latest_selected = true;
                     self.rebuild_visible_entries();
                     self.reset_selection();
-                    Some(Msg::Shell(ShellRequest::FeedsLatestSelected))
+                    Some(Msg::Shell(Box::new(ShellRequest::FeedsLatestSelected)))
                 } else if index <= WatchedFilter::COUNT {
                     self.latest_selected = false;
                     self.select_watched_filter(index - 1);
@@ -220,7 +220,7 @@ impl LibraryContentOwner for FeedsContent {
                     let target = self.resolve_row_id(at)?;
                     self.delegate_row_local_input(input, Some(target));
                     let _ = ();
-                    Some(Msg::Shell(ShellRequest::FeedsRowClick))
+                    Some(Msg::Shell(Box::new(ShellRequest::FeedsRowClick)))
                 }
                 MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.resolve_row_id(at)?;
@@ -232,10 +232,10 @@ impl LibraryContentOwner for FeedsContent {
                             .collect(),
                         _ => vec![self.entry_for_target(&target)?.clone()],
                     };
-                    Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                         crate::app::state::types::context_menu::ContextMenuTargets::Feeds(entries),
                         Some((at.x, at.y)),
-                    )))
+                    ))))
                 }
                 MediaListSurfaceInput::DoubleClick(at) => {
                     // Resolve once, then delegate the target-bearing activation.
@@ -243,7 +243,7 @@ impl LibraryContentOwner for FeedsContent {
                     self.carrier
                         .delegate_operation(MediaListOperation::Activate(target.clone()));
                     let entry = self.entry_for_target(&target)?.clone();
-                    Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry])))
+                    Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(vec![entry]))))
                 }
                 _ => None,
             },
@@ -252,7 +252,7 @@ impl LibraryContentOwner for FeedsContent {
             LibrarySlotEvent::HeroActivate => self
                 .selected_entry()
                 .cloned()
-                .map(|entry| Msg::Shell(ShellRequest::FeedsPlay(vec![entry]))),
+                .map(|entry| Msg::Shell(Box::new(ShellRequest::FeedsPlay(vec![entry])))),
         }
     }
 
@@ -262,7 +262,7 @@ impl LibraryContentOwner for FeedsContent {
 
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.handle_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if matches!(
                 key.code,
                 Key::Up

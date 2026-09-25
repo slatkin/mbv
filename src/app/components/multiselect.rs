@@ -85,7 +85,10 @@ impl MultiselectComponent {
                 None
             }
             Key::Esc | Key::Enter => self.commit_snapshot().map(|(kind, items)| {
-                Msg::Shell(super::msg::ShellRequest::MultiselectCommit { kind, items })
+                Msg::Shell(Box::new(super::msg::ShellRequest::MultiselectCommit {
+                    kind,
+                    items,
+                }))
             }),
             _ => None,
         }
@@ -131,7 +134,10 @@ impl MultiselectComponent {
     /// The keyboard Esc/Enter path: commit the current choices.
     fn commit_request(&self) -> Option<Msg> {
         self.commit_snapshot().map(|(kind, items)| {
-            Msg::Shell(super::msg::ShellRequest::MultiselectCommit { kind, items })
+            Msg::Shell(Box::new(super::msg::ShellRequest::MultiselectCommit {
+                kind,
+                items,
+            }))
         })
     }
 
@@ -211,7 +217,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
                     key.code,
                     Key::Up | Key::Down | Key::Char(' ') | Key::Enter | Key::Esc
@@ -276,11 +282,11 @@ mod tests {
         component.set_content(&popup());
 
         assert!(matches!(
-            component.on(&key(Key::Enter)),
-            Some(Msg::Shell(
-                super::super::msg::ShellRequest::MultiselectCommit { .. }
-            ))
-        ));
+           component.on(&key(Key::Enter)),
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(),
+               super::super::msg::ShellRequest::MultiselectCommit { .. }
+           )));
     }
 
     #[test]

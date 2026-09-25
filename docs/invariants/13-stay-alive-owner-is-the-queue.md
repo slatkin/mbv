@@ -3,7 +3,7 @@
 **Scope:** every path that loads, edits, saves, clears, or reconciles the
 Stay-alive owner's queue — the owner side in `src/local_daemon.rs` /
 `crates/mbvd`-adjacent local-daemon code and the Client side in
-`src/app/shell/`, `src/app/dispatch/queue/mod.rs`, and the
+`src/app/shell/`, `src/app/dispatch/queue.rs`, and the
 `dispatch/session/player_event.rs` adoption arms.
 
 ## The invariant
@@ -59,14 +59,25 @@ every other attached terminal.
 
 ## How the code maintains it today
 
+- Owner identity is typed, not inferred: `LocalQueueOwner`
+  (`state/queue_owner.rs`), derived from `player_endpoint`, decides at each
+  owner-sensitive site which side holds the authoritative Local queue; every
+  connect/switch/teardown write to `player_endpoint` advances the
+  Client-local `QueueEpoch`.
 - Owner snapshots are authoritative for adoption: the Client adopts
   unfenced owner state including source on attach and after every
   accepted load/replace/edit/clear (`dispatch/session/player_event.rs` `UnifiedQueueUpdated`
-  arm), with the Bare-mode fence byte-identical to the pre-change
-  behaviour so direct/bare scopes are untouched.
+  arm via `adopt_owner_source`), with the Bare-mode fence byte-identical to
+  the pre-change behaviour so direct/bare scopes are untouched.
 - All Client source writers route through one shared guard
   (`set_queue_source_if_not_local_daemon`): a Client attached to the
   Stay-alive owner cannot write a source of its own.
+- Save As and Overwrite completions share one source-update path
+  (`apply_saved_playlist_source`): under Stay-alive both send a
+  lineage-guarded `UnifiedQueueSourceUpdate` carrying the `QueueOrigin`
+  captured at request time, and the queue stays dirty until the owner's
+  snapshot adopts the new source; a Stay-alive Client without an owner
+  snapshot refuses playlist saves at request time.
 - Owner persistence writes only what the owner accepted; the reload path
   restores exactly the persisted state, and an empty queue persists as
   empty.

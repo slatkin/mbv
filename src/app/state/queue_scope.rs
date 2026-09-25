@@ -1,4 +1,5 @@
 use crate::app::dispatch::notify::ToastSeverity;
+use crate::app::state::queue_owner::LocalQueueOwner;
 use crate::app::{
     App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
 };
@@ -20,20 +21,19 @@ impl App {
         matches!(self.playback_target(), PlaybackTarget::Local(_))
     }
 
-    pub(in crate::app) fn stay_alive_owner_is_queue_authority(&self) -> bool {
-        self.is_local_daemon()
-    }
-
     /// Whether the scope's canonical queue is the playback owner's accepted
     /// submission. Bare mode uses a generation fence until submit; the
     /// Stay-alive owner is authoritative from its snapshots, while direct
     /// remote scope is already independently projected.
     pub(in crate::app) fn local_queue_is_owner_queue(&self, scope: QueueScope) -> bool {
-        if scope == QueueScope::Remote || self.stay_alive_owner_is_queue_authority() {
-            return true;
+        match self.local_queue_owner() {
+            LocalQueueOwner::StayAlive => true,
+            LocalQueueOwner::ThisProcess => {
+                scope == QueueScope::Remote
+                    || self.queue_for_scope(scope).sequence_generation
+                        <= self.player.status.lock().unwrap().sequence_generation
+            }
         }
-        self.queue_for_scope(scope).sequence_generation
-            <= self.player.status.lock().unwrap().sequence_generation
     }
 
     /// Whether a canonical-queue edit in `scope` should also be sent to the
@@ -86,7 +86,7 @@ impl App {
     /// Stamps `scope`'s queue with the playback owner's current sequence
     /// generation, after a submit the owner accepted at that generation.
     pub(in crate::app) fn stamp_queue_generation(&mut self, scope: QueueScope) {
-        if self.stay_alive_owner_is_queue_authority() {
+        if !self.local_queue_owner().owns_local_persistence() {
             return;
         }
         let generation = self.player.status.lock().unwrap().sequence_generation;
@@ -130,8 +130,33 @@ impl App {
         &mut self,
         source: crate::config::QueueSource,
     ) {
-        if !self.stay_alive_owner_is_queue_authority() {
-            self.queue_source = source;
+        match self.local_queue_owner() {
+            LocalQueueOwner::StayAlive => {}
+            LocalQueueOwner::ThisProcess => self.queue_source = source,
+        }
+    }
+
+    /// Adopt the Stay-alive owner's snapshot source and reconcile a pending
+    /// playlist-save source update (design D6). `ThisProcess` owns its source
+    /// directly, so it adopts nothing.
+    pub(in crate::app) fn adopt_owner_source(
+        &mut self,
+        unified: &mbv_core::ctrl::UnifiedQueueStateData,
+    ) {
+        match self.local_queue_owner() {
+            LocalQueueOwner::ThisProcess => {}
+            LocalQueueOwner::StayAlive => {
+                self.queue_source = unified.source.clone();
+                if let Some((source, lineage)) = self.pending_owner_source_update.clone() {
+                    if unified.lineage != lineage {
+                        self.pending_owner_source_update = None;
+                    } else if unified.source == source {
+                        self.pending_owner_source_update = None;
+                        self.queue_dirty = false;
+                        self.clear_local_playlist_entry_ids();
+                    }
+                }
+            }
         }
     }
 
@@ -203,16 +228,20 @@ impl App {
 
     pub(in crate::app) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
         self.reset_bare_transitions();
-        self.advance_remote_queue_lineage();
+        self.advance_queue_epoch();
         let cursor = cursor.min(items.len().saturating_sub(1));
         match self.playing_queue_scope() {
             QueueScope::Local => {
                 self.player_tab.set_items(items, cursor);
                 // Bare mode fences a local replacement until submit. A
                 // Stay-alive Client instead reconciles the owner's snapshots.
-                if !self.stay_alive_owner_is_queue_authority() {
-                    let owner_generation = self.player.status.lock().unwrap().sequence_generation;
-                    self.player_tab.sequence_generation = owner_generation.saturating_add(1);
+                match self.local_queue_owner() {
+                    LocalQueueOwner::StayAlive => {}
+                    LocalQueueOwner::ThisProcess => {
+                        let owner_generation =
+                            self.player.status.lock().unwrap().sequence_generation;
+                        self.player_tab.sequence_generation = owner_generation.saturating_add(1);
+                    }
                 }
             }
             QueueScope::Remote => {

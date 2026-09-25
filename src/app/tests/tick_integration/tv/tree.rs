@@ -66,10 +66,9 @@ fn tv_tree_keyboard_navigation_resolves_show_target_through_shell_sync(
     assert!(
         messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(ShellRequest::TvHitClick {
+            Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
                 hit: TvHit::SeriesRow(target)
-            }) if target == "series-1"
-        )),
+            } if target == "series-1"))),
         "tick must resolve the selected tree target before shell dispatch: {messages:?}"
     );
     assert_eq!(
@@ -101,8 +100,7 @@ fn tv_tree_show_activation_uses_the_selected_target_in_every_geometry(
         assert!(
             outcome.messages.iter().any(|message| matches!(
                 message,
-                Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
-            )),
+                Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { item } if item.id == "series-0"))),
             "Wide Enter must carry the selected show's stable identity: {:?}",
             outcome.messages
         );
@@ -111,7 +109,7 @@ fn tv_tree_show_activation_uses_the_selected_target_in_every_geometry(
             !outcome
                 .messages
                 .iter()
-                .any(|message| matches!(message, Msg::Shell(ShellRequest::TvActivate { .. }))),
+                .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { .. }))),
             "non-Wide show activation opens the Library Hero overlay"
         );
     }
@@ -158,10 +156,9 @@ fn tv_tree_mouse_click_resolves_the_painted_show_target_in_every_geometry(
             .iter()
             .filter(|message| matches!(
                 message,
-                Msg::Shell(ShellRequest::TvHitClick {
+                Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
                     hit: TvHit::SeriesRow(target)
-                }) if target == "series-1"
-            ))
+                } if target == "series-1")))
             .count(),
         1,
         "one Library Panel painter must resolve the row exactly once: {:?}",
@@ -217,10 +214,9 @@ fn tv_tree_mouse_uses_the_latest_painted_geometry_across_resize(
             .iter()
             .filter(|message| matches!(
                 message,
-                Msg::Shell(ShellRequest::TvHitClick {
+                Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
                     hit: TvHit::SeriesRow(target)
-                }) if target == "series-1"
-            ))
+                } if target == "series-1")))
             .count(),
         1,
         "mouse delivery must use the last painted tree geometry exactly once: {:?}",
@@ -255,8 +251,7 @@ fn right_on_expanded_show_activates_its_workspace_through_tick(
     assert!(
         messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(ShellRequest::TvActivate { item }) if item.id == "series-0"
-        )),
+            Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { item } if item.id == "series-0"))),
         "Right on the expanded Show must emit its stable-target activation: {messages:?}"
     );
     assert_eq!(
@@ -291,7 +286,7 @@ fn tv_tree_episode_activation_plays_the_resolved_episode_in_every_geometry(
     assert!(
         !messages
             .iter()
-            .any(|message| matches!(message, Msg::Shell(ShellRequest::TvActivate { .. }))),
+            .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { .. }))),
         "Right on an expanded Season must not activate its Show Workspace"
     );
     tick_tv_key(&mut harness, Key::Down); // Still-visible Episode 1 proves Right did not collapse.
@@ -305,8 +300,7 @@ fn tv_tree_episode_activation_plays_the_resolved_episode_in_every_geometry(
     assert!(
         messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(ShellRequest::TvEpisodeActivate { episode }) if episode.id == "episode-1"
-        )),
+            Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { episode } if episode.id == "episode-1"))),
         "Enter must resolve the selected episode identity: {messages:?}"
     );
     assert_eq!(

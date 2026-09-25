@@ -82,9 +82,9 @@ fn podcast_latest_uses_cached_shelf_and_resolves_provider_targets_without_emby()
     }));
     let play = harness.step();
     assert!(play.raw_messages.iter().any(|msg| matches!(msg,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastEpisodeIntent(
             crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(target))
-        )) if target.library_item_id() == "shelf-show" && target.episode_id() == "shelf-episode")));
+        ) if target.library_item_id() == "shelf-show" && target.episode_id() == "shelf-episode"))));
     let resolved = harness
         .model()
         .app
@@ -100,9 +100,9 @@ fn podcast_latest_uses_cached_shelf_and_resolves_provider_targets_without_emby()
     }));
     let enqueue = harness.step();
     assert!(enqueue.raw_messages.iter().any(|msg| matches!(msg,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastEpisodeIntent(
             crate::app::components::msg::PodcastEpisodeIntent::Enqueue(Some(target))
-        )) if target.library_item_id() == "shelf-show" && target.episode_id() == "shelf-episode")));
+        ) if target.library_item_id() == "shelf-show" && target.episode_id() == "shelf-episode"))));
 }
 
 #[test]

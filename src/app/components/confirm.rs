@@ -107,7 +107,9 @@ impl ConfirmComponent {
         let Some(intent) = confirm_intent_for_key(action, key.code) else {
             return LeafKeyResult::Unhandled;
         };
-        LeafKeyResult::Consumed(Some(Msg::Shell(ShellRequest::ConfirmIntent(intent))))
+        LeafKeyResult::Consumed(Some(Box::new(Msg::Shell(Box::new(
+            ShellRequest::ConfirmIntent(intent),
+        )))))
     }
 }
 
@@ -192,11 +194,11 @@ mod tests {
             KeyModifiers::NONE,
         )));
         assert!(matches!(
-            msg,
-            Some(Msg::Shell(ShellRequest::ConfirmIntent(
-                ConfirmIntent::Accept
-            )))
-        ));
+           msg,
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(
+               ConfirmIntent::Accept
+           ))));
     }
 
     #[test]
@@ -228,11 +230,11 @@ mod tests {
         });
         let msg = comp.on(&Event::Keyboard(make_key(Key::Esc, KeyModifiers::NONE)));
         assert!(matches!(
-            msg,
-            Some(Msg::Shell(ShellRequest::ConfirmIntent(
-                ConfirmIntent::Cancel
-            )))
-        ));
+           msg,
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(
+               ConfirmIntent::Cancel
+           ))));
     }
 
     #[test]
@@ -249,9 +251,9 @@ mod tests {
                 Key::Char('x'),
                 KeyModifiers::NONE,
             ))),
-            Some(Msg::Shell(ShellRequest::ConfirmIntent(
+            Some(Msg::Shell(Box::new(ShellRequest::ConfirmIntent(
                 ConfirmIntent::Dismiss
-            )))
+            ))))
         );
     }
 

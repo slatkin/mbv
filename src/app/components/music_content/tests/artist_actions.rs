@@ -61,11 +61,17 @@ fn artist_action_ids(owner: &mut MusicContent, code: Key) -> Vec<String> {
         },
     });
     let items = match message {
-        Some(Msg::Shell(ShellRequest::MusicArtistAction {
-            items,
-            unresolved_targets,
-            ..
-        })) => {
+        Some(Msg::Shell(shell_boxed))
+            if matches!(shell_boxed.as_ref(), ShellRequest::MusicArtistAction { .. }) =>
+        {
+            let ShellRequest::MusicArtistAction {
+                items,
+                unresolved_targets,
+                ..
+            } = *shell_boxed
+            else {
+                unreachable!("guard above ensures the artist action request")
+            };
             assert!(
                 unresolved_targets.is_empty(),
                 "settled artist fixture should resolve every album target"
@@ -76,10 +82,14 @@ fn artist_action_ids(owner: &mut MusicContent, code: Key) -> Vec<String> {
             );
             items
         }
-        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-            _,
-        ))) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicRowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                _,
+            ) = *shell_boxed
+            else {
+                panic!("expected an artist album action for {code:?}, got {shell_boxed:?}")
+            };
             assert!(
                 items.iter().all(|item| item.is_folder),
                 "artist context requests carry folder album targets"
@@ -177,11 +187,15 @@ fn partially_unresolved_artist_actions_keep_ordered_targets_and_report_misses() 
             modifiers: KeyModifiers::CONTROL,
         });
         match message {
-            Some(Msg::Shell(ShellRequest::MusicArtistAction {
-                items,
-                unresolved_targets,
-                ..
-            })) => {
+            Some(Msg::Shell(shell_boxed)) => {
+                let ShellRequest::MusicArtistAction {
+                    items,
+                    unresolved_targets,
+                    ..
+                } = *shell_boxed
+                else {
+                    panic!("expected a partial artist action for {code:?}, got {shell_boxed:?}")
+                };
                 assert_eq!(
                     items.into_iter().map(|item| item.id).collect::<Vec<_>>(),
                     vec!["a-0"],
@@ -205,11 +219,15 @@ fn fully_unresolved_artist_action_requests_shell_feedback() {
         code: Key::Char('p'),
         modifiers: KeyModifiers::CONTROL,
     }) {
-        Some(Msg::Shell(ShellRequest::MusicArtistAction {
-            items,
-            unresolved_targets,
-            ..
-        })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistAction {
+                items,
+                unresolved_targets,
+                ..
+            } = *shell_boxed
+            else {
+                panic!("expected shell feedback request, got {shell_boxed:?}")
+            };
             assert!(items.is_empty());
             assert_eq!(unresolved_targets, vec!["a-0", "a-1"]);
         }

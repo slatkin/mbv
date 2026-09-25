@@ -134,7 +134,9 @@ mod tests {
         let mut music_resize = false;
         let mut tv_resize = false;
         model.handle_terminal_message(
-            crate::app::components::Msg::Shell(crate::app::components::ShellRequest::FeedsRowClick),
+            crate::app::components::Msg::Shell(Box::new(
+                crate::app::components::ShellRequest::FeedsRowClick,
+            )),
             &mut music_resize,
             &mut tv_resize,
         );

@@ -34,7 +34,9 @@ impl QueueComponent {
             }
             MouseGesture::Click { at, modifier } => {
                 if let Some(scope) = self.claim_scope_pill(at) {
-                    return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
+                    return Some(Msg::Shell(Box::new(ShellRequest::QueueScopeClick {
+                        scope,
+                    })));
                 }
                 if !self.carrier.claims_current_point(at) {
                     return None;
@@ -54,13 +56,15 @@ impl QueueComponent {
                 } else {
                     None
                 };
-                Some(Msg::Shell(ShellRequest::QueueRowClick {
+                Some(Msg::Shell(Box::new(ShellRequest::QueueRowClick {
                     slot_id: self.carrier.selected_target().copied(),
-                }))
+                })))
             }
             MouseGesture::DoubleClick(at) => {
                 if let Some(scope) = self.claim_scope_pill(at) {
-                    return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
+                    return Some(Msg::Shell(Box::new(ShellRequest::QueueScopeClick {
+                        scope,
+                    })));
                 }
                 if !self.carrier.claims_current_point(at) {
                     return None;
@@ -69,9 +73,9 @@ impl QueueComponent {
                 if let Some(target) = target {
                     self.delegate_row_local_input(MediaListSurfaceInput::Click(at), Some(target));
                 }
-                Some(Msg::Shell(ShellRequest::QueueRowActivate {
+                Some(Msg::Shell(Box::new(ShellRequest::QueueRowActivate {
                     slot_id: self.carrier.selected_target().copied(),
-                }))
+                })))
             }
             MouseGesture::RightClick(at) => {
                 // Legacy parity: a right-click on blank queue space opens no
@@ -88,10 +92,10 @@ impl QueueComponent {
                     Some(RowIntent::ContextSelection(targets)) => targets,
                     _ => vec![slot_id],
                 };
-                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                     ContextMenuTargets::Queue(targets),
                     Some((mouse.column, mouse.row)),
-                )))
+                ))))
             }
             MouseGesture::Drag { to, .. } => {
                 let grabbed = self.drag_grab?;

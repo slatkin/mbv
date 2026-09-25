@@ -71,14 +71,14 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
     assert!(outcome
         .messages
         .iter()
-        .all(|message| { !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. })) }));
+        .all(|message| { !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. })) }));
     assert_eq!(track_state(&harness), (true, Some(1)));
     harness.inject(click(second_track_point.0, second_track_point.1));
     let outcome = harness.step();
     assert!(outcome
         .messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::MusicTrackActivate { .. }))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicTrackActivate { .. }))));
 
     // Right-click resolves the same retained row and translates directly to
     // the track context intent; no shell-side coordinate lookup is involved.
@@ -86,8 +86,7 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
     let outcome = harness.step();
     assert!(outcome.messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::MusicRowContextMenu(_, Some((x, y)))) if *x == second_track_point.0 && *y == second_track_point.1
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(_, Some((x, y))) if *x == second_track_point.0 && *y == second_track_point.1))));
 
     // Wheel over the painted table advances exactly one local track row and
     // emits no shell-side cursor movement.
@@ -102,7 +101,7 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
     assert!(outcome
         .messages
         .iter()
-        .all(|message| !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))));
+        .all(|message| !matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor { .. }))));
 }
 
 /// Modifier clicks on the Wide Music track list are delivered through the

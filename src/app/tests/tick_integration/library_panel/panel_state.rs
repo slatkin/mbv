@@ -48,8 +48,8 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
     assert!(
         !outcome.raw_messages.iter().any(|msg| matches!(
             msg,
-            Msg::Shell(crate::app::components::msg::ShellRequest::ResizeListPaneLive(_))
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::ResizeListPaneLive(_)))),
         "the vanished gutter must not arm the split drag"
     );
 

@@ -45,7 +45,10 @@ fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
             modifiers: KeyModifiers::NONE,
         }))
     };
-    let Some(Msg::Shell(ShellRequest::MultiselectCommit { .. })) = message else {
+    let Some(Msg::Shell(shell_boxed)) = message else {
+        panic!("Multiselect should emit a shell request");
+    };
+    let ShellRequest::MultiselectCommit { .. } = *shell_boxed else {
         panic!("Multiselect should emit a shell request");
     };
     model.handle_multiselect_commit();
@@ -94,7 +97,10 @@ fn settings_popup_library_routes_shell_syncs_and_routes_escape() {
             modifiers: KeyModifiers::NONE,
         }))
     };
-    let Some(Msg::Shell(ShellRequest::LibraryRoutesEsc)) = message else {
+    let Some(Msg::Shell(shell_boxed)) = message else {
+        panic!("Library routes should emit a shell request");
+    };
+    let ShellRequest::LibraryRoutesEsc = *shell_boxed else {
         panic!("Library routes should emit a shell request");
     };
     model.handle_library_routes_request(ShellRequest::LibraryRoutesEsc);
@@ -122,7 +128,10 @@ fn settings_popup_feeds_manage_shell_syncs_and_routes_escape() {
             modifiers: KeyModifiers::NONE,
         }))
     };
-    let Some(Msg::Shell(ShellRequest::FeedsManageIntent(intent))) = message else {
+    let Some(Msg::Shell(shell_boxed)) = message else {
+        panic!("Feed management should emit a shell request");
+    };
+    let ShellRequest::FeedsManageIntent(intent) = *shell_boxed else {
         panic!("Feed management should emit a shell request");
     };
     model.handle_feeds_manage_intent(intent);
@@ -136,7 +145,7 @@ fn settings_popup_feeds_manage_shell_syncs_and_routes_escape() {
 /// component's `handle_clock`-via-unit-test shortcut. The shell's
 /// `tick_search_clock` sweep calls the component's `tick_clock(Instant::
 /// now())`, and any emitted `Msg` flows through `handle_service_request`
-/// — exactly mirroring the main-loop wiring at `shell/run/mod.rs`'s
+/// — exactly mirroring the main-loop wiring at `shell/run.rs`'s
 /// `drain_search_results` block.
 ///
 /// The component anchors `debounce_deadline` to `Instant::now()` at
@@ -294,7 +303,10 @@ fn context_menu_click_select_executes_and_closes_the_menu() {
     let Some(Msg::Shell(request)) = message else {
         panic!("menu click must select the entry");
     };
-    assert!(matches!(request, ShellRequest::ContextMenuSelect(0)));
+    assert!(matches!(
+        request.as_ref(),
+        ShellRequest::ContextMenuSelect(0)
+    ));
 
     model.handle_terminal_message(Msg::Shell(request), &mut false, &mut false);
     assert!(

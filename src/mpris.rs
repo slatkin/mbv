@@ -72,7 +72,7 @@ pub(crate) struct MprisSource {
 
 /// Handle returned by `start`; pass it to `rebind` to re-point a live MPRIS
 /// registration at a different playback source. Callers outside this module
-/// (`main.rs`, `app/mod.rs`) only ever move this opaque handle around and
+/// (`main.rs`, `app.rs`) only ever move this opaque handle around and
 /// pass it back into `rebind` -- they never touch `MprisSource`'s fields
 /// directly, which stay module-private.
 pub(crate) type MprisHandle = Arc<Mutex<MprisSource>>;
@@ -548,7 +548,7 @@ pub fn rebind(
 }
 
 /// Test-only constructor/inspector pair for `MprisHandle`, used by
-/// `src/app/mod.rs`'s tests to inject a lightweight (no real D-Bus/tokio)
+/// `src/app.rs`'s tests to inject a lightweight (no real D-Bus/tokio)
 /// handle into `App.mpris` and assert `switch_to_direct_remote` /
 /// `restore_local_mode` actually call `rebind` on it (#175), without
 /// duplicating `MprisSource`'s private fields outside this module.

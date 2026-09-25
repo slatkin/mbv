@@ -83,9 +83,9 @@ impl StatusBarPanel {
             MouseEventKind::Down(MouseButton::Left)
                 if self.regions.visual_clear.is_some_and(|r| r.contains(at)) =>
             {
-                Some(Msg::Shell(ShellRequest::ClearMultiSelection(
+                Some(Msg::Shell(Box::new(ShellRequest::ClearMultiSelection(
                     self.visual_origin.clone(),
-                )))
+                ))))
             }
             _ => None,
         }

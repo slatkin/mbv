@@ -67,7 +67,7 @@ impl super::super::Model {
                 // concern keeps a separate exhaustive dispatch arm.
                 self.request_music_artist_tracks(target.clone());
                 self.handle_terminal_message(
-                    Msg::Shell(ShellRequest::MusicArtistArtwork { target }),
+                    Msg::Shell(Box::new(ShellRequest::MusicArtistArtwork { target })),
                     music_resize,
                     tv_resize,
                 );

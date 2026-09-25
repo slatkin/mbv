@@ -1,8 +1,6 @@
 //! Wide Hero header characterization tests: artwork-box geometry, arm
 //! derivation, title/meta role cycling, and the Workspace/text-starvation
-//! shrink rules — gated behind the `#[cfg(test)]` declaration in `mod.rs`.
-
-#![allow(clippy::unwrap_used)]
+//! shrink rules — gated behind the `#[cfg(test)]` declaration in `hero_header.rs`.
 
 use super::super::content::{
     ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroHeader, PanelList, Workspace,

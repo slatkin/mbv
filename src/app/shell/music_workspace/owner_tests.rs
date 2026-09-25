@@ -79,8 +79,8 @@ fn narrow_enter_requests_album_activation() {
     });
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::MusicAlbumActivate { .. }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumActivate { .. })));
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
         message.expect("activation request"),
@@ -355,12 +355,12 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
         modifiers: KeyModifiers::NONE,
     });
     assert!(matches!(
-        message,
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: 1,
-            kind: AlbumCursorKind::Move
-        }))
-    ));
+       message,
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor {
+           target: 1,
+           kind: AlbumCursorKind::Move
+       })));
     assert_eq!(
         model.test_music_owner().album_cursor(),
         1,
@@ -540,11 +540,14 @@ fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     });
-    let Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind })) = message else {
+    let Some(Msg::Shell(shell_boxed)) = message.as_ref() else {
         panic!("expected MusicAlbumCursor, got {message:?}");
     };
-    assert_eq!(target, 1);
-    assert_eq!(kind, AlbumCursorKind::Move);
+    let ShellRequest::MusicAlbumCursor { target, kind } = shell_boxed.as_ref() else {
+        panic!("expected MusicAlbumCursor, got {shell_boxed:?}");
+    };
+    assert_eq!(*target, 1);
+    assert_eq!(*kind, AlbumCursorKind::Move);
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(message.unwrap(), &mut music_resize, &mut tv_resize);
     assert_eq!(
@@ -559,12 +562,12 @@ fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
     });
     assert!(
         matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                target: 4,
-                kind: AlbumCursorKind::Page,
-            }))
-        ),
+           message,
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumCursor {
+               target: 4,
+               kind: AlbumCursorKind::Page,
+           })),
         "PageDown must move by the tree's visible viewport (here 3 rows): {message:?}"
     );
 }
@@ -629,7 +632,10 @@ fn down_key_moves_visible_nodes_in_settled_display_order() {
         modifiers: KeyModifiers::NONE,
     });
     match message {
-        Some(Msg::Shell(ShellRequest::MusicArtistTracks { target })) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::MusicArtistTracks { target } = *shell_boxed else {
+                panic!("expected the fallback artist-track request, got {shell_boxed:?}")
+            };
             assert_eq!(target.artist_name, "Bravo");
             assert_eq!(target.artist_id, None);
         }
@@ -649,22 +655,25 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
         code: Key::Char('.'),
         modifiers: KeyModifiers::NONE,
     });
-    let Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
+    let Some(Msg::Shell(shell_boxed)) = message else {
+        panic!("Music '.' must emit a library context-menu request, got {message:?}");
+    };
+    let ShellRequest::MusicRowContextMenu(
         crate::app::state::types::context_menu::ContextMenuTargets::Emby(mut items),
         anchor,
-    ))) = message
+    ) = *shell_boxed
     else {
-        panic!("Music '.' must emit a library context-menu request, got {message:?}");
+        panic!("Music '.' must emit a library context-menu request, got {shell_boxed:?}");
     };
     let item = items.pop().expect("context item");
     assert!(anchor.is_none());
     assert_eq!(item.item_type, "MusicAlbum");
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
-        Msg::Shell(ShellRequest::MusicRowContextMenu(
+        Msg::Shell(Box::new(ShellRequest::MusicRowContextMenu(
             crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
             None,
-        )),
+        ))),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -677,7 +686,10 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
         code: Key::Char('/'),
         modifiers: KeyModifiers::NONE,
     });
-    assert_eq!(message, Some(Msg::Shell(ShellRequest::OpenInlineSearch)));
+    assert_eq!(
+        message,
+        Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)))
+    );
 }
 
 /// `h`/`l` are not tree chords: Grouped Music maps only the arrow chords
@@ -770,12 +782,12 @@ fn album_row_right_click_requests_the_album_context_menu() {
             modifiers: KeyModifiers::NONE,
         }));
     assert!(matches!(
-        message,
-        Some(Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(_),
-            Some(_),
-        )))
-    ));
+       message,
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(
+           crate::app::state::types::context_menu::ContextMenuTargets::Emby(_),
+           Some(_),
+       ))));
 }
 
 #[test]
@@ -801,8 +813,8 @@ fn narrow_enter_requests_album_activation_with_the_tracks_already_cached() {
     assert!(
         matches!(
             message,
-            Some(Msg::Shell(ShellRequest::MusicAlbumActivate { .. }))
-        ),
+            Some(Msg::Shell(ref shell_boxed))
+         if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumActivate { .. })),
         "narrow Enter with cached tracks requests the album's overlay"
     );
     assert!(

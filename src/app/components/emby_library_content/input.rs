@@ -25,7 +25,7 @@ impl EmbyLibraryContent {
             _ => return None,
         };
         self.inline_search.close();
-        Some(Msg::Shell(request))
+        Some(Msg::Shell(Box::new(request)))
     }
 
     /// Pointer input against the active Inline Search session (design.md D4):
@@ -71,10 +71,10 @@ impl EmbyLibraryContent {
                 match outcome.external_intent {
                     Some(RowIntent::Activate(target)) => {
                         search.item_for_target(&target).map(|item| {
-                            Msg::Shell(ShellRequest::InlineSearchActivate {
+                            Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
                                 id: item.id,
                                 item_type: item.item_type,
-                            })
+                            }))
                         })
                     }
                     // A double-click never resolves a context intent, and no
@@ -93,12 +93,12 @@ impl EmbyLibraryContent {
                 );
                 match outcome.external_intent {
                     Some(RowIntent::Context(target)) => {
-                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                             crate::app::state::types::context_menu::ContextMenuTargets::Browser(
                                 vec![target],
                             ),
                             None,
-                        )))
+                        ))))
                     }
                     // A context click never resolves an activate intent, a
                     // search session has no Visual-mode multi-selection so a
@@ -120,31 +120,31 @@ impl EmbyLibraryContent {
         if self.inline_search.is_active() {
             return match self.inline_search.handle_key(key) {
                 Some(InlineSearchAction::Activate { id, item_type }) => {
-                    Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
                         id,
                         item_type,
-                    }))
+                    })))
                 }
                 Some(InlineSearchAction::Dismiss) => {
                     self.inline_search.close();
                     None
                 }
                 Some(InlineSearchAction::QueryStarted) => {
-                    Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
+                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted)))
                 }
                 None => self.inline_search_result_action(key),
             };
         }
         if key.modifiers.is_empty() && matches!(key.code, Key::Char('/')) {
             self.inline_search.open();
-            return Some(Msg::Shell(ShellRequest::OpenInlineSearch));
+            return Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)));
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         if self.carrier.handle_visual_key(key).is_some() {
-            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+            return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
                 self.carrier.selection_summary(),
-            )));
+            ))));
         }
         if alt && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down) {
             return None;
@@ -160,40 +160,40 @@ impl EmbyLibraryContent {
             Key::Up | Key::Char('k') => {
                 self.carrier
                     .delegate_operation(MediaListOperation::Move(-1));
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
-                }));
+                })));
             }
             Key::Down | Key::Char('j') => {
                 self.carrier.delegate_operation(MediaListOperation::Move(1));
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
-                }));
+                })));
             }
             Key::PageUp => {
                 self.carrier
                     .delegate_operation(MediaListOperation::Page(-1));
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
-                }));
+                })));
             }
             Key::PageDown => {
                 self.carrier.delegate_operation(MediaListOperation::Page(1));
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
-                }));
+                })));
             }
             Key::Home => {
                 self.carrier.delegate_operation(MediaListOperation::First);
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
-                }));
+                })));
             }
             Key::End => {
                 self.carrier.delegate_operation(MediaListOperation::Last);
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                return Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
-                }));
+                })));
             }
             _ => {}
         }
@@ -261,6 +261,6 @@ impl EmbyLibraryContent {
             }
             _ => None,
         };
-        request.map(Msg::Shell)
+        request.map(|request| Msg::Shell(Box::new(request)))
     }
 }

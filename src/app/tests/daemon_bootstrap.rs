@@ -46,7 +46,7 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
     );
     assert!(app.player_tab.emby_items().is_empty());
     assert_eq!(app.queue_source, crate::config::QueueSource::Remote);
-    app.maybe_restore_queue_state();
+    app.restore_queue_state();
     assert!(app.player_tab.emby_items().is_empty());
 
     app.player_tab.set_items(make_items(2), 0);
@@ -143,12 +143,12 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
 
     // The local-daemon guard must prevent the stale snapshot from clobbering
     // the live adopted ABS queue.
-    app.maybe_restore_queue_state();
+    app.restore_queue_state();
 
     assert_eq!(
         app.player_tab.total_queue_len(),
         1,
-        "live ABS queue must survive maybe_restore_queue_state"
+        "live ABS queue must survive restore_queue_state"
     );
     let ep = app.player_tab.queue.slots()[0]
         .item

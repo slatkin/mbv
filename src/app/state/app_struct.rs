@@ -3,6 +3,7 @@ use crate::app::infra::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
 use crate::app::infra::{images, layout};
 use crate::app::render;
 use crate::app::state::panel_targets::PanelTarget;
+use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::types::browse::{AlbumIndexState, SeriesDetail};
 use crate::app::state::types::cast::{CastAttachment, CastEvent};
 use crate::app::state::types::confirm::ConfirmModal;
@@ -384,7 +385,7 @@ pub struct App {
     pub(in crate::app) cast_rx: mpsc::Receiver<CastEvent>,
     pub(in crate::app) last_cast_poll: Instant,
     pub(in crate::app) cast_status_loading: bool,
-    pub(in crate::app) remote_queue_lineage: u64,
+    pub(in crate::app) queue_epoch: QueueEpoch,
     pub(in crate::app) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(in crate::app) next_playlist_mutation: u64,
     pub(in crate::app) next_owner_queue_load_request: u64,

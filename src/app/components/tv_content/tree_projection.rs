@@ -228,6 +228,6 @@ impl TvContent {
         {
             return None;
         }
-        Some(Msg::Shell(ShellRequest::TvTreeExpand { target }))
+        Some(Msg::Shell(Box::new(ShellRequest::TvTreeExpand { target })))
     }
 }

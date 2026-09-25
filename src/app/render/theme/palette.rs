@@ -2,13 +2,13 @@
 //! (openspec/changes/archive/2026-09-19-palette-enum).
 //!
 //! One meaning-free variant per distinct colour, one `Rgb` literal per
-//! variant, owned here and nowhere else in theme code. Roles (`mod.rs`)
+//! variant, owned here and nowhere else in theme code. Roles (`theme.rs`)
 //! and surface rows are compiler-visible assignments over this enum; raw
 //! `Color::` specials (Black/White/Reset) are ratatui mechanics and stay
 //! outside the palette (design.md, "Raw `Color::` specials stay outside
 //! the palette").
 //!
-//! Additive unit: the roles (`mod.rs`) and the surface tier consume
+//! Additive unit: the roles (`theme.rs`) and the surface tier consume
 //! `color()`; `ALL`, `name()` and `hex()` are test-only (the uniqueness and
 //! `docs/palette.json` drift tests below) and are `#[cfg(test)]`-gated —
 //! structurally, with no production dead-code suppression.
@@ -240,7 +240,7 @@ mod tests {
         Some(rgb)
     }
 
-    /// Every production role const in `theme/mod.rs` as `(name, variant
+    /// Every production role const in `theme.rs` as `(name, variant
     /// name)`, in declaration order. Test-only aliases are not roles and do
     /// not belong in the docs.
     ///
@@ -250,7 +250,7 @@ mod tests {
     fn code_roles() -> Vec<(String, String)> {
         let mut roles = Vec::new();
         let mut cfg_test = false;
-        for line in include_str!("mod.rs").lines() {
+        for line in include_str!("../theme.rs").lines() {
             let line = line.trim();
             if line.starts_with("#[cfg(test)]") {
                 cfg_test = true;
@@ -347,7 +347,7 @@ mod tests {
             .collect();
         assert_eq!(
             actual, expected,
-            "docs/palette.json roles drifted from the role consts in theme/mod.rs"
+            "docs/palette.json roles drifted from the role consts in theme.rs"
         );
     }
 

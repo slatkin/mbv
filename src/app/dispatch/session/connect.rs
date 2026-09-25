@@ -242,7 +242,7 @@ impl App {
             PlayerTab::from_unified_state,
         ));
         self.direct_remote_connected = true;
-        self.advance_remote_queue_lineage();
+        self.advance_queue_epoch();
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.remote_pos_at = Instant::now();

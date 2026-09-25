@@ -114,7 +114,7 @@ impl LibraryPlaybackPanel {
 
     fn key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if matches!(
                 key.code,
                 Key::Char(' ')

@@ -80,7 +80,7 @@ impl App {
         ));
         self.connected_session_id = None;
         self.connected_session_state = None;
-        self.advance_remote_queue_lineage();
+        self.advance_queue_epoch();
         self.direct_remote_connected = true;
         self.direct_remote_label = {
             let name = sess.device_name.trim();
@@ -194,6 +194,7 @@ impl App {
             || PlayerTab::from_emby_items(initial_items, initial_cursor),
             PlayerTab::from_unified_state,
         ));
+        self.advance_queue_epoch();
         self.direct_remote_connected = false;
         self.direct_remote_session_id = None;
         self.active_route = Some(library_name.to_string());
@@ -277,7 +278,7 @@ impl App {
         self.set_queue_scope(QueueScope::Local);
         self.connected_session_id = None;
         self.connected_session_state = None;
-        self.advance_remote_queue_lineage();
+        self.advance_queue_epoch();
         self.direct_remote_connected = false;
         self.direct_remote_label = None;
         self.direct_remote_session_id = None;
@@ -486,7 +487,7 @@ impl App {
         );
         self.connected_session_id = Some(id);
         self.connected_session_state = Some(sess.clone());
-        self.advance_remote_queue_lineage();
+        self.advance_queue_epoch();
         self.session_miss_count = 0;
         self.remote_pos_s = sess.position_s;
         self.remote_pos_at = Instant::now();

@@ -29,18 +29,15 @@ fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
         assert!(owner.on_key(&key(Key::Char('p'))).is_none());
         assert!(matches!(
             owner.on_key(&key(Key::Right)),
-            Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == show_target
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == show_target)));
         assert!(matches!(
             owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
-            Some(Msg::Shell(ShellRequest::EmbyLibraryPlay { item })) if item.id == show.id
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryPlay { item } if item.id == show.id)));
         assert!(matches!(
             owner.on_key(&key(Key::Char('.'))),
-            Some(Msg::Shell(ShellRequest::RowContextMenu(
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
                 crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
-            ))) if items.len() == 1 && items[0].id == show.id
-        ));
+            ) if items.len() == 1 && items[0].id == show.id)));
         assert!(matches!(
             owner.on_key(&key(Key::Down)),
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
@@ -49,18 +46,15 @@ fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
         assert!(matches!(season_target, TvTreeTarget::Season { .. }));
         assert!(matches!(
             owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
-            Some(Msg::Shell(ShellRequest::EmbyLibraryPlay { item })) if item.id == season.id
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryPlay { item } if item.id == season.id)));
         assert!(matches!(
             owner.on_key(&key(Key::Char('.'))),
-            Some(Msg::Shell(ShellRequest::RowContextMenu(
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
                 crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
-            ))) if items.len() == 1 && items[0].id == season.id
-        ));
+            ) if items.len() == 1 && items[0].id == season.id)));
         assert!(matches!(
             owner.on_key(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == season_target
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == season_target)));
         assert!(matches!(
             owner.on_key(&key(Key::Down)),
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
@@ -71,23 +65,19 @@ fn tv_tree_key_actions_use_stable_targets_in_wide_and_narrow() {
         ));
         assert!(matches!(
             owner.on_key(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::TvEpisodeActivate { episode: selected })) if selected.id == episode.id
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { episode: selected } if selected.id == episode.id)));
         assert!(matches!(
             owner.on_key(&KeyEvent { code: Key::Char('p'), modifiers: KeyModifiers::CONTROL }),
-            Some(Msg::Shell(ShellRequest::EmbyLibraryPlay { item })) if item.id == episode.id
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryPlay { item } if item.id == episode.id)));
         assert!(matches!(
             owner.on_key(&key(Key::Char('.'))),
-            Some(Msg::Shell(ShellRequest::RowContextMenu(
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::RowContextMenu(
                 crate::app::state::types::context_menu::ContextMenuTargets::Emby(items), None
-            ))) if items.len() == 1 && items[0].id == episode.id
-        ));
+            ) if items.len() == 1 && items[0].id == episode.id)));
         owner.on_key(&key(Key::Home));
         assert!(matches!(
             owner.on_key(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::TvActivate { item })) if item.id == show.id
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvActivate { item } if item.id == show.id)));
     }
 }
 
@@ -113,8 +103,8 @@ fn tv_show_mode_escape_and_backspace_return_to_tv_back_in_both_geometries() {
 
             assert!(matches!(
                 owner.on_key(&key(code)),
-                Some(Msg::Shell(ShellRequest::TvBack))
-            ));
+                Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::TvBack)));
         }
     }
 }
@@ -200,10 +190,9 @@ fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     });
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::TvHitClick {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
             hit: TvHit::SeriesRow(ref id)
-        })) if id == "tv-series-2"
-    ));
+        } if id == "tv-series-2")));
     assert_eq!(
         tv(&panel).selected_tree_target(),
         Some(&TvTreeTarget::Show("tv-id:11:tv-series-2".into()))

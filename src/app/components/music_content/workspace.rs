@@ -318,12 +318,12 @@ impl MusicContent {
         if items.is_empty() && unresolved_targets.is_empty() {
             return None;
         }
-        Some(Msg::Shell(ShellRequest::MusicArtistAction {
+        Some(Msg::Shell(Box::new(ShellRequest::MusicArtistAction {
             action,
             items,
             origin,
             unresolved_targets,
-        }))
+        })))
     }
 
     /// The focused artist root's component-resolved detail identity (design
@@ -453,18 +453,17 @@ impl MusicContent {
                 self.artist_detail_target(),
                 self.track_list.selected_target().cloned(),
             ) {
-                return Some(Msg::Shell(ShellRequest::MusicArtistTrackActivate {
-                    target,
-                    track_id,
-                }));
+                return Some(Msg::Shell(Box::new(
+                    ShellRequest::MusicArtistTrackActivate { target, track_id },
+                )));
             }
         }
         let track = self.selected_track_item()?;
         let album_id = self.focused_track_album_id()?;
-        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+        Some(Msg::Shell(Box::new(ShellRequest::MusicTrackActivate {
             album_id,
             track,
-        }))
+        })))
     }
 
     /// Select the album whose existing artwork path supplies an artist Hero.

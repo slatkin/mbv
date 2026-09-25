@@ -182,8 +182,7 @@ fn feeds_tick_leaf_enter_opens_overlay_then_activates_selected_entry() {
     let activated = harness.step();
     assert!(activated.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::FeedsPlay(entries)) if entries.len() == 1 && entries[0].guid == "one"
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::FeedsPlay(entries) if entries.len() == 1 && entries[0].guid == "one"))));
     assert!(panel(&harness).test_hero_overlay_open());
 }
 
@@ -384,16 +383,16 @@ fn feeds_tick_latest_selection_uses_loaded_snapshot_without_fetch_and_refreshes_
     assert!(selected
         .messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::FeedsLatestSelected))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::FeedsLatestSelected))));
     assert!(!selected
         .messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::RefreshFeeds))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::RefreshFeeds))));
     assert!(feeds_owner(&harness).latest_selected());
     let mut music_resize = false;
     let mut tv_resize = false;
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::FeedsLatestSelected),
+        Msg::Shell(Box::new(ShellRequest::FeedsLatestSelected)),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -411,7 +410,7 @@ fn feeds_tick_latest_selection_uses_loaded_snapshot_without_fetch_and_refreshes_
     assert!(refresh
         .messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::RefreshFeeds))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::RefreshFeeds))));
 
     harness.model_mut().app.feed_tab.entries = vec![vec![
         entry("one", "One"),
@@ -445,7 +444,7 @@ fn feeds_tick_row_click_through_the_panel_emits_feeds_row_click() {
         if outcome
             .messages
             .iter()
-            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::FeedsRowClick)))
+            .any(|msg| matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::FeedsRowClick)))
         {
             resolved = Some(row);
             break;

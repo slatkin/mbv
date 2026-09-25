@@ -112,7 +112,7 @@ surface at Wide and Narrow, including absent Panels in each Panel mode.
 
 There is exactly one keyboard resolution site: `src/app/input/router.rs`, with its
 ordered policy in `src/app/input/key_policy.rs`, folded into the tick in
-`shell/run/mod.rs`, with chord conversion in `src/app/input/resolver.rs`. `UiRoot`
+`shell/run.rs`, with chord conversion in `src/app/input/resolver.rs`. `UiRoot`
 returns ADR 0002's `Command` / `Swallow` / `FallThrough` from a plain-data
 `RouterSnapshot`. A component interprets only its own local chords and emits a
 semantic intent. Shell compatibility/fall-through handlers may remain for
@@ -169,7 +169,7 @@ TuiRealm bump.
 Before writing rendering code for a screen:
 
 1. **Look for an existing component or arrangement first.** Check
-   `src/app/render/components/mod.rs` and `src/app/render/arrangements/mod.rs`
+   `src/app/render/components.rs` and `src/app/render/arrangements.rs`
    for something that already paints this shape (a row, a card, a modal
    frame, a hero pane). Reuse it before writing a new painter — for a
    hero-bearing surface this means `hero_on_left_pane`/`LeftPaneFocus`

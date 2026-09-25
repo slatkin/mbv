@@ -199,8 +199,8 @@ fn artist_library_hero_track_activation_emits_artist_track_intent() {
     assert!(outcome.messages.iter().any(|message| {
         matches!(
             message,
-            Msg::Shell(ShellRequest::MusicArtistTrackActivate { .. })
-        )
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), ShellRequest::MusicArtistTrackActivate { .. }))
     }));
 }
 

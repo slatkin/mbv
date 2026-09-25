@@ -250,7 +250,7 @@ fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16)
     assert!(outcome
         .raw_messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryLatestSelected))));
     dispatch_messages(&mut harness, outcome.messages);
     assert!(browser_owner(&harness).latest_mode());
     assert!(
@@ -272,16 +272,16 @@ fn mounted_movies_latest_click_and_item_actions_use_snapshot(#[case] width: u16)
             modifiers: KeyModifiers::CONTROL,
         }));
         let outcome = harness.step();
-        assert!(outcome
-            .raw_messages
-            .iter()
-            .any(|message| match (message, expected_play) {
-                (Msg::Shell(ShellRequest::EmbyLibraryPlay { item }), true)
-                | (Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }), false) => {
+        assert!(outcome.raw_messages.iter().any(|message| match message {
+            Msg::Shell(shell_boxed) => match (shell_boxed.as_ref(), expected_play) {
+                (ShellRequest::EmbyLibraryPlay { item }, true)
+                | (ShellRequest::EmbyLibraryEnqueue { item }, false) => {
                     item.id == "latest-movie"
                 }
                 _ => false,
-            }));
+            },
+            _ => false,
+        }));
     }
 }
 
@@ -321,8 +321,8 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
     let outcome = click_selector(&mut harness, 1);
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::EmbyLibraryLatestExit { target: usize::MAX })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryLatestExit { target: usize::MAX }))));
     dispatch_messages(&mut harness, outcome.messages);
     assert!(harness.model().app.libs[0].nav_stack[0]
         .letter_filter
@@ -385,8 +385,8 @@ fn mounted_movies_latest_exit_restores_unfiltered_and_selected_letter_scope() {
     let outcome = click_selector(&mut bucket_harness, 3);
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::EmbyLibraryLatestExit { target: 2 })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryLatestExit { target: 2 }))));
     dispatch_messages(&mut bucket_harness, outcome.messages);
     assert_eq!(
         bucket_harness.model().app.libs[0].nav_stack[0]
@@ -456,7 +456,7 @@ fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16
     assert!(outcome
         .raw_messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::EmbyLibraryLatestSelected))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryLatestSelected))));
     dispatch_messages(&mut harness, outcome.messages);
     let state = harness.model().app.libs[0]
         .feed_home_video
@@ -472,8 +472,8 @@ fn mounted_home_video_latest_round_trip_preserves_group_state(#[case] width: u16
     let outcome = click_selector(&mut harness, 2);
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::EmbyLibraryLatestExit { target: 1 })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryLatestExit { target: 1 }))));
     dispatch_messages(&mut harness, outcome.messages);
     let state = harness.model().app.libs[0]
         .feed_home_video

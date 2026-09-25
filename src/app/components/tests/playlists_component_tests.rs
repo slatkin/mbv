@@ -139,10 +139,10 @@ fn playlists_component_double_click_activates_an_open_playlist_item() {
     // …the second click — a double click — activates it (Enter equivalent).
     assert_eq!(
         component.on(&Event::Mouse(down)),
-        Some(Msg::Shell(ShellRequest::PlaylistsActivate {
+        Some(Msg::Shell(Box::new(ShellRequest::PlaylistsActivate {
             open: true,
             index: 0
-        }))
+        })))
     );
 }
 
@@ -170,6 +170,6 @@ fn playlists_component_right_click_on_an_open_playlist_goes_back() {
             kind: MouseEventKind::Down(MouseButton::Right),
             modifiers: KeyModifiers::NONE,
         })),
-        Some(Msg::Shell(ShellRequest::PlaylistsBack))
+        Some(Msg::Shell(Box::new(ShellRequest::PlaylistsBack)))
     );
 }

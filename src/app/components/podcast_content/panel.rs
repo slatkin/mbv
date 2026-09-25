@@ -196,11 +196,11 @@ impl LibraryContentOwner for PodcastContent {
                     // Resolve once, then delegate the target-bearing activation.
                     let target = self.episodes.resolve_current_point(at)?.clone();
                     self.delegate_episodes(MediaListOperation::Activate(target.clone()));
-                    Some(Msg::Shell(
+                    Some(Msg::Shell(Box::new(
                         ShellRequest::AudiobookshelfPodcastEpisodeIntent(
                             PodcastEpisodeIntent::OpenOrPlay(Some(target)),
                         ),
-                    ))
+                    )))
                 }
                 _ => {
                     self.delegate_episodes(
@@ -213,19 +213,19 @@ impl LibraryContentOwner for PodcastContent {
             },
             // No Workspace and no hero-pane input of its own (design D1).
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
-            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
+            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(Box::new(
                 ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
                     self.episodes.selected_target().cloned(),
                 )),
-            )),
+            ))),
         }
     }
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.episodes.handle_visual_key(key).is_some() {
-            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+            return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
                 self.episodes.selection_summary(),
-            )));
+            ))));
         }
         if !self.focused {
             return None;
@@ -281,19 +281,19 @@ impl LibraryContentOwner for PodcastContent {
             }
             Key::Char('[') if key.modifiers.is_empty() => self.cycle_pill(-1),
             Key::Char(']') if key.modifiers.is_empty() => self.cycle_pill(1),
-            Key::Enter => Some(Msg::Shell(
+            Key::Enter => Some(Msg::Shell(Box::new(
                 ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
                     self.episodes.selected_target().cloned(),
                 )),
-            )),
-            Key::Char(' ') => Some(Msg::Shell(
+            ))),
+            Key::Char(' ') => Some(Msg::Shell(Box::new(
                 ShellRequest::AudiobookshelfPodcastEpisodeIntent(
                     PodcastEpisodeIntent::FocusOrPlay(self.episodes.selected_target().cloned()),
                 ),
-            )),
+            ))),
             Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
-                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(
-                    self.episodes.selected_target().cloned(),
+                Box::new(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                    PodcastEpisodeIntent::Enqueue(self.episodes.selected_target().cloned()),
                 )),
             )),
             _ => None,

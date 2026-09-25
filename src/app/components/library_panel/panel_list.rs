@@ -135,7 +135,6 @@ impl PanelList for InlineSearch {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod panel_list_tests {
     use super::*;
     use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};

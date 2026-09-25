@@ -105,7 +105,7 @@ impl SearchSidebarComponent {
             return None;
         }
         match key.code {
-            Key::Esc => Some(Msg::Shell(ShellRequest::DismissSearch)),
+            Key::Esc => Some(Msg::Shell(Box::new(ShellRequest::DismissSearch))),
             Key::Enter => self.handle_activate(),
             Key::Up => {
                 self.move_cursor(-1);
@@ -145,16 +145,16 @@ impl SearchSidebarComponent {
         }
         let idx = self.sidebar.cursor.min(results.len() - 1);
         let item = &results[idx];
-        Some(Msg::Shell(ShellRequest::SearchActivate {
+        Some(Msg::Shell(Box::new(ShellRequest::SearchActivate {
             id: item.id.clone(),
             item_type: item.item_type.clone(),
-        }))
+        })))
     }
 
     /// Backspace: pop the last char or dismiss if empty.
     fn handle_backspace(&mut self) -> Option<Msg> {
         if self.sidebar.query.is_empty() {
-            return Some(Msg::Shell(ShellRequest::DismissSearch));
+            return Some(Msg::Shell(Box::new(ShellRequest::DismissSearch)));
         }
         self.sidebar.query.pop();
         self.sidebar.on_query_changed();
@@ -256,7 +256,7 @@ impl SearchSidebarComponent {
                     return None;
                 }
                 if !self.frame.contains(at) {
-                    return Some(Msg::Shell(ShellRequest::DismissSearch));
+                    return Some(Msg::Shell(Box::new(ShellRequest::DismissSearch)));
                 }
                 None
             }
@@ -357,7 +357,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
                     key.code,
                     Key::Esc
@@ -397,7 +397,7 @@ mod tests {
     #[case::esc_emits_dismiss_search(
         Key::Esc,
         KeyModifiers::NONE,
-        Some(Msg::Shell(ShellRequest::DismissSearch))
+        Some(Msg::Shell(Box::new(ShellRequest::DismissSearch)))
     )]
     #[case::ctrl_key_is_swallowed(Key::Char('a'), KeyModifiers::CONTROL, None)]
     #[case::alt_key_is_swallowed(Key::Char('a'), KeyModifiers::ALT, None)]
@@ -440,7 +440,7 @@ mod tests {
     fn backspace_on_empty_emits_dismiss() {
         let mut comp = SearchSidebarComponent::new();
         let msg = comp.handle_key(&make_key(Key::Backspace, KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::DismissSearch)));
+        assert_eq!(msg, Some(Msg::Shell(Box::new(ShellRequest::DismissSearch))));
     }
 
     #[test]
@@ -458,9 +458,8 @@ mod tests {
         let msg = comp.handle_key(&make_key(Key::Enter, KeyModifiers::NONE));
         assert!(matches!(
             msg,
-            Some(Msg::Shell(ShellRequest::SearchActivate { id, item_type }))
-                if id == "id" && item_type == "Movie"
-        ));
+            Some(Msg::Shell(ref shell_boxed))
+                 if matches!(shell_boxed.as_ref(), ShellRequest::SearchActivate { id, item_type } if id == "id" && item_type == "Movie")));
     }
 
     #[test]

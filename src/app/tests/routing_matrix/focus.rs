@@ -19,7 +19,9 @@ fn queue_focus_routes_queue_chord_to_queue_owner() {
 }
 #[test]
 fn library_focus_routes_bracket_to_library_leaf() {
-    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryLatestSelected));
+    let leaf = Some(Msg::Shell(Box::new(
+        ShellRequest::EmbyLibraryLatestSelected,
+    )));
     let out = fold_tick(
         leaf,
         key(KeyCode::Char('[')),
@@ -29,14 +31,14 @@ fn library_focus_routes_bracket_to_library_leaf() {
     assert_eq!(out.len(), 1);
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::EmbyLibraryLatestSelected)
-    ));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryLatestSelected)));
 }
 #[test]
 fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
-    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryEnqueue {
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryEnqueue {
         item: crate::app::tests::make_item("item", "Movie"),
-    }));
+    })));
     let out = fold_tick(
         leaf,
         KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
@@ -50,8 +52,8 @@ fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
     );
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::EmbyLibraryEnqueue { .. })
-    ));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryEnqueue { .. })));
     // Ctrl+a resolves through no policy layer (exact-chord matching keeps
     // superset chords inert), so the audio toggle cannot claim it even with
     // playback active — the FallThrough above is the enqueue-before-playback
@@ -78,7 +80,9 @@ fn lib_key_ctrl_catchall_swallows_unmapped_chord() {
 /// Left conflicted with the tree's parent/collapse chord in the Both layout).
 #[test]
 fn library_focus_tree_navigation_chords_stay_leaf_local() {
-    let leaf = Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::MusicGroupSwitch {
+        delta: 1,
+    })));
     for code in [
         KeyCode::Up,
         KeyCode::Down,
@@ -127,7 +131,9 @@ fn library_focus_tree_navigation_chords_stay_leaf_local() {
 /// direction is gated on the opposite panel holding focus.
 #[test]
 fn panel_focus_switches_on_the_ctrl_arrows_only() {
-    let leaf = Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::MusicGroupSwitch {
+        delta: 1,
+    })));
     let ctrl_left = KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL);
     let ctrl_right = KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL);
 

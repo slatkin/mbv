@@ -9,6 +9,9 @@ description = "Daemon process for mbv media playback."
 name = "mbvd"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 mbv-core = { path = "../mbv-core" }
 libc.workspace = true

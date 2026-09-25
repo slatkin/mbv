@@ -26,6 +26,9 @@ pipewire = "0.10.1"
 nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket"] }
 rstest = { version = "0.27", default-features = false }
 
+[workspace.lints.clippy]
+mod_module_files = "deny"
+
 [package]
 name = "mbv"
 version.workspace = true
@@ -33,6 +36,9 @@ edition.workspace = true
 rust-version.workspace = true
 description = "Terminal UI client for Emby media servers."
 default-run = "mbv"
+
+[lints]
+workspace = true
 
 [[bin]]
 name = "mbv"

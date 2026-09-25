@@ -72,8 +72,7 @@ fn drag_once(harness: &mut TickHarness) {
     .expect("drag resolves a valid width");
     assert!(outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) if *width == expected
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(width) if *width == expected))));
     apply(harness, outcome);
     assert_eq!(harness.model().app.list_pane_width, Some(expected));
 }
@@ -166,7 +165,7 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
         .step()
         .raw_messages
         .iter()
-        .any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+        .any(|m| matches!(m, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_)))));
 
     let first_column = gap.x - 2;
     let first_expected = crate::app::state::list_pane_width::normalize_list_pane_width(
@@ -182,8 +181,7 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|m| matches!(
         m,
-        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) if *width == first_expected
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(width) if *width == first_expected))));
     apply(&mut harness, outcome);
     assert_eq!(
         std::fs::read(crate::config::prefs_path()).expect("read live prefs"),
@@ -205,8 +203,7 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|m| matches!(
         m,
-        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) if *width == expected
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(width) if *width == expected))));
     apply(&mut harness, outcome);
     assert_eq!(
         std::fs::read(crate::config::prefs_path()).expect("read live prefs"),
@@ -222,8 +219,7 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|m| matches!(
         m,
-        Msg::Shell(ShellRequest::ResizeListPaneEnd(width)) if *width == expected
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneEnd(width) if *width == expected))));
     apply(&mut harness, outcome);
     assert_eq!(harness.model().app.list_pane_width, Some(expected));
     let after_release = std::fs::read(crate::config::prefs_path()).expect("read end prefs");
@@ -249,13 +245,13 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
         .step()
         .raw_messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::ResizeListPaneEnd(_)))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneEnd(_)))));
     harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x, gap.y));
     let outcome = harness.step();
     assert!(!outcome
         .raw_messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::ResizeListPaneEnd(_)))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneEnd(_)))));
     apply(&mut harness, outcome);
     assert_eq!(
         std::fs::read(crate::config::prefs_path()).expect("read click prefs"),
@@ -294,7 +290,7 @@ fn split_drag_ignores_the_selector_band() {
             .step()
             .raw_messages
             .iter()
-            .any(|message| matches!(message, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+            .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_)))));
         harness.inject(mouse(
             MouseEventKind::Drag(MouseButton::Left),
             gap.x - 5,
@@ -304,13 +300,13 @@ fn split_drag_ignores_the_selector_band() {
             .step()
             .raw_messages
             .iter()
-            .any(|message| matches!(message, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+            .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_)))));
         harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x - 5, row));
         assert!(!harness
             .step()
             .raw_messages
             .iter()
-            .any(|message| matches!(message, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+            .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_)))));
     }
 
     // A drag starting in the content band still owns the split and resolves
@@ -320,7 +316,7 @@ fn split_drag_ignores_the_selector_band() {
         .step()
         .raw_messages
         .iter()
-        .any(|message| matches!(message, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+        .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_)))));
     harness.inject(mouse(
         MouseEventKind::Drag(MouseButton::Left),
         gap.x - 5,
@@ -333,8 +329,7 @@ fn split_drag_ignores_the_selector_band() {
     .expect("content-band drag resolves a valid width");
     assert!(harness.step().raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) if *width == expected
-    )));
+        Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(width) if *width == expected))));
 }
 
 #[test]
@@ -360,7 +355,7 @@ fn split_drag_is_suppressed_and_reset_when_panel_loses_eligibility() {
             .step()
             .raw_messages
             .iter()
-            .any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+            .any(|m| matches!(m, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_)))));
     }
     harness.model_mut().dismiss_sidebar(SidebarId::Search);
     harness.model_mut().sync_mounted_surfaces();
@@ -373,5 +368,5 @@ fn split_drag_is_suppressed_and_reset_when_panel_loses_eligibility() {
         .step()
         .raw_messages
         .iter()
-        .any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
+        .any(|m| matches!(m, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_)))));
 }

@@ -151,10 +151,13 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
     harness.inject(right);
     let outcome = harness.step();
     let context_items = outcome.messages.iter().find_map(|message| match message {
-        Msg::Shell(ShellRequest::MusicRowContextMenu(
-            crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
-            _,
-        )) => Some(items),
+        Msg::Shell(shell_boxed) => match shell_boxed.as_ref() {
+            ShellRequest::MusicRowContextMenu(
+                crate::app::state::types::context_menu::ContextMenuTargets::Emby(items),
+                _,
+            ) => Some(items),
+            _ => None,
+        },
         _ => None,
     });
     assert_eq!(
@@ -223,7 +226,7 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
     );
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ClearMultiSelection(wrong_origin)),
+        Msg::Shell(Box::new(ShellRequest::ClearMultiSelection(wrong_origin))),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -237,7 +240,7 @@ fn grouped_music_tree_selection_projects_status_and_context_origin() {
         "a clear for another Library origin cannot clear the tree"
     );
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ClearMultiSelection(origin)),
+        Msg::Shell(Box::new(ShellRequest::ClearMultiSelection(origin))),
         &mut music_resize,
         &mut tv_resize,
     );

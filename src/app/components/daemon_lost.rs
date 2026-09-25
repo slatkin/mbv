@@ -101,7 +101,7 @@ impl AppComponent<Msg, UserEvent> for DaemonLostComponent {
             Key::Char('q') | Key::Char('Q') => DaemonLostIntent::Quit,
             _ => return None,
         };
-        Some(Msg::Shell(ShellRequest::DaemonLostIntent(intent)))
+        Some(Msg::Shell(Box::new(ShellRequest::DaemonLostIntent(intent))))
     }
 }
 
@@ -123,11 +123,11 @@ mod tests {
             KeyModifiers::NONE,
         )));
         assert!(matches!(
-            msg,
-            Some(Msg::Shell(ShellRequest::DaemonLostIntent(
-                DaemonLostIntent::RestartWithTray
-            )))
-        ));
+           msg,
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::DaemonLostIntent(
+               DaemonLostIntent::RestartWithTray
+           ))));
     }
 
     #[test]

@@ -34,7 +34,7 @@ fn list_pane_resize_live_is_memory_only_and_end_saves_prefs() {
         .width;
     let (mut music_resize, mut tv_resize) = (false, false);
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ResizeListPaneLive(42)),
+        Msg::Shell(Box::new(ShellRequest::ResizeListPaneLive(42))),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -50,7 +50,7 @@ fn list_pane_resize_live_is_memory_only_and_end_saves_prefs() {
     );
 
     harness.model_mut().handle_terminal_message(
-        Msg::Shell(ShellRequest::ResizeListPaneEnd(u16::MAX)),
+        Msg::Shell(Box::new(ShellRequest::ResizeListPaneEnd(u16::MAX))),
         &mut music_resize,
         &mut tv_resize,
     );

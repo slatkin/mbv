@@ -319,12 +319,12 @@ fn dispatch_music_artist_action(model: &mut Model, action: MusicTreeAction, item
     let mut music_resize = false;
     let mut tv_resize = false;
     model.handle_terminal_message(
-        Msg::Shell(ShellRequest::MusicArtistAction {
+        Msg::Shell(Box::new(ShellRequest::MusicArtistAction {
             action,
             items,
             origin: SelectionOrigin::Queue,
             unresolved_targets: Vec::new(),
-        }),
+        })),
         &mut music_resize,
         &mut tv_resize,
     );

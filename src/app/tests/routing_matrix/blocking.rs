@@ -15,9 +15,9 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
         blocking_overlay_open: true,
         ..RouterSnapshot::default()
     };
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::ConfirmIntent(
         ConfirmIntent::Dismiss,
-    )));
+    ))));
     let out = fold_tick_focused(
         leaf,
         key(KeyCode::Char('x')),
@@ -27,8 +27,8 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
     assert_eq!(out.len(), 1, "the overlay's own request must stand");
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss))
-    ));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(ConfirmIntent::Dismiss))));
 }
 #[test]
 fn focused_blocking_overlay_keeps_its_own_global_chord() {
@@ -36,9 +36,9 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
         blocking_overlay_open: true,
         ..RouterSnapshot::default()
     };
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::ConfirmIntent(
         ConfirmIntent::Accept,
-    )));
+    ))));
     let out = fold_tick_focused(
         leaf,
         key(KeyCode::Char('q')),
@@ -52,8 +52,8 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
     );
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::ConfirmIntent(ConfirmIntent::Accept))
-    ));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(ConfirmIntent::Accept))));
 }
 #[test]
 fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
@@ -78,9 +78,9 @@ fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
 }
 #[test]
 fn injected_swallow_discards_leaf_message() {
-    let leaf = Some(Msg::Shell(ShellRequest::ConfirmIntent(
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::ConfirmIntent(
         ConfirmIntent::Dismiss,
-    )));
+    ))));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('x')),
@@ -94,7 +94,7 @@ fn injected_swallow_discards_leaf_message() {
 }
 #[test]
 fn router_command_discards_focused_leaf_message() {
-    let leaf = Some(Msg::Shell(ShellRequest::Quit));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('q')),
@@ -108,7 +108,7 @@ fn router_command_discards_focused_leaf_message() {
 }
 #[test]
 fn fallthrough_leaves_exactly_one_leaf_message_standing() {
-    let leaf = Some(Msg::Shell(ShellRequest::Quit));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Down),
@@ -116,7 +116,9 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
         RouterOutcome::FallThrough,
     );
     assert_eq!(out.len(), 1, "exactly one leaf message must stand");
-    assert!(matches!(&out[0], Msg::Shell(ShellRequest::Quit)));
+    assert!(
+        matches!(&out[0], Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::Quit))
+    );
 }
 #[test]
 fn fallthrough_with_no_leaf_message_fires_no_global_effect() {

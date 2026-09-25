@@ -203,7 +203,7 @@ impl App {
 
     /// Spawn queued image fetches until the in-flight limit is reached. Called
     /// whenever an in-flight fetch completes and frees a slot (see the card-image
-    /// receiver in `mod.rs`).
+    /// receiver in `images.rs`).
     pub(in crate::app) fn drain_image_fetches(&mut self) {
         while self.image_fetches_active < MAX_IMAGE_FETCHES {
             let Some(req) = self.pending_image_fetches.pop_front() else {

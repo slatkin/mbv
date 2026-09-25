@@ -87,11 +87,13 @@ impl HelpComponent {
         // Help swallows every key (matching legacy `handle_key_help`'s
         // unconditional `Some(false)` return for unbound keys).
         match key.code {
-            Key::Char('q') if key.modifiers.is_empty() => Some(Msg::Shell(ShellRequest::Quit)),
-            Key::Esc | Key::Function(1) => Some(Msg::Shell(ShellRequest::DismissHelp)),
-            Key::Function(2) => Some(Msg::Shell(ShellRequest::OpenSettings)),
-            Key::Function(3) => Some(Msg::Shell(ShellRequest::OpenSessions)),
-            Key::Function(4) => Some(Msg::Shell(ShellRequest::OpenPlaylists)),
+            Key::Char('q') if key.modifiers.is_empty() => {
+                Some(Msg::Shell(Box::new(ShellRequest::Quit)))
+            }
+            Key::Esc | Key::Function(1) => Some(Msg::Shell(Box::new(ShellRequest::DismissHelp))),
+            Key::Function(2) => Some(Msg::Shell(Box::new(ShellRequest::OpenSettings))),
+            Key::Function(3) => Some(Msg::Shell(Box::new(ShellRequest::OpenSessions))),
+            Key::Function(4) => Some(Msg::Shell(Box::new(ShellRequest::OpenPlaylists))),
             Key::Up => {
                 self.scroll = self.scroll.saturating_sub(1);
                 None
@@ -141,7 +143,7 @@ impl HelpComponent {
                     None
                 } else {
                     // Click outside the panel: dismiss.
-                    Some(Msg::Shell(ShellRequest::DismissHelp))
+                    Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
                 }
             }
             MouseGesture::Scroll { delta, .. } => {
@@ -197,7 +199,7 @@ impl AppComponent<Msg, UserEvent> for HelpComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
                     key.code,
                     Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home
@@ -243,32 +245,32 @@ mod tests {
     #[case::quit_emits_shell_quit(
         Key::Char('q'),
         KeyModifiers::NONE,
-        Some(Msg::Shell(ShellRequest::Quit))
+        Some(Msg::Shell(Box::new(ShellRequest::Quit)))
     )]
     #[case::escape_emits_dismiss_help(
         Key::Esc,
         KeyModifiers::NONE,
-        Some(Msg::Shell(ShellRequest::DismissHelp))
+        Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
     )]
     #[case::f1_emits_dismiss_help(
         Key::Function(1),
         KeyModifiers::NONE,
-        Some(Msg::Shell(ShellRequest::DismissHelp))
+        Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
     )]
     #[case::f2_emits_open_settings(
         Key::Function(2),
         KeyModifiers::NONE,
-        Some(Msg::Shell(ShellRequest::OpenSettings))
+        Some(Msg::Shell(Box::new(ShellRequest::OpenSettings)))
     )]
     #[case::f3_emits_open_sessions(
         Key::Function(3),
         KeyModifiers::NONE,
-        Some(Msg::Shell(ShellRequest::OpenSessions))
+        Some(Msg::Shell(Box::new(ShellRequest::OpenSessions)))
     )]
     #[case::f4_emits_open_playlists(
         Key::Function(4),
         KeyModifiers::NONE,
-        Some(Msg::Shell(ShellRequest::OpenPlaylists))
+        Some(Msg::Shell(Box::new(ShellRequest::OpenPlaylists)))
     )]
     #[case::unbound_key_is_swallowed(Key::Char('x'), KeyModifiers::NONE, None)]
     #[case::ctrl_q_does_not_emit_quit(Key::Char('q'), KeyModifiers::CONTROL, None)]
@@ -346,12 +348,12 @@ mod tests {
         };
         assert_eq!(
             comp.handle_mouse(&down),
-            Some(Msg::Shell(ShellRequest::DismissHelp))
+            Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
         );
         // The second down is recognized as a double click and dismisses too.
         assert_eq!(
             comp.handle_mouse(&down),
-            Some(Msg::Shell(ShellRequest::DismissHelp))
+            Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
         );
     }
 
@@ -365,7 +367,7 @@ mod tests {
             row: 10,
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::DismissHelp)));
+        assert_eq!(msg, Some(Msg::Shell(Box::new(ShellRequest::DismissHelp))));
     }
 
     #[test]

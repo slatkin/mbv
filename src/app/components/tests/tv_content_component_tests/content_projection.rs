@@ -146,8 +146,7 @@ fn tv_latest_and_upcoming_enter_play_the_selected_episode_directly() {
         });
         assert!(matches!(
             activation,
-            Some(Msg::Shell(ShellRequest::TvEpisodeActivate { episode })) if episode.id == id
-        ));
+            Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { episode } if episode.id == id)));
         assert!(owner.selected_series_snapshot().is_none());
         assert!(owner.content().hero.is_none());
     }
@@ -176,10 +175,9 @@ fn tv_flat_episode_click_moves_the_browser_carrier_without_entering_workspace() 
     ));
     assert!(matches!(
         click,
-        Some(Msg::Shell(ShellRequest::TvHitClick {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
             hit: TvHit::EpisodeRow(ref target),
-        })) if target == "episode-b"
-    ));
+        } if target == "episode-b")));
     assert_eq!(tv(&panel).selected_item_id(), Some("episode-b".into()));
     assert!(!tv(&panel).episode_pane_focused());
 }

@@ -360,7 +360,10 @@ fn split_drag_resolves_the_live_width_from_the_painted_gap() {
         gap.y,
     ));
     match msg {
-        Some(Msg::Shell(ShellRequest::ResizeListPaneLive(width))) => {
+        Some(Msg::Shell(shell_boxed)) => {
+            let ShellRequest::ResizeListPaneLive(width) = *shell_boxed else {
+                panic!("the drag must resolve the live width: {shell_boxed:?}")
+            };
             assert!(width > 0, "the drag resolves a live width: {width}");
         }
         other => panic!("the drag must resolve the live width: {other:?}"),
@@ -373,8 +376,7 @@ fn split_drag_resolves_the_live_width_from_the_painted_gap() {
     ));
     assert!(matches!(
         end,
-        Some(Msg::Shell(ShellRequest::ResizeListPaneEnd(width))) if width > 0
-    ));
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneEnd(width) if *width > 0)));
 }
 
 #[test]
@@ -401,12 +403,12 @@ fn split_drag_started_outside_the_gap_emits_no_resize_request() {
     ));
     assert!(!matches!(
         drag,
-        Some(Msg::Shell(ShellRequest::ResizeListPaneLive(_)))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_))));
     assert!(!matches!(
         end,
-        Some(Msg::Shell(ShellRequest::ResizeListPaneEnd(_)))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneEnd(_))));
 }
 
 #[test]
@@ -430,8 +432,8 @@ fn interrupted_split_drag_does_not_claim_a_later_row_release_or_unchanged_drag()
             gap.x + 6,
             gap.y,
         )),
-        Some(Msg::Shell(ShellRequest::ResizeListPaneLive(_)))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneLive(_))));
     // The release is dropped outside the painted area, abandoning the gap
     // recognizer before it can emit its end request.
     assert_eq!(
@@ -538,9 +540,9 @@ fn wide_hero_link_click_emits_open_url_request() {
             point.0,
             point.1
         )),
-        Some(Msg::Shell(ShellRequest::OpenUrl(
+        Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(
             "https://imdb.test/dune".into()
-        )))
+        ))))
     );
     assert_eq!(
         panel.on(&mouse_event(

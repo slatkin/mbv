@@ -6,10 +6,9 @@ fn settings_mouse_click_selects_and_activates_a_row() {
     let (rect, cursor) = component.test_rows().regions()[0];
     assert!(matches!(
         component.on(&mouse_down(rect.x, rect.y)),
-        Some(Msg::Shell(ShellRequest::SettingsIntent(
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::SettingsIntent(
             SettingsIntent::Activate(c)
-        ))) if c == cursor
-    ));
+        ) if *c == cursor)));
     assert_eq!(component.cursor, cursor);
 }
 
@@ -33,7 +32,7 @@ fn settings_mouse_click_outside_the_painted_panel_dismisses() {
     );
     assert_eq!(
         component.on(&mouse_down(x + width + 5, 1)),
-        Some(Msg::Shell(ShellRequest::DismissSettings))
+        Some(Msg::Shell(Box::new(ShellRequest::DismissSettings)))
     );
 }
 

@@ -80,8 +80,8 @@ impl LibraryRoutesComponent {
                 }
                 None
             }
-            Key::Enter => Some(Msg::Shell(ShellRequest::LibraryRoutesEnter)),
-            Key::Esc => Some(Msg::Shell(ShellRequest::LibraryRoutesEsc)),
+            Key::Enter => Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEnter))),
+            Key::Esc => Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc))),
             _ => None,
         }
     }
@@ -103,14 +103,14 @@ impl LibraryRoutesComponent {
                     return None;
                 }
                 if !self.frame.contains(at) {
-                    return Some(Msg::Shell(ShellRequest::LibraryRoutesEsc));
+                    return Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc)));
                 }
                 None
             }
             MouseGesture::DoubleClick(at) => {
                 if let Some(&index) = self.hit_rows.resolve(at) {
                     self.cursor = index;
-                    return Some(Msg::Shell(ShellRequest::LibraryRoutesEnter));
+                    return Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEnter)));
                 }
                 // Outside double-click: the first click already dismissed.
                 None
@@ -205,7 +205,7 @@ impl AppComponent<Msg, UserEvent> for LibraryRoutesComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(key.code, Key::Up | Key::Down | Key::Enter | Key::Esc) => {
                     LeafKeyResult::Consumed(None).into_option()
                 }
@@ -257,11 +257,11 @@ mod tests {
         component.set_content(&popup());
         assert_eq!(
             component.on(&key(Key::Enter)),
-            Some(Msg::Shell(ShellRequest::LibraryRoutesEnter))
+            Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEnter)))
         );
         assert_eq!(
             component.on(&key(Key::Esc)),
-            Some(Msg::Shell(ShellRequest::LibraryRoutesEsc))
+            Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc)))
         );
     }
 

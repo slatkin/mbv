@@ -1,12 +1,12 @@
 # Invariant 9 — The Grouped Music tree claims a point only from the latest completed view
 
-**Scope:** the shared `TreeBrowser` (`src/app/components/list/tree_browser/mod.rs`)
+**Scope:** the shared `TreeBrowser` (`src/app/components/list/tree_browser.rs`)
 with the Grouped Music target (`src/app/components/music_content/tree_target.rs`),
 its
 `PanelList` adapter (`src/app/components/library_panel/panel_list.rs`), the
 Wide paint order that drives it
-(`src/app/components/library_panel/wide/mod.rs`), and the pointer consumers
-(`src/app/components/music_content/interaction.rs`, `music_content/mod.rs`).
+(`src/app/components/library_panel/wide.rs`), and the pointer consumers
+(`src/app/components/music_content/interaction.rs`, `music_content.rs`).
 
 ## The invariant
 

@@ -275,8 +275,8 @@ fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
     let outcome = harness.step();
     assert!(!outcome.raw_messages.iter().any(|message| matches!(
         message,
-        Msg::Shell(crate::app::components::msg::ShellRequest::MusicAlbumCursor { .. })
-    )));
+        Msg::Shell(ref shell_boxed)
+     if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::MusicAlbumCursor { .. }))));
     assert_eq!(
         harness
             .model()
@@ -367,8 +367,8 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 5 })
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 5 }))),
         "PageDown moves by the episode list's own page stride"
     );
     assert_eq!(
@@ -390,8 +390,8 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -5 })
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -5 }))),
         "PageUp reports the applied movement too"
     );
     assert_eq!(tv_owner_of(&harness).episode_cursor(), 0);
@@ -421,8 +421,8 @@ fn overlay_workspace_home_end_report_the_resolved_move() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 9 })
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 9 }))),
         "End reports the resolved jump to the last row"
     );
     assert_eq!(
@@ -439,8 +439,8 @@ fn overlay_workspace_home_end_report_the_resolved_move() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -9 })
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -9 }))),
         "Home reports the resolved jump to the first row"
     );
     assert_eq!(
@@ -490,8 +490,8 @@ fn stale_overlay_bit_never_shadows_wide_keyboard_handling() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvJumpCursor { to_end: false })
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::TvJumpCursor { to_end: false }))),
         "the Wide workspace's Home reaches the series rail, not the overlay arms"
     );
     assert_eq!(

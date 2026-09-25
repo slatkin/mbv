@@ -120,8 +120,7 @@ fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
     ));
     assert!(matches!(
         component.toggle_tree_expansion(show_target.clone()),
-        Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == show_target
-    ));
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == show_target)));
     assert!(component.browser.is_expanded(&show_target));
     assert!(component
         .toggle_tree_expansion(show_target.clone())
@@ -149,8 +148,7 @@ fn tree_expand_requests_shell_loading_only_on_the_open_transition() {
     };
     assert!(matches!(
         component.toggle_tree_expansion(season_target.clone()),
-        Some(Msg::Shell(ShellRequest::TvTreeExpand { target })) if target == season_target
-    ));
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand { target } if *target == season_target)));
 }
 
 #[test]

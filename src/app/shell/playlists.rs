@@ -231,10 +231,10 @@ mod tests {
                 modifiers: KeyModifiers::NONE,
             }));
         assert!(matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
-                SavePlaylistIntent::Submit
-            )))
-        ));
+           message,
+           Some(Msg::Shell(ref shell_boxed))
+        if matches!(shell_boxed.as_ref(), ShellRequest::SavePlaylistIntent(
+               SavePlaylistIntent::Submit
+           ))));
     }
 }

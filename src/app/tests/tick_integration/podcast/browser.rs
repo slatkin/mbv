@@ -37,11 +37,11 @@ fn podcast_owner_is_registered_and_starts_on_the_first_episode() {
     }));
     let result = harness.step();
     assert!(result.raw_messages.iter().any(|msg| matches!(
-        msg,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: None
-        })
-    )));
+       msg,
+       Msg::Shell(ref shell_boxed)
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
+           library_item_id: None
+       }))));
 }
 
 #[test]
@@ -77,11 +77,11 @@ fn podcast_panel_mouse_pill_click_commits_the_state_selection() {
         )
     ));
     assert!(outcome.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: None
-        })
-    )));
+       message,
+       Msg::Shell(ref shell_boxed)
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
+           library_item_id: None
+       }))));
 }
 
 #[test]
@@ -109,11 +109,11 @@ fn podcast_panel_mouse_episode_clicks_claim_and_open_or_play() {
     // A resolved episode click is click-to-focus: the shell pulls panel
     // focus to the Library and persists the tab slot (no show selection).
     assert!(single.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: None
-        })
-    )));
+       message,
+       Msg::Shell(ref shell_boxed)
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastShowMove {
+           library_item_id: None
+       }))));
 
     harness.inject(mouse(
         MouseEventKind::Down(MouseButton::Left),
@@ -122,11 +122,11 @@ fn podcast_panel_mouse_episode_clicks_claim_and_open_or_play() {
     ));
     let double = harness.step();
     assert!(double.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
-            crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
-        ))
-    )));
+       message,
+       Msg::Shell(ref shell_boxed)
+    if matches!(shell_boxed.as_ref(), ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+           crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
+       )))));
 }
 
 #[test]

@@ -10,7 +10,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
 fn playback_gating_space_falls_through_to_consumed_leaf() {
-    let leaf = Some(Msg::Shell(ShellRequest::Quit));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::Quit)));
     let out = fold_tick(
         leaf,
         key(KeyCode::Char(' ')),
@@ -25,7 +25,7 @@ fn playback_gating_space_falls_through_to_consumed_leaf() {
 }
 #[test]
 fn playback_gating_esc_falls_through_to_consumed_leaf() {
-    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryBack));
+    let leaf = Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryBack)));
     let out = fold_tick(
         leaf,
         key(KeyCode::Esc),
@@ -33,7 +33,9 @@ fn playback_gating_esc_falls_through_to_consumed_leaf() {
         active_snapshot(),
     );
     assert_eq!(out.len(), 1);
-    assert!(matches!(&out[0], Msg::Shell(ShellRequest::EmbyLibraryBack)));
+    assert!(
+        matches!(&out[0], Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::EmbyLibraryBack))
+    );
 }
 #[test]
 fn playback_gating_space_claims_deferred_toggle() {

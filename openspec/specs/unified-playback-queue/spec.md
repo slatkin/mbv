@@ -577,7 +577,7 @@ When a Client loads a playlist into the Stay-alive process's queue without reque
 
 ### Requirement: The Stay-alive process holds the queue source
 
-The Stay-alive process SHALL hold the queue source as part of its queue state. Every whole-queue replacement it accepts, every clear, and every source-only update SHALL set its source; a clear SHALL reset it to Unknown. A source-only update SHALL apply only to the queue lineage the owner held when the update was requested; a delayed update from an earlier queue SHALL NOT rename a later queue. A Client attached to that owner SHALL display the owner's source and SHALL NOT maintain an independent authoritative source for it.
+The Stay-alive process SHALL hold the queue source as part of its queue state. Every whole-queue replacement it accepts, every clear, and every source-only update SHALL set its source; a clear SHALL reset it to Unknown. A source-only update SHALL apply only to the queue lineage the owner held when the update was requested; a delayed update from an earlier queue SHALL NOT rename a later queue. A Client attached to that owner SHALL display the owner's source and SHALL NOT maintain an independent authoritative source for it. Saving the queue as a new playlist (Save As) and overwriting an existing playlist with the queue SHALL both reach the owner as source-only updates carrying the lineage observed when the save was requested; the Client SHALL report the queue clean only once an owner snapshot shows the new source. A Client that has not yet received an owner snapshot SHALL refuse to save the queue to a playlist, and SHALL create or change no server playlist.
 
 #### Scenario: Playing a different source updates the owner
 
@@ -596,6 +596,18 @@ The Stay-alive process SHALL hold the queue source as part of its queue state. E
 - **WHEN** a source-only update from an earlier queue arrives after another Client replaced the queue
 - **THEN** the owner SHALL reject it
 - **AND** the later queue's source SHALL remain unchanged
+
+#### Scenario: Overwriting a playlist updates the owner's source
+
+- **WHEN** a Client attached to the Stay-alive process overwrites an existing playlist with the queue and the server replacement succeeds
+- **THEN** the Client SHALL send the owner a source-only update naming the replacement playlist, carrying the lineage observed when the overwrite was requested
+- **AND** the queue SHALL stay dirty until an owner snapshot with that source arrives
+
+#### Scenario: No owner snapshot refuses a playlist save
+
+- **WHEN** a Client attached to the Stay-alive process has received no owner queue snapshot and the user saves, saves as, or overwrites a playlist
+- **THEN** the Client SHALL show an error
+- **AND** no server playlist SHALL be created, updated, or deleted
 
 ### Requirement: User-initiated queue replacements confirm before replacing a populated queue
 When the user explicitly picks content to replace the playback queue, the system SHALL ask for confirmation before replacing that queue if it is populated. An empty target queue SHALL be replaced without the prompt. This applies to album and artist track plays, playlist loads, shuffle-folder plays, context-menu Play and Shuffle, and grouped-tree track plays. It SHALL NOT apply to library autoplay, single-item play, or replays that restore existing session state. Cancelling SHALL leave the queue and playback unchanged. After confirmation, the replacement SHALL behave exactly as it did before this gate existed, including any later "play locally instead" or unsaved-playlist prompt.

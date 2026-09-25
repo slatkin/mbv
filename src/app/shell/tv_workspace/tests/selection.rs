@@ -84,10 +84,10 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
             code,
             modifiers: KeyModifiers::NONE,
         });
-        let Some(Msg::Shell(request)) = request else {
+        let Some(Msg::Shell(shell_boxed)) = request else {
             panic!("TV key {code:?} must produce a typed shell request");
         };
-        (model, request)
+        (model, *shell_boxed)
     }
 
     // Tree navigation resolves the selected stable target. Moving from the
@@ -160,11 +160,11 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         modifiers: KeyModifiers::NONE,
     });
     assert!(matches!(
-        request,
-        Some(Msg::Shell(ShellRequest::TvTreeExpand {
-            target: crate::app::components::tv_tree_target::TvTreeTarget::Show(_)
-        }))
-    ));
+       request,
+       Some(Msg::Shell(ref shell_boxed))
+    if matches!(shell_boxed.as_ref(), ShellRequest::TvTreeExpand {
+           target: crate::app::components::tv_tree_target::TvTreeTarget::Show(_)
+       })));
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 }
 
@@ -180,7 +180,10 @@ fn tv_series_enter_carries_the_component_selected_item() {
         code: Key::Enter,
         modifiers: KeyModifiers::NONE,
     });
-    let Some(Msg::Shell(ShellRequest::TvActivate { item })) = request else {
+    let Some(Msg::Shell(shell_boxed)) = request else {
+        panic!("series Enter must emit TvActivate carrying the selected item");
+    };
+    let ShellRequest::TvActivate { item } = *shell_boxed else {
         panic!("series Enter must emit TvActivate carrying the selected item");
     };
     assert_eq!(
@@ -213,10 +216,9 @@ fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
     });
     assert!(matches!(
         moved,
-        Some(Msg::Shell(ShellRequest::TvHitClick {
+        Some(Msg::Shell(ref shell_boxed))  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
             hit: TvHit::SeriesRow(ref target)
-        })) if target == "movie-second"
-    ));
+        } if target == "movie-second")));
     model
         .app
         .handle_mouse_single_click_tv(0, TvHit::SeriesRow("movie-second".into()));
@@ -260,7 +262,7 @@ fn tv_season_move_fetches_uncached_episodes_for_component_selection() {
     let Some(Msg::Shell(request)) = enter else {
         panic!("series Enter must produce a typed request");
     };
-    model.handle_tv_request(request);
+    model.handle_tv_request(*request);
 
     // Diverge the legacy App cursor: the component's selected series remains authoritative.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
@@ -270,8 +272,8 @@ fn tv_season_move_fetches_uncached_episodes_for_component_selection() {
     });
     assert!(matches!(
         season,
-        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { delta: 1 })));
 
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
@@ -319,7 +321,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     let Some(Msg::Shell(enter_series)) = enter_series else {
         panic!("series Enter must produce a typed request");
     };
-    model.handle_tv_request(enter_series);
+    model.handle_tv_request(*enter_series);
 
     let season = model.test_tv_owner_mut().test_key(&KeyEvent {
         code: Key::Char(']'),
@@ -327,8 +329,8 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     });
     assert!(matches!(
         season,
-        Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+     if matches!(shell_boxed.as_ref(), ShellRequest::TvSeasonMove { delta: 1 })));
     // Make the App library cursor stale after the component has selected
     // the series; episode activation must not consult that cursor.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
@@ -381,9 +383,10 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         "TvBack must pop the seasons child level"
     );
     assert_eq!(
-            model.app.libs[0].nav_stack[0].resting().cursor(), 2,
-            "TvBack restores the series cursor by parent_id (row of movie-third), not a reset 0, the popped child cursor 99, or the stale 1"
-        );
+        model.app.libs[0].nav_stack[0].resting().cursor(),
+        2,
+        "TvBack restores the series cursor by parent_id (row of movie-third), not a reset 0, the popped child cursor 99, or the stale 1"
+    );
 }
 
 /// Renders the wide TV workspace through the library panel's paint path and

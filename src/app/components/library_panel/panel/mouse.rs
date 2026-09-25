@@ -74,11 +74,11 @@ impl LibraryPanel {
                     .active_mut()
                     .and_then(|owner| owner.scroll_position()),
             ) {
-                self.deferred_msg = Some(Msg::Shell(ShellRequest::LibraryScroll {
+                self.deferred_msg = Some(Msg::Shell(Box::new(ShellRequest::LibraryScroll {
                     key,
                     index,
                     scroll,
-                }));
+                })));
             }
         }
         result
@@ -136,10 +136,13 @@ impl LibraryPanel {
                 }
                 self.split.as_mut()?.width = width;
                 self.split_changed = true;
-                Some(Msg::Shell(ShellRequest::ResizeListPaneLive(width)))
+                Some(Msg::Shell(Box::new(ShellRequest::ResizeListPaneLive(
+                    width,
+                ))))
             }
-            MouseGesture::DragEnd => std::mem::take(&mut self.split_changed)
-                .then_some(Msg::Shell(ShellRequest::ResizeListPaneEnd(split.width))),
+            MouseGesture::DragEnd => std::mem::take(&mut self.split_changed).then_some(Msg::Shell(
+                Box::new(ShellRequest::ResizeListPaneEnd(split.width)),
+            )),
             _ => None,
         }
     }
@@ -171,7 +174,7 @@ impl LibraryPanel {
                 if let Some(url) = self.painted_link_urls.get(index).cloned().and_then(|url| {
                     super::super::overview_box::sanitize_url(&url).map(str::to_owned)
                 }) {
-                    return Some(Msg::Shell(ShellRequest::OpenUrl(url)));
+                    return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
                 }
             }
         }
@@ -258,7 +261,7 @@ impl LibraryPanel {
                 if let Some(url) = self.painted_link_urls.get(index).cloned().and_then(|url| {
                     super::super::overview_box::sanitize_url(&url).map(str::to_owned)
                 }) {
-                    return Some(Msg::Shell(ShellRequest::OpenUrl(url)));
+                    return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
                 }
             }
         }
@@ -301,12 +304,14 @@ impl LibraryPanel {
                 // A pointer gesture always claims as mouse. Preserve a
                 // destination request, but never leak a keyboard claim from
                 // an owner's legacy leaf disposition.
-                LeafKeyResult::Consumed(Some(Msg::TerminalEvent(_))) => {
+                LeafKeyResult::Consumed(Some(message))
+                    if matches!(message.as_ref(), Msg::TerminalEvent(_)) =>
+                {
                     Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                 }
-                LeafKeyResult::Consumed(message) => message.or(Some(Msg::TerminalEvent(
-                    TerminalObserverEvent::MouseClaimed,
-                ))),
+                LeafKeyResult::Consumed(message) => message.map(|message| *message).or(Some(
+                    Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed),
+                )),
                 LeafKeyResult::Unhandled => {
                     Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                 }

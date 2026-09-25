@@ -17,7 +17,7 @@ branch), which is unaffected by this ADR:
    direct-remote/attached session) was active when it last exited. This
    was #222's original intent — its initial design mistakenly ruled out
    any startup connection entirely, which #236 corrected. See
-   `App::try_auto_reconnect` (`src/app/mod.rs`).
+   `App::try_auto_reconnect` (`src/app.rs`).
 2. **Fallback, not hard-fail.** A failed connect attempt falls back to (or
    stays on) local playback. It never hard-fails or exits the process. The
    raw failure is always logged (`log::warn!`, `target: "daemon_route"`).
@@ -65,13 +65,13 @@ outside a single issue body, mirroring why ADR 0003 exists (see that ADR's
 or reverse them without leaving a trace.
 
 Implementation: `App::try_daemon_route_connect` /
-`App::connect_daemon_route_endpoint` in `src/app/mod.rs` (issue #222). Two
+`App::connect_daemon_route_endpoint` in `src/app.rs` (issue #222). Two
 production call sites now exist: #223's `apply_route_for_playback` (the
 per-library swap, a sibling to `switch_to_direct_remote` /
 `restore_local_mode`, wiring the actual play/enqueue trigger), and #236's
 `try_auto_reconnect` (restoring the last remote connection at startup).
 Both methods carried a scoped `#[allow(dead_code)]` until #223's call site
-landed (see the doc comments on each in `src/app/mod.rs`) -- this repo's
+landed (see the doc comments on each in `src/app.rs`) -- this repo's
 "fix all compile warnings, never `#[allow(unused)]`" convention
 (`mem:conventions`) was deliberately overridden in that narrow,
 self-documenting case, not silently worked around.

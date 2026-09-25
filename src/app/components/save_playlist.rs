@@ -76,12 +76,12 @@ impl SavePlaylistComponent {
                 self.input.push(c);
                 None
             }
-            Key::Esc => Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
+            Key::Esc => Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
                 SavePlaylistIntent::Dismiss,
-            ))),
-            Key::Enter => Some(Msg::Shell(ShellRequest::SavePlaylistIntent(
+            )))),
+            Key::Enter => Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
                 SavePlaylistIntent::Submit,
-            ))),
+            )))),
             _ => None,
         }
     }
@@ -96,9 +96,11 @@ impl SavePlaylistComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click { at, .. } if !self.frame.contains(at) => Some(Msg::Shell(
-                ShellRequest::SavePlaylistIntent(SavePlaylistIntent::Dismiss),
-            )),
+            MouseGesture::Click { at, .. } if !self.frame.contains(at) => {
+                Some(Msg::Shell(Box::new(ShellRequest::SavePlaylistIntent(
+                    SavePlaylistIntent::Dismiss,
+                ))))
+            }
             _ => None,
         }
     }
@@ -150,7 +152,7 @@ impl AppComponent<Msg, UserEvent> for SavePlaylistComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
             Event::Keyboard(key) => match self.handle_key(key) {
-                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
                     key.code,
                     Key::Backspace | Key::Esc | Key::Enter | Key::Char(_)

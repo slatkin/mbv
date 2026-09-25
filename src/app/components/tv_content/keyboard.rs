@@ -24,7 +24,7 @@ impl TvContent {
         // A launched result exits search like Enter activation does; leaving it
         // open traps focus in the text entry so no other key reaches the shell.
         self.inline_search.close();
-        Some(Msg::Shell(request))
+        Some(Msg::Shell(Box::new(request)))
     }
 
     pub(super) fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -34,10 +34,10 @@ impl TvContent {
         if self.inline_search.is_active() {
             return match self.inline_search.handle_key(key) {
                 Some(InlineSearchAction::Activate { id, item_type }) => {
-                    Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchActivate {
                         id,
                         item_type,
-                    }))
+                    })))
                 }
                 Some(InlineSearchAction::Dismiss) => {
                     // Escape/empty-query Backspace dismiss locally
@@ -46,7 +46,7 @@ impl TvContent {
                     None
                 }
                 Some(InlineSearchAction::QueryStarted) => {
-                    Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
+                    Some(Msg::Shell(Box::new(ShellRequest::InlineSearchQueryStarted)))
                 }
                 // Ctrl+P/S/A that the shared control does not consume act on
                 // the selected result row via the ordinary result-row effects.
@@ -54,9 +54,9 @@ impl TvContent {
             };
         }
         if self.flat_episode_mode() && self.carrier.handle_visual_key(key).is_some() {
-            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+            return Some(Msg::Shell(Box::new(ShellRequest::SelectionProjection(
                 self.carrier.selection_summary(),
-            )));
+            ))));
         }
         if !self.context.focused {
             return None;
@@ -123,7 +123,7 @@ impl TvContent {
             Key::End => Some(self.move_episode_by(MediaListSurfaceInput::Last)),
             _ => None,
         };
-        request.map(Msg::Shell)
+        request.map(|request| Msg::Shell(Box::new(request)))
     }
 
     /// Show-mode navigation changes the tree's selected stable target. Moving
@@ -175,7 +175,7 @@ impl TvContent {
             }
             _ => return None,
         };
-        Some(Msg::Shell(request))
+        Some(Msg::Shell(Box::new(request)))
     }
 
     fn handle_show_tree_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -203,7 +203,7 @@ impl TvContent {
         }
 
         if matches!(key.code, Key::Esc | Key::Backspace) {
-            return Some(Msg::Shell(ShellRequest::TvBack));
+            return Some(Msg::Shell(Box::new(ShellRequest::TvBack)));
         }
 
         let target = self.browser.selected_target().cloned();
@@ -271,7 +271,7 @@ impl TvContent {
                 };
                 return Some(
                     activation
-                        .map(Msg::Shell)
+                        .map(|request| Msg::Shell(Box::new(request)))
                         .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
                 );
             }
@@ -305,7 +305,7 @@ impl TvContent {
             }
             _ => None,
         };
-        request.map(Msg::Shell)
+        request.map(|request| Msg::Shell(Box::new(request)))
     }
 
     /// Wide pane-based keyboard handling (unchanged from before the merge).
@@ -390,7 +390,7 @@ impl TvContent {
             _ => None,
         };
         if let Some(request) = request {
-            return Some(Msg::Shell(request));
+            return Some(Msg::Shell(Box::new(request)));
         }
         // Library effects use the component's selected item. TV keeps
         // the series-list selection authoritative even while the local
@@ -482,6 +482,6 @@ impl TvContent {
             }
             _ => None,
         };
-        request.map(Msg::Shell)
+        request.map(|request| Msg::Shell(Box::new(request)))
     }
 }

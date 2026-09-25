@@ -122,8 +122,8 @@ fn library_panel_split_drag_resolves_the_live_width() {
     assert!(
         outcome.raw_messages.iter().any(|msg| matches!(
             msg,
-            Msg::Shell(crate::app::components::msg::ShellRequest::ResizeListPaneLive(_))
-        )),
+            Msg::Shell(ref shell_boxed)
+         if matches!(shell_boxed.as_ref(), crate::app::components::msg::ShellRequest::ResizeListPaneLive(_)))),
         "the panel's split drag resolves the live width through the tick"
     );
 

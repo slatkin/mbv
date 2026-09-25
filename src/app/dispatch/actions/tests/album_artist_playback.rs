@@ -145,10 +145,10 @@ fn artist_track_dispatch_resolves_revision_rebind_and_preserves_queue_on_miss() 
     rebound.revision += 1;
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
-        Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+        Msg::Shell(Box::new(ShellRequest::MusicArtistTrackActivate {
             target: rebound.clone(),
             track_id: "artist-track-2".into(),
-        }),
+        })),
         &mut music_resize,
         &mut tv_resize,
     );
@@ -168,10 +168,10 @@ fn artist_track_dispatch_resolves_revision_rebind_and_preserves_queue_on_miss() 
     let queue_before_miss = queued_track_ids(&model.app);
     let cursor_before_miss = model.app.playback_queue().queue_cursor;
     model.handle_terminal_message(
-        Msg::Shell(ShellRequest::MusicArtistTrackActivate {
+        Msg::Shell(Box::new(ShellRequest::MusicArtistTrackActivate {
             target: rebound,
             track_id: "missing-track".into(),
-        }),
+        })),
         &mut music_resize,
         &mut tv_resize,
     );

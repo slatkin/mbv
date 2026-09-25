@@ -94,7 +94,7 @@ impl App {
         });
         // Advance the queue lineage so any late work from this process cannot
         // be applied after teardown.
-        self.advance_remote_queue_lineage();
+        self.advance_queue_epoch();
         // #236: persist whichever remote connection (if any) is active
         // right now, before anything below or in the caller's cleanup
         // path clears `active_route` / direct-session identity -- so the

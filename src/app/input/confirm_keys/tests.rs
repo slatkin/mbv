@@ -386,11 +386,12 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
     assert_eq!(queue_ids(&app), ["existing"]);
 
     // The save completes with matching lineage and playlist identity.
-    let queue_lineage = app.remote_queue_lineage;
     app.handle_session_event(crate::app::SessionEvent::PlaylistMutationComplete {
         mutation_id: save_mutation_id,
         playlist_id: "playlist-1".into(),
-        queue_lineage,
+        origin: crate::app::state::queue_owner::QueueOrigin::ThisProcess {
+            epoch: app.queue_epoch,
+        },
         source_playlist_id: "playlist-1".into(),
         result: Ok(()),
     });

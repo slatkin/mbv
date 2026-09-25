@@ -370,9 +370,8 @@ fn tree_episode_double_click_uses_its_show_target_when_selection_is_stale() {
     ));
     assert!(matches!(
         message,
-        Some(Msg::Shell(ShellRequest::TvEpisodeActivate { episode: selected }))
-            if selected.id == episode.id && selected.series_id == show.id
-    ));
+        Some(Msg::Shell(ref shell_boxed))
+             if matches!(shell_boxed.as_ref(), ShellRequest::TvEpisodeActivate { episode: selected } if selected.id == episode.id && selected.series_id == show.id)));
 }
 
 #[test]

@@ -1,4 +1,5 @@
 use crate::app::state::home_latest::{is_new_in_launch_window, HomeLatestLaunchWindow};
+use crate::app::state::queue_owner::QueueOrigin;
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
@@ -269,7 +270,7 @@ pub(in crate::app) enum RoutedReplacementPrep {
 pub(in crate::app) enum PlaylistMutation {
     Save {
         mutation_id: u64,
-        queue_lineage: u64,
+        origin: QueueOrigin,
         source_playlist_id: String,
         item_ids: Option<Vec<String>>,
     },
@@ -277,14 +278,13 @@ pub(in crate::app) enum PlaylistMutation {
         mutation_id: u64,
         coordinator_key: String,
         name: String,
-        queue_lineage: u64,
+        origin: QueueOrigin,
         source_playlist_id: Option<String>,
-        owner_queue_lineage: Option<mbv_core::ctrl::QueueLineage>,
         item_ids: Option<Vec<String>>,
     },
     Replace {
         mutation_id: u64,
-        queue_lineage: u64,
+        origin: QueueOrigin,
         name: String,
         item_ids: Option<Vec<String>>,
     },
