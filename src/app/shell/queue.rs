@@ -326,27 +326,14 @@ impl Model {
                 slot_id,
                 direction,
             } => {
-                if let Some(index) = self.select_queue_slot(scope, slot_id) {
-                    match direction {
-                        QueueMove::Up => self.app.move_queue_item_up(index),
-                        QueueMove::Down => self.app.move_queue_item_down(index),
-                    }
-                }
+                self.handle_queue_move(scope, slot_id, direction);
             }
             QueueRequest::MoveTo {
                 scope,
                 slot_id,
                 onto,
             } => {
-                let Some(from) = self.select_queue_slot(scope, slot_id) else {
-                    return;
-                };
-                let Some(to) = self.slot_index(scope, onto) else {
-                    return;
-                };
-                if from != to {
-                    self.app.move_queue_item_to(scope, from, to);
-                }
+                self.handle_queue_move_to(scope, slot_id, onto);
             }
             QueueRequest::ResizeColumnLive(width) => {
                 self.app.queue_column_width = width;
@@ -358,25 +345,50 @@ impl Model {
                 self.app.save_prefs();
             }
             QueueRequest::Undo { scope } => {
-                // The component can still be showing (and emit for) `Remote`
-                // for a frame after a remote disconnect, before the projection
-                // refresh flips it back. Once no direct remote queue exists the
-                // visible queue is the Local one, so treat the undo as
-                // targeting Local rather than flashing a spurious error.
-                let scope = if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
-                    QueueScope::Local
-                } else {
-                    scope
-                };
-                if scope == QueueScope::Remote {
-                    self.app.flash(
-                        "Undo is not supported for remote queue edits".into(),
-                        ToastSeverity::Error,
-                    );
-                } else {
-                    self.app.undo_last_queue_edit(scope);
-                }
+                self.handle_queue_undo(scope);
             }
+        }
+    }
+
+    fn handle_queue_move(&mut self, scope: QueueScope, slot_id: QueueSlotId, direction: QueueMove) {
+        if let Some(index) = self.select_queue_slot(scope, slot_id) {
+            match direction {
+                QueueMove::Up => self.app.move_queue_item_up(index),
+                QueueMove::Down => self.app.move_queue_item_down(index),
+            }
+        }
+    }
+
+    fn handle_queue_move_to(&mut self, scope: QueueScope, slot_id: QueueSlotId, onto: QueueSlotId) {
+        let Some(from) = self.select_queue_slot(scope, slot_id) else {
+            return;
+        };
+        let Some(to) = self.slot_index(scope, onto) else {
+            return;
+        };
+        if from != to {
+            self.app.move_queue_item_to(scope, from, to);
+        }
+    }
+
+    fn handle_queue_undo(&mut self, scope: QueueScope) {
+        // The component can still be showing (and emit for) `Remote`
+        // for a frame after a remote disconnect, before the projection
+        // refresh flips it back. Once no direct remote queue exists the
+        // visible queue is the Local one, so treat the undo as
+        // targeting Local rather than flashing a spurious error.
+        let scope = if scope == QueueScope::Remote && !self.app.has_direct_remote_queue() {
+            QueueScope::Local
+        } else {
+            scope
+        };
+        if scope == QueueScope::Remote {
+            self.app.flash(
+                "Undo is not supported for remote queue edits".into(),
+                ToastSeverity::Error,
+            );
+        } else {
+            self.app.undo_last_queue_edit(scope);
         }
     }
 
