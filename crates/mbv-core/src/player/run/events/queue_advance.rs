@@ -121,30 +121,43 @@ impl PlaybackRun {
             settling_transition.is_some(),
         );
 
+        let end = QueueEndStop {
+            completed_slot_id,
+            completed_item: &completed_item,
+            completed_pos,
+            played_out,
+            consume_track,
+            natural,
+            completed_runtime,
+        };
         if next_idx >= self.queue_len() {
-            return self.stop_at_queue_end(
-                QueueEndStop {
-                    completed_slot_id,
-                    completed_item: &completed_item,
-                    completed_pos,
-                    played_out,
-                    consume_track,
-                    natural,
-                    completed_runtime,
-                },
-                progress,
-            );
+            return self.stop_at_queue_end(end, progress);
         }
 
+        return self.advance_to_next_track(mpv, progress, end, next_idx, settling_transition);
+    }
+
+    /// Advance to the already-bounds-checked next track: select it, emit the
+    /// transition, and report false (keep running). Extracted from
+    /// `on_end_file` (issue #803); the `next_idx < queue_len()` check above
+    /// still guarantees `set_active_index` cannot fail here.
+    fn advance_to_next_track(
+        &mut self,
+        mpv: &Mpv,
+        progress: &mut ProgressGuard,
+        end: QueueEndStop<'_>,
+        next_idx: usize,
+        settling_transition: Option<crate::playback_transition::Transition>,
+    ) -> bool {
         // Update UI to the next track immediately, before slow network calls.
         // next_idx < queue_len() was already checked above, so set_active_index
         // (which only fails when the index is out of bounds) cannot fail here.
         let next_slot_id = self.slot_id_at(next_idx);
         let advanced = if self.active_file {
             self.close_prepared_source_at(provider_lifecycle_close_pos(
-                &completed_item,
-                natural,
-                completed_runtime,
+                end.completed_item,
+                end.natural,
+                end.completed_runtime,
                 self.last_valid_pos,
             ));
             next_slot_id.is_some_and(|slot_id| self.select_active_slot(slot_id, mpv).is_ok())
@@ -162,13 +175,13 @@ impl PlaybackRun {
             .expect("active item must exist after successful set_active_index");
         self.load_active_item_state();
         if self.active_file && !advanced {
-            return self.stop_for_failed_advance(completed_slot_id, progress);
+            return self.stop_for_failed_advance(end.completed_slot_id, progress);
         }
         self.tracks_initialized = false;
         self.set_next_item_status(&next_item);
 
-        let stop_report_accepted = self.reporter.report_stopped(completed_pos);
-        self.mark_played_or_retry(played_out, &completed_item);
+        let stop_report_accepted = self.reporter.report_stopped(end.completed_pos);
+        self.mark_played_or_retry(end.played_out, end.completed_item);
 
         let _ = mpv.set_property("start", "0");
         self.queue_next_up.reset();
@@ -184,13 +197,13 @@ impl PlaybackRun {
 
         log::info!(target: "player", "playlist track-transition idx={}", self.current_idx);
 
-        if let Some(completed_slot_id) = completed_slot_id {
+        if let Some(completed_slot_id) = end.completed_slot_id {
             let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
                 slot_id: completed_slot_id,
                 run_identity: self.run_identity,
-                position_ticks: completed_pos,
-                played: played_out,
-                consume: consume_track,
+                position_ticks: end.completed_pos,
+                played: end.played_out,
+                consume: end.consume_track,
                 progress_report_accepted: stop_report_accepted,
             });
         }
