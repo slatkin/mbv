@@ -57,6 +57,9 @@ jobs:
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
 
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
       - name: Record Rust toolchain version
         run: echo "RUSTC_VER=$(rustc --version | tr ' ' '_')" >> "$GITHUB_ENV"
 
@@ -91,6 +94,9 @@ jobs:
 
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Audit dependencies
+        run: cargo audit
 
       - name: Build and test
         # Bounded test concurrency: nextest runs each test in its own process,
