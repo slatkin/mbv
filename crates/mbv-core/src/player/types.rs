@@ -389,29 +389,34 @@ pub enum PlayerCommand {
     },
 }
 
+const LANGS: &[(&[&str], &str)] = &[
+    (&["en", "eng"], "English"),
+    (&["fr", "fre", "fra"], "French"),
+    (&["de", "ger", "deu"], "German"),
+    (&["es", "spa"], "Spanish"),
+    (&["it", "ita"], "Italian"),
+    (&["pt", "por"], "Portuguese"),
+    (&["ja", "jpn"], "Japanese"),
+    (&["ko", "kor"], "Korean"),
+    (&["zh", "chi", "zho"], "Chinese"),
+    (&["ru", "rus"], "Russian"),
+    (&["ar", "ara"], "Arabic"),
+    (&["nl", "nld", "dut"], "Dutch"),
+    (&["sv", "swe"], "Swedish"),
+    (&["no", "nor"], "Norwegian"),
+    (&["da", "dan"], "Danish"),
+    (&["fi", "fin"], "Finnish"),
+    (&["pl", "pol"], "Polish"),
+    (&["cs", "cze", "ces"], "Czech"),
+    (&["tr", "tur"], "Turkish"),
+];
+
 pub(in crate::player) fn lang_code_to_name(code: &str) -> &'static str {
-    match code.to_lowercase().as_str() {
-        "en" | "eng" => "English",
-        "fr" | "fre" | "fra" => "French",
-        "de" | "ger" | "deu" => "German",
-        "es" | "spa" => "Spanish",
-        "it" | "ita" => "Italian",
-        "pt" | "por" => "Portuguese",
-        "ja" | "jpn" => "Japanese",
-        "ko" | "kor" => "Korean",
-        "zh" | "chi" | "zho" => "Chinese",
-        "ru" | "rus" => "Russian",
-        "ar" | "ara" => "Arabic",
-        "nl" | "nld" | "dut" => "Dutch",
-        "sv" | "swe" => "Swedish",
-        "no" | "nor" => "Norwegian",
-        "da" | "dan" => "Danish",
-        "fi" | "fin" => "Finnish",
-        "pl" | "pol" => "Polish",
-        "cs" | "cze" | "ces" => "Czech",
-        "tr" | "tur" => "Turkish",
-        _ => "",
-    }
+    let code = code.to_lowercase();
+    LANGS
+        .iter()
+        .find_map(|(codes, name)| codes.contains(&code.as_str()).then_some(*name))
+        .unwrap_or("")
 }
 
 fn fmt_channels(n: i64) -> &'static str {
