@@ -358,71 +358,77 @@ impl TvContent {
 
     pub(super) fn show_tree_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         match input {
-            MediaListSurfaceInput::Wheel { at, delta } => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                self.browser.apply(TreeOperation::Move(delta));
-                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-            }
+            MediaListSurfaceInput::Wheel { at, delta } => self.show_tree_list_wheel(at, delta),
             MediaListSurfaceInput::Click(at)
             | MediaListSurfaceInput::ToggleClick(at)
-            | MediaListSurfaceInput::RangeClick(at) => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                let target = self.browser.resolve_current_point(at).cloned()?;
-                let show = self.show_item_for_tree_target(&target);
-                self.browser.apply(TreeOperation::Select(target.clone()));
-                match target {
-                    TvTreeTarget::Show(_) => show.map(|item| {
-                        Msg::Shell(Box::new(ShellRequest::TvHitClick {
-                            hit: TvHit::SeriesRow(item.id),
-                        }))
-                    }),
-                    TvTreeTarget::Season { .. } | TvTreeTarget::Episode { .. } => {
-                        self.show_for_tree_target(&target).map(|item| {
-                            Msg::Shell(Box::new(ShellRequest::TvHitClick {
-                                hit: TvHit::SeriesRow(item.id),
-                            }))
-                        })
-                    }
-                }
-            }
-            MediaListSurfaceInput::DoubleClick(at) => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                let target = self.browser.resolve_current_point(at)?.clone();
-                self.browser.apply(TreeOperation::Select(target.clone()));
-                match target {
-                    TvTreeTarget::Show(_) => self.show_item_for_tree_target(&target).map(|item| {
-                        Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick {
-                            hit: TvHit::SeriesRow(item.id),
-                        }))
-                    }),
-                    TvTreeTarget::Season { .. } => self.toggle_tree_expansion(target),
-                    TvTreeTarget::Episode { .. } => {
-                        self.show_item_for_tree_target(&target).map(|episode| {
-                            Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode }))
-                        })
-                    }
-                }
-            }
-            MediaListSurfaceInput::ContextClick(at) => {
-                if !self.browser.claims_current_point(at) {
-                    return None;
-                }
-                let target = self.browser.resolve_current_point(at)?.clone();
-                let item = self.show_item_for_tree_target(&target)?;
-                self.browser.apply(TreeOperation::Select(target));
-                Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
-                    crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
-                    Some((at.x, at.y)),
-                ))))
-            }
+            | MediaListSurfaceInput::RangeClick(at) => self.show_tree_list_click(at),
+            MediaListSurfaceInput::DoubleClick(at) => self.show_tree_list_double_click(at),
+            MediaListSurfaceInput::ContextClick(at) => self.show_tree_list_context_click(at),
             _ => None,
         }
+    }
+
+    fn show_tree_list_wheel(&mut self, at: Position, delta: i64) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        self.browser.apply(TreeOperation::Move(delta));
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    }
+
+    fn show_tree_list_click(&mut self, at: Position) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        let target = self.browser.resolve_current_point(at).cloned()?;
+        let show = self.show_item_for_tree_target(&target);
+        self.browser.apply(TreeOperation::Select(target.clone()));
+        match target {
+            TvTreeTarget::Show(_) => show.map(|item| {
+                Msg::Shell(Box::new(ShellRequest::TvHitClick {
+                    hit: TvHit::SeriesRow(item.id),
+                }))
+            }),
+            TvTreeTarget::Season { .. } | TvTreeTarget::Episode { .. } => {
+                self.show_for_tree_target(&target).map(|item| {
+                    Msg::Shell(Box::new(ShellRequest::TvHitClick {
+                        hit: TvHit::SeriesRow(item.id),
+                    }))
+                })
+            }
+        }
+    }
+
+    fn show_tree_list_double_click(&mut self, at: Position) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        let target = self.browser.resolve_current_point(at)?.clone();
+        self.browser.apply(TreeOperation::Select(target.clone()));
+        match target {
+            TvTreeTarget::Show(_) => self.show_item_for_tree_target(&target).map(|item| {
+                Msg::Shell(Box::new(ShellRequest::TvHitDoubleClick {
+                    hit: TvHit::SeriesRow(item.id),
+                }))
+            }),
+            TvTreeTarget::Season { .. } => self.toggle_tree_expansion(target),
+            TvTreeTarget::Episode { .. } => self
+                .show_item_for_tree_target(&target)
+                .map(|episode| Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode }))),
+        }
+    }
+
+    fn show_tree_list_context_click(&mut self, at: Position) -> Option<Msg> {
+        if !self.browser.claims_current_point(at) {
+            return None;
+        }
+        let target = self.browser.resolve_current_point(at)?.clone();
+        let item = self.show_item_for_tree_target(&target)?;
+        self.browser.apply(TreeOperation::Select(target));
+        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            crate::app::state::types::context_menu::ContextMenuTargets::Emby(vec![item]),
+            Some((at.x, at.y)),
+        ))))
     }
 
     fn show_target_str(target: &TvTreeTarget) -> &str {
