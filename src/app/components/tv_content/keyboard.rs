@@ -435,7 +435,26 @@ impl TvContent {
         {
             return None;
         }
+        if let Some(request) = self.narrow_movement_request(key) {
+            return Some(Msg::Shell(Box::new(request)));
+        }
         let request = match key.code {
+            Key::Enter => self.selected_item().map(|item| {
+                if self.flat_episode_mode() {
+                    ShellRequest::TvEpisodeActivate { episode: item }
+                } else {
+                    ShellRequest::TvActivate { item }
+                }
+            }),
+            Key::Esc | Key::Backspace => Some(ShellRequest::TvBack),
+            Key::Char('.') => self.context_menu_request(),
+            _ => return self.shared_library_effect(key, self.selected_item()),
+        };
+        request.map(|request| Msg::Shell(Box::new(request)))
+    }
+
+    fn narrow_movement_request(&mut self, key: &KeyEvent) -> Option<ShellRequest> {
+        match key.code {
             Key::Up | Key::Char('k') => {
                 let index = self.move_by_item_rows_narrow(-1);
                 Some(ShellRequest::EmbyLibraryCursorIndex { index })
@@ -462,51 +481,7 @@ impl TvContent {
                 let index = self.jump_cursor_narrow(true);
                 Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
-            Key::Enter => self.selected_item().map(|item| {
-                if self.flat_episode_mode() {
-                    ShellRequest::TvEpisodeActivate { episode: item }
-                } else {
-                    ShellRequest::TvActivate { item }
-                }
-            }),
-            Key::Esc | Key::Backspace => Some(ShellRequest::TvBack),
-            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryPlay { item }),
-            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryEnqueue { item }),
-            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryToggleWatched { item }),
-            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => self
-                .selected_item()
-                .map(|item| ShellRequest::EmbyLibraryShuffle { item }),
-            Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                Some(ShellRequest::EmbyLibraryRescan)
-            }
-            Key::Char('r')
-                if !key
-                    .modifiers
-                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
-            {
-                Some(ShellRequest::EmbyLibraryRefresh)
-            }
-            Key::Char('.') => self.context_menu_request(),
-            Key::Char('/') => {
-                self.inline_search.open();
-                Some(ShellRequest::OpenInlineSearch)
-            }
-            Key::Char(c @ ('[' | ']'))
-                if !key.modifiers.contains(KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                Some(ShellRequest::TvCycleLetterPill {
-                    delta: if c == '[' { -1 } else { 1 },
-                })
-            }
             _ => None,
-        };
-        request.map(|request| Msg::Shell(Box::new(request)))
+        }
     }
 }
