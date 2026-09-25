@@ -84,104 +84,109 @@ fn parse(text: &str) -> Option<WsEvent> {
     log::debug!(target: "ws", "inbound: {msg_type}");
 
     match msg_type {
-        "Play" => {
-            let data = &v["Data"];
-            // Case-insensitive key search ("ItemIds", "itemIds", etc.)
-            let ids_value = data.as_object().and_then(|obj| {
-                obj.iter()
-                    .find(|(k, _)| k.eq_ignore_ascii_case("itemids"))
-                    .map(|(_, v)| v)
-            });
-            let item_ids: Vec<String> = ids_value
-                .and_then(|v| v.as_array())
-                .map(|a| {
-                    a.iter()
-                        .filter_map(|v| {
-                            v.as_str()
-                                .map(str::to_string)
-                                .or_else(|| v.as_i64().map(|n| n.to_string()))
-                                .or_else(|| v.as_u64().map(|n| n.to_string()))
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            if item_ids.is_empty() {
-                log::warn!(target: "ws", "Play: no ItemIds — raw data: {data}");
-                return None;
-            }
-            let play_now = data["PlayCommand"].as_str().unwrap_or("PlayNow") == "PlayNow";
-            let start_position_ticks = data["StartPositionTicks"].as_i64().unwrap_or(0);
-            let start_index = data["StartIndex"].as_u64().unwrap_or(0) as usize;
-            Some(WsEvent::Play {
-                item_ids,
-                play_now,
-                start_position_ticks,
-                start_index,
-            })
-        }
-        "Playstate" => {
-            let cmd = v["Data"]["Command"].as_str().unwrap_or("");
-            log::debug!(target: "ws", "Playstate cmd={cmd}");
-            match cmd {
-                "Stop" => Some(WsEvent::Stop),
-                "Pause" => Some(WsEvent::Pause),
-                "Unpause" => Some(WsEvent::Unpause),
-                "PlayPause" => Some(WsEvent::TogglePause),
-                "NextTrack" => Some(WsEvent::NextTrack),
-                "PreviousTrack" => Some(WsEvent::PreviousTrack),
-                "Seek" => Some(WsEvent::Seek(
-                    v["Data"]["SeekPositionTicks"].as_i64().unwrap_or(0),
-                )),
-                "Rewind" => Some(WsEvent::SeekRelative(-10.0)),
-                "FastForward" => Some(WsEvent::SeekRelative(10.0)),
-                other => {
-                    log::warn!(target: "ws", "Playstate: unhandled cmd={other}");
-                    None
-                }
-            }
-        }
-        "GeneralCommand" => {
-            let name = v["Data"]["Name"].as_str().unwrap_or("");
-            log::debug!(target: "ws", "GeneralCommand name={name}");
-            match name {
-                "PlayPause" => Some(WsEvent::TogglePause),
-                "SetVolume" => {
-                    let vol = v["Data"]["Arguments"]["Volume"]
-                        .as_str()
-                        .and_then(|s| s.parse::<i64>().ok())
-                        .or_else(|| v["Data"]["Arguments"]["Volume"].as_i64())
-                        .unwrap_or(50);
-                    Some(WsEvent::SetVolume(vol))
-                }
-                "VolumeUp" => Some(WsEvent::VolumeUp),
-                "VolumeDown" => Some(WsEvent::VolumeDown),
-                "Mute" => Some(WsEvent::SetMute(true)),
-                "Unmute" => Some(WsEvent::SetMute(false)),
-                "ToggleMute" => Some(WsEvent::ToggleMute),
-                "SetAudioStreamIndex" => {
-                    let idx = v["Data"]["Arguments"]["Index"]
-                        .as_str()
-                        .and_then(|s| s.parse::<i64>().ok())
-                        .or_else(|| v["Data"]["Arguments"]["Index"].as_i64())
-                        .unwrap_or(0);
-                    Some(WsEvent::SetAudio(idx))
-                }
-                "SetSubtitleStreamIndex" => {
-                    let idx = v["Data"]["Arguments"]["Index"]
-                        .as_str()
-                        .and_then(|s| s.parse::<i64>().ok())
-                        .or_else(|| v["Data"]["Arguments"]["Index"].as_i64())
-                        .unwrap_or(-1);
-                    Some(WsEvent::SetSub(idx))
-                }
-                other => {
-                    log::warn!(target: "ws", "GeneralCommand: unhandled name={other}");
-                    None
-                }
-            }
-        }
+        "Play" => parse_play(&v["Data"]),
+        "Playstate" => parse_playstate(&v["Data"]),
+        "GeneralCommand" => parse_general_command(&v["Data"]),
         "UserDataChanged" => Some(WsEvent::UserDataChanged),
         _ => None,
+    }
+}
+
+fn parse_play(data: &Value) -> Option<WsEvent> {
+    // Case-insensitive key search ("ItemIds", "itemIds", etc.)
+    let ids_value = data.as_object().and_then(|obj| {
+        obj.iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("itemids"))
+            .map(|(_, v)| v)
+    });
+    let item_ids: Vec<String> = ids_value
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| {
+                    v.as_str()
+                        .map(str::to_string)
+                        .or_else(|| v.as_i64().map(|n| n.to_string()))
+                        .or_else(|| v.as_u64().map(|n| n.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if item_ids.is_empty() {
+        log::warn!(target: "ws", "Play: no ItemIds — raw data: {data}");
+        return None;
+    }
+    let play_now = data["PlayCommand"].as_str().unwrap_or("PlayNow") == "PlayNow";
+    let start_position_ticks = data["StartPositionTicks"].as_i64().unwrap_or(0);
+    let start_index = data["StartIndex"].as_u64().unwrap_or(0) as usize;
+    Some(WsEvent::Play {
+        item_ids,
+        play_now,
+        start_position_ticks,
+        start_index,
+    })
+}
+
+fn parse_playstate(data: &Value) -> Option<WsEvent> {
+    let cmd = data["Command"].as_str().unwrap_or("");
+    log::debug!(target: "ws", "Playstate cmd={cmd}");
+    match cmd {
+        "Stop" => Some(WsEvent::Stop),
+        "Pause" => Some(WsEvent::Pause),
+        "Unpause" => Some(WsEvent::Unpause),
+        "PlayPause" => Some(WsEvent::TogglePause),
+        "NextTrack" => Some(WsEvent::NextTrack),
+        "PreviousTrack" => Some(WsEvent::PreviousTrack),
+        "Seek" => Some(WsEvent::Seek(
+            data["SeekPositionTicks"].as_i64().unwrap_or(0),
+        )),
+        "Rewind" => Some(WsEvent::SeekRelative(-10.0)),
+        "FastForward" => Some(WsEvent::SeekRelative(10.0)),
+        other => {
+            log::warn!(target: "ws", "Playstate: unhandled cmd={other}");
+            None
+        }
+    }
+}
+
+fn parse_general_command(data: &Value) -> Option<WsEvent> {
+    let name = data["Name"].as_str().unwrap_or("");
+    log::debug!(target: "ws", "GeneralCommand name={name}");
+    match name {
+        "PlayPause" => Some(WsEvent::TogglePause),
+        "SetVolume" => {
+            let vol = data["Arguments"]["Volume"]
+                .as_str()
+                .and_then(|s| s.parse::<i64>().ok())
+                .or_else(|| data["Arguments"]["Volume"].as_i64())
+                .unwrap_or(50);
+            Some(WsEvent::SetVolume(vol))
+        }
+        "VolumeUp" => Some(WsEvent::VolumeUp),
+        "VolumeDown" => Some(WsEvent::VolumeDown),
+        "Mute" => Some(WsEvent::SetMute(true)),
+        "Unmute" => Some(WsEvent::SetMute(false)),
+        "ToggleMute" => Some(WsEvent::ToggleMute),
+        "SetAudioStreamIndex" => {
+            let idx = data["Arguments"]["Index"]
+                .as_str()
+                .and_then(|s| s.parse::<i64>().ok())
+                .or_else(|| data["Arguments"]["Index"].as_i64())
+                .unwrap_or(0);
+            Some(WsEvent::SetAudio(idx))
+        }
+        "SetSubtitleStreamIndex" => {
+            let idx = data["Arguments"]["Index"]
+                .as_str()
+                .and_then(|s| s.parse::<i64>().ok())
+                .or_else(|| data["Arguments"]["Index"].as_i64())
+                .unwrap_or(-1);
+            Some(WsEvent::SetSub(idx))
+        }
+        other => {
+            log::warn!(target: "ws", "GeneralCommand: unhandled name={other}");
+            None
+        }
     }
 }
 
