@@ -22,13 +22,8 @@ pub(crate) fn broadcast_player_event_if_not_replaced(
     }
 }
 
-/// The playback-run identity carried by `PlayerEvent::Stopped`/
-/// `TrackCompleted`: the owner submission generation at event construction
-/// time.
-pub(crate) type PlaybackRunIdentity = PlaybackGeneration;
-
 pub(crate) fn playback_run_identity_is_current(
-    run_identity: PlaybackRunIdentity,
+    run_identity: PlaybackGeneration,
     player: &Player,
 ) -> bool {
     run_identity == player.status.lock().unwrap().sequence_generation
@@ -38,7 +33,7 @@ pub(super) fn apply_track_completed_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
-    run_identity: PlaybackRunIdentity,
+    run_identity: PlaybackGeneration,
     slot_id: QueueSlotId,
     position_ticks: i64,
     played: bool,
@@ -78,7 +73,7 @@ pub(super) fn apply_track_completed_observation(
 pub(super) fn apply_stopped_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
-    run_identity: PlaybackRunIdentity,
+    run_identity: PlaybackGeneration,
     slot_id: Option<QueueSlotId>,
     position_ticks: i64,
     played: bool,
