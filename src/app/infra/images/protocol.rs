@@ -227,119 +227,15 @@ impl App {
             (String::new(), String::new())
         };
         let tx = self.card_image_tx.clone();
-        let ImageFetchReq {
-            cache_key,
-            item_id,
-            series_id,
-            types,
-            source,
-        } = req;
         std::thread::spawn(move || {
             // catch_unwind so a panic during fetch/decode still reports a result,
             // freeing the in-flight slot and the loading reservation (H9). Exactly
             // one message is sent per spawn, so the receiver can balance the count.
+            let cache_key = req.cache_key.clone();
             let cache_key_outer = cache_key.clone();
             let tx_outer = tx.clone();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let bytes: Option<Vec<u8>> = if let ImageSource::Audiobookshelf {
-                    server_url,
-                    api_key,
-                } = source
-                {
-                    if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
-                        Some(cached)
-                    } else {
-                        let client =
-                            mbv_core::audiobookshelf::AudiobookshelfClient::new(&server_url).ok();
-                        let result = client.and_then(|client| {
-                            client
-                                .cover_bounded(
-                                    &api_key,
-                                    &item_id,
-                                    mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
-                                )
-                                .ok()
-                        });
-                        if let Some(ref bytes) = result {
-                            crate::config::write_image_disk_cache(&cache_key, bytes);
-                        }
-                        result
-                    }
-                } else if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
-                    // Mem-cache miss satisfied from the on-disk source bytes
-                    // (no network). The protocol-specific re-encode then runs
-                    // off-thread via the resize worker, so this is the
-                    // local-only path that powers dim-then-undim cycles for
-                    // a dimmed modal opening on a warm cache.
-                    log::debug!(target: "images", "image disk cache hit for {cache_key}");
-                    Some(cached)
-                } else {
-                    let fetch_url = |url: &str| -> Option<Vec<u8>> {
-                        let agent = crate::app::infra::feed_parse::tls_agent(Some(
-                            std::time::Duration::from_secs(10),
-                        ));
-                        agent.get(url).call().ok().and_then(|r| {
-                            let mut buf = Vec::new();
-                            r.into_body()
-                                .into_reader()
-                                .take(10 * 1024 * 1024)
-                                .read_to_end(&mut buf)
-                                .ok()?;
-                            Some(buf)
-                        })
-                    };
-                    let fetched = types.iter().find_map(|t| {
-                        if t == "AudioChild" {
-                            let child_url = format!(
-                                "{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=1&api_key={}",
-                                server_url, item_id, token
-                            );
-                            let child_id: Option<String> = fetch_url(&child_url)
-                                .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-                                .and_then(|v| {
-                                    v["Items"]
-                                        .get(0)
-                                        .and_then(|i| i["Id"].as_str().map(|s| s.to_string()))
-                                });
-                            let child_id = child_id?;
-                            let url = format!(
-                                "{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}",
-                                server_url, child_id, token
-                            );
-                            return fetch_url(&url);
-                        }
-                        let src = match t.as_str() {
-                            "Logo" | "Backdrop" | "Thumb" if !series_id.is_empty() => &series_id,
-                            _ => &item_id,
-                        };
-                        let url = match t.as_str() {
-                            "Backdrop" => format!(
-                                "{}/Items/{}/Images/Backdrop/0?maxHeight=400&quality=80&api_key={}",
-                                server_url, src, token
-                            ),
-                            "Logo" => format!(
-                                "{}/Items/{}/Images/Logo?maxHeight=400&quality=80&api_key={}",
-                                server_url, src, token
-                            ),
-                            "Thumb" => format!(
-                                "{}/Items/{}/Images/Thumb?maxHeight=400&quality=80&api_key={}",
-                                server_url, src, token
-                            ),
-                            _ => format!(
-                                "{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}",
-                                server_url, src, token
-                            ),
-                        };
-                        fetch_url(&url)
-                    });
-                    // Cache the original server bytes as-is. Emby already sized them
-                    // (maxHeight=400&quality=80); no client-side re-encode, so quality
-                    // is unchanged and the cache stays small for fast decode.
-                    if let Some(ref b) = fetched {
-                        crate::config::write_image_disk_cache(&cache_key, b);
-                    }
-                    fetched
-                };
+                let bytes = fetch_image_bytes(req, &server_url, &token);
                 // Decode off the UI thread; the main loop only builds the protocol.
                 let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
                 let _ = tx.send((cache_key, img));
@@ -494,6 +390,127 @@ impl App {
             paint.area,
         );
     }
+}
+
+fn fetch_image_bytes(req: ImageFetchReq, emby_url: &str, token: &str) -> Option<Vec<u8>> {
+    let ImageFetchReq {
+        cache_key,
+        item_id,
+        series_id,
+        types,
+        source,
+    } = req;
+    match source {
+        ImageSource::Audiobookshelf {
+            server_url,
+            api_key,
+        } => fetch_audiobookshelf_image(&cache_key, &server_url, &api_key, &item_id),
+        ImageSource::Emby => {
+            fetch_emby_image(&cache_key, &item_id, &series_id, &types, emby_url, token)
+        }
+    }
+}
+
+fn fetch_audiobookshelf_image(
+    cache_key: &str,
+    server_url: &str,
+    api_key: &str,
+    item_id: &str,
+) -> Option<Vec<u8>> {
+    if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
+        return Some(cached);
+    }
+    let client = mbv_core::audiobookshelf::AudiobookshelfClient::new(server_url).ok();
+    let result = client.and_then(|client| {
+        client
+            .cover_bounded(
+                api_key,
+                item_id,
+                mbv_core::audiobookshelf::AudiobookshelfClient::REQUEST_HARD_BOUND,
+            )
+            .ok()
+    });
+    if let Some(ref bytes) = result {
+        crate::config::write_image_disk_cache(cache_key, bytes);
+    }
+    result
+}
+
+fn fetch_emby_image(
+    cache_key: &str,
+    item_id: &str,
+    series_id: &str,
+    types: &[String],
+    server_url: &str,
+    token: &str,
+) -> Option<Vec<u8>> {
+    if let Some(cached) = crate::config::read_image_disk_cache(cache_key) {
+        // Local-only cache hits power dim-then-undim cycles for warm-cache modals.
+        log::debug!(target: "images", "image disk cache hit for {cache_key}");
+        return Some(cached);
+    }
+    let fetched = types
+        .iter()
+        .find_map(|kind| fetch_emby_image_type(kind, item_id, series_id, server_url, token));
+    // Cache original server bytes as-is; Emby already resized these to maxHeight=400.
+    if let Some(ref bytes) = fetched {
+        crate::config::write_image_disk_cache(cache_key, bytes);
+    }
+    fetched
+}
+
+fn fetch_emby_image_type(
+    kind: &str,
+    item_id: &str,
+    series_id: &str,
+    server_url: &str,
+    token: &str,
+) -> Option<Vec<u8>> {
+    if kind == "AudioChild" {
+        let child_url = format!(
+            "{server_url}/Items?ParentId={item_id}&IncludeItemTypes=Audio&Limit=1&api_key={token}"
+        );
+        let child_id = fetch_url(&child_url)
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(|value| {
+                value["Items"]
+                    .get(0)
+                    .and_then(|item| item["Id"].as_str().map(str::to_owned))
+            })?;
+        let url = format!(
+            "{server_url}/Items/{child_id}/Images/Primary?maxHeight=400&quality=80&api_key={token}"
+        );
+        return fetch_url(&url);
+    }
+
+    let src = match kind {
+        "Logo" | "Backdrop" | "Thumb" if !series_id.is_empty() => series_id,
+        _ => item_id,
+    };
+    let image_kind = match kind {
+        "Backdrop" => "Backdrop/0",
+        "Logo" => "Logo",
+        "Thumb" => "Thumb",
+        _ => "Primary",
+    };
+    let url = format!(
+        "{server_url}/Items/{src}/Images/{image_kind}?maxHeight=400&quality=80&api_key={token}"
+    );
+    fetch_url(&url)
+}
+
+fn fetch_url(url: &str) -> Option<Vec<u8>> {
+    let agent = crate::app::infra::feed_parse::tls_agent(Some(std::time::Duration::from_secs(10)));
+    agent.get(url).call().ok().and_then(|response| {
+        let mut bytes = Vec::new();
+        response
+            .into_body()
+            .into_reader()
+            .take(10 * 1024 * 1024)
+            .read_to_end(&mut bytes)
+            .ok()?;
+        Some(bytes)
+    })
 }
 
 #[cfg(test)]
