@@ -309,56 +309,71 @@ where
     FS: Fn(&EmbySetup, &std::path::Path) -> Result<(), String>,
     FT: Fn(&str, &std::path::Path) -> Result<(), String>,
 {
-    let snapshot = |path: &std::path::Path| match std::fs::read(path) {
-        Ok(bytes) => Ok(Some(bytes)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(format!("read {} for rollback: {error}", path.display())),
-    };
-    let old_config = snapshot(config)?;
-    let old_secret = snapshot(secret)?;
-
-    let restore = |path: &std::path::Path, bytes: &Option<Vec<u8>>| -> Result<(), String> {
-        match bytes {
-            Some(bytes) => {
-                if let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                }
-                let tmp = path.with_extension("rollback.tmp");
-                std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-                #[cfg(unix)]
-                if path == secret {
-                    use std::os::unix::fs::PermissionsExt;
-                    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
-                        .map_err(|e| e.to_string())?;
-                }
-                std::fs::rename(tmp, path).map_err(|e| e.to_string())
-            }
-            None => {
-                let _ = std::fs::remove_file(path);
-                Ok(())
-            }
-        }
-    };
-    let rollback = |reason: String| {
-        let config_restore = restore(config, &old_config);
-        let secret_restore = restore(secret, &old_secret);
-        let _ = std::fs::remove_file(secret.with_extension("json.tmp"));
-        let _ = std::fs::remove_file(config.with_extension("toml.tmp"));
-        let _ = std::fs::remove_file(config.with_extension("rollback.tmp"));
-        let _ = std::fs::remove_file(secret.with_extension("rollback.tmp"));
-        match (config_restore, secret_restore) {
-            (Ok(()), Ok(())) => Err(reason),
-            (config, secret) => Err(format!(
-                "{reason}; rollback failed (config={config:?}, secret={secret:?})"
-            )),
-        }
-    };
+    let old_config = snapshot_for_rollback(config)?;
+    let old_secret = snapshot_for_rollback(secret)?;
 
     if let Err(error) = save_setup(setup, config) {
-        return rollback(format!("persist Emby setup: {error}"));
+        return rollback_emby_setup_and_secret(
+            format!("persist Emby setup: {error}"),
+            config,
+            secret,
+            old_config.as_deref(),
+            old_secret.as_deref(),
+        );
     }
     if let Err(error) = save_secret(token, secret) {
-        return rollback(format!("persist Emby secret: {error}"));
+        return rollback_emby_setup_and_secret(
+            format!("persist Emby secret: {error}"),
+            config,
+            secret,
+            old_config.as_deref(),
+            old_secret.as_deref(),
+        );
     }
     Ok(())
+}
+
+fn restore_emby_setup_file(
+    path: &std::path::Path,
+    secret: &std::path::Path,
+    bytes: Option<&[u8]>,
+) -> Result<(), String> {
+    if let Some(bytes) = bytes {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let tmp = path.with_extension("rollback.tmp");
+        std::fs::write(&tmp, bytes).map_err(|error| error.to_string())?;
+        #[cfg(unix)]
+        if path == secret {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
+                .map_err(|error| error.to_string())?;
+        }
+        std::fs::rename(tmp, path).map_err(|error| error.to_string())
+    } else {
+        let _ = std::fs::remove_file(path);
+        Ok(())
+    }
+}
+
+fn rollback_emby_setup_and_secret(
+    reason: String,
+    config: &std::path::Path,
+    secret: &std::path::Path,
+    old_config: Option<&[u8]>,
+    old_secret: Option<&[u8]>,
+) -> Result<(), String> {
+    let config_restore = restore_emby_setup_file(config, secret, old_config);
+    let secret_restore = restore_emby_setup_file(secret, secret, old_secret);
+    let _ = std::fs::remove_file(secret.with_extension("json.tmp"));
+    let _ = std::fs::remove_file(config.with_extension("toml.tmp"));
+    let _ = std::fs::remove_file(config.with_extension("rollback.tmp"));
+    let _ = std::fs::remove_file(secret.with_extension("rollback.tmp"));
+    match (config_restore, secret_restore) {
+        (Ok(()), Ok(())) => Err(reason),
+        (config, secret) => Err(format!(
+            "{reason}; rollback failed (config={config:?}, secret={secret:?})"
+        )),
+    }
 }
