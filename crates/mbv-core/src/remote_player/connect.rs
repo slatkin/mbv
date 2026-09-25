@@ -337,6 +337,19 @@ pub(crate) fn connect_endpoint(
     connect_stream(stream)
 }
 
+struct ReaderThreadState {
+    status: Arc<Mutex<PlayerStatus>>,
+    items: Arc<Mutex<Vec<EmbyItem>>>,
+    unified_queue: Arc<Mutex<Option<UnifiedQueueStateData>>>,
+    queue_source: Arc<Mutex<crate::config::QueueSource>>,
+    pending_playback: Arc<Mutex<HashMap<u64, PlaybackIntent>>>,
+    disconnected: Arc<AtomicBool>,
+    disconnect_notified: Arc<AtomicBool>,
+    shutdown_announced: Arc<AtomicBool>,
+    shutdown_request: Arc<Mutex<Option<mpsc::Sender<crate::remote_player::ShutdownResponse>>>>,
+    event_tx: mpsc::Sender<PlayerEvent>,
+}
+
 /// Builds a `RemotePlayer` over an already-connected control stream.
 ///
 /// Split out of `connect_endpoint` so tests can drive the swap/disconnect
@@ -393,128 +406,30 @@ fn connect_stream(
     );
 
     // Reader thread: deserializes CtrlEvent lines from daemon
-    let status_r = status.clone();
-    let items_r = items.clone();
-    let unified_queue_r = unified_queue.clone();
-    let queue_source_r = queue_source.clone();
-    let pending_playback_r = pending_playback.clone();
-    let disconnected_r = disconnected.clone();
-    let disconnect_notified_r = disconnect_notified.clone();
-    let shutdown_announced_r = shutdown_announced.clone();
-    let shutdown_request_r = shutdown_request_tx.clone();
-    let event_tx_r = event_tx.clone();
-    std::thread::spawn(move || {
-        let mut expected_disconnect = false;
-        for line in reader.lines() {
-            match line {
-                Err(_) => break,
-                Ok(l) if l.is_empty() => continue,
-                Ok(l) => {
-                    let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else {
-                        log::warn!(target: "remote", "unrecognized event from daemon: {l}");
-                        continue;
-                    };
-
-                    // Handle shutdown request responses directly.
-                    match &ev {
-                        CtrlEvent::ShutdownAccepted => {
-                            if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
-                                let _ = tx.send(crate::remote_player::ShutdownResponse::Accepted);
-                            }
-                        }
-                        CtrlEvent::ShutdownRejected { reason } => {
-                            if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
-                                let _ = tx.send(crate::remote_player::ShutdownResponse::Rejected {
-                                    reason: reason.clone(),
-                                });
-                            }
-                        }
-                        _ => {}
-                    }
-
-                    // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
-                    // a notification — the connection stays open. Only set expected_disconnect
-                    // for events that actually close the connection. Exhaustive match ensures
-                    // new DisconnectReason variants are evaluated.
-                    let is_structured_disconnect = match &ev {
-                        CtrlEvent::Disconnected { reason } => match reason {
-                            DisconnectReason::TakenOverByEmbyRemote => false,
-                            DisconnectReason::DaemonShutdown => true,
-                        },
-                        _ => false,
-                    };
-                    apply_ctrl_event(
-                        ev,
-                        &status_r,
-                        &items_r,
-                        &unified_queue_r,
-                        &queue_source_r,
-                        &event_tx_r,
-                        &pending_playback_r,
-                        true,
-                    );
-                    expected_disconnect |= is_structured_disconnect;
-                }
-            }
-        }
-        disconnected_r.store(true, Ordering::SeqCst);
-        pending_playback_r.lock().unwrap().clear();
-
-        // Resolve any pending shutdown request with Disconnected.
-        if let Some(tx) = shutdown_request_r.lock().unwrap().take() {
-            let _ = tx.send(crate::remote_player::ShutdownResponse::Disconnected);
-        }
-
-        log::info!(target: "remote", "daemon disconnected");
-        if !expected_disconnect {
-            if !disconnect_notified_r.swap(true, Ordering::SeqCst) {
-                let _ = event_tx_r.send(PlayerEvent::RemoteDisconnected(
-                    crate::player::CONNECTION_LOST_MESSAGE.to_string(),
-                ));
-            }
-        } else {
-            // An "expected"/structured disconnect (e.g. an Emby Remote
-            // takeover, or a deliberate daemon shutdown) never sends a
-            // Stopped PlayerEvent, so nothing else clears `status`.
-            // Clear it here, at the source, so
-            // every consumer of `status` (not just MPRIS's separate
-            // `disconnected_flag()` check in src/mpris.rs) sees an
-            // inactive/no-track player immediately rather than stale
-            // "still playing" data.
-            if let Ok(mut s) = status_r.lock() {
-                s.active = false;
-                s.paused = false;
-                s.clear_current_item_metadata();
-            }
-            // `TakenOverByEmbyRemote` never reaches this branch (it does not
-            // close the connection), so this structured disconnect is a
-            // deliberate daemon shutdown.
-            shutdown_announced_r.store(true, Ordering::SeqCst);
-            let _ = event_tx_r.send(PlayerEvent::DaemonShutdownAnnounced);
-        }
-    });
+    let reader_state = ReaderThreadState {
+        status: status.clone(),
+        items: items.clone(),
+        unified_queue: unified_queue.clone(),
+        queue_source: queue_source.clone(),
+        pending_playback: pending_playback.clone(),
+        disconnected: disconnected.clone(),
+        disconnect_notified: disconnect_notified.clone(),
+        shutdown_announced: shutdown_announced.clone(),
+        shutdown_request: shutdown_request_tx.clone(),
+        event_tx: event_tx.clone(),
+    };
+    std::thread::spawn(move || read_remote_events(reader, reader_state));
 
     // Writer thread: serializes CtrlCmd to daemon
-    let mut stream_w = stream;
     let disconnected_w = disconnected.clone();
-    let disconnect_notified_w = disconnect_notified;
-    let event_tx_w = event_tx;
     std::thread::spawn(move || {
-        while let Ok(cmd) = cmd_rx.recv() {
-            let Ok(json) = serde_json::to_string(&cmd) else {
-                continue;
-            };
-            if let Err(error) = writeln!(stream_w, "{json}") {
-                log::warn!(target: "remote", "failed to write command to daemon: {error}");
-                disconnected_w.store(true, Ordering::SeqCst);
-                if !disconnect_notified_w.swap(true, Ordering::SeqCst) {
-                    let _ = event_tx_w.send(PlayerEvent::RemoteDisconnected(
-                        crate::player::CONNECTION_LOST_MESSAGE.to_string(),
-                    ));
-                }
-                break;
-            }
-        }
+        write_remote_commands(
+            stream,
+            cmd_rx,
+            disconnected_w,
+            disconnect_notified,
+            event_tx,
+        )
     });
 
     Ok((
@@ -535,6 +450,133 @@ fn connect_stream(
         },
         event_rx,
     ))
+}
+
+fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState) {
+    let ReaderThreadState {
+        status,
+        items,
+        unified_queue,
+        queue_source,
+        pending_playback,
+        disconnected,
+        disconnect_notified,
+        shutdown_announced,
+        shutdown_request,
+        event_tx,
+    } = state;
+    let mut expected_disconnect = false;
+    for line in reader.lines() {
+        match line {
+            Err(_) => break,
+            Ok(l) if l.is_empty() => continue,
+            Ok(l) => {
+                let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else {
+                    log::warn!(target: "remote", "unrecognized event from daemon: {l}");
+                    continue;
+                };
+
+                // Handle shutdown request responses directly.
+                match &ev {
+                    CtrlEvent::ShutdownAccepted => {
+                        if let Some(tx) = shutdown_request.lock().unwrap().take() {
+                            let _ = tx.send(crate::remote_player::ShutdownResponse::Accepted);
+                        }
+                    }
+                    CtrlEvent::ShutdownRejected { reason } => {
+                        if let Some(tx) = shutdown_request.lock().unwrap().take() {
+                            let _ = tx.send(crate::remote_player::ShutdownResponse::Rejected {
+                                reason: reason.clone(),
+                            });
+                        }
+                    }
+                    _ => {}
+                }
+
+                // Under multi-connection (v5), `Disconnected { TakenOverByEmbyRemote }` is
+                // a notification — the connection stays open. Only set expected_disconnect
+                // for events that actually close the connection. Exhaustive match ensures
+                // new DisconnectReason variants are evaluated.
+                let is_structured_disconnect = match &ev {
+                    CtrlEvent::Disconnected { reason } => match reason {
+                        DisconnectReason::TakenOverByEmbyRemote => false,
+                        DisconnectReason::DaemonShutdown => true,
+                    },
+                    _ => false,
+                };
+                apply_ctrl_event(
+                    ev,
+                    &status,
+                    &items,
+                    &unified_queue,
+                    &queue_source,
+                    &event_tx,
+                    &pending_playback,
+                    true,
+                );
+                expected_disconnect |= is_structured_disconnect;
+            }
+        }
+    }
+    disconnected.store(true, Ordering::SeqCst);
+    pending_playback.lock().unwrap().clear();
+
+    // Resolve any pending shutdown request with Disconnected.
+    if let Some(tx) = shutdown_request.lock().unwrap().take() {
+        let _ = tx.send(crate::remote_player::ShutdownResponse::Disconnected);
+    }
+
+    log::info!(target: "remote", "daemon disconnected");
+    if !expected_disconnect {
+        if !disconnect_notified.swap(true, Ordering::SeqCst) {
+            let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
+                crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+            ));
+        }
+    } else {
+        // An "expected"/structured disconnect (e.g. an Emby Remote
+        // takeover, or a deliberate daemon shutdown) never sends a
+        // Stopped PlayerEvent, so nothing else clears `status`.
+        // Clear it here, at the source, so
+        // every consumer of `status` (not just MPRIS's separate
+        // `disconnected_flag()` check in src/mpris.rs) sees an
+        // inactive/no-track player immediately rather than stale
+        // "still playing" data.
+        if let Ok(mut s) = status.lock() {
+            s.active = false;
+            s.paused = false;
+            s.clear_current_item_metadata();
+        }
+        // `TakenOverByEmbyRemote` never reaches this branch (it does not
+        // close the connection), so this structured disconnect is a
+        // deliberate daemon shutdown.
+        shutdown_announced.store(true, Ordering::SeqCst);
+        let _ = event_tx.send(PlayerEvent::DaemonShutdownAnnounced);
+    }
+}
+
+fn write_remote_commands(
+    mut stream: SocketStream,
+    cmd_rx: mpsc::Receiver<CtrlCmd>,
+    disconnected: Arc<AtomicBool>,
+    disconnect_notified: Arc<AtomicBool>,
+    event_tx: mpsc::Sender<PlayerEvent>,
+) {
+    while let Ok(cmd) = cmd_rx.recv() {
+        let Ok(json) = serde_json::to_string(&cmd) else {
+            continue;
+        };
+        if let Err(error) = writeln!(stream, "{json}") {
+            log::warn!(target: "remote", "failed to write command to daemon: {error}");
+            disconnected.store(true, Ordering::SeqCst);
+            if !disconnect_notified.swap(true, Ordering::SeqCst) {
+                let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
+                    crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+                ));
+            }
+            break;
+        }
+    }
 }
 
 /// Test-support: connects a `RemotePlayer` over an in-memory `UnixStream`
