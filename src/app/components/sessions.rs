@@ -359,7 +359,7 @@ impl Component for SessionsComponent {
                 self.projected_width = Some(content_area.width);
                 self.content_dirty = false;
             }
-            self.list.view(f, content_area);
+            self.list.view_in(f, panel_area, content_area);
             crate::app::render::render_sessions_scrollbar(
                 f,
                 content_area,

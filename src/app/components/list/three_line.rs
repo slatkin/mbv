@@ -187,7 +187,7 @@ impl<Target> PaintRetained<Target> for ThreeLineFlatList<Target> {
 
 impl<Target: Clone + Eq> Component for ThreeLineFlatList<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        crate::app::render::render_three_line_flat_list(frame, area, self);
+        self.view_in(frame, area, area);
     }
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
         None
@@ -198,6 +198,20 @@ impl<Target: Clone + Eq> Component for ThreeLineFlatList<Target> {
     }
     fn perform(&mut self, _cmd: Cmd) -> CmdResult {
         CmdResult::NoChange
+    }
+}
+
+impl<Target: Clone + Eq> ThreeLineFlatList<Target> {
+    /// Paint with a full-width claim rect (the owning panel) over the inset
+    /// content rect; the selected row's bar spans the claim like every other
+    /// selected-row paint. Hit geometry stays on the content rect's flow.
+    pub(in crate::app) fn view_in(
+        &mut self,
+        frame: &mut Frame,
+        claim_rect: Rect,
+        content_rect: Rect,
+    ) {
+        crate::app::render::render_three_line_flat_list(frame, claim_rect, content_rect, self);
     }
 }
 
@@ -218,11 +232,12 @@ impl<Target> ThreeLineFlatList<Target> {
 
     pub(in crate::app) fn publish(
         &mut self,
-        area: Rect,
+        claim_rect: Rect,
+        content_rect: Rect,
         rows: Vec<(Rect, Target)>,
         selected: Option<Rect>,
     ) {
-        PaintRetained::finish(self, area, area, rows, selected);
+        PaintRetained::finish(self, claim_rect, content_rect, rows, selected);
     }
 
     pub(in crate::app) fn selected(&self) -> Option<&Target> {

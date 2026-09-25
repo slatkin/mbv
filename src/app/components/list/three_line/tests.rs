@@ -51,6 +51,7 @@ fn test_three_line_paint_invalidation_preserves_selection() {
     assert_eq!((offset, visible), (0, 2));
     list.publish(
         area,
+        area,
         vec![
             (ratatui::layout::Rect::new(0, 0, 12, 3), 1),
             (ratatui::layout::Rect::new(0, 4, 12, 3), 2),
@@ -62,6 +63,7 @@ fn test_three_line_paint_invalidation_preserves_selection() {
     list.invalidate_paint();
     assert_eq!(list.resolve_point(Position { x: 2, y: 6 }), None);
     list.publish(
+        area,
         area,
         vec![(ratatui::layout::Rect::new(0, 0, 12, 3), 1)],
         None,

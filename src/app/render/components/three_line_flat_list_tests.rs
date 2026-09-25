@@ -68,6 +68,41 @@ fn test_three_line_buffer_selection_stripes_and_hits() {
 }
 
 #[test]
+fn test_three_line_buffer_selected_bar_spans_claim_rect() {
+    // Like the tree browser and wide media list, the selected row's bar
+    // reaches the owning panel's edges while zebra rows stay inside the
+    // content inset; hit geometry mirrors the painted rows.
+    let mut list = ThreeLineFlatList::new(1);
+    list.set_content((0..3).map(item).collect());
+    list.set_focused(true);
+    list.select_target(&1);
+    let claim = Rect::new(0, 0, 14, 7);
+    let content = Rect::new(2, 0, 10, 7);
+    let mut terminal = Terminal::new(TestBackend::new(14, 7)).unwrap();
+    terminal
+        .draw(|frame| list.view_in(frame, claim, content))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
+
+    // The selected bar spans the full claim width on all three lines.
+    for x in [0, 1, 2, 13] {
+        for y in 4..=6 {
+            assert_eq!(buffer[(x, y)].bg, palette::SELECTED_ROW_BG, "x={x} y={y}");
+        }
+    }
+    // The selected row's text still starts at the content inset, not the band.
+    assert_eq!(buffer[(2, 4)].symbol(), "i");
+    // Non-selected rows stay inset: the band next to item 0 is untouched.
+    assert_eq!(buffer[(0, 0)].bg, ratatui::style::Color::Reset);
+    assert_eq!(buffer[(2, 0)].bg, surface);
+    // Hit geometry mirrors the paint: the selected row's band resolves, the
+    // non-selected row's band does not.
+    assert_eq!(list.resolve_point(Position { x: 0, y: 5 }), Some(&1));
+    assert_eq!(list.resolve_point(Position { x: 0, y: 1 }), None);
+}
+
+#[test]
 fn test_three_line_buffer_stripes_follow_flow_position_after_scroll() {
     let mut list = ThreeLineFlatList::new(1);
     list.set_content((0..6).map(item).collect());
