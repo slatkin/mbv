@@ -220,6 +220,25 @@ fn parse_session_subtitle_streams(streams: &[Value]) -> Vec<SessionSubtitleStrea
         .collect()
 }
 
+fn parse_artist_items(raw: &Value) -> Vec<EmbyArtistRef> {
+    raw["ArtistItems"]
+        .as_array()
+        .map(|pairs| {
+            pairs
+                .iter()
+                .filter_map(|pair| {
+                    let name = pair["Name"].as_str()?;
+                    let id = pair["Id"].as_str()?;
+                    Some(EmbyArtistRef {
+                        name: name.to_string(),
+                        id: id.to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The single raw-JSON-to-`EmbyItem` constructor. `pub` so the app crate's
 /// tests parse recorded item JSON (task 5.3's fixtures) the way the live
 /// parse path does (task 5.4's artwork-policy tests).
@@ -269,22 +288,7 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
             .or_else(|| raw["Artists"].get(0).and_then(|v| v.as_str()))
             .unwrap_or("")
             .to_string(),
-        artist_items: raw["ArtistItems"]
-            .as_array()
-            .map(|pairs| {
-                pairs
-                    .iter()
-                    .filter_map(|pair| {
-                        let name = pair["Name"].as_str()?;
-                        let id = pair["Id"].as_str()?;
-                        Some(EmbyArtistRef {
-                            name: name.to_string(),
-                            id: id.to_string(),
-                        })
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
+        artist_items: parse_artist_items(raw),
         sort_name: raw["SortName"].as_str().unwrap_or("").to_string(),
         production_year: raw["ProductionYear"]
             .as_u64()
