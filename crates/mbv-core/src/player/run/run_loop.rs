@@ -255,28 +255,8 @@ impl PlaybackRun {
                 }
                 false
             }
-            Ok(Event::ClientMessage(args)) if args.first().copied() == Some("mbv-next-up-play") => {
-                log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
-                self.next_up_jump = true;
-                let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
-                false
-            }
-            Ok(Event::ClientMessage(args))
-                if args.first().copied() == Some("mbv-skip-intro-play") =>
-            {
-                let _ = self.event_tx.send(PlayerEvent::SkipIntroPlay);
-                false
-            }
-            Ok(Event::ClientMessage(args))
-                if self.config.use_mpv_config && args.first().copied() == Some("mouse-moved") =>
-            {
-                let show = self
-                    .last_mouse_osd
-                    .is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
-                if show {
-                    let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
-                    self.last_mouse_osd = Some(Instant::now());
-                }
+            Ok(Event::ClientMessage(args)) => {
+                self.handle_client_message(&args, mpv);
                 false
             }
             Ok(Event::Shutdown) => {
@@ -290,6 +270,29 @@ impl PlaybackRun {
                 false
             }
             _ => false,
+        }
+    }
+
+    fn handle_client_message(&mut self, args: &[&str], mpv: &Mpv) {
+        match args.first().copied() {
+            Some("mbv-next-up-play") => {
+                log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
+                self.next_up_jump = true;
+                let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
+            }
+            Some("mbv-skip-intro-play") => {
+                let _ = self.event_tx.send(PlayerEvent::SkipIntroPlay);
+            }
+            Some("mouse-moved") if self.config.use_mpv_config => {
+                let show = self
+                    .last_mouse_osd
+                    .is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
+                if show {
+                    let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+                    self.last_mouse_osd = Some(Instant::now());
+                }
+            }
+            _ => {}
         }
     }
 
