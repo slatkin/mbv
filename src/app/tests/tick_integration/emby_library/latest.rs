@@ -1,5 +1,73 @@
 use super::*;
 
+fn tab_panel(harness: &TickHarness) -> &crate::app::components::TabPanel {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::TabPanel)
+        .expect("TabPanel mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::TabPanel>()
+        .expect("TabPanel component")
+}
+
+#[test]
+fn movies_tab_marker_tracks_latest_acknowledgement_across_snapshot_refresh() {
+    use crate::app::TabSelection;
+    use mbv_core::playback_queue::QueueItem;
+
+    let mut app = make_movie_app();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.libs[0].library_total = Some(100);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().app.home_latest_launch_window =
+        crate::app::state::home_latest::HomeLatestLaunchWindow {
+            previous: Some(100),
+            current: 200,
+        };
+
+    let mut item = crate::app::tests::make_item("New movie", "Movie");
+    item.id = "new-movie".into();
+    item.date_added = "1970-01-01T00:02:00Z".into();
+    let replacement_item = || QueueItem::Emby(Box::new(item.clone()));
+    harness.model_mut().sync_mounted_surfaces();
+    draw_mounted(&mut harness, 100, 30);
+    harness.model_mut().app.tab = TabSelection::Home;
+    harness.model_mut().sync_tab_panel();
+    harness.model_mut().update_emby_latest_snapshot(
+        "lib-movies".into(),
+        "Movies".into(),
+        vec![replacement_item()],
+    );
+    harness.model_mut().sync_tab_panel();
+
+    assert_eq!(tab_panel(&harness).test_markers().get(1), Some(&true));
+    assert_eq!(harness.model().app.tab, TabSelection::Home);
+
+    // Switching to Movies alone does not acknowledge its Latest marker.
+    harness.model_mut().app.tab = TabSelection::EmbyLibrary(0);
+    harness.model_mut().sync_tab_panel();
+    assert_eq!(tab_panel(&harness).test_markers().get(1), Some(&true));
+
+    let outcome = click_selector(&mut harness, 0);
+    dispatch_messages(&mut harness, outcome.messages);
+    draw_mounted(&mut harness, 100, 30);
+    assert!(browser_owner(&harness).latest_mode());
+    assert_eq!(tab_panel(&harness).test_markers().get(1), Some(&false));
+
+    harness.model_mut().update_emby_latest_snapshot(
+        "lib-movies".into(),
+        "Movies".into(),
+        vec![replacement_item()],
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    draw_mounted(&mut harness, 100, 30);
+    assert_eq!(tab_panel(&harness).test_markers().get(1), Some(&false));
+}
+
 #[rstest::rstest]
 #[case::movies("movies", false, "Movies")]
 #[case::home_videos("homevideos", true, "Home Videos")]
