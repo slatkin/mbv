@@ -100,6 +100,19 @@ pub(super) struct ArenaNode<Target> {
     pub(super) root_index: usize,
 }
 
+struct RebuiltForest<Target> {
+    arena: HashMap<usize, ArenaNode<Target>>,
+    target_to_node: HashMap<Target, usize>,
+    ordered_nodes: Vec<usize>,
+    roots: Vec<usize>,
+}
+
+struct ReconciledSelection<Target> {
+    selected: Option<Target>,
+    expanded: HashSet<Target>,
+    marks: Vec<Target>,
+}
+
 /// The complete embedded owner for one nested stable-target row flow.
 ///
 /// The arena and its identifiers are private.  In particular, callers can
@@ -224,18 +237,39 @@ impl<Target> TreeBrowser<Target> {
         Target: Clone + Eq + Hash,
     {
         let entries: Vec<TreeEntry<Target>> = projection.into_iter().map(Into::into).collect();
-        let nodes: Vec<TreeNode<Target>> = entries
+        let nodes = Self::project_nodes(&entries);
+        validate_forest(&nodes)?;
+
+        let root_structures = Self::project_root_structures(&entries);
+        if !self.content_changed(&nodes, &root_structures) {
+            return Ok(());
+        }
+
+        let forest = self.rebuild_forest(nodes);
+        self.commit_reconciliation(root_structures, forest);
+        Ok(())
+    }
+
+    fn project_nodes(entries: &[TreeEntry<Target>]) -> Vec<TreeNode<Target>>
+    where
+        Target: Clone,
+    {
+        entries
             .iter()
             .filter_map(|entry| match entry {
                 TreeEntry::Node(node) => Some(node.clone()),
                 TreeEntry::Heading(_) | TreeEntry::Spacer => None,
             })
-            .collect();
-        validate_forest(&nodes)?;
+            .collect()
+    }
 
+    fn project_root_structures(entries: &[TreeEntry<Target>]) -> HashMap<Target, Vec<StructuralRow>>
+    where
+        Target: Clone + Eq + Hash,
+    {
         let mut root_structures = HashMap::new();
         let mut pending_structure = Vec::new();
-        for entry in &entries {
+        for entry in entries {
             match entry {
                 TreeEntry::Heading(title) => {
                     pending_structure.push(StructuralRow::Heading(title.clone()));
@@ -250,31 +284,55 @@ impl<Target> TreeBrowser<Target> {
                 TreeEntry::Node(_) => {}
             }
         }
+        root_structures
+    }
 
-        let content_changed = self.ordered_nodes.len() != nodes.len()
-            || self.root_structures != root_structures
+    fn content_changed(
+        &self,
+        nodes: &[TreeNode<Target>],
+        root_structures: &HashMap<Target, Vec<StructuralRow>>,
+    ) -> bool
+    where
+        Target: Eq + Hash,
+    {
+        self.ordered_nodes.len() != nodes.len()
+            || self.root_structures != *root_structures
             || self
                 .ordered_nodes
                 .iter()
                 .zip(nodes.iter())
-                .any(|(id, node)| self.arena.get(id).is_none_or(|entry| entry.node != *node));
-        if !content_changed {
-            return Ok(());
-        }
+                .any(|(id, node)| self.arena.get(id).is_none_or(|entry| entry.node != *node))
+    }
 
-        let mut arena = HashMap::with_capacity(nodes.len());
-        let mut new_target_to_node = HashMap::with_capacity(nodes.len());
-        let mut ordered_nodes = Vec::with_capacity(nodes.len());
-        let mut roots = Vec::new();
-        let mut ids_by_index = Vec::with_capacity(nodes.len());
+    fn rebuild_forest(&mut self, nodes: Vec<TreeNode<Target>>) -> RebuiltForest<Target>
+    where
+        Target: Clone + Eq + Hash,
+    {
+        let mut forest = Self::allocate_nodes(nodes, &mut self.next_node_id);
+        Self::link_parent_nodes(&mut forest);
+        Self::compute_forest_depths(&mut forest);
+        forest
+    }
 
+    fn allocate_nodes(
+        nodes: Vec<TreeNode<Target>>,
+        next_node_id: &mut usize,
+    ) -> RebuiltForest<Target>
+    where
+        Target: Clone + Eq + Hash,
+    {
+        let mut forest = RebuiltForest {
+            arena: HashMap::with_capacity(nodes.len()),
+            target_to_node: HashMap::with_capacity(nodes.len()),
+            ordered_nodes: Vec::with_capacity(nodes.len()),
+            roots: Vec::new(),
+        };
         for node in nodes {
-            let id = self.next_node_id;
-            self.next_node_id = self.next_node_id.saturating_add(1);
-            ids_by_index.push(id);
-            new_target_to_node.insert(node.target.clone(), id);
-            ordered_nodes.push(id);
-            arena.insert(
+            let id = *next_node_id;
+            *next_node_id = next_node_id.saturating_add(1);
+            forest.target_to_node.insert(node.target.clone(), id);
+            forest.ordered_nodes.push(id);
+            forest.arena.insert(
                 id,
                 ArenaNode {
                     node,
@@ -284,32 +342,41 @@ impl<Target> TreeBrowser<Target> {
                 },
             );
         }
+        forest
+    }
 
-        // Build parent links by the already validated stable-target map.
-        for id in ids_by_index.iter().copied() {
-            let parent = arena.get(&id).and_then(|entry| entry.node.parent.clone());
+    // Build parent links only after validation, using the stable-target map.
+    fn link_parent_nodes(forest: &mut RebuiltForest<Target>)
+    where
+        Target: Clone + Eq + Hash,
+    {
+        for id in forest.ordered_nodes.iter().copied() {
+            let parent = forest
+                .arena
+                .get(&id)
+                .and_then(|entry| entry.node.parent.clone());
             if let Some(parent) = parent {
-                let parent_id = new_target_to_node[&parent];
-                arena
-                    .get_mut(&parent_id)
-                    .expect("validated parent")
-                    .children
-                    .push(id);
+                let parent_id = forest.target_to_node[&parent];
+                if let Some(parent) = forest.arena.get_mut(&parent_id) {
+                    parent.children.push(id);
+                }
             } else {
-                roots.push(id);
+                forest.roots.push(id);
             }
         }
+    }
 
-        // Compute depth and group-relative stripe phase from the roots.  This
-        // is derived data and does not expose the private node identifiers.
-        let mut stack: Vec<(usize, usize, usize)> = roots
+    // Derived depth and group-relative stripe phase do not expose private IDs.
+    fn compute_forest_depths(forest: &mut RebuiltForest<Target>) {
+        let mut stack: Vec<(usize, usize, usize)> = forest
+            .roots
             .iter()
             .copied()
             .enumerate()
             .map(|(root_index, id)| (id, 0, root_index))
             .collect();
         while let Some((id, depth, root_index)) = stack.pop() {
-            if let Some(entry) = arena.get_mut(&id) {
+            if let Some(entry) = forest.arena.get_mut(&id) {
                 entry.depth = depth;
                 entry.root_index = root_index;
                 for child in entry.children.iter().rev().copied() {
@@ -317,47 +384,70 @@ impl<Target> TreeBrowser<Target> {
                 }
             }
         }
+    }
 
+    fn reconcile_projected_selection(
+        &self,
+        forest: &RebuiltForest<Target>,
+    ) -> ReconciledSelection<Target>
+    where
+        Target: Clone + Eq + Hash,
+    {
         let selected = self
             .selected
             .as_ref()
-            .filter(|target| new_target_to_node.contains_key(*target))
+            .filter(|target| forest.target_to_node.contains_key(*target))
             .cloned()
             .or_else(|| {
-                ordered_nodes
+                forest
+                    .ordered_nodes
                     .first()
-                    .map(|id| arena[id].node.target.clone())
+                    .map(|id| forest.arena[id].node.target.clone())
             });
         let expanded = self
             .expanded
             .iter()
             .filter_map(|target| {
-                let id = *new_target_to_node.get(target)?;
-                let node = &arena[&id];
+                let id = *forest.target_to_node.get(target)?;
+                let node = &forest.arena[&id];
                 (node.node.expandable || !node.children.is_empty()).then(|| target.clone())
             })
             .collect();
-        let marks: Vec<Target> = self
+        let marks = self
             .marks
             .targets()
             .iter()
-            .filter(|target| new_target_to_node.contains_key(*target))
+            .filter(|target| forest.target_to_node.contains_key(*target))
             .filter(|target| {
-                let id = new_target_to_node[*target];
-                arena[&id].node.mark_policy == TreeMarkPolicy::Direct
+                let id = forest.target_to_node[*target];
+                forest.arena[&id].node.mark_policy == TreeMarkPolicy::Direct
             })
             .cloned()
             .collect();
+        ReconciledSelection {
+            selected,
+            expanded,
+            marks,
+        }
+    }
 
-        self.arena = arena;
-        self.target_to_node = new_target_to_node;
-        self.ordered_nodes = ordered_nodes;
-        self.roots = roots;
+    fn commit_reconciliation(
+        &mut self,
+        root_structures: HashMap<Target, Vec<StructuralRow>>,
+        forest: RebuiltForest<Target>,
+    ) where
+        Target: Clone + Eq + Hash,
+    {
+        let selection = self.reconcile_projected_selection(&forest);
+        self.arena = forest.arena;
+        self.target_to_node = forest.target_to_node;
+        self.ordered_nodes = forest.ordered_nodes;
+        self.roots = forest.roots;
         self.root_structures = root_structures;
         self.model_revision = self.model_revision.saturating_add(1);
-        self.selected = selected;
-        self.expanded = expanded;
-        self.marks.set_targets(marks);
+        self.selected = selection.selected;
+        self.expanded = selection.expanded;
+        self.marks.set_targets(selection.marks);
         self.viewport_offset = self
             .viewport_offset
             .min(self.visible_len().saturating_sub(1));
@@ -369,7 +459,6 @@ impl<Target> TreeBrowser<Target> {
         );
         self.paint.invalidate();
         self.reconcile_selection();
-        Ok(())
     }
 
     pub fn selected_target(&self) -> Option<&Target> {
