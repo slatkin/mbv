@@ -42,6 +42,7 @@ impl App {
             && !self.is_cast_attached()
             && active
             && !audio_pipe_enabled
+            && !self.visual_slot_hidden
     }
 
     pub(in crate::app) fn stop_visualizer_worker(&mut self) {
@@ -52,6 +53,9 @@ impl App {
     }
 
     pub(in crate::app) fn toggle_visualizer(&mut self) {
+        if self.visual_slot_hidden {
+            return;
+        }
         self.visualizer_enabled = !self.visualizer_enabled;
         self.visualizer_failed = false;
         if !self.visualizer_enabled {
@@ -74,6 +78,37 @@ mod tests {
 
         assert!(!app.visualizer_should_run());
         assert!(app.visualizer.is_none());
+    }
+
+    #[test]
+    fn hidden_slot_keeps_visualizer_selection_unchanged() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visual_slot_hidden = true;
+        app.visualizer_enabled = false;
+
+        app.toggle_visualizer();
+
+        assert!(!app.visualizer_enabled, "hidden slot ignores the v toggle");
+        assert!(
+            app.visualizer.is_none(),
+            "hidden slot starts no capture worker"
+        );
+    }
+
+    #[test]
+    fn hidden_slot_blocks_capture_when_visualizer_is_selected_and_playing() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.visualizer_enabled = true;
+        app.visual_slot_hidden = true;
+        app.player.status.lock().unwrap().active = true;
+
+        app.sync_visualizer();
+
+        assert!(!app.visualizer_should_run());
+        assert!(
+            app.visualizer.is_none(),
+            "hidden slot starts no capture worker"
+        );
     }
 
     #[test]

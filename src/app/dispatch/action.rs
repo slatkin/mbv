@@ -30,6 +30,7 @@ pub(crate) const VOLUME_STEP: i64 = 5;
 pub(in crate::app) enum Command {
     OpenIdleFeedLink,
     ToggleVisualizer,
+    ToggleVisualSlotHidden,
     TogglePlayPause,
     Stop,
     /// Relative seek in seconds; negative rewinds, positive fast-forwards.
@@ -217,6 +218,11 @@ impl App {
                 self.open_idle_feed_link();
             }
             Command::ToggleVisualizer => self.toggle_visualizer(),
+            Command::ToggleVisualSlotHidden => {
+                self.visual_slot_hidden = !self.visual_slot_hidden;
+                self.sync_visualizer();
+                self.save_prefs();
+            }
 
             Command::TogglePlayPause => {
                 self.playback_target().toggle_play_pause(self);

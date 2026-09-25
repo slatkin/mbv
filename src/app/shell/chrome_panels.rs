@@ -39,7 +39,7 @@ impl Model {
     /// The reservation is derived from the prior paint checkpoint, so draw
     /// remains read-only with respect to `AppLayout`.
     pub(in crate::app) fn sync_queue_card_geometry(&mut self) {
-        if self.app.now_playing_status() == NowPlayingStatus::Idle {
+        if !self.app.visual_slot_shown() {
             self.app.layout.card = CardGeometry::default();
             return;
         }
@@ -362,28 +362,20 @@ impl Model {
             ..inset
         };
         let wide = queue_playback_column_wide(placement.width);
-        if self.app.now_playing_status() != NowPlayingStatus::Idle {
-            // Fill the slot region's own background first (task 12.2):
-            // the visual slot only paints the image/placeholder it
-            // actually has (documented: images-off or not-yet-loaded
-            // paints nothing, `render_card_painting`'s own test), so any
-            // columns it leaves untouched -- e.g. the gap before a
-            // zero-width slot at the wide breakpoint -- must still show
-            // this panel's own background rather than whatever was
-            // painted underneath before this panel owned the placement.
-            // The outer `fill_surface` call above already cleared all of
-            // `placement`, including this subrect, so only the
-            // background needs (re)painting here.
-            frame.render_widget(
-                ratatui::widgets::Block::default().style(
-                    ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
-                        crate::app::palette::Surface::QueueOnlyPlaybackPanel,
-                        false,
-                    )
-                    .fill),
-                ),
-                slot_region,
-            );
+        // The slot region owns the QueueOnlyPlaybackPanel background even
+        // when its content is hidden. Idle placements have a zero-height
+        // slot region, so this remains a no-op while idle.
+        frame.render_widget(
+            ratatui::widgets::Block::default().style(
+                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
+                    crate::app::palette::Surface::QueueOnlyPlaybackPanel,
+                    false,
+                )
+                .fill),
+            ),
+            slot_region,
+        );
+        if self.app.visual_slot_shown() {
             self.app
                 .render_queue_playback_slot(frame, slot_region, wide);
         }

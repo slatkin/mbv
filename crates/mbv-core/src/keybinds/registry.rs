@@ -138,7 +138,7 @@ impl KeybindAction {
 /// hard binding (`Ctrl+q` already triggers quit in the daemon-lost overlay).
 pub const RESERVED_CHORDS: &[&str] = &["Ctrl+q"];
 
-/// The declared action table: 18 router-owned global chords plus the 12
+/// The declared action table: 19 router-owned global chords plus the 12
 /// split transport actions, sectioned per design D4.
 pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     // ── Global (chrome not tied to one settings domain) ─────────────────
@@ -274,6 +274,15 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         default_chords: &["v"],
         gate: KeyGate::NoBlockingOverlay,
         policy: "visualizer",
+        rebindable: true,
+        prefix_addressable: true,
+    },
+    KeybindAction {
+        id: "hide_visual_slot",
+        section: KeySection::Playback,
+        default_chords: &["h"],
+        gate: KeyGate::NoBlockingOverlay,
+        policy: "hide_visual_slot",
         rebindable: true,
         prefix_addressable: true,
     },

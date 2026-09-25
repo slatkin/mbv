@@ -157,6 +157,78 @@ mod strip_hits {
 }
 
 #[test]
+fn hidden_visual_slot_collapses_and_restores_queue_geometry_at_both_breakpoints() {
+    use crate::app::render::arrangements::chrome::{PLAYER_BOX_HEIGHT, QUEUE_PLAYBACK_HEADER_ROWS};
+
+    for width in [80, 120] {
+        let mut app = active_app(PanelMode::QueueOnly);
+        app.terminal_width = width;
+        app.terminal_height = 40;
+        app.last_card_height = 8;
+        app.last_card_width = 16;
+        let mut harness = TickHarness::new(app);
+
+        harness.model_mut().sync_queue_card_geometry();
+        let shown_card = (
+            harness.model().app.layout.card.height,
+            harness.model().app.layout.card.width,
+        );
+        assert!(shown_card.0 > 0, "slot has a reservation at width {width}");
+        assert!(shown_card.1 > 0, "slot has a width at width {width}");
+        let checkpoint = (
+            harness.model().app.last_card_height,
+            harness.model().app.last_card_width,
+        );
+
+        harness.model_mut().app.visual_slot_hidden = true;
+        harness.model_mut().sync_queue_card_geometry();
+        assert_eq!(
+            (
+                harness.model().app.layout.card.height,
+                harness.model().app.layout.card.width,
+            ),
+            (0, 0)
+        );
+        assert_eq!(
+            (
+                harness.model().app.last_card_height,
+                harness.model().app.last_card_width,
+            ),
+            checkpoint,
+            "hiding preserves the paint checkpoint"
+        );
+
+        let root = harness
+            .model()
+            .app
+            .compute_chrome_geometry(Rect::new(0, 0, width, 40))
+            .root;
+        let playback = root.queue_playback.expect("queue playback placed");
+        let queue = root.queue.expect("queue placed");
+        assert_eq!(
+            playback.height,
+            QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT + 1,
+            "header, transport, and separator remain at width {width}"
+        );
+        assert_eq!(
+            queue.y,
+            playback.y + QUEUE_PLAYBACK_HEADER_ROWS + PLAYER_BOX_HEIGHT + 1,
+            "queue starts below the header, transport, and separator at width {width}"
+        );
+
+        harness.model_mut().app.visual_slot_hidden = false;
+        harness.model_mut().sync_queue_card_geometry();
+        assert_eq!(
+            (
+                harness.model().app.layout.card.height,
+                harness.model().app.layout.card.width,
+            ),
+            shown_card
+        );
+    }
+}
+
+#[test]
 fn sync_projects_queue_transport_area_before_draw() {
     let mut app = active_app(PanelMode::Both);
     app.terminal_width = 100;

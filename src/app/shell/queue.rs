@@ -159,7 +159,7 @@ impl Model {
         // item and projects the slot's image state. The slot only paints while
         // playback is active (idle collapse), so the projection follows the
         // same gate the card's render used.
-        if self.app.effective_playback_state().active {
+        if self.app.visual_slot_shown() {
             self.app.refresh_queue_card_image();
         }
         if let Some(comp) = self.application.get_component_mut(&id) {
@@ -418,7 +418,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::{Msg, QueueRequest};
-    use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub};
+    use crate::app::tests::{make_app_stub, make_item, make_items, make_remote_app_stub};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -467,6 +467,29 @@ mod tests {
         model.app.player.status.lock().unwrap().current_idx = 1;
         model.sync_queue();
         assert!(model.app.card_image_loading.contains("id1:P"));
+    }
+
+    #[test]
+    fn hidden_visual_slot_skips_artwork_fetch_until_shown() {
+        let mut app = make_app_stub();
+        app.player_tab.set_items(make_items(2), 0);
+        app.image_protocol_enabled = true;
+        app.visual_slot_hidden = true;
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+        }
+        let mut model = Model::new(app);
+
+        model.sync_queue();
+        assert_eq!(model.app.card_image_fetch_calls, 0);
+        assert!(!model.app.card_image_loading.contains("id0:P"));
+
+        model.app.visual_slot_hidden = false;
+        model.sync_queue();
+        assert!(model.app.card_image_fetch_calls > 0);
+        assert!(model.app.card_image_loading.contains("id0:P"));
     }
 
     #[test]

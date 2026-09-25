@@ -230,6 +230,7 @@ pub(crate) fn make_app_stub() -> App {
         tab: TabSelection::Home,
         queue_column_width: LEFT_WIDTH_DEFAULT,
         list_pane_width: None,
+        visual_slot_hidden: false,
         panel_mode: PanelMode::default(),
         mini_view_focus: PanelFocus::Queue,
         library_tab_pending: 0,

@@ -70,6 +70,36 @@ fn panel_mode_cycle_falls_through_during_text_entry() {
 }
 
 #[test]
+fn hide_visual_slot_routes_to_command_without_overlay() {
+    let key = crossterm::event::KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
+    assert_eq!(
+        crate::app::input::router::resolve_router_outcome_with_focused(
+            key,
+            &snapshot(),
+            None,
+            &keybinds()
+        ),
+        crate::app::input::router::RouterOutcome::Command(Command::ToggleVisualSlotHidden)
+    );
+}
+
+#[test]
+fn hide_visual_slot_falls_through_to_text_entry() {
+    let key = crossterm::event::KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
+    let mut typing = snapshot();
+    typing.text_entry_focused = true;
+    assert_eq!(
+        crate::app::input::router::resolve_router_outcome_with_focused(
+            key,
+            &typing,
+            None,
+            &keybinds()
+        ),
+        crate::app::input::router::RouterOutcome::FallThrough
+    );
+}
+
+#[test]
 fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     let mut active = snapshot();
     active.player_active = true;

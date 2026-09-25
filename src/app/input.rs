@@ -137,6 +137,7 @@ impl App {
         v["mute_on"] = serde_json::json!(self.mute_on);
         v["pre_mute_volume"] = serde_json::json!(self.pre_mute_volume);
         v["queue_column_width"] = serde_json::json!(self.queue_column_width);
+        v["visual_slot_hidden"] = serde_json::json!(self.visual_slot_hidden);
         v["list_pane_width"] = serde_json::json!(self.list_pane_width);
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
@@ -147,6 +148,18 @@ impl App {
 #[cfg(test)]
 mod prefs_tests {
     use super::App;
+
+    #[test]
+    fn visual_slot_hidden_prefs_round_trip() {
+        let mut app = crate::app::tests::make_app_stub();
+
+        app.visual_slot_hidden = true;
+        app.save_prefs();
+        assert_eq!(
+            App::load_prefs()["visual_slot_hidden"].as_bool(),
+            Some(true)
+        );
+    }
 
     #[test]
     fn list_pane_width_prefs_round_trip_width_and_null() {
