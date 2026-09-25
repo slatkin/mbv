@@ -76,42 +76,12 @@ fn parse_action(args: &[String]) -> Result<Action, String> {
     while i < args.len() {
         match args[i].as_str() {
             "--audio-only" => audio_only = true,
-            "--log-level" => {
-                i += 1;
-                let Some(value) = args.get(i) else {
-                    return Err("mbvd: --log-level requires error, warn, info, or debug".into());
-                };
-                log_level = applog::Level::parse(value)
-                    .ok_or_else(|| format!("mbvd: invalid log level {value:?}"))?;
-            }
+            "--log-level" => log_level = parse_log_level(args, &mut i)?,
             "--help" | "-h" => select_action(&mut action, Action::Help)?,
             "--version" | "-V" => select_action(&mut action, Action::Version)?,
             "--quit" | "-q" => select_action(&mut action, Action::Quit)?,
-            "--connect" => {
-                i += 1;
-                let Some(service) = args.get(i) else {
-                    return Err("mbvd: --connect requires a Service (supported: emby, abs)".into());
-                };
-                match service.as_str() {
-                    "emby" => select_action(&mut action, Action::ConnectEmby)?,
-                    "abs" => select_action(&mut action, Action::ConnectAbs)?,
-                    _ => {
-                        return Err(
-                            "mbvd: unsupported Service; supported Services: emby, abs".into()
-                        )
-                    }
-                }
-            }
-            "--disconnect" => {
-                i += 1;
-                let Some(service) = args.get(i) else {
-                    return Err("mbvd: --disconnect requires a Service (supported: abs)".into());
-                };
-                if service != "abs" {
-                    return Err("mbvd: unsupported Service; supported Services: abs".into());
-                }
-                select_action(&mut action, Action::DisconnectAbs)?;
-            }
+            "--connect" => parse_connect_action(args, &mut i, &mut action)?,
+            "--disconnect" => parse_disconnect_action(args, &mut i, &mut action)?,
             arg => return Err(format!("mbvd: unknown argument {arg:?}")),
         }
         i += 1;
@@ -128,6 +98,46 @@ fn parse_action(args: &[String]) -> Result<Action, String> {
         audio_only,
         log_level,
     }))
+}
+
+fn parse_log_level(args: &[String], i: &mut usize) -> Result<applog::Level, String> {
+    *i += 1;
+    let Some(value) = args.get(*i) else {
+        return Err("mbvd: --log-level requires error, warn, info, or debug".into());
+    };
+    applog::Level::parse(value).ok_or_else(|| format!("mbvd: invalid log level {value:?}"))
+}
+
+fn parse_connect_action(
+    args: &[String],
+    i: &mut usize,
+    action: &mut Option<Action>,
+) -> Result<(), String> {
+    *i += 1;
+    let Some(service) = args.get(*i) else {
+        return Err("mbvd: --connect requires a Service (supported: emby, abs)".into());
+    };
+    let next = match service.as_str() {
+        "emby" => Action::ConnectEmby,
+        "abs" => Action::ConnectAbs,
+        _ => return Err("mbvd: unsupported Service; supported Services: emby, abs".into()),
+    };
+    select_action(action, next)
+}
+
+fn parse_disconnect_action(
+    args: &[String],
+    i: &mut usize,
+    action: &mut Option<Action>,
+) -> Result<(), String> {
+    *i += 1;
+    let Some(service) = args.get(*i) else {
+        return Err("mbvd: --disconnect requires a Service (supported: abs)".into());
+    };
+    if service != "abs" {
+        return Err("mbvd: unsupported Service; supported Services: abs".into());
+    }
+    select_action(action, Action::DisconnectAbs)
 }
 
 fn select_action(action: &mut Option<Action>, next: Action) -> Result<(), String> {
