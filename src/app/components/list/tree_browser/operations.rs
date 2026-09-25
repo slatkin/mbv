@@ -304,88 +304,45 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
     pub fn apply(&mut self, operation: super::TreeOperation<Target>) -> TreeTransition<Target> {
         let previous = self.selected.clone();
         let previous_marks = self.selected_summary();
+        let flow = self.current_flow();
+        let Some((disposition, external_intent)) = self.apply_operation(operation, &flow) else {
+            return self.transition(previous, previous_marks, TreeConsumed::Unhandled, None);
+        };
+        self.invalidate_paint();
+        self.transition(previous, previous_marks, disposition, external_intent)
+    }
+
+    fn apply_operation(
+        &mut self,
+        operation: super::TreeOperation<Target>,
+        flow: &RowFlow<Target>,
+    ) -> Option<(TreeConsumed, Option<TreeExternalIntent<Target>>)> {
         let mut disposition = TreeConsumed::Consumed;
         let mut external_intent = None;
-        let flow = self.current_flow();
         match operation {
             super::TreeOperation::Move(delta) => {
                 self.with_state(|state| {
                     Cursored::move_by(
                         state,
-                        &flow,
+                        flow,
                         delta.clamp(isize::MIN as i64, isize::MAX as i64) as isize,
                     )
                 });
                 self.reconcile_selection();
             }
             super::TreeOperation::Page(direction) => {
-                // The page distance is the established visible viewport: the
-                // panel-declared content height, or the latest completed
-                // frame's height. No viewport means no page.
-                let height = self
-                    .configured_geometry
-                    .map(|(_, content)| usize::from(content.height))
-                    .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
-                let Some(height) = height else {
-                    return self.transition(
-                        previous,
-                        previous_marks,
-                        TreeConsumed::Unhandled,
-                        external_intent,
-                    );
-                };
-                self.with_state(|state| {
-                    Viewported::page(
-                        state,
-                        &flow,
-                        height,
-                        direction.clamp(isize::MIN as i64, isize::MAX as i64) as isize,
-                        PagingPolicy::visible_viewport(),
-                    )
-                });
-            }
-            super::TreeOperation::First => {
-                self.with_state(|state| Cursored::first(state, &flow));
-                self.reconcile_selection();
-            }
-            super::TreeOperation::Last => {
-                self.with_state(|state| Cursored::last(state, &flow));
-                self.reconcile_selection();
-            }
-            super::TreeOperation::Parent => {
-                self.with_state(|state| Expandable::select_parent(state, &flow));
-                self.reconcile_selection();
-            }
-            super::TreeOperation::Right => {
-                if let Some(target) = self.selected.clone() {
-                    if self.is_expandable(&target) {
-                        if self.expanded.contains(&target) {
-                            if self
-                                .target_to_node
-                                .get(&target)
-                                .and_then(|id| self.arena.get(id))
-                                .is_some_and(|entry| entry.node.parent.is_none())
-                            {
-                                external_intent = Some(TreeExternalIntent::Activate(target));
-                            }
-                        } else {
-                            self.with_state(|state| Expandable::toggle_expanded(state, &target));
-                            self.reconcile_selection();
-                        }
-                    } else {
-                        disposition = TreeConsumed::Unhandled;
-                    }
-                } else {
-                    disposition = TreeConsumed::Unhandled;
+                if !self.apply_page(direction, flow) {
+                    return None;
                 }
+            }
+            operation @ (super::TreeOperation::First
+            | super::TreeOperation::Last
+            | super::TreeOperation::Parent) => self.apply_cursor_operation(operation, flow),
+            super::TreeOperation::Right => {
+                (disposition, external_intent) = self.apply_right();
             }
             super::TreeOperation::ToggleExpansionTarget(target) => {
-                if self.is_expandable(&target) {
-                    self.with_state(|state| Expandable::toggle_expanded(state, &target));
-                    self.reconcile_selection();
-                } else {
-                    disposition = TreeConsumed::Unhandled;
-                }
+                disposition = self.apply_toggle_expansion(target);
             }
             super::TreeOperation::AnchorSelection {
                 target,
@@ -396,50 +353,153 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 }
             }
             super::TreeOperation::Select(target) => {
-                if !self.with_state(|state| Cursored::select_target(state, &flow, &target)) {
+                if !self.with_state(|state| Cursored::select_target(state, flow, &target)) {
                     disposition = TreeConsumed::Unhandled;
                 }
                 self.reconcile_selection();
             }
             super::TreeOperation::PointerToggleMark(point) => {
-                // Legacy parity (the retired `toggle_mark_at`): a modified
-                // click resolves the painted row and moves the cursor to it
-                // before toggling. An `Excluded` row (a cached track) is not
-                // markable, so it still takes the cursor and reports no mark
-                // change rather than leaving the selection behind.
-                let Some(target) = self.resolve_current_point(point).cloned() else {
-                    disposition = TreeConsumed::Unhandled;
-                    return self.transition(previous, previous_marks, disposition, external_intent);
-                };
-                self.selected = Some(target.clone());
-                let _ = self.toggle_mark_target(&target);
-                self.reconcile_selection();
+                if !self.apply_pointer_toggle_mark(point) {
+                    return None;
+                }
             }
             super::TreeOperation::Activate => {
-                if let Some(target) = self.selected.clone() {
-                    external_intent = Some(TreeExternalIntent::Activate(target));
-                } else {
-                    disposition = TreeConsumed::Unhandled;
-                }
+                (disposition, external_intent) = self.apply_activate();
             }
             super::TreeOperation::Context => {
-                if let Some(target) = self.selected.clone() {
-                    let targets = self.action_targets();
-                    external_intent = Some(if targets.is_empty() {
-                        TreeExternalIntent::Context(target)
-                    } else {
-                        TreeExternalIntent::ContextSelection(targets)
-                    });
-                } else {
-                    disposition = TreeConsumed::Unhandled;
-                }
+                (disposition, external_intent) = self.apply_context();
             }
+            operation @ (super::TreeOperation::EditFilter(_)
+            | super::TreeOperation::ClearFilter
+            | super::TreeOperation::ClearMarks) => self.apply_filter_operation(operation),
+        }
+        Some((disposition, external_intent))
+    }
+
+    fn apply_cursor_operation(
+        &mut self,
+        operation: super::TreeOperation<Target>,
+        flow: &RowFlow<Target>,
+    ) {
+        match operation {
+            super::TreeOperation::First => {
+                self.with_state(|state| Cursored::first(state, flow));
+            }
+            super::TreeOperation::Last => {
+                self.with_state(|state| Cursored::last(state, flow));
+            }
+            super::TreeOperation::Parent => {
+                self.with_state(|state| Expandable::select_parent(state, flow));
+            }
+            _ => return,
+        }
+        self.reconcile_selection();
+    }
+
+    fn apply_filter_operation(&mut self, operation: super::TreeOperation<Target>) {
+        match operation {
             super::TreeOperation::EditFilter(query) => self.filter_edit(query),
             super::TreeOperation::ClearFilter => self.clear_filter(),
             super::TreeOperation::ClearMarks => self.marks.clear(),
+            _ => return,
         }
-        self.invalidate_paint();
-        self.transition(previous, previous_marks, disposition, external_intent)
+    }
+
+    fn apply_page(&mut self, direction: i64, flow: &RowFlow<Target>) -> bool {
+        // The page distance is the established visible viewport: the
+        // panel-declared content height, or the latest completed frame's
+        // height. No viewport means no page.
+        let height = self
+            .configured_geometry
+            .map(|(_, content)| usize::from(content.height))
+            .or_else(|| self.last_painted.map(|area| usize::from(area.height)));
+        let Some(height) = height else {
+            return false;
+        };
+        self.with_state(|state| {
+            Viewported::page(
+                state,
+                flow,
+                height,
+                direction.clamp(isize::MIN as i64, isize::MAX as i64) as isize,
+                PagingPolicy::visible_viewport(),
+            )
+        });
+        true
+    }
+
+    fn apply_right(&mut self) -> (TreeConsumed, Option<TreeExternalIntent<Target>>) {
+        let Some(target) = self.selected.clone() else {
+            return (TreeConsumed::Unhandled, None);
+        };
+        if !self.is_expandable(&target) {
+            return (TreeConsumed::Unhandled, None);
+        }
+        if self.expanded.contains(&target) {
+            let is_root = self
+                .target_to_node
+                .get(&target)
+                .and_then(|id| self.arena.get(id))
+                .is_some_and(|entry| entry.node.parent.is_none());
+            return if is_root {
+                (
+                    TreeConsumed::Consumed,
+                    Some(TreeExternalIntent::Activate(target)),
+                )
+            } else {
+                (TreeConsumed::Consumed, None)
+            };
+        }
+        self.with_state(|state| Expandable::toggle_expanded(state, &target));
+        self.reconcile_selection();
+        (TreeConsumed::Consumed, None)
+    }
+
+    fn apply_toggle_expansion(&mut self, target: Target) -> TreeConsumed {
+        if !self.is_expandable(&target) {
+            return TreeConsumed::Unhandled;
+        }
+        self.with_state(|state| Expandable::toggle_expanded(state, &target));
+        self.reconcile_selection();
+        TreeConsumed::Consumed
+    }
+
+    fn apply_pointer_toggle_mark(&mut self, point: ratatui::layout::Position) -> bool {
+        // Legacy parity (the retired `toggle_mark_at`): a modified click
+        // resolves the painted row and moves the cursor to it before toggling.
+        // An `Excluded` row (a cached track) is not markable, so it still takes
+        // the cursor and reports no mark change rather than leaving selection behind.
+        let Some(target) = self.resolve_current_point(point).cloned() else {
+            return false;
+        };
+        self.selected = Some(target.clone());
+        let _ = self.toggle_mark_target(&target);
+        self.reconcile_selection();
+        true
+    }
+
+    fn apply_activate(&self) -> (TreeConsumed, Option<TreeExternalIntent<Target>>) {
+        self.selected
+            .clone()
+            .map_or((TreeConsumed::Unhandled, None), |target| {
+                (
+                    TreeConsumed::Consumed,
+                    Some(TreeExternalIntent::Activate(target)),
+                )
+            })
+    }
+
+    fn apply_context(&self) -> (TreeConsumed, Option<TreeExternalIntent<Target>>) {
+        let Some(target) = self.selected.clone() else {
+            return (TreeConsumed::Unhandled, None);
+        };
+        let targets = self.action_targets();
+        let intent = if targets.is_empty() {
+            TreeExternalIntent::Context(target)
+        } else {
+            TreeExternalIntent::ContextSelection(targets)
+        };
+        (TreeConsumed::Consumed, Some(intent))
     }
 
     fn toggle_mark_target(&mut self, target: &Target) -> bool {
