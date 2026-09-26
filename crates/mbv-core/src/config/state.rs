@@ -316,6 +316,6 @@ impl QueueState {
     /// Service-owned queue state without affecting other Services.
     #[must_use]
     pub fn without_audiobookshelf(&self) -> Self {
-        self.without_items(|item| !item.is_audiobookshelf_any())
+        self.without_items(|item| !item.is_audiobookshelf())
     }
 }

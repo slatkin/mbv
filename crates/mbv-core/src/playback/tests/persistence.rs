@@ -2,7 +2,10 @@ use super::*;
 
 #[test]
 fn audiobookshelf_episode_queue_item_wire_format_round_trips() {
-    let item = QueueItem::Audiobookshelf(audiobookshelf_episode("library-a", "episode-1"));
+    let item = QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
+        "library-a",
+        "episode-1",
+    )));
     let expected = r#"{"kind":"Audiobookshelf","libraryItemId":"library-a","episodeId":"episode-1","title":"ABS episode","show_title":"Show","author":"Author","description":null,"duration_ticks":1200000000,"position_ticks":300000000,"played":false,"pub_date_secs":1700000000,"is_finished":false,"cover_path":"/covers/show.jpg"}"#;
     let json = serde_json::to_string(&item).unwrap();
     let restored: QueueItem = serde_json::from_str(expected).unwrap();
@@ -14,13 +17,18 @@ fn audiobookshelf_episode_queue_item_wire_format_round_trips() {
 
 #[test]
 fn audiobookshelf_book_queue_item_wire_format_round_trips() {
-    let item = QueueItem::AudiobookshelfBook(audiobookshelf_book("library-book-1"));
+    let item = QueueItem::Audiobookshelf(AudiobookshelfItem::Book(audiobookshelf_book(
+        "library-book-1",
+    )));
     let expected = r#"{"kind":"AudiobookshelfBook","libraryItemId":"library-book-1","title":"ABS book","author":"Author","duration_ticks":36000000000,"position_ticks":9000000000,"played":false,"is_finished":false,"cover_path":"/covers/book.jpg"}"#;
     let json = serde_json::to_string(&item).unwrap();
     let restored: QueueItem = serde_json::from_str(expected).unwrap();
 
     assert_eq!(json, expected);
-    assert!(matches!(restored, QueueItem::AudiobookshelfBook(_)));
+    assert!(matches!(
+        restored,
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_))
+    ));
     assert_eq!(serde_json::to_string(&restored).unwrap(), expected);
 }
 
@@ -75,7 +83,7 @@ fn queue_item_deserializes(
         (QueueItem::Emby(_), true) | (QueueItem::Feed(_), false) => {}
         (QueueItem::Emby(_), false) => panic!("expected Feed variant"),
         (QueueItem::Feed(_), true) => panic!("expected Emby variant"),
-        (QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_), _) => {
+        (QueueItem::Audiobookshelf(_), _) => {
             panic!("unexpected queue item variant")
         }
     }
@@ -114,14 +122,14 @@ fn queue_state_round_trip_preserves_item_kind() {
     match &restored[0] {
         QueueItem::Emby(e) => assert_eq!(e.id, "emby-1"),
         QueueItem::Feed(_) => panic!("expected Emby variant"),
-        QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {
+        QueueItem::Audiobookshelf(_) => {
             panic!("expected Emby variant")
         }
     }
 
     // Feed kind preserved
     match &restored[1] {
-        QueueItem::Emby(_) | QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {
+        QueueItem::Emby(_) | QueueItem::Audiobookshelf(_) => {
             panic!("expected Feed variant")
         }
         QueueItem::Feed(f) => {
@@ -137,7 +145,10 @@ fn queue_state_round_trip_preserves_item_kind() {
 
 #[test]
 fn audiobookshelf_identity_and_mixed_queue_round_trip_are_typed() {
-    let first = QueueItem::Audiobookshelf(audiobookshelf_episode("library-a", "episode-1"));
+    let first = QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
+        "library-a",
+        "episode-1",
+    )));
     let second = first.clone();
     assert_eq!(first.content_id(), second.content_id());
 
@@ -185,12 +196,11 @@ fn refresh_preserves_inactive_audiobookshelf_book_slot() {
         ],
         Some(0),
     );
-    let episode_slot = queue.append(QueueItem::Audiobookshelf(audiobookshelf_episode(
-        "library-a",
-        "episode-1",
+    let episode_slot = queue.append(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(
+        audiobookshelf_episode("library-a", "episode-1"),
     )));
-    let book_slot = queue.append(QueueItem::AudiobookshelfBook(audiobookshelf_book(
-        "library-book-1",
+    let book_slot = queue.append(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(
+        audiobookshelf_book("library-book-1"),
     )));
     let ids = slot_ids(&queue);
 
@@ -204,7 +214,8 @@ fn refresh_preserves_inactive_audiobookshelf_book_slot() {
     ));
     assert!(matches!(
         queue.slot(book_slot).unwrap().item,
-        QueueItem::AudiobookshelfBook(ref book) if book.position_ticks == 900 * TICKS_PER_SECOND
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(ref book))
+            if book.position_ticks == 900 * TICKS_PER_SECOND
     ));
     assert_eq!(
         queue
@@ -218,7 +229,10 @@ fn refresh_preserves_inactive_audiobookshelf_book_slot() {
 
 #[test]
 fn audiobookshelf_admission_and_purge_keep_other_kinds() {
-    let abs = QueueItem::Audiobookshelf(audiobookshelf_episode("library-a", "episode-1"));
+    let abs = QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
+        "library-a",
+        "episode-1",
+    )));
     assert!(!abs.admissible_for_owner(false, |_| true));
     assert!(!abs.admissible_for_owner(true, |_| false));
     assert!(QueueItem::Feed(feed("feed-1")).admissible_for_owner(true, |_| false));
@@ -228,7 +242,9 @@ fn audiobookshelf_admission_and_purge_keep_other_kinds() {
         items: vec![
             QueueItem::Emby(Box::new(item("emby-1"))),
             abs,
-            QueueItem::AudiobookshelfBook(audiobookshelf_book("library-book-1")),
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(audiobookshelf_book(
+                "library-book-1",
+            ))),
             QueueItem::Feed(feed("feed-1")),
         ],
         cursor: 1,
@@ -239,10 +255,7 @@ fn audiobookshelf_admission_and_purge_keep_other_kinds() {
     };
     let filtered = state.without_audiobookshelf();
     assert_eq!(filtered.items.len(), 2);
-    assert!(filtered
-        .items
-        .iter()
-        .all(|item| !item.is_audiobookshelf_any()));
+    assert!(filtered.items.iter().all(|item| !item.is_audiobookshelf()));
     assert!(filtered.items.iter().any(QueueItem::is_emby));
     assert!(filtered.items.iter().any(QueueItem::is_feed));
 }

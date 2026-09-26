@@ -209,7 +209,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
         if !finalize_active_audiobookshelf(ctx.player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
-        let items = purge_queue(queue, QueueItem::is_audiobookshelf_any);
+        let items = purge_queue(queue, QueueItem::is_audiobookshelf);
         let active_index = queue.active_index();
         *source = if items.is_empty() {
             QueueSource::Unknown
@@ -249,7 +249,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
         if !finalize_active_audiobookshelf(ctx.player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
-        let items = purge_queue(queue, QueueItem::is_audiobookshelf_any);
+        let items = purge_queue(queue, QueueItem::is_audiobookshelf);
         let active_index = queue.active_index();
         *source = if items.is_empty() {
             QueueSource::Unknown
@@ -294,7 +294,7 @@ fn same_audiobookshelf_server(
 fn finalize_active_audiobookshelf(player: &Player, queue: &PlaybackQueue) -> bool {
     let active_is_audiobookshelf = queue
         .active_slot()
-        .is_some_and(|slot| slot.item.is_audiobookshelf_any());
+        .is_some_and(|slot| slot.item.is_audiobookshelf());
     if !active_is_audiobookshelf {
         return true;
     }

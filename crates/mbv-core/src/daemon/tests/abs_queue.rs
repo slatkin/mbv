@@ -5,20 +5,22 @@
 use super::*;
 
 pub fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
-    QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
-        library_item_id: library_item_id.into(),
-        episode_id: episode_id.into(),
-        title: "Test Episode".into(),
-        show_title: None,
-        author: None,
-        description: None,
-        duration_ticks: None,
-        position_ticks: 0,
-        played: false,
-        pub_date_secs: None,
-        is_finished: false,
-        cover_path: None,
-    })
+    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(
+        AudiobookshelfQueueItem {
+            library_item_id: library_item_id.into(),
+            episode_id: episode_id.into(),
+            title: "Test Episode".into(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        },
+    ))
 }
 
 fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {

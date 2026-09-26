@@ -1,6 +1,6 @@
 use super::{serialize_ctrl_event, ClientRegistry, DaemonPlayerOwner, SharedQueueState};
 use crate::ctrl::CtrlEvent;
-use crate::playback_queue::{PlaybackQueue, QueueItem};
+use crate::playback_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem};
 use crate::player::Player;
 
 /// Builds a `QueueState` from the daemon's canonical queue and player status.
@@ -95,8 +95,8 @@ pub(crate) fn unified_queue_state_for_peer(
         .slots()
         .iter()
         .filter(|s| match &s.item {
-            QueueItem::Audiobookshelf(_) => supports_abs_queue,
-            QueueItem::AudiobookshelfBook(_) => supports_abs_book_queue,
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => supports_abs_queue,
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => supports_abs_book_queue,
             QueueItem::Emby(_) | QueueItem::Feed(_) => true,
         })
         .map(|s| crate::ctrl::UnifiedQueueSlot {
@@ -305,9 +305,20 @@ pub(crate) fn abs_queue_transport_rejection<'a>(
     supports_abs_queue: bool,
     supports_abs_book_queue: bool,
 ) -> Option<String> {
-    if !supports_abs_queue && items.clone().into_iter().any(QueueItem::is_audiobookshelf) {
+    if !supports_abs_queue
+        && items.clone().into_iter().any(|item| {
+            matches!(
+                item,
+                QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_))
+            )
+        })
+    {
         Some("peer did not negotiate Audiobookshelf queue transport".to_string())
-    } else if !supports_abs_book_queue && items.into_iter().any(QueueItem::is_audiobookshelf_book) {
+    } else if !supports_abs_book_queue
+        && items
+            .into_iter()
+            .any(|item| matches!(item, QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_))))
+    {
         Some("peer did not negotiate Audiobookshelf book queue transport".to_string())
     } else {
         None

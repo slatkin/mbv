@@ -1,16 +1,18 @@
 use super::*;
 
 pub fn book_qi(library_item_id: &str) -> QueueItem {
-    QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
-        library_item_id: library_item_id.into(),
-        title: "Test Book".into(),
-        author: None,
-        duration_ticks: None,
-        position_ticks: 0,
-        played: false,
-        is_finished: false,
-        cover_path: None,
-    })
+    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Book(
+        AudiobookshelfBookQueueItem {
+            library_item_id: library_item_id.into(),
+            title: "Test Book".into(),
+            author: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            is_finished: false,
+            cover_path: None,
+        },
+    ))
 }
 
 // A book progress update must never match an episode-shaped queue slot, even

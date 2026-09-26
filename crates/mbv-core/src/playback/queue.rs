@@ -73,13 +73,9 @@ impl SlotProgress {
                 position_ticks: entry.position_ticks,
                 played: entry.played,
             },
-            QueueItem::Audiobookshelf(ep) => Self {
-                position_ticks: ep.position_ticks,
-                played: ep.played || ep.is_finished,
-            },
-            QueueItem::AudiobookshelfBook(book) => Self {
-                position_ticks: book.position_ticks,
-                played: book.played || book.is_finished,
+            QueueItem::Audiobookshelf(item) => Self {
+                position_ticks: item.playback_position_ticks(),
+                played: item.played(),
             },
         }
     }
@@ -114,17 +110,10 @@ impl ProgressState {
                 },
                 pending_sync: None,
             },
-            QueueItem::Audiobookshelf(ep) => Self {
+            QueueItem::Audiobookshelf(item) => Self {
                 local: SlotProgress {
-                    position_ticks: ep.position_ticks,
-                    played: ep.played || ep.is_finished,
-                },
-                pending_sync: None,
-            },
-            QueueItem::AudiobookshelfBook(book) => Self {
-                local: SlotProgress {
-                    position_ticks: book.position_ticks,
-                    played: book.played || book.is_finished,
+                    position_ticks: item.playback_position_ticks(),
+                    played: item.played(),
                 },
                 pending_sync: None,
             },
@@ -157,12 +146,12 @@ pub(crate) fn apply_progress_to_queue_item(
             entry.position_ticks = position_ticks;
             entry.played = played;
         }
-        QueueItem::Audiobookshelf(ep) => {
-            ep.position_ticks = position_ticks;
-            ep.played = played;
-            ep.is_finished = played;
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(episode)) => {
+            episode.position_ticks = position_ticks;
+            episode.played = played;
+            episode.is_finished = played;
         }
-        QueueItem::AudiobookshelfBook(book) => {
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
             book.position_ticks = position_ticks;
             book.played = played;
             book.is_finished = played;
@@ -348,7 +337,7 @@ impl PlaybackQueue {
     /// Returns `true` when the queue contains any Audiobookshelf slots.
     #[must_use]
     pub fn has_audiobookshelf_entries(&self) -> bool {
-        self.slots.iter().any(|s| s.item.is_audiobookshelf_any())
+        self.slots.iter().any(|s| s.item.is_audiobookshelf())
     }
 
     /// Returns `true` when the queue contains any non-Emby slots (Feed or
@@ -609,7 +598,7 @@ impl PlaybackQueue {
             // Feed and Audiobookshelf slots (both episode and book shapes)
             // have no Emby server counterpart; keep them as-is
             // (group_fetched_items_by_item_id is Emby-only).
-            if matches!(slot.item, QueueItem::Feed(_)) || slot.item.is_audiobookshelf_any() {
+            if matches!(slot.item, QueueItem::Feed(_)) || slot.item.is_audiobookshelf() {
                 if should_protect_missing_slot(&slot, active_slot_id) {
                     result.protected_slots.push(slot.slot_id);
                 }

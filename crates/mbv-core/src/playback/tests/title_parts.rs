@@ -49,12 +49,16 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
             "Audio",
             "Track Name",
         ))),
-        "abs_podcast_episode" => QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
-            title: "Episode Five".into(),
-            show_title: Some("Show Title".into()),
-            ..audiobookshelf_episode("lib1", "ep1")
-        }),
-        "abs_book" => QueueItem::AudiobookshelfBook(audiobookshelf_book("lib1")),
+        "abs_podcast_episode" => {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
+                title: "Episode Five".into(),
+                show_title: Some("Show Title".into()),
+                ..audiobookshelf_episode("lib1", "ep1")
+            }))
+        }
+        "abs_book" => {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(audiobookshelf_book("lib1")))
+        }
         "feed_entry" => QueueItem::Feed(FeedEntry {
             guid: "g1".into(),
             title: "Entry Title".into(),
@@ -123,7 +127,7 @@ fn queue_item_playback_title_parts(
                 show_title: None,
                 ..audiobookshelf_episode("lib1", "ep1")
             };
-            QueueItem::Audiobookshelf(ep)
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(ep))
         }
         "feed_entry_without_feed_id" => QueueItem::Feed(FeedEntry {
             guid: "g1".into(),

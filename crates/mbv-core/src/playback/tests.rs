@@ -749,6 +749,14 @@ fn is_music_covers_emby_music_types(
 #[test]
 fn is_music_excludes_feeds_and_audiobookshelf_however_audio_they_are() {
     assert!(!QueueItem::Feed(feed("f1")).is_music());
-    assert!(!QueueItem::Audiobookshelf(audiobookshelf_episode("lib1", "ep1")).is_music());
-    assert!(!QueueItem::AudiobookshelfBook(audiobookshelf_book("lib1")).is_music());
+    assert!(
+        !QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
+            "lib1", "ep1"
+        )))
+        .is_music()
+    );
+    assert!(
+        !QueueItem::Audiobookshelf(AudiobookshelfItem::Book(audiobookshelf_book("lib1")))
+            .is_music()
+    );
 }
