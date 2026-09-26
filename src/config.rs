@@ -210,6 +210,7 @@ pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
 /// present -- without reading its bytes. Used to build `mpris:artUrl`
 /// `file://` URIs (see `src/mpris.rs::resolve_art_url`), which need the
 /// path itself, not the decoded image data.
+#[cfg(not(test))]
 pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
     let path = image_disk_cache_dir().join(safe_cache_filename(key));
     if !path.is_file() {
@@ -220,10 +221,12 @@ pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
 }
 
 /// Cache-key suffix for a card's primary image (see `src/app/render/card.rs`).
+#[cfg(not(test))]
 pub const IMAGE_CACHE_SUFFIX_CARD_PRIMARY: &str = "card";
 
 /// Cache-key suffix for an album-level card
 /// (see `src/app/render/card.rs`).
+#[cfg(not(test))]
 pub const IMAGE_CACHE_SUFFIX_ALBUM_CARD: &str = "album_card";
 
 pub fn write_image_disk_cache(key: &str, bytes: &[u8]) {
