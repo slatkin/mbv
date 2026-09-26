@@ -1,6 +1,5 @@
 //! Shared builders for the key-policy tests: default and rebound keybinds, a Both-panels snapshot, and the normalizing chord constructor.
 use super::*;
-use crate::app::input::router::RouterSnapshot;
 use mbv_core::keybinds::{Chord, KeySection, SectionBindings};
 
 pub(super) fn keybinds() -> Keybinds {

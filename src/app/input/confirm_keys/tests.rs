@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::state::types::playback::{ReplacementExecutor, RoutedReplacementPrep};
 use crate::app::tests::*;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyModifiers;
 use mbv_core::api::EmbyItem;
 
 /// Design D6: one `PlayItems` payload as the grouped-track resolver produces

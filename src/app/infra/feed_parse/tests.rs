@@ -1,8 +1,4 @@
-use super::{
-    duration_secs, extract_atom_enclosure, extract_atom_link, extract_enclosure, extract_tag,
-    infer_feed_kind_from_mime, normalize_feed_url, parse_atom_entries, parse_pub_date_secs,
-    parse_rss_entries,
-};
+use super::{duration_secs, parse_atom_entries, parse_rss_entries};
 use mbv_core::config::FeedKind;
 
 #[test]

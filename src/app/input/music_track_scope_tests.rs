@@ -1,5 +1,4 @@
 use super::music_track_test_support::*;
-use super::*;
 use crate::app::components::library_panel::owner::LibraryContentOwner;
 use crate::app::components::msg::Msg;
 use crate::app::components::{ComponentId, ShellRequest};

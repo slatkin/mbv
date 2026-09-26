@@ -431,13 +431,9 @@ mod protocol;
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        composite_landscape_logo, cover_fill_hero_box, series_image_cache_key,
-        NAV_IMAGE_FETCH_IDLE_DELAY,
-    };
+    use super::{composite_landscape_logo, series_image_cache_key};
     use crate::app::tests::make_app_stub;
-    use image::GenericImageView;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
 
     /// A 4:3 source filled into a 16:9 box is cropped top and bottom (design
     /// D5: the artwork fills its box; the excess is cropped, centred). The
