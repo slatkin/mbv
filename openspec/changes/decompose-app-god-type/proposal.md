@@ -28,7 +28,8 @@ None. This is a pure internal refactor (`skip_specs: true`).
 
 ## Impact
 
-- `src/app/state/app_struct.rs`, `src/app/state/construct.rs`, `src/app/state/app_init.rs`: field removal, sub-struct construction.
+- `src/app/state/app_struct.rs`, `src/app/state/construct.rs`, `src/app/state/construct/remote.rs`, `src/app/state/app_init.rs`, `src/app/tests.rs`: field removal, sub-struct construction; channel pairs move from the three `AppInit` construction sites into `RuntimeChannels::new()`.
+- The two #804 suppressions that name this change as their blocker: `too_many_lines` on `App::build` (removed) and `struct_excessive_bools` on `App` (count updated, or removed).
 - Every file that reads the moved fields, tests included: compile-forced path edits (`self.card_image_states` → `self.images.card_image_states`, and so on).
 - `src/app/dispatch/session/player_event.rs`, `src/app/shell/run/drains.rs`, `src/app/dispatch/library/event.rs` and `event/*.rs`: dispatch reshaping.
 - Shell `Model` is out of scope (see design.md, Non-Goals).
