@@ -128,6 +128,11 @@ pub struct KeybindAction {
 impl KeybindAction {
     /// The declared default chords, parsed. Declaration strings must parse;
     /// the unit tests pin this.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a `default_chords` declaration fails to parse, i.e. if the
+    /// "declared default chord must parse" invariant is violated.
     #[must_use]
     pub fn parsed_default_chords(&self) -> Vec<Chord> {
         self.default_chords
