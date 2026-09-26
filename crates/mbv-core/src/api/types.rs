@@ -113,9 +113,7 @@ pub fn html_to_text(html: &str) -> String {
                 result.push('\n');
             } else if name.trim() == "a" {
                 if let Some(href) = pending_link.take() {
-                    if !result.is_empty() && !result.ends_with(' ') {
-                        result.push(' ');
-                    }
+                    result.extend((!result.is_empty() && !result.ends_with(' ')).then_some(' '));
                     result.push('(');
                     result.push_str(&href);
                     result.push(')');

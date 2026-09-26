@@ -459,6 +459,16 @@ fn get_str(section: &toml::Value, key: &str) -> String {
         .to_string()
 }
 
+fn parse_prefix_chord<'a>(
+    chord: &'a toml::Value,
+    name: &str,
+    action_id: &str,
+) -> Result<&'a str, String> {
+    chord
+        .as_str()
+        .ok_or_else(|| format!("keys.{name}.prefix.{action_id} must be a string chord"))
+}
+
 /// Parse the `[keys]` table into the raw section-outer shape (design D3):
 /// `prefix` is a string chord, each other entry a per-section table whose
 /// string keys are router-scope overrides and whose `prefix` sub-table
@@ -489,9 +499,7 @@ fn parse_raw_keybinds(keys: &toml::Value) -> Result<crate::keybinds::RawKeybinds
                     .as_table()
                     .ok_or_else(|| format!("keys.{name}.prefix must be a table"))?;
                 for (action_id, chord) in prefix_table {
-                    let chord = chord.as_str().ok_or_else(|| {
-                        format!("keys.{name}.prefix.{action_id} must be a string chord")
-                    })?;
+                    let chord = parse_prefix_chord(chord, name, action_id)?;
                     section.prefix.push((action_id.clone(), chord.to_string()));
                 }
                 continue;

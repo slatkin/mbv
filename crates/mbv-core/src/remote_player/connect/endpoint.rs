@@ -82,14 +82,10 @@ impl DaemonEndpoint {
                 loop {
                     match UnixStream::connect(&path) {
                         Ok(stream) => return Ok(SocketStream::Unix(stream)),
-                        Err(e) => {
-                            if start.elapsed() >= LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT {
-                                return Err(format!(
-                                    "cannot connect to daemon endpoint {self}: {e}"
-                                ));
-                            }
-                            std::thread::sleep(LOCAL_DAEMON_CONNECT_RETRY_INTERVAL);
+                        Err(e) if start.elapsed() >= LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT => {
+                            return Err(format!("cannot connect to daemon endpoint {self}: {e}"));
                         }
+                        Err(_) => std::thread::sleep(LOCAL_DAEMON_CONNECT_RETRY_INTERVAL),
                     }
                 }
             }

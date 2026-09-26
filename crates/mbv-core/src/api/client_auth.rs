@@ -1,6 +1,12 @@
 use super::*;
 use serde_json::Value;
 
+fn user_matches_username(user: &Value, username: &str) -> bool {
+    user["Name"]
+        .as_str()
+        .is_some_and(|name| name.eq_ignore_ascii_case(username))
+}
+
 fn emby_agent(
     connect_timeout: std::time::Duration,
     total_timeout: std::time::Duration,
@@ -199,11 +205,9 @@ impl EmbyClient {
                     .then(|| users.first())
                     .flatten()
                     .or_else(|| {
-                        users.iter().find(|user| {
-                            user["Name"].as_str().is_some_and(|name| {
-                                name.eq_ignore_ascii_case(&clone.config.username)
-                            })
-                        })
+                        users
+                            .iter()
+                            .find(|user| user_matches_username(user, &clone.config.username))
                     })
                     .ok_or_else(|| "no matching Emby user".to_string())?;
                 clone.user_id = user["Id"].as_str().unwrap_or_default().to_string();

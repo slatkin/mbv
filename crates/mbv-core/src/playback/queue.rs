@@ -660,14 +660,13 @@ impl PlaybackQueue {
         if let Some(pending) = slot.progress_state.pending_sync {
             if pending.matches_server_confirmation(&fetched_item) {
                 slot.progress_state.pending_sync = None;
+                let local_progress = SlotProgress::from_item(&fetched_item);
                 slot.item = QueueItem::Emby(Box::new(fetched_item));
                 if is_active {
                     slot.progress_state.apply_to_item(&mut slot.item);
                     result.protected_slots.push(slot.slot_id);
                 } else {
-                    if let QueueItem::Emby(ref emby) = slot.item {
-                        slot.progress_state.local = SlotProgress::from_item(emby);
-                    }
+                    slot.progress_state.local = local_progress;
                 }
                 result.pending_confirmed_slots.push(slot.slot_id);
                 result.updated_slots.push(slot.slot_id);
