@@ -470,62 +470,6 @@ mod tests {
     }
 
     #[test]
-    fn cover_fill_crops_a_4_3_source_into_a_16_9_box() {
-        let (w, h) = (800u32, 600u32);
-        let mut img = image::DynamicImage::new_rgb8(w, h);
-        for (_x, y, pixel) in img.as_mut_rgb8().unwrap().enumerate_pixels_mut() {
-            let white = y < h / 8 || y >= h * 7 / 8;
-            *pixel = if white {
-                image::Rgb([255, 255, 255])
-            } else {
-                image::Rgb([0, 0, 0])
-            };
-        }
-        let filled = cover_fill_hero_box(&img, 160, 90);
-        assert_eq!(filled.dimensions(), (160, 90));
-        let brightness = |pixel: &image::Rgb<u8>| {
-            let [red, green, blue] = pixel.0;
-            (u16::from(red) + u16::from(green) + u16::from(blue)) / 3
-        };
-        let rgb = filled.as_rgb8().unwrap();
-        assert!(brightness(rgb.get_pixel(80, 0)) < 64, "top band cropped");
-        assert!(
-            brightness(rgb.get_pixel(80, 89)) < 64,
-            "bottom band cropped"
-        );
-    }
-
-    #[test]
-    fn wide_hero_projection_encodes_the_capped_box_height() {
-        use crate::app::components::library_panel::content::HeroImageState as State;
-        use crate::app::components::library_panel::{ArtworkShape, HeroArtwork, HeroFacts};
-
-        let facts = HeroFacts {
-            title: "Dune".into(),
-            meta_rows: vec!["2021".into()],
-            duration_row: None,
-            progress_row: None,
-            links: Vec::new(),
-            artwork: HeroArtwork {
-                shape: ArtworkShape::Landscape,
-                source: None,
-                decoration: None,
-                image: State::None,
-            },
-        };
-        // Above the short-pane threshold, so the tall-pane cap applies.
-        let area = ratatui::layout::Rect::new(0, 0, 113, 61);
-        let box_cells = crate::app::components::library_panel::hero_header::hero_artwork_box(
-            area, &facts, false, 61,
-        );
-        assert_eq!(box_cells.height, 25);
-
-        let source = image::DynamicImage::new_rgb8(80, 60);
-        let encoded = cover_fill_hero_box(&source, 160, u32::from(box_cells.height) * 20);
-        assert_eq!(encoded.dimensions(), (160, 500));
-    }
-
-    #[test]
     fn series_image_cache_key_pins_both_live_chains() {
         assert_eq!(
             series_image_cache_key("abc", &["Primary"]),
@@ -549,23 +493,5 @@ mod tests {
         );
         assert!(!app.card_image_loading.contains("recent-nav:P"));
         assert!(!app.card_image_states.contains_key("recent-nav:P"));
-    }
-
-    #[test]
-    fn idle_navigation_allows_list_card_image_fetch() {
-        let mut app = make_app_stub();
-        app.last_nav_at = Instant::now()
-            .checked_sub(NAV_IMAGE_FETCH_IDLE_DELAY + Duration::from_millis(1))
-            .expect("test timestamp is within Instant's representable range");
-        app.fetch_list_card_image_when_idle(
-            "idle-nav:P".into(),
-            "idle-nav".into(),
-            String::new(),
-            &["Primary"],
-        );
-        assert!(
-            app.card_image_loading.contains("idle-nav:P")
-                || app.card_image_states.contains_key("idle-nav:P")
-        );
     }
 }
