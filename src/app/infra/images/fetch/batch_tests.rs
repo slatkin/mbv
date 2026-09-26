@@ -24,9 +24,9 @@ fn album(id: &str, path: &str) -> mbv_core::api::EmbyItem {
 }
 
 #[rstest]
-#[case("majority_win", &["A", "B", "A", "A", "B"], Some("A"))]
-#[case("first_seen_wins_tie", &["B", "A", "A", "B"], Some("B"))]
-fn vote_cases(#[case] _name: &str, #[case] album_artists: &[&str], #[case] expected: Option<&str>) {
+#[case::majority_win(&["A", "B", "A", "A", "B"], Some("A"))]
+#[case::first_seen_wins_tie(&["B", "A", "A", "B"], Some("B"))]
+fn vote_cases(#[case] album_artists: &[&str], #[case] expected: Option<&str>) {
     let tracks: Vec<serde_json::Value> = album_artists
         .iter()
         .map(|artist| track("alb-1", "/m/a/1.flac", Some(artist), &["Fallback"]))

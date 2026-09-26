@@ -397,22 +397,6 @@ impl MusicContent {
         }
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
-        let target = self.track_list.selected_target()?;
-        if let Some(detail) = self.current_artist_detail() {
-            return detail
-                .track_groups
-                .iter()
-                .flat_map(|group| group.tracks.iter())
-                .position(|track| track.id == *target);
-        }
-        self.context
-            .album_tracks
-            .as_deref()?
-            .iter()
-            .position(|track| track.id == *target)
-    }
     pub(in crate::app) fn hero_data(&mut self) -> Option<HeroContentData> {
         self.resolved_hero_data()
     }

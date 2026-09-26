@@ -30,8 +30,8 @@ impl Component for MouseProbe {
 }
 
 impl AppComponent<Msg, UserEvent> for MouseProbe {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
             Event::Mouse(_) => Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)),
             _ => None,
         }

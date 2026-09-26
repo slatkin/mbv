@@ -613,7 +613,7 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(LibraryPanel::test_list_rect)
         .expect("the Library panel must have painted a list slot");
     assert!(
         library_point.width > 0 && library_point.height > 0,

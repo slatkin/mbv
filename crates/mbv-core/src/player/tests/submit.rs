@@ -247,10 +247,10 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: crate::api::EmbyImageTags::default(),
     })));
     let feed_slot = queue.append(QueueItem::Feed(make_feed_entry("podcast-ep", "Podcast Ep")));
-    let _other = queue.append(QueueItem::Feed(make_feed_entry("other-ep", "Other Ep")));
+    let other = queue.append(QueueItem::Feed(make_feed_entry("other-ep", "Other Ep")));
     assert_eq!(queue.len(), 3);
 
     // Select the existing Feed slot — this is the correct operation for
@@ -265,7 +265,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
     assert_eq!(queue.len(), 3, "queue length must be preserved");
     assert_eq!(
         queue.slots().iter().map(|s| s.slot_id).collect::<Vec<_>>(),
-        vec![emby_slot, feed_slot, _other],
+        vec![emby_slot, feed_slot, other],
         "slot IDs and order must be preserved"
     );
     assert_eq!(

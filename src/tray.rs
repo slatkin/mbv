@@ -55,11 +55,6 @@ impl MbvTray {
     fn next(&self) {
         self.send_command(PlayerCommand::Next);
     }
-
-    #[cfg(test)]
-    fn previous(&self) {
-        self.send_command(PlayerCommand::Previous);
-    }
 }
 
 impl ksni::Tray for MbvTray {

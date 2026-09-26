@@ -311,13 +311,11 @@ impl LibraryPanel {
     pub(in crate::app) fn test_painted_layout(&self) -> crate::app::layout::PaintedRowGeometry {
         if let Some(wide) = self.wide_geometry.as_ref() {
             return crate::app::layout::PaintedRowGeometry {
-                left_area: wide.list_area,
                 selected_item_rect: wide.selected,
             };
         }
         if let Some(narrow) = self.narrow_geometry.as_ref() {
             return crate::app::layout::PaintedRowGeometry {
-                left_area: narrow.list_area,
                 selected_item_rect: narrow.selected,
             };
         }

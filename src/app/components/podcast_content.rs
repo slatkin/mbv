@@ -7,9 +7,6 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
-#[cfg(test)]
-use tuirealm::event::{Key, KeyEvent, KeyModifiers};
-
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_core::config::{

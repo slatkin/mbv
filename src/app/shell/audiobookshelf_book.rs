@@ -110,15 +110,4 @@ impl Model {
         }
         self.push_audiobookshelf_book_content();
     }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_abs_book_owner(&self) -> &BookContent {
-        self.abs_book_owner().expect("book owner")
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_abs_book_owner_mut(&mut self) -> &mut BookContent {
-        let key = self.abs_book_key().expect("book key");
-        self.library_owner_mut(&key).expect("book owner")
-    }
 }

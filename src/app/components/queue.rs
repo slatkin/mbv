@@ -108,25 +108,6 @@ impl QueueComponent {
         }
     }
 
-    /// Test-only: drive framework focus the way `Component::attr` does.
-    #[cfg(test)]
-    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
-        self.focused = focused;
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn set_content(
-        &mut self,
-        slots: &[QueueSlot],
-        cursor: &QueueCursorUpdate,
-        scope: QueueScope,
-        playback: PlaybackState,
-    ) {
-        self.set_rows(slots, playback);
-        self.set_cursor(cursor);
-        self.set_scope(scope);
-    }
-
     /// Replace projected rows while preserving the canonical list's selection.
     pub(in crate::app) fn set_rows(&mut self, slots: &[QueueSlot], playback: PlaybackState) {
         self.carrier
@@ -258,26 +239,6 @@ impl QueueComponent {
             .clamp_viewport(self.content_area.height.max(1) as usize);
     }
 
-    #[cfg(test)]
-    pub(crate) fn test_scope_pill_areas(&self) -> (Option<Rect>, Option<Rect>) {
-        (self.scope_local, self.scope_remote)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_selected_target(&self) -> Option<QueueSlotId> {
-        self.carrier.selected_target().copied()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_toggle_selection(&mut self, target: QueueSlotId) {
-        self.carrier.toggle_selection(&target);
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_multi_selection(&self) -> &[QueueSlotId] {
-        self.carrier.multi_selection()
-    }
-
     pub(in crate::app) fn selection_summary(
         &self,
     ) -> crate::app::components::media_list::SelectionSummary {
@@ -287,11 +248,6 @@ impl QueueComponent {
     #[cfg(test)]
     pub(crate) fn test_cursor(&self) -> usize {
         self.carrier.cursor()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_scroll(&self) -> usize {
-        self.carrier.scroll()
     }
 }
 

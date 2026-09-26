@@ -41,7 +41,7 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
         MediaSourceId::new(""),
         EmbySessionId::new(""),
         true, // is_audio
-        status.clone(),
+        Arc::clone(&status),
     );
     let (event_tx, _event_rx) = mpsc::channel();
     let session = PlaybackRun::new_from_slot_items(
@@ -66,7 +66,7 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
                 audio_device: None,
             },
             startup_pause_for_pipe: false,
-            status: status.clone(),
+            status: Arc::clone(&status),
             event_tx,
             subtitle_prefs: Arc::new(Mutex::new(SubtitlePrefs::default())),
             shutdown_report_timeout: Arc::new(Mutex::new(None)),
