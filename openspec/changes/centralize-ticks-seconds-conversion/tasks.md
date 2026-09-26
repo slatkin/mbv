@@ -17,7 +17,7 @@
 
 ## 4. mpris µs→seconds
 
-- [ ] 4.1 In `src/mpris.rs`, add file-local `us_to_seconds(i64) -> f64` carrying one expect with the 2^53-µs domain doc; migrate `mpris.rs:309,338`; delete their expects. Verify: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv`.
+- [x] 4.1 In `src/mpris.rs`, add file-local `us_to_seconds(i64) -> f64` carrying one expect with the 2^53-µs domain doc; migrate `mpris.rs:309,338`; delete their expects. Verify: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv`.
 
 ## 5. Family D — genuine per-site fixes (no expects added)
 
