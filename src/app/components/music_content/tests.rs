@@ -8,24 +8,6 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use tuirealm::component::Component;
 
-fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
-    let mut album = album;
-    album.overview = overview.into();
-    MusicWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![album.clone()], 0),
-        Some(album),
-        "Artist".into(),
-        vec![make_item("Artist", "MusicArtist")],
-        0,
-        vec![("Artist".into(), "2024".into(), "Album".into())],
-        vec![crate::app::state::music_grouping::ArtistKey::Fallback(
-            "Artist".into(),
-        )],
-        vec![0],
-        None,
-    )
-}
-
 #[test]
 fn filter_escape_closes_search_and_tree_navigation_returns_selection() {
     let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);

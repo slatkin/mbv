@@ -460,37 +460,6 @@ mod tests {
         );
     }
 
-    fn badge_component(
-        use_nerd_fonts: bool,
-        emby_state: ServiceState,
-        cast_attachment: Option<&str>,
-    ) -> SessionsComponent {
-        use mbv_core::cast::discovery::CastReceiver;
-
-        let mut emby = crate::app::tests::make_session("Emby Box", "Emby");
-        emby.id = "emby-1".into();
-        let targets = vec![
-            PanelTarget::Emby(Box::new(emby)),
-            PanelTarget::Cast(CastReceiver {
-                id: "cast-1".into(),
-                friendly_name: "Living Room".into(),
-                host: "192.168.0.5".into(),
-                port: 8009,
-            }),
-        ];
-        let mut component = SessionsComponent::new();
-        component.set_display_context(use_nerd_fonts, emby_state);
-        component.set_content(
-            &targets,
-            false,
-            None,
-            cast_attachment,
-            false,
-            Some(Rect::new(0, 0, 50, 16)),
-        );
-        component
-    }
-
     fn painted_component() -> SessionsComponent {
         use crate::app::tests::make_session;
         let mut first = make_session("a", "mbv");
@@ -524,12 +493,6 @@ mod tests {
             row,
             modifiers: KeyModifiers::NONE,
         }
-    }
-
-    fn cell_x(buffer: &ratatui::buffer::Buffer, row: u16, symbol: &str) -> u16 {
-        (0..buffer.area.width)
-            .find(|&x| buffer[(x, row)].symbol() == symbol)
-            .unwrap_or_else(|| panic!("no {symbol:?} painted on row {row}"))
     }
 
     #[test]

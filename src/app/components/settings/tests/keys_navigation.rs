@@ -53,38 +53,6 @@ fn keys_destination_is_read_only_and_back_resets_the_cursor() {
     assert_eq!(component.keys_cursor, 0);
 }
 
-/// Keys cursor and scroll fixture: one group header plus `actions`
-/// action rows, painted once so the render geometry (cursor lines,
-/// content area) is live.
-fn painted_keys_content(actions: usize) -> SettingsComponent {
-    let mut keys = vec![SettingsRow {
-        label: "Playback".into(),
-        value: String::new(),
-        section: true,
-        cursor: None,
-    }];
-    keys.extend((0..actions).map(|i| SettingsRow {
-        label: format!("action_{i}"),
-        value: "k".into(),
-        section: false,
-        cursor: Some(i),
-    }));
-    let mut component = SettingsComponent::new();
-    component.set_content(SettingsSnapshot {
-        destination: SettingsDestination::Keys,
-        rows: Vec::new(),
-        services: Vec::new(),
-        keys,
-        setup: None,
-        area: Rect::new(0, 0, 40, 12),
-    });
-    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, frame.area()))
-        .unwrap();
-    component
-}
-
 /// Arrow moves scroll the Main window so the cursor's row stays
 /// painted: section headers are not addressable, so the Down clamp
 /// stops at the last action and the scroll follows the highlight.

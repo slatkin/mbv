@@ -89,8 +89,6 @@ pub(crate) use screens::sort_filter::{
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
-#[cfg(test)]
-pub(crate) use theme::PILL_SELECTED_BG;
 pub(crate) use theme::{
     bar_role_fg, ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, DURATION, GROUP_HEADING_FG,
     HERO_CREDITS_NAME, HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR,

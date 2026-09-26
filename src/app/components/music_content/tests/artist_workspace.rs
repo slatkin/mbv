@@ -52,17 +52,6 @@ pub(super) fn artist_workspace_owner() -> MusicContent {
     owner
 }
 
-/// Paints the artist Workspace track list into `area`: row 0 is the `a-0`
-/// heading (not selectable), row 1 the first `alpha-track-1` item row.
-fn paint_artist_workspace(owner: &mut MusicContent, area: Rect) {
-    owner.track_list.wide_mut().set_geometry(area, area);
-    let mut terminal =
-        Terminal::new(TestBackend::new(area.width, area.height)).expect("workspace terminal");
-    terminal
-        .draw(|frame| owner.track_list.wide_mut().view(frame, area))
-        .expect("workspace frame");
-}
-
 #[test]
 fn enter_activates_an_artist_workspace_track_from_its_group() {
     let mut owner = artist_workspace_owner();

@@ -310,30 +310,6 @@ mod tests {
     /// One painted band row: its text and each cell's foreground.
     type PaintedRow = (String, Vec<Color>);
 
-    fn painted_panel(idle: bool) -> QueuePlaybackPanel {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(
-            if idle {
-                NowPlayingStatus::Idle
-            } else {
-                NowPlayingStatus::Playing
-            },
-            "music-box".into(),
-            false,
-        );
-        panel.transport.show_controls = !idle;
-        // The shell hands the transport band the rows below the header's
-        // band: row 0 is the header's recessed padding, row 1 the header
-        // itself.
-        let transport_area = (!idle).then_some(Rect::new(0, 2, 40, 4));
-        panel.set_transport_area(transport_area);
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        panel
-    }
-
     /// The media-type families of the requirements table, as the projection
     /// carries them (title part, optional context part). The mapping itself is
     /// core's table (task 1.1); these fixtures pin the painted behaviour per

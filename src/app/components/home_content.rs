@@ -471,23 +471,6 @@ mod tests {
         owner
     }
 
-    fn row_parts(owner: &HomeContent, index: usize) -> (String, Option<String>) {
-        // Item rows only: the projection's leading group heading is
-        // non-selectable and outside these assertions' concern.
-        let row = owner
-            .test_active_rows()
-            .iter()
-            .filter(|r| matches!(r, MediaListRow::Item { .. }))
-            .nth(index)
-            .unwrap_or_else(|| panic!("expected item row {index}, got none"));
-        match row {
-            MediaListRow::Item {
-                primary, secondary, ..
-            } => (primary.clone(), secondary.clone()),
-            other => panic!("expected an item row, got {other:?}"),
-        }
-    }
-
     #[test]
     fn key_intents_use_selected_home_item_and_ctrl_enqueue() {
         let item = QueueItem::Emby(Box::new(make_item("Film", "Movie")));
