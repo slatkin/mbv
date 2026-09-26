@@ -19,8 +19,8 @@ Each group is one commit. The gate for a group is `cargo check -p mbv`, `cargo c
 
 ## 4. ServiceSetup seam
 
-- [ ] 4.1 Create `src/app/state/service_setup.rs` with `ServiceSetup` holding these fields, moved from `App` with their types and docs: `emby_startup_rx, emby_startup_request, audiobookshelf_startup_rx, audiobookshelf_startup_request, audiobookshelf_catalog_rx, audiobookshelf_test_rx, audiobookshelf_setup_rx, emby_setup_form, audiobookshelf_setup_form, emby_setup_rx, pending_emby_replacement, pending_audiobookshelf_replacement`. Add a constructor. Add the field `setup: ServiceSetup` to `App`, delete the originals, and fix all access paths to `.setup.<field>`. Verify: gate green.
-- [ ] 4.2 Move `impl App` methods that touch only `self.setup.*` into `impl ServiceSetup` (look under `src/app/dispatch/session/service_startup*` and `services_settings*`). Verify: gate green. Audit: no methods moved—service startup/settings, drains, and completion handlers had no methods touching only `self.setup.*`; near-misses also touch runtime/config/overlay/library or player state.
+- [x] 4.1 Create `src/app/state/service_setup.rs` with `ServiceSetup` holding these fields, moved from `App` with their types and docs: `emby_startup_rx, emby_startup_request, audiobookshelf_startup_rx, audiobookshelf_startup_request, audiobookshelf_catalog_rx, audiobookshelf_test_rx, audiobookshelf_setup_rx, emby_setup_form, audiobookshelf_setup_form, emby_setup_rx, pending_emby_replacement, pending_audiobookshelf_replacement`. Add a constructor. Add the field `setup: ServiceSetup` to `App`, delete the originals, and fix all access paths to `.setup.<field>`. Verify: gate green.
+- [x] 4.2 Move `impl App` methods that touch only `self.setup.*` into `impl ServiceSetup` (look under `src/app/dispatch/session/service_startup*` and `services_settings*`). Verify: gate green. Audit: no methods moved—service startup/settings, drains, and completion handlers had no methods touching only `self.setup.*`; near-misses also touch runtime/config/overlay/library or player state.
 
 ## 5. RemoteTracking seam
 
