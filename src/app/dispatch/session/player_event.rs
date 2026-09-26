@@ -3,6 +3,15 @@ use crate::app::{App, DaemonLostModal, QUIT_REQUESTED};
 use mbv_core::player::{PlayerCommand, PlayerEvent};
 use std::sync::atomic::Ordering;
 
+/// What `App::handle_player_event` asks its caller to do next.
+#[derive(Debug, PartialEq, Eq)]
+pub(in crate::app) enum PlayerEventFlow {
+    /// The caller's event loop continues normally.
+    Proceed,
+    /// The caller's event loop should `continue` (skip render for this tick).
+    RestartLoop,
+}
+
 impl App {
     pub(in crate::app) fn expire_bare_transition(&mut self, now: std::time::Instant) -> bool {
         if self.player.is_remote() {
@@ -55,19 +64,29 @@ impl App {
     }
 
     /// Handle a PlayerEvent received from the player thread.
-    /// Returns true if the caller's event loop should `continue` (skip render for this tick).
-    pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
+    /// Returns [`PlayerEventFlow::RestartLoop`] if the caller's event loop
+    /// should `continue` (skip render for this tick).
+    pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> PlayerEventFlow {
         let ev = match self.handle_player_event_playback(ev) {
-            Ok(should_continue) => return should_continue,
+            Ok(true) => return PlayerEventFlow::RestartLoop,
+            Ok(false) => return PlayerEventFlow::Proceed,
             Err(ev) => ev,
         };
         let ev = match self.handle_player_event_notices(ev) {
-            Ok(should_continue) => return should_continue,
+            Ok(true) => return PlayerEventFlow::RestartLoop,
+            Ok(false) => return PlayerEventFlow::Proceed,
             Err(ev) => ev,
         };
         match self.handle_player_event_queue_state(ev) {
-            Ok(should_continue) => should_continue,
-            Err(ev) => self.handle_player_event_progress(ev),
+            Ok(true) => PlayerEventFlow::RestartLoop,
+            Ok(false) => PlayerEventFlow::Proceed,
+            Err(ev) => {
+                if self.handle_player_event_progress(ev) {
+                    PlayerEventFlow::RestartLoop
+                } else {
+                    PlayerEventFlow::Proceed
+                }
+            }
         }
     }
 

@@ -6,6 +6,7 @@ use super::super::{
     RouterOutcome,
 };
 use super::{Duration, IdleFeed, Instant, PollStrategy};
+use crate::app::dispatch::session::player_event::PlayerEventFlow;
 
 /// Outcome of one `drain_worker` step.
 enum WorkerDrain {
@@ -77,7 +78,7 @@ impl Model {
             return false;
         };
         *had_events = true;
-        let restart = self.app.handle_player_event(ev);
+        let flow = self.app.handle_player_event(ev);
         // Playback completion refetches Home; re-project (task 5.3d, sync_home
         // mirror deletion).
         self.push_home_content();
@@ -88,7 +89,7 @@ impl Model {
         // Player events can reconcile ABS book progress; re-project (5.3d).
         self.push_audiobookshelf_book_content();
         self.push_music_workspace_content();
-        restart
+        flow == PlayerEventFlow::RestartLoop
     }
 
     /// Drain pending library events. Returns whether any event was drained.
