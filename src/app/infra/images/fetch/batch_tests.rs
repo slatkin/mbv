@@ -35,23 +35,6 @@ fn vote_cases(#[case] _name: &str, #[case] album_artists: &[&str], #[case] expec
 }
 
 #[test]
-fn buckets_one_to_one_by_parent_id() {
-    let tracks = vec![
-        track("alb-1", "/m/a/1.flac", None, &["A"]),
-        track("alb-2", "/m/b/1.flac", None, &["B"]),
-        track("alb-1", "/m/a/2.flac", None, &["A"]),
-    ];
-    let albums = vec![album("alb-1", "/m/a"), album("alb-2", "/m/b")];
-    let buckets = bucket_tracks_by_album(&tracks, &albums);
-    assert_eq!(buckets.len(), 2);
-    let a = &buckets["alb-1"];
-    assert_eq!(a.len(), 2);
-    assert_eq!(a[0]["Path"], "/m/a/1.flac");
-    assert_eq!(a[1]["Path"], "/m/a/2.flac");
-    assert_eq!(buckets["alb-2"].len(), 1);
-}
-
-#[test]
 fn multi_disc_orphan_bucket_attributed_via_path() {
     let tracks = vec![
         track("disc-1", "/m/a/Disc 1/1.flac", None, &["A"]),

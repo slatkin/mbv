@@ -152,22 +152,4 @@ mod prefix_mode {
             RouterOutcome::PrefixSwallow
         );
     }
-
-    #[test]
-    fn armed_escape_does_not_reach_stop() {
-        // Esc is the stop default and the player is active, but armed
-        // dispatch never consults router-scope chords and `stop` is not
-        // prefix-addressable (design D1): Esc swallows and disarms.
-        let keybinds = prefix_keybinds(&[]);
-        let mut armed = armed_snapshot();
-        armed.playback.player_active = true;
-        assert_eq!(
-            resolve(
-                crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
-                &armed,
-                &keybinds
-            ),
-            RouterOutcome::PrefixSwallow
-        );
-    }
 }

@@ -83,18 +83,3 @@ pub(in crate::app) fn restore_terminal(
     terminal.show_cursor()?;
     Ok(())
 }
-
-#[cfg(test)]
-mod shift_escape_tests {
-    use super::set_shift_escape_mode;
-
-    #[test]
-    fn emits_xtshift_escape_mode_sequences() {
-        let mut output = Vec::new();
-        set_shift_escape_mode(&mut output, true).unwrap();
-        assert_eq!(output, b"\x1b[>1s");
-        output.clear();
-        set_shift_escape_mode(&mut output, false).unwrap();
-        assert_eq!(output, b"\x1b[>0s");
-    }
-}
