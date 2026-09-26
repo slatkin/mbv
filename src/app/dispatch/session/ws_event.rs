@@ -1,4 +1,5 @@
 use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
+#[cfg(test)]
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_ws::WsEvent;
@@ -31,13 +32,9 @@ impl App {
             WsEvent::TogglePause => {
                 self.player.send_command(PlayerCommand::TogglePause);
             }
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
             WsEvent::Seek(ticks) => {
                 self.player.send_command(PlayerCommand::SeekAbsolute(
-                    ticks as f64 / TICKS_PER_SECOND as f64,
+                    mbv_core::api::ticks_to_seconds(ticks),
                 ));
             }
             WsEvent::SeekRelative(secs) => {

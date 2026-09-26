@@ -26,6 +26,7 @@ pub(super) mod library_routes;
 pub(super) mod list_context;
 pub(super) mod list_rows;
 pub(in crate::app) mod marquee;
+pub(in crate::app) mod math;
 pub(super) mod media_list;
 pub(super) mod modal_frame;
 pub(super) mod multiselect;

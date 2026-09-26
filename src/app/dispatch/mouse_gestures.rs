@@ -3,7 +3,7 @@
 use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
 use crate::app::{App, QueueScope};
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use mbv_core::api::EmbyItem;
 use mbv_core::player::PlayerCommand;
 use std::time::{Duration, Instant};
 
@@ -43,11 +43,7 @@ impl App {
         if runtime_ticks == 0 {
             return;
         }
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let target_secs = (fraction * runtime_ticks as f64) / TICKS_PER_SECOND as f64;
+        let target_secs = fraction * mbv_core::api::ticks_to_seconds(runtime_ticks);
         self.player
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists

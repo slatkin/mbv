@@ -412,18 +412,18 @@ fn abs_book_meta_rows(
     }
     if book.is_finished {
         rows.push("Finished".into());
-    } else if book.position_ticks > 0 && book.duration_ticks.is_some_and(|t| t > 0) {
-        #[expect(
-            clippy::cast_precision_loss,
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "duration fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let pct = (book.position_ticks as f64 * 100.0 / book.duration_ticks.unwrap() as f64)
-            .floor()
-            .clamp(1.0, 99.0) as u8;
-        progress_row = Some(rows.len());
-        rows.push(format!("{pct}%"));
+    } else if book.position_ticks > 0 {
+        if let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0) {
+            let percent = (crate::app::render::components::math::int_ratio(
+                book.position_ticks,
+                i64::try_from(duration_ticks).unwrap_or(i64::MAX),
+            ) * 100.0)
+                .floor()
+                .clamp(1.0, 99.0);
+            let pct = u8::try_from(mbv_core::api::i64_ticks_saturating(percent)).unwrap_or(u8::MAX);
+            progress_row = Some(rows.len());
+            rows.push(format!("{pct}%"));
+        }
     }
     (rows, duration_row, progress_row)
 }
