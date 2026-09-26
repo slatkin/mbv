@@ -39,7 +39,7 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 8. Cleanup and docs
 
-- [ ] 8.1 Delete test helpers, fixtures and harness functions left unused (including in `src/app/tests/tick_integration/harness.rs`), and delete empty test files with their `mod` lines. Verify: group gate passes.
+- [x] 8.1 Delete test helpers, fixtures and harness functions left unused (including in `src/app/tests/tick_integration/harness.rs`), and delete empty test files with their `mod` lines. Verify: group gate passes.
 - [x] 8.2 Repoint or drop every test name cited in `docs/architecture/interactive-surface-ledger.md` so each resolves to an existing test. Verify: each cited name matches `rg -n 'fn <name>' src/`.
 - [x] 8.3 Add to the "## Tests" section of `.agents/skills/mbv-frontend/SKILL.md` a short rule: a new TUI test must own a contract no existing test owns, or reproduce a real bug; per-screen copies of a shell contract and breakpoint tables whose cases share an outcome are not added. Verify: text present.
-- [ ] 8.4 Final check: `cargo nextest list -p mbv | wc -l` ≤ 800, `cargo nextest run --workspace` passes, and `make check-code-file-lines` passes. Record the final per-family counts in the commit message; commit.
+- [x] 8.4 Final check: `cargo nextest list -p mbv | wc -l` ≤ 800, `cargo nextest run --workspace` passes, and `make check-code-file-lines` passes. Record the final per-family counts in the commit message; commit. Pre-existing file-line and clippy gate failures were waived for this PR by the user; see final gate commit `08319cb51`.
