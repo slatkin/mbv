@@ -14,7 +14,7 @@ use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
 use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
 #[cfg(test)]
 use crate::playback_queue::QueueMutationResult;
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::playback_queue::{AudiobookshelfItem, PlaybackQueue, QueueItem, QueueSlotId};
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,
@@ -55,7 +55,8 @@ pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
                 0.0
             }
         }
-        QueueItem::Audiobookshelf(item) => item.resume_seconds(),
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(item)) => item.resume_seconds(),
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(item)) => item.resume_seconds(),
     }
 }
 

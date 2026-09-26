@@ -1,7 +1,7 @@
 use super::*;
 
 use crate::ctrl::{CtrlCmd, CtrlCompatibility};
-use crate::playback_queue::{AudiobookshelfItem, AudiobookshelfQueueItem};
+use crate::playback_queue::AudiobookshelfQueueItem;
 use crate::remote_player::RemotePlayer;
 
 fn proxy_audiobookshelf_item() -> QueueItem {
