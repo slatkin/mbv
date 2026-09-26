@@ -54,7 +54,7 @@ impl App {
         }
     }
 
-    /// Handle a PlayerEvent received from the player thread.
+    /// Handle a `PlayerEvent` received from the player thread.
     /// Returns true if the caller's event loop should `continue` (skip render for this tick).
     pub(in crate::app) fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
         let ev = match self.handle_player_event_playback(ev) {

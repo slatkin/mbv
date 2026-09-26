@@ -71,7 +71,7 @@ impl LeafKeyResult {
     }
 }
 
-/// The single TuiRealm outbound type, grouping surface output enums (design
+/// The single `TuiRealm` outbound type, grouping surface output enums (design
 /// D4). `Application` requires `Msg: PartialEq`; convenience `Debug`/`Clone`
 /// derives aid diagnostics and follow-on message cascades.
 #[derive(Debug, Clone, PartialEq)]
@@ -86,7 +86,7 @@ pub enum Msg {
     TerminalEvent(TerminalObserverEvent),
 }
 
-/// Self-contained payload emitted by the permanent UiRoot terminal observer.
+/// Self-contained payload emitted by the permanent `UiRoot` terminal observer.
 /// Otherwise unhandled events are represented without carrying a
 /// framework-specific event payload because they only participate in redraw
 /// accounting at the shell boundary. Mouse events are no longer observed here:

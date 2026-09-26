@@ -1,8 +1,8 @@
 //! Interactive Component for the global Search sidebar overlay (design D3–D9).
 //!
-//! Owns the `SearchSidebar` state (query, cursor, scroll, type_filter,
+//! Owns the `SearchSidebar` state (query, cursor, scroll, `type_filter`,
 //! loading, results) and the 300 ms debounce deadline. The component handles
-//! keyboard input locally (query editing, cursor, scroll, type_filter) and
+//! keyboard input locally (query editing, cursor, scroll, `type_filter`) and
 //! emits `Msg` for cross-boundary work:
 //! - `Msg::Shell(DismissSearch)` — Esc or Backspace on empty query
 //! - `Msg::Shell(SearchActivate { id, item_type })` — Enter on a result

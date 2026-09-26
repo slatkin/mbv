@@ -8,7 +8,7 @@ fn ancestor(id: &str, item_type: &str) -> EmbyItem {
     item
 }
 
-/// D1 reveal table (task 1.1): item_type + the item's own back-references +
+/// D1 reveal table (task 1.1): `item_type` + the item's own back-references +
 /// the ancestor chain (nearest→root) → the single reveal target. An empty
 /// ancestors row means the worker never needed the round trip.
 #[rstest]

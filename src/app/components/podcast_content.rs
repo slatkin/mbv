@@ -65,7 +65,7 @@ pub(in crate::app) struct PodcastContent {
     /// read by the painters through the panel content.
     hero_image: HeroImageState,
     /// The Wide hero's overview scroll offset (paint-local presentation
-    /// state): the panel turns it from the HeroPane wheel and the hero
+    /// state): the panel turns it from the `HeroPane` wheel and the hero
     /// header paints from it. `hero_scroll_target` remembers the episode it
     /// was measured on, so a different selected episode starts at the top of
     /// its description instead of inheriting the previous one's offset.

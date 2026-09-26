@@ -2,9 +2,9 @@ use ratatui::layout::Rect;
 
 use crate::app::render::components::widgets::queue_panel_inset;
 
-/// Rows the QueueColumn footer band spends below the recessed queue-list
+/// Rows the `QueueColumn` footer band spends below the recessed queue-list
 /// box: one gap row, the one-row status bar, one gap row. The status bar
-/// sits outside the recessed panel, as wide as the QueueColumn header.
+/// sits outside the recessed panel, as wide as the `QueueColumn` header.
 pub(in crate::app) const QUEUE_FOOTER_BAND: u16 = 3;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -26,8 +26,8 @@ pub(in crate::app) struct QueuePanelInputs {
     pub card_height: u16,
 }
 
-/// The QueueColumn footer row: the status bar below the recessed panel,
-/// with one gap row above it and one below, as wide as the QueueColumn
+/// The `QueueColumn` footer row: the status bar below the recessed panel,
+/// with one gap row above it and one below, as wide as the `QueueColumn`
 /// header (the column's canonical content inset). Reserved when the
 /// placement fits the band alongside at least a two-row recessed box;
 /// otherwise the panel keeps every row and the footer collapses.
@@ -42,7 +42,7 @@ pub(in crate::app) fn queue_footer_row(placement: Rect) -> Option<Rect> {
 
 /// The recessed queue-list box inside the placement: the column's canonical
 /// inset, ended just above the gap row that precedes the footer. The footer
-/// band's rows keep the QueueColumn surface; the row below the footer is the
+/// band's rows keep the `QueueColumn` surface; the row below the footer is the
 /// placement's own bottom padding.
 pub(in crate::app) fn queue_list_box(placement: Rect) -> Rect {
     let mut box_area = queue_panel_inset(placement);
@@ -59,7 +59,7 @@ pub(in crate::app) fn queue_list_box(placement: Rect) -> Rect {
 /// view, which derives the same content from the placement it is handed
 /// (task 3.1) -- one source for the panel's internal geometry. The list keeps
 /// the box's own one-row top inset and bottom padding; there is no title band
-/// above it. The status bar lives in the QueueColumn footer below the box. A
+/// above it. The status bar lives in the `QueueColumn` footer below the box. A
 /// degenerate box reserves nothing.
 pub(in crate::app) fn queue_panel_subareas(panel_box: Rect) -> Rect {
     let padding = u16::from(panel_box.height >= 3);

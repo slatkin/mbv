@@ -522,7 +522,7 @@ impl App {
         self.select_letter_pill(lib_idx, next);
     }
 
-    /// If the music-group library's nav_stack was truncated back to just the
+    /// If the music-group library's `nav_stack` was truncated back to just the
     /// group level (e.g., by a stale breadcrumb click), immediately re-push the
     /// current group's album level so the combined view stays intact.
     pub(in crate::app) fn ensure_music_group_album_level(&mut self, lib_idx: usize) {

@@ -25,7 +25,7 @@ const OVERLAY_IDS: &[ComponentId] = &[
 ];
 
 /// Root routing owns overlay z-order from a fixed canonical mount order;
-/// TuiRealm owns focus and its LIFO stack.
+/// `TuiRealm` owns focus and its LIFO stack.
 pub(in crate::app) struct UiRootComponent;
 
 impl UiRootComponent {

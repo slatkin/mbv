@@ -36,7 +36,7 @@ pub(in crate::app) enum RouterOutcome {
     /// declared gate currently allows it — run the command and disarm.
     PrefixDispatch(Command),
     /// Armed chord resolved to nothing (unmapped, Escape, or a mapped chord
-    /// whose gate is closed): swallow and disarm. No FallThrough exists
+    /// whose gate is closed): swallow and disarm. No `FallThrough` exists
     /// while armed.
     PrefixSwallow,
 }
@@ -131,7 +131,7 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
 /// chord re-arms; a mapped chord fires its action only under the action's
 /// normal eligibility gate (arming reuses each action's declared gate, never
 /// bypasses it) and disarms; Escape or an unmapped chord — including a mapped
-/// chord whose gate is closed — swallows and disarms. There is no FallThrough
+/// chord whose gate is closed — swallows and disarms. There is no `FallThrough`
 /// path: while armed, no chord reaches the focused component or any surface.
 pub(in crate::app) fn resolve_armed_outcome(
     chord: KeyChord,

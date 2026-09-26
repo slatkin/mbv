@@ -3,7 +3,7 @@ use super::Model;
 use super::{PanelFocus, PanelMode};
 
 impl Model {
-    /// Route TuiRealm's native LIFO focus to the active destination's child
+    /// Route `TuiRealm`'s native LIFO focus to the active destination's child
     /// component, or back to `UiRoot` when the destination has no mounted
     /// surface component (e.g. a narrow non-wide grouped-Music Emby
     /// library). Idempotent: `active()` on the already-active component is a

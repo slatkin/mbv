@@ -7,7 +7,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 /// Paint sidebar chrome and empty/loading content. Populated rows belong to
-/// the embedded ThreeLineFlatList painter.
+/// the embedded `ThreeLineFlatList` painter.
 pub(in crate::app) fn render_sessions_overlay_content(
     f: &mut Frame,
     area: Option<Rect>,

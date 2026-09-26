@@ -4,7 +4,7 @@ use super::Model;
 impl Model {
     /// Overlay paint order is the canonical `OVERLAY_IDS` order filtered by
     /// mount state (the deleted `sync_overlay_stack`/`UiRootComponent::sync_overlay_order`
-    /// mirror kept a retained mount order; TuiRealm's native LIFO focus stack
+    /// mirror kept a retained mount order; `TuiRealm`'s native LIFO focus stack
     /// owns actual stacking, so the paint order only needs to be a stable
     /// canonical order — task 5.3d).
     pub(in crate::app) fn render_overlay_stack(&mut self, frame: &mut ratatui::Frame) {

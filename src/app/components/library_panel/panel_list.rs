@@ -70,7 +70,7 @@ impl<Target: Clone + Eq> PanelList for MediaListCarrier<Target> {
     }
 }
 
-/// The complete shared tree owner uses the same erased PanelList surface as
+/// The complete shared tree owner uses the same erased `PanelList` surface as
 /// the flat carrier. The panel supplies only focus and claim/content geometry;
 /// all tree painting and retained target geometry stay behind
 /// `TreeBrowser::Component::view`.
@@ -107,7 +107,7 @@ impl<Target: Clone + Eq + Hash> PanelList
     }
 }
 
-/// The Inline Search session's PanelList surface (design.md D3, task 2.1):
+/// The Inline Search session's `PanelList` surface (design.md D3, task 2.1):
 /// every method forwards one line to the session's embedded carrier, so the
 /// panel's `ListSlot::Search` arm drives the exact same fixed-row presentation
 /// `ListSlot::Media` does — the search control keeps only its query, pool,

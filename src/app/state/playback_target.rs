@@ -210,7 +210,7 @@ impl App {
         }
     }
 
-    /// Whether the QueueColumn's visual slot should be reserved and painted.
+    /// Whether the `QueueColumn`'s visual slot should be reserved and painted.
     pub(in crate::app) fn visual_slot_shown(&self) -> bool {
         self.now_playing_status() != NowPlayingStatus::Idle && !self.visual_slot_hidden
     }

@@ -1,4 +1,4 @@
-//! TuiRealm interactive-component contracts: `ComponentId`, `Msg`, `UserEvent`
+//! `TuiRealm` interactive-component contracts: `ComponentId`, `Msg`, `UserEvent`
 //! (design `migrate-tui-to-tuirealm` D3–D5).
 
 pub mod book_content;

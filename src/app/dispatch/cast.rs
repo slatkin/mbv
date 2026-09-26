@@ -33,7 +33,7 @@ const CAST_DISCOVERY_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Everything an Audiobookshelf episode's cast dispatch needs: enough to
 /// open a playback session and resolve its castable source, mirroring
-/// `AudiobookshelfPlayerContext` (player_sources.rs) without depending on
+/// `AudiobookshelfPlayerContext` (`player_sources.rs`) without depending on
 /// that excluded file.
 pub(in crate::app) struct AbsCastContext {
     pub(in crate::app) client: AudiobookshelfClient,
@@ -59,7 +59,7 @@ impl App {
     /// arrives later via `set_cast_client` once an async connect completes
     /// (task 8.3's attach-on-selection and 7.3's reattach both go through
     /// here). Never touches `self.player` (5.1's verification). Stops any
-    /// running PipeWire capture (8.5): no audio reaches the local graph
+    /// running `PipeWire` capture (8.5): no audio reaches the local graph
     /// once a cast target is attached (`visualizer_should_run`'s
     /// `!self.is_cast_attached()` clause would tear it down on the next
     /// tick regardless, but doing it here covers the frame between attach
@@ -129,7 +129,7 @@ impl App {
     /// Routes a played selection to the attached receiver instead of the
     /// local player (5.3), surfacing uncastable items by name and reason at
     /// dispatch time (5.4). Resolution touches the network (Emby
-    /// PlaybackInfo, Audiobookshelf session open), so it runs on a
+    /// `PlaybackInfo`, Audiobookshelf session open), so it runs on a
     /// background thread; the result comes back through `cast_rx`
     /// (`handle_cast_event`).
     pub(in crate::app) fn dispatch_selection_to_cast(

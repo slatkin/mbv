@@ -1,4 +1,4 @@
-//! TuiRealm component and retained-frame painting for the tree owner.
+//! `TuiRealm` component and retained-frame painting for the tree owner.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;

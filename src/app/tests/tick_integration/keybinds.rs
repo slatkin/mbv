@@ -2,7 +2,7 @@
 //!
 //! The compiled `[keys]` configuration is read once at `Model` construction;
 //! this file proves a loaded router-scope override fires through the real
-//! `Application::tick()` path (inject port → UiRoot observer → router fold),
+//! `Application::tick()` path (inject port → `UiRoot` observer → router fold),
 //! not just through the pure policy seam.
 
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};

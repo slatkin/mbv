@@ -17,7 +17,7 @@ use std::sync::{mpsc, Arc, Mutex};
 /// `switch_to_direct_remote` / `restore_local_mode` swap which target owns
 /// playback.
 ///
-/// Test builds leave `mpris` unset (build() initializes it to None):
+/// Test builds leave `mpris` unset (`build()` initializes it to None):
 /// `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real D-Bus
 /// session bus from a thread with no shutdown path -- leaked into every test
 /// process that constructs a remote App, where process teardown races it

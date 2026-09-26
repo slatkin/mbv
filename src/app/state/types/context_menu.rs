@@ -113,7 +113,7 @@ pub(in crate::app) struct MultiSelectPopup {
 
 #[derive(Clone)]
 pub(crate) enum LibraryRouteStage {
-    /// (library_name_lower, display_name, current_device_or_none)
+    /// (`library_name_lower`, `display_name`, `current_device_or_none`)
     PickLibrary {
         items: Vec<(String, String, Option<String>)>,
     },
@@ -121,7 +121,7 @@ pub(crate) enum LibraryRouteStage {
     /// Each entry pairs a device's display name (UX only -- #256 never
     /// persists it) with its live-resolved endpoint (what actually gets
     /// written to config on commit). `None` means the device is visible
-    /// in the live session list but session_direct_endpoint couldn't
+    /// in the live session list but `session_direct_endpoint` couldn't
     /// resolve it to a connectable address (e.g. no advertised
     /// direct-connect port, or an unparseable host) -- shown greyed out
     /// with a reason rather than silently omitted, and not committable.

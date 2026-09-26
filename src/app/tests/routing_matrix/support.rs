@@ -6,7 +6,7 @@
 //! through the live harness. It drives the exact seam where routing happens —
 //! the ADR 0023 fold (`fold_keyboard_messages`) — with the exact message ordering
 //! `Application::tick` produces: the focused component's message first, then
-//! the UiRoot observer's `TerminalEvent`.
+//! the `UiRoot` observer's `TerminalEvent`.
 //!
 //! Each row pins one load-bearing precedence quirk from the handoff (task 1.3)
 //! plus the required U2 coverage: blocking-overlay swallow, router

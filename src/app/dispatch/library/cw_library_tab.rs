@@ -313,7 +313,7 @@ impl App {
         self.save_prefs();
     }
 
-    /// Jump directly to left-panel tab `idx` (0 = Home, 1..=libs.len() =
+    /// Jump directly to left-panel tab `idx` (0 = Home, `1..=libs.len()` =
     /// library index `idx - 1`, or Feeds at the end when present).
     pub(in crate::app) fn set_library_tab(&mut self, idx: usize) {
         if idx >= self.tab_count() {

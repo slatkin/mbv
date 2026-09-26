@@ -18,7 +18,7 @@ pub(in crate::app) enum RevealTarget {
 }
 /// D1 reveal-item table, pure over the item's own back-references and its
 /// ancestor chain (nearest→root, the `get_ancestors` order) so the table
-/// test covers the item_type → reveal mapping without a server. `ancestors`
+/// test covers the `item_type` → reveal mapping without a server. `ancestors`
 /// is `None` when the kind's own back-reference already decided (the worker
 /// skips the round trip).
 pub(in crate::app) fn resolve_reveal_target(
@@ -103,7 +103,7 @@ fn build_navigate_landing(
 
 /// The navigable ancestors inside the library: `get_ancestors` is
 /// nearest→root and its last two entries are the physical library folder and
-/// the AggregateFolder root, which are never browse levels of their own.
+/// the `AggregateFolder` root, which are never browse levels of their own.
 fn ancestors_inside_library(ancestors: &[EmbyItem]) -> &[EmbyItem] {
     &ancestors[..ancestors.len().saturating_sub(2)]
 }
@@ -233,7 +233,7 @@ fn configured_album_ancestors(
 }
 
 /// Movie/generic ancestor-chain rebuild (D2: the Chain arm keeps this
-/// pre-change shape verbatim): lib_id first, then inside ancestors from
+/// pre-change shape verbatim): `lib_id` first, then inside ancestors from
 /// root→item, cursors resting on the next level's target.
 fn build_chain_nav_stack(
     client: &EmbyClient,

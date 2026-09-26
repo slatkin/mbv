@@ -1,12 +1,12 @@
 //! The Movies/HomeVideos/Generic Emby destinations' embedded content owner
-//! (task 6.1, design D2/D3). This owner serves Generic, Movies, and HomeVideos;
+//! (task 6.1, design D2/D3). This owner serves Generic, Movies, and `HomeVideos`;
 //! TV and Music have their own owners. A plain type — never mounted, focused,
 //! subscribed, or given a `ComponentId` — that keeps the shell-projected
 //! browse rows, the letter/feed-group pill state, the one shared canonical
 //! `MediaList` owner of the active level's rows, and the embedded Inline
 //! Search session. It produces the panel's [`LibraryPanelContent`] per frame
 //! and translates the panel's slot events and forwarded chords into the same
-//! typed `Msg`s the former BrowserComponent emitted for these three kinds
+//! typed `Msg`s the former `BrowserComponent` emitted for these three kinds
 //! (`shell/emby_library.rs::handle_emby_library_request` and `shell/messages.rs`'s
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
@@ -119,7 +119,7 @@ pub(in crate::app) struct BrowserOwnerPush {
     pub feed_group_cursor: usize,
 }
 
-/// The embedded content owner for Movies, HomeVideos and Generic Emby
+/// The embedded content owner for Movies, `HomeVideos` and Generic Emby
 /// libraries (design D2, task 6.1). Plain type; the mounted `LibraryPanel`
 /// borrows it for content and slot events.
 pub(in crate::app) struct EmbyLibraryContent {
@@ -244,7 +244,7 @@ impl EmbyLibraryContent {
     }
 
     /// Explicit, identity-gated resting-position re-seed (mirrors
-    /// the former BrowserComponent's position application): the shell calls this only when
+    /// the former `BrowserComponent`'s position application): the shell calls this only when
     /// `note_browse_identity` reports a real identity change (drill-in,
     /// go-back, letter-filter reset, sort change, feed/home-video group
     /// switch). Within one identity no position crosses the boundary.
@@ -261,7 +261,7 @@ impl EmbyLibraryContent {
 
     /// Records the browse identity of the current shell content push and
     /// reports whether it differs from the previous push (mirrors
-    /// the former BrowserComponent's identity tracking).
+    /// the former `BrowserComponent`'s identity tracking).
     pub(in crate::app) fn note_browse_identity(&mut self, identity: EmbyLibraryIdentity) -> bool {
         let changed = self.last_identity.as_ref() != Some(&identity);
         self.last_identity = Some(identity);
@@ -291,7 +291,7 @@ impl EmbyLibraryContent {
     /// Project the mirrored items into provider-neutral rows: letter-grouped
     /// `Heading`/`Spacer`/`Item` rows for a large library (or an active
     /// letter pill), natural-sorted plain rows otherwise (mirrors
-    /// the former BrowserComponent's row projection).
+    /// the former `BrowserComponent`'s row projection).
     fn feed_owner(&mut self) {
         let grouped =
             !self.latest_mode && (self.true_total() >= 50 || self.letter_filter.is_some());
@@ -318,7 +318,7 @@ impl EmbyLibraryContent {
 
     /// The selected item, gated the same way the old wide Movies hero was
     /// (no hero for a folder; Movies libraries additionally require the
-    /// selected item to actually be a `Movie`, not e.g. a BoxSet folder).
+    /// selected item to actually be a `Movie`, not e.g. a `BoxSet` folder).
     fn hero_item(&self) -> Option<&EmbyItem> {
         let item = self.items().get(self.cursor())?;
         (!item.is_folder && (self.kind != LibraryKind::Movies || item.item_type == "Movie"))

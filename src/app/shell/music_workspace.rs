@@ -1,5 +1,5 @@
 //! Shell projection for the grouped Music library owner.
-//! Music is retained by the LibraryPanel under `LibraryKey::Service(Music)`;
+//! Music is retained by the `LibraryPanel` under `LibraryKey::Service(Music)`;
 //! it is not a mounted destination component.
 
 use super::components::library_panel::LibraryKey;

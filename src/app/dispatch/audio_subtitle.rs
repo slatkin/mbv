@@ -36,7 +36,7 @@ impl App {
     /// state with this client's own preferences and pushes them over the
     /// wire. A newly connected `RemotePlayer` always starts at
     /// `SubtitlePrefs::default()` — `mbvd` no longer reads these from its
-    /// own host config — so without this, direct-daemon and stay_alive
+    /// own host config — so without this, direct-daemon and `stay_alive`
     /// sessions would silently ignore the controlling client's language
     /// preferences until the user manually cycled subtitle mode once.
     /// Call this right after any `self.player = PlayerProxy::remote(...)`
