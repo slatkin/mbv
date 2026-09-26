@@ -434,8 +434,29 @@ impl App {
             target.library_item_id().to_owned(),
             target.episode_id().to_owned(),
         ));
-        if let Some(mut item) = self.audiobookshelf_shelf_cache.get(library_id).and_then(|items| items.iter().find(|item| matches!(item, QueueItem::Audiobookshelf(episode) if episode.library_item_id == target.library_item_id() && episode.episode_id == target.episode_id()))).cloned() {
-            if let (QueueItem::Audiobookshelf(episode), Some(progress)) = (&mut item, progress) {
+        if let Some(mut item) = self
+            .audiobookshelf_shelf_cache
+            .get(library_id)
+            .and_then(|items| {
+                items.iter().find(|item| {
+                    matches!(
+                        item,
+                        QueueItem::Audiobookshelf(
+                            mbv_core::playback_queue::AudiobookshelfItem::Episode(episode)
+                        ) if episode.library_item_id == target.library_item_id()
+                            && episode.episode_id == target.episode_id()
+                    )
+                })
+            })
+            .cloned()
+        {
+            if let (
+                QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
+                    episode,
+                )),
+                Some(progress),
+            ) = (&mut item, progress)
+            {
                 episode.position_ticks = seconds_to_ticks(progress.current_time_seconds);
                 episode.played = progress.is_finished;
                 episode.is_finished = progress.is_finished;
@@ -459,20 +480,22 @@ impl App {
         });
         let is_finished = progress.is_some_and(|progress| progress.is_finished);
 
-        Some(QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
-            library_item_id: episode.library_item_id.clone(),
-            episode_id: episode.episode_id.clone(),
-            title: episode.title.clone(),
-            show_title: show.map(|show| show.title.clone()),
-            author: show.and_then(|show| show.author.clone()),
-            description: None,
-            duration_ticks: episode.duration_seconds.and_then(seconds_to_ticks_u64),
-            position_ticks,
-            played: is_finished,
-            pub_date_secs: episode.published_at,
-            is_finished,
-            cover_path: show.and_then(|show| show.cover_path.clone()),
-        }))
+        Some(QueueItem::Audiobookshelf(
+            mbv_core::playback_queue::AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
+                library_item_id: episode.library_item_id.clone(),
+                episode_id: episode.episode_id.clone(),
+                title: episode.title.clone(),
+                show_title: show.map(|show| show.title.clone()),
+                author: show.and_then(|show| show.author.clone()),
+                description: None,
+                duration_ticks: episode.duration_seconds.and_then(seconds_to_ticks_u64),
+                position_ticks,
+                played: is_finished,
+                pub_date_secs: episode.published_at,
+                is_finished,
+                cover_path: show.and_then(|show| show.cover_path.clone()),
+            }),
+        ))
     }
 
     // ---- Book browsing actions -----------------------------------------
@@ -630,7 +653,7 @@ impl App {
         }
     }
 
-    /// Resolve the selected book as a `QueueItem::AudiobookshelfBook` without
+    /// Resolve the selected book as a `QueueItem::Audiobookshelf(AudiobookshelfItem::Book)` without
     /// mutating the queue or opening a playback lifecycle. Duration is the
     /// sum of the book's audio-file durations (chapters are offsets, not
     /// durations).
@@ -728,7 +751,7 @@ pub(in crate::app) fn seconds_to_ticks(seconds: f64) -> i64 {
         .unwrap_or(0)
 }
 
-/// Resolve the Books tab's selected book as a `QueueItem::AudiobookshelfBook`
+/// Resolve the Books tab's selected book as a `QueueItem::Audiobookshelf(AudiobookshelfItem::Book)`
 /// without mutating the queue or opening a playback lifecycle (factored out
 /// of `App::selected_audiobookshelf_book_queue_item` for task 5.4: the Books
 /// tab's selection path and Home's queue-item path feed the one hero
@@ -762,16 +785,18 @@ pub(in crate::app) fn audiobookshelf_book_queue_item(
     });
     let is_finished = progress.is_some_and(|progress| progress.is_finished);
 
-    Some(QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
-        library_item_id: book.library_item_id.clone(),
-        title: book.title.clone(),
-        author: book.author_display.clone(),
-        duration_ticks: duration_seconds.and_then(seconds_to_ticks_u64),
-        position_ticks,
-        played: is_finished,
-        is_finished,
-        cover_path: book.cover_path.clone(),
-    }))
+    Some(QueueItem::Audiobookshelf(
+        mbv_core::playback_queue::AudiobookshelfItem::Book(AudiobookshelfBookQueueItem {
+            library_item_id: book.library_item_id.clone(),
+            title: book.title.clone(),
+            author: book.author_display.clone(),
+            duration_ticks: duration_seconds.and_then(seconds_to_ticks_u64),
+            position_ticks,
+            played: is_finished,
+            is_finished,
+            cover_path: book.cover_path.clone(),
+        }),
+    ))
 }
 
 #[expect(

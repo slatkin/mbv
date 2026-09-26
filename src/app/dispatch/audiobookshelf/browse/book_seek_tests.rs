@@ -12,16 +12,18 @@ fn library() -> mbv_core::audiobookshelf::AudiobookshelfLibrary {
 }
 
 fn book_queue_item(id: &str) -> QueueItem {
-    QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
-        library_item_id: id.into(),
-        title: "Book".into(),
-        author: None,
-        duration_ticks: None,
-        position_ticks: 0,
-        played: false,
-        is_finished: false,
-        cover_path: None,
-    })
+    QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Book(
+        AudiobookshelfBookQueueItem {
+            library_item_id: id.into(),
+            title: "Book".into(),
+            author: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            is_finished: false,
+            cover_path: None,
+        },
+    ))
 }
 
 /// 7.4: the shell resolves the stable book-qualified chapter target the

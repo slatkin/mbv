@@ -433,7 +433,9 @@ impl App {
                     .into_iter()
                     .filter_map(|entry| match entry {
                         mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Episode(item) => {
-                            Some(QueueItem::Audiobookshelf(item))
+                            Some(QueueItem::Audiobookshelf(
+                                mbv_core::playback_queue::AudiobookshelfItem::Episode(item),
+                            ))
                         }
                         mbv_core::audiobookshelf::AudiobookshelfShelfEntry::Show(_) => None,
                     })
