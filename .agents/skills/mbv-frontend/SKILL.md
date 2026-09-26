@@ -281,6 +281,9 @@ is not evidence about any of them:
 ## Tests
 
 Presentation tests are owned by the narrowest layer that can regress the fact.
+A new TUI test must own a contract no existing test owns, or reproduce a real bug;
+per-screen copies of a shell contract and breakpoint tables whose cases share
+an outcome are not added.
 Use this four-layer matrix when adding, narrowing, or deleting assertions:
 
 | Layer | Owned proof | Claims removed from this layer |
