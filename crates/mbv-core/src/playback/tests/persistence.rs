@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn audiobookshelf_episode_queue_item_wire_format_round_trips() {
+    let item = QueueItem::Audiobookshelf(audiobookshelf_episode("library-a", "episode-1"));
+    let expected = r#"{"kind":"Audiobookshelf","libraryItemId":"library-a","episodeId":"episode-1","title":"ABS episode","show_title":"Show","author":"Author","description":null,"duration_ticks":1200000000,"position_ticks":300000000,"played":false,"pub_date_secs":1700000000,"is_finished":false,"cover_path":"/covers/show.jpg"}"#;
+    let json = serde_json::to_string(&item).unwrap();
+    let restored: QueueItem = serde_json::from_str(expected).unwrap();
+
+    assert_eq!(json, expected);
+    assert!(matches!(restored, QueueItem::Audiobookshelf(_)));
+    assert_eq!(serde_json::to_string(&restored).unwrap(), expected);
+}
+
+#[test]
+fn audiobookshelf_book_queue_item_wire_format_round_trips() {
+    let item = QueueItem::AudiobookshelfBook(audiobookshelf_book("library-book-1"));
+    let expected = r#"{"kind":"AudiobookshelfBook","libraryItemId":"library-book-1","title":"ABS book","author":"Author","duration_ticks":36000000000,"position_ticks":9000000000,"played":false,"is_finished":false,"cover_path":"/covers/book.jpg"}"#;
+    let json = serde_json::to_string(&item).unwrap();
+    let restored: QueueItem = serde_json::from_str(expected).unwrap();
+
+    assert_eq!(json, expected);
+    assert!(matches!(restored, QueueItem::AudiobookshelfBook(_)));
+    assert_eq!(serde_json::to_string(&restored).unwrap(), expected);
+}
+
+#[test]
 fn queue_item_serializes_tagged() {
     let emby = QueueItem::Emby(Box::new(item("e1")));
     let json = serde_json::to_string(&emby).unwrap();
