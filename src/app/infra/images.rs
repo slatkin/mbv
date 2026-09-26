@@ -270,7 +270,7 @@ impl App {
         let Some(source) = &artwork.source else {
             return State::None;
         };
-        if !self.images_enabled() {
+        if !self.images.images_enabled() {
             return State::None;
         }
         // The one fetch per key (fetch dedupes on its own reservation set).
@@ -355,10 +355,12 @@ impl App {
                 // that resolved empty, and every other presentation, stays
                 // undecorated and issues no Logo request.
                 let logo_cache_key = self.fetch_hero_logo(artwork, panel_area);
-                if !self.ensure_hero_cover_protocol(
+                let protocol_suffix = self.current_protocol_suffix();
+                if !self.images.ensure_hero_cover_protocol(
                     &cache_key,
                     (box_cells.width, box_cells.height),
                     logo_cache_key.as_deref(),
+                    protocol_suffix,
                 ) {
                     return State::Loading;
                 }
@@ -367,7 +369,11 @@ impl App {
             // The Library Hero overlay paints the same reserved-box flow; a
             // Landscape hero there is cover-fit for the overlay's own box
             // (its provider-link row stays plain, so no Logo).
-            if !self.ensure_hero_cover_protocol(&cache_key, box_cells, None) {
+            let protocol_suffix = self.current_protocol_suffix();
+            if !self
+                .images
+                .ensure_hero_cover_protocol(&cache_key, box_cells, None, protocol_suffix)
+            {
                 return State::Loading;
             }
         }
@@ -392,7 +398,7 @@ impl App {
             library_item_id,
             self.current_protocol_suffix(),
         );
-        if self.images_enabled() {
+        if self.images.images_enabled() {
             self.fetch_audiobookshelf_image(
                 cache_key.clone(),
                 setup.server_url.clone(),
@@ -417,7 +423,7 @@ impl App {
             library_item_id,
             self.current_protocol_suffix(),
         );
-        if self.images_enabled() {
+        if self.images.images_enabled() {
             self.fetch_audiobookshelf_image(
                 cache_key.clone(),
                 setup.server_url.clone(),

@@ -151,7 +151,7 @@ impl App {
     /// the existing idle gate (`fetch_list_card_image_when_idle`), so rapid
     /// navigation suppresses the whole window.
     pub(in crate::app) fn prefetch_neighbour_album_art(&mut self, targets: &[String]) {
-        if !self.images_enabled() {
+        if !self.images.images_enabled() {
             return;
         }
         for target in targets {

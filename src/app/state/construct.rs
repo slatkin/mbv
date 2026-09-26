@@ -9,7 +9,6 @@ use crate::app::{
 use mbv_core::api::EmbyItem;
 use mbv_core::player::{Player, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use ratatui_image::picker::Picker;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -460,48 +459,8 @@ impl App {
         app
     }
 
-    /// Query the terminal for its image protocol (sixel/kitty/iterm2/etc,
-    /// via `Picker::from_query_stdio`, falling back to halfblocks), then
-    /// apply `self.image_protocol`'s override if it names one of the known
-    /// protocols. Called once at startup by `run`.
-    pub(in crate::app) fn build_image_picker(&self) -> Picker {
-        use ratatui_image::picker::ProtocolType;
-        let protocol_override = self.images.image_protocol.clone();
-        let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
-        let proto = protocol_override
-            .as_deref()
-            .and_then(|s| match s.to_lowercase().as_str() {
-                "sixel" => Some(ProtocolType::Sixel),
-                "kitty" => Some(ProtocolType::Kitty),
-                "iterm2" => Some(ProtocolType::Iterm2),
-                "halfblocks" => Some(ProtocolType::Halfblocks),
-                _ => None, // "auto" or unknown: use picker's detected protocol
-            });
-        if let Some(proto) = proto {
-            picker.set_protocol_type(proto);
-        }
-        picker
-    }
-
-    /// Populate `image_picker` (terminal-detected, with the config override)
-    /// and `halfblock_picker` (the #451 dimmed-backdrop fallback: modals
-    /// re-encode images to halfblocks so the dim applies uniformly).
-    ///
-    /// MUST run before the `TuiRealm` crossterm listener starts
-    /// (`Application::init`): `Picker::from_query_stdio` writes a
-    /// `CSI 16 t` cell-size query to the terminal and reads the reply with a
-    /// raw `io::stdin().read()`. If the listener thread is already draining
-    /// stdin it eats the reply, the picker falls back to a wrong cell size,
-    /// and Kitty renders images clipped on the right/bottom (#654).
+    /// Initialize terminal image pickers before the TUI listener starts.
     pub(crate) fn init_image_pickers(&mut self) {
-        let picker = self.build_image_picker();
-        log::debug!(
-            target: "startup",
-            "image picker: protocol={:?} font_size={:?}",
-            picker.protocol_type(),
-            picker.font_size()
-        );
-        self.images.image_picker = Some(picker);
-        self.images.halfblock_picker = Some(Picker::halfblocks());
+        self.images.init_image_pickers();
     }
 }

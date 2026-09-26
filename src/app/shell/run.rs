@@ -181,7 +181,11 @@ impl Model {
             self.app.images.card_image_loading.remove(&cache_key);
             self.app.images.image_fetches_active =
                 self.app.images.image_fetches_active.saturating_sub(1);
-            let entry = self.app.build_cached_image(&cache_key, img_opt);
+            let entry = self.app.images.build_cached_image(
+                &cache_key,
+                img_opt,
+                self.app.current_protocol_suffix(),
+            );
             // Artist artwork (task 6.2, design D7): a fetch reserved through
             // the typed artist request identity completes as its own typed
             // event; the generic image cache stays provider/generic.

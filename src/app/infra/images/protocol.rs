@@ -1,3 +1,4 @@
+use super::cache::ImageCache;
 use super::{
     cover_fill_hero_box, mem_key, palette, App, CachedImage, ImageFetchReq, ImageSource, IoRead,
     Picker, MAX_IMAGE_FETCHES, QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY,
@@ -35,7 +36,7 @@ impl App {
                 )
             })
             .collect();
-        if self.images_enabled() {
+        if self.images.images_enabled() {
             for (cache_key, item_id, series_id) in prefetch {
                 self.fetch_list_card_image_when_idle(cache_key, item_id, series_id, &["Primary"]);
             }
@@ -56,7 +57,11 @@ impl App {
         let Ok(img) = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES) else {
             return;
         };
-        let entry = self.build_cached_image(QUEUE_CARD_PLACEHOLDER_KEY, Some(img));
+        let entry = self.images.build_cached_image(
+            QUEUE_CARD_PLACEHOLDER_KEY,
+            Some(img),
+            self.current_protocol_suffix(),
+        );
         self.images
             .card_image_states
             .insert(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), entry);
@@ -65,7 +70,7 @@ impl App {
     fn picker_and_suffix(&self) -> Option<(&Picker, &'static str)> {
         let use_halfblock = self.dim_backdrop_active
             && self.images.image_protocol_enabled
-            && !self.is_halfblock_configured();
+            && !self.images.is_halfblock_configured();
         if use_halfblock {
             self.images
                 .halfblock_picker
@@ -75,7 +80,7 @@ impl App {
             self.images
                 .image_picker
                 .as_ref()
-                .map(|p| (p, self.configured_protocol_name()))
+                .map(|p| (p, self.images.configured_protocol_name()))
         }
     }
 
@@ -84,28 +89,61 @@ impl App {
     pub(in crate::app) fn current_protocol_suffix(&self) -> &'static str {
         self.picker_and_suffix().map_or("halfblock", |(_, s)| s)
     }
+}
+
+impl ImageCache {
+    fn build_image_picker(&self) -> Picker {
+        use ratatui_image::picker::ProtocolType;
+        let protocol_override = self.image_protocol.clone();
+        let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
+        let proto = protocol_override
+            .as_deref()
+            .and_then(|s| match s.to_lowercase().as_str() {
+                "sixel" => Some(ProtocolType::Sixel),
+                "kitty" => Some(ProtocolType::Kitty),
+                "iterm2" => Some(ProtocolType::Iterm2),
+                "halfblocks" => Some(ProtocolType::Halfblocks),
+                _ => None,
+            });
+        if let Some(proto) = proto {
+            picker.set_protocol_type(proto);
+        }
+        picker
+    }
+
+    pub(in crate::app) fn init_image_pickers(&mut self) {
+        let picker = self.build_image_picker();
+        log::debug!(
+            target: "startup",
+            "image picker: protocol={:?} font_size={:?}",
+            picker.protocol_type(),
+            picker.font_size()
+        );
+        self.image_picker = Some(picker);
+        self.halfblock_picker = Some(Picker::halfblocks());
+    }
 
     /// The picker that encodes the given protocol suffix.
     fn picker_for_suffix(&self, suffix: &'static str) -> Option<&Picker> {
         if suffix == "halfblock" {
-            self.images
-                .halfblock_picker
+            self.halfblock_picker
                 .as_ref()
-                .or(self.images.image_picker.as_ref())
+                .or(self.image_picker.as_ref())
         } else {
-            self.images.image_picker.as_ref()
+            self.image_picker.as_ref()
         }
     }
 
     /// Builds a fresh cache entry for a just-fetched image: keeps the decoded
     /// source so it can be re-encoded with a different protocol picker later
-    /// (#451), and encodes the protocol for the currently active suffix.
+    /// (#451), and encodes the protocol for the active suffix.
     /// `img: None` records a resolved-but-empty fetch (the "no art" marker
     /// renderers branch on).
     pub(in crate::app) fn build_cached_image(
         &self,
         bare_key: &str,
         img: Option<image::DynamicImage>,
+        suffix: &'static str,
     ) -> CachedImage {
         let mut entry = CachedImage {
             img,
@@ -114,7 +152,6 @@ impl App {
             applied_logo_key: None,
         };
         if let Some(img) = entry.img.clone() {
-            let suffix = self.current_protocol_suffix();
             if let Some(picker) = self.picker_for_suffix(suffix) {
                 let proto = self.build_protocol(bare_key, suffix, picker, img);
                 entry.protocols.insert(suffix, proto);
@@ -131,17 +168,15 @@ impl App {
     pub(in crate::app) fn cached_image_protocol_mut(
         &mut self,
         bare_key: &str,
+        suffix: &'static str,
     ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
-        let suffix = self.current_protocol_suffix();
         let picker = self.picker_for_suffix(suffix)?;
         let reencode = self
-            .images
             .card_image_states
             .get(bare_key)
             .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
         if reencode {
             let (img, cover_box, stored_logo_key) = self
-                .images
                 .card_image_states
                 .get(bare_key)
                 .and_then(|e| {
@@ -156,20 +191,19 @@ impl App {
             // so a suffix switch keeps the cropped aspect.
             let img = match cover_box {
                 Some((w, h)) => {
-                    let (px_w, px_h) = self.hero_box_pixels(w, h);
+                    let (px_w, px_h) = self.hero_box_pixels(w, h, suffix);
                     crate::app::infra::images::cover_fill_hero_box(&img, px_w, px_h)
                 }
                 None => img,
             };
             let img = self.decorate_with_logo(img, logo_key.as_deref());
             let proto = self.build_protocol(bare_key, suffix, picker, img);
-            if let Some(entry) = self.images.card_image_states.get_mut(bare_key) {
+            if let Some(entry) = self.card_image_states.get_mut(bare_key) {
                 entry.protocols.insert(suffix, proto);
                 entry.applied_logo_key = logo_key;
             }
         }
-        self.images
-            .card_image_states
+        self.card_image_states
             .get_mut(bare_key)?
             .protocols
             .get_mut(suffix)
@@ -183,35 +217,35 @@ impl App {
         img: image::DynamicImage,
     ) -> ratatui_image::thread::ThreadProtocol {
         #[cfg(test)]
-        self.images
-            .image_protocol_builds
-            .set(self.images.image_protocol_builds.get() + 1);
+        self.image_protocol_builds
+            .set(self.image_protocol_builds.get() + 1);
         let mem_key = mem_key(bare_key, suffix);
         let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
-        let _ = self.images.resize_register_tx.send((mem_key, req_rx));
+        let _ = self.resize_register_tx.send((mem_key, req_rx));
         ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
     pub(in crate::app) fn is_halfblock_configured(&self) -> bool {
-        self.images
-            .image_protocol
+        self.image_protocol
             .as_deref()
             .is_some_and(|s| s.eq_ignore_ascii_case("halfblocks"))
-            || self.images.image_picker.as_ref().is_some_and(|p| {
+            || self.image_picker.as_ref().is_some_and(|p| {
                 p.protocol_type() == ratatui_image::picker::ProtocolType::Halfblocks
             })
     }
 
     pub(in crate::app) fn configured_protocol_name(&self) -> &'static str {
         use ratatui_image::picker::ProtocolType;
-        match self.images.image_picker.as_ref().map(Picker::protocol_type) {
+        match self.image_picker.as_ref().map(Picker::protocol_type) {
             Some(ProtocolType::Sixel) => "sixel",
             Some(ProtocolType::Kitty) => "kitty",
             Some(ProtocolType::Iterm2) => "iterm2",
             Some(ProtocolType::Halfblocks) | None => "halfblock",
         }
     }
+}
 
+impl App {
     /// Spawn queued image fetches until the in-flight limit is reached. Called
     /// whenever an in-flight fetch completes and frees a slot (see the card-image
     /// receiver in `images.rs`).
@@ -257,25 +291,30 @@ impl App {
             }
         });
     }
+}
 
+impl ImageCache {
     pub(in crate::app) fn images_enabled(&self) -> bool {
-        self.images.image_protocol_enabled
+        self.image_protocol_enabled
     }
 
     /// The active picker's terminal font size — the cell-to-pixel ratio the
     /// hero cover fit's box pixels derive from. Falls back to the halfblock
     /// picker and then the picker constructor's default.
-    pub(in crate::app) fn image_font_size(&self) -> ratatui_image::FontSize {
-        self.picker_and_suffix()
-            .map_or(ratatui_image::FontSize::new(10, 20), |(picker, _)| {
-                picker.font_size()
-            })
+    pub(in crate::app) fn image_font_size(&self, suffix: &'static str) -> ratatui_image::FontSize {
+        self.picker_for_suffix(suffix)
+            .map_or(ratatui_image::FontSize::new(10, 20), Picker::font_size)
     }
 
     /// One hero artwork box's pixel size from its cell size (task 5.10,
     /// design D5's cover-fit input).
-    pub(in crate::app) fn hero_box_pixels(&self, box_w: u16, box_h: u16) -> (u32, u32) {
-        let font = self.image_font_size();
+    pub(in crate::app) fn hero_box_pixels(
+        &self,
+        box_w: u16,
+        box_h: u16,
+        suffix: &'static str,
+    ) -> (u32, u32) {
+        let font = self.image_font_size(suffix);
         (
             u32::from(box_w) * u32::from(font.width.max(1)),
             u32::from(box_h) * u32::from(font.height.max(1)),
@@ -288,8 +327,7 @@ impl App {
     fn ready_logo_key(&self, logo_cache_key: Option<&str>) -> Option<String> {
         logo_cache_key
             .filter(|key| {
-                self.images
-                    .card_image_states
+                self.card_image_states
                     .get(*key)
                     .is_some_and(|entry| entry.img.is_some())
             })
@@ -304,7 +342,7 @@ impl App {
         logo_cache_key: Option<&str>,
     ) -> image::DynamicImage {
         let Some(logo) = logo_cache_key
-            .and_then(|key| self.images.card_image_states.get(key))
+            .and_then(|key| self.card_image_states.get(key))
             .and_then(|entry| entry.img.as_ref())
         else {
             return img;
@@ -324,8 +362,9 @@ impl App {
         cache_key: &str,
         box_cells: (u16, u16),
         logo_cache_key: Option<&str>,
+        suffix: &'static str,
     ) -> bool {
-        let Some(entry) = self.images.card_image_states.get(cache_key) else {
+        let Some(entry) = self.card_image_states.get(cache_key) else {
             return false;
         };
         let Some(source) = entry.img.clone() else {
@@ -338,20 +377,17 @@ impl App {
         {
             return true;
         }
-        let Some((suffix, picker)) = self
-            .picker_and_suffix()
-            .map(|(picker, suffix)| (suffix, picker.clone()))
-        else {
+        let Some(picker) = self.picker_for_suffix(suffix).cloned() else {
             return false;
         };
-        let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
+        let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1, suffix);
         let cropped = self.decorate_with_logo(
             cover_fill_hero_box(&source, px_w, px_h),
             desired_logo_key.as_deref(),
         );
         let bare_key = cache_key.to_string();
         let proto = self.build_protocol(&bare_key, suffix, &picker, cropped);
-        if let Some(entry) = self.images.card_image_states.get_mut(cache_key) {
+        if let Some(entry) = self.card_image_states.get_mut(cache_key) {
             entry.protocols.clear();
             entry.protocols.insert(suffix, proto);
             entry.cover_box = Some(box_cells);
@@ -370,11 +406,12 @@ impl App {
         &mut self,
         f: &mut ratatui::Frame,
         paint: &crate::app::components::library_panel::PanelHeroImagePaint,
+        suffix: &'static str,
     ) {
         if paint.area.width == 0 || paint.area.height == 0 {
             return;
         }
-        if let Some(state) = self.cached_image_protocol_mut(&paint.cache_key) {
+        if let Some(state) = self.cached_image_protocol_mut(&paint.cache_key, suffix) {
             type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = ratatui::layout::Size {
                 width: paint.area.width,
@@ -576,13 +613,17 @@ mod protocol_tests {
     fn arriving_logo_rebuilds_base_only_protocol_once() {
         let mut app = app_with_base();
 
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
+        assert!(app
+            .images
+            .ensure_hero_cover_protocol(BASE_KEY, BOX, None, "kitty"));
         assert_eq!(build_count(&app), 1);
 
         app.images
             .card_image_states
             .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert!(app
+            .images
+            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
         assert_eq!(build_count(&app), 2);
         assert_eq!(
             app.images
@@ -592,15 +633,21 @@ mod protocol_tests {
             Some(LOGO_KEY)
         );
 
-        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert!(app
+            .images
+            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
         assert_eq!(build_count(&app), 2);
     }
 
     #[test]
     fn failed_or_absent_logo_keeps_base_only_protocol_valid() {
         let mut absent = app_with_base();
-        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
-        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert!(absent
+            .images
+            .ensure_hero_cover_protocol(BASE_KEY, BOX, None, "kitty"));
+        assert!(absent
+            .images
+            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
         assert_eq!(build_count(&absent), 1);
         assert!(absent
             .images
@@ -613,8 +660,12 @@ mod protocol_tests {
             .images
             .card_image_states
             .insert(LOGO_KEY.to_owned(), CachedImage::empty());
-        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
-        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert!(failed
+            .images
+            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
+        assert!(failed
+            .images
+            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
         assert_eq!(build_count(&failed), 1);
         assert!(failed
             .images

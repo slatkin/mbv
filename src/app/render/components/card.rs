@@ -302,7 +302,8 @@ impl App {
         let loading = !placeholder_slot && self.images.card_image_loading.contains(key);
         let last_card = (self.images.last_card_height, self.images.last_card_width);
         let terminal_height = self.terminal_height;
-        let image = self.cached_image_protocol_mut(key);
+        let suffix = self.current_protocol_suffix();
+        let image = self.images.cached_image_protocol_mut(key, suffix);
         let (height, width, loading) = render_card_painting(
             f,
             area,
@@ -449,7 +450,7 @@ impl App {
     pub(in crate::app) fn refresh_queue_card_image(&mut self) {
         let mut projection = QueueCardProjection {
             cache_key: None,
-            images_enabled: self.images_enabled(),
+            images_enabled: self.images.images_enabled(),
             visualizer: self.visualizer_enabled,
         };
         if projection.visualizer || !projection.images_enabled {
