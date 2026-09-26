@@ -55,15 +55,7 @@ pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
                 0.0
             }
         }
-        QueueItem::Audiobookshelf(item) => {
-            let runtime = i64::try_from(item.duration().unwrap_or(0)).unwrap_or(i64::MAX);
-            let position_ticks = item.playback_position_ticks();
-            if crate::api::should_resume(position_ticks, runtime) {
-                position_ticks as f64 / crate::api::TICKS_PER_SECOND as f64
-            } else {
-                0.0
-            }
-        }
+        QueueItem::Audiobookshelf(item) => item.resume_seconds(),
     }
 }
 

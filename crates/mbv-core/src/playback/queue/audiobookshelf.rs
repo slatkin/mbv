@@ -133,6 +133,14 @@ pub enum AudiobookshelfItem {
 
 impl AudiobookshelfItem {
     #[must_use]
+    pub fn resume_seconds(&self) -> f64 {
+        match self {
+            Self::Episode(item) => item.resume_seconds(),
+            Self::Book(item) => item.resume_seconds(),
+        }
+    }
+
+    #[must_use]
     pub fn title(&self) -> &str {
         match self {
             Self::Episode(item) => &item.title,

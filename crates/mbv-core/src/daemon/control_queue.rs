@@ -306,18 +306,16 @@ pub(crate) fn abs_queue_transport_rejection<'a>(
     supports_abs_book_queue: bool,
 ) -> Option<String> {
     if !supports_abs_queue
-        && items.clone().into_iter().any(|item| {
-            matches!(
-                item,
-                QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_))
-            )
-        })
+        && items
+            .clone()
+            .into_iter()
+            .any(|item| item.as_audiobookshelf().is_some())
     {
         Some("peer did not negotiate Audiobookshelf queue transport".to_string())
     } else if !supports_abs_book_queue
         && items
             .into_iter()
-            .any(|item| matches!(item, QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_))))
+            .any(|item| item.as_audiobookshelf_book().is_some())
     {
         Some("peer did not negotiate Audiobookshelf book queue transport".to_string())
     } else {

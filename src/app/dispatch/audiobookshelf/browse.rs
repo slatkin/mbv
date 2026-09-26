@@ -3,7 +3,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::App;
 use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
+use mbv_core::playback_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
 
 mod books;
 pub(in crate::app) use books::audiobookshelf_book_queue_item;
@@ -437,34 +437,28 @@ impl App {
             target.library_item_id().to_owned(),
             target.episode_id().to_owned(),
         ));
-        if let Some(mut item) = self
+        if let Some(mut episode) = self
             .audiobookshelf_shelf_cache
             .get(library_id)
             .and_then(|items| {
-                items.iter().find(|item| {
-                    matches!(
-                        item,
-                        QueueItem::Audiobookshelf(
-                            mbv_core::playback_queue::AudiobookshelfItem::Episode(episode)
-                        ) if episode.library_item_id == target.library_item_id()
+                items
+                    .iter()
+                    .filter_map(QueueItem::as_audiobookshelf)
+                    .find(|episode| {
+                        episode.library_item_id == target.library_item_id()
                             && episode.episode_id == target.episode_id()
-                    )
-                })
+                    })
             })
             .cloned()
         {
-            if let (
-                QueueItem::Audiobookshelf(mbv_core::playback_queue::AudiobookshelfItem::Episode(
-                    episode,
-                )),
-                Some(progress),
-            ) = (&mut item, progress)
-            {
+            if let Some(progress) = progress {
                 episode.position_ticks = seconds_to_ticks(progress.current_time_seconds);
                 episode.played = progress.is_finished;
                 episode.is_finished = progress.is_finished;
             }
-            return Some(item);
+            return Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(
+                episode,
+            )));
         }
         // The episode is resolved by its own `(library_item_id, episode_id)`
         // identity from the per-show cache, never from the tab's current
@@ -483,8 +477,8 @@ impl App {
         });
         let is_finished = progress.is_some_and(|progress| progress.is_finished);
 
-        Some(QueueItem::Audiobookshelf(
-            mbv_core::playback_queue::AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
+        Some(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(
+            AudiobookshelfQueueItem {
                 library_item_id: episode.library_item_id.clone(),
                 episode_id: episode.episode_id.clone(),
                 title: episode.title.clone(),
@@ -497,8 +491,8 @@ impl App {
                 pub_date_secs: episode.published_at,
                 is_finished,
                 cover_path: show.and_then(|show| show.cover_path.clone()),
-            }),
-        ))
+            },
+        )))
     }
 }
 
