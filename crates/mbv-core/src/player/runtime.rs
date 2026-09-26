@@ -463,16 +463,10 @@ pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_
     let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
     let v = i64::from(initial_volume).clamp(0, st.volume_max);
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "player volume (i64) → f64 for the mpv cube-root volume curve; the curve has no integer path (approved, issue #804)"
-    )]
-    let raw = crate::api::i64_ticks_saturating((10.0 * (v as f64).sqrt()).round());
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "computed volume (i64) → f64 for the mpv volume property; mpv stores volume as a float (approved, issue #804)"
-    )]
-    let _ = mpv.set_property("volume", raw as f64);
+    let raw = crate::api::i64_ticks_saturating(
+        (10.0 * f64::from(u32::try_from(v).unwrap_or(u32::MAX)).sqrt()).round(),
+    );
+    let _ = mpv.set_property("volume", f64::from(u32::try_from(raw).unwrap_or(u32::MAX)));
     st.volume = v;
 }
 
