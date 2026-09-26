@@ -7,8 +7,8 @@
 
 ## 2. Family A — ticks→seconds (~19 sites)
 
-- [ ] 2.1 Migrate mbv-core sites to `ticks_to_seconds` (or `TICKS_PER_SECOND_F64` where the product stays f64): `player.rs:43`, `daemon/ws.rs:147`, `player/reporting.rs:8,224`, `player/sources.rs:158`, `player/run/queue.rs:422`, `player/run/events/restart.rs:82`, `playback/queue/audiobookshelf.rs:54,108`, `api/types.rs:391,405`. Delete each expect. Verify: `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core`, `rg -c cast_precision_loss crates/mbv-core` drops accordingly.
-- [ ] 2.2 Migrate app-side sites: `dispatch/session/player_event.rs:115,233`, `dispatch/session/ws_event.rs:35`, `dispatch/library/event_reconcile.rs:85`, `dispatch/mouse_gestures.rs:47`, and `components/library_panel/hero.rs:417` via a new `int_ratio(numer, denom) -> f64` helper (design Decision 5) placed beside its other user in `render/components/`. Delete each expect. Verify: `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv`.
+- [x] 2.1 Migrate mbv-core sites to `ticks_to_seconds` (or `TICKS_PER_SECOND_F64` where the product stays f64): `player.rs:43`, `daemon/ws.rs:147`, `player/reporting.rs:8,224`, `player/sources.rs:158`, `player/run/queue.rs:422`, `player/run/events/restart.rs:82`, `playback/queue/audiobookshelf.rs:54,108`, `api/types.rs:391,405`. Delete each expect. Verify: `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core`, `rg -c cast_precision_loss crates/mbv-core` drops accordingly.
+- [x] 2.2 Migrate app-side sites: `dispatch/session/player_event.rs:115,233`, `dispatch/session/ws_event.rs:35`, `dispatch/library/event_reconcile.rs:85`, `dispatch/mouse_gestures.rs:47`, and `components/library_panel/hero.rs:417` via a new `int_ratio(numer, denom) -> f64` helper (design Decision 5) placed beside its other user in `render/components/`. Delete each expect. Verify: `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv`.
 
 ## 3. Family B — seconds→ticks (~12 sites)
 
