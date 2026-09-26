@@ -121,12 +121,12 @@ impl ContextMenuComponent {
             MouseEventKind::Down(MouseButton::Left) => {
                 if inside && pos.y >= inner_y {
                     let idx = (pos.y - inner_y) as usize;
-                    if let Some(entry) = self.entries.get(idx) {
-                        if entry.action.is_some() {
-                            return Some(Msg::Shell(Box::new(ShellRequest::ContextMenuSelect(
-                                idx,
-                            ))));
-                        }
+                    if self
+                        .entries
+                        .get(idx)
+                        .is_some_and(|entry| entry.action.is_some())
+                    {
+                        return Some(Msg::Shell(Box::new(ShellRequest::ContextMenuSelect(idx))));
                     }
                 }
                 Some(Msg::Shell(Box::new(ShellRequest::ContextMenuDismiss)))
@@ -137,12 +137,15 @@ impl ContextMenuComponent {
                     && self.menu_rect.y + 1 + self.entries.len() as u16 > pos.y
                 {
                     let idx = (pos.y - inner_y) as usize;
-                    if let Some(entry) = self.entries.get(idx) {
-                        if entry.action.is_some() && idx != self.cursor {
-                            self.cursor = idx;
-                            // Force a redraw so the highlight follows the pointer.
-                            return None;
-                        }
+                    if self
+                        .entries
+                        .get(idx)
+                        .is_some_and(|entry| entry.action.is_some())
+                        && idx != self.cursor
+                    {
+                        self.cursor = idx;
+                        // Force a redraw so the highlight follows the pointer.
+                        return None;
                     }
                 }
                 None

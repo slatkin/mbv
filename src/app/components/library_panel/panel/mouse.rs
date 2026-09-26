@@ -40,22 +40,29 @@ impl LibraryPanel {
         Some(Msg::TerminalEvent(claim))
     }
 
+    fn hero_wheel_result(&mut self, at: Position, delta: i64) -> (bool, Option<Msg>) {
+        let Some(geometry) = self.wide_geometry.as_ref() else {
+            return (false, None);
+        };
+        let Some(rect) = geometry.overview_box else {
+            return (false, None);
+        };
+        if !rect.contains(at) || geometry.overview_content_length <= geometry.overview_viewport {
+            return (false, None);
+        }
+        let max = geometry.overview_content_length - geometry.overview_viewport;
+        let message = self.owners.active_mut().map(|owner| {
+            owner.hero_scroll(delta as i16, max);
+            Msg::TerminalEvent(crate::app::components::msg::TerminalObserverEvent::MouseClaimed)
+        });
+        (true, message)
+    }
+
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         if let LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel { at, delta }) = event {
-            if let Some(geometry) = self.wide_geometry.as_ref() {
-                if let Some(rect) = geometry.overview_box {
-                    if rect.contains(at)
-                        && geometry.overview_content_length > geometry.overview_viewport
-                    {
-                        let max = geometry.overview_content_length - geometry.overview_viewport;
-                        return self.owners.active_mut().map(|owner| {
-                            owner.hero_scroll(delta as i16, max);
-                            Msg::TerminalEvent(
-                                crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
-                            )
-                        });
-                    }
-                }
+            let (handled, message) = self.hero_wheel_result(at, delta);
+            if handled {
+                return message;
             }
             // Otherwise preserve the owner's existing HeroPane behavior.
         }

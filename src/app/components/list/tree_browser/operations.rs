@@ -701,6 +701,33 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         rows
     }
 
+    fn retained_row(
+        &self,
+        row: VisibleRow,
+        index: usize,
+        claim_rect: Rect,
+        content_rect: Rect,
+    ) -> Option<(Rect, Target)> {
+        let VisibleRow::Node(id) = row else {
+            return None;
+        };
+        let y = content_rect.y.checked_add(index as u16)?;
+        if y >= content_rect.bottom() {
+            return None;
+        }
+        let entry = self.arena.get(&id)?;
+        let target = entry.node.target.clone();
+        let marked = self.marks.contains(&target);
+        let selected = self.focused && self.selected.as_ref() == Some(&target);
+        let full_width = tree_row_is_full_width(selected, marked);
+        let rect = if full_width {
+            Rect::new(claim_rect.x, y, claim_rect.width, 1)
+        } else {
+            Rect::new(content_rect.x, y, content_rect.width, 1)
+        };
+        Some((rect, target))
+    }
+
     pub(super) fn retained_rows(
         &self,
         visible_rows: &[VisibleRow],
@@ -712,26 +739,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .copied()
             .skip(self.viewport_offset)
             .enumerate()
-            .filter_map(|(index, row)| {
-                let VisibleRow::Node(id) = row else {
-                    return None;
-                };
-                let y = content_rect.y.checked_add(index as u16)?;
-                (y < content_rect.bottom()).then(|| {
-                    self.arena.get(&id).map(|entry| {
-                        let target = entry.node.target.clone();
-                        let marked = self.marks.contains(&target);
-                        let selected = self.focused && self.selected.as_ref() == Some(&target);
-                        let full_width = tree_row_is_full_width(selected, marked);
-                        let rect = if full_width {
-                            Rect::new(claim_rect.x, y, claim_rect.width, 1)
-                        } else {
-                            Rect::new(content_rect.x, y, content_rect.width, 1)
-                        };
-                        (rect, target)
-                    })
-                })?
-            })
+            .filter_map(|(index, row)| self.retained_row(row, index, claim_rect, content_rect))
             .collect()
     }
 }

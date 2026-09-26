@@ -210,6 +210,22 @@ impl MusicContent {
         }
     }
 
+    fn project_artist_track_group(
+        &mut self,
+        group: &crate::app::state::music_artist_detail::ArtistTrackGroup,
+    ) {
+        for (index, album) in self.context.list.items.iter().enumerate() {
+            if album.id != group.album_id {
+                continue;
+            }
+            let Some(target) = self.context.album_targets.get(index) else {
+                continue;
+            };
+            self.tree_tracks
+                .insert(target.clone(), group.tracks.clone());
+        }
+    }
+
     /// Refreshes the component's projected view of the shell-owned artist
     /// cache. It is retained across a local move onto an album child because
     /// the shell's next album snapshot does not itself carry the artist cache.
@@ -220,15 +236,8 @@ impl MusicContent {
         }
         if let Some(detail) = self.current_artist_detail() {
             let groups = detail.track_groups.clone();
-            for group in groups {
-                for (index, album) in self.context.list.items.iter().enumerate() {
-                    if album.id == group.album_id {
-                        if let Some(target) = self.context.album_targets.get(index) {
-                            self.tree_tracks
-                                .insert(target.clone(), group.tracks.clone());
-                        }
-                    }
-                }
+            for group in &groups {
+                self.project_artist_track_group(group);
             }
             return;
         }

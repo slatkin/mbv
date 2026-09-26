@@ -304,6 +304,19 @@ fn sanitize_label(label: &str) -> Option<&str> {
     (!contains_control(label)).then_some(label)
 }
 
+fn underline_link_cells(f: &mut Frame, cell: Rect, offset: usize, label_width: usize) {
+    for x in offset..offset + label_width {
+        let Some(cell) = f.buffer_mut().cell_mut((cell.x + x as u16, cell.y)) else {
+            continue;
+        };
+        cell.set_style(
+            cell.style()
+                .fg(palette::TEXT_METADATA)
+                .add_modifier(ratatui::style::Modifier::UNDERLINED),
+        );
+    }
+}
+
 /// Registers hover underline and hit regions for the links row painted in
 /// `cell` (a full-width stacked row or one landscape-grid cell). `bottom`
 /// clips rows outside the text block. A label run wider than the cell
@@ -327,15 +340,7 @@ fn paint_link_hit_row(
             && sanitize_label(&link.name).is_some()
         {
             if hovered_link == Some(link_index) {
-                for x in offset..offset + label_width {
-                    if let Some(cell) = f.buffer_mut().cell_mut((cell.x + x as u16, cell.y)) {
-                        cell.set_style(
-                            cell.style()
-                                .fg(palette::TEXT_METADATA)
-                                .add_modifier(ratatui::style::Modifier::UNDERLINED),
-                        );
-                    }
-                }
+                underline_link_cells(f, cell, offset, label_width);
             }
             link_hits.push(
                 Rect::new(cell.x + offset as u16, cell.y, label_width as u16, 1),

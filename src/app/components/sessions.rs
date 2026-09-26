@@ -218,14 +218,10 @@ impl SessionsComponent {
                             "{} · {}@{}",
                             session.client, session.user_name, session.host
                         );
-                        let state_icon = if session.now_playing.is_some() {
-                            if session.is_paused {
-                                "⏸"
-                            } else {
-                                "▶"
-                            }
-                        } else {
-                            "■"
+                        let state_icon = match (session.now_playing.is_some(), session.is_paused) {
+                            (true, true) => "⏸",
+                            (true, false) => "▶",
+                            (false, _) => "■",
                         };
                         let time = if session.now_playing.is_some() {
                             format!(
