@@ -38,7 +38,7 @@ fn configured_startup_is_independent_and_reaches_ready() {
     )
     .unwrap();
     let mut app = App::new_independent(&config);
-    assert!(app.audiobookshelf_startup_request.is_some());
+    assert!(app.setup.audiobookshelf_startup_request.is_some());
     let generation = app.audiobookshelf_runtime.generation();
     app.apply_audiobookshelf_completion(completion(
         generation,

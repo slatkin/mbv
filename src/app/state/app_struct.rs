@@ -83,20 +83,7 @@ pub struct App {
     pub(in crate::app) config: std::sync::Arc<std::sync::Mutex<crate::config::Config>>,
     pub(in crate::app) emby_runtime: EmbyRuntime,
     pub(in crate::app) audiobookshelf_runtime: AudiobookshelfRuntime,
-    pub(in crate::app) emby_startup_rx:
-        Option<crate::app::dispatch::session::service_startup::StartupReceiver>,
-    pub(in crate::app) emby_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(in crate::app) audiobookshelf_startup_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfStartupReceiver>,
-    pub(in crate::app) audiobookshelf_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(in crate::app) audiobookshelf_catalog_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfCatalogReceiver>,
+    pub(in crate::app) setup: crate::app::state::service_setup::ServiceSetup,
     pub(in crate::app) audiobookshelf_libraries:
         Vec<mbv_core::audiobookshelf::AudiobookshelfLibrary>,
     /// Most-recent `Newest Episodes` shelf per podcast library (async shelf
@@ -109,23 +96,6 @@ pub struct App {
         Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState>,
     pub(in crate::app) audiobookshelf_book_browse:
         Vec<crate::app::state::types::audiobookshelf_browse::AudiobookshelfBookBrowseState>,
-    pub(in crate::app) audiobookshelf_test_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfStartupReceiver>,
-    pub(in crate::app) audiobookshelf_setup_rx: Option<
-        std::sync::mpsc::Receiver<
-            crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion,
-        >,
-    >,
-    pub(in crate::app) emby_setup_form:
-        Option<crate::app::dispatch::session::services_settings::EmbySetupForm>,
-    pub(in crate::app) audiobookshelf_setup_form:
-        Option<crate::app::dispatch::session::services_settings::AudiobookshelfSetupForm>,
-    pub(in crate::app) emby_setup_rx:
-        Option<mpsc::Receiver<crate::app::dispatch::session::service_startup::SetupCompletion>>,
-    pub(in crate::app) pending_emby_replacement:
-        Option<crate::app::dispatch::session::service_startup::Startup>,
-    pub(in crate::app) pending_audiobookshelf_replacement:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement>,
     pub(in crate::app) player: PlayerProxy,
     /// Bare mode's owner-side transition state. Remote targets use their
     /// daemon-owned coordinator; this is still hosted here so local jumps

@@ -202,8 +202,8 @@ impl App {
                     startup.client.config.password.clear();
                     startup.client.config.api_key.clear();
                     self.emby_runtime.state = completion.previous_state;
-                    self.pending_emby_replacement = Some(startup);
-                    self.emby_setup_form = None;
+                    self.setup.pending_emby_replacement = Some(startup);
+                    self.setup.emby_setup_form = None;
                     self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
                         title: " Replace Emby ".into(),
                         message: "Replace Emby? The previous server's queues, positions, routes, caches, and credential will be cleared.".into(),
@@ -217,7 +217,7 @@ impl App {
                     mbv_core::config::persist_emby_setup_and_secret(&startup.setup, &token)
                 {
                     self.emby_runtime.state = completion.previous_state;
-                    if let Some(form) = self.emby_setup_form.as_mut() {
+                    if let Some(form) = self.setup.emby_setup_form.as_mut() {
                         form.busy = false;
                         form.error = error;
                         form.fields[2].clear();
@@ -264,13 +264,13 @@ impl App {
                     config.password.clear();
                     config.api_key.clear();
                 };
-                self.emby_setup_form = None;
+                self.setup.emby_setup_form = None;
                 self.flash("Emby is ready".into(), ToastSeverity::Success);
                 Some(content)
             }
             Err(error) => {
                 self.emby_runtime.state = completion.previous_state;
-                if let Some(form) = self.emby_setup_form.as_mut() {
+                if let Some(form) = self.setup.emby_setup_form.as_mut() {
                     form.busy = false;
                     form.error = error;
                     form.fields[2].clear();

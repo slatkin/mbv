@@ -14,9 +14,9 @@ impl App {
         let mut produced = false;
         for test in [false, true] {
             let receiver = if test {
-                self.audiobookshelf_test_rx.take()
+                self.setup.audiobookshelf_test_rx.take()
             } else {
-                self.audiobookshelf_startup_rx.take()
+                self.setup.audiobookshelf_startup_rx.take()
             };
             let Some(receiver) = receiver else { continue };
             match receiver.rx.try_recv() {
@@ -26,9 +26,9 @@ impl App {
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
                     if test {
-                        self.audiobookshelf_test_rx = Some(receiver);
+                        self.setup.audiobookshelf_test_rx = Some(receiver);
                     } else {
-                        self.audiobookshelf_startup_rx = Some(receiver);
+                        self.setup.audiobookshelf_startup_rx = Some(receiver);
                     }
                 }
                 Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -41,7 +41,7 @@ impl App {
     }
 
     fn drain_audiobookshelf_setup_event(&mut self) -> bool {
-        let Some(receiver) = self.audiobookshelf_setup_rx.take() else {
+        let Some(receiver) = self.setup.audiobookshelf_setup_rx.take() else {
             return false;
         };
         match receiver.try_recv() {
@@ -50,7 +50,7 @@ impl App {
                 true
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
-                self.audiobookshelf_setup_rx = Some(receiver);
+                self.setup.audiobookshelf_setup_rx = Some(receiver);
                 false
             }
             Err(std::sync::mpsc::TryRecvError::Disconnected) => {
@@ -61,7 +61,7 @@ impl App {
     }
 
     fn drain_audiobookshelf_catalog_event(&mut self) -> bool {
-        let Some(receiver) = self.audiobookshelf_catalog_rx.take() else {
+        let Some(receiver) = self.setup.audiobookshelf_catalog_rx.take() else {
             return false;
         };
         match receiver.rx.try_recv() {
@@ -70,7 +70,7 @@ impl App {
                 true
             }
             Err(std::sync::mpsc::TryRecvError::Empty) => {
-                self.audiobookshelf_catalog_rx = Some(receiver);
+                self.setup.audiobookshelf_catalog_rx = Some(receiver);
                 false
             }
             _ => false,

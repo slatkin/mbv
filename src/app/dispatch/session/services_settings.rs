@@ -55,12 +55,12 @@ impl App {
     fn open_emby_setup(&mut self) {
         let previous = self.emby_runtime.state;
         let config = self.config.lock().unwrap().clone();
-        self.emby_setup_form = Some(EmbySetupForm::new(&config, previous));
+        self.setup.emby_setup_form = Some(EmbySetupForm::new(&config, previous));
     }
 
     fn open_audiobookshelf_setup(&mut self) {
         let config = self.config.lock().unwrap().clone();
-        self.audiobookshelf_setup_form = Some(AudiobookshelfSetupForm {
+        self.setup.audiobookshelf_setup_form = Some(AudiobookshelfSetupForm {
             fields: [
                 config
                     .audiobookshelf_setup
@@ -77,28 +77,28 @@ impl App {
     }
 
     pub(in crate::app) fn cancel_emby_setup(&mut self) {
-        if let Some(form) = self.emby_setup_form.take() {
+        if let Some(form) = self.setup.emby_setup_form.take() {
             if let Some(generation) = form.generation {
                 self.emby_runtime
                     .cancel_setup(generation, form.previous_state);
             }
         }
-        self.emby_setup_rx = None;
+        self.setup.emby_setup_rx = None;
     }
 
     pub(in crate::app) fn cancel_audiobookshelf_setup(&mut self) {
-        if let Some(mut form) = self.audiobookshelf_setup_form.take() {
+        if let Some(mut form) = self.setup.audiobookshelf_setup_form.take() {
             form.fields[1].clear();
             if let Some(generation) = form.generation {
                 self.audiobookshelf_runtime
                     .cancel_setup(generation, form.previous_state);
             }
         }
-        self.audiobookshelf_setup_rx = None;
+        self.setup.audiobookshelf_setup_rx = None;
     }
 
     pub(in crate::app) fn submit_audiobookshelf_setup(&mut self) {
-        let Some(form) = self.audiobookshelf_setup_form.as_mut() else {
+        let Some(form) = self.setup.audiobookshelf_setup_form.as_mut() else {
             return;
         };
         if form.busy {
@@ -117,7 +117,7 @@ impl App {
         form.generation = Some(generation);
         form.busy = true;
         form.error = "Validating Audiobookshelf setup…".into();
-        self.audiobookshelf_setup_rx = Some(
+        self.setup.audiobookshelf_setup_rx = Some(
             crate::app::dispatch::session::service_startup::start_audiobookshelf_setup(
                 server_url,
                 api_key,
@@ -128,8 +128,8 @@ impl App {
     }
 
     pub(in crate::app) fn handle_emby_setup_worker_disconnect(&mut self) {
-        let Some(form) = self.emby_setup_form.as_mut() else {
-            self.emby_setup_rx = None;
+        let Some(form) = self.setup.emby_setup_form.as_mut() else {
+            self.setup.emby_setup_rx = None;
             return;
         };
         if let Some(generation) = form.generation {
@@ -141,11 +141,11 @@ impl App {
         form.busy = false;
         form.fields[2].clear();
         form.error = "Emby setup stopped unexpectedly; check the server and retry".into();
-        self.emby_setup_rx = None;
+        self.setup.emby_setup_rx = None;
     }
 
     pub(in crate::app) fn submit_emby_setup(&mut self) {
-        let Some(form) = self.emby_setup_form.as_mut() else {
+        let Some(form) = self.setup.emby_setup_form.as_mut() else {
             return;
         };
         if form.busy {
@@ -174,9 +174,10 @@ impl App {
         form.error = "Validating Emby setup…".into();
         let previous = form.previous_state;
         let config = self.config.lock().unwrap().clone();
-        self.emby_setup_rx = Some(crate::app::dispatch::session::service_startup::start_setup(
-            config, server_url, username, password, generation, previous,
-        ));
+        self.setup.emby_setup_rx =
+            Some(crate::app::dispatch::session::service_startup::start_setup(
+                config, server_url, username, password, generation, previous,
+            ));
     }
 
     pub(in crate::app) fn activate_service_entry(&mut self, entry: ServiceEntry) {
@@ -297,7 +298,7 @@ impl App {
             return;
         }
         let generation = self.emby_runtime.begin_retry();
-        self.emby_startup_rx = Some(crate::app::dispatch::session::service_startup::start(
+        self.setup.emby_startup_rx = Some(crate::app::dispatch::session::service_startup::start(
             config, generation,
         ));
     }

@@ -274,7 +274,7 @@ impl App {
         } else {
             app.queue_source = remote_queue_source;
         }
-        app.audiobookshelf_startup_request = (services.audiobookshelf_configured
+        app.setup.audiobookshelf_startup_request = (services.audiobookshelf_configured
             && services.audiobookshelf_credential_present)
             .then_some((
                 app.config.lock().unwrap().clone(),

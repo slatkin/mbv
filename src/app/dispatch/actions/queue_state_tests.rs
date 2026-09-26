@@ -246,7 +246,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     })
     .unwrap();
     let generation = app.audiobookshelf_runtime.generation();
-    app.pending_audiobookshelf_replacement = Some(
+    app.setup.pending_audiobookshelf_replacement = Some(
         crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
             candidate:
                 crate::app::dispatch::session::service_startup::AudiobookshelfValidatedCandidate {

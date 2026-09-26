@@ -102,26 +102,29 @@ impl Model {
             })
             .collect();
 
-        let setup =
-            self.app
-                .emby_setup_form
-                .as_ref()
-                .map(|form| SetupDraft::Emby {
-                    fields: form.fields.clone(),
-                    focus: form.focus,
-                    busy: form.busy,
-                    error: form.error.clone(),
-                })
-                .or_else(|| {
-                    self.app.audiobookshelf_setup_form.as_ref().map(|form| {
-                        SetupDraft::Audiobookshelf {
-                            fields: form.fields.clone(),
-                            focus: form.focus,
-                            busy: form.busy,
-                            error: form.error.clone(),
-                        }
+        let setup = self
+            .app
+            .setup
+            .emby_setup_form
+            .as_ref()
+            .map(|form| SetupDraft::Emby {
+                fields: form.fields.clone(),
+                focus: form.focus,
+                busy: form.busy,
+                error: form.error.clone(),
+            })
+            .or_else(|| {
+                self.app
+                    .setup
+                    .audiobookshelf_setup_form
+                    .as_ref()
+                    .map(|form| SetupDraft::Audiobookshelf {
+                        fields: form.fields.clone(),
+                        focus: form.focus,
+                        busy: form.busy,
+                        error: form.error.clone(),
                     })
-                });
+            });
         SettingsSnapshot {
             destination: self.app.settings_destination,
             rows,
@@ -232,7 +235,7 @@ impl Model {
                 username,
                 password,
             } => {
-                if let Some(form) = self.app.emby_setup_form.as_mut() {
+                if let Some(form) = self.app.setup.emby_setup_form.as_mut() {
                     form.fields = [server_url, username, password];
                     form.focus = 2;
                 }
@@ -243,7 +246,7 @@ impl Model {
                 server_url,
                 api_key,
             } => {
-                if let Some(form) = self.app.audiobookshelf_setup_form.as_mut() {
+                if let Some(form) = self.app.setup.audiobookshelf_setup_form.as_mut() {
                     form.fields = [server_url, api_key];
                     form.focus = 1;
                 }
@@ -251,9 +254,9 @@ impl Model {
                 false
             }
             ServiceRequest::CancelSetup => {
-                if self.app.emby_setup_form.is_some() {
+                if self.app.setup.emby_setup_form.is_some() {
                     self.app.cancel_emby_setup();
-                } else if self.app.audiobookshelf_setup_form.is_some() {
+                } else if self.app.setup.audiobookshelf_setup_form.is_some() {
                     self.app.cancel_audiobookshelf_setup();
                 }
                 false
@@ -313,7 +316,7 @@ mod tests {
         app.open_services_settings();
         let mut model = Model::new(app);
         model.handle_service_request(ServiceRequest::ActivateService(0));
-        assert!(model.app.emby_setup_form.is_some());
+        assert!(model.app.setup.emby_setup_form.is_some());
 
         model.handle_service_request(ServiceRequest::SubmitEmbySetup {
             server_url: String::new(),
@@ -322,6 +325,7 @@ mod tests {
         });
         assert!(model
             .app
+            .setup
             .emby_setup_form
             .as_ref()
             .is_some_and(|form| !form.error.is_empty()));

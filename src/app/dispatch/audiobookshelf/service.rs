@@ -78,12 +78,12 @@ impl App {
                 {
                     self.audiobookshelf_runtime
                         .complete(completion.generation, completion.previous_state);
-                    self.pending_audiobookshelf_replacement =
+                    self.setup.pending_audiobookshelf_replacement =
                         Some(crate::app::dispatch::session::service_startup::AudiobookshelfPendingReplacement {
                             candidate,
                             previous_state: completion.previous_state,
                         });
-                    self.audiobookshelf_setup_form = None;
+                    self.setup.audiobookshelf_setup_form = None;
                     self.ask_confirm(crate::app::state::types::confirm::ConfirmModal {
                         title: " Replace Audiobookshelf ".into(),
                         message:
@@ -114,7 +114,7 @@ impl App {
                         .commit_ready(completion.generation, user.clone());
                     self.start_audiobookshelf_socket(completion.generation);
                     self.install_audiobookshelf_player_context(completion.generation);
-                    self.audiobookshelf_setup_form = None;
+                    self.setup.audiobookshelf_setup_form = None;
                     self.signal_running_local_daemon(revision);
                     self.flash(
                         format!(
@@ -126,7 +126,7 @@ impl App {
                 } else {
                     self.audiobookshelf_runtime
                         .complete(completion.generation, completion.previous_state);
-                    if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
+                    if let Some(form) = self.setup.audiobookshelf_setup_form.as_mut() {
                         form.busy = false;
                         form.error = "Could not save Audiobookshelf setup".into();
                     }
@@ -135,7 +135,7 @@ impl App {
             Err(error) => {
                 self.audiobookshelf_runtime
                     .complete(completion.generation, completion.previous_state);
-                if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
+                if let Some(form) = self.setup.audiobookshelf_setup_form.as_mut() {
                     form.busy = false;
                     form.error = error.to_string();
                 }
@@ -145,10 +145,11 @@ impl App {
 
     pub(in crate::app) fn handle_audiobookshelf_setup_worker_disconnect(&mut self) {
         let previous = self
+            .setup
             .audiobookshelf_setup_form
             .as_ref()
             .map_or(ServiceState::NotConfigured, |form| form.previous_state);
-        if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
+        if let Some(form) = self.setup.audiobookshelf_setup_form.as_mut() {
             form.busy = false;
             form.error = "Audiobookshelf setup stopped unexpectedly; retry".into();
         }
@@ -245,13 +246,14 @@ impl App {
             return;
         }
         let previous_state = self
+            .setup
             .pending_audiobookshelf_replacement
             .as_ref()
             .map_or(self.audiobookshelf_runtime.state, |pending| {
                 pending.previous_state
             });
         self.stop_active_audiobookshelf_playback();
-        let Some(pending) = self.pending_audiobookshelf_replacement.take() else {
+        let Some(pending) = self.setup.pending_audiobookshelf_replacement.take() else {
             return;
         };
         let candidate = pending.candidate;

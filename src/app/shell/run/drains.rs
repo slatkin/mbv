@@ -43,7 +43,7 @@ impl Model {
     /// any event was drained.
     pub(super) fn drain_startup_workers(&mut self) -> bool {
         let mut had_events = false;
-        if let Some(mut worker) = self.app.emby_startup_rx.take() {
+        if let Some(mut worker) = self.app.setup.emby_startup_rx.take() {
             let generation = worker.generation;
             match self.drain_worker(
                 &mut worker.rx,
@@ -53,10 +53,10 @@ impl Model {
                 |model| model.app.handle_emby_startup_worker_disconnect(generation),
             ) {
                 WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
-                WorkerDrain::Empty => self.app.emby_startup_rx = Some(worker),
+                WorkerDrain::Empty => self.app.setup.emby_startup_rx = Some(worker),
             }
         }
-        if let Some(mut rx) = self.app.emby_setup_rx.take() {
+        if let Some(mut rx) = self.app.setup.emby_setup_rx.take() {
             match self.drain_worker(
                 &mut rx,
                 // Emby setup drain re-bootstraps Home content; assign +
@@ -65,7 +65,7 @@ impl Model {
                 |model| model.app.handle_emby_setup_worker_disconnect(),
             ) {
                 WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
-                WorkerDrain::Empty => self.app.emby_setup_rx = Some(rx),
+                WorkerDrain::Empty => self.app.setup.emby_setup_rx = Some(rx),
             }
         }
         had_events
@@ -453,11 +453,11 @@ impl Model {
         // Only start the configured Remote Service after the first TUI frame
         // has been rendered. The selected Player owner and UI therefore never
         // wait for Emby setup, authentication, or connectivity.
-        if let Some((config, generation)) = self.app.emby_startup_request.take() {
-            self.app.emby_startup_rx = Some(service_startup::start(config, generation));
+        if let Some((config, generation)) = self.app.setup.emby_startup_request.take() {
+            self.app.setup.emby_startup_rx = Some(service_startup::start(config, generation));
         }
-        if let Some((config, generation)) = self.app.audiobookshelf_startup_request.take() {
-            self.app.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
+        if let Some((config, generation)) = self.app.setup.audiobookshelf_startup_request.take() {
+            self.app.setup.audiobookshelf_startup_rx = Some(service_startup::start_audiobookshelf(
                 config,
                 generation,
                 service_startup::AudiobookshelfCompletionKind::Startup,

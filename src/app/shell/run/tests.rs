@@ -208,7 +208,7 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
     app.audiobookshelf_runtime.begin_setup();
     let (tx, rx) = std::sync::mpsc::channel::<AudiobookshelfSetupCompletion>();
     drop(tx);
-    app.audiobookshelf_setup_rx = Some(rx);
+    app.setup.audiobookshelf_setup_rx = Some(rx);
 
     assert!(
         app.drain_audiobookshelf_events(),
@@ -220,7 +220,7 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
         "the setup disconnect resets to the form's previous state"
     );
     assert!(
-        app.audiobookshelf_setup_rx.is_none(),
+        app.setup.audiobookshelf_setup_rx.is_none(),
         "the disconnected setup receiver is not put back"
     );
 }
@@ -245,7 +245,7 @@ fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_cr
         "saved-token",
     )
     .expect("secret is written under the test state dir");
-    app.audiobookshelf_catalog_rx = Some(catalog_receiver(
+    app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
         generation,
         Err(AudiobookshelfError {
             class: AudiobookshelfFailureClass::AuthenticationRejected,
@@ -298,7 +298,7 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
             is_finished: false,
         },
     )]);
-    app.audiobookshelf_catalog_rx = Some(catalog_receiver(
+    app.setup.audiobookshelf_catalog_rx = Some(catalog_receiver(
         generation,
         Ok((
             vec![

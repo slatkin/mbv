@@ -20,7 +20,7 @@ fn unavailable_emby_retry_is_one_bounded_generation() {
     let retry_generation = app.emby_runtime.generation();
     app.activate_service_entry(ServiceEntry::Emby);
     assert_eq!(app.emby_runtime.generation(), retry_generation);
-    assert!(app.emby_startup_rx.is_some());
+    assert!(app.setup.emby_startup_rx.is_some());
 }
 
 #[test]
@@ -33,8 +33,8 @@ fn unavailable_emby_without_secret_offers_setup_instead_of_placeholder_auth() {
     app.open_services_settings();
     app.activate_service_entry(ServiceEntry::Emby);
     assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
-    assert!(app.emby_setup_form.is_some());
-    assert!(app.emby_startup_rx.is_none());
+    assert!(app.setup.emby_setup_form.is_some());
+    assert!(app.setup.emby_startup_rx.is_none());
 }
 
 #[test]
@@ -170,8 +170,8 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     app.open_services_settings();
     app.activate_service_entry(ServiceEntry::Emby);
     let generation = app.emby_runtime.begin_setup();
-    app.emby_setup_form.as_mut().unwrap().generation = Some(generation);
-    app.emby_setup_form.as_mut().unwrap().busy = true;
+    app.setup.emby_setup_form.as_mut().unwrap().generation = Some(generation);
+    app.setup.emby_setup_form.as_mut().unwrap().busy = true;
     let mut candidate = mbv_core::api::EmbyClient::new(config);
     candidate.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
         server_url: "https://new.example".into(),
@@ -192,7 +192,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
         },
     );
     assert!(content.is_none());
-    assert!(app.pending_emby_replacement.is_some());
+    assert!(app.setup.pending_emby_replacement.is_some());
     assert!(matches!(
         app.pending_overlay,
         Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
@@ -212,7 +212,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     };
     app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.dismiss_confirm();
-    assert!(app.pending_emby_replacement.is_none());
+    assert!(app.setup.pending_emby_replacement.is_none());
     assert_eq!(app.emby_runtime.state, ServiceState::Ready);
     assert_eq!(
         mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby),

@@ -147,7 +147,7 @@ impl App {
         if !self.emby_runtime.accepts(generation) {
             return;
         }
-        let Some(candidate) = self.pending_emby_replacement.take() else {
+        let Some(candidate) = self.setup.pending_emby_replacement.take() else {
             return;
         };
         let old_setup = self.config.lock().unwrap().emby_setup.clone();

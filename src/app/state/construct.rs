@@ -102,7 +102,7 @@ impl App {
         clippy::too_many_lines,
         reason = "App::build is one complete App construction; splitting it before the decompose-app-god-type work would need a Default impl over ~470 non-Default fields — blocked on that change (approved, issue #804)"
     )]
-    pub(in crate::app) fn build(init: AppInit) -> Self {
+    pub(in crate::app) fn build(mut init: AppInit) -> Self {
         // Must run before `load_prefs()`: the guard redirects `config_dir()`/
         // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
         // its path through that same lookup. Installing the guard after
@@ -129,28 +129,18 @@ impl App {
         );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let (cast_tx, cast_rx) = mpsc::channel();
+        let setup = crate::app::state::service_setup::ServiceSetup::new(&mut init);
         let mut app = App {
             #[cfg(test)]
             _test_state_dir_guard: test_state_dir_guard,
             config: init.config,
             emby_runtime: init.emby_runtime,
             audiobookshelf_runtime: init.audiobookshelf_runtime,
-            emby_startup_rx: init.emby_startup_rx,
-            emby_startup_request: init.emby_startup_request,
-            audiobookshelf_startup_rx: init.audiobookshelf_startup_rx,
-            audiobookshelf_startup_request: init.audiobookshelf_startup_request,
-            audiobookshelf_catalog_rx: None,
+            setup,
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_shelf_cache: std::collections::HashMap::new(),
             audiobookshelf_browse: Vec::new(),
             audiobookshelf_book_browse: Vec::new(),
-            audiobookshelf_test_rx: init.audiobookshelf_test_rx,
-            audiobookshelf_setup_rx: init.audiobookshelf_setup_rx,
-            emby_setup_form: init.emby_setup_form,
-            audiobookshelf_setup_form: None,
-            emby_setup_rx: init.emby_setup_rx,
-            pending_emby_replacement: None,
-            pending_audiobookshelf_replacement: None,
             player: init.player,
             bare_owner,
             mpris: None,
@@ -449,8 +439,8 @@ impl App {
             search_rx,
             idle_feed: None,
         });
-        app.emby_startup_request = configured.then_some((app_config.clone(), generation));
-        app.audiobookshelf_startup_request = (audiobookshelf_configured
+        app.setup.emby_startup_request = configured.then_some((app_config.clone(), generation));
+        app.setup.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)
             .then_some((app_config.clone(), generation));
         if crate::app::dispatch::session::service_startup::should_open_services(app_config) {
