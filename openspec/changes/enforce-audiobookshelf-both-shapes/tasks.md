@@ -20,4 +20,4 @@
 ## 4. Retire the invariant
 
 - [x] 4.1 Delete `docs/invariants/04-audiobookshelf-means-both-shapes.md` and remove it from any index in `docs/invariants/`. Update the `CONTEXT.md` **QueueItem** entry to name `AudiobookshelfItem` (Episode | Book). Verify: `rg -n "04-audiobookshelf" docs CONTEXT.md AGENTS.md` returns nothing.
-- [ ] 4.2 Run `make check-code-file-lines` and split `items.rs` along the `AudiobookshelfItem` seam if it exceeds 800 lines. Tick 04 on #810 and comment on #806 with the commit. Verify: the check passes and the issue comments are posted.
+- [x] 4.2 Run `make check-code-file-lines` and split `items.rs` along the `AudiobookshelfItem` seam if it exceeds 800 lines. Tick 04 on #810 and comment on #806 with the commit. Verify: the check passes and the issue comments are posted.
