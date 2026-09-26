@@ -251,6 +251,6 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 - [x] 7.3 Run the full gate one final time plus
   `make check-code-file-lines` and `cargo fmt --all -- --check`. Verify: all
   clean, no governed file over 800 lines.
-- [ ] 7.4 Comment on issue #814 recording that Tier 1 is complete, listing the
+- [x] 7.4 Comment on issue #814 recording that Tier 1 is complete, listing the
   six crate names and noting that `mbv-net` and `mbv-ids` now exist for Tier 2.
   Verify: the comment is posted.
