@@ -19,7 +19,7 @@ use zbus::zvariant;
 use zbus::{connection, interface};
 
 #[cfg(not(test))]
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::{i64_ticks_saturating, TICKS_PER_SECOND};
 use mbv_core::player::{PlayerCommand, PlayerStatus};
 
 #[cfg(not(test))]
@@ -171,26 +171,14 @@ fn resolve_art_url(
         .map(|path| format!("file://{}", path.display()))
 }
 
-/// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
-/// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
-/// it's cloned/called every poll tick without hesitation; kept independent of
-/// the D-Bus connection.
+/// Convert a microsecond position to seconds; exact while |µs| < 2^53 (about 285 years of media).
 #[cfg(not(test))]
-fn saturating_i64_from_f64(value: f64) -> i64 {
-    const I64_MIN_AS_F64: f64 = -9_223_372_036_854_775_808.0;
-    const I64_MAX_EXCLUSIVE_AS_F64: f64 = 9_223_372_036_854_775_808.0;
-
-    if value.is_nan() {
-        0
-    } else if value >= I64_MAX_EXCLUSIVE_AS_F64 {
-        i64::MAX
-    } else if value <= I64_MIN_AS_F64 {
-        i64::MIN
-    } else {
-        format!("{value:.0}")
-            .parse()
-            .expect("rounded bounded float fits i64")
-    }
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "MPRIS microseconds are exact as f64 below 2^53 µs, about 285 years of media"
+)]
+fn us_to_seconds(microseconds: i64) -> f64 {
+    microseconds as f64 / 1_000_000.0
 }
 
 #[cfg(not(test))]
@@ -305,11 +293,7 @@ impl MediaPlayer2Player {
     }
 
     fn seek(&self, offset_us: i64) {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let secs = offset_us as f64 / 1_000_000.0;
+        let secs = us_to_seconds(offset_us);
         // Clamp seek to reasonable bounds (avoid seeking hours into the future).
         if secs.abs() > 86400.0 {
             return;
@@ -334,13 +318,7 @@ impl MediaPlayer2Player {
         if runtime_us > 0 && position_us > runtime_us {
             return;
         }
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        (source.send)(PlayerCommand::SeekAbsolute(
-            position_us as f64 / 1_000_000.0,
-        ));
+        (source.send)(PlayerCommand::SeekAbsolute(us_to_seconds(position_us)));
     }
 
     #[expect(
@@ -407,7 +385,7 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn set_volume(&self, vol: f64) {
-        (self.source.lock().unwrap().send)(PlayerCommand::SetVolume(saturating_i64_from_f64(
+        (self.source.lock().unwrap().send)(PlayerCommand::SetVolume(i64_ticks_saturating(
             (vol * 100.0).round(),
         )));
     }
