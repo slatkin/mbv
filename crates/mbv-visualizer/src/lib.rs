@@ -103,6 +103,16 @@ pub struct PipeWireWorker {
     handle: Option<JoinHandle<()>>,
 }
 
+impl std::fmt::Debug for PipeWireWorker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The PipeWire sender and the control channel payload are not `Debug`,
+        // so report the observable worker state by hand.
+        f.debug_struct("PipeWireWorker")
+            .field("running", &self.handle.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 impl PipeWireWorker {
     pub fn start() -> Result<Self, String> {
         let (stop_tx, stop_rx) = pw::channel::channel();
