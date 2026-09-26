@@ -261,24 +261,224 @@ impl FeedEntry {
 // QueueItem — enum wrapping the three item kinds the playback queue can hold.
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(tag = "kind")]
+#[derive(Debug, Clone)]
+pub enum AudiobookshelfItem {
+    Episode(AudiobookshelfQueueItem),
+    Book(AudiobookshelfBookQueueItem),
+}
+
+impl PartialEq for AudiobookshelfItem {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Episode(left), Self::Episode(right)) => left == right,
+            (Self::Book(left), Self::Book(right)) => {
+                left.library_item_id == right.library_item_id
+                    && left.title == right.title
+                    && left.author == right.author
+                    && left.duration_ticks == right.duration_ticks
+                    && left.position_ticks == right.position_ticks
+                    && left.played == right.played
+                    && left.is_finished == right.is_finished
+                    && left.cover_path == right.cover_path
+            }
+            _ => false,
+        }
+    }
+}
+
+impl AudiobookshelfItem {
+    #[must_use]
+    pub fn title(&self) -> &str {
+        match self {
+            Self::Episode(item) => &item.title,
+            Self::Book(item) => &item.title,
+        }
+    }
+
+    #[must_use]
+    pub fn duration(&self) -> Option<u64> {
+        match self {
+            Self::Episode(item) => item.duration_ticks,
+            Self::Book(item) => item.duration_ticks,
+        }
+    }
+
+    #[must_use]
+    pub fn media_kind(&self) -> &str {
+        "Audio"
+    }
+
+    #[must_use]
+    pub fn is_audio(&self) -> bool {
+        true
+    }
+
+    #[must_use]
+    pub fn is_music(&self) -> bool {
+        false
+    }
+
+    #[must_use]
+    pub fn is_video(&self) -> bool {
+        false
+    }
+
+    #[must_use]
+    pub fn artwork_url(&self) -> Option<&str> {
+        match self {
+            Self::Episode(item) => item.cover_path.as_deref(),
+            Self::Book(item) => item.cover_path.as_deref(),
+        }
+    }
+
+    #[must_use]
+    pub fn display_name_parts(&self) -> (String, Option<String>) {
+        match self {
+            Self::Episode(item) => item
+                .show_title
+                .as_deref()
+                .filter(|show| !show.is_empty())
+                .map_or_else(
+                    || (item.title.clone(), None),
+                    |show| (show.to_owned(), Some(item.title.clone())),
+                ),
+            Self::Book(item) => (item.title.clone(), None),
+        }
+    }
+
+    #[must_use]
+    pub fn playback_title_parts(&self) -> PlaybackTitleParts {
+        match self {
+            Self::Episode(item) => item
+                .show_title
+                .as_deref()
+                .filter(|show| !show.is_empty())
+                .map_or_else(
+                    || PlaybackTitleParts::single(item.title.clone()),
+                    |show| PlaybackTitleParts::two(item.title.clone(), show.to_owned()),
+                ),
+            Self::Book(item) => PlaybackTitleParts::single(item.title.clone()),
+        }
+    }
+
+    #[must_use]
+    pub fn display_name(&self) -> String {
+        match self {
+            Self::Episode(item) => item
+                .show_title
+                .as_deref()
+                .filter(|show| !show.is_empty())
+                .map_or_else(
+                    || item.title.clone(),
+                    |show| format!("{show} - {}", item.title),
+                ),
+            Self::Book(item) => item.title.clone(),
+        }
+    }
+
+    #[must_use]
+    pub fn overview(&self) -> Option<&str> {
+        match self {
+            Self::Episode(item) => item.description.as_deref(),
+            Self::Book(_) => None,
+        }
+    }
+
+    #[must_use]
+    pub fn runtime_ticks(&self) -> i64 {
+        duration_ticks_as_i64(self.duration().unwrap_or(0))
+    }
+
+    #[must_use]
+    pub fn playback_position_ticks(&self) -> i64 {
+        match self {
+            Self::Episode(item) => item.position_ticks,
+            Self::Book(item) => item.position_ticks,
+        }
+    }
+
+    #[must_use]
+    pub fn played(&self) -> bool {
+        match self {
+            Self::Episode(item) => item.played || item.is_finished,
+            Self::Book(item) => item.played || item.is_finished,
+        }
+    }
+
+    #[must_use]
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Episode(item) => &item.episode_id,
+            Self::Book(item) => &item.library_item_id,
+        }
+    }
+
+    #[must_use]
+    pub fn content_id(&self) -> QueueItemContentId {
+        match self {
+            Self::Episode(item) => item.content_id(),
+            Self::Book(item) => item.content_id(),
+        }
+    }
+
+    #[must_use]
+    pub fn playlist_item_id(&self) -> &str {
+        ""
+    }
+
+    #[must_use]
+    pub fn kind(&self) -> QueueItemKind {
+        match self {
+            Self::Episode(_) => QueueItemKind::Audiobookshelf,
+            Self::Book(_) => QueueItemKind::AudiobookshelfBook,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum QueueItem {
-    #[serde(rename = "Emby")]
     Emby(Box<EmbyItem>),
-    #[serde(rename = "Feed")]
     Feed(FeedEntry),
+    Audiobookshelf(AudiobookshelfItem),
+}
+
+// Serialize through the original flat internally-tagged representation. This
+// preserves both the legacy discriminator and the inner fields' wire order.
+#[derive(serde::Serialize)]
+#[serde(tag = "kind")]
+enum QueueItemSerialize<'a> {
+    #[serde(rename = "Emby")]
+    Emby(&'a EmbyItem),
+    #[serde(rename = "Feed")]
+    Feed(&'a FeedEntry),
     #[serde(rename = "Audiobookshelf")]
-    Audiobookshelf(AudiobookshelfQueueItem),
+    Audiobookshelf(&'a AudiobookshelfQueueItem),
     #[serde(rename = "AudiobookshelfBook")]
-    AudiobookshelfBook(AudiobookshelfBookQueueItem),
+    AudiobookshelfBook(&'a AudiobookshelfBookQueueItem),
+}
+
+impl serde::Serialize for QueueItem {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let proxy = match self {
+            Self::Emby(item) => QueueItemSerialize::Emby(item),
+            Self::Feed(item) => QueueItemSerialize::Feed(item),
+            Self::Audiobookshelf(AudiobookshelfItem::Episode(item)) => {
+                QueueItemSerialize::Audiobookshelf(item)
+            }
+            Self::Audiobookshelf(AudiobookshelfItem::Book(item)) => {
+                QueueItemSerialize::AudiobookshelfBook(item)
+            }
+        };
+        proxy.serialize(serializer)
+    }
 }
 
 /// Custom deserializer for `QueueItem` that accepts both the tagged form
-/// (with `"kind": "Emby"`, `"kind": "Feed"`, or `"kind": "Audiobookshelf"`)
-/// and legacy bare `EmbyItem` objects (no `kind` field). This preserves
-/// backward compatibility with `queue_state.json` files written before the
-/// `QueueItem` enum existed.
+/// (with `kind` discriminators) and legacy bare `EmbyItem` objects (no `kind`
+/// field). This preserves backward compatibility with older queue state.
 impl<'de> serde::Deserialize<'de> for QueueItem {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -288,7 +488,6 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
 
         let value = serde_json::Value::deserialize(deserializer)?;
 
-        // Try tagged first: {"kind":"Emby",...} or {"kind":"Feed",...}
         if let Some(kind) = value.get("kind").and_then(|k| k.as_str()) {
             return match kind {
                 "Emby" => {
@@ -300,14 +499,14 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
                     Ok(QueueItem::Feed(entry))
                 }
                 "Audiobookshelf" => {
-                    let ep =
+                    let item =
                         AudiobookshelfQueueItem::deserialize(value).map_err(de::Error::custom)?;
-                    Ok(QueueItem::Audiobookshelf(ep))
+                    Ok(QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(item)))
                 }
                 "AudiobookshelfBook" => {
-                    let book = AudiobookshelfBookQueueItem::deserialize(value)
+                    let item = AudiobookshelfBookQueueItem::deserialize(value)
                         .map_err(de::Error::custom)?;
-                    Ok(QueueItem::AudiobookshelfBook(book))
+                    Ok(QueueItem::Audiobookshelf(AudiobookshelfItem::Book(item)))
                 }
                 other => Err(de::Error::unknown_variant(
                     other,
@@ -326,142 +525,112 @@ impl QueueItem {
     #[must_use]
     pub fn title(&self) -> &str {
         match self {
-            QueueItem::Emby(item) => &item.name,
-            QueueItem::Feed(entry) => &entry.title,
-            QueueItem::Audiobookshelf(ep) => &ep.title,
-            QueueItem::AudiobookshelfBook(book) => &book.title,
+            Self::Emby(item) => &item.name,
+            Self::Feed(entry) => &entry.title,
+            Self::Audiobookshelf(item) => item.title(),
         }
     }
 
     #[must_use]
     pub fn duration(&self) -> Option<u64> {
         match self {
-            QueueItem::Emby(item) => u64::try_from(item.runtime_ticks)
+            Self::Emby(item) => u64::try_from(item.runtime_ticks)
                 .ok()
                 .filter(|_| item.runtime_ticks > 0),
-            QueueItem::Feed(entry) => entry.duration_ticks,
-            QueueItem::Audiobookshelf(ep) => ep.duration_ticks,
-            QueueItem::AudiobookshelfBook(book) => book.duration_ticks,
+            Self::Feed(entry) => entry.duration_ticks,
+            Self::Audiobookshelf(item) => item.duration(),
         }
     }
 
     #[must_use]
     pub fn media_kind(&self) -> &str {
         match self {
-            QueueItem::Emby(item) => &item.media_type,
-            QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
+            Self::Emby(item) => &item.media_type,
+            Self::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("audio/") => "Audio",
                 Some(m) if m.starts_with("video/") => "Video",
                 _ => entry.feed_kind.map_or("Video", |k| k.as_str()),
             },
-            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => "Audio",
+            Self::Audiobookshelf(item) => item.media_kind(),
         }
     }
 
     #[must_use]
     pub fn is_audio(&self) -> bool {
         match self {
-            QueueItem::Emby(item) => item.is_audio(),
-            QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
+            Self::Emby(item) => item.is_audio(),
+            Self::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("audio/") => true,
                 Some(m) if m.starts_with("video/") => false,
                 _ => entry.feed_kind == Some(crate::config::FeedKind::Audio),
             },
-            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => true,
+            Self::Audiobookshelf(item) => item.is_audio(),
         }
     }
 
-    /// Whether this is a music item (see [`EmbyItem::is_music`]). Feeds and
-    /// Audiobookshelf content are not music, however audio they are: their
-    /// stored played/resume facts do reach the row.
+    /// Whether this is a music item. Feeds and Audiobookshelf content are not music.
     #[must_use]
     pub fn is_music(&self) -> bool {
         match self {
-            QueueItem::Emby(item) => item.is_music(),
-            QueueItem::Feed(_)
-            | QueueItem::Audiobookshelf(_)
-            | QueueItem::AudiobookshelfBook(_) => false,
+            Self::Emby(item) => item.is_music(),
+            Self::Feed(_) => false,
+            Self::Audiobookshelf(item) => item.is_music(),
         }
     }
 
     #[must_use]
     pub fn is_video(&self) -> bool {
         match self {
-            QueueItem::Emby(item) => item.is_video(),
-            QueueItem::Feed(entry) => match entry.mime_type.as_deref() {
+            Self::Emby(item) => item.is_video(),
+            Self::Feed(entry) => match entry.mime_type.as_deref() {
                 Some(m) if m.starts_with("video/") => true,
                 Some(m) if m.starts_with("audio/") => false,
                 _ => entry.feed_kind == Some(crate::config::FeedKind::Video),
             },
-            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => false,
+            Self::Audiobookshelf(item) => item.is_video(),
         }
     }
 
-    /// Whether this is an Emby TV episode. Next Up is only meaningful for
-    /// `TVShow` library items, not movies, music, or feed entries.
+    /// Whether this is an Emby TV episode.
     #[must_use]
     pub fn is_tv_episode(&self) -> bool {
-        matches!(self, QueueItem::Emby(item) if item.item_type == "Episode")
+        matches!(self, Self::Emby(item) if item.item_type == "Episode")
     }
 
     #[must_use]
     pub fn artwork_url(&self) -> Option<&str> {
         match self {
-            QueueItem::Emby(_item) => None,
-            QueueItem::Feed(_entry) => None,
-            QueueItem::Audiobookshelf(ep) => ep.cover_path.as_deref(),
-            QueueItem::AudiobookshelfBook(book) => book.cover_path.as_deref(),
+            Self::Emby(_) | Self::Feed(_) => None,
+            Self::Audiobookshelf(item) => item.artwork_url(),
         }
     }
 
-    /// The Emby item ID for Emby items, or the feed GUID for feed entries.
-    /// For Audiobookshelf, returns the episode ID (typed identity is via
-    /// `content_id()`).
+    /// Audiobookshelf returns the episode ID; typed identity is via `content_id()`.
     #[must_use]
     pub fn id(&self) -> &str {
         match self {
-            QueueItem::Emby(item) => &item.id,
-            QueueItem::Feed(entry) => &entry.guid,
-            QueueItem::Audiobookshelf(ep) => &ep.episode_id,
-            QueueItem::AudiobookshelfBook(book) => &book.library_item_id,
+            Self::Emby(item) => &item.id,
+            Self::Feed(entry) => &entry.guid,
+            Self::Audiobookshelf(item) => item.id(),
         }
     }
 
-    /// The two-tone title parts for a list row: the series/show title and,
-    /// for episode rows, the episode title that paints after it in the
-    /// accent role. Items without a parent title return the display name
-    /// with no secondary part.
     #[must_use]
     pub fn display_name_parts(&self) -> (String, Option<String>) {
         match self {
-            QueueItem::Emby(item) => item.display_name_parts(),
-            QueueItem::Audiobookshelf(ep) => ep
-                .show_title
-                .as_deref()
-                .filter(|show| !show.is_empty())
-                .map_or_else(
-                    || (ep.title.clone(), None),
-                    |show| (show.to_owned(), Some(ep.title.clone())),
-                ),
+            Self::Emby(item) => item.display_name_parts(),
+            Self::Audiobookshelf(item) => item.display_name_parts(),
             other => (other.display_name(), None),
         }
     }
 
     /// The now-playing title parts for the playback panel: the item's own
-    /// title part plus, when the item carries one, the context part naming
-    /// the container it came from — the series for an Emby episode, the
-    /// artist for an Emby audio track, the show for an Audiobookshelf podcast
-    /// episode, the subscription for a feed entry. Media types with no
-    /// container, and items whose container name is absent, degrade to the
-    /// title part alone. `feed_subscription_name` is the caller-resolved
-    /// subscription display name; it is read only for feed items and ignored
-    /// by every other kind. This is presentation metadata only — the
-    /// colourless plain-text forms (`display_name()`, `playback_label()`)
-    /// keep their existing separators.
+    /// title plus optional context. The feed subscription name is caller-resolved
+    /// and ignored by every non-feed kind.
     #[must_use]
     pub fn playback_title_parts(&self, feed_subscription_name: Option<&str>) -> PlaybackTitleParts {
         match self {
-            QueueItem::Emby(item) => {
+            Self::Emby(item) => {
                 if item.item_type == "Episode" && !item.series_name.is_empty() {
                     PlaybackTitleParts::two(item.name.clone(), item.series_name.clone())
                 } else if item.is_audio() && !item.artist.is_empty() {
@@ -470,91 +639,68 @@ impl QueueItem {
                     PlaybackTitleParts::single(item.name.clone())
                 }
             }
-            QueueItem::Feed(entry) => {
+            Self::Feed(entry) => {
                 if let Some(name) = feed_subscription_name.filter(|n| !n.is_empty()) {
                     PlaybackTitleParts::two(entry.title.clone(), name.to_owned())
                 } else {
                     PlaybackTitleParts::single(entry.title.clone())
                 }
             }
-            QueueItem::Audiobookshelf(ep) => {
-                if let Some(show) = ep.show_title.as_deref().filter(|show| !show.is_empty()) {
-                    PlaybackTitleParts::two(ep.title.clone(), show.to_owned())
-                } else {
-                    PlaybackTitleParts::single(ep.title.clone())
-                }
-            }
-            QueueItem::AudiobookshelfBook(book) => PlaybackTitleParts::single(book.title.clone()),
+            Self::Audiobookshelf(item) => item.playback_title_parts(),
         }
     }
 
     #[must_use]
     pub fn display_name(&self) -> String {
         match self {
-            QueueItem::Emby(item) => item.display_name(),
-            QueueItem::Feed(entry) => entry.title.clone(),
-            QueueItem::Audiobookshelf(ep) => {
-                if let Some(show) = ep.show_title.as_deref().filter(|s| !s.is_empty()) {
-                    format!("{show} - {}", ep.title)
-                } else {
-                    ep.title.clone()
-                }
-            }
-            QueueItem::AudiobookshelfBook(book) => book.title.clone(),
+            Self::Emby(item) => item.display_name(),
+            Self::Feed(entry) => entry.title.clone(),
+            Self::Audiobookshelf(item) => item.display_name(),
         }
     }
 
     /// A short synopsis/overview for the item, when one is available. Used by
-    /// Home's hero detail. Emby exposes its episode/movie overview; the other
-    /// providers return `None` unless their catalog carries a description.
+    /// Home's hero detail.
     #[must_use]
     pub fn overview(&self) -> Option<&str> {
         match self {
-            QueueItem::Emby(item) => (!item.overview.is_empty()).then_some(item.overview.as_str()),
-            QueueItem::Feed(_) | QueueItem::AudiobookshelfBook(_) => None,
-            QueueItem::Audiobookshelf(ep) => ep.description.as_deref(),
+            Self::Emby(item) => (!item.overview.is_empty()).then_some(item.overview.as_str()),
+            Self::Feed(_) => None,
+            Self::Audiobookshelf(item) => item.overview(),
         }
     }
 
     #[must_use]
     pub fn runtime_ticks(&self) -> i64 {
         match self {
-            QueueItem::Emby(item) => item.runtime_ticks,
-            QueueItem::Feed(entry) => duration_ticks_as_i64(entry.duration_ticks.unwrap_or(0)),
-            QueueItem::Audiobookshelf(ep) => duration_ticks_as_i64(ep.duration_ticks.unwrap_or(0)),
-            QueueItem::AudiobookshelfBook(book) => {
-                duration_ticks_as_i64(book.duration_ticks.unwrap_or(0))
-            }
+            Self::Emby(item) => item.runtime_ticks,
+            Self::Feed(entry) => duration_ticks_as_i64(entry.duration_ticks.unwrap_or(0)),
+            Self::Audiobookshelf(item) => item.runtime_ticks(),
         }
     }
 
     #[must_use]
     pub fn playback_position_ticks(&self) -> i64 {
         match self {
-            QueueItem::Emby(item) => item.playback_position_ticks,
-            QueueItem::Feed(entry) => entry.position_ticks,
-            QueueItem::Audiobookshelf(ep) => ep.position_ticks,
-            QueueItem::AudiobookshelfBook(book) => book.position_ticks,
+            Self::Emby(item) => item.playback_position_ticks,
+            Self::Feed(entry) => entry.position_ticks,
+            Self::Audiobookshelf(item) => item.playback_position_ticks(),
         }
     }
 
     #[must_use]
     pub fn played(&self) -> bool {
         match self {
-            QueueItem::Emby(item) => item.played,
-            QueueItem::Feed(entry) => entry.played,
-            QueueItem::Audiobookshelf(ep) => ep.played || ep.is_finished,
-            QueueItem::AudiobookshelfBook(book) => book.played || book.is_finished,
+            Self::Emby(item) => item.played,
+            Self::Feed(entry) => entry.played,
+            Self::Audiobookshelf(item) => item.played(),
         }
     }
 
-    /// Returns the inner `EmbyItem` if this is an Emby variant.
-    /// Used at boundaries that only operate on Emby items (`send_ep_info`,
-    /// `set_current_item_metadata`, `start_item`, `mark_played`, etc.).
     #[must_use]
     pub fn as_emby(&self) -> Option<&EmbyItem> {
         match self {
-            QueueItem::Emby(item) => Some(item),
+            Self::Emby(item) => Some(item),
             _ => None,
         }
     }
@@ -562,7 +708,7 @@ impl QueueItem {
     #[must_use]
     pub fn as_feed(&self) -> Option<&FeedEntry> {
         match self {
-            QueueItem::Feed(entry) => Some(entry),
+            Self::Feed(entry) => Some(entry),
             _ => None,
         }
     }
@@ -570,7 +716,7 @@ impl QueueItem {
     #[must_use]
     pub fn as_audiobookshelf(&self) -> Option<&AudiobookshelfQueueItem> {
         match self {
-            QueueItem::Audiobookshelf(ep) => Some(ep),
+            Self::Audiobookshelf(AudiobookshelfItem::Episode(item)) => Some(item),
             _ => None,
         }
     }
@@ -578,76 +724,59 @@ impl QueueItem {
     #[must_use]
     pub fn as_audiobookshelf_book(&self) -> Option<&AudiobookshelfBookQueueItem> {
         match self {
-            QueueItem::AudiobookshelfBook(book) => Some(book),
+            Self::Audiobookshelf(AudiobookshelfItem::Book(item)) => Some(item),
             _ => None,
         }
     }
 
     #[must_use]
     pub fn is_emby(&self) -> bool {
-        matches!(self, QueueItem::Emby(_))
+        matches!(self, Self::Emby(_))
     }
 
     #[must_use]
     pub fn is_feed(&self) -> bool {
-        matches!(self, QueueItem::Feed(_))
+        matches!(self, Self::Feed(_))
     }
 
     #[must_use]
     pub fn is_audiobookshelf(&self) -> bool {
-        matches!(self, QueueItem::Audiobookshelf(_))
-    }
-
-    #[must_use]
-    pub fn is_audiobookshelf_book(&self) -> bool {
-        matches!(self, QueueItem::AudiobookshelfBook(_))
-    }
-
-    /// `true` for either Audiobookshelf queue-item shape (episode or book).
-    #[must_use]
-    pub fn is_audiobookshelf_any(&self) -> bool {
-        self.is_audiobookshelf() || self.is_audiobookshelf_book()
+        matches!(self, Self::Audiobookshelf(_))
     }
 
     #[must_use]
     pub fn kind(&self) -> QueueItemKind {
         match self {
-            QueueItem::Emby(_) => QueueItemKind::Emby,
-            QueueItem::Feed(_) => QueueItemKind::Feed,
-            QueueItem::Audiobookshelf(_) => QueueItemKind::Audiobookshelf,
-            QueueItem::AudiobookshelfBook(_) => QueueItemKind::AudiobookshelfBook,
+            Self::Emby(_) => QueueItemKind::Emby,
+            Self::Feed(_) => QueueItemKind::Feed,
+            Self::Audiobookshelf(item) => item.kind(),
         }
     }
 
+    /// Typed Service-qualified content identity.
     /// Typed Service-qualified content identity. Use this for matching
-    /// and reconciliation instead of `format!("abs:{}:{}", library, episode)`.
+    /// and reconciliation instead of formatted string matching.
     #[must_use]
     pub fn content_id(&self) -> QueueItemContentId {
         match self {
-            QueueItem::Emby(item) => QueueItemContentId::Emby(item.id.clone()),
-            QueueItem::Feed(entry) => QueueItemContentId::Feed(entry.guid.clone()),
-            QueueItem::Audiobookshelf(ep) => ep.content_id(),
-            QueueItem::AudiobookshelfBook(book) => book.content_id(),
+            Self::Emby(item) => QueueItemContentId::Emby(item.id.clone()),
+            Self::Feed(entry) => QueueItemContentId::Feed(entry.guid.clone()),
+            Self::Audiobookshelf(item) => item.content_id(),
         }
     }
 
-    /// Alias for typed identity (position tracking reuses content identity).
     #[must_use]
     pub fn content_key(&self) -> QueueItemContentId {
         self.content_id()
     }
 
-    /// The Remote Service required to play this item. Emby and Feed items
-    /// retain their existing local/source behavior; Audiobookshelf admission
-    /// is decided by the owner capability supplied to
-    /// `admissible_for_owner`.
+    /// The Remote Service required to play this item. Audiobookshelf admission
+    /// is decided by the owner capability supplied to `admissible_for_owner`.
     #[must_use]
     pub fn required_service(&self) -> Option<crate::config::ServiceKind> {
         match self {
-            QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {
-                Some(crate::config::ServiceKind::Audiobookshelf)
-            }
-            QueueItem::Emby(_) | QueueItem::Feed(_) => None,
+            Self::Audiobookshelf(_) => Some(crate::config::ServiceKind::Audiobookshelf),
+            Self::Emby(_) | Self::Feed(_) => None,
         }
     }
 
@@ -665,7 +794,7 @@ impl QueueItem {
         has_service: impl Fn(crate::config::ServiceKind) -> bool,
         can_admit_audiobookshelf: bool,
     ) -> bool {
-        if self.is_audiobookshelf_any() && !can_admit_audiobookshelf {
+        if self.is_audiobookshelf() && !can_admit_audiobookshelf {
             return false;
         }
         (!audio_only || self.is_audio()) && self.required_service().is_none_or(has_service)
@@ -674,10 +803,9 @@ impl QueueItem {
     #[must_use]
     pub fn playlist_item_id(&self) -> &str {
         match self {
-            QueueItem::Emby(item) => &item.playlist_item_id,
-            QueueItem::Feed(_)
-            | QueueItem::Audiobookshelf(_)
-            | QueueItem::AudiobookshelfBook(_) => "",
+            Self::Emby(item) => &item.playlist_item_id,
+            Self::Feed(_) => "",
+            Self::Audiobookshelf(item) => item.playlist_item_id(),
         }
     }
 }
