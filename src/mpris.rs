@@ -379,11 +379,9 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn volume(&self) -> f64 {
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "percent-to-fraction conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let volume = self.snapshot.lock().unwrap().volume as f64 / 100.0;
+        let volume =
+            f64::from(u32::try_from(self.snapshot.lock().unwrap().volume).unwrap_or(u32::MAX))
+                / 100.0;
         volume
     }
 

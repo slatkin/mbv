@@ -29,11 +29,9 @@ pub fn encode_path_segment(value: &str) -> percent_encoding::PercentEncode<'_> {
 /// websocket reconnect loops so the incantation lives in one place.
 pub fn reconnect_backoff_sleep(backoff_secs: &mut u64, target: &str) {
     let jitter: f64 = rand::rng().random_range(0.0..1.0);
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "backoff seconds (u64) → f64 for jittered delay; sub-second jitter needs float (approved, issue #804)"
-    )]
-    let delay = std::time::Duration::from_secs_f64(*backoff_secs as f64 + jitter);
+    let delay = std::time::Duration::from_secs_f64(
+        f64::from(u32::try_from(*backoff_secs).unwrap_or(u32::MAX)) + jitter,
+    );
     log::info!(
         target: target,
         "reconnecting in {:.1}s (backoff={}s)",

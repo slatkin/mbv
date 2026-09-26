@@ -176,24 +176,19 @@ fn render_seekbar(
         playback.seekbar = Rect::default();
         return;
     }
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     let ratio = if runtime > 0 {
-        (position as f64 / runtime as f64).clamp(0.0, 1.0)
+        crate::app::render::components::math::int_ratio(position, runtime).clamp(0.0, 1.0)
     } else {
         0.0
     };
     playback.seekbar = area;
     let width = area.width as usize;
     #[expect(
-        clippy::cast_precision_loss,
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
     )]
-    let filled = ((ratio * width as f64).round() as usize).min(width);
+    let filled = ((ratio * f64::from(area.width)).round() as usize).min(width);
     frame.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(

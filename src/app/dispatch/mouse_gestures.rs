@@ -26,11 +26,11 @@ impl App {
             );
             let id = conn_id.clone();
             #[expect(
-                clippy::cast_precision_loss,
                 clippy::cast_possible_truncation,
-                reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                reason = "fractional remote seek is truncated to integer seconds"
             )]
-            let remote_pos_s = (fraction * runtime_s as f64) as i64;
+            let remote_pos_s =
+                (fraction * f64::from(u32::try_from(runtime_s).unwrap_or(u32::MAX))) as i64;
             self.remote_pos_s = remote_pos_s;
             self.remote_pos_at = Instant::now();
             self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);

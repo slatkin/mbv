@@ -197,17 +197,11 @@ pub(in crate::app) fn composite_landscape_logo(
     let logo = logo.resize(max_w, max_h, image::imageops::FilterType::Lanczos3);
     let (logo_w, logo_h) = logo.dimensions();
     let inset_percent = LOGO_INSET_PERCENT / 100.0;
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "image scale factor through f32; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
-    let inset_x = rounded_dimension((base_w as f32 * inset_percent).round())
+    let base_width_f32 = f32::from(u16::try_from(base_w).unwrap_or(u16::MAX));
+    let base_height_f32 = f32::from(u16::try_from(base_h).unwrap_or(u16::MAX));
+    let inset_x = rounded_dimension((base_width_f32 * inset_percent).round())
         .min(base_w.saturating_sub(logo_w));
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "image scale factor through f32; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
-    let inset_y = rounded_dimension((base_h as f32 * inset_percent).round())
+    let inset_y = rounded_dimension((base_height_f32 * inset_percent).round())
         .min(base_h.saturating_sub(logo_h));
     image::imageops::overlay(
         &mut base,
