@@ -436,8 +436,7 @@ impl Player {
     /// # Panics
     ///
     /// Panics if the `stop_tx` mutex is poisoned, or if the `wakeup_fd` mutex is
-    /// poisoned once a stop sender was taken. Both mean a previous owner
-    /// panicked while holding the lock.
+    /// poisoned. Both mean a previous owner panicked while holding the lock.
     pub fn stop(&self) {
         if let Some(tx) = self.stop_tx.lock().unwrap().take() {
             let _ = tx.send(());
