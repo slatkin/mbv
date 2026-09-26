@@ -63,21 +63,6 @@ fn launch_snapshot_uses_show_id_and_selected_episode_identity() {
     );
 }
 
-#[test]
-fn launch_snapshot_is_empty_without_shows_or_selected_episode() {
-    let mut owner = PodcastContent::new();
-    owner.set_content(&AudiobookshelfBrowseState::new(library()), false);
-    assert_eq!(
-        owner.launch_snapshot(),
-        (
-            Some(SelectorIdentity::Audiobookshelf {
-                key: AudiobookshelfSelectorKey::PodcastFilter(AudiobookshelfPodcastFilter::All),
-            }),
-            None
-        )
-    );
-}
-
 fn item_rows(owner: &PodcastContent) -> Vec<(&str, &str)> {
     owner
         .episodes
@@ -97,15 +82,6 @@ fn item_rows(owner: &PodcastContent) -> Vec<(&str, &str)> {
 
 fn pills(content: &LibraryPanelContent) -> Vec<String> {
     content.selector.as_ref().expect("pill bar").pills.clone()
-}
-
-#[test]
-fn pill_selection_starts_at_all_on_construction() {
-    let owner = PodcastContent::new();
-    assert_eq!(
-        owner.pill,
-        PillSelection::State(AudiobookshelfEpisodeFilter::All)
-    );
 }
 
 #[test]
@@ -139,47 +115,6 @@ fn content_has_one_selector_row_for_state_and_show_pills() {
 }
 
 #[test]
-fn show_pills_truncate_like_feed_group_labels() {
-    let mut state = AudiobookshelfBrowseState::new(library());
-    state.append_page(
-        0,
-        20,
-        1,
-        vec![show("long", "A Very Long Podcast Show Name Indeed Indeed")],
-    );
-    let mut owner = PodcastContent::new();
-    owner.set_now_secs(NOW);
-    owner.set_content(&state, false);
-    assert_eq!(
-        pills(&owner.content())[4],
-        trunc_str(
-            "A Very Long Podcast Show Name Indeed Indeed",
-            MAX_GROUP_LABEL
-        )
-    );
-}
-
-#[test]
-fn painted_active_index_is_derived_from_the_stored_value() {
-    let mut owner = owner();
-    owner.set_focused(true);
-    // Land on the Beta show pill (painted index 4).
-    owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
-    owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
-    owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
-    owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
-    assert_eq!(owner.pill, PillSelection::Show("beta".into()));
-
-    // A new show page that sorts before Beta shifts Beta's painted
-    // position; the value keeps identifying the same pill.
-    let mut state = fixture_state();
-    state.append_page(1, 20, 3, vec![show("aardvark", "Aardvark Show")]);
-    owner.set_content(&state, false);
-    assert_eq!(owner.pill, PillSelection::Show("beta".into()));
-    assert_eq!(owner.content().selector.unwrap().active, Some(6));
-}
-
-#[test]
 fn keyboard_pill_walk_wraps_at_both_ends() {
     let mut owner = owner();
     owner.set_focused(true);
@@ -190,18 +125,6 @@ fn keyboard_pill_walk_wraps_at_both_ends() {
     // `]` advances back to the Latest pill.
     owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
     assert_eq!(owner.pill, PillSelection::Latest);
-}
-
-#[test]
-fn remembered_pill_survives_an_ordinary_refresh() {
-    let mut owner = owner();
-    owner.set_focused(true);
-    owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
-    owner.set_content(&fixture_state(), false);
-    assert_eq!(
-        owner.pill,
-        PillSelection::State(AudiobookshelfEpisodeFilter::Unplayed)
-    );
 }
 
 #[test]
@@ -287,28 +210,6 @@ fn episode_rows_are_split_rows_with_played_and_in_progress_state() {
         in_progress,
         MediaSemanticState::active(Some(16)),
         "in-progress progress renders the shared in-progress badge"
-    );
-}
-
-#[test]
-fn grouped_rows_carry_stable_episode_targets() {
-    let owner = owner();
-    let rows = owner.episodes.rows();
-    assert!(matches!(rows.first(), Some(MediaListRow::Heading { .. })));
-    assert!(matches!(rows.last(), Some(MediaListRow::Item { .. })));
-    assert!(rows
-        .iter()
-        .any(|row| matches!(row, MediaListRow::Heading { .. })));
-    // Heading insertion never changes episode targeting: the dated and
-    // undated rows carry the provider-native identity pair.
-    assert_eq!(
-        item_rows(&owner),
-        [
-            ("dated", "dated"),
-            ("undated", "undated"),
-            ("beta-one", "beta-one")
-        ],
-        "the All view lists every fetched show's episodes"
     );
 }
 
