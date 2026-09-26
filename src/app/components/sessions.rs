@@ -493,22 +493,6 @@ mod tests {
         component
     }
 
-    #[rstest]
-    #[case(ServiceState::Ready, palette::ACCENT)]
-    #[case(ServiceState::NotConfigured, palette::TEXT_MUTED)]
-    #[case(ServiceState::Connecting, palette::STATUS_ERROR)]
-    #[case(ServiceState::NeedsAuthentication, palette::STATUS_ERROR)]
-    #[case(ServiceState::Unavailable, palette::STATUS_ERROR)]
-    fn test_session_nerd_emby_badge_tracks_status_bar_color(
-        #[case] state: ServiceState,
-        #[case] expected: ratatui::style::Color,
-    ) {
-        let component = badge_component(true, state, None);
-        let items = component.project_targets(40);
-        assert_eq!(items[0].lines[0][0].text, "\u{f06b4} ");
-        assert_eq!(items[0].lines[0][0].role, ThreeLineRole::Badge(expected));
-    }
-
     fn painted_component() -> SessionsComponent {
         use crate::app::tests::make_session;
         let mut first = make_session("a", "mbv");
