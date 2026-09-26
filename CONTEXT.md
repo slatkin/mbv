@@ -336,8 +336,8 @@ field names are unchanged. Positions for EmbyItems report to the Emby API.
 _Avoid_: MediaItem, media item, emby entry
 
 **QueueItem**:
-The queue's media snapshot — an EmbyItem, FeedEntry, AudiobookshelfQueueItem,
-or AudiobookshelfBookQueueItem. Generic queue operations use shared presentation
+The queue's media snapshot — an EmbyItem, FeedEntry, or AudiobookshelfItem
+(Episode(AudiobookshelfQueueItem) | Book(AudiobookshelfBookQueueItem)). Generic queue operations use shared presentation
 and identity behavior; Service-specific admission, source preparation,
 lifecycle, progress, and cleanup remain explicit boundaries. Persistence
 round-trips tagged QueueItem values; legacy untagged Emby-only payloads remain
