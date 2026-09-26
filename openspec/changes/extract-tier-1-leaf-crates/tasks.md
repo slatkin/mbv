@@ -210,25 +210,25 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 6. `mbv-text`
 
-- [ ] 6.1 Create `crates/mbv-text/Cargo.toml`: `name = "mbv-text"`,
+- [x] 6.1 Create `crates/mbv-text/Cargo.toml`: `name = "mbv-text"`,
   `description` ("Fuzzy-match acceptance and control-character predicates for
   mbv's text input."), the seven `*.workspace = true` package fields,
   `[lints] workspace = true`, and `fuzzy-matcher.workspace = true`. Register it
   in `members` and `default-members`. Verify: `cargo check -p mbv-text` succeeds
   on the empty crate.
-- [ ] 6.2 Move `src/app/infra/fuzzy_match.rs` and
+- [x] 6.2 Move `src/app/infra/fuzzy_match.rs` and
   `src/app/infra/text_safety.rs` to `crates/mbv-text/src/`, declare both as
   `pub mod` in `crates/mbv-text/src/lib.rs`, and widen
   `fuzzy_match::word_match_score` and `text_safety::is_control_char` from
   `pub(in crate::app)` to `pub`. Keep `fuzzy_match.rs`'s `//!` doc block — it is
   the record of why word-local matching exists. Verify:
   `cargo nextest run -p mbv-text` runs the moved `fuzzy_match` tests and passes.
-- [ ] 6.3 Delete the `fuzzy_match` and `text_safety` `mod` lines from
+- [x] 6.3 Delete the `fuzzy_match` and `text_safety` `mod` lines from
   `src/app/infra.rs`, add `mbv-text = { path = "crates/mbv-text" }` to the `mbv`
   package's `[dependencies]`, and remove `fuzzy-matcher.workspace = true` from
   it. Verify: `rg 'fuzzy-matcher' Cargo.toml` shows it only under
   `[workspace.dependencies]`.
-- [ ] 6.4 Rewrite the 4 remaining references in `src/`:
+- [x] 6.4 Rewrite the 4 remaining references in `src/`:
   `crate::app::infra::fuzzy_match::word_match_score` →
   `mbv_text::fuzzy_match::word_match_score` (the inline-search component and the
   tree-browser operations module) and
@@ -236,7 +236,7 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
   `mbv_text::text_safety::is_control_char` (the feed-parse infra module and the
   library-panel overview-box component). Verify:
   `rg 'fuzzy_match|text_safety' src/` returns nothing.
-- [ ] 6.5 Run the group gate for `mbv-text`.
+- [x] 6.5 Run the group gate for `mbv-text`.
 
 ## 7. Wrap-up
 
