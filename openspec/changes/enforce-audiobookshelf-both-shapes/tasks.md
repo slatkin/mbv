@@ -2,7 +2,7 @@
 
 ## 1. Pin the wire format before touching the type
 
-- [ ] 1.1 In `crates/mbv-core/src/playback/tests/persistence.rs`, add golden tests: one Audiobookshelf episode and one book `QueueItem` serialize to exact JSON strings (capture them from the current derive), and those strings deserialize back to the same shape. Verify: `cargo nextest run -p mbv-core persistence` passes on unchanged code.
+- [x] 1.1 In `crates/mbv-core/src/playback/tests/persistence.rs`, add golden tests: one Audiobookshelf episode and one book `QueueItem` serialize to exact JSON strings (capture them from the current derive), and those strings deserialize back to the same shape. Verify: `cargo nextest run -p mbv-core persistence` passes on unchanged code.
 
 ## 2. Nest the shapes (source-of-truth type)
 
