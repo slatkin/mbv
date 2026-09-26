@@ -12,8 +12,8 @@
 
 ## 3. Family B — seconds→ticks (~12 sites)
 
-- [ ] 3.1 Migrate mbv-core sites to `seconds_to_ticks`/`i64_ticks_saturating`/`TICKS_PER_SECOND_F64` (rounding sites keep their `.round()`/`.trunc()` before the kernel): `player.rs:67,234`, `player/run/events/track_progress.rs:82`, `player/sources.rs:158` (f64-ticks product), `daemon/audiobookshelf.rs:13`, `audiobookshelf/catalog.rs:233`. Delete each expect. Verify: `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core`.
-- [ ] 3.2 Migrate app-side sites: `dispatch/cast_status.rs:101,171`, `state/playback_target.rs:162`, `dispatch/mouse_gestures.rs:24`, `dispatch/audiobookshelf/browse.rs:505`, `components/podcast_content.rs:179,463`. Delete each expect. Verify: `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv`.
+- [x] 3.1 Migrate mbv-core sites to `seconds_to_ticks`/`i64_ticks_saturating`/`TICKS_PER_SECOND_F64` (rounding sites keep their `.round()`/`.trunc()` before the kernel): `player.rs:67,234`, `player/run/events/track_progress.rs:82`, `player/sources.rs:158` (f64-ticks product), `daemon/audiobookshelf.rs:13`, `audiobookshelf/catalog.rs:233`. Delete each expect. Verify: `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core`.
+- [x] 3.2 Migrate app-side sites: `dispatch/cast_status.rs:101,171`, `state/playback_target.rs:162`, `dispatch/mouse_gestures.rs:24`, `dispatch/audiobookshelf/browse.rs:505`, `components/podcast_content.rs:179,463`. Delete each expect. Verify: `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv`.
 
 ## 4. mpris µs→seconds
 
