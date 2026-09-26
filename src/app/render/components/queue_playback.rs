@@ -51,9 +51,9 @@ pub(in crate::app) fn render_playback_header(
     let bg = palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
     let status_color = status_color(status);
     let status = header_status_word(status);
-    let status_w = unicode_width::UnicodeWidthStr::width(status) as u16;
+    let status_w = u16::try_from(unicode_width::UnicodeWidthStr::width(status)).unwrap_or(u16::MAX);
     let full_target = format!("on {host}");
-    let full_target_w = full_target.width() as u16;
+    let full_target_w = u16::try_from(full_target.width()).unwrap_or(u16::MAX);
     // One space of text padding on each side inside the header band. The
     // content budget is the band minus those two cells; when the band is
     // too narrow to hold even the padding, paint the background only.
@@ -74,7 +74,7 @@ pub(in crate::app) fn render_playback_header(
     } else {
         (String::new(), 0)
     };
-    let target_w = target.width() as u16;
+    let target_w = u16::try_from(target.width()).unwrap_or(u16::MAX);
     let bg_style = Style::default().bg(bg);
     let mut spans = vec![Span::styled(" ", bg_style)];
     if status_fits {

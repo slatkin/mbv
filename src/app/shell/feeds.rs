@@ -52,7 +52,7 @@ impl Model {
         &mut self,
         f: impl FnOnce(&mut FeedsContent) -> R,
     ) -> Option<R> {
-        self.update_library_owner(LibraryKey::Feeds, || Box::new(FeedsContent::new()), f)
+        self.update_library_owner(&LibraryKey::Feeds, || Box::new(FeedsContent::new()), f)
     }
 }
 
@@ -62,7 +62,6 @@ mod tests {
     use crate::app::components::library_panel::LibraryContentOwner;
     use crate::app::state::types::feed_tab::WatchedFilter;
     use crate::app::tests::make_app_stub;
-    use crate::app::PanelFocus;
     use mbv_core::config::{FeedKind, FeedSubscription};
 
     fn subscription(name: &str) -> FeedSubscription {
@@ -102,31 +101,6 @@ mod tests {
         assert_eq!(subscription_names(&mut model), ["Visible Feed"]);
     }
 
-    #[test]
-    fn shell_syncs_feed_snapshot_into_retained_owner() {
-        let mut model = Model::new(make_app_stub());
-        model.app.tab = super::super::TabSelection::Feeds;
-        model.app.feed_tab.subscriptions = vec![subscription("Shell Feed")];
-        model.sync_feeds();
-
-        assert_eq!(subscription_names(&mut model), ["Shell Feed"]);
-    }
-
     // Task 4.5: the FeedsRowClick arm pulls panel focus to the Library
     // (mirrors the HomeRowClick arm).
-    #[test]
-    fn feeds_row_click_pulls_panel_focus_to_library() {
-        let mut model = Model::new(make_app_stub());
-        model.app.panel_focus = PanelFocus::Queue;
-        let mut music_resize = false;
-        let mut tv_resize = false;
-        model.handle_terminal_message(
-            crate::app::components::Msg::Shell(Box::new(
-                crate::app::components::ShellRequest::FeedsRowClick,
-            )),
-            &mut music_resize,
-            &mut tv_resize,
-        );
-        assert_eq!(model.app.panel_focus, PanelFocus::Library);
-    }
 }

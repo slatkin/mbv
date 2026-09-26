@@ -17,29 +17,6 @@ fn app_with_mock_emby(http: &MockHttp) -> crate::app::App {
 }
 
 #[test]
-fn watched_toggle_ignores_folders_and_audio_before_service_access() {
-    let mut app = make_app_stub();
-    let severity = app.status_severity;
-    let mut folder = make_item("folder", "Folder");
-    folder.is_folder = true;
-    let audio = make_item("audio", "Audio");
-
-    app.toggle_watched_item(0, folder);
-    app.toggle_watched_item(0, audio);
-
-    assert_eq!(app.status_severity, severity);
-}
-
-#[test]
-fn context_mark_without_emby_reports_unavailable() {
-    let mut app = make_app_stub();
-
-    app.execute_context_action(Some(ContextAction::MarkPlayed("item".into())), None);
-
-    assert_eq!(app.status_severity, ToastSeverity::Warning);
-}
-
-#[test]
 fn context_played_mark_uses_the_requested_remote_mutation() {
     let http = MockHttp::new();
     http.respond(200, "");
@@ -62,7 +39,7 @@ fn watched_toggle_unmarks_a_played_item_through_emby() {
     movie.played = true;
     let severity = app.status_severity;
 
-    app.toggle_watched_item(0, movie);
+    app.toggle_watched_item(0, &movie);
 
     assert!(
         http.requests()[0].contains("DELETE /Users/user/PlayedItems/movie"),

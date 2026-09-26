@@ -28,9 +28,8 @@ impl TabSelection {
     /// Audiobookshelf, and Feeds.
     pub(in crate::app) fn emby_library_index(self) -> Option<usize> {
         match self {
-            Self::Home | Self::Feeds => None,
+            Self::Home | Self::Feeds | Self::AudiobookshelfLibrary(_) => None,
             Self::EmbyLibrary(i) => Some(i),
-            Self::AudiobookshelfLibrary(_) => None,
         }
     }
 
@@ -78,9 +77,23 @@ impl TabSelection {
 mod tests {
     use super::*;
 
-    #[test]
-    fn feeds_emby_library_index_is_none() {
-        assert_eq!(TabSelection::Feeds.emby_library_index(), None);
+    fn assert_positions_round_trip(emby: usize, audio: usize, feeds: bool) {
+        let total = 1 + emby + audio + usize::from(feeds);
+        let feeds_pos = feeds.then_some(total - 1);
+        let mut seen: Vec<TabSelection> = Vec::new();
+        for pos in 0..total {
+            let sel = TabSelection::from_position_with_counts(pos, emby, audio, feeds);
+            assert!(
+                !seen.contains(&sel),
+                "position {pos} collides for {sel:?} with emby={emby} audio={audio} feeds={feeds}"
+            );
+            seen.push(sel);
+            assert_eq!(
+                sel.to_position_with_counts(emby, feeds_pos),
+                pos,
+                "round trip failed for {sel:?} at {pos} (emby={emby} audio={audio} feeds={feeds})"
+            );
+        }
     }
 
     /// The count-aware mapping must assign every visible Home / Emby /
@@ -91,22 +104,7 @@ mod tests {
         for emby in 0..=2 {
             for audio in 0..=2 {
                 for feeds in [false, true] {
-                    let total = 1 + emby + audio + usize::from(feeds);
-                    let feeds_pos = feeds.then_some(total - 1);
-                    let mut seen: Vec<TabSelection> = Vec::new();
-                    for pos in 0..total {
-                        let sel = TabSelection::from_position_with_counts(pos, emby, audio, feeds);
-                        assert!(
-                            !seen.contains(&sel),
-                            "position {pos} collides for {sel:?} with emby={emby} audio={audio} feeds={feeds}"
-                        );
-                        seen.push(sel);
-                        assert_eq!(
-                            sel.to_position_with_counts(emby, feeds_pos),
-                            pos,
-                            "round trip failed for {sel:?} at {pos} (emby={emby} audio={audio} feeds={feeds})"
-                        );
-                    }
+                    assert_positions_round_trip(emby, audio, feeds);
                 }
             }
         }

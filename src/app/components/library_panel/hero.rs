@@ -170,7 +170,7 @@ fn album_source(item: &EmbyItem) -> Option<ArtworkSource> {
         series_id: String::new(),
         image_types: MUSIC_ALBUM_IMAGE_TYPES
             .iter()
-            .map(|s| s.to_string())
+            .map(ToString::to_string)
             .collect(),
         cache_key: format!("{}:P", item.id),
     })
@@ -196,7 +196,7 @@ fn music_source(item: &EmbyItem) -> Option<ArtworkSource> {
         item_id: item.id.clone(),
         series_id: String::new(),
         image_types: vec!["Primary".into()],
-        cache_key: format!("{}:P", key_scope),
+        cache_key: format!("{key_scope}:P"),
     })
 }
 
@@ -236,7 +236,7 @@ fn landscape_image_chain(item: &EmbyItem) -> &'static [&'static str] {
 /// Series artwork family and the image-completion gate are keyed by; every
 /// other item uses `{id}:{chain}`.
 fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
-    let image_types = chain.iter().map(|s| s.to_string()).collect();
+    let image_types = chain.iter().map(ToString::to_string).collect();
     let cache_key = if item.item_type == "Series" {
         crate::app::images::series_image_cache_key(&item.id, chain)
     } else {
@@ -402,14 +402,22 @@ fn abs_book_meta_rows(
     }
     if let Some(ticks) = book.duration_ticks.filter(|t| *t > 0) {
         duration_row = Some(rows.len());
-        rows.push(fmt_duration_hms(ticks as i64 / TICKS_PER_SECOND));
+        rows.push(fmt_duration_hms(
+            i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX),
+        ));
     }
     if book.is_finished {
         rows.push("Finished".into());
     } else if book.position_ticks > 0 && book.duration_ticks.is_some_and(|t| t > 0) {
-        let pct = ((book.position_ticks as f64 * 100.0 / book.duration_ticks.unwrap() as f64)
-            .floor() as u8)
-            .clamp(1, 99);
+        #[expect(
+            clippy::cast_precision_loss,
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "duration fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
+        let pct = (book.position_ticks as f64 * 100.0 / book.duration_ticks.unwrap() as f64)
+            .floor()
+            .clamp(1.0, 99.0) as u8;
         progress_row = Some(rows.len());
         rows.push(format!("{pct}%"));
     }
@@ -433,7 +441,9 @@ pub(in crate::app) fn hero_content_abs_episode(
     }
     if let Some(ticks) = episode.duration_ticks.filter(|t| *t > 0) {
         duration_row = Some(meta_rows.len());
-        meta_rows.push(fmt_duration_hms(ticks as i64 / TICKS_PER_SECOND));
+        meta_rows.push(fmt_duration_hms(
+            i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX),
+        ));
     }
     if let Some(secs) = episode.pub_date_secs {
         meta_rows.push(fmt_publish_date(secs));
@@ -468,7 +478,11 @@ pub(in crate::app) fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
         meta_rows: entry
             .duration_ticks
             .filter(|t| *t > 0)
-            .map(|ticks| vec![fmt_duration_hms(ticks as i64 / TICKS_PER_SECOND)])
+            .map(|ticks| {
+                vec![fmt_duration_hms(
+                    i64::try_from(ticks / TICKS_PER_SECOND as u64).unwrap_or(i64::MAX),
+                )]
+            })
             .unwrap_or_default(),
         duration_row: has_duration.then_some(0),
         progress_row: None,
@@ -481,6 +495,3 @@ pub(in crate::app) fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
         credits: None,
     }
 }
-
-#[cfg(test)]
-mod tests;

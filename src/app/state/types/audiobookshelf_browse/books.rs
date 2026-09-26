@@ -46,9 +46,8 @@ pub(in crate::app) struct SurnameBucket {
 fn surname_bucket_key(sort_key: &str) -> char {
     sort_key
         .chars()
-        .find(|c| c.is_ascii_alphabetic())
-        .map(|c| c.to_ascii_lowercase())
-        .unwrap_or('a')
+        .find(char::is_ascii_alphabetic)
+        .map_or('a', |c| c.to_ascii_lowercase())
 }
 
 /// Partitions `books` (already sorted by `author_sort_key`) into the fixed

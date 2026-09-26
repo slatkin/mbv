@@ -53,14 +53,14 @@ impl Model {
             OverlayRequest::DismissConfirm => self.dismiss_modal(&Self::confirm_id()),
             OverlayRequest::DismissDaemonLost => self.dismiss_modal(&Self::daemon_lost_id()),
             OverlayRequest::DismissSavePlaylist => {
-                self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist))
+                self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist));
             }
             OverlayRequest::ContextMenu(menu) => self.mount_context_menu(menu),
             OverlayRequest::OpenMultiselect(kind) => self.open_multiselect(kind),
             OverlayRequest::OpenLibraryRoutes => self.open_library_routes(),
             OverlayRequest::OpenFeedsManage => self.open_feeds_manage(),
             OverlayRequest::DismissContextMenu => {
-                self.dismiss_modal(&ComponentId::Overlay(OverlayId::ContextMenu))
+                self.dismiss_modal(&ComponentId::Overlay(OverlayId::ContextMenu));
             }
         }
         self.assert_modal_mount_exclusive();

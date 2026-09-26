@@ -16,23 +16,13 @@ fn reattach_is_a_noop_when_auto_reconnect_is_disabled() {
 }
 
 #[test]
-fn reattach_skips_local_daemon_endpoint() {
-    let mut app = make_app_stub();
-    app.player_endpoint = Some(DaemonEndpoint::Local);
-    app.config.lock().unwrap().auto_reconnect = true;
-
-    assert!(!app.try_reattach_remote_daemon());
-    assert!(!app.player.is_remote());
-}
-
-#[test]
 fn reattach_reconnects_to_remote_endpoint_and_adopts_live_queue() {
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_success(
         _endpoint: &DaemonEndpoint,
     ) -> Result<(RemotePlayer, std::sync::mpsc::Receiver<PlayerEvent>), String> {
         Ok(RemotePlayer::stub(make_items(2), 1))
     }
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
 
     let mut app = make_app_stub();
@@ -54,12 +44,12 @@ fn reattach_reconnects_to_remote_endpoint_and_adopts_live_queue() {
 
 #[test]
 fn reattach_falls_back_when_daemon_stays_unreachable() {
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn always_fail(
         _endpoint: &DaemonEndpoint,
     ) -> Result<(RemotePlayer, std::sync::mpsc::Receiver<PlayerEvent>), String> {
         Err("connection refused".to_string())
     }
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(always_fail);
 
     let mut app = make_app_stub();

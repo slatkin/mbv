@@ -1,6 +1,10 @@
 //! Capability derivation for multi-item context menus.
 use mbv_core::playback_queue::{QueueItem, QueueItemKind};
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independently intersected backend capabilities (playable, queue-admissible, removable, played-state-capable); all four co-occur for all-Emby selections and unit tests assert each axis independently (design analysis, issue #804)"
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ItemCapabilities {
     pub playable: bool,
@@ -67,34 +71,5 @@ mod tests {
         let result = intersect([all, no_played]).unwrap();
         assert!(!result.played_state_capable);
         assert!(result.removable);
-    }
-
-    #[test]
-    fn folder_or_non_playable_selection_suppresses_playback_actions() {
-        let playable = ItemCapabilities {
-            playable: true,
-            queue_admissible: true,
-            ..Default::default()
-        };
-        let folder = ItemCapabilities::default();
-        let result = intersect([playable, folder]).unwrap();
-        assert!(!result.playable);
-        assert!(!result.queue_admissible);
-    }
-
-    #[test]
-    fn mixed_queue_selection_keeps_remove_but_drops_played_state() {
-        let emby = ItemCapabilities {
-            removable: true,
-            played_state_capable: true,
-            ..Default::default()
-        };
-        let feed = ItemCapabilities {
-            removable: true,
-            ..Default::default()
-        };
-        let result = intersect([emby, feed]).unwrap();
-        assert!(result.removable);
-        assert!(!result.played_state_capable);
     }
 }

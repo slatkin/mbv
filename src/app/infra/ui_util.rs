@@ -1,3 +1,5 @@
+use std::fmt::Write as _;
+
 use mbv_core::api::EmbyItem;
 use mbv_core::service_runtime::ServiceState;
 use ratatui::style::Color;
@@ -96,7 +98,14 @@ pub(crate) fn move_cursor(cur: usize, delta: i64, len: usize) -> usize {
     if len == 0 {
         return 0;
     }
-    (cur as i64 + delta).clamp(0, len as i64 - 1) as usize
+    let upper = len - 1;
+    if delta >= 0 {
+        cur.saturating_add(usize::try_from(delta).unwrap_or(usize::MAX))
+            .min(upper)
+    } else {
+        cur.saturating_sub(usize::try_from(delta.unsigned_abs()).unwrap_or(usize::MAX))
+            .min(upper)
+    }
 }
 
 pub fn natural_sort_key(s: &str) -> String {
@@ -105,10 +114,10 @@ pub fn natural_sort_key(s: &str) -> String {
     while let Some(c) = chars.next() {
         if c.is_ascii_digit() {
             let mut num = c.to_string();
-            while chars.peek().is_some_and(|d| d.is_ascii_digit()) {
+            while chars.peek().is_some_and(char::is_ascii_digit) {
                 num.push(chars.next().unwrap());
             }
-            out.push_str(&format!("{:0>8}", num));
+            write!(&mut out, "{num:0>8}").expect("writing to a String cannot fail");
         } else {
             out.push(c.to_ascii_lowercase());
         }
@@ -128,11 +137,7 @@ pub fn natural_sort_key(s: &str) -> String {
 /// this "#" header, making it unreachable from the "#" pill's scoped fetch.
 /// Left as-is; flagged for a follow-up.
 pub fn letter_bucket_label(key: &str, total: usize) -> String {
-    let first = key
-        .chars()
-        .next()
-        .map(|c| c.to_ascii_uppercase())
-        .unwrap_or('\0');
+    let first = key.chars().next().map_or('\0', |c| c.to_ascii_uppercase());
     if !first.is_ascii_alphabetic() {
         return "#".to_string();
     }

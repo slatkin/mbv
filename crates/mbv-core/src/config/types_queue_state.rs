@@ -45,21 +45,23 @@ pub struct QueueState {
 
 impl QueueState {
     /// Returns only the Emby items from the queue state.
-    /// Used by the UI layer (PlayerTab) and ctrl boundary, which only
+    /// Used by the UI layer (`PlayerTab`) and ctrl boundary, which only
     /// operate on Emby items. Skips both Feed and Audiobookshelf items.
+    #[must_use]
     pub fn emby_items(&self) -> Vec<crate::api::EmbyItem> {
         self.items
             .iter()
             .filter_map(|qi| match qi {
                 crate::playback_queue::QueueItem::Emby(e) => Some((**e).clone()),
-                crate::playback_queue::QueueItem::Feed(_) => None,
-                crate::playback_queue::QueueItem::Audiobookshelf(_) => None,
-                crate::playback_queue::QueueItem::AudiobookshelfBook(_) => None,
+                crate::playback_queue::QueueItem::Feed(_)
+                | crate::playback_queue::QueueItem::Audiobookshelf(_)
+                | crate::playback_queue::QueueItem::AudiobookshelfBook(_) => None,
             })
             .collect()
     }
 
     /// Consumes self and returns the inner `Vec<QueueItem>`.
+    #[must_use]
     pub fn into_queue_items(self) -> Vec<crate::playback_queue::QueueItem> {
         self.items
     }
@@ -67,6 +69,7 @@ impl QueueState {
     /// Creates a `QueueState` from `Vec<EmbyItem>`, wrapping each as
     /// `QueueItem::Emby`. Convenience for tests and callers that only
     /// deal with Emby items.
+    #[must_use]
     pub fn from_emby_items(
         items: Vec<crate::api::EmbyItem>,
         cursor: usize,
@@ -82,7 +85,7 @@ impl QueueState {
             last_played_item_id: None,
             last_played_content_id: None,
             last_played_completed: false,
-            positions: Default::default(),
+            positions: std::collections::HashMap::default(),
         }
     }
 }

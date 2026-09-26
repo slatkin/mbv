@@ -1,22 +1,26 @@
-use super::super::*;
+use super::super::{
+    is_near_end, mpv_end_file_reason, mpv_err_str, retry_mark_played, EndFileReason,
+    PlaybackOrigin, PlaybackRun, PlayerEvent, ProgressGuard, QueueItem, QueueSlotId, StopReport,
+};
 use super::event_classifiers::{is_clocked_audio_error, provider_lifecycle_close_pos};
+use std::sync::{atomic::Ordering, Arc};
 
 impl PlaybackRun {
     // libmpv2 returns MPV_EVENT_END_FILE failures as Err(Error::Raw(...)),
     // so classify the output-specific error before the generic event logging.
     pub(in crate::player) fn on_mpv_error(
         &mut self,
-        error: libmpv2::Error,
+        error: &libmpv2::Error,
         progress: &mut ProgressGuard,
     ) -> bool {
-        if !is_clocked_audio_error(&error, self.config.audio_device.is_some()) {
-            log::warn!(target: "player", "event error: {}", mpv_err_str(&error));
+        if !is_clocked_audio_error(error, self.config.audio_device.is_some()) {
+            log::warn!(target: "player", "event error: {}", mpv_err_str(error));
             return false;
         }
 
         let device = self.config.audio_device.clone().unwrap_or_default();
         self.close_prepared_source();
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         self.close_prepared_source_at(self.last_valid_pos);
         let stopped_slot = self.active_slot_id();
         self.status.lock().unwrap().active = false;
@@ -32,10 +36,10 @@ impl PlaybackRun {
         true
     }
 
-    /// Standalone origin: exactly one file, so any EndFile ends playback. The
+    /// Standalone origin: exactly one file, so any `EndFile` ends playback. The
     /// run idles afterward (mpv stays up awaiting Shutdown), so the shared
     /// status snapshot must stop advertising `active=true` here — unlike the
-    /// queue paths, no Shutdown or TrackChanged will refresh it. A daemon
+    /// queue paths, no Shutdown or `TrackChanged` will refresh it. A daemon
     /// client attaching later would otherwise inherit a "still playing"
     /// now-playing panel frozen at the final position.
     fn report_for_end_file(&mut self, reason: EndFileReason, progress: &mut ProgressGuard) {
@@ -45,7 +49,7 @@ impl PlaybackRun {
             self.report_stop_now_or_background(progress);
             return;
         }
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
     }
 
@@ -69,7 +73,7 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) -> bool {
         if reason == mpv_end_file_reason::Quit {
-            self.stop_runtime = Some(self.active_item().map_or(0, |item| item.runtime_ticks()));
+            self.stop_runtime = Some(self.active_item().map_or(0, QueueItem::runtime_ticks));
         }
         let runtime = self.status.lock().unwrap().runtime_ticks;
         let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
@@ -112,7 +116,7 @@ impl PlaybackRun {
         if self.stop_report == StopReport::NotSent {
             self.report_stop_now_or_background(progress);
         }
-        let client = self.reporter.client.clone();
+        let client = Arc::clone(&self.reporter.client);
         if self.origin == PlaybackOrigin::Standalone {
             self.shutdown_standalone(stopped_slot, &client);
             return;
@@ -127,18 +131,18 @@ impl PlaybackRun {
     ) {
         // Retry mark_played in a detached thread so Shutdown never blocks.
         if let Some(mid) = self.mark_played_id.take() {
-            retry_mark_played(client.clone(), mid);
+            retry_mark_played(Arc::clone(client), mid);
         }
         let completed_runtime = self
             .stop_runtime
-            .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
+            .or_else(|| self.active_item().map(QueueItem::runtime_ticks))
             .unwrap_or(0);
         let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
         let near_end = self.reporter.has_session()
             && is_near_end(is_audio, false, self.last_valid_pos, completed_runtime);
         if near_end {
             let id = self.reporter.ids.lock().unwrap().0.clone();
-            retry_mark_played(client.clone(), id);
+            retry_mark_played(Arc::clone(client), id);
         }
         self.status.lock().unwrap().active = false;
         if !self.stopped_event_sent {

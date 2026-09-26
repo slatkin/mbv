@@ -28,11 +28,11 @@ pub(in crate::app) struct TransportRows {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub(in crate::app) struct TransportMeasure {
     /// The play/pause glyph cell width (including its trailing space).
-    pub(in crate::app) glyph_w: u16,
+    pub(in crate::app) glyph: u16,
     /// The stop + next buttons' width including their separating spaces.
-    pub(in crate::app) buttons_w: u16,
+    pub(in crate::app) buttons: u16,
     /// The indicator span set's width (the elapsed time and the status pill).
-    pub(in crate::app) indicators_w: u16,
+    pub(in crate::app) indicators: u16,
 }
 
 /// Which transport rows render in a panel rect of `rows` available height.
@@ -61,8 +61,8 @@ pub(in crate::app) fn transport_buttons_fit(
     measure: TransportMeasure,
 ) -> bool {
     available as usize
-        >= measure.glyph_w as usize
-            + measure.indicators_w as usize
-            + measure.buttons_w as usize
+        >= measure.glyph as usize
+            + measure.indicators as usize
+            + measure.buttons as usize
             + title_width as usize
 }

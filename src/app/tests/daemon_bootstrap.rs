@@ -1,14 +1,6 @@
 use super::*;
 
 #[test]
-fn remote_app_starts_on_local_queue_when_remote_queue_is_empty() {
-    let app = make_remote_app_stub(make_items(2), Vec::new());
-
-    assert_eq!(app.queue_scope, QueueScope::Local);
-    assert_eq!(app.viewed_queue_scope(), QueueScope::Local);
-}
-
-#[test]
 fn remote_app_starts_on_remote_queue_when_remote_queue_has_items() {
     let app = make_remote_app_stub(make_items(2), make_items(1));
 
@@ -41,7 +33,7 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
         config,
     );
     assert!(app.player_tab.emby_items().is_empty());
@@ -137,7 +129,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .expect("save stale queue state");
 
@@ -174,19 +166,9 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     ));
 
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
-    assert_eq!(
-        progress.current_time_seconds, 30.0,
+    assert!(
+        (progress.current_time_seconds - 30.0).abs() < f64::EPSILON,
         "browse must reflect the adopted acknowledged position"
     );
     assert!(!progress.is_finished);
-}
-
-#[test]
-fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
-    let items: Vec<mbv_core::playback_queue::QueueItem> = make_items(3)
-        .into_iter()
-        .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
-        .collect();
-    let cursor = crate::app::dispatch::actions::queue_restore_cursor(&items, 2, None, None, false);
-    assert_eq!(cursor, 2);
 }

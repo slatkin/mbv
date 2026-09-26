@@ -33,7 +33,7 @@ impl Model {
 
     fn update_abs_book_owner<R>(&mut self, f: impl FnOnce(&mut BookContent) -> R) -> Option<R> {
         let key = self.abs_book_key()?;
-        self.update_library_owner(key, || Box::new(BookContent::new()), f)
+        self.update_library_owner(&key, || Box::new(BookContent::new()), f)
     }
 
     pub(in crate::app) fn push_audiobookshelf_book_content(&mut self) {
@@ -54,7 +54,7 @@ impl Model {
         });
     }
 
-    pub(in crate::app) fn sync_audiobookshelf_book(&mut self) {
+    pub(in crate::app) fn sync_audiobookshelf_book() {
         // Books are retained as a LibraryPanel owner for the lifetime of the
         // catalog entry; content is pushed by discrete writers/events. The
         // panel sync pass reconciles the active owner and focus separately.
@@ -71,14 +71,14 @@ impl Model {
         match request {
             ShellRequest::AudiobookshelfBookMove(movement) => match movement {
                 AudiobookshelfBookMove::Book(Some(target)) => {
-                    self.app.select_audiobookshelf_book_target(&target)
+                    self.app.select_audiobookshelf_book_target(&target);
                 }
                 AudiobookshelfBookMove::Book(None) => {}
                 AudiobookshelfBookMove::Bucket(position) => {
-                    self.app.select_audiobookshelf_book_bucket(position)
+                    self.app.select_audiobookshelf_book_bucket(position);
                 }
                 AudiobookshelfBookMove::ChapterFocus(selection) => {
-                    self.app.set_audiobookshelf_book_chapter_focus(selection)
+                    crate::app::App::set_audiobookshelf_book_chapter_focus(selection);
                 }
             },
             ShellRequest::AudiobookshelfBookIntent(intent) => match intent {
@@ -103,13 +103,13 @@ impl Model {
                 }
                 AudiobookshelfBookIntent::FocusChapters => {
                     if self.app.is_right_panel_wide() {
-                        self.update_abs_book_owner(|owner| owner.enter_chapter_focus());
+                        self.update_abs_book_owner(super::super::components::book_content::BookContent::enter_chapter_focus);
                     } else {
                         self.open_library_hero_overlay();
                     }
                 }
                 AudiobookshelfBookIntent::ActivateChapter(target) => {
-                    self.app.activate_audiobookshelf_book_row_target(target)
+                    self.app.activate_audiobookshelf_book_row_target(target);
                 }
             },
             _ => unreachable!("non-book request routed to book handler"),

@@ -47,7 +47,7 @@ fn open_sessions(harness: &mut TickHarness) {
     );
     harness
         .model_mut()
-        .dispatch_router_command(Command::OpenSessions);
+        .dispatch_router_command(&Command::OpenSessions);
     apply_messages(harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(

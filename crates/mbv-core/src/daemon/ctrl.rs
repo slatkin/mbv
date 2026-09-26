@@ -4,7 +4,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::ctrl::{CtrlEvent, DisconnectReason};
+use crate::ctrl::{CtrlAudiobookshelfCapabilities, CtrlEvent, DisconnectReason};
 
 pub(crate) type CtrlClientId = u64;
 pub(crate) type CtrlSender = mpsc::Sender<CtrlOutbound>;
@@ -45,18 +45,8 @@ struct CtrlClient {
     id: CtrlClientId,
     tx: CtrlSender,
     transport: CtrlTransport,
-    /// Whether this peer advertised `abs-queue` in its Hello. Gates whether
-    /// it receives or may submit `QueueItem::Audiobookshelf` values.
-    supports_abs_queue: bool,
-    /// Whether this peer advertised `abs-progress` in its Hello. Gates
-    /// whether it receives the redacted Audiobookshelf progress event.
-    supports_abs_progress: bool,
-    /// Whether this peer advertised `abs-book-queue` in its Hello. Gates
-    /// whether it receives or may submit `QueueItem::AudiobookshelfBook`.
-    supports_abs_book_queue: bool,
-    /// Whether this peer advertised `abs-book-progress` in its Hello. Gates
-    /// whether it receives the redacted Audiobookshelf book progress event.
-    supports_abs_book_progress: bool,
+    /// Capabilities advertised by this peer at Hello.
+    audiobookshelf: CtrlAudiobookshelfCapabilities,
     supports_owner_queue_load: bool,
 }
 
@@ -85,10 +75,7 @@ impl CtrlClients {
         &mut self,
         tx: CtrlSender,
         transport: CtrlTransport,
-        supports_abs_queue: bool,
-        supports_abs_progress: bool,
-        supports_abs_book_queue: bool,
-        supports_abs_book_progress: bool,
+        audiobookshelf: CtrlAudiobookshelfCapabilities,
         supports_owner_queue_load: bool,
     ) -> CtrlClientId {
         let id = self.next_id;
@@ -97,10 +84,7 @@ impl CtrlClients {
             id,
             tx,
             transport,
-            supports_abs_queue,
-            supports_abs_progress,
-            supports_abs_book_queue,
-            supports_abs_book_progress,
+            audiobookshelf,
             supports_owner_queue_load,
         });
         if self.authority == AuthorityHolder::None {
@@ -139,7 +123,7 @@ impl CtrlClients {
         self.connection
             .iter()
             .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_abs_queue)
+            .is_some_and(|c| c.audiobookshelf.queue)
     }
 
     /// Whether the client `id` advertised `abs-book-queue` support at Hello.
@@ -156,7 +140,7 @@ impl CtrlClients {
         self.connection
             .iter()
             .find(|c| c.id == id)
-            .is_some_and(|c| c.supports_abs_book_queue)
+            .is_some_and(|c| c.audiobookshelf.book_queue)
     }
 
     pub(crate) fn send_to_client(&self, id: CtrlClientId, event: &CtrlEvent) {
@@ -171,9 +155,9 @@ impl CtrlClients {
 
     /// Broadcast `json` to all connected ctrl clients. Removes any client
     /// whose channel has failed (broken pipe / disconnected).
-    pub(crate) fn broadcast_to_all(&mut self, json: String) {
+    pub(crate) fn broadcast_to_all(&mut self, json: &str) {
         self.connection
-            .retain(|c| c.tx.send(CtrlOutbound::Event(json.clone())).is_ok());
+            .retain(|c| c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok());
     }
 
     /// Broadcasts a state event gated per client:
@@ -185,19 +169,19 @@ impl CtrlClients {
     /// Mirrors `broadcast_to_all`'s drop-on-failed-send behavior.
     pub(crate) fn broadcast_state_gated(
         &mut self,
-        unified_full_json: String,
-        unified_abs_json: String,
-        unified_book_json: String,
-        unified_json: String,
+        unified_full_json: &str,
+        unified_abs_json: &str,
+        unified_book_json: &str,
+        unified_json: &str,
     ) {
         self.connection.retain(|c| {
-            let json = match (c.supports_abs_queue, c.supports_abs_book_queue) {
-                (true, true) => &unified_full_json,
-                (true, false) => &unified_abs_json,
-                (false, true) => &unified_book_json,
-                (false, false) => &unified_json,
+            let json = match (c.audiobookshelf.queue, c.audiobookshelf.book_queue) {
+                (true, true) => unified_full_json,
+                (true, false) => unified_abs_json,
+                (false, true) => unified_book_json,
+                (false, false) => unified_json,
             };
-            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+            c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
         });
     }
 
@@ -205,23 +189,23 @@ impl CtrlClients {
     /// advertised `abs-progress` at Hello. Peers lacking the capability are
     /// silently skipped (not dropped) — mirrors `broadcast_state_gated`'s
     /// drop-on-failed-send semantics for the peers that do receive it.
-    pub(crate) fn broadcast_progress_gated(&mut self, json: String) {
+    pub(crate) fn broadcast_progress_gated(&mut self, json: &str) {
         self.connection.retain(|c| {
-            if !c.supports_abs_progress {
+            if !c.audiobookshelf.progress {
                 return true;
             }
-            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+            c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
         });
     }
 
     /// Sends redacted Audiobookshelf book progress `json` only to clients
     /// that advertised `abs-book-progress` at Hello.
-    pub(crate) fn broadcast_book_progress_gated(&mut self, json: String) {
+    pub(crate) fn broadcast_book_progress_gated(&mut self, json: &str) {
         self.connection.retain(|c| {
-            if !c.supports_abs_book_progress {
+            if !c.audiobookshelf.book_progress {
                 return true;
             }
-            c.tx.send(CtrlOutbound::Event(json.clone())).is_ok()
+            c.tx.send(CtrlOutbound::Event(json.to_string())).is_ok()
         });
     }
 
@@ -248,7 +232,7 @@ impl CtrlClients {
                     .tx
                     .send(CtrlOutbound::Flush(ack_tx))
                     .ok()
-                    .map(|_| ack_rx)
+                    .map(|()| ack_rx)
             })
             .collect();
         let deadline = Instant::now() + timeout;

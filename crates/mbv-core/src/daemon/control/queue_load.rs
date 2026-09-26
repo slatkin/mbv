@@ -1,4 +1,11 @@
-use super::*;
+use super::{
+    abs_queue_transport_rejection, admit_queue_slots, audio_only_rejection, broadcast_queue_state,
+    mint_queue_lineage, reset_slot_jumps, send_to, ClientRegistry, CtrlContext, CtrlSender,
+    DaemonPlayerOwner, PendingIdleQueueLoad, Player, QueueItem, QueueSlotId, SharedQueueState,
+};
+use crate::ctrl::CtrlEvent;
+use crate::playback_queue::PlaybackQueue;
+use std::time::{Duration, Instant};
 
 fn install_idle_queue_load(
     request_id: crate::ctrl::QueueLoadRequestId,
@@ -119,10 +126,10 @@ pub(in crate::daemon) fn complete_pending_idle_queue_load(
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
 ) -> bool {
-    if !owner
+    if owner
         .pending_idle_load
         .as_ref()
-        .is_some_and(|pending| pending.stopped_run == run_identity)
+        .is_none_or(|pending| pending.stopped_run != run_identity)
     {
         return false;
     }
@@ -162,14 +169,14 @@ pub(super) fn handle_queue_load_idle(
             clients.supports_abs_book_queue(ctx.client_id),
         )
     };
-    let reason = if !supports_operation {
-        Some("peer did not negotiate owner queue-load capability".to_string())
-    } else {
+    let reason = if supports_operation {
         abs_queue_transport_rejection(
             slots.iter().map(|slot| &slot.item),
             supports_abs_queue,
             supports_abs_book_queue,
         )
+    } else {
+        Some("peer did not negotiate owner queue-load capability".to_string())
     };
     if let Some(reason) = reason {
         reject_queue_load(ctx.reply_tx, request_id, reason);

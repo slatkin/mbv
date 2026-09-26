@@ -102,8 +102,7 @@ impl App {
             .as_ref()
             .and_then(|s| s.now_playing_item_id.as_ref())
             .zip(self.queue_for_scope(scope).emby_item_at(pos))
-            .map(|(npid, item)| item.id == *npid)
-            .unwrap_or(false)
+            .is_some_and(|(npid, item)| item.id == *npid)
     }
 
     /// Remove the slots named by `slot_ids` from `scope`'s queue as one edit.
@@ -181,7 +180,7 @@ impl App {
             let queue = self.queue_for_scope_mut(scope);
             queue.queue_cursor = cursor_after;
             queue.clamp_cursor();
-        }
+        };
         // The mounted component owns the painted cursor and only adopts
         // `App`'s value when a re-anchor is armed; without this it would keep
         // the row the deleted range used to occupy and clamp there.
@@ -363,7 +362,7 @@ impl App {
             let name = crate::app::infra::ui_util::trunc_str(self.queue_playlist_name(), 36);
             self.ask_confirm(ConfirmModal {
                 title: " Unsaved Playlist Changes ".into(),
-                message: format!("Save changes to \"{}\"?", name),
+                message: format!("Save changes to \"{name}\"?"),
                 hint: "[s]Save  [d]Discard  [Esc]Cancel".into(),
                 on_confirm: ConfirmAction::DiscardOrSaveDirtyPlaylist,
             });
@@ -410,7 +409,7 @@ impl App {
                 on_confirm: ConfirmAction::ReplacePopulatedQueue,
             });
         } else {
-            self.run_replacement(action, via);
+            self.run_replacement(action, &via);
         }
     }
 
@@ -421,7 +420,7 @@ impl App {
     pub(in crate::app) fn run_replacement(
         &mut self,
         action: PendingQueueAction,
-        via: ReplacementExecutor,
+        via: &ReplacementExecutor,
     ) {
         match via {
             ReplacementExecutor::Pending => {
@@ -443,7 +442,7 @@ impl App {
                     self.set_panel_focus(PanelFocus::Queue);
                 }
             }
-            ReplacementExecutor::Routed(prep) => self.run_routed_replacement(action, prep),
+            ReplacementExecutor::Routed(prep) => self.run_routed_replacement(action, *prep),
         }
     }
 
@@ -456,7 +455,7 @@ impl App {
             items,
             start_idx,
             source,
-            autostart: _,
+            ..
         } = action
         else {
             return;
@@ -567,9 +566,9 @@ impl App {
             self.set_queue_source_if_not_local_daemon(source.clone());
         }
         if autostart {
-            self.start_pending_queue_playback(items, start_idx, source, direct_remote);
+            self.start_pending_queue_playback(&items, start_idx, source, direct_remote);
         } else {
-            self.load_pending_queue_locally(items, start_idx, direct_remote);
+            self.load_pending_queue_locally(&items, start_idx, direct_remote);
         }
     }
 
@@ -609,14 +608,16 @@ impl App {
 
     fn load_pending_queue_locally(
         &mut self,
-        items: Vec<EmbyItem>,
+        items: &[EmbyItem],
         start_idx: usize,
         direct_remote: bool,
     ) {
         // Playlist Enter populates the queue; Space/Enter starts it.
-        let loaded = items.get(start_idx).map(|i| i.playback_label());
+        let loaded = items
+            .get(start_idx)
+            .map(mbv_core::api::EmbyItem::playback_label);
         if !direct_remote {
-            self.replace_playback_queue(items, start_idx);
+            self.replace_playback_queue(items.to_vec(), start_idx);
         }
         self.set_queue_scope(self.playing_queue_scope());
         self.persist_local_queue_state_if_needed(self.playing_queue_scope());
@@ -627,13 +628,13 @@ impl App {
 
     fn start_pending_queue_playback(
         &mut self,
-        items: Vec<EmbyItem>,
+        items: &[EmbyItem],
         start_idx: usize,
         source: crate::config::QueueSource,
         direct_remote: bool,
     ) {
         if !direct_remote {
-            self.replace_playback_queue(items.clone(), start_idx);
+            self.replace_playback_queue(items.to_vec(), start_idx);
         }
         self.set_queue_scope(self.playing_queue_scope());
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -641,13 +642,13 @@ impl App {
             let id = conn_id.clone();
             let label = items
                 .get(start_idx)
-                .map(|i| i.playback_label())
+                .map(mbv_core::api::EmbyItem::playback_label)
                 .unwrap_or_default();
             self.flash(
                 format!("Requesting playback: {label}"),
                 ToastSeverity::Neutral,
             );
-            self.submit_attached_sequence(&id, &items, start_idx);
+            self.submit_attached_sequence(&id, items, start_idx);
         } else {
             self.submit_tab_queue(self.playing_queue_scope(), start_idx, source);
             self.player
@@ -724,11 +725,11 @@ impl App {
         let mutation_id = self.next_playlist_mutation;
         self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
         self.enqueue_playlist_mutation(
-            playlist_id.clone(),
+            &playlist_id,
             PlaylistMutation::Save {
                 mutation_id,
                 origin,
-                source_playlist_id: playlist_id,
+                source_playlist_id: playlist_id.clone(),
                 item_ids: None,
             },
         );
@@ -746,10 +747,10 @@ impl App {
             .filter(|id| self.playlist_mutation_pending(id))
             .unwrap_or_else(|| format!("create:{mutation_id}"));
         self.enqueue_playlist_mutation(
-            key.clone(),
+            &key,
             PlaylistMutation::CreateAs {
                 mutation_id,
-                coordinator_key: key,
+                coordinator_key: key.clone(),
                 name,
                 origin,
                 source_playlist_id,
@@ -792,18 +793,18 @@ impl App {
 
     pub(in crate::app) fn enqueue_playlist_mutation(
         &mut self,
-        playlist_id: String,
+        playlist_id: &str,
         mutation: PlaylistMutation,
     ) {
         let state = self
             .playlist_mutations
-            .entry(playlist_id.clone())
+            .entry(playlist_id.to_string())
             .or_default();
         if state.active.is_some() {
             state.queued.push_back(mutation);
         } else {
             state.active = Some(mutation);
-            self.start_playlist_mutation(&playlist_id);
+            self.start_playlist_mutation(playlist_id);
         }
     }
 

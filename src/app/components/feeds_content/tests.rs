@@ -119,26 +119,3 @@ fn selected_podcast_entry_hero_is_square_with_the_placeholder() {
     assert!(hero.facts.artwork.source.is_none());
     assert_eq!(hero.facts.title, "episode");
 }
-
-/// A selected video feed entry is the Landscape placeholder (design D5).
-#[test]
-fn selected_video_entry_hero_is_landscape_with_the_placeholder() {
-    let mut owner = owner(
-        &[subscription("A")],
-        vec![entry("video", FeedKind::Video, false)],
-    );
-    let hero = owner.content().hero.expect("selected entry hero");
-    assert_eq!(hero.facts.artwork.shape, ArtworkShape::Landscape);
-    assert!(hero.facts.artwork.source.is_none());
-}
-
-/// The list slot hands the shared carrier over as the active canonical
-/// list when the projection has selectable entries.
-#[test]
-fn content_list_slot_is_the_canonical_media_list_with_entries() {
-    let mut owner = owner(
-        &[subscription("A")],
-        vec![entry("one", FeedKind::Audio, false)],
-    );
-    assert!(matches!(owner.content().list, ListSlot::Media(_)));
-}

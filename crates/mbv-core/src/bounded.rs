@@ -13,7 +13,7 @@ use std::time::Duration;
 ///
 /// Shared by `api::EmbyClient::authenticate_bounded` and
 /// `remote_player::RemotePlayer::connect_endpoint`'s handshake bound, so the
-/// spawn/recv_timeout/abandon mechanics only need to be gotten right once,
+/// `spawn/recv_timeout/abandon` mechanics only need to be gotten right once,
 /// and so each caller's own timeout logic can be unit-tested directly with a
 /// closure -- no real socket or filesystem state required.
 pub(crate) fn run_with_hard_bound<T, F, E>(f: F, hard_bound: Duration) -> Result<T, E>

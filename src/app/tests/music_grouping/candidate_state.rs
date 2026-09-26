@@ -58,7 +58,7 @@ fn silent_artist_lookups_expire_to_fallback() {
         .candidate
         .as_mut()
         .unwrap()
-        .created_at = Instant::now() - Duration::from_secs(4);
+        .created_at = Instant::now().checked_sub(Duration::from_secs(4)).unwrap();
 
     app.expire_music_grouping_candidates();
 

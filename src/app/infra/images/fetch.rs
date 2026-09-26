@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, App, ImageFetchReq,
+    ImageSource, Instant, LevelFillAction, LevelFillState, LibEvent, MAX_IMAGE_FETCHES,
+    NAV_IMAGE_FETCH_IDLE_DELAY, PAGE_SIZE,
+};
 
 mod card_images;
 mod level_artists;
@@ -45,22 +49,22 @@ impl App {
     /// Proactively fetches TV series detail (seasons + episodes) so the
     /// Inline series detail pane can render without the user
     /// drilling in first.
-    pub(in crate::app) fn fetch_series_detail(&mut self, series_id: String) {
+    pub(in crate::app) fn fetch_series_detail(&mut self, series_id: &str) {
         if series_id.is_empty() {
             return;
         }
-        if self.series_detail_loading.contains(&series_id)
-            || self.series_detail_cache.contains_key(&series_id)
+        if self.series_detail_loading.contains(series_id)
+            || self.series_detail_cache.contains_key(series_id)
         {
             return;
         }
-        self.series_detail_loading.insert(series_id.clone());
+        self.series_detail_loading.insert(series_id.to_string());
         let Some(client) = self.emby_snapshot() else {
-            self.series_detail_loading.remove(&series_id);
+            self.series_detail_loading.remove(series_id);
             return;
         };
         let tx = self.lib_tx.clone();
-        let sid = series_id.clone();
+        let sid = series_id.to_string();
         std::thread::spawn(move || {
             let (seasons, episodes) = client
                 .get_items_sorted(&sid, None, false, 0, PAGE_SIZE, "SortName", "Ascending")
@@ -86,7 +90,7 @@ impl App {
         let Some(detail) = self.series_detail_cache.get(&series_id) else {
             if !series_id.is_empty() && !season_id.is_empty() {
                 self.pending_series_season_expansions.insert(key);
-                self.fetch_series_detail(series_id);
+                self.fetch_series_detail(&series_id);
             }
             return;
         };

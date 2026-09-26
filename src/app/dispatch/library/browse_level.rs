@@ -32,8 +32,7 @@ impl App {
             if last
                 .items
                 .first()
-                .map(|item| item.item_type == "Episode")
-                .unwrap_or(false)
+                .is_some_and(|item| item.item_type == "Episode")
             {
                 sort_episodes(&mut last.items);
             }
@@ -60,23 +59,13 @@ impl App {
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
         let should_auto_push = self.tab.emby_library_index() == Some(lib_idx)
-            && self
-                .libs
-                .get(lib_idx)
-                .map(|lib| {
-                    lib.library.collection_type == "tvshows"
-                        && lib
-                            .nav_stack
-                            .last()
-                            .map(|l| {
-                                l.items
-                                    .first()
-                                    .map(|i| i.item_type == "Season")
-                                    .unwrap_or(false)
-                            })
-                            .unwrap_or(false)
-                })
-                .unwrap_or(false);
+            && self.libs.get(lib_idx).is_some_and(|lib| {
+                lib.library.collection_type == "tvshows"
+                    && lib
+                        .nav_stack
+                        .last()
+                        .is_some_and(|l| l.items.first().is_some_and(|i| i.item_type == "Season"))
+            });
 
         if should_auto_push {
             let (season_id, season_name) = self

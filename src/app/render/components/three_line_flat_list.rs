@@ -31,7 +31,7 @@ pub(in crate::app) fn render_three_line_flat_list<Target: Clone + Eq>(
     let mut hits = Vec::with_capacity(visible);
     let mut selected_rect = None;
     for index in offset..offset + visible {
-        let y = content_rect.y + ((index - offset) * (3 + gap)) as u16;
+        let y = content_rect.y + u16::try_from((index - offset) * (3 + gap)).unwrap_or(u16::MAX);
         let selected = list.focused() && list.selected() == Some(&list.item(index).target);
         let (row_x, row_width) = if selected {
             (claim_rect.x, claim_rect.width)

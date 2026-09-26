@@ -56,7 +56,7 @@ fn stay_alive_owner_queue_state_round_trips_queue_source_and_lineage() {
             last_played_content_id: None,
             last_played_item_id: None,
             last_played_completed: false,
-            positions: Default::default(),
+            positions: std::collections::HashMap::default(),
         },
         lineage: crate::ctrl::QueueLineage(42),
     };
@@ -84,7 +84,7 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     };
     let takeover = crate::config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).unwrap();
     assert_eq!(takeover.lineage, crate::ctrl::QueueLineage::default());
@@ -98,7 +98,7 @@ fn stay_alive_owner_takes_over_legacy_snapshot_only_once() {
             last_played_content_id: None,
             last_played_item_id: None,
             last_played_completed: false,
-            positions: Default::default(),
+            positions: std::collections::HashMap::default(),
         }),
     )
     .is_none());
@@ -125,7 +125,7 @@ fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
             last_played_content_id: None,
             last_played_item_id: None,
             last_played_completed: false,
-            positions: Default::default(),
+            positions: std::collections::HashMap::default(),
         },
         lineage: crate::ctrl::QueueLineage(7),
     };
@@ -140,7 +140,7 @@ fn stay_alive_empty_owner_state_never_takes_over_legacy_snapshot() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     };
     assert!(crate::config::legacy_queue_for_owner_if_absent(&path, Some(legacy)).is_none());
 
@@ -185,5 +185,5 @@ fn stay_alive_owner_refuses_client_queue_adoption() {
         matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
         if reason.contains("cannot be adopted"))
     );
-    assert!(commands.try_recv().is_err());
+    commands.try_recv().unwrap_err();
 }

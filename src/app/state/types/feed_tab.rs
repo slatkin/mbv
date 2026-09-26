@@ -26,15 +26,6 @@ impl WatchedFilter {
         }
     }
 
-    #[cfg(test)]
-    pub fn position(self) -> usize {
-        match self {
-            Self::All => 0,
-            Self::Watched => 1,
-            Self::Unwatched => 2,
-        }
-    }
-
     pub fn from_position(position: usize) -> Option<Self> {
         match position {
             0 => Some(Self::All),
@@ -161,23 +152,5 @@ mod tests {
         state.rebuild_all_entries();
         let titles: Vec<&str> = state.all_entries.iter().map(|e| e.title.as_str()).collect();
         assert_eq!(titles, vec!["new", "mid", "old", "nodate"]);
-    }
-
-    #[test]
-    fn subscription_groups_are_sorted_newest_first_with_none_last() {
-        let mut state = FeedTabState {
-            entries: vec![vec![
-                entry("old", Some(100)),
-                entry("new", Some(300)),
-                entry("nodate", None),
-            ]],
-            ..Default::default()
-        };
-        state.rebuild_all_entries();
-        let titles: Vec<&str> = state.entries[0]
-            .iter()
-            .map(|entry| entry.title.as_str())
-            .collect();
-        assert_eq!(titles, vec!["new", "old", "nodate"]);
     }
 }

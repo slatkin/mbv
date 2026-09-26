@@ -115,20 +115,28 @@ pub(in crate::app) enum Command {
 /// queue-visible layout, so the gate follows it instead of the panel mode and
 /// the link is gated off in idle `both` and `queue-only`, on in idle
 /// `library-only` where the strip displays the feed.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independently-derived idle-feed gate facts (player active, connected session, idle panel presence, link availability); the command fires only when all activity gates are false AND the link is available; any combination is reachable (design analysis, issue #804)"
+)]
+pub(in crate::app) struct IdleFeedLinkContext {
+    pub player_active: bool,
+    pub has_connected_session: bool,
+    pub playback_panel_present_idle: bool,
+    pub link_available: bool,
+}
+
 pub(in crate::app) fn idle_feed_command_for_key(
     chord: KeyChord,
-    player_active: bool,
-    has_connected_session: bool,
-    playback_panel_present_idle: bool,
-    link_available: bool,
+    context: &IdleFeedLinkContext,
 ) -> Option<Command> {
     match chord.code {
         KeyCode::Char('o')
             if chord.mods.is_empty()
-                && !player_active
-                && !has_connected_session
-                && !playback_panel_present_idle
-                && link_available =>
+                && !context.player_active
+                && !context.has_connected_session
+                && !context.playback_panel_present_idle
+                && context.link_available =>
         {
             Some(Command::OpenIdleFeedLink)
         }
@@ -212,8 +220,8 @@ impl App {
     /// command vs. a local `Player` command, matching the divergent behavior
     /// `handle_playback_key` had inline (including its known bugs — see issue
     /// #78 follow-up).
-    pub(in crate::app) fn dispatch(&mut self, command: Command) -> bool {
-        match command {
+    pub(in crate::app) fn dispatch(&mut self, command: &Command) -> bool {
+        match *command {
             Command::OpenIdleFeedLink
             | Command::ToggleVisualizer
             | Command::ToggleVisualSlotHidden => self.dispatch_visual_command(command),
@@ -240,14 +248,14 @@ impl App {
             | Command::OpenSearch
             | Command::OpenHelp => self.dispatch_navigation_command(command),
             Command::FocusPanel(_) | Command::CyclePanelMode => {
-                self.dispatch_panel_command(command)
+                self.dispatch_panel_command(command);
             }
         }
         false
     }
 
-    fn dispatch_visual_command(&mut self, command: Command) {
-        match command {
+    fn dispatch_visual_command(&mut self, command: &Command) {
+        match *command {
             Command::OpenIdleFeedLink => self.open_idle_feed_link(),
             Command::ToggleVisualizer => self.toggle_visualizer(),
             Command::ToggleVisualSlotHidden => {
@@ -259,8 +267,8 @@ impl App {
         }
     }
 
-    fn dispatch_playback_command(&mut self, command: Command) {
-        match command {
+    fn dispatch_playback_command(&mut self, command: &Command) {
+        match *command {
             Command::TogglePlayPause => self.playback_target().toggle_play_pause(self),
             Command::Stop => self.playback_target().stop(self),
             Command::SeekRelative(delta) => self.playback_target().seek_relative(self, delta),
@@ -288,8 +296,8 @@ impl App {
         }
     }
 
-    fn dispatch_navigation_command(&mut self, command: Command) {
-        match command {
+    fn dispatch_navigation_command(&mut self, command: &Command) {
+        match *command {
             Command::NextLibraryTab => self.library_tab_next(),
             Command::PreviousLibraryTab => self.library_tab_prev(),
             Command::SetLibraryTab(index) => {
@@ -311,8 +319,8 @@ impl App {
         }
     }
 
-    fn dispatch_panel_command(&mut self, command: Command) {
-        match command {
+    fn dispatch_panel_command(&mut self, command: &Command) {
+        match *command {
             Command::FocusPanel(focus) => {
                 self.set_panel_focus(focus);
                 // No card-checkpoint reset: `last_card_*` is the measured
@@ -379,7 +387,7 @@ impl App {
         if self.handoff_queue_play_to_session(&item, &emby_items, emby_start) {
             return;
         }
-        self.play_queue_cursor_locally(t, item, slot_id, all_slots);
+        self.play_queue_cursor_locally(t, &item, slot_id, all_slots);
     }
 
     fn queue_play_cursor_item(&mut self, t: usize) -> Option<mbv_core::playback_queue::QueueItem> {
@@ -523,7 +531,7 @@ impl App {
     fn play_queue_cursor_locally(
         &mut self,
         t: usize,
-        item: mbv_core::playback_queue::QueueItem,
+        item: &mbv_core::playback_queue::QueueItem,
         slot_id: Option<QueueSlotId>,
         all_slots: Vec<mbv_core::playback_execution_sequence::ExecSlot>,
     ) {
@@ -559,7 +567,7 @@ impl App {
     fn cold_start_queue_play(
         &mut self,
         t: usize,
-        item: mbv_core::playback_queue::QueueItem,
+        item: &mbv_core::playback_queue::QueueItem,
         scope: crate::app::QueueScope,
         all_slots: Vec<mbv_core::playback_execution_sequence::ExecSlot>,
     ) {

@@ -300,7 +300,7 @@ impl SettingsComponent {
             // nothing — the chord changes in the config file, never in
             // place (ADR 0023). Returning None lets `on()`'s fallback
             // claim them like the cursor moves.
-            Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
+            Key::Esc | Key::Function(3 | 4) | Key::Char('q') => {
                 let intent = settings_intent_for_key(key.code)?;
                 if matches!(intent, SettingsIntent::Back) {
                     // Leaving Keys zeroes the local cursor so the next
@@ -324,15 +324,10 @@ impl SettingsComponent {
                     (self.services_cursor + 1).min(self.services.len().saturating_sub(1));
                 None
             }
-            Key::Enter
-            | Key::Char(' ')
-            | Key::Char('d')
-            | Key::Char('D')
-            | Key::Char('t')
-            | Key::Char('T')
-            | Key::Char('r')
-            | Key::Char('R') => self.service_key(key),
-            Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
+            Key::Enter | Key::Char(' ' | 'd' | 'D' | 't' | 'T' | 'r' | 'R') => {
+                self.service_key(key)
+            }
+            Key::Esc | Key::Function(3 | 4) | Key::Char('q') => {
                 let intent = settings_intent_for_key(key.code)?;
                 if matches!(intent, SettingsIntent::Back) {
                     // Leaving Services zeroes the local cursor so the next
@@ -348,10 +343,8 @@ impl SettingsComponent {
 
     fn handle_main_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         match key.code {
-            Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                settings_intent_for_key(key.code)
-                    .map(|intent| Msg::Shell(Box::new(ShellRequest::SettingsIntent(intent))))
-            }
+            Key::Esc | Key::Function(3 | 4) | Key::Char('q') => settings_intent_for_key(key.code)
+                .map(|intent| Msg::Shell(Box::new(ShellRequest::SettingsIntent(intent)))),
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
                 self.scroll_cursor_into_view(self.cursor);
@@ -384,7 +377,7 @@ impl SettingsComponent {
     /// click outside the panel dismisses, a click on a cursor-activatable
     /// row selects and activates it (the Enter/Space equivalent), and the
     /// focused overlay's wheel scrolls by one document line per throttled step.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -413,7 +406,13 @@ impl SettingsComponent {
                 let max_scroll = self.max_scroll();
                 self.scroll = self
                     .scroll
-                    .saturating_add_signed(delta as isize)
+                    .saturating_add_signed(isize::try_from(delta).unwrap_or_else(|_| {
+                        if delta.is_negative() {
+                            isize::MIN
+                        } else {
+                            isize::MAX
+                        }
+                    }))
                     .min(max_scroll);
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
@@ -468,7 +467,8 @@ impl Component for SettingsComponent {
             if line < self.scroll {
                 continue;
             }
-            let offset = (line - self.scroll) as u16;
+            let offset = u16::try_from(line - self.scroll)
+                .expect("visible settings row offset is bounded by content height");
             if offset >= self.geometry.content_area.height {
                 continue;
             }
@@ -484,7 +484,7 @@ impl Component for SettingsComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
@@ -497,8 +497,8 @@ impl Component for SettingsComponent {
 }
 
 impl AppComponent<Msg, UserEvent> for SettingsComponent {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
                 Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if self.destination == SettingsDestination::Keys
@@ -524,7 +524,7 @@ impl AppComponent<Msg, UserEvent> for SettingsComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }

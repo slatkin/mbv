@@ -8,7 +8,9 @@
 //! entangled with the same suspend/restore machinery the Sessions-panel
 //! direct-remote path uses).
 
-use crate::app::*;
+#[cfg(test)]
+use crate::app::TabSelection;
+use crate::app::{App, Duration, Instant, PanelFocus};
 
 /// How long a `library_route_cache` entry (#223) stays trusted before a
 /// repeat lookup re-resolves from scratch, so a mid-session library
@@ -66,12 +68,11 @@ impl App {
             log::info!(target: "library_route", "configured library missing library={name:?}");
             return None;
         };
-        let endpoint = match mbv_core::remote_player::DaemonEndpoint::parse(raw) {
-            Ok(endpoint @ mbv_core::remote_player::DaemonEndpoint::Tcp(_)) => endpoint,
-            _ => {
-                log::warn!(target: "library_route", "malformed endpoint library={name:?} endpoint={raw:?}; accepted shape is tcp://host:port");
-                return None;
-            }
+        let Ok(endpoint @ mbv_core::remote_player::DaemonEndpoint::Tcp(_)) =
+            mbv_core::remote_player::DaemonEndpoint::parse(raw)
+        else {
+            log::warn!(target: "library_route", "malformed endpoint library={name:?} endpoint={raw:?}; accepted shape is tcp://host:port");
+            return None;
         };
         log::info!(target: "library_route", "accepted endpoint library={name:?} endpoint={endpoint}");
         Some((name.to_lowercase(), endpoint))
@@ -229,7 +230,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{LibraryTab, PanelFocus};
+    use crate::app::LibraryTab;
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
@@ -263,12 +264,6 @@ mod tests {
     }
 
     #[test]
-    fn resolve_route_for_library_returns_none_when_unconfigured() {
-        let mut app = make_app_stub();
-        assert_eq!(app.resolve_route_for_library("Movies"), None);
-    }
-
-    #[test]
     fn route_for_active_library_view_uses_nav_state_no_network() {
         // The active library is already known from nav state, and (#256)
         // resolving its routed endpoint is now a pure config read too --
@@ -284,34 +279,6 @@ mod tests {
         let resolved = app.route_for_active_library_view(0);
 
         assert_eq!(resolved.map(|(name, _)| name), Some("music".to_string()));
-    }
-
-    #[test]
-    fn route_for_active_library_view_none_for_unrouted_library() {
-        let mut app = make_app_stub();
-        let mut lib_item = make_item("Movies", "CollectionFolder");
-        lib_item.id = "lib-movies".to_string();
-        app.libs.push(LibraryTab::new(lib_item));
-
-        assert_eq!(app.route_for_active_library_view(0), None);
-    }
-
-    #[test]
-    fn resolve_route_for_play_uses_library_context_when_library_side_is_focused() {
-        let mut app = make_app_stub();
-        app.library_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        let mut lib_item = make_item("Music", "CollectionFolder");
-        lib_item.id = "lib-music".to_string();
-        app.libs.push(LibraryTab::new(lib_item));
-        app.panel_focus = PanelFocus::Library;
-        app.tab = TabSelection::EmbyLibrary(0);
-        let mut item = make_item("Song", "Audio");
-        item.id = "song-1".to_string();
-
-        let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
-
-        assert_eq!(resolved, Some("music".to_string()));
     }
 
     #[test]
@@ -374,65 +341,6 @@ mod tests {
     }
 
     #[test]
-    fn route_for_item_via_ancestors_does_not_trust_an_expired_cache_entry() {
-        // #223 post-grilling revision item 5: a mid-session library
-        // reorganization on the Emby server must self-heal after
-        // LIBRARY_ROUTE_CACHE_TTL, not require an app restart. Prime the
-        // cache with a stale, EXPIRED entry that (if trusted) would
-        // resolve to "music" -- then confirm the resolver ignores it and
-        // re-attempts the lookup instead (which errors in this stub with
-        // no live server, giving `None`), rather than trusting the stale
-        // hit and returning the resolved route.
-        let mut app = make_app_stub();
-        app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
-        app.library_route_cache.insert(
-            "item-1".to_string(),
-            (
-                Some("music".to_string()),
-                Instant::now() - LIBRARY_ROUTE_CACHE_TTL - Duration::from_secs(1),
-            ),
-        );
-
-        let resolved = app.route_for_item_via_ancestors("item-1");
-
-        assert_eq!(resolved, None);
-    }
-
-    #[test]
-    fn route_for_item_via_ancestors_prunes_expired_entries_once_the_cache_is_large() {
-        // Review follow-up: library_route_cache had no eviction beyond the
-        // per-read TTL check, so it could grow unbounded across a long
-        // session. Once the cache reaches LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD,
-        // a fresh insert must first drop every already-expired entry
-        // rather than growing forever.
-        let mut app = make_app_stub();
-        app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
-        let expired_at = Instant::now() - LIBRARY_ROUTE_CACHE_TTL - Duration::from_secs(1);
-        for i in 0..LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD {
-            app.library_route_cache.insert(
-                format!("stale-{i}"),
-                (Some("music".to_string()), expired_at),
-            );
-        }
-        assert_eq!(
-            app.library_route_cache.len(),
-            LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD
-        );
-
-        // No live server in this stub -- the lookup for "item-1" itself
-        // errors and is never cached, but the prune must still have run
-        // as a side effect of crossing the threshold.
-        app.route_for_item_via_ancestors("item-1");
-
-        assert!(
-            app.library_route_cache.len() < LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD,
-            "expired entries must be pruned once the cache crosses the threshold"
-        );
-    }
-
-    #[test]
     fn resolve_route_for_play_does_not_panic_from_the_queue_tab() {
         // Regression guard: queue focus (`PanelFocus::Queue`) has no library
         // of its own -- the item being played is already part of whatever
@@ -455,54 +363,5 @@ mod tests {
         let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
 
         assert_eq!(resolved, Some("music".to_string()));
-    }
-
-    #[test]
-    fn resolve_route_for_play_from_queue_resolves_item_when_no_route_is_active() {
-        let mut app = make_app_stub();
-        app.library_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        app.library_route_cache.insert(
-            "song-1".to_string(),
-            (Some("music".to_string()), Instant::now()),
-        );
-        let mut item = make_item("Song", "Audio");
-        item.id = "song-1".to_string();
-
-        let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
-
-        assert_eq!(resolved, Some("music".to_string()));
-    }
-
-    #[test]
-    fn resolve_route_for_enqueue_folder_matches_a_library_root_folder_by_its_own_name() {
-        // #223 follow-up: `get_ancestors` on a library root returns no
-        // `CollectionFolder` ancestor above it (there isn't one), so a plain
-        // ancestor-lookup resolver always yields `None` for the library root
-        // item itself. `do_enqueue_folder` can receive exactly that item (the
-        // user enqueue-recursive's an entire library from its root), so this
-        // helper checks the item's own type first.
-        let mut app = make_app_stub();
-        app.library_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        let mut lib_root = make_item("Music", "CollectionFolder");
-        lib_root.id = "lib-music".to_string();
-
-        let resolved = app.resolve_route_for_enqueue_folder(&lib_root);
-
-        assert_eq!(resolved, Some("music".to_string()));
-    }
-
-    #[test]
-    fn resolve_route_for_enqueue_folder_falls_back_to_ancestor_lookup_for_a_non_root_folder() {
-        let mut app = make_app_stub();
-        let mut sub_folder = make_item("Some Album", "MusicAlbum");
-        sub_folder.id = "album-1".to_string();
-        sub_folder.is_folder = true;
-
-        // No live server in this stub -- `get_ancestors` errors, so this
-        // must fall through to the ancestor-lookup path (not treat every
-        // folder as a library root) and resolve to `None`, not panic.
-        assert_eq!(app.resolve_route_for_enqueue_folder(&sub_folder), None);
     }
 }

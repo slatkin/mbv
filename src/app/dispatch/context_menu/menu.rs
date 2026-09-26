@@ -67,7 +67,7 @@ impl App {
 
         if let Some(item) = current_item.as_ref() {
             if item.is_folder {
-                self.push_folder_context_actions(&mut entries, item);
+                Self::push_folder_context_actions(&mut entries, item);
             } else {
                 self.push_leaf_context_actions(
                     &mut entries,
@@ -123,16 +123,15 @@ impl App {
                         .libs
                         .get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .map(|level| level.resting().cursor())
-                        .unwrap_or(0);
+                        .map_or(0, |level| level.resting().cursor());
                     self.current_lib_item(lib_idx, cursor)
                 })
             }
             (
                 crate::app::PanelFocus::Library,
-                crate::app::TabSelection::AudiobookshelfLibrary(_),
-            )
-            | (crate::app::PanelFocus::Library, crate::app::TabSelection::Feeds) => return None,
+                crate::app::TabSelection::AudiobookshelfLibrary(_)
+                | crate::app::TabSelection::Feeds,
+            ) => return None,
             (crate::app::PanelFocus::Queue, _) => {
                 let cursor = self.displayed_queue().queue_cursor;
                 queue_cursor = Some(cursor);
@@ -142,7 +141,7 @@ impl App {
         Some((current_item, queue_cursor))
     }
 
-    fn push_folder_context_actions(&self, entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+    fn push_folder_context_actions(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
         Self::push_context_action(
             entries,
             "Play All",
@@ -158,11 +157,11 @@ impl App {
             "Add to Queue",
             ContextAction::EnqueueFolder(Box::new(item.clone())),
         );
-        self.push_play_state_context_action(entries, item);
+        Self::push_play_state_context_action(entries, item);
     }
 
-    fn push_play_state_context_action(&self, entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
-        if self.context_menu_play_state(item) {
+    fn push_play_state_context_action(entries: &mut Vec<ContextMenuEntry>, item: &EmbyItem) {
+        if App::context_menu_play_state(item) {
             Self::push_context_action(
                 entries,
                 "Mark Unwatched",
@@ -199,7 +198,7 @@ impl App {
         }
         // Audio items (music tracks) don't get mark-played.
         if item.media_type != "Audio" && item.item_type != "Audio" {
-            self.push_play_state_context_action(entries, item);
+            Self::push_play_state_context_action(entries, item);
         }
         // `home_cw_selected` is the component-derived authoritative
         // fact (resolved at the Model boundary), replacing the deleted
@@ -308,7 +307,7 @@ impl App {
     /// the corresponding backend.
     pub(in crate::app) fn open_context_menu_for_selection(
         &mut self,
-        items: Vec<EmbyItem>,
+        items: &[EmbyItem],
         anchor: Option<(u16, u16)>,
         focus: PanelFocus,
         capabilities: Vec<ItemCapabilities>,
@@ -327,17 +326,17 @@ impl App {
             Self::push_context_action(
                 &mut entries,
                 "Play",
-                ContextAction::PlaySelection(items.clone()),
+                ContextAction::PlaySelection(items.to_vec()),
             );
             Self::push_context_action(
                 &mut entries,
                 "Shuffle",
-                ContextAction::ShuffleSelection(items.clone()),
+                ContextAction::ShuffleSelection(items.to_vec()),
             );
             Self::push_context_action(
                 &mut entries,
                 "Add to Queue",
-                ContextAction::EnqueueSelection(items.clone()),
+                ContextAction::EnqueueSelection(items.to_vec()),
             );
         }
         if capabilities.removable && !remove_targets.is_empty() {

@@ -54,7 +54,7 @@ pub struct CastMediaItem {
     pub content_type: String,
 }
 
-/// The receiver's reported playback state, decoupled from rust_cast's own
+/// The receiver's reported playback state, decoupled from `rust_cast`'s own
 /// types so callers outside this module don't take on that dependency.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CastStatus {
@@ -110,7 +110,6 @@ impl CastClient {
             .receiver
             .stop_app(self.session_id.as_str())
             .map_err(|e| format!("cast teardown failed: {e}"))
-            .map(|_| ())
     }
 
     /// Answers any heartbeat PING the receiver has sent since the last call
@@ -209,8 +208,8 @@ impl CastClient {
     }
 
     /// Advances to the next entry of the queue this client last loaded, by
-    /// reloading it with a shifted `start_index`. rust_cast 0.21 has no
-    /// QUEUE_UPDATE/jump message; see design.md Risks.
+    /// reloading it with a shifted `start_index`. `rust_cast` 0.21 has no
+    /// `QUEUE_UPDATE/jump` message; see design.md Risks.
     pub fn skip_next(&mut self) -> Result<(), String> {
         self.jump(1)
     }
@@ -416,7 +415,7 @@ mod tests {
         let status = cast_status_from_entry(&recorded_playing_entry());
         assert_eq!(status.position_seconds, Some(64.384_93));
         assert_eq!(status.duration_seconds, Some(2705.045));
-        assert_eq!(status.playback_rate, 1.0);
+        assert!((status.playback_rate - 1.0).abs() < f32::EPSILON);
         assert_eq!(status.state, CastPlaybackState::Playing);
         assert_eq!(
             status.playing_content_id.as_deref(),

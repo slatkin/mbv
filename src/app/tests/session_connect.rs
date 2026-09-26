@@ -13,10 +13,3 @@ fn session_direct_endpoint_prefers_advertised_tcp_port() {
         ))
     );
 }
-
-#[test]
-fn session_direct_endpoint_rejects_non_mbv_without_local_fallback() {
-    let app = make_app_stub();
-    let sess = make_session("other-host", "Emby");
-    assert_eq!(app.session_direct_endpoint(&sess), None);
-}

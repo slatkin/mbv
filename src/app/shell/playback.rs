@@ -35,7 +35,7 @@ impl Model {
                     self.app
                         .cast_attachment
                         .as_ref()
-                        .and_then(|cast| self.app.cast_now_playing_title(cast))
+                        .and_then(crate::app::App::cast_now_playing_title)
                 })
                 .or_else(|| {
                     self.app
@@ -44,7 +44,7 @@ impl Model {
                         .and_then(|session| session.now_playing.clone())
                 })
         } else if let Some(cast) = self.app.cast_attachment.as_ref() {
-            self.app.cast_now_playing_title(cast)
+            crate::app::App::cast_now_playing_title(cast)
         } else {
             self.app
                 .connected_session_state
@@ -76,34 +76,36 @@ impl Model {
                 })
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
-            stop_available: self.app.connected_session_id.is_some() || state.active,
-            prev_available,
-            next_available,
+            availability: super::components::library_playback_panel::TransportAvailability {
+                stop: self.app.connected_session_id.is_some() || state.active,
+                previous: prev_available,
+                next: next_available,
+            },
         }
     }
 
-    pub(in crate::app) fn handle_playback_request(&mut self, request: PlaybackRequest) {
+    pub(in crate::app) fn handle_playback_request(&mut self, request: &PlaybackRequest) {
         use crate::app::dispatch::action::Command;
         match request {
-            PlaybackRequest::TogglePlayPause => self.dispatch_playback(Command::TogglePlayPause),
-            PlaybackRequest::Stop => self.dispatch_playback(Command::Stop),
-            PlaybackRequest::Previous => self.dispatch_playback(Command::PreviousTrack),
-            PlaybackRequest::Next => self.dispatch_playback(Command::NextTrack),
-            PlaybackRequest::SeekTo(fraction) => self.app.seek_to_fraction(fraction),
-            PlaybackRequest::ToggleMute => self.dispatch_playback(Command::ToggleMute),
+            PlaybackRequest::TogglePlayPause => self.dispatch_playback(&Command::TogglePlayPause),
+            PlaybackRequest::Stop => self.dispatch_playback(&Command::Stop),
+            PlaybackRequest::Previous => self.dispatch_playback(&Command::PreviousTrack),
+            PlaybackRequest::Next => self.dispatch_playback(&Command::NextTrack),
+            PlaybackRequest::SeekTo(fraction) => self.app.seek_to_fraction(*fraction),
+            PlaybackRequest::ToggleMute => self.dispatch_playback(&Command::ToggleMute),
             PlaybackRequest::VolumeDelta(delta) => {
-                self.dispatch_playback(Command::AdjustVolume(delta));
+                self.dispatch_playback(&Command::AdjustVolume(*delta));
             }
             PlaybackRequest::CycleAudio => {
-                self.dispatch_playback(Command::ToggleMuteOrCycleAudio);
+                self.dispatch_playback(&Command::ToggleMuteOrCycleAudio);
             }
             PlaybackRequest::CycleSubtitle => {
-                self.dispatch_playback(Command::CycleOrToggleSubtitle);
+                self.dispatch_playback(&Command::CycleOrToggleSubtitle);
             }
         }
     }
 
-    fn dispatch_playback(&mut self, command: crate::app::dispatch::action::Command) {
+    fn dispatch_playback(&mut self, command: &crate::app::dispatch::action::Command) {
         let _ = self.app.dispatch(command);
     }
 }
@@ -118,7 +120,7 @@ mod tests {
     fn playback_chrome_request_routes_through_shell_authority() {
         let app = crate::app::tests::make_app_stub();
         let mut model = Model::new(app);
-        model.handle_playback_request(PlaybackRequest::VolumeDelta(5));
+        model.handle_playback_request(&PlaybackRequest::VolumeDelta(5));
         assert!(matches!(
             Msg::Playback(PlaybackRequest::VolumeDelta(5)),
             Msg::Playback(PlaybackRequest::VolumeDelta(_))

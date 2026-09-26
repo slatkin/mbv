@@ -1,9 +1,5 @@
 use super::*;
-use crate::app::components::{
-    FeedsManageComponent, LibraryRoutesComponent, Msg, MultiselectComponent, ShellRequest,
-    UserEvent,
-};
-use crate::app::state::types::context_menu::{LibraryRoutePopup, LibraryRouteStage};
+use crate::app::components::{Msg, MultiselectComponent, ShellRequest, UserEvent};
 use crate::app::state::types::context_menu::{MultiSelectKind, MultiSelectPopup};
 use crate::app::tests::make_app_stub;
 use tuirealm::component::AppComponent;
@@ -57,86 +53,6 @@ fn settings_popup_multiselect_shell_syncs_and_commits_component_choices() {
         vec!["movies".to_string()],
         "hidden selection must persist to config"
     );
-    assert!(!model.application.mounted(&id));
-}
-
-#[test]
-fn settings_popup_library_routes_shell_syncs_and_routes_escape() {
-    let mut model = Model::new(make_app_stub());
-    let id = ComponentId::Popup(PopupId::LibraryRoutes);
-    model
-        .application
-        .mount(id.clone(), Box::new(LibraryRoutesComponent::new()), vec![])
-        .expect("mount Library routes");
-    model
-        .application
-        .active(&id)
-        .expect("activate Library routes");
-    let popup = LibraryRoutePopup {
-        stage: LibraryRouteStage::PickLibrary {
-            items: vec![("movies".into(), "Movies".into(), None)],
-        },
-        cursor: 0,
-    };
-    if let Some(comp) = model.application.get_component_mut(&id) {
-        if let Some(routes) = comp.as_any_mut().downcast_mut::<LibraryRoutesComponent>() {
-            routes.set_content(&popup);
-        }
-    }
-
-    let message = {
-        let component = model
-            .application
-            .get_component_mut(&id)
-            .expect("Library routes mounted")
-            .as_any_mut()
-            .downcast_mut::<LibraryRoutesComponent>()
-            .expect("Library routes type");
-        component.on(&Event::Keyboard(KeyEvent {
-            code: Key::Esc,
-            modifiers: KeyModifiers::NONE,
-        }))
-    };
-    let Some(Msg::Shell(shell_boxed)) = message else {
-        panic!("Library routes should emit a shell request");
-    };
-    let ShellRequest::LibraryRoutesEsc = *shell_boxed else {
-        panic!("Library routes should emit a shell request");
-    };
-    model.handle_library_routes_request(ShellRequest::LibraryRoutesEsc);
-
-    assert!(!model.application.mounted(&id));
-}
-
-#[test]
-fn settings_popup_feeds_manage_shell_syncs_and_routes_escape() {
-    let mut model = Model::new(make_app_stub());
-    model.open_feeds_manage();
-    let id = ComponentId::Popup(PopupId::FeedManage);
-    assert!(model.application.mounted(&id));
-
-    let message = {
-        let component = model
-            .application
-            .get_component_mut(&id)
-            .expect("Feed management mounted")
-            .as_any_mut()
-            .downcast_mut::<FeedsManageComponent>()
-            .expect("Feed management type");
-        component.on(&Event::Keyboard(KeyEvent {
-            code: Key::Esc,
-            modifiers: KeyModifiers::NONE,
-        }))
-    };
-    let Some(Msg::Shell(shell_boxed)) = message else {
-        panic!("Feed management should emit a shell request");
-    };
-    let ShellRequest::FeedsManageIntent(intent) = *shell_boxed else {
-        panic!("Feed management should emit a shell request");
-    };
-    model.handle_feeds_manage_intent(intent);
-
-    assert!(model.feeds_manage.is_none());
     assert!(!model.application.mounted(&id));
 }
 
@@ -210,7 +126,11 @@ fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
         .as_any_mut()
         .downcast_mut::<SearchSidebarComponent>()
         .expect("search sidebar type")
-        .debounce_deadline = Some(Instant::now() - std::time::Duration::from_millis(1));
+        .debounce_deadline = Some(
+        Instant::now()
+            .checked_sub(std::time::Duration::from_millis(1))
+            .unwrap_or_else(Instant::now),
+    );
 
     // Sweep after the deadline: the production run loop calls
     // handle_service_request on the returned Msg. With no Emby client

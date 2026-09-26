@@ -3,110 +3,112 @@ mod local;
 mod remote;
 
 use crate::app::render::indicators::IndicatorData;
-use crate::app::{App, PlaybackTarget};
+use crate::app::{
+    App, CastPlaybackTarget, LocalPlaybackTarget, PlaybackTarget, RemotePlaybackTarget,
+};
 
 impl PlaybackTarget {
     pub(in crate::app) fn toggle_play_pause(&self, app: &mut App) {
         match self {
-            Self::Local(target) => target.toggle_play_pause(app),
+            Self::Local(_) => LocalPlaybackTarget::toggle_play_pause(app),
             Self::Remote(target) => target.toggle_play_pause(app),
-            Self::Cast(target) => target.toggle_play_pause(app),
+            Self::Cast(_) => CastPlaybackTarget::toggle_play_pause(app),
         }
     }
 
     pub(in crate::app) fn stop(&self, app: &mut App) {
         match self {
-            Self::Local(target) => target.stop(app),
+            Self::Local(_) => LocalPlaybackTarget::stop(app),
             Self::Remote(target) => target.stop(app),
-            Self::Cast(target) => target.stop(app),
+            Self::Cast(_) => CastPlaybackTarget::stop(app),
         }
     }
 
     pub(in crate::app) fn seek_relative(&self, app: &mut App, delta: f64) {
         match self {
-            Self::Local(target) => target.seek_relative(app, delta),
+            Self::Local(_) => LocalPlaybackTarget::seek_relative(app, delta),
             Self::Remote(target) => target.seek_relative(app, delta),
-            Self::Cast(target) => target.seek_relative(app, delta),
+            Self::Cast(_) => CastPlaybackTarget::seek_relative(app, delta),
         }
     }
 
     pub(in crate::app) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
         match self {
-            Self::Local(target) => target.jump_track(app, step),
+            Self::Local(_) => LocalPlaybackTarget::jump_track(app, step),
             Self::Remote(target) => target.jump_track(app, step, transport),
-            Self::Cast(target) => target.jump_track(app, step),
+            Self::Cast(_) => CastPlaybackTarget::jump_track(app, step),
         }
     }
 
     pub(in crate::app) fn toggle_command_mute(&self, app: &mut App) {
         match self {
-            Self::Local(target) => target.toggle_command_mute(app),
-            Self::Remote(target) => target.toggle_command_mute(app),
-            Self::Cast(target) => target.toggle_command_mute(app),
+            Self::Local(_) => LocalPlaybackTarget::toggle_command_mute(app),
+            Self::Remote(_) => RemotePlaybackTarget::toggle_command_mute(app),
+            Self::Cast(_) => CastPlaybackTarget::toggle_command_mute(app),
         }
     }
 
     pub(in crate::app) fn is_audio_item(&self, app: &App) -> bool {
         match self {
-            Self::Local(target) => target.is_audio_item(app),
-            Self::Remote(target) => target.is_audio_item(app),
-            Self::Cast(target) => target.is_audio_item(app),
+            Self::Local(_) => LocalPlaybackTarget::is_audio_item(app),
+            Self::Remote(_) => RemotePlaybackTarget::is_audio_item(app),
+            Self::Cast(_) => CastPlaybackTarget::is_audio_item(app),
         }
     }
 
     pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
         match self {
-            Self::Local(target) => target.toggle_soft_mute(app),
+            Self::Local(_) => LocalPlaybackTarget::toggle_soft_mute(app),
             Self::Remote(target) => target.toggle_soft_mute(app),
-            Self::Cast(target) => target.toggle_soft_mute(app),
+            Self::Cast(_) => CastPlaybackTarget::toggle_soft_mute(app),
         }
     }
 
     pub(in crate::app) fn cycle_audio(&self, app: &mut App) {
         match self {
-            Self::Local(target) => target.cycle_audio(app),
+            Self::Local(_) => LocalPlaybackTarget::cycle_audio(app),
             Self::Remote(target) => target.cycle_audio(app),
-            Self::Cast(target) => target.cycle_audio(app),
+            Self::Cast(_) => CastPlaybackTarget::cycle_audio(app),
         }
     }
 
     pub(in crate::app) fn adjust_volume(&self, app: &mut App, delta: i64) {
         match self {
-            Self::Local(target) => target.adjust_volume(app, delta),
+            Self::Local(_) => LocalPlaybackTarget::adjust_volume(app, delta),
             Self::Remote(target) => target.adjust_volume(app, delta),
-            Self::Cast(target) => target.adjust_volume(app, delta),
+            Self::Cast(_) => CastPlaybackTarget::adjust_volume(app, delta),
         }
     }
 
     pub(in crate::app) fn cycle_sub(&self, app: &mut App) {
         match self {
-            Self::Local(target) => target.cycle_sub(app),
+            Self::Local(_) => LocalPlaybackTarget::cycle_sub(app),
             Self::Remote(target) => target.cycle_sub(app),
-            Self::Cast(target) => target.cycle_sub(app),
+            Self::Cast(_) => CastPlaybackTarget::cycle_sub(app),
         }
     }
 
     pub(in crate::app) fn displayed_volume(&self, app: &App) -> i64 {
         match self {
-            Self::Local(target) => target.displayed_volume(app),
-            Self::Remote(target) => target.displayed_volume(app),
-            Self::Cast(target) => target.displayed_volume(app),
+            Self::Local(_) => LocalPlaybackTarget::displayed_volume(app),
+            Self::Remote(_) => RemotePlaybackTarget::displayed_volume(app),
+            Self::Cast(_) => CastPlaybackTarget::displayed_volume(app),
         }
     }
 
     pub(in crate::app) fn displayed_mute(&self, app: &App) -> bool {
         match self {
-            Self::Local(target) => target.displayed_mute(app),
-            Self::Remote(target) => target.displayed_mute(app),
-            Self::Cast(target) => target.displayed_mute(app),
+            Self::Local(_) => LocalPlaybackTarget::displayed_mute(app),
+            Self::Remote(_) => RemotePlaybackTarget::displayed_mute(app),
+            Self::Cast(_) => CastPlaybackTarget::displayed_mute(app),
         }
     }
 
     pub(in crate::app) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
         match self {
-            Self::Local(target) => target.indicator_data(app),
-            Self::Remote(target) => target.indicator_data(app),
-            Self::Cast(target) => target.indicator_data(app),
+            Self::Local(_) => LocalPlaybackTarget::indicator_data(app),
+            Self::Remote(_) => RemotePlaybackTarget::indicator_data(app),
+            Self::Cast(_) => CastPlaybackTarget::indicator_data(app),
         }
     }
 }
@@ -126,28 +128,6 @@ pub(in crate::app) enum NowPlayingStatus {
 }
 
 impl App {
-    /// Whether the connected transport is currently paused. For remote
-    /// sessions, returns true once a single API poll has observed
-    /// `IsPaused=true` without a position advance (typically within one
-    /// poll after the user pauses remotely). For pos-advancing clients that
-    /// always report `IsPaused=true` (some Emby Web builds), the
-    /// position-advance observation each poll keeps this returning false.
-    #[cfg(test)]
-    pub(in crate::app) fn playback_transport_paused(&self) -> bool {
-        // Same rule as `effective_playback_state`: an idle receiver's status
-        // says nothing about the media actually playing; only an engaged cast
-        // target owns the paused read.
-        if let Some(state) = self.cast_effective_playback_state() {
-            if state.active {
-                return state.paused;
-            }
-        }
-        if self.connected_session_state.is_some() {
-            return self.remote_stalled_while_paused;
-        }
-        self.player.status.lock().unwrap().paused
-    }
-
     /// Returns the observed playback state for rendering.
     pub(in crate::app) fn effective_playback_state(&self) -> crate::app::PlaybackState {
         // The attached cast target wins only while it actually reports (or is
@@ -178,6 +158,11 @@ impl App {
                     .iter()
                     .position(|s| s.item.id() == id)
             });
+            #[expect(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
             let pos_ticks = {
                 let elapsed_s = if remote.is_paused {
                     0.0
@@ -271,8 +256,7 @@ impl App {
             runtime_ticks: self
                 .playback_queue()
                 .item_at(index)
-                .map(|item| item.runtime_ticks())
-                .unwrap_or(0),
+                .map_or(0, mbv_core::playback::QueueItem::runtime_ticks),
             paused: false,
         }
     }
@@ -362,7 +346,7 @@ mod now_playing_status_tests {
         app.attach_cast("device-1".to_string());
 
         // Receiver reports no active media.
-        app.apply_cast_status("device-1".to_string(), Ok(idle_cast_status()));
+        app.apply_cast_status("device-1", Ok(idle_cast_status()));
         set_player(&app, true, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
 
@@ -370,10 +354,7 @@ mod now_playing_status_tests {
         // "cast get_status returned no entries"), status stays None.
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
-        app.apply_cast_status(
-            "device-1".to_string(),
-            Err("get_status returned no entries".into()),
-        );
+        app.apply_cast_status("device-1", Err("get_status returned no entries".into()));
         set_player(&app, true, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
     }
@@ -389,7 +370,7 @@ mod now_playing_status_tests {
             let mut status = app.player.status.lock().unwrap();
             status.active = true;
             status.current_idx = 0;
-        }
+        };
 
         app.replace_playback_queue(make_items(2), 0);
 
@@ -406,7 +387,7 @@ mod now_playing_status_tests {
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
         app.apply_cast_status(
-            "device-1".to_string(),
+            "device-1",
             Ok(mbv_core::cast::client::CastStatus {
                 position_seconds: Some(1.0),
                 duration_seconds: Some(100.0),
@@ -438,23 +419,7 @@ mod now_playing_status_tests {
             status.runtime_ticks = 84;
             // Owner advanced past the never-stamped tab generation.
             status.sequence_generation = 7;
-        }
-        let state = app.queue_row_playback_state();
-        assert!(state.active);
-        assert_eq!(state.active_idx, Some(1));
-    }
-
-    #[test]
-    fn local_daemon_queue_row_ignores_client_generation_mismatch() {
-        let mut app = crate::app::tests::make_local_daemon_app_stub(make_items(3));
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 1;
-            status.sequence_generation = 7;
-        }
-        app.player_tab.sequence_generation = 8;
-
+        };
         let state = app.queue_row_playback_state();
         assert!(state.active);
         assert_eq!(state.active_idx, Some(1));

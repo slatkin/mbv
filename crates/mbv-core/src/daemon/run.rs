@@ -1,8 +1,13 @@
 use super::core::{bind_ctrl_listener, broadcast, DaemonEvent};
-use super::*;
+use super::{
+    broadcast_queue_state, install_daemon_audiobookshelf_context, pid_file, project_queue_state,
+    setup_shutdown_signal, spawn_ctrl_client, AudiobookshelfOwnerContext, CtrlTransport,
+    DaemonLoop, DaemonPlayerHandle, DaemonPlayerOwner, DaemonRole, DaemonRuntimeHooks,
+    DaemonStartupContext, EmbyOwnerContext, LoopFlow, SharedQueueState,
+};
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlEvent, PlaybackGeneration};
-use crate::daemon::ctrl::{ClientRegistry, CtrlClients};
+use crate::daemon::{ClientRegistry, CtrlClients};
 use crate::playback::PlaybackQueue;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{Player, PlayerEvent, PlayerOwnerState};
@@ -29,6 +34,12 @@ pub(crate) fn playback_run_identity_is_current(
     run_identity == player.status.lock().unwrap().sequence_generation
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct ConsumePolicy {
+    pub videos: bool,
+    pub audio: bool,
+}
+
 pub(super) fn apply_track_completed_observation(
     owner: &mut DaemonPlayerOwner,
     player: &Player,
@@ -36,10 +47,9 @@ pub(super) fn apply_track_completed_observation(
     run_identity: PlaybackGeneration,
     slot_id: QueueSlotId,
     position_ticks: i64,
-    played: bool,
+    was_played: bool,
     consume: bool,
-    consume_videos: bool,
-    consume_audio: bool,
+    consume_policy: ConsumePolicy,
 ) -> bool {
     if !playback_run_identity_is_current(run_identity, player) {
         return false;
@@ -47,7 +57,7 @@ pub(super) fn apply_track_completed_observation(
     if let Some(slot) = owner.core.queue.slot(slot_id) {
         // Completion observations ignore small progress changes; stopped observations below
         // retain any positive position so an interrupted item can resume precisely.
-        let position = if played {
+        let position = if was_played {
             0
         } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
             && !slot.item.is_audio()
@@ -58,12 +68,14 @@ pub(super) fn apply_track_completed_observation(
         };
         owner
             .core
-            .apply_completion_progress(slot_id, position, played);
+            .apply_completion_progress(slot_id, position, was_played);
     }
-    if owner
-        .core
-        .consume_completed_slot(slot_id, consume, consume_videos, consume_audio)
-    {
+    if owner.core.consume_completed_slot(
+        slot_id,
+        consume,
+        consume_policy.videos,
+        consume_policy.audio,
+    ) {
         log::info!(target: "consume", "TrackCompleted: consumed slot_id={slot_id:?}");
     }
     *shared_queue.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
@@ -76,7 +88,7 @@ pub(super) fn apply_stopped_observation(
     run_identity: PlaybackGeneration,
     slot_id: Option<QueueSlotId>,
     position_ticks: i64,
-    played: bool,
+    was_played: bool,
 ) -> Option<bool> {
     if !playback_run_identity_is_current(run_identity, player) {
         return None;
@@ -87,7 +99,7 @@ pub(super) fn apply_stopped_observation(
     let Some(slot) = owner.core.queue.slot(slot_id) else {
         return Some(false);
     };
-    let position = if played {
+    let position = if was_played {
         0
     } else if position_ticks > 0 && !slot.item.is_audio() {
         position_ticks
@@ -96,7 +108,7 @@ pub(super) fn apply_stopped_observation(
     };
     owner
         .core
-        .apply_completion_progress(slot_id, position, played);
+        .apply_completion_progress(slot_id, position, was_played);
     Some(true)
 }
 
@@ -143,10 +155,10 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         .expect("mbv daemon: failed to write PID file");
 
     let (shutdown_signal_tx, shutdown_signal_rx) = setup_shutdown_signal();
-    let client = emby_runtime
-        .as_ref()
-        .map(|runtime| runtime.client.clone())
-        .unwrap_or_else(|| Arc::new(Mutex::new(EmbyClient::new(config.clone()))));
+    let client = emby_runtime.as_ref().map_or_else(
+        || Arc::new(Mutex::new(EmbyClient::new(config.clone()))),
+        |runtime| Arc::clone(&runtime.client),
+    );
     let control_credential = if role == DaemonRole::Packaged {
         None
     } else {
@@ -196,14 +208,14 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         client_locked.config.audio_pipe_samplerate,
         client_locked.config.audio_pipe_bitdepth,
     );
-    let player_status = player.status.clone();
-    let player_cmd_tx = player.cmd_tx.clone();
+    let player_status = Arc::clone(&player.status);
+    let player_cmd_tx = Arc::clone(&player.cmd_tx);
     (hooks.on_player_ready)(DaemonPlayerHandle {
         status: player_status,
         command_tx: player_cmd_tx,
     });
 
-    let _tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
+    let tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
 
     let tx = merged_tx.clone();
@@ -234,7 +246,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
     // Install the owner's Audiobookshelf context on the daemon player so
     // admitted ABS slots reach `prepare_source`, and wire the player's
     // acknowledged-progress sender into the daemon event loop.
-    install_daemon_audiobookshelf_context(&player, &audiobookshelf_runtime, &merged_tx);
+    install_daemon_audiobookshelf_context(&player, audiobookshelf_runtime.as_ref(), &merged_tx);
 
     DaemonStarted {
         config,
@@ -247,7 +259,7 @@ fn start_daemon(startup: DaemonStartupContext, hooks: DaemonRuntimeHooks) -> Dae
         merged_tx,
         merged_rx,
         ws_send_tx,
-        _tray,
+        _tray: tray,
     }
 }
 
@@ -267,19 +279,20 @@ fn initialize_queue(role: DaemonRole, player: &Player) -> (DaemonPlayerOwner, Sh
     } else {
         None
     };
-    let (initial_queue, initial_source, initial_lineage) = owner_state
-        .map(|state| {
-            let queue =
-                PlaybackQueue::from_queue_items(state.queue.items, Some(state.queue.cursor));
-            (queue, state.queue.source, state.lineage)
-        })
-        .unwrap_or_else(|| {
+    let (initial_queue, initial_source, initial_lineage) = owner_state.map_or_else(
+        || {
             (
                 PlaybackQueue::default(),
                 crate::config::QueueSource::Unknown,
                 crate::ctrl::QueueLineage::default(),
             )
-        });
+        },
+        |state| {
+            let queue =
+                PlaybackQueue::from_queue_items(state.queue.items, Some(state.queue.cursor));
+            (queue, state.queue.source, state.lineage)
+        },
+    );
     if role == DaemonRole::Local {
         if let Err(error) =
             crate::config::save_stay_alive_queue_state(&crate::config::StayAliveQueueState {
@@ -321,17 +334,17 @@ fn start_local_control_server(
     ctrl_clients: &ClientRegistry,
     player: &Player,
     shared_queue: &SharedQueueState,
-    control_credential: &Option<String>,
+    control_credential: Option<&String>,
 ) {
     // Bind and start the control socket only once the daemon can immediately
     // accept and speak the protocol, so local clients never connect and hang
     // waiting for the daemon hello.
     if let Some(listener) = bind_ctrl_listener() {
-        let ctrl_clients = ctrl_clients.clone();
+        let ctrl_clients = Arc::clone(ctrl_clients);
         let merged_tx2 = merged_tx.clone();
-        let player_status = player.status.clone();
+        let player_status = Arc::clone(&player.status);
         let shared_queue = shared_queue.clone();
-        let control_credential = control_credential.clone();
+        let control_credential = control_credential.cloned();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
@@ -339,9 +352,9 @@ fn start_local_control_server(
                     SocketStream::Unix(stream),
                     CtrlTransport::Local,
                     merged_tx2.clone(),
-                    ctrl_clients.clone(),
+                    Arc::clone(&ctrl_clients),
                     control_credential.clone(),
-                    player_status.clone(),
+                    Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
                 );
@@ -356,16 +369,14 @@ fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<T
     } else {
         match TcpListener::bind(listen.trim()) {
             Ok(listener) => {
-                let port = listener.local_addr().map(|addr| addr.port()).unwrap_or(0);
+                let port = listener.local_addr().map_or(0, |addr| addr.port());
                 if port > 0 {
                     direct_commands.push(mbv_direct_tcp_port_command(port));
                     log::info!(
                         target: "daemon",
                         "daemon tcp control listening on {}",
                         listener
-                            .local_addr()
-                            .map(|addr| addr.to_string())
-                            .unwrap_or_else(|_| listen.to_string())
+                            .local_addr().map_or_else(|_| listen.to_string(), |addr| addr.to_string())
                     );
                 }
                 Some(listener)
@@ -373,8 +384,7 @@ fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<T
             Err(e) => {
                 log::warn!(
                     target: "daemon",
-                    "daemon tcp control bind failed for {}: {e}",
-                    listen
+                    "daemon tcp control bind failed for {listen}: {e}"
                 );
                 None
             }
@@ -386,7 +396,7 @@ fn bind_tcp_control(listen: &str, direct_commands: &mut Vec<String>) -> Option<T
 
 fn register_capabilities(
     client: &Arc<Mutex<EmbyClient>>,
-    emby_runtime: &Option<EmbyOwnerContext>,
+    emby_runtime: Option<&EmbyOwnerContext>,
     direct_commands: &[String],
     audio_only: bool,
 ) {
@@ -408,14 +418,14 @@ fn serve_tcp_control(
     merged_tx: &mpsc::Sender<DaemonEvent>,
     player: &Player,
     shared_queue: &SharedQueueState,
-    control_credential: &Option<String>,
+    control_credential: Option<&String>,
 ) {
     if let Some(listener) = listener {
-        let ctrl_clients = ctrl_clients.clone();
+        let ctrl_clients = Arc::clone(ctrl_clients);
         let merged_tx2 = merged_tx.clone();
-        let player_status = player.status.clone();
+        let player_status = Arc::clone(&player.status);
         let shared_queue = shared_queue.clone();
-        let control_credential = control_credential.clone();
+        let control_credential = control_credential.cloned();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
@@ -423,9 +433,9 @@ fn serve_tcp_control(
                     SocketStream::Tcp(stream),
                     CtrlTransport::Tcp,
                     merged_tx2.clone(),
-                    ctrl_clients.clone(),
+                    Arc::clone(&ctrl_clients),
                     control_credential.clone(),
-                    player_status.clone(),
+                    Arc::clone(&player_status),
                     shared_queue.clone(),
                     audio_only,
                 );
@@ -443,8 +453,8 @@ fn spawn_status_broadcast(
     // seekbar and toggle state stay in sync without sending the full queue.
     let broadcast_interval =
         std::time::Duration::from_millis(client.lock().unwrap().config.daemon_broadcast_ms);
-    let player_status = player.status.clone();
-    let ctrl_clients = clients.clone();
+    let player_status = Arc::clone(&player.status);
+    let ctrl_clients = Arc::clone(clients);
     std::thread::spawn(move || loop {
         std::thread::sleep(broadcast_interval);
         if !ctrl_clients.lock().unwrap().has_driver() {
@@ -482,7 +492,7 @@ pub fn run_with_options(
         &ctrl_clients,
         &player,
         &shared_queue,
-        &control_credential,
+        control_credential.as_ref(),
     );
 
     let mut direct_commands = Vec::new();
@@ -490,7 +500,7 @@ pub fn run_with_options(
     // negotiation metadata, capability registration). Local control is
     // already up and serving connections above. ---
     let tcp_listener = bind_tcp_control(&config.daemon_server_tcp_listen, &mut direct_commands);
-    register_capabilities(&client, &emby_runtime, &direct_commands, audio_only);
+    register_capabilities(&client, emby_runtime.as_ref(), &direct_commands, audio_only);
     serve_tcp_control(
         tcp_listener,
         audio_only,
@@ -498,7 +508,7 @@ pub fn run_with_options(
         &merged_tx,
         &player,
         &shared_queue,
-        &control_credential,
+        control_credential.as_ref(),
     );
     spawn_status_broadcast(&client, &player, &ctrl_clients);
 
@@ -520,10 +530,10 @@ pub fn run_with_options(
         last_capabilities: Instant::now(),
         store: Box::new(crate::config::save_stay_alive_queue_state),
     };
-    run_daemon_loop(&mut daemon_loop, merged_rx)
+    run_daemon_loop(&mut daemon_loop, &merged_rx)
 }
 
-fn run_daemon_loop(daemon_loop: &mut DaemonLoop, merged_rx: mpsc::Receiver<DaemonEvent>) -> ! {
+fn run_daemon_loop(daemon_loop: &mut DaemonLoop, merged_rx: &mpsc::Receiver<DaemonEvent>) -> ! {
     loop {
         daemon_loop.tick(Instant::now());
         match merged_rx.recv_timeout(Duration::from_millis(25)) {

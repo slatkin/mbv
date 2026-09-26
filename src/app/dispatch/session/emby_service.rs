@@ -5,7 +5,7 @@ use mbv_core::playback_queue::QueueItem;
 use mbv_core::service_runtime::{ServiceState, SetupGeneration};
 
 impl App {
-    fn persist_filtered_queue(&self, state: &Option<QueueState>) -> Result<(), String> {
+    fn persist_filtered_queue(state: Option<&QueueState>) -> Result<(), String> {
         match state {
             Some(state) if !state.items.is_empty() => mbv_core::config::save_queue_state(state),
             _ => mbv_core::config::clear_queue_state(),
@@ -99,7 +99,7 @@ impl App {
         self.image_lru.clear();
         self.pending_image_fetches.clear();
         self.image_fetches_active = 0;
-        self.library_position_state = Default::default();
+        self.library_position_state = crate::config::LibraryPositionState::default();
         self.active_route = None;
         self.connected_session_id = None;
         self.connected_session_state = None;
@@ -125,7 +125,7 @@ impl App {
         let old_queue = mbv_core::config::load_queue_state();
         let filtered = old_queue.as_ref().map(QueueState::without_emby);
         if let Err(error) = mbv_core::config::remove_emby_setup_and_secret()
-            .and_then(|_| self.persist_filtered_queue(&filtered))
+            .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
         {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
             Self::restore_persisted_queue(old_queue.as_ref());
@@ -157,8 +157,8 @@ impl App {
         let replacement = candidate.setup.clone();
         let token = candidate.client.token.clone();
         let result = mbv_core::config::remove_emby_setup_and_secret()
-            .and_then(|_| self.persist_filtered_queue(&filtered))
-            .and_then(|_| mbv_core::config::persist_emby_setup_and_secret(&replacement, &token));
+            .and_then(|()| Self::persist_filtered_queue(filtered.as_ref()))
+            .and_then(|()| mbv_core::config::persist_emby_setup_and_secret(&replacement, &token));
         if let Err(error) = result {
             Self::restore_emby_setup(old_setup.as_ref(), old_token.as_deref());
             Self::restore_persisted_queue(old_queue.as_ref());
@@ -189,7 +189,7 @@ impl App {
             .send(LibEvent::HomeContentRefreshed(Box::new(content)));
         let mut config = self.config.lock().unwrap();
         config.emby_setup = Some(replacement.clone());
-        config.server_url = replacement.server_url.clone();
+        config.server_url.clone_from(&replacement.server_url);
         config.username.clear();
         config.password.clear();
         config.api_key.clear();

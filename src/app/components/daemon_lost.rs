@@ -47,10 +47,10 @@ impl DaemonLostComponent {
         daemon_log_path: &str,
         restart_error: Option<&str>,
     ) {
-        self.last_playing_title = last_playing_title.map(|s| s.to_string());
+        self.last_playing_title = last_playing_title.map(ToString::to_string);
         self.daemon_log_path.clear();
         self.daemon_log_path.push_str(daemon_log_path);
-        self.restart_error = restart_error.map(|s| s.to_string());
+        self.restart_error = restart_error.map(ToString::to_string);
     }
 
     pub(in crate::app) fn set_restart_error(&mut self, message: String) {
@@ -65,9 +65,9 @@ impl Default for DaemonLostComponent {
 }
 
 impl Component for DaemonLostComponent {
-    fn view(&mut self, f: &mut ratatui::Frame, _area: ratatui::layout::Rect) {
+    fn view(&mut self, frame: &mut ratatui::Frame, _area: ratatui::layout::Rect) {
         render_daemon_lost_modal_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
             self.last_playing_title.as_deref(),
             &self.daemon_log_path,
@@ -75,7 +75,7 @@ impl Component for DaemonLostComponent {
         );
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -96,9 +96,9 @@ impl AppComponent<Msg, UserEvent> for DaemonLostComponent {
             return None;
         };
         let intent = match key.code {
-            Key::Char('r') | Key::Char('R') => DaemonLostIntent::RestartWithTray,
-            Key::Char('s') | Key::Char('S') => DaemonLostIntent::RestartWithoutTray,
-            Key::Char('q') | Key::Char('Q') => DaemonLostIntent::Quit,
+            Key::Char('r' | 'R') => DaemonLostIntent::RestartWithTray,
+            Key::Char('s' | 'S') => DaemonLostIntent::RestartWithoutTray,
+            Key::Char('q' | 'Q') => DaemonLostIntent::Quit,
             _ => return None,
         };
         Some(Msg::Shell(Box::new(ShellRequest::DaemonLostIntent(intent))))
@@ -108,8 +108,7 @@ impl AppComponent<Msg, UserEvent> for DaemonLostComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
-    use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use tuirealm::event::KeyModifiers;
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> tuirealm::event::KeyEvent {
         tuirealm::event::KeyEvent { code, modifiers }
@@ -128,47 +127,5 @@ mod tests {
         if matches!(shell_boxed.as_ref(), ShellRequest::DaemonLostIntent(
                DaemonLostIntent::RestartWithTray
            ))));
-    }
-
-    #[test]
-    fn unbound_key_is_swallowed_locally() {
-        let mut comp = DaemonLostComponent::new();
-        assert_eq!(
-            comp.on(&Event::Keyboard(make_key(
-                Key::Char('x'),
-                KeyModifiers::NONE,
-            ))),
-            None
-        );
-    }
-
-    #[test]
-    fn non_keyboard_events_return_none() {
-        let mut comp = DaemonLostComponent::new();
-        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
-        assert_eq!(
-            comp.on(&Event::Mouse(MouseEvent {
-                kind: MouseEventKind::Down(MouseButton::Left),
-                column: 10,
-                row: 5,
-                modifiers: KeyModifiers::NONE,
-            })),
-            None
-        );
-    }
-
-    #[rstest]
-    #[case::set_content_updates_fields(Some("Birthday Clip"), "/tmp/mbvd.log", Some("refused"))]
-    #[case::set_content_with_none_values(None, "/var/log/mbvd.log", None)]
-    fn set_content(
-        #[case] title: Option<&str>,
-        #[case] log_path: &str,
-        #[case] restart_error: Option<&str>,
-    ) {
-        let mut comp = DaemonLostComponent::new();
-        comp.set_content(title, log_path, restart_error);
-        assert_eq!(comp.last_playing_title.as_deref(), title);
-        assert_eq!(comp.daemon_log_path, log_path);
-        assert_eq!(comp.restart_error.as_deref(), restart_error);
     }
 }

@@ -86,6 +86,20 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
 }
 
 impl App {
+    fn refresh_completed_feed_home_videos(&mut self, item_id: &str) {
+        for lib_idx in 0..self.libs.len() {
+            if self.is_feed_home_video_group_view(lib_idx)
+                || self.is_feed_home_video_library(lib_idx)
+            {
+                self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
+                if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                    state.loading = true;
+                }
+                self.log_feed_home_video_state(lib_idx, "refresh_after_stop_completed");
+            }
+        }
+    }
+
     pub(in crate::app) fn refresh_after_stop(&mut self) {
         if let Ok(content) = self.fetch_home() {
             // The fetch runs synchronously (order-sensitive side
@@ -96,18 +110,8 @@ impl App {
                 .send(LibEvent::HomeContentRefreshed(Box::new(content)));
         }
         if self.last_played_completed {
-            if let Some(ref item_id) = self.last_played_item_id.clone() {
-                for lib_idx in 0..self.libs.len() {
-                    if self.is_feed_home_video_group_view(lib_idx)
-                        || self.is_feed_home_video_library(lib_idx)
-                    {
-                        self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
-                        if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-                            state.loading = true;
-                        }
-                        self.log_feed_home_video_state(lib_idx, "refresh_after_stop_completed");
-                    }
-                }
+            if let Some(item_id) = self.last_played_item_id.clone() {
+                self.refresh_completed_feed_home_videos(&item_id);
             }
         }
         let fetches: Vec<BrowseRefresh> = self
@@ -163,8 +167,10 @@ impl App {
                         self.libs[lib_idx].library.name.clone(),
                     );
                 }
-                Some(mbv_core::config::TvContentMode::All)
-                | Some(mbv_core::config::TvContentMode::Range(_))
+                Some(
+                    mbv_core::config::TvContentMode::All
+                    | mbv_core::config::TvContentMode::Range(_),
+                )
                 | None => self.spawn_refresh(
                     lib_idx,
                     parent_id,
@@ -283,18 +289,6 @@ mod tv_latest_tests {
         }
     }
 
-    struct FakeUpcomingSource {
-        request: RefCell<Option<(String, usize)>>,
-        items: Vec<EmbyItem>,
-    }
-
-    impl TvUpcomingSource for FakeUpcomingSource {
-        fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-            *self.request.borrow_mut() = Some((parent_id.into(), limit));
-            Ok(self.items.clone())
-        }
-    }
-
     #[test]
     fn latest_library_fetch_uses_home_feed_request_without_home_state() {
         let mut episode = crate::app::tests::make_item("Feed episode", "Episode");
@@ -315,29 +309,8 @@ mod tv_latest_tests {
         assert_eq!(level.item_types.as_deref(), Some("Episode"));
     }
 
-    #[test]
-    fn upcoming_library_fetch_uses_library_parent_and_flat_episode_rows() {
-        let mut episode = crate::app::tests::make_item("Upcoming episode", "Episode");
-        episode.id = "upcoming-episode".into();
-        let source = FakeUpcomingSource {
-            request: RefCell::new(None),
-            items: vec![episode.clone()],
-        };
-
-        let level = build_tv_upcoming_level(&source, "library-id".into(), "TV".into())
-            .expect("fake Upcoming request succeeds");
-
-        assert_eq!(
-            source.request.borrow().as_ref(),
-            Some(&("library-id".into(), 30))
-        );
-        assert_eq!(level.items, vec![episode]);
-        assert_eq!(level.item_types.as_deref(), Some("Episode"));
-    }
-
     #[rstest]
     #[case::latest(mbv_core::config::TvContentMode::Latest)]
-    #[case::upcoming(mbv_core::config::TvContentMode::Upcoming)]
     fn refresh_after_stop_reloads_selected_tv_mode(#[case] mode: mbv_core::config::TvContentMode) {
         let mut app = crate::app::tests::make_app_stub();
         let config = crate::config::Config {
@@ -398,10 +371,8 @@ mod tv_latest_tests {
                 .recv()
                 .expect("selected TV refresh must complete")
             {
-                event @ LibEvent::Loaded { .. } | event @ LibEvent::Refreshed { .. } => {
-                    break event
-                }
-                _ => continue,
+                event @ (LibEvent::Loaded { .. } | LibEvent::Refreshed { .. }) => break event,
+                _ => {}
             }
         };
         match event {

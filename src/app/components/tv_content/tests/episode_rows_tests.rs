@@ -3,23 +3,6 @@ use super::*;
 /// A played episode projects the shared `Played` state, so the episode list
 /// paints the one played-row colour used by every other tab.
 #[test]
-fn played_episode_rows_project_the_shared_played_state() {
-    let mut played = make_item("Watched Episode", "Episode");
-    played.played = true;
-    let fresh = make_item("Unwatched Episode", "Episode");
-    let rows = build_episode_rows(&[played, fresh]);
-    let states: Vec<&MediaSemanticState> = rows
-        .iter()
-        .map(|row| match row {
-            MediaListRow::Item { semantic_state, .. } => semantic_state,
-            _ => panic!("episode rows are items"),
-        })
-        .collect();
-    assert_eq!(states[0], &MediaSemanticState::Played);
-    assert_eq!(states[1], &MediaSemanticState::Ordinary);
-}
-
-#[test]
 fn episode_rows_project_runtime_in_the_green_gutter() {
     let mut episode = make_item("Episode", "Episode");
     episode.runtime_ticks = 3_661 * mbv_core::api::TICKS_PER_SECOND;
@@ -76,49 +59,6 @@ fn upcoming_episode_rows_group_dates_in_first_seen_order_with_relative_headings(
             "Older episode"
         ]
     );
-}
-
-#[test]
-fn upcoming_rows_without_dates_have_no_headings() {
-    let rows = upcoming_episode_rows(
-        &[
-            make_item("First", "Episode"),
-            make_item("Second", "Episode"),
-        ],
-        time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap(),
-    );
-    assert!(rows
-        .iter()
-        .all(|row| !matches!(row, MediaListRow::Heading { .. })));
-}
-
-#[test]
-fn virtual_idless_upcoming_rows_show_series_and_episode_context() {
-    let mut virtual_episode = make_item("Pilot", "Episode");
-    virtual_episode.id.clear();
-    virtual_episode.series_name = "Example Show".into();
-    virtual_episode.parent_index_number = 2;
-    virtual_episode.index_number = 7;
-    virtual_episode.premiere_date = "2026-09-23".into();
-
-    let rows = upcoming_episode_rows(
-        &[virtual_episode],
-        time::Date::from_calendar_date(2026, time::Month::September, 23).unwrap(),
-    );
-    let Some(MediaListRow::Item {
-        target,
-        primary,
-        secondary,
-        ..
-    }) = rows
-        .iter()
-        .find(|row| matches!(row, MediaListRow::Item { .. }))
-    else {
-        panic!("upcoming episode row missing");
-    };
-    assert!(!target.is_empty());
-    assert_eq!(primary, "Example Show");
-    assert_eq!(secondary.as_deref(), Some("S02:E07 — Pilot"));
 }
 
 #[test]

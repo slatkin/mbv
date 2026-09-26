@@ -48,6 +48,7 @@ impl Default for MockHttp {
 }
 
 impl MockHttp {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             shared: Arc::new(Shared {
@@ -88,11 +89,13 @@ impl MockHttp {
     }
 
     /// The full wire text of every request transmitted so far, in order.
+    #[must_use]
     pub fn requests(&self) -> Vec<String> {
         self.shared.requests.lock().unwrap().clone()
     }
 
     /// Number of requests transmitted so far, without cloning them.
+    #[must_use]
     pub fn request_count(&self) -> usize {
         self.shared.requests.lock().unwrap().len()
     }
@@ -102,9 +105,10 @@ impl MockHttp {
     }
 
     /// Build a ureq agent whose HTTP round-trips run entirely in memory.
+    #[must_use]
     pub fn agent(&self) -> Agent {
         let connector = MockConnector {
-            shared: self.shared.clone(),
+            shared: Arc::clone(&self.shared),
         };
         Agent::with_parts(Config::default(), connector, DefaultResolver::default())
     }
@@ -135,7 +139,7 @@ impl<In: Transport> Connector<In> for MockConnector {
     ) -> Result<Option<Self::Out>, Error> {
         Ok(Some(MockTransport {
             buffers: LazyBuffers::new(64 * 1024, 64 * 1024),
-            shared: self.shared.clone(),
+            shared: Arc::clone(&self.shared),
             received: String::new(),
             request_logged: false,
             response_served: false,

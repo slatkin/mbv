@@ -62,13 +62,14 @@ impl DaemonEndpoint {
 
         let port: u16 = port
             .parse()
-            .map_err(|_| format!("daemon endpoint tcp:// requires a numeric port: {value}"))?;
+            .map_err(|e| format!("daemon endpoint tcp:// requires a numeric port: {value}: {e}"))?;
 
         let ip = if host.eq_ignore_ascii_case("localhost") {
             Ipv4Addr::LOCALHOST
         } else {
-            host.parse()
-                .map_err(|_| format!("daemon endpoint tcp:// requires an IPv4 host: {value}"))?
+            host.parse().map_err(|e| {
+                format!("daemon endpoint tcp:// requires an IPv4 host: {value}: {e}")
+            })?
         };
 
         Ok(Self::Tcp(SocketAddr::from((ip, port))))
@@ -82,14 +83,10 @@ impl DaemonEndpoint {
                 loop {
                     match UnixStream::connect(&path) {
                         Ok(stream) => return Ok(SocketStream::Unix(stream)),
-                        Err(e) => {
-                            if start.elapsed() >= LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT {
-                                return Err(format!(
-                                    "cannot connect to daemon endpoint {self}: {e}"
-                                ));
-                            }
-                            std::thread::sleep(LOCAL_DAEMON_CONNECT_RETRY_INTERVAL);
+                        Err(e) if start.elapsed() >= LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT => {
+                            return Err(format!("cannot connect to daemon endpoint {self}: {e}"));
                         }
+                        Err(_) => std::thread::sleep(LOCAL_DAEMON_CONNECT_RETRY_INTERVAL),
                     }
                 }
             }
@@ -106,6 +103,7 @@ impl DaemonEndpoint {
     /// decide connection behavior (e.g. `App::new_remote`'s `is_local_daemon`)
     /// so that distinction is derived from the endpoint itself rather than
     /// tracked separately and passed around as a disconnected bool.
+    #[must_use]
     pub fn is_local(&self) -> bool {
         matches!(self, Self::Local)
     }

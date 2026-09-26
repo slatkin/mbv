@@ -240,17 +240,6 @@ fn parse_atom_entries(body: &str, subscription_kind: FeedKind, feed_id: &str) ->
     entries
 }
 
-/// Infer the media kind of a feed entry from its enclosure MIME type;
-/// absent or unrecognized values default to Video. Keep in one helper so
-/// #472 can reuse it.
-#[cfg(test)]
-pub(in crate::app) fn infer_feed_kind_from_mime(mime: Option<&str>) -> FeedKind {
-    match mime.map(|m| m.trim().to_ascii_lowercase()) {
-        Some(m) if m.starts_with("audio/") => FeedKind::Audio,
-        _ => FeedKind::Video,
-    }
-}
-
 /// The first `<enclosure ...>` element's `url` and `type` attributes
 /// (RSS), sanitized. None when no enclosure parses.
 fn extract_enclosure(text: &str) -> Option<(String, Option<String>)> {
@@ -337,7 +326,7 @@ fn extract_tag(text: &str, tag: &str) -> Option<String> {
 fn extract_atom_link(text: &str) -> Option<String> {
     let link_start = text.find("<link")?;
     let link_end = text[link_start..].find('>')?;
-    let link_tag = &text[link_start..link_start + link_end + 1];
+    let link_tag = &text[link_start..=(link_start + link_end)];
     let href_start = link_tag.find("href=\"")? + 6;
     let href_end = link_tag[href_start..].find('"')?;
     let href = &link_tag[href_start..href_start + href_end];
@@ -358,17 +347,14 @@ fn strip_tags(text: &str) -> String {
     while let Some(cdata_start) = rest.find(CDATA_OPEN) {
         result.push_str(&strip_tags_no_cdata(&rest[..cdata_start]));
         let after_open = &rest[cdata_start + CDATA_OPEN.len()..];
-        match after_open.find(CDATA_CLOSE) {
-            Some(cdata_end) => {
-                result.push_str(&after_open[..cdata_end]);
-                rest = &after_open[cdata_end + CDATA_CLOSE.len()..];
-            }
-            None => {
-                // Unterminated CDATA: treat the rest as raw content.
-                result.push_str(after_open);
-                rest = "";
-                break;
-            }
+        if let Some(cdata_end) = after_open.find(CDATA_CLOSE) {
+            result.push_str(&after_open[..cdata_end]);
+            rest = &after_open[cdata_end + CDATA_CLOSE.len()..];
+        } else {
+            // Unterminated CDATA: treat the rest as raw content.
+            result.push_str(after_open);
+            rest = "";
+            break;
         }
     }
     result.push_str(&strip_tags_no_cdata(rest));

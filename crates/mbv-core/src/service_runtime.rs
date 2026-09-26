@@ -60,10 +60,12 @@ pub struct EmbyBootstrap {
 pub struct SetupGeneration(u64);
 
 impl SetupGeneration {
+    #[must_use]
     pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
+    #[must_use]
     pub const fn value(self) -> u64 {
         self.0
     }
@@ -97,6 +99,7 @@ impl EmbyRuntime {
         }
     }
 
+    #[must_use]
     pub fn new(configured: bool) -> Self {
         Self {
             client: None,
@@ -109,6 +112,7 @@ impl EmbyRuntime {
         }
     }
 
+    #[must_use]
     pub const fn generation(&self) -> SetupGeneration {
         self.generation
     }
@@ -151,6 +155,7 @@ impl EmbyRuntime {
         self.generation
     }
 
+    #[must_use]
     pub fn accepts(&self, generation: SetupGeneration) -> bool {
         self.generation == generation
     }
@@ -174,6 +179,7 @@ pub struct AudiobookshelfRuntime {
 }
 
 impl AudiobookshelfRuntime {
+    #[must_use]
     pub fn new(configured: bool) -> Self {
         Self {
             user: None,
@@ -186,6 +192,7 @@ impl AudiobookshelfRuntime {
         }
     }
 
+    #[must_use]
     pub const fn generation(&self) -> SetupGeneration {
         self.generation
     }
@@ -235,6 +242,7 @@ impl AudiobookshelfRuntime {
         true
     }
 
+    #[must_use]
     pub fn accepts(&self, generation: SetupGeneration) -> bool {
         self.generation == generation
     }

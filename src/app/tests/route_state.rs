@@ -88,16 +88,16 @@ fn switch_to_direct_remote_rebinds_mpris_to_the_new_remote_status() {
     // real `App` method (not just `mpris::rebind` in isolation) to
     // prove the wiring at the call site is actually in place.
     let mut app = make_app_stub();
-    let local_status = app.player.status.clone();
+    let local_status = Arc::clone(&app.player.status);
     app.mpris = Some(crate::mpris::test_handle(
-        local_status.clone(),
+        Arc::clone(&local_status),
         |_| {},
         None,
     ));
 
     let remote_items = make_items(1);
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let remote_status = remote.status.clone();
+    let remote_status = Arc::clone(&remote.status);
     let sess = make_session("remote-host", "mbv");
 
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
@@ -221,16 +221,16 @@ fn restore_local_mode_rebinds_mpris_back_to_the_suspended_local_status() {
     // playback back to the restored local `Player`, not stay wired to
     // the now-defunct remote session.
     let mut app = make_app_stub();
-    let local_status = app.player.status.clone();
+    let local_status = Arc::clone(&app.player.status);
     app.mpris = Some(crate::mpris::test_handle(
-        local_status.clone(),
+        Arc::clone(&local_status),
         |_| {},
         None,
     ));
 
     let remote_items = make_items(1);
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
-    let remote_status = remote.status.clone();
+    let remote_status = Arc::clone(&remote.status);
     let sess = make_session("remote-host", "mbv");
     app.switch_to_direct_remote(&sess, remote, remote_rx, &stub_endpoint());
 
@@ -257,5 +257,3 @@ fn restore_local_mode_clears_active_route() {
     assert!(app.active_route.is_none());
     assert!(!app.player.is_remote());
 }
-
-mod session;

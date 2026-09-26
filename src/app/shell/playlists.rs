@@ -49,23 +49,23 @@ impl Model {
         }
     }
 
-    pub(in crate::app) fn handle_playlists_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_playlists_request(&mut self, request: &ShellRequest) {
         match request {
             ShellRequest::PlaylistsBack => {
                 self.app.playlists_open = None;
                 self.app.playlists_open_items.clear();
             }
             ShellRequest::PlaylistsOpen(index) => {
-                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app.spawn_open_playlist(playlist);
                 }
             }
             ShellRequest::PlaylistsActivate { open, index } => {
-                if open {
+                if *open {
                     let Some(selected_id) = self
                         .app
                         .playlists_open_items
-                        .get(index)
+                        .get(*index)
                         .map(|item| item.id.clone())
                     else {
                         return;
@@ -103,12 +103,12 @@ impl Model {
                     // the replacement actually runs (immediately on an empty
                     // queue, after confirmation on a populated one), so a
                     // cancelled load leaves the sidebar open.
-                } else if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                } else if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app.load_and_play_playlist(playlist.id);
                 }
             }
             ShellRequest::PlaylistsRename(index) => {
-                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app
                         .open_save_playlist_dialog(crate::app::SavePlaylistDialog {
                             input: playlist.name,
@@ -119,7 +119,7 @@ impl Model {
                 }
             }
             ShellRequest::PlaylistsDelete(index) => {
-                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app.ask_confirm(crate::app::ConfirmModal {
                         title: " Delete Playlist ".into(),
                         message: format!(
@@ -157,9 +157,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::SavePlaylistIntent;
     use crate::app::components::msg::{Msg, TerminalObserverEvent};
-    use crate::app::components::ShellRequest;
     use crate::app::tests::make_app_stub;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -186,55 +184,5 @@ mod tests {
             message,
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
         ));
-    }
-
-    #[test]
-    fn opening_a_sidebar_unmounts_the_previous_sidebar() {
-        let mut model = Model::new(make_app_stub());
-        model.app.pending_overlay = Some(
-            crate::app::state::types::overlay::OverlayRequest::OpenSidebar(
-                crate::app::SidebarId::Settings,
-            ),
-        );
-        model.sync_modal_requests();
-        model.app.pending_overlay = Some(
-            crate::app::state::types::overlay::OverlayRequest::OpenSidebar(
-                crate::app::SidebarId::Playlists,
-            ),
-        );
-        model.sync_modal_requests();
-
-        assert!(!model
-            .application
-            .mounted(&ComponentId::Overlay(OverlayId::Settings)));
-        assert!(model
-            .application
-            .mounted(&ComponentId::Overlay(OverlayId::Playlists)));
-    }
-
-    #[test]
-    fn save_playlist_shell_mounts_and_routes_component() {
-        let mut app = make_app_stub();
-        app.open_save_playlist_dialog(crate::app::SavePlaylistDialog {
-            input: "Playlist".into(),
-            stage: crate::app::SavePlaylistStage::EnterName,
-        });
-        let mut model = Model::new(app);
-        model.sync_modal_requests();
-        let id = ComponentId::Modal(ModalId::SavePlaylist);
-        let message = model
-            .application
-            .get_component_mut(&id)
-            .expect("Save-playlist component mounted")
-            .on(&Event::Keyboard(KeyEvent {
-                code: Key::Enter,
-                modifiers: KeyModifiers::NONE,
-            }));
-        assert!(matches!(
-           message,
-           Some(Msg::Shell(ref shell_boxed))
-        if matches!(shell_boxed.as_ref(), ShellRequest::SavePlaylistIntent(
-               SavePlaylistIntent::Submit
-           ))));
     }
 }

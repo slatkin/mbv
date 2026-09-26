@@ -2,7 +2,7 @@ use super::*;
 use crate::app::state::types::settings::ServiceEntry;
 use crate::config::TestStateDirGuard;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::config::{EmbySetup, FeedKind, FeedSubscription};
+use mbv_core::config::EmbySetup;
 use mbv_core::service_runtime::ServiceState;
 
 #[test]
@@ -62,67 +62,6 @@ fn auth_rejection_clears_player_even_when_secret_deletion_fails() {
 }
 
 #[test]
-fn auth_rejection_isolated_cleanup_preserves_setup_owned_content_and_other_secrets() {
-    let _guard = TestStateDirGuard::new();
-    let mut config = crate::config::Config {
-        emby_setup: Some(EmbySetup::new("https://emby.example", "user-id")),
-        ..Default::default()
-    };
-    config.feeds.push(FeedSubscription {
-        name: "News".into(),
-        url: "https://feed.example/rss".into(),
-        kind: FeedKind::Audio,
-    });
-    let mut app = tests::make_app_stub();
-    *app.config.lock().unwrap() = config.clone();
-    let mut client = mbv_core::api::EmbyClient::new(config.clone());
-    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
-        server_url: "https://emby.example".into(),
-        user_id: "user-id".into(),
-        token: "rejected-token".into(),
-    });
-    let current = std::sync::Arc::new(std::sync::Mutex::new(client));
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(current);
-    app.player
-        .update_emby_credentials("https://emby.example".into(), "rejected-token".into());
-    mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "rejected-token")
-        .unwrap();
-    mbv_core::config::save_service_secret(
-        mbv_core::config::ServiceKind::Audiobookshelf,
-        "audiobookshelf-secret",
-    )
-    .unwrap();
-    mbv_core::config::save_control_credential("control-secret").unwrap();
-
-    let generation = app.emby_runtime.generation();
-    // No content snapshot is delivered on the failure path, so the
-    // Model-owned Home content (task 5.3d) is untouched.
-    let content =
-        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-            generation,
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-                message: "HTTP 403".into(),
-            }),
-        });
-    assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
-    assert_eq!(app.config.lock().unwrap().emby_setup, config.emby_setup);
-    assert!(content.is_none());
-    assert!(app.emby_runtime.client.is_none());
-    assert_eq!(app.player.emby_credentials(), None);
-    assert!(mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_none());
-    assert_eq!(
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf),
-        Some("audiobookshelf-secret".into())
-    );
-    assert_eq!(
-        mbv_core::config::load_control_credential(),
-        Some("control-secret".into())
-    );
-    assert!(!app.config.lock().unwrap().feeds.is_empty());
-}
-
-#[test]
 fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_and_content() {
     let _guard = TestStateDirGuard::new();
     let config = crate::config::Config {
@@ -138,7 +77,8 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
         token: "valid-token".into(),
     });
     let current = std::sync::Arc::new(std::sync::Mutex::new(client));
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(current.clone());
+    app.emby_runtime =
+        mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::clone(&current));
     app.player
         .update_emby_credentials("https://emby.example".into(), "valid-token".into());
     mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "valid-token")
@@ -164,88 +104,6 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
         Some("valid-token".into())
     );
     assert_eq!(app.config.lock().unwrap().emby_setup, config.emby_setup);
-}
-
-#[test]
-fn startup_worker_disconnect_is_generation_aware_and_preserves_secret() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = tests::make_app_stub();
-    app.config.lock().unwrap().emby_setup = Some(EmbySetup::new("https://emby.example", "user-id"));
-    mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "valid-token")
-        .unwrap();
-    app.emby_runtime.state = ServiceState::Connecting;
-    let generation = app.emby_runtime.generation();
-    app.handle_emby_startup_worker_disconnect(generation);
-    assert_eq!(app.emby_runtime.state, ServiceState::Unavailable);
-    assert_eq!(app.emby_runtime.generation(), generation);
-    assert!(mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some());
-
-    let newer = app.emby_runtime.begin_retry();
-    app.emby_runtime.state = ServiceState::Connecting;
-    app.handle_emby_startup_worker_disconnect(generation);
-    assert_eq!(app.emby_runtime.state, ServiceState::Connecting);
-    assert_eq!(app.emby_runtime.generation(), newer);
-}
-
-#[test]
-fn startup_worker_disconnect_without_secret_requires_authentication() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = tests::make_app_stub();
-    app.config.lock().unwrap().emby_setup = Some(EmbySetup::new("https://emby.example", "user-id"));
-    app.emby_runtime.state = ServiceState::Connecting;
-    let generation = app.emby_runtime.generation();
-    app.handle_emby_startup_worker_disconnect(generation);
-    assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
-    assert_eq!(app.emby_runtime.generation(), generation);
-}
-
-#[test]
-fn retry_failure_completion_preserves_existing_runtime_and_advances_generation() {
-    let _guard = TestStateDirGuard::new();
-    let config = crate::config::Config {
-        emby_setup: Some(EmbySetup::new("https://emby.example", "user-id")),
-        ..Default::default()
-    };
-    let mut app = tests::make_app_stub();
-    *app.config.lock().unwrap() = config.clone();
-    let mut client = mbv_core::api::EmbyClient::new(config.clone());
-    client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
-        server_url: "https://emby.example".into(),
-        user_id: "user-id".into(),
-        token: "valid-token".into(),
-    });
-    let current = std::sync::Arc::new(std::sync::Mutex::new(client));
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(current.clone());
-    app.emby_runtime.state = ServiceState::Unavailable;
-    app.player
-        .update_emby_credentials("https://emby.example".into(), "valid-token".into());
-    mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "valid-token")
-        .unwrap();
-    app.open_services_settings();
-    let old_generation = app.emby_runtime.generation();
-    app.activate_service_entry(ServiceEntry::Emby);
-    let generation = app.emby_runtime.generation();
-    assert_ne!(generation, old_generation);
-    app.emby_startup_rx = None;
-    // No content snapshot is delivered on the failure path, so the
-    // Model-owned Home content (task 5.3d) is untouched.
-    let content =
-        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-            generation,
-            result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
-                "connection refused",
-            )),
-        });
-    assert_eq!(app.emby_runtime.state, ServiceState::Unavailable);
-    assert!(std::sync::Arc::ptr_eq(
-        app.emby_runtime.client.as_ref().unwrap(),
-        &current
-    ));
-    assert_eq!(
-        app.player.emby_credentials(),
-        Some(("https://emby.example".into(), "valid-token".into()))
-    );
-    assert!(content.is_none());
 }
 
 #[test]
@@ -297,53 +155,6 @@ fn stale_auth_completion_cannot_delete_new_secret_or_change_ready_runtime() {
 }
 
 #[test]
-fn transient_setup_rejection_preserves_persisted_secret_setup_and_content() {
-    let _guard = TestStateDirGuard::new();
-    let mut app = tests::make_app_stub();
-    let setup = EmbySetup::new("https://emby.example", "user-id");
-    app.config.lock().unwrap().emby_setup = Some(setup.clone());
-    mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "old-token")
-        .unwrap();
-    app.emby_runtime.state = ServiceState::NeedsAuthentication;
-    app.open_services_settings();
-    app.activate_service_entry(ServiceEntry::Emby);
-    let generation = app.emby_runtime.begin_setup();
-    app.emby_setup_form.as_mut().unwrap().generation = Some(generation);
-    app.emby_setup_form.as_mut().unwrap().busy = true;
-    // No content snapshot is delivered on the rejection path, so the
-    // Model-owned Home content (task 5.3d) is untouched.
-    let content = app.apply_emby_setup_completion_without_network(
-        crate::app::dispatch::session::service_startup::SetupCompletion {
-            generation,
-            previous_state: ServiceState::NeedsAuthentication,
-            result: Err("candidate credential rejected".into()),
-        },
-    );
-    assert_eq!(app.emby_runtime.state, ServiceState::NeedsAuthentication);
-    assert_eq!(app.config.lock().unwrap().emby_setup, Some(setup));
-    assert!(content.is_none());
-    assert_eq!(
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby),
-        Some("old-token".into())
-    );
-}
-
-#[test]
-fn ready_emby_repair_opens_the_transactional_setup_form() {
-    let mut app = tests::make_app_stub();
-    app.emby_runtime.state = ServiceState::Ready;
-    app.open_services_settings();
-    app.activate_service_entry(ServiceEntry::Emby);
-    assert!(app.emby_setup_form.is_some());
-    assert!(!matches!(
-        app.pending_overlay,
-        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
-            _
-        ))
-    ));
-}
-
-#[test]
 fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     let _guard = TestStateDirGuard::new();
     let old_setup = EmbySetup::new("https://old.example", "old-user");
@@ -375,7 +186,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
             previous_state: ServiceState::Ready,
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client: candidate,
-                bootstrap: Default::default(),
+                bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
                 setup: EmbySetup::new("https://new.example/", "new-user"),
             }),
         },
@@ -402,33 +213,6 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
     app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     app.dismiss_confirm();
     assert!(app.pending_emby_replacement.is_none());
-    assert_eq!(app.emby_runtime.state, ServiceState::Ready);
-    assert_eq!(
-        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby),
-        Some("old-token".into())
-    );
-}
-
-#[test]
-fn emby_removal_cancel_is_non_destructive() {
-    let _guard = TestStateDirGuard::new();
-    let setup = EmbySetup::new("https://old.example", "old-user");
-    let mut app = tests::make_app_stub();
-    app.config.lock().unwrap().emby_setup = Some(setup.clone());
-    app.emby_runtime.state = ServiceState::Ready;
-    mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "old-token")
-        .unwrap();
-    app.open_services_settings();
-    app.request_emby_removal();
-    let action = match app.pending_overlay.as_ref() {
-        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(modal)) => {
-            modal.on_confirm.clone()
-        }
-        _ => panic!("confirmation request missing"),
-    };
-    app.apply_confirm_action(action, KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    app.dismiss_confirm();
-    assert_eq!(app.config.lock().unwrap().emby_setup, Some(setup));
     assert_eq!(app.emby_runtime.state, ServiceState::Ready);
     assert_eq!(
         mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby),

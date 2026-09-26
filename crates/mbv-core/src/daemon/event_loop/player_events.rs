@@ -1,8 +1,12 @@
 //! Player-originated daemon events: track changes, Next-Up cards, output start,
 //! completions, and all other player observations relayed to control clients.
 
-use super::super::*;
-use super::{DaemonLoop, EventOutcome};
+use super::super::{
+    apply_stopped_observation, apply_track_completed_observation, broadcast,
+    broadcast_player_event_if_not_replaced, cancel_pending_idle_queue_load,
+    complete_pending_idle_queue_load, settle_and_redispatch, DaemonLoop,
+};
+use super::EventOutcome;
 use crate::ctrl::{
     CtrlEvent, PlaybackGeneration, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackRequestId,
@@ -196,9 +200,12 @@ impl DaemonLoop {
         else {
             return EventOutcome::CONTINUE;
         };
-        let (consume_videos, consume_audio) = {
+        let consume_policy = {
             let cfg = self.client.lock().unwrap();
-            (cfg.config.consume_videos, cfg.config.consume_audio)
+            super::super::ConsumePolicy {
+                videos: cfg.config.consume_videos,
+                audio: cfg.config.consume_audio,
+            }
         };
         if !apply_track_completed_observation(
             &mut self.owner,
@@ -209,8 +216,7 @@ impl DaemonLoop {
             position_ticks,
             played,
             consume,
-            consume_videos,
-            consume_audio,
+            consume_policy,
         ) {
             return EventOutcome::CONTINUE;
         }

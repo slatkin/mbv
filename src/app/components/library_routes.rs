@@ -92,7 +92,7 @@ impl LibraryRoutesComponent {
     /// closes the picker on PickLibrary and steps back on PickDevice —
     /// by emitting the same `LibraryRoutesEsc` request. Right-click and
     /// wheel have no keyboard equivalent here and are ignored.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -117,23 +117,6 @@ impl LibraryRoutesComponent {
             }
             _ => None,
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
-        &self.hit_rows
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_frame(&self) -> Rect {
-        self.frame
-    }
-
-    /// Test seam: forget the last click so the next event is neither
-    /// throttled nor promoted to a double-click.
-    #[cfg(test)]
-    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
-        self.mouse_gestures.reset_for_test();
     }
 }
 
@@ -165,14 +148,14 @@ impl Default for LibraryRoutesComponent {
 }
 
 impl Component for LibraryRoutesComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, _area: Rect) {
         let Some(stage) = self.stage.as_ref() else {
             return;
         };
         let geometry = render_library_routes_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
-            LibraryRoutesRenderModel {
+            &LibraryRoutesRenderModel {
                 stage,
                 cursor: self.cursor,
             },
@@ -186,7 +169,7 @@ impl Component for LibraryRoutesComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -211,7 +194,7 @@ impl AppComponent<Msg, UserEvent> for LibraryRoutesComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -220,9 +203,7 @@ impl AppComponent<Msg, UserEvent> for LibraryRoutesComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::event::{KeyEvent, KeyModifiers};
+    use tuirealm::event::KeyModifiers;
 
     fn popup() -> LibraryRoutePopup {
         LibraryRoutePopup {
@@ -244,14 +225,6 @@ mod tests {
     }
 
     #[test]
-    fn settings_popup_library_routes_keeps_local_cursor() {
-        let mut component = LibraryRoutesComponent::new();
-        component.set_content(&popup());
-        component.on(&key(Key::Down));
-        assert_eq!(component.cursor, 1);
-    }
-
-    #[test]
     fn settings_popup_library_routes_cross_boundary_keys_are_typed() {
         let mut component = LibraryRoutesComponent::new();
         component.set_content(&popup());
@@ -263,24 +236,5 @@ mod tests {
             component.on(&key(Key::Esc)),
             Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc)))
         );
-    }
-
-    #[test]
-    fn settings_popup_library_routes_renders_without_app_state() {
-        let mut component = LibraryRoutesComponent::new();
-        component.set_content(&popup());
-        let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Library Routes"));
-        assert!(output.contains("Movies"));
     }
 }

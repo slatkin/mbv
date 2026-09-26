@@ -19,10 +19,12 @@ pub use items::*;
 pub struct QueueSlotId(u64);
 
 impl QueueSlotId {
+    #[must_use]
     pub fn raw(self) -> u64 {
         self.0
     }
 
+    #[must_use]
     pub fn from_raw(raw: u64) -> Self {
         Self(raw)
     }
@@ -32,10 +34,12 @@ impl QueueSlotId {
 pub struct QueueRevision(u64);
 
 impl QueueRevision {
+    #[must_use]
     pub fn raw(self) -> u64 {
         self.0
     }
 
+    #[must_use]
     pub fn from_raw(raw: u64) -> Self {
         Self(raw)
     }
@@ -52,6 +56,7 @@ pub struct SlotProgress {
 }
 
 impl SlotProgress {
+    #[must_use]
     pub fn from_item(item: &EmbyItem) -> Self {
         Self {
             position_ticks: item.playback_position_ticks,
@@ -220,6 +225,7 @@ impl Default for PlaybackQueue {
 }
 
 impl PlaybackQueue {
+    #[must_use]
     pub fn from_items(items: Vec<EmbyItem>, active_index: Option<usize>) -> Self {
         let queue_items: Vec<QueueItem> = items
             .into_iter()
@@ -228,10 +234,12 @@ impl PlaybackQueue {
         Self::from_queue_items(queue_items, active_index)
     }
 
+    #[must_use]
     pub fn from_queue_items(items: Vec<QueueItem>, active_index: Option<usize>) -> Self {
         Self::from_queue_items_with_revision(items, active_index, QueueRevision::default())
     }
 
+    #[must_use]
     pub fn from_queue_items_with_revision(
         items: Vec<QueueItem>,
         active_index: Option<usize>,
@@ -257,6 +265,7 @@ impl PlaybackQueue {
     /// Reconstruct a queue snapshot while retaining the slot identities
     /// assigned by its owner. Used at the unified ctrl boundary; local queue
     /// construction should use `from_queue_items` so it allocates identities.
+    #[must_use]
     pub fn from_slot_items(
         slots: Vec<(QueueSlotId, QueueItem)>,
         active_slot_id: Option<QueueSlotId>,
@@ -282,15 +291,18 @@ impl PlaybackQueue {
         }
     }
 
+    #[must_use]
     pub fn revision(&self) -> QueueRevision {
         self.revision
     }
 
+    #[must_use]
     pub fn slots(&self) -> &[QueueSlot] {
         &self.slots
     }
 
     /// Clone the canonical queue entries together with their stable slot identities.
+    #[must_use]
     pub fn slot_pairs(&self) -> Vec<ExecSlot> {
         self.slots
             .iter()
@@ -303,37 +315,45 @@ impl PlaybackQueue {
 
     /// Consume the queue and return its slots. Used by tests and callers
     /// that need owned slot data.
+    #[must_use]
     pub fn into_slots(self) -> Vec<QueueSlot> {
         self.slots
     }
 
+    #[must_use]
     pub fn active_slot_id(&self) -> Option<QueueSlotId> {
         self.active_slot_id
     }
 
+    #[must_use]
     pub fn active_index(&self) -> Option<usize> {
         self.active_slot_id.and_then(|id| self.slot_index(id))
     }
 
+    #[must_use]
     pub fn active_slot(&self) -> Option<&QueueSlot> {
         self.active_slot_id.and_then(|slot_id| self.slot(slot_id))
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.slots.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }
 
     /// Returns `true` when the queue contains any Audiobookshelf slots.
+    #[must_use]
     pub fn has_audiobookshelf_entries(&self) -> bool {
         self.slots.iter().any(|s| s.item.is_audiobookshelf_any())
     }
 
     /// Returns `true` when the queue contains any non-Emby slots (Feed or
     /// Audiobookshelf). Used at boundaries that strip server-owned state.
+    #[must_use]
     pub fn has_non_emby_entries(&self) -> bool {
         self.slots
             .iter()
@@ -346,10 +366,12 @@ impl PlaybackQueue {
         }
     }
 
+    #[must_use]
     pub fn slot(&self, slot_id: QueueSlotId) -> Option<&QueueSlot> {
         self.slots.iter().find(|slot| slot.slot_id == slot_id)
     }
 
+    #[must_use]
     pub fn slot_index(&self, slot_id: QueueSlotId) -> Option<usize> {
         self.slots.iter().position(|slot| slot.slot_id == slot_id)
     }
@@ -453,8 +475,7 @@ impl PlaybackQueue {
         }
         self.remove_existing_slot(slot_id)
             .map(Box::new)
-            .map(RemoveSlotResult::Removed)
-            .unwrap_or(RemoveSlotResult::NotFound)
+            .map_or(RemoveSlotResult::NotFound, RemoveSlotResult::Removed)
     }
 
     pub fn remove_active_slot_confirmed(&mut self, slot_id: QueueSlotId) -> RemoveSlotResult {
@@ -660,14 +681,13 @@ impl PlaybackQueue {
         if let Some(pending) = slot.progress_state.pending_sync {
             if pending.matches_server_confirmation(&fetched_item) {
                 slot.progress_state.pending_sync = None;
+                let local_progress = SlotProgress::from_item(&fetched_item);
                 slot.item = QueueItem::Emby(Box::new(fetched_item));
                 if is_active {
                     slot.progress_state.apply_to_item(&mut slot.item);
                     result.protected_slots.push(slot.slot_id);
                 } else {
-                    if let QueueItem::Emby(ref emby) = slot.item {
-                        slot.progress_state.local = SlotProgress::from_item(emby);
-                    }
+                    slot.progress_state.local = local_progress;
                 }
                 result.pending_confirmed_slots.push(slot.slot_id);
                 result.updated_slots.push(slot.slot_id);

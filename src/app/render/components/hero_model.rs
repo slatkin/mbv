@@ -16,8 +16,8 @@ pub(in crate::app) fn emby_hero_meta_rows_plain(item: &EmbyItem) -> (Vec<String>
     let mut duration_row = None;
     if item.item_type == "Series" {
         let year_range = match (item.production_year, item.end_year) {
-            (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
-            (s, _) if s > 0 => format!("{}", s),
+            (s, e) if s > 0 && e > 0 && e != s => format!("{s}-{e}"),
+            (s, _) if s > 0 => format!("{s}"),
             _ => String::new(),
         };
         let genre_upper = item

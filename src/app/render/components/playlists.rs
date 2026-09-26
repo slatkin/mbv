@@ -47,7 +47,7 @@ pub(in crate::app) fn render_save_playlist_content(
         .chars()
         .rev()
         .collect();
-    let input_line = format!("{}{}{}", label, visible, cursor);
+    let input_line = format!("{label}{visible}{cursor}");
     let hint = "Enter to save · Esc to cancel";
     let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
     let hint_y = input_y + 2;
@@ -171,23 +171,41 @@ pub(in crate::app) fn render_playlists_content(
         );
         return;
     }
-    if *playlists_cursor < *playlists_scroll {
-        *playlists_scroll = *playlists_cursor;
-    } else if *playlists_cursor >= *playlists_scroll + content.height as usize {
-        *playlists_scroll = (*playlists_cursor)
+    render_playlist_rows(
+        frame,
+        content,
+        playlists,
+        playlists_cursor,
+        playlists_scroll,
+        loaded_id,
+        geometry,
+    );
+}
+
+fn render_playlist_rows(
+    frame: &mut Frame,
+    content: Rect,
+    playlists: &[EmbyItem],
+    cursor: &mut usize,
+    scroll: &mut usize,
+    loaded_id: Option<&str>,
+    geometry: &mut PlaylistsRenderGeometry,
+) {
+    if *cursor < *scroll {
+        *scroll = *cursor;
+    } else if *cursor >= *scroll + content.height as usize {
+        *scroll = (*cursor)
             .saturating_add(1)
             .saturating_sub(content.height as usize);
     }
-    for (visible, playlist) in playlists[*playlists_scroll..].iter().enumerate() {
+    for (visible, playlist) in playlists[*scroll..].iter().enumerate() {
         if visible >= content.height as usize {
             break;
         }
-        let index = *playlists_scroll + visible;
-        let selected = index == *playlists_cursor;
+        let index = *scroll + visible;
+        let selected = index == *cursor;
         let loaded = loaded_id.is_some_and(|id| id == playlist.id);
-        // Canonical selected-row treatment (Iris bar, Ink text) like the
-        // media lists; unselected rows zebra-stripe on absolute parity so the
-        // bands hold still under scroll, opening on the panel fill.
+        // Keep zebra parity tied to the absolute row so bands hold still under scroll.
         let bg = if selected {
             Some(palette::SELECTED_ROW_BG)
         } else if index % 2 == 1 {
@@ -219,7 +237,8 @@ pub(in crate::app) fn render_playlists_content(
         };
         let row = Rect {
             x: content.x,
-            y: content.y + visible as u16,
+            y: content.y
+                + u16::try_from(visible).expect("visible row is bounded by content height"),
             width: content.width,
             height: 1,
         };
@@ -243,7 +262,7 @@ pub(in crate::app) fn render_playlists_content(
         );
         geometry.playlist_rows.push((row, index));
     }
-    chrome::render_sidebar_scrollbar(frame, content, playlists.len(), *playlists_scroll);
+    chrome::render_sidebar_scrollbar(frame, content, playlists.len(), *scroll);
 }
 
 fn render_open_playlist_content(
@@ -296,66 +315,80 @@ fn render_open_playlist_content(
             break;
         }
         let index = *scroll + visible;
-        let selected = index == *cursor;
-        let fg = if selected {
-            palette::ACCENT_ACTIVE
-        } else {
-            palette::TEXT_PRIMARY
-        };
-        let num = format!("{:>2}. ", index + 1);
-        let text_width = chrome::panel_row_text_width(content.width).saturating_sub(num.len());
-        let label = item.display_name();
-        let (line1, line2) = if label.len() <= text_width {
-            (label, String::new())
-        } else {
-            let split = label[..text_width].rfind(' ').unwrap_or(text_width);
-            (
-                label[..split].to_string(),
-                label[split..].trim_start().to_string(),
-            )
-        };
-        let indent = " ".repeat(2 + num.len());
-        let row_y = content.y + y as u16;
-        let height = 1 + usize::from(!line2.is_empty());
-        let target = Rect {
-            x: content.x,
-            y: row_y,
-            width: content.width,
-            height: (height as u16).min(content.bottom().saturating_sub(row_y)),
-        };
-        chrome::render_panel_row(
-            frame,
-            content.x,
-            row_y,
-            content.width,
-            selected,
-            vec![
-                Span::styled(num, Style::default().fg(palette::TEXT_MUTED)),
-                Span::styled(line1, Style::default().fg(fg)),
-            ],
-            None,
-        );
-        if !line2.is_empty() && y + 1 < content.height as usize {
-            frame.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::raw(indent),
-                    Span::styled(
-                        trunc_str(&line2, text_width),
-                        Style::default().fg(palette::TEXT_SECONDARY),
-                    ),
-                ])),
-                Rect {
-                    x: content.x,
-                    y: row_y + 1,
-                    width: content.width,
-                    height: 1,
-                },
-            );
-        }
-        geometry.open_rows.push((target, index));
-        y += height;
+        y += render_open_playlist_row(frame, content, item, index, *cursor, y, geometry);
     }
     let total = items.iter().map(item_lines).sum::<usize>();
     let before = items[..*scroll].iter().map(item_lines).sum::<usize>();
     chrome::render_sidebar_scrollbar(frame, content, total, before);
+}
+
+fn render_open_playlist_row(
+    frame: &mut Frame,
+    content: Rect,
+    item: &EmbyItem,
+    index: usize,
+    cursor: usize,
+    y: usize,
+    geometry: &mut PlaylistsRenderGeometry,
+) -> usize {
+    let selected = index == cursor;
+    let fg = if selected {
+        palette::ACCENT_ACTIVE
+    } else {
+        palette::TEXT_PRIMARY
+    };
+    let num = format!("{:>2}. ", index + 1);
+    let text_width = chrome::panel_row_text_width(content.width).saturating_sub(num.len());
+    let label = item.display_name();
+    let (line1, line2) = if label.len() <= text_width {
+        (label, String::new())
+    } else {
+        let split = label[..text_width].rfind(' ').unwrap_or(text_width);
+        (
+            label[..split].to_string(),
+            label[split..].trim_start().to_string(),
+        )
+    };
+    let indent = " ".repeat(2 + num.len());
+    let row_y = content.y + u16::try_from(y).expect("row offset is bounded by content height");
+    let height = 1 + usize::from(!line2.is_empty());
+    let target = Rect {
+        x: content.x,
+        y: row_y,
+        width: content.width,
+        height: u16::try_from(height)
+            .expect("playlist rows are at most two lines")
+            .min(content.bottom().saturating_sub(row_y)),
+    };
+    chrome::render_panel_row(
+        frame,
+        content.x,
+        row_y,
+        content.width,
+        selected,
+        vec![
+            Span::styled(num, Style::default().fg(palette::TEXT_MUTED)),
+            Span::styled(line1, Style::default().fg(fg)),
+        ],
+        None,
+    );
+    if !line2.is_empty() && y + 1 < content.height as usize {
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::raw(indent),
+                Span::styled(
+                    trunc_str(&line2, text_width),
+                    Style::default().fg(palette::TEXT_SECONDARY),
+                ),
+            ])),
+            Rect {
+                x: content.x,
+                y: row_y + 1,
+                width: content.width,
+                height: 1,
+            },
+        );
+    }
+    geometry.open_rows.push((target, index));
+    height
 }

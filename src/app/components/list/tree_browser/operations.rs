@@ -179,11 +179,11 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             self.visible_flow_rows()
                 .into_iter()
                 .map(|row| match row {
-                    VisibleRow::Node(id) => self
-                        .arena
-                        .get(&id)
-                        .map(|entry| Row::selectable(entry.node.target.clone()))
-                        .unwrap_or_else(Row::structural),
+                    VisibleRow::Node(id) => {
+                        self.arena.get(&id).map_or_else(Row::structural, |entry| {
+                            Row::selectable(entry.node.target.clone())
+                        })
+                    }
                     VisibleRow::Structural(_, _) => Row::structural(),
                 })
                 .collect(),
@@ -256,8 +256,8 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
 
     fn transition(
         &self,
-        previous: Option<Target>,
-        previous_marks: TreeMarkSummary,
+        previous: Option<&Target>,
+        previous_marks: &TreeMarkSummary,
         disposition: TreeConsumed,
         external_intent: Option<TreeExternalIntent<Target>>,
     ) -> TreeTransition<Target> {
@@ -266,10 +266,12 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         TreeTransition {
             disposition,
             selected_target: current.clone(),
-            selected_target_change: (previous != current)
-                .then_some(TreeSelectionChange { previous, current }),
+            selected_target_change: (previous != current.as_ref()).then_some(TreeSelectionChange {
+                previous: previous.cloned(),
+                current,
+            }),
             mark_summary: Some(current_marks.clone()),
-            mark_summary_change: (previous_marks != current_marks).then_some(current_marks),
+            mark_summary_change: (*previous_marks != current_marks).then_some(current_marks),
             external_intent,
         }
     }
@@ -306,10 +308,20 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         let previous_marks = self.selected_summary();
         let flow = self.current_flow();
         let Some((disposition, external_intent)) = self.apply_operation(operation, &flow) else {
-            return self.transition(previous, previous_marks, TreeConsumed::Unhandled, None);
+            return self.transition(
+                previous.as_ref(),
+                &previous_marks,
+                TreeConsumed::Unhandled,
+                None,
+            );
         };
         self.invalidate_paint();
-        self.transition(previous, previous_marks, disposition, external_intent)
+        self.transition(
+            previous.as_ref(),
+            &previous_marks,
+            disposition,
+            external_intent,
+        )
     }
 
     fn apply_operation(
@@ -325,7 +337,11 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                     Cursored::move_by(
                         state,
                         flow,
-                        delta.clamp(isize::MIN as i64, isize::MAX as i64) as isize,
+                        isize::try_from(delta).unwrap_or(if delta.is_negative() {
+                            isize::MIN
+                        } else {
+                            isize::MAX
+                        }),
                     )
                 });
                 self.reconcile_selection();
@@ -337,12 +353,12 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             }
             operation @ (super::TreeOperation::First
             | super::TreeOperation::Last
-            | super::TreeOperation::Parent) => self.apply_cursor_operation(operation, flow),
+            | super::TreeOperation::Parent) => self.apply_cursor_operation(&operation, flow),
             super::TreeOperation::Right => {
                 (disposition, external_intent) = self.apply_right();
             }
             super::TreeOperation::ToggleExpansionTarget(target) => {
-                disposition = self.apply_toggle_expansion(target);
+                disposition = self.apply_toggle_expansion(&target);
             }
             super::TreeOperation::AnchorSelection {
                 target,
@@ -378,7 +394,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
 
     fn apply_cursor_operation(
         &mut self,
-        operation: super::TreeOperation<Target>,
+        operation: &super::TreeOperation<Target>,
         flow: &RowFlow<Target>,
     ) {
         match operation {
@@ -451,7 +467,11 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
                 state,
                 flow,
                 height,
-                direction.clamp(isize::MIN as i64, isize::MAX as i64) as isize,
+                isize::try_from(direction).unwrap_or(if direction.is_negative() {
+                    isize::MIN
+                } else {
+                    isize::MAX
+                }),
                 PagingPolicy::visible_viewport(),
             )
         });
@@ -485,11 +505,11 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         (TreeConsumed::Consumed, None)
     }
 
-    fn apply_toggle_expansion(&mut self, target: Target) -> TreeConsumed {
-        if !self.is_expandable(&target) {
+    fn apply_toggle_expansion(&mut self, target: &Target) -> TreeConsumed {
+        if !self.is_expandable(target) {
             return TreeConsumed::Unhandled;
         }
-        self.with_state(|state| Expandable::toggle_expanded(state, &target));
+        self.with_state(|state| Expandable::toggle_expanded(state, target));
         self.reconcile_selection();
         TreeConsumed::Consumed
     }
@@ -701,6 +721,35 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
         rows
     }
 
+    fn retained_row(
+        &self,
+        row: VisibleRow,
+        index: usize,
+        claim_rect: Rect,
+        content_rect: Rect,
+    ) -> Option<(Rect, Target)> {
+        let VisibleRow::Node(id) = row else {
+            return None;
+        };
+        let y = content_rect
+            .y
+            .checked_add(u16::try_from(index).unwrap_or(u16::MAX))?;
+        if y >= content_rect.bottom() {
+            return None;
+        }
+        let entry = self.arena.get(&id)?;
+        let target = entry.node.target.clone();
+        let marked = self.marks.contains(&target);
+        let selected = self.focused && self.selected.as_ref() == Some(&target);
+        let full_width = tree_row_is_full_width(selected, marked);
+        let rect = if full_width {
+            Rect::new(claim_rect.x, y, claim_rect.width, 1)
+        } else {
+            Rect::new(content_rect.x, y, content_rect.width, 1)
+        };
+        Some((rect, target))
+    }
+
     pub(super) fn retained_rows(
         &self,
         visible_rows: &[VisibleRow],
@@ -712,26 +761,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .copied()
             .skip(self.viewport_offset)
             .enumerate()
-            .filter_map(|(index, row)| {
-                let VisibleRow::Node(id) = row else {
-                    return None;
-                };
-                let y = content_rect.y.checked_add(index as u16)?;
-                (y < content_rect.bottom()).then(|| {
-                    self.arena.get(&id).map(|entry| {
-                        let target = entry.node.target.clone();
-                        let marked = self.marks.contains(&target);
-                        let selected = self.focused && self.selected.as_ref() == Some(&target);
-                        let full_width = tree_row_is_full_width(selected, marked);
-                        let rect = if full_width {
-                            Rect::new(claim_rect.x, y, claim_rect.width, 1)
-                        } else {
-                            Rect::new(content_rect.x, y, content_rect.width, 1)
-                        };
-                        (rect, target)
-                    })
-                })?
-            })
+            .filter_map(|(index, row)| self.retained_row(row, index, claim_rect, content_rect))
             .collect()
     }
 }

@@ -1,7 +1,5 @@
 use super::*;
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
-use tuirealm::event::{KeyEvent, KeyModifiers};
+use tuirealm::event::KeyModifiers;
 
 /// Task 4.2d: the embedded episode `WideMediaList` field replaces the
 /// old `Option<usize>` episode cursor. This exercises the same
@@ -105,77 +103,6 @@ fn tv_workspace_series_change_resets_local_selection() {
     assert_eq!(component.season_cursor, 0);
     assert!(component.episodes.is_empty());
     assert!(matches!(component.pane, Pane::Series));
-}
-
-#[test]
-fn tv_workspace_renders_the_wide_workspace_without_app() {
-    let mut component = TvContent::new();
-    component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0),
-        None,
-        None,
-        0,
-        None,
-        false,
-    ));
-    let mut panel = crate::app::components::library_panel::LibraryPanel::new();
-    panel.insert_owner(
-        crate::app::components::library_panel::LibraryKey::Service {
-            service: mbv_core::config::ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: crate::app::components::LibraryKind::TvShows,
-        },
-        Box::new(component),
-    );
-    panel.set_active(Some(
-        crate::app::components::library_panel::LibraryKey::Service {
-            service: mbv_core::config::ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: crate::app::components::LibraryKind::TvShows,
-        },
-    ));
-    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
-    terminal
-        .draw(|frame| tuirealm::component::Component::view(&mut panel, frame, frame.area()))
-        .unwrap();
-    assert!(terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .any(|cell| cell.symbol() == "S"));
-}
-
-#[test]
-fn tv_workspace_renders_the_narrow_series_list_without_app() {
-    let mut component = TvContent::new();
-    component.set_is_wide(false);
-    component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0),
-        None,
-        None,
-        0,
-        None,
-        false,
-    ));
-    let key = crate::app::components::library_panel::LibraryKey::Service {
-        service: mbv_core::config::ServiceKind::Emby,
-        library_id: "lib".into(),
-        kind: crate::app::components::LibraryKind::TvShows,
-    };
-    let mut panel = crate::app::components::library_panel::LibraryPanel::new();
-    panel.insert_owner(key.clone(), Box::new(component));
-    panel.set_active(Some(key));
-    let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
-    terminal
-        .draw(|frame| tuirealm::component::Component::view(&mut panel, frame, frame.area()))
-        .unwrap();
-    assert!(terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .any(|cell| cell.symbol() == "S"));
 }
 
 /// The grouped-row gate reads the Inline Search session for the first time

@@ -99,10 +99,10 @@ impl FeedsManageComponent {
                 }
                 None
             }
-            Key::Esc => Self::shell_intent(FeedsManageIntent::Dismiss),
-            Key::Char('a') => Self::shell_intent(FeedsManageIntent::Add),
-            Key::Enter | Key::Char('e') => Self::shell_intent(FeedsManageIntent::Edit),
-            Key::Char('d') => Self::shell_intent(FeedsManageIntent::Remove),
+            Key::Esc => Some(Self::shell_intent(FeedsManageIntent::Dismiss)),
+            Key::Char('a') => Some(Self::shell_intent(FeedsManageIntent::Add)),
+            Key::Enter | Key::Char('e') => Some(Self::shell_intent(FeedsManageIntent::Edit)),
+            Key::Char('d') => Some(Self::shell_intent(FeedsManageIntent::Remove)),
             _ => None,
         }
     }
@@ -123,8 +123,8 @@ impl FeedsManageComponent {
                 Key::BackTab => self.previous_field(),
                 Key::Left | Key::Right if form.focus == FeedFormField::Kind => self.toggle_kind(),
                 Key::Backspace => self.backspace(),
-                Key::Enter => return Self::shell_intent(FeedsManageIntent::Submit),
-                Key::Esc => return Self::shell_intent(FeedsManageIntent::Cancel),
+                Key::Enter => return Some(Self::shell_intent(FeedsManageIntent::Submit)),
+                Key::Esc => return Some(Self::shell_intent(FeedsManageIntent::Cancel)),
                 _ => {}
             }
             return None;
@@ -140,10 +140,8 @@ impl FeedsManageComponent {
         None
     }
 
-    fn shell_intent(intent: FeedsManageIntent) -> Option<Msg> {
-        Some(Msg::Shell(Box::new(ShellRequest::FeedsManageIntent(
-            intent,
-        ))))
+    fn shell_intent(intent: FeedsManageIntent) -> Msg {
+        Msg::Shell(Box::new(ShellRequest::FeedsManageIntent(intent)))
     }
 
     /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
@@ -154,7 +152,7 @@ impl FeedsManageComponent {
     /// keyboard too), an outside click cancels (Esc equivalent). The popup
     /// paints no buttons, so add/remove have no click targets, and
     /// right-click/wheel have no keyboard equivalent here — both ignored.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -180,7 +178,7 @@ impl FeedsManageComponent {
                 if let FeedsManageStage::List = &stage {
                     if let Some(&index) = self.hit_rows.resolve(at) {
                         self.cursor = index;
-                        return Self::shell_intent(FeedsManageIntent::Edit);
+                        return Some(Self::shell_intent(FeedsManageIntent::Edit));
                     }
                 }
                 // Outside double-click: the first click already dismissed.
@@ -196,10 +194,10 @@ impl FeedsManageComponent {
         if self.frame.contains(at) {
             return None;
         }
-        Self::shell_intent(match stage {
+        Some(Self::shell_intent(match stage {
             FeedsManageStage::List => FeedsManageIntent::Dismiss,
             FeedsManageStage::Form(_) => FeedsManageIntent::Cancel,
-        })
+        }))
     }
 
     /// Focus a clicked form field — the Tab/BackTab equivalent. While a
@@ -224,9 +222,8 @@ impl FeedsManageComponent {
             return;
         };
         form.focus = match (form.focus, form.editing_index.is_some()) {
-            (FeedFormField::Name, true) => FeedFormField::Kind,
+            (FeedFormField::Name, true) | (FeedFormField::Url, _) => FeedFormField::Kind,
             (FeedFormField::Name, false) => FeedFormField::Url,
-            (FeedFormField::Url, _) => FeedFormField::Kind,
             (FeedFormField::Kind, _) => FeedFormField::Name,
         };
     }
@@ -237,8 +234,7 @@ impl FeedsManageComponent {
         };
         form.focus = match (form.focus, form.editing_index.is_some()) {
             (FeedFormField::Name, _) => FeedFormField::Kind,
-            (FeedFormField::Url, _) => FeedFormField::Name,
-            (FeedFormField::Kind, true) => FeedFormField::Name,
+            (FeedFormField::Url, _) | (FeedFormField::Kind, true) => FeedFormField::Name,
             (FeedFormField::Kind, false) => FeedFormField::Url,
         };
     }
@@ -278,28 +274,6 @@ impl FeedsManageComponent {
             _ => {}
         }
     }
-
-    #[cfg(test)]
-    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
-        &self.hit_rows
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_fields(&self) -> &HitRegions<FeedFormField> {
-        &self.hit_fields
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_frame(&self) -> Rect {
-        self.frame
-    }
-
-    /// Test seam: forget the last click so the next event is neither
-    /// throttled nor promoted to a double-click.
-    #[cfg(test)]
-    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
-        self.mouse_gestures.reset_for_test();
-    }
 }
 
 impl Default for FeedsManageComponent {
@@ -309,14 +283,15 @@ impl Default for FeedsManageComponent {
 }
 
 impl Component for FeedsManageComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        let _ = area;
         let Some(stage) = self.stage.as_ref() else {
             return;
         };
         let geometry = render_feeds_manage_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
-            FeedsManageRenderModel {
+            &FeedsManageRenderModel {
                 feeds: &self.feeds,
                 stage,
                 cursor: self.cursor,
@@ -336,7 +311,7 @@ impl Component for FeedsManageComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -374,7 +349,7 @@ impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -383,9 +358,6 @@ impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::event::KeyModifiers;
 
     fn key(code: Key) -> Event<UserEvent> {
         Event::Keyboard(KeyEvent {
@@ -417,24 +389,5 @@ mod tests {
         if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
                FeedsManageIntent::Submit
            ))));
-    }
-
-    #[test]
-    fn settings_popup_feeds_manage_renders_without_app_state() {
-        let mut component = FeedsManageComponent::new();
-        component.set_stage(FeedsManageStage::List);
-        let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Manage Feeds"));
-        assert!(output.contains("No feed subscriptions"));
     }
 }

@@ -1,4 +1,4 @@
-use super::*;
+use super::{App, LevelFillAction, LevelFillState, LibEvent, PAGE_SIZE};
 
 use super::level_artists::level_artists_from_items;
 
@@ -65,12 +65,7 @@ impl App {
     /// D5): every Emby music library while the configured music levels
     /// start with `"group"` — the same gate the group view itself uses.
     pub(in crate::app) fn music_group_warmup_library_ids(&self) -> Vec<String> {
-        if !self
-            .music_levels
-            .first()
-            .map(|s| s == "group")
-            .unwrap_or(false)
-        {
+        if self.music_levels.first().is_none_or(|s| s != "group") {
             return Vec::new();
         }
         self.libs
@@ -186,8 +181,7 @@ impl App {
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let url = format!(
-                "{}/Items?ParentId={}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={}",
-                server_url, level_id, token
+                "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"
             );
             let items: Vec<serde_json::Value> = crate::app::infra::feed_parse::tls_agent(None)
                 .get(&url)

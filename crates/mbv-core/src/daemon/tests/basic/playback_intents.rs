@@ -120,10 +120,10 @@ fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
 // ── active-file JumpTo confirms via TrackChanged (stay-alive D1) ─────────
 
 /// Active-file mode has no mpv playlist move to observe, so the daemon's
-/// queue tracking depends entirely on the run's TrackChanged response to a
-/// JumpTo. The run side needs mpv and is exercised by design review; this
+/// queue tracking depends entirely on the run's `TrackChanged` response to a
+/// `JumpTo`. The run side needs mpv and is exercised by design review; this
 /// test pins the daemon half of the loop: dispatch a slot jump, mock the
-/// Playback run's TrackChanged response exactly as the active-file JumpTo
+/// Playback run's `TrackChanged` response exactly as the active-file `JumpTo`
 /// handler now emits it (target slot + the jump's request identity), and
 /// assert the observed active slot advances to the target and the in-flight
 /// transition settles — the closed loop Next/Previous resolves from.

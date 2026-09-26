@@ -65,7 +65,7 @@ impl QueueBoundaryComponent {
         )
     }
 
-    fn handle_mouse(&mut self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, event: tuirealm::event::MouseEvent) -> Option<Msg> {
         let at = Position::new(event.column, event.row);
         if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && !self.inside(at) {
             return None;
@@ -114,7 +114,7 @@ impl Component for QueueBoundaryComponent {
         // column with its own surface value and erase the scrollbar glyph
         // the panel just drew.
     }
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
@@ -127,9 +127,9 @@ impl Component for QueueBoundaryComponent {
 }
 
 impl AppComponent<Msg, UserEvent> for QueueBoundaryComponent {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }

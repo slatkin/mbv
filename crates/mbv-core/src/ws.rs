@@ -27,10 +27,12 @@ impl WsSender {
         self.tx.send(OutboundMessage::Text(msg))
     }
 
+    #[must_use]
     pub fn is_connected(&self) -> bool {
         self.connected.load(Ordering::Relaxed)
     }
 
+    #[must_use]
     pub fn flush(&self, timeout: Duration) -> bool {
         let (tx, rx) = mpsc::channel();
         if self.tx.send(OutboundMessage::Flush(tx)).is_err() {
@@ -58,7 +60,7 @@ pub enum WsEvent {
         item_ids: Vec<String>,
         play_now: bool,
         start_position_ticks: i64,
-        /// Index into item_ids of the first item to play; preceding items are
+        /// Index into `item_ids` of the first item to play; preceding items are
         /// already-queued but not current.
         start_index: usize,
     },
@@ -120,7 +122,8 @@ fn parse_play(data: &Value) -> Option<WsEvent> {
     }
     let play_now = data["PlayCommand"].as_str().unwrap_or("PlayNow") == "PlayNow";
     let start_position_ticks = data["StartPositionTicks"].as_i64().unwrap_or(0);
-    let start_index = data["StartIndex"].as_u64().unwrap_or(0) as usize;
+    let start_index =
+        usize::try_from(data["StartIndex"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX);
     Some(WsEvent::Play {
         item_ids,
         play_now,
@@ -192,11 +195,12 @@ fn parse_general_command(data: &Value) -> Option<WsEvent> {
     }
 }
 
+#[must_use]
 pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
     let (out_tx, out_rx) = mpsc::channel::<OutboundMessage>();
     let connected = Arc::new(AtomicBool::new(false));
-    let connected_bg = connected.clone();
-    thread::spawn(move || reconnect_loop(ws_url, event_tx, out_rx, connected_bg));
+    let connected_bg = Arc::clone(&connected);
+    thread::spawn(move || reconnect_loop(&ws_url, &event_tx, &out_rx, &connected_bg));
     WsSender {
         tx: out_tx,
         connected,
@@ -213,22 +217,22 @@ enum ConnectionResult {
 }
 
 fn reconnect_loop(
-    ws_url: String,
-    event_tx: mpsc::Sender<WsEvent>,
-    out_rx: mpsc::Receiver<OutboundMessage>,
-    connected: Arc<AtomicBool>,
+    ws_url: &str,
+    event_tx: &mpsc::Sender<WsEvent>,
+    out_rx: &mpsc::Receiver<OutboundMessage>,
+    connected: &Arc<AtomicBool>,
 ) {
     let mut backoff_secs: u64 = 1;
     loop {
         connected.store(false, Ordering::Relaxed);
         log::info!(target: "ws", "connecting…");
-        match tungstenite::connect(&ws_url) {
+        match tungstenite::connect(ws_url) {
             Ok((mut socket, _)) => {
                 // Successful connection — reset backoff.
                 backoff_secs = 1;
-                prepare_connection(&socket, &out_rx);
+                prepare_connection(&socket, out_rx);
                 connected.store(true, Ordering::Relaxed);
-                let result = run_connection(&mut socket, &out_rx, &event_tx);
+                let result = run_connection(&mut socket, out_rx, event_tx);
                 if result == ConnectionResult::EventReceiverClosed {
                     return;
                 }
@@ -387,8 +391,6 @@ fn read_message(
 mod tests {
     use super::*;
     use rstest::rstest;
-    use std::sync::atomic::AtomicBool;
-    use std::time::Duration;
 
     fn parse_msg(text: &str) -> Option<WsEvent> {
         parse(text)
@@ -435,7 +437,7 @@ mod tests {
             ..
         } = parse_msg(msg).unwrap()
         {
-            assert_eq!(start_position_ticks, 50000000);
+            assert_eq!(start_position_ticks, 50_000_000);
         } else {
             panic!();
         }
@@ -481,14 +483,14 @@ mod tests {
     #[test]
     fn playstate_seek_absolute() {
         let msg = r#"{"MessageType":"Playstate","Data":{"Command":"Seek","SeekPositionTicks":100000000}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::Seek(100000000))));
+        assert!(matches!(parse_msg(msg), Some(WsEvent::Seek(100_000_000))));
     }
 
     #[test]
     fn playstate_rewind() {
         let msg = r#"{"MessageType":"Playstate","Data":{"Command":"Rewind"}}"#;
         if let Some(WsEvent::SeekRelative(s)) = parse_msg(msg) {
-            assert_eq!(s, -10.0);
+            assert!((s + 10.0).abs() < f64::EPSILON);
         } else {
             panic!();
         }
@@ -498,7 +500,7 @@ mod tests {
     fn playstate_fast_forward() {
         let msg = r#"{"MessageType":"Playstate","Data":{"Command":"FastForward"}}"#;
         if let Some(WsEvent::SeekRelative(s)) = parse_msg(msg) {
-            assert_eq!(s, 10.0);
+            assert!((s - 10.0).abs() < f64::EPSILON);
         } else {
             panic!();
         }
@@ -580,7 +582,7 @@ mod tests {
 
         drop_stale_outbound(&rx);
 
-        assert!(done_rx.recv_timeout(Duration::from_millis(100)).is_ok());
-        assert!(rx.try_recv().is_err());
+        done_rx.recv_timeout(Duration::from_millis(100)).unwrap();
+        rx.try_recv().unwrap_err();
     }
 }

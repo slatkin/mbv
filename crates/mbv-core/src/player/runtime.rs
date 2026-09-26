@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    fs, mpv_err_str, Format, IntroState, Mpv, OsStr, Path, PathBuf, PlayerEvent, PlayerStatus,
+    SessionReporter, TICKS_PER_SECOND,
+};
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 pub(super) struct ProgressGuard {
     pub(super) stop_tx: mpsc::Sender<()>,
@@ -21,17 +27,21 @@ impl ProgressGuard {
             match result {
                 Ok(()) => {
                     log::info!(target: "player", "progress_join: joined in {}ms (budget={}ms)",
-                    elapsed.as_millis(), budget.as_millis())
+                    elapsed.as_millis(), budget.as_millis());
                 }
                 Err(e) => {
                     log::warn!(target: "player", "progress_join: {e} after {}ms (budget={}ms)",
-                    elapsed.as_millis(), budget.as_millis())
+                    elapsed.as_millis(), budget.as_millis());
                 }
             }
         }
     }
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mpv run options are independently configurable properties (design analysis, issue #804)"
+)]
 pub(super) struct MpvRunConfig {
     pub(super) headless: bool,
     pub(super) use_mpv_config: bool,
@@ -183,6 +193,7 @@ fn ensure_pipe(path: &str) -> Result<(), String> {
         Ok(_) => Err(format!("audio pipe path '{path}' exists and is not a FIFO")),
         Err(_) => {
             let cpath = std::ffi::CString::new(path).map_err(|e| e.to_string())?;
+            // SAFETY: `cpath` is NUL-terminated and remains alive for the call.
             let rc = unsafe { libc::mkfifo(cpath.as_ptr(), 0o644) };
             if rc != 0 {
                 Err(format!(
@@ -367,9 +378,9 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
     let ipc_existed = Path::new(&ipc_path).exists();
     if ipc_existed {
         let _ = std::fs::remove_file(&ipc_path);
-        log::info!(target: "player", "init: removed stale ipc socket {}", ipc_path);
+        log::info!(target: "player", "init: removed stale ipc socket {ipc_path}");
     }
-    log::info!(target: "player", "init: ipc={} (existed={})", ipc_path, ipc_existed);
+    log::info!(target: "player", "init: ipc={ipc_path} (existed={ipc_existed})");
 
     let no_scripts = config.no_scripts;
     let use_mpv_config = config.use_mpv_config;
@@ -431,14 +442,15 @@ pub(super) fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
         }
     };
 
+    // SAFETY: mpv.ctx is a live context owned by `mpv`, and `log_level` is a valid C string.
     unsafe {
         let log_level = if cfg!(debug_assertions) {
             c"warn"
         } else {
             c"error"
         };
-        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), log_level.as_ptr() as _);
-    }
+        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), log_level.as_ptr().cast())
+    };
 
     configure_caches(&mpv, config);
     let startup_pause_armed = configure_audio_output(&mpv, config)?;
@@ -450,8 +462,16 @@ pub(super) fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_
     let mut st = status.lock().unwrap();
     let raw_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
     st.volume_max = raw_max * raw_max / 100;
-    let v = (initial_volume as i64).clamp(0, st.volume_max);
-    let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+    let v = i64::from(initial_volume).clamp(0, st.volume_max);
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "player volume (i64) → f64 for the mpv cube-root volume curve; the curve has no integer path (approved, issue #804)"
+    )]
+    let raw = super::saturating_i64_from_f64((10.0 * (v as f64).sqrt()).round());
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "computed volume (i64) → f64 for the mpv volume property; mpv stores volume as a float (approved, issue #804)"
+    )]
     let _ = mpv.set_property("volume", raw as f64);
     st.volume = v;
 }
@@ -478,7 +498,7 @@ pub(super) fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuar
     let interval = Duration::from_secs(reporter.client.config.progress_interval_secs);
     let handle = thread::spawn(move || loop {
         match stop_rx.recv_timeout(interval) {
-            Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 reporter.report_progress("TimeUpdate");
                 reporter.report_ping();
@@ -506,6 +526,10 @@ pub(super) fn handle_intro(
     if intro_state.is_pending() && ticks >= start {
         intro_state.shown();
         if ticks < end {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "intro end ticks → mpv time-pos seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
             let end_secs = end as f64 / TICKS_PER_SECOND as f64;
             if always_skip {
                 let _ = mpv.set_property("time-pos", end_secs);

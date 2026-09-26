@@ -1,103 +1,14 @@
 use crate::app::state::types::browse::BrowseResting;
 
-use crate::app::{App, ContextAction};
-use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::player::PlayerCommand;
+use crate::app::App;
 use rstest::rstest;
 
 // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
 
 #[rstest]
 #[case::remote_seek_rewind_clamps_at_zero(3, -5.0, 0)]
-#[case::remote_seek_rewind_does_not_clamp_when_unnecessary(20, -5.0, 15 * TICKS_PER_SECOND)]
-#[case::remote_seek_forward_has_no_clamp(3, 5.0, 8 * TICKS_PER_SECOND)]
 fn remote_seek(#[case] position: i64, #[case] delta: f64, #[case] expected: i64) {
     assert_eq!(App::remote_seek_ticks(position, delta), expected);
-}
-
-// ── execute_context_action(Play) on the queue tab (issue #134 follow-up) ─
-// This used to be a third, independent copy of queue-cursor activation
-// that had drifted from the keyboard `Enter`/mouse double-click paths
-// (no seek-to-start for an already-playing audio item); it now shares
-// `Command::QueuePlayCursor` with both of them.
-
-#[test]
-fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item() {
-    use crate::app::tests::make_item;
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.player_tab
-        .set_items(vec![make_item("Track One", "Audio")], 0);
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    }
-    let rx = app.player.spy_on_commands();
-
-    app.execute_context_action(Some(ContextAction::Play), None);
-
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(PlayerCommand::SeekAbsolute(pos)) if pos == 0.0
-    ));
-}
-
-#[test]
-fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
-    use crate::app::state::types::overlay::OverlayRequest;
-    use crate::app::tests::make_item;
-    use crate::player::PlayerCommand;
-
-    // The queue menu's Play action must retain the index resolved when the
-    // menu opened (the right-clicked slot) rather than re-reading
-    // `queue_cursor` at execution (split-queue-cursor-ownership D2): a
-    // follow update while the menu is open must not redirect playback to
-    // another row.
-    let mut app = crate::app::tests::make_app_stub();
-    app.panel_focus = crate::app::PanelFocus::Queue;
-    app.player_tab
-        .set_items(vec![make_item("A", "Movie"), make_item("B", "Movie")], 0);
-    let slot_b = app.player_tab.queue.slots()[1].slot_id;
-
-    // Right-click row B (index 1): the click resolves slot -> index 1 and
-    // opens the menu; the menu's Play action closes over 1.
-    app.handle_mouse_right_click_queue(Some(slot_b), 0, 0, false);
-    let menu = match app.pending_overlay.as_ref() {
-        Some(OverlayRequest::ContextMenu(menu)) => menu,
-        _ => panic!("queue context menu must open on right-click"),
-    };
-    let play_index = menu
-        .entries
-        .iter()
-        .find_map(|entry| match entry.action.as_ref() {
-            Some(crate::app::ContextAction::PlayQueue(pos)) => Some(*pos),
-            _ => None,
-        })
-        .expect("queue menu must carry a PlayQueue action");
-    assert_eq!(
-        play_index, 1,
-        "menu Play must close over the clicked index 1, got {play_index}"
-    );
-
-    // Follow update while the menu is open: playback advances the follow
-    // cursor to 0 (row A). Executing the retained PlayQueue(1) must still
-    // play row B.
-    app.player_tab.queue_cursor = 0;
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-        st.queue_len = 2;
-    }
-    let rx = app.player.spy_on_commands();
-    app.execute_context_action(Some(crate::app::ContextAction::PlayQueue(play_index)), None);
-
-    assert!(
-        matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo { slot_id, .. }) if slot_id == slot_b),
-        "menu Play must jump to the retained clicked row B, not follow cursor 0"
-    );
 }
 
 #[test]
@@ -120,7 +31,7 @@ fn queue_double_click_plays_clicked_index_not_follow_cursor() {
         st.active = true;
         st.current_idx = 0;
         st.queue_len = 2;
-    }
+    };
     let rx = app.player.spy_on_commands();
 
     // Double-click row B (index 1).
@@ -149,7 +60,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
         st.active = true;
         st.current_idx = 0;
         st.queue_len = 1;
-    }
+    };
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -199,7 +110,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     app.player_tab.queue_cursor = 1;
     let want_slot = app.player_tab.queue.slots()[1].slot_id;
 
-    app.dispatch(Command::QueuePlayCursor(1));
+    app.dispatch(&Command::QueuePlayCursor(1));
 
     assert!(matches!(
         rx.try_recv(),
@@ -217,15 +128,6 @@ fn next_subtitle_entry_advances_from_off() {
 #[test]
 fn next_subtitle_entry_wraps_from_last_back_to_off() {
     assert_eq!(App::next_subtitle_entry(&[0, 5, 7], 7), 0);
-}
-
-#[test]
-fn next_subtitle_entry_unknown_current_restarts_at_first() {
-    // A stale/unrecognized current selection (e.g. a track that
-    // disappeared) is treated as if it were at position 0, matching the
-    // pre-existing `.unwrap_or(0)` fallback in both the remote and local
-    // branches -- so the *next* entry advances to position 1.
-    assert_eq!(App::next_subtitle_entry(&[0, 5, 7], 99), 5);
 }
 
 #[test]

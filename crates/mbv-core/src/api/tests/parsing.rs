@@ -38,7 +38,7 @@ fn make_item(name: &str, item_type: &str) -> EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: EmbyImageTags::default(),
     }
 }
 
@@ -109,7 +109,7 @@ fn parse_item_metadata_lists() {
         item.people[0],
         EmbyPerson {
             name: "Director".into(),
-            role: "".into(),
+            role: String::new(),
             kind: "Director".into()
         }
     );
@@ -567,8 +567,7 @@ fn parse_audio_info_lang_table_matches_player_lang_code_to_name() {
         let result = parse_audio_info(streams.as_array().unwrap());
         assert_eq!(
             result, *expected,
-            "parse_audio_info: code {:?} → expected {:?}, got {:?}",
-            code, expected, result
+            "parse_audio_info: code {code:?} → expected {expected:?}, got {result:?}"
         );
     }
 }

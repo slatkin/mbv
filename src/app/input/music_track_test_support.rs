@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::state::types::browse::BrowseResting;
 use crate::app::tests::{make_app_stub, make_item};
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
+use crate::app::{BrowseLevel, LibraryTab};
 
 /// Music library sitting on the album-folder-listing nav
 /// level (`is_viewing_album_folders` holds): a grouped `["group",

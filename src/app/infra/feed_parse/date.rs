@@ -28,5 +28,5 @@ pub(in crate::app) fn parse_pub_date_secs(text: &str) -> Option<u64> {
     if dt.year() < 1970 {
         return None;
     }
-    Some(dt.unix_timestamp() as u64)
+    u64::try_from(dt.unix_timestamp()).ok()
 }

@@ -345,8 +345,8 @@ impl App {
         consume: bool,
     ) -> (bool, bool) {
         let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
-        let is_video = item.is_some_and(|i| i.is_video());
-        let is_audio = item.is_some_and(|i| i.is_audio());
+        let is_video = item.is_some_and(mbv_core::playback::QueueItem::is_video);
+        let is_audio = item.is_some_and(mbv_core::playback::QueueItem::is_audio);
         let (consume_videos, consume_audio) = {
             let config = self.config.lock().unwrap();
             let cfg = &*config;

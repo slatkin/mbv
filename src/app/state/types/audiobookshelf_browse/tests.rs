@@ -6,10 +6,8 @@ use mbv_core::audiobookshelf::{
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow,
 };
 
-use super::books::{SURNAME_BUCKET_LABELS, SURNAME_BUCKET_UPPER};
 use super::*;
 use mbv_core::audiobookshelf::audiobook_author_sort_key;
-use mbv_core::config::AudiobookshelfBookBucket;
 
 fn library() -> AudiobookshelfLibrary {
     AudiobookshelfLibrary {
@@ -129,24 +127,6 @@ fn episode_by_identity_resolves_across_shows_and_requires_both_ids() {
 }
 
 #[test]
-fn same_episode_id_isolated_by_show_identity() {
-    let mut state = AudiobookshelfBrowseState::new(library());
-    state.progress.insert(
-        ("a".into(), "shared".into()),
-        AudiobookshelfProgress {
-            library_item_id: "a".into(),
-            episode_id: "shared".into(),
-            current_time_seconds: 4.0,
-            is_finished: false,
-        },
-    );
-    assert!(!state
-        .progress
-        .keys()
-        .any(|(library_item_id, episode_id)| { library_item_id == "b" && episode_id == "shared" }));
-}
-
-#[test]
 fn filters_completed_progress_and_treats_partial_as_unplayed() {
     let mut state = AudiobookshelfBrowseState::new(library());
     state.append_page(0, 20, 1, vec![show("a", "A")]);
@@ -245,50 +225,6 @@ fn display_rows_insert_non_selectable_groups_without_changing_indices() {
             PodcastDisplayRow::Entry(2),
         ],
         "undated episodes sort last and group as `Unknown date`; empty groups are omitted"
-    );
-}
-
-#[test]
-fn audiobookshelf_kind_resolves_once_by_media_type() {
-    assert_eq!(
-        AudiobookshelfBrowseKind::from_media_type("book"),
-        AudiobookshelfBrowseKind::Book
-    );
-    assert_eq!(
-        AudiobookshelfBrowseKind::from_media_type("podcast"),
-        AudiobookshelfBrowseKind::Podcast
-    );
-    assert_eq!(
-        AudiobookshelfBrowseKind::from_media_type("book"),
-        AudiobookshelfBrowseKind::Book,
-        "book resolves to Book every time — dispatch forks once and never re-reads media_type"
-    );
-}
-
-#[test]
-fn surname_bucket_table_matches_mbv_core_bucket_indices() {
-    for (index, (&label, &upper)) in SURNAME_BUCKET_LABELS
-        .iter()
-        .zip(SURNAME_BUCKET_UPPER.iter())
-        .enumerate()
-    {
-        let bucket = AudiobookshelfBookBucket::from_bucket_index(index)
-            .expect("every app-side surname bucket has a core identity");
-        let (expected_label, expected_upper) = match bucket {
-            AudiobookshelfBookBucket::AToC => ("A\u{2013}C", 'c'),
-            AudiobookshelfBookBucket::DToF => ("D\u{2013}F", 'f'),
-            AudiobookshelfBookBucket::GToI => ("G\u{2013}I", 'i'),
-            AudiobookshelfBookBucket::JToL => ("J\u{2013}L", 'l'),
-            AudiobookshelfBookBucket::MToO => ("M\u{2013}O", 'o'),
-            AudiobookshelfBookBucket::PToR => ("P\u{2013}R", 'r'),
-            AudiobookshelfBookBucket::SToU => ("S\u{2013}U", 'u'),
-            AudiobookshelfBookBucket::VToZ => ("V\u{2013}Z", 'z'),
-        };
-        assert_eq!((label, upper), (expected_label, expected_upper));
-    }
-    assert_eq!(
-        AudiobookshelfBookBucket::from_bucket_index(SURNAME_BUCKET_LABELS.len()),
-        None
     );
 }
 

@@ -28,10 +28,4 @@ impl MusicTreeTarget {
             Self::Artist(_) | Self::Track { .. } => None,
         }
     }
-
-    /// Whether this target is an artist root.
-    #[cfg(test)]
-    pub(in crate::app) fn is_artist(&self) -> bool {
-        matches!(self, Self::Artist(_))
-    }
 }

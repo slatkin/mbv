@@ -12,7 +12,10 @@ use crossterm::event::KeyCode;
 #[test]
 fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
     let snapshot = RouterSnapshot {
-        blocking_overlay_open: true,
+        overlays: crate::app::input::RouterOverlayState {
+            focus: crate::app::input::OverlayFocus::Blocking,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     };
     let leaf = Some(Msg::Shell(Box::new(ShellRequest::ConfirmIntent(
@@ -33,7 +36,10 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
 #[test]
 fn focused_blocking_overlay_keeps_its_own_global_chord() {
     let snapshot = RouterSnapshot {
-        blocking_overlay_open: true,
+        overlays: crate::app::input::RouterOverlayState {
+            focus: crate::app::input::OverlayFocus::Blocking,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     };
     let leaf = Some(Msg::Shell(Box::new(ShellRequest::ConfirmIntent(
@@ -58,7 +64,10 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
 #[test]
 fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
     let snapshot = RouterSnapshot {
-        blocking_overlay_open: true,
+        overlays: crate::app::input::RouterOverlayState {
+            focus: crate::app::input::OverlayFocus::Blocking,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     };
     let focused = ComponentId::Modal(ModalId::Confirm);
@@ -145,7 +154,10 @@ fn rebound_global_respects_blocking_overlays() {
         crossterm::event::KeyModifiers::CONTROL,
     );
     let snapshot = RouterSnapshot {
-        blocking_overlay_open: true,
+        overlays: crate::app::input::RouterOverlayState {
+            focus: crate::app::input::OverlayFocus::Blocking,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     };
 

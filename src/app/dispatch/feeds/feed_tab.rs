@@ -16,11 +16,8 @@ impl App {
     /// The 1-based tab position of the Feeds tab, or `None` when no
     /// subscriptions exist.
     pub(in crate::app) fn feeds_tab_pos(&self) -> Option<usize> {
-        if self.has_feeds_subscriptions() {
-            Some(1 + self.libs.len() + self.audiobookshelf_libraries.len())
-        } else {
-            None
-        }
+        self.has_feeds_subscriptions()
+            .then(|| 1 + self.libs.len() + self.audiobookshelf_libraries.len())
     }
 
     /// Copy configured subscriptions from the client config into the
@@ -34,13 +31,18 @@ impl App {
         self.feed_tab.entries.resize_with(n, Vec::new);
     }
 
+    fn replace_feed_entries(&mut self, index: usize, entries: Vec<FeedEntry>) {
+        if let Some(slot) = self.feed_tab.entries.get_mut(index) {
+            *slot = entries;
+        }
+    }
+
     /// Drain completed background fetch results from the channel.
     pub(in crate::app) fn drain_feed_tab_results(&mut self) -> bool {
         let mut had_events = false;
         // Take the receiver once; we'll put it back after draining.
-        let rx = match self.feed_tab.refresh_rx.take() {
-            Some(rx) => rx,
-            None => return false,
+        let Some(rx) = self.feed_tab.refresh_rx.take() else {
+            return false;
         };
         // Drain all available results.
         while let Ok(result) = rx.try_recv() {
@@ -56,9 +58,7 @@ impl App {
                 match result.entries {
                     Ok(mut entries) => {
                         self.hydrate_feed_entries_for_subscription(&feed_id, &mut entries);
-                        if let Some(slot) = self.feed_tab.entries.get_mut(idx) {
-                            *slot = entries;
-                        }
+                        self.replace_feed_entries(idx, entries);
                     }
                     Err(e) => {
                         self.flash(
@@ -66,8 +66,7 @@ impl App {
                                 self.feed_tab
                                     .subscriptions
                                     .get(idx)
-                                    .map(|s| s.name.as_str())
-                                    .unwrap_or("?")
+                                    .map_or("?", |s| s.name.as_str())
                             }),
                             ToastSeverity::Error,
                         );
@@ -296,9 +295,7 @@ impl App {
             ),
             Err(error) => log::warn!(
                 target: "feed_state",
-                "feed state write failed guid={} feed_id={}: {error}",
-                entry_guid,
-                feed_id,
+                "feed state write failed guid={entry_guid} feed_id={feed_id}: {error}",
             ),
         }
     }
@@ -333,8 +330,7 @@ impl App {
             queue
                 .queue
                 .slot(slot_id)
-                .map(|s| s.item.runtime_ticks())
-                .unwrap_or(0)
+                .map_or(0, |s| s.item.runtime_ticks())
         };
         let (store_position, store_played) = if completed && runtime > 0 {
             (0, true)

@@ -1,8 +1,11 @@
 //! Service- and socket-originated daemon events: Emby websocket messages,
 //! enriched queue items, and acknowledged Audiobookshelf progress.
 
-use super::super::*;
-use super::{DaemonLoop, EventOutcome};
+use super::super::{
+    apply_audiobookshelf_book_progress, apply_audiobookshelf_progress, apply_queue_enriched,
+    handle_ws, DaemonLoop,
+};
+use super::EventOutcome;
 use crate::api::EmbyItem;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate};
@@ -58,7 +61,7 @@ impl DaemonLoop {
     /// progress for the running service generation.
     pub(super) fn handle_audiobookshelf_progress(
         &mut self,
-        update: AudiobookshelfProgressUpdate,
+        update: &AudiobookshelfProgressUpdate,
     ) -> EventOutcome {
         apply_audiobookshelf_progress(
             update,
@@ -75,7 +78,7 @@ impl DaemonLoop {
     /// `AudiobookshelfProgress`, keyed by `library_item_id`.
     pub(super) fn handle_audiobookshelf_book_progress(
         &mut self,
-        update: AudiobookshelfBookProgressUpdate,
+        update: &AudiobookshelfBookProgressUpdate,
     ) -> EventOutcome {
         apply_audiobookshelf_book_progress(
             update,

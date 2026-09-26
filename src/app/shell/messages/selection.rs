@@ -11,12 +11,14 @@ impl super::super::Model {
                         .as_any()
                         .downcast_ref::<crate::app::components::QueueComponent>()
                 })
-                .map(|queue| queue.selection_summary())
+                .map(crate::app::components::queue::QueueComponent::selection_summary)
         } else {
             self.application
                 .get_component_mut(&crate::app::components::ComponentId::Library)
                 .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-                .and_then(|panel| panel.focused_summary())
+                .and_then(
+                    crate::app::components::library_panel::panel::LibraryPanel::focused_summary,
+                )
         };
         self.visual_selection = summary
             .filter(|summary| summary.count > 0)

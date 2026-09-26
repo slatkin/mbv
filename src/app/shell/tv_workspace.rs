@@ -36,7 +36,7 @@ impl Model {
                     if let Some(season_id) = season_id {
                         self.app.fetch_series_season_episodes(series_id, season_id);
                     } else {
-                        self.app.fetch_series_detail(series_id);
+                        self.app.fetch_series_detail(&series_id);
                     }
                     self.push_tv_workspace_content();
                 }
@@ -65,11 +65,12 @@ impl Model {
             | ShellRequest::TvCycleLetterPill { .. } => {
                 self.handle_tv_navigation_request(lib_idx, request);
             }
-            ShellRequest::TvEpisodeMove { .. } => {}
             ShellRequest::TvSeasonMove { .. } => {
                 // The owner moves its season cursor first; use that
                 // authoritative selection to lazily fetch uncached episodes.
-                let selected_season = self.tv_owner().and_then(|owner| owner.selected_season());
+                let selected_season = self
+                    .tv_owner()
+                    .and_then(super::super::components::tv_content::TvContent::selected_season);
                 if let Some((series_id, season_id)) = selected_season {
                     self.app.fetch_series_season_episodes(series_id, season_id);
                     self.push_tv_workspace_content();
@@ -78,7 +79,8 @@ impl Model {
             // unreachable: shell/messages.rs routes only the Tv* group
             // (TreeExpand/MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
             // CycleLetterPill/EpisodeMove/SeasonMove) into handle_tv_request;
-            // every one has an arm above.
+            // every one has an arm above, and TvEpisodeMove needs no shell
+            // effect here (the owner already moved its rows).
             _ => {}
         }
     }
@@ -304,7 +306,7 @@ impl Model {
     /// push.
     fn update_tv_owner<R>(&mut self, f: impl FnOnce(&mut TvContent) -> R) -> Option<R> {
         let key = self.tv_owner_key()?;
-        self.update_library_owner(key, || Box::new(TvContent::new()), f)
+        self.update_library_owner(&key, || Box::new(TvContent::new()), f)
     }
 
     /// Test-only: the active TV owner's key, for shell tests' owner-map
@@ -312,18 +314,6 @@ impl Model {
     #[cfg(test)]
     pub(in crate::app) fn test_tv_owner_key(&self) -> LibraryKey {
         self.tv_owner_key().expect("TV library active")
-    }
-
-    /// Test-only: the owner key for library `index` whether or not it is the
-    /// active tab (the Movies-tab assertions check the absence of a TV owner
-    /// for a non-TV library).
-    #[cfg(test)]
-    pub(in crate::app) fn test_tv_owner_key_at(&self, index: usize) -> LibraryKey {
-        LibraryKey::Service {
-            service: ServiceKind::Emby,
-            library_id: self.app.libs[index].library.id.clone(),
-            kind: LibraryKind::TvShows,
-        }
     }
 
     /// Test-only: the mounted panel's last painted role rects, for the
@@ -380,8 +370,8 @@ impl Model {
                 .expect("LibraryPanel");
             terminal
                 .draw(|frame| tuirealm::component::Component::view(panel, frame, area))
-                .expect("paint library panel");
-        }
+                .expect("paint library panel")
+        };
         self.application
             .get_component_mut(&ComponentId::Library)
             .expect("library panel mounted")
@@ -475,7 +465,7 @@ impl Model {
         if let Some(item) = selected_series.as_ref() {
             // Detail loading is an App-owned effect; schedule it at the shell
             // hand-off rather than from the render context or painter.
-            self.app.fetch_series_detail(item.id.clone());
+            self.app.fetch_series_detail(&item.id);
         }
         let series_detail = selected_series
             .as_ref()

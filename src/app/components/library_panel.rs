@@ -30,8 +30,6 @@ pub(in crate::app) use content::{
     ListSlot, PanelHeroImagePaint, SelectorRow, Workspace,
 };
 pub(in crate::app) use hero::{hero_content_emby, HeroContentData};
-#[cfg(test)]
-pub(in crate::app) use narrow::render_narrow_skeleton;
 pub(in crate::app) use overview_box::sanitize_url;
 pub(in crate::app) use owner::{LibraryContentOwner, LibrarySlotEvent};
 pub use owner::{LibraryKey, LibraryKind};

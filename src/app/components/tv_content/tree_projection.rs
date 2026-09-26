@@ -1,4 +1,12 @@
-use super::*;
+use super::super::list::tree_browser::{TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
+use super::super::media_list::MediaSemanticState;
+use super::super::msg::{Msg, ShellRequest};
+use super::super::tv_tree_target::TvTreeTarget;
+use super::episode_rows::upcoming_episode_target;
+use super::TvContent;
+use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
+use crate::app::ui_util::natural_sort_key;
+use mbv_core::api::EmbyItem;
 
 impl TvContent {
     /// Project the settled show-mode catalog into the shared tree vocabulary.
@@ -92,6 +100,48 @@ impl TvContent {
             .or(self.context.series_detail.as_ref())
     }
 
+    fn append_episode_entries(
+        entries: &mut Vec<TreeEntry<TvTreeTarget>>,
+        episodes: &[EmbyItem],
+        show_id: &str,
+        season: &EmbyItem,
+        season_occurrence: usize,
+        season_target: &TvTreeTarget,
+    ) {
+        let mut episode_occurrences = std::collections::HashMap::new();
+        for (index, episode) in episodes.iter().enumerate() {
+            let episode_id = if episode.id.is_empty() {
+                upcoming_episode_target(episode)
+            } else {
+                episode.id.clone()
+            };
+            let episode_occurrence = episode_occurrences
+                .entry(episode_id.clone())
+                .or_insert(0usize);
+            let number = if episode.index_number > 0 {
+                episode.index_number
+            } else {
+                i64::try_from(index).expect("episode enumerate index fits i64") + 1
+            };
+            let episode_target = TvTreeTarget::Episode {
+                show: show_id.to_owned(),
+                season: season.id.clone(),
+                season_occurrence,
+                episode: episode_id,
+                occurrence: *episode_occurrence,
+            };
+            *episode_occurrence += 1;
+            entries.push(TreeEntry::Node(TreeNode::new(
+                episode_target,
+                Some(season_target.clone()),
+                format!("{number}. {}", episode.name),
+                episode.name.clone(),
+                MediaSemanticState::from_emby(episode),
+                TreeMarkPolicy::Direct,
+            )));
+        }
+    }
+
     /// Project the settled show-mode catalog into the shared tree vocabulary.
     /// Loaded details for every listed show project per show, so an expanded
     /// show keeps its children while another show is selected. Contexts built
@@ -113,9 +163,7 @@ impl TvContent {
             if grouped {
                 let bucket = letter_bucket(show, bucket_total);
                 if previous_bucket.as_deref() != Some(bucket.as_str()) {
-                    if previous_bucket.is_some() {
-                        entries.push(TreeEntry::Spacer);
-                    }
+                    entries.extend(previous_bucket.is_some().then_some(TreeEntry::Spacer));
                     entries.push(TreeEntry::Heading(bucket.clone()));
                     previous_bucket = Some(bucket);
                 }
@@ -165,38 +213,14 @@ impl TvContent {
                     .with_expandable(episodes.is_none_or(|episodes| !episodes.is_empty())),
                 ));
                 if let Some(episodes) = episodes {
-                    let mut episode_occurrences = std::collections::HashMap::new();
-                    for (index, episode) in episodes.iter().enumerate() {
-                        let episode_id = if episode.id.is_empty() {
-                            upcoming_episode_target(episode)
-                        } else {
-                            episode.id.clone()
-                        };
-                        let episode_occurrence = episode_occurrences
-                            .entry(episode_id.clone())
-                            .or_insert(0usize);
-                        let number = if episode.index_number > 0 {
-                            episode.index_number
-                        } else {
-                            index as i64 + 1
-                        };
-                        let episode_target = TvTreeTarget::Episode {
-                            show: show_id.clone(),
-                            season: season.id.clone(),
-                            season_occurrence,
-                            episode: episode_id,
-                            occurrence: *episode_occurrence,
-                        };
-                        *episode_occurrence += 1;
-                        entries.push(TreeEntry::Node(TreeNode::new(
-                            episode_target,
-                            Some(season_target.clone()),
-                            format!("{number}. {}", episode.name),
-                            episode.name.clone(),
-                            MediaSemanticState::from_emby(episode),
-                            TreeMarkPolicy::Direct,
-                        )));
-                    }
+                    Self::append_episode_entries(
+                        &mut entries,
+                        episodes,
+                        &show_id,
+                        season,
+                        season_occurrence,
+                        &season_target,
+                    );
                 }
             }
         }

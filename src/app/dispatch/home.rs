@@ -53,7 +53,7 @@ impl App {
             }
         } else {
             match item {
-                QueueItem::Emby(item) => self.do_enqueue_folder(*item),
+                QueueItem::Emby(item) => self.do_enqueue_folder(&item),
                 other => {
                     self.submit_queue_item(other, false);
                 }

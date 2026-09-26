@@ -54,7 +54,7 @@ pub struct RemotePlayer {
 pub(crate) mod connect;
 
 pub(crate) use crate::stream::SocketStream;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 pub use connect::connect_stub_daemon_pair;
 pub use connect::signal_local_daemon_service_setup;
 pub use connect::DaemonEndpoint;
@@ -66,6 +66,7 @@ impl RemotePlayer {
         connect::connect_endpoint(endpoint)
     }
 
+    #[must_use]
     pub fn is_disconnected(&self) -> bool {
         self.disconnected.load(Ordering::SeqCst)
     }
@@ -73,6 +74,7 @@ impl RemotePlayer {
     /// Whether the connection closed after the daemon announced a deliberate
     /// shutdown, as opposed to closing with no warning. Only meaningful once
     /// `is_disconnected()` is true.
+    #[must_use]
     pub fn is_shutdown_announced(&self) -> bool {
         self.shutdown_announced.load(Ordering::SeqCst)
     }
@@ -85,10 +87,12 @@ impl RemotePlayer {
     /// with the disconnect (an "expected" disconnect, e.g. an Emby Remote
     /// takeover, never sends a `Stopped` event -- see the reader thread in
     /// `connect_endpoint`).
+    #[must_use]
     pub fn disconnected_flag(&self) -> Arc<AtomicBool> {
-        self.disconnected.clone()
+        Arc::clone(&self.disconnected)
     }
 
+    #[must_use]
     pub fn send_ctrl_cmd(&self, cmd: CtrlCmd) -> bool {
         !self.is_disconnected() && self.cmd_tx.send(cmd).is_ok()
     }
@@ -99,6 +103,7 @@ impl RemotePlayer {
     /// bounded timeout. Returns `Accepted` only when the daemon has durably
     /// persisted its queue and acknowledged the request; enqueue success
     /// alone is never returned as `Accepted`.
+    #[must_use]
     pub fn request_shutdown(&self, timeout: Duration) -> ShutdownResponse {
         if !self.supports_lifecycle_shutdown() {
             return ShutdownResponse::Unsupported;
@@ -117,7 +122,7 @@ impl RemotePlayer {
                 };
             }
             *guard = Some(response_tx);
-        }
+        };
 
         // Send the request.
         if self.cmd_tx.send(CtrlCmd::RequestShutdown).is_err() {
@@ -147,6 +152,7 @@ impl RemotePlayer {
     /// Send a guarded playback intent through its dedicated protocol
     /// envelope. There is deliberately no conversion to `PlayerCmd` here:
     /// callers that need lifecycle correlation must use this boundary.
+    #[must_use]
     pub fn send_playback_intent(&self, intent: PlaybackIntent) -> bool {
         let request_id = intent.request_id;
         self.pending_playback
@@ -161,6 +167,7 @@ impl RemotePlayer {
         }
     }
 
+    #[must_use]
     pub fn new_playback_intent(&self, action: crate::ctrl::PlaybackIntentAction) -> PlaybackIntent {
         let id = self.next_playback_id.fetch_add(1, Ordering::Relaxed);
         PlaybackIntent {
@@ -170,6 +177,7 @@ impl RemotePlayer {
         }
     }
 
+    #[must_use]
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         let wire_cmd = match cmd {
             // Queue mutation has no legacy wire form; it crosses ctrl
@@ -199,6 +207,7 @@ impl RemotePlayer {
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
     }
 
+    #[must_use]
     pub fn adopt_queue(
         &self,
         items: Vec<QueueItem>,
@@ -211,12 +220,12 @@ impl RemotePlayer {
             status.current_idx = cursor;
             status.queue_len = items.len();
             status.active = false;
-        }
+        };
         let emby_items: Vec<EmbyItem> = items
             .iter()
             .filter_map(|item| item.as_emby().cloned())
             .collect();
-        *self.items.lock().unwrap() = emby_items.clone();
+        self.items.lock().unwrap().clone_from(&emby_items);
         *self.queue_source.lock().unwrap() = source.clone();
         self.cmd_tx
             .send(CtrlCmd::UnifiedAdoptQueue {
@@ -227,6 +236,7 @@ impl RemotePlayer {
             .is_ok()
     }
 
+    #[must_use]
     pub fn play(
         &self,
         item: &EmbyItem,
@@ -250,6 +260,7 @@ impl RemotePlayer {
         sent
     }
 
+    #[must_use]
     pub fn play_queue(
         &self,
         items: Vec<EmbyItem>,
@@ -301,18 +312,22 @@ impl RemotePlayer {
         }
     }
 
+    #[must_use]
     pub fn supports_queue_append(&self) -> bool {
         self.ctrl_compatibility.supports_queue_append
     }
 
+    #[must_use]
     pub fn supports_lifecycle_shutdown(&self) -> bool {
         self.ctrl_compatibility.supports_lifecycle_shutdown
     }
 
+    #[must_use]
     pub fn supports_audio_only(&self) -> bool {
         self.ctrl_compatibility.supports_audio_only
     }
 
+    #[must_use]
     pub fn supports_owner_queue_load(&self) -> bool {
         self.ctrl_compatibility.supports_owner_queue_load
     }
@@ -354,10 +369,12 @@ impl RemotePlayer {
         Ok(())
     }
 
+    #[must_use]
     pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
     }
 
+    #[must_use]
     pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
         if items.is_empty() {
             return true;
@@ -366,12 +383,14 @@ impl RemotePlayer {
     }
 
     /// Remove a slot by its stable identity.
+    #[must_use]
     pub fn queue_remove_slot(&self, slot_id: u64) -> bool {
         self.send_ctrl_cmd(CtrlCmd::UnifiedQueueRemoveSlot { slot_id })
     }
 
     /// Remove several slots in one owner edit, so the owner publishes one
     /// queue snapshot instead of one per slot.
+    #[must_use]
     pub fn queue_remove_slots(&self, slot_ids: Vec<u64>) -> bool {
         if slot_ids.is_empty() {
             return true;
@@ -380,11 +399,13 @@ impl RemotePlayer {
     }
 
     /// Move a slot by its stable identity to `to_index`.
+    #[must_use]
     pub fn queue_move_slot(&self, slot_id: u64, to_index: usize) -> bool {
         self.send_ctrl_cmd(CtrlCmd::UnifiedQueueMoveSlot { slot_id, to_index })
     }
 
     /// Begin playback of an existing slot by its stable identity.
+    #[must_use]
     pub fn queue_play_slot(&self, slot_id: u64) -> bool {
         self.send_ctrl_cmd(CtrlCmd::UnifiedQueuePlaySlot { slot_id })
     }
@@ -400,12 +421,14 @@ impl RemotePlayer {
 
     /// Test helper for root-crate integration tests that need a remote-player
     /// stand-in without a live daemon connection.
+    #[must_use]
     pub fn stub(items: Vec<EmbyItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
         let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx(items, current_idx);
         (remote, event_rx)
     }
 
     /// Test helper variant that also exposes commands sent to the daemon.
+    #[must_use]
     pub fn stub_with_command_rx(
         items: Vec<EmbyItem>,
         current_idx: usize,
@@ -444,7 +467,8 @@ impl RemotePlayer {
     }
 
     /// Test-support stub that advertises owner-authoritative idle queue loads.
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn stub_owner_queue_load_with_command_rx(
         items: Vec<EmbyItem>,
         current_idx: usize,
@@ -456,7 +480,8 @@ impl RemotePlayer {
 
     /// Test-support stub whose advertised ctrl capability identifies an
     /// audio-only playback owner.
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
+    #[must_use]
     pub fn stub_audio_only_with_command_rx(
         items: Vec<EmbyItem>,
         current_idx: usize,

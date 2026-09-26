@@ -41,7 +41,6 @@ pub(in crate::app) static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new
 pub(in crate::app) type SessionsLoadFn =
     fn(&mbv_core::api::EmbyClient) -> Result<Vec<mbv_core::api::SessionInfo>, String>;
 pub(in crate::app) static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
-pub(in crate::app) static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
 // Test seam for `App::connect_cast_receiver`'s resolve-and-connect step
 // (7.3/7.5), mirroring the overrides above: lets tests substitute a fake

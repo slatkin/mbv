@@ -251,14 +251,6 @@ impl PlayerTab {
         self.queue.slot_pairs()
     }
 
-    /// Test helper: set the local progress state on a slot by index.
-    /// This simulates playback progress without going through the full
-    /// player event path. Only affects Emby slots; Feed slots are a no-op.
-    #[cfg(test)]
-    pub(in crate::app) fn set_slot_progress_at(&mut self, index: usize, position_ticks: i64) {
-        self.queue.set_slot_progress_by_index(index, position_ticks);
-    }
-
     /// Test helper: replace the item at a specific index. Used by tests
     /// that need to modify queue items after construction.
     #[cfg(test)]

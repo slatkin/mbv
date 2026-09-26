@@ -38,8 +38,7 @@ impl App {
             self.libs[lib_idx]
                 .nav_stack
                 .last()
-                .map(|l| l.resting().cursor())
-                .unwrap_or(0),
+                .map_or(0, |l| l.resting().cursor()),
         );
         self.spawn_all_items_prefetch(lib_idx);
         // A pending Series landing retries once this library's ROOT level has
@@ -159,8 +158,7 @@ impl App {
             self.libs[lib_idx]
                 .nav_stack
                 .last()
-                .map(|l| l.resting().cursor())
-                .unwrap_or(0),
+                .map_or(0, |l| l.resting().cursor()),
         );
     }
 
@@ -242,7 +240,7 @@ impl App {
             return;
         }
         if let Some(lib) = self.libs.get_mut(lib_idx) {
-            lib.apply_library_position(position.clone(), nav_stack);
+            lib.apply_library_position(&position, nav_stack);
         }
         self.finish_restored_library_position(lib_idx);
         // Deliberately no `spawn_all_items_prefetch` call here (unlike
@@ -354,7 +352,7 @@ impl App {
         let restored = self
             .libs
             .get(lib_idx)
-            .map(|lib| lib.library_position_snapshot());
+            .map(crate::app::state::types::library_tab::LibraryTab::library_position_snapshot);
         if restored.as_ref() != self.saved_library_position(lib_idx).as_ref() {
             if let Some(restored) = restored {
                 self.replace_saved_library_position(lib_idx, restored);

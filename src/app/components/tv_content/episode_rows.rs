@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    fmt_duration_gutter, fmt_publish_date_short, Date, EmbyItem, MediaKind, MediaListRow,
+    MediaListTrailing, MediaSemanticState, Pane, QueueItem, TvContent, TICKS_PER_SECOND,
+};
+use crate::app::render::effective_sort_str;
+use crate::app::ui_util::natural_sort_key;
 
 pub(super) fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
@@ -8,7 +13,7 @@ pub(super) fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<Stri
             let number = if episode.index_number > 0 {
                 episode.index_number
             } else {
-                index as i64 + 1
+                i64::try_from(index).unwrap_or(i64::MAX).saturating_add(1)
             };
             let trailing = (episode.runtime_ticks > 0)
                 .then(|| fmt_duration_gutter(episode.runtime_ticks / TICKS_PER_SECOND))
@@ -150,8 +155,7 @@ impl TvContent {
                 let season = detail.seasons.get(self.season_cursor)?;
                 detail.episodes.get(&season.id)
             })
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+            .map_or(&[], Vec::as_slice)
     }
     /// Whether the current season's episode key is present in
     /// `series_detail.episodes` at all (even mapped to an empty `Vec`) --
@@ -235,15 +239,7 @@ impl TvContent {
         // collapsing two visibly distinct rows onto the first item.
         let mut items: Vec<&EmbyItem> = self.context.list.items.iter().collect();
         items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        items.get(self.carrier.cursor()).cloned().cloned()
-    }
-    /// The Series snapshot the shell pushed for this frame (`context
-    /// .selected_series`), exposed so tests can verify the pushed detail
-    /// follows the component's authoritative selection rather than the App
-    /// browse cursor.
-    #[cfg(test)]
-    pub(in crate::app) fn selected_series_snapshot(&self) -> Option<&EmbyItem> {
-        self.context.selected_series.as_ref()
+        items.get(self.carrier.cursor()).copied().cloned()
     }
     /// The episode item under the episode owner's current selection, resolved
     /// from the pushed season detail (design.md D4: the component carries the
@@ -274,25 +270,6 @@ impl TvContent {
                 mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
             )
         )
-    }
-    /// Test-only: the episode owner's selectable cursor index, used to prove
-    /// the cursor survives a loading refresh where no episode item is
-    /// resolvable.
-    #[cfg(test)]
-    pub(in crate::app) fn episode_cursor(&self) -> usize {
-        self.episodes.cursor()
-    }
-    /// Test-only: the episode owner's resting scroll offset, used to prove
-    /// the overlay Workspace's viewport follows cursor/wheel movement.
-    #[cfg(test)]
-    pub(in crate::app) fn episode_scroll(&self) -> usize {
-        self.episodes.scroll()
-    }
-    /// Test-only: whether the Episodes pane holds the local focus (the
-    /// "workspace is active" state).
-    #[cfg(test)]
-    pub(in crate::app) fn episode_pane_focused(&self) -> bool {
-        self.pane == Pane::Episodes
     }
     pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();

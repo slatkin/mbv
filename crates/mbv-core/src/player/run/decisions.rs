@@ -37,7 +37,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
         }
         Some(QueueItem::Feed(item)) => {
             state.osd_title.clone_from(&item.title);
-            let runtime = item.duration_ticks.unwrap_or(0) as i64;
+            let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
                 item.position_ticks
             } else {
@@ -46,7 +46,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
         }
         Some(QueueItem::Audiobookshelf(item)) => {
             state.osd_title.clone_from(&item.title);
-            let runtime = item.duration_ticks.unwrap_or(0) as i64;
+            let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
                 item.position_ticks
             } else {
@@ -55,7 +55,7 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
         }
         Some(QueueItem::AudiobookshelfBook(item)) => {
             state.osd_title.clone_from(&item.title);
-            let runtime = item.duration_ticks.unwrap_or(0) as i64;
+            let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
             state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
                 item.position_ticks
             } else {
@@ -83,7 +83,11 @@ pub(in crate::player) fn seek_decision(seconds: f64, absolute: bool) -> (&'stati
 
 pub(in crate::player) fn volume_decision(requested: i64, maximum: i64) -> (i64, i64) {
     let volume = requested.clamp(0, maximum);
-    let raw = (10.0 * (volume as f64).sqrt()).round() as i64;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
+    let raw = super::super::saturating_i64_from_f64((10.0 * (volume as f64).sqrt()).round());
     (volume, raw)
 }
 
@@ -169,16 +173,39 @@ pub(in crate::player) fn standalone_next_up_decision(
     }
 }
 
-pub(in crate::player) fn advance_decision(
-    is_audio: bool,
-    natural: bool,
-    near_end: bool,
-    was_next_up: bool,
-    last_valid_pos: i64,
-) -> (bool, bool, bool, i64) {
-    let finished = natural || near_end || was_next_up;
-    let played = finished && !is_audio;
-    let consume = finished;
-    let position = crate::player::queue_completed_pos(is_audio, natural, near_end, last_valid_pos);
-    (finished, played, consume, position)
+pub(in crate::player) struct AdvanceDecisionInput {
+    pub(in crate::player) media: CompletedMedia,
+    pub(in crate::player) finish: FinishReason,
+    pub(in crate::player) last_valid_pos: i64,
+}
+
+#[derive(Copy, Clone)]
+pub(in crate::player) enum CompletedMedia {
+    Audio,
+    Video,
+}
+
+#[derive(Copy, Clone)]
+pub(in crate::player) enum FinishReason {
+    Natural,
+    NearEnd,
+    NextUp,
+    Unfinished,
+}
+
+pub(in crate::player) fn advance_decision(input: &AdvanceDecisionInput) -> (bool, bool, bool, i64) {
+    let finished = !matches!(input.finish, FinishReason::Unfinished);
+    let played = finished && matches!(input.media, CompletedMedia::Video);
+    let (natural, near_end) = match input.finish {
+        FinishReason::Natural => (true, false),
+        FinishReason::NearEnd => (false, true),
+        FinishReason::NextUp | FinishReason::Unfinished => (false, false),
+    };
+    let position = crate::player::queue_completed_pos(
+        matches!(input.media, CompletedMedia::Audio),
+        natural,
+        near_end,
+        input.last_valid_pos,
+    );
+    (finished, played, finished, position)
 }

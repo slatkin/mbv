@@ -1,8 +1,16 @@
-use super::*;
+#[cfg(test)]
+use super::TEST_DEFAULT_STATE_DIR;
+use super::{AudiobookshelfSetup, EmbySetup, FeedSubscription};
+#[cfg(any(test, feature = "test"))]
+use super::{TEST_CONFIG_DIR_OVERRIDE, TEST_STATE_DIR_OVERRIDE};
 use std::env;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "configuration options are independent user-controlled settings (design analysis, issue #804)"
+)]
 pub struct Config {
     /// Singleton Emby setup. `server_url` remains only as a legacy projection
     /// for callers that still construct provider clients.
@@ -75,7 +83,7 @@ pub struct Config {
     /// `resolve_library_route`, never routed. No `"*"` wildcard. Editable
     /// via the F2 Settings "Library routes" row, and hand-editable in
     /// `config.toml`.
-    pub library_routes: std::collections::HashMap<String, String>,
+    pub library_routes: std::collections::BTreeMap<String, String>,
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
     pub quit_timeout_secs: u64,      // how long quit waits for local player teardown (seconds)
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
@@ -150,7 +158,7 @@ impl Default for Config {
             audio_lang: String::new(),
             my_languages: vec![],
             feed_view_libraries: vec![],
-            library_routes: std::collections::HashMap::new(),
+            library_routes: std::collections::BTreeMap::new(),
             progress_interval_secs: 10,
             quit_timeout_secs: 5,
             daemon_broadcast_ms: 500,
@@ -169,17 +177,16 @@ impl Config {
     /// The mpv audio-pipe FIFO path to write to, or `None` when the feature
     /// is disabled. Centralizes the enabled/path pair so callers never need
     /// to re-derive this themselves.
+    #[must_use]
     pub fn audio_pipe_target(&self) -> Option<String> {
-        if self.audio_pipe_enabled {
-            Some(self.audio_pipe_path.clone())
-        } else {
-            None
-        }
+        self.audio_pipe_enabled
+            .then(|| self.audio_pipe_path.clone())
     }
 }
 
 /// True when `value` is a valid `audio_device` identifier: exactly `alsa`,
 /// or `alsa/<device>` naming an exact ALSA endpoint.
+#[must_use]
 pub fn is_valid_audio_device(value: &str) -> bool {
     value == "alsa" || value.starts_with("alsa/")
 }
@@ -198,8 +205,9 @@ pub fn is_valid_audio_device(value: &str) -> bool {
 /// skipped rather than routed. This is a pure, synchronous, no-network
 /// lookup -- the entire point of #256 is that route resolution on the
 /// play/enqueue path never touches `/Sessions` again.
+#[must_use]
 pub fn resolve_library_route(
-    routes: &std::collections::HashMap<String, String>,
+    routes: &std::collections::BTreeMap<String, String>,
     library_name: &str,
 ) -> Option<crate::remote_player::DaemonEndpoint> {
     let raw = routes.get(&library_name.to_lowercase())?;
@@ -222,10 +230,12 @@ pub fn resolve_library_route(
     }
 }
 
+#[must_use]
 pub fn is_system_instance() -> bool {
     env::var("MBV_SYSTEM").ok().as_deref() == Some("1")
 }
 
+#[must_use]
 pub fn default_daemon_server_tcp_listen() -> String {
     if is_system_instance() {
         DEFAULT_SYSTEM_DAEMON_TCP_LISTEN.to_string()
@@ -245,19 +255,20 @@ pub(crate) fn config_dir() -> PathBuf {
     // config.toml. `TestStateDirGuard` already attaches to every `App`
     // built in test mode, so piggybacking the override there closes this
     // for the whole suite at once.
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     if let Some(dir) = TEST_CONFIG_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
         return dir;
     }
     if is_system_instance() {
         return PathBuf::from("/etc/mbv");
     }
-    let base = env::var("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
+    let base = env::var("XDG_CONFIG_HOME").map_or_else(
+        |_| {
             let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
             PathBuf::from(home).join(".config")
-        });
+        },
+        PathBuf::from,
+    );
     base.join("mbv")
 }
 
@@ -265,17 +276,18 @@ pub fn cache_dir() -> PathBuf {
     if is_system_instance() {
         return PathBuf::from("/var/cache/mbv");
     }
-    let base = env::var("XDG_CACHE_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
+    let base = env::var("XDG_CACHE_HOME").map_or_else(
+        |_| {
             let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
             PathBuf::from(home).join(".cache")
-        });
+        },
+        PathBuf::from,
+    );
     base.join("mbv")
 }
 
 pub(crate) fn state_dir() -> PathBuf {
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     if let Some(dir) = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
         return dir;
     }
@@ -292,12 +304,13 @@ pub(crate) fn state_dir() -> PathBuf {
     if is_system_instance() {
         return PathBuf::from("/var/lib/mbv");
     }
-    let base = env::var("XDG_STATE_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
+    let base = env::var("XDG_STATE_HOME").map_or_else(
+        |_| {
             let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
             PathBuf::from(home).join(".local").join("state")
-        });
+        },
+        PathBuf::from,
+    );
     base.join("mbv")
 }
 

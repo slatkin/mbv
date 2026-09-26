@@ -1,7 +1,6 @@
 use super::*;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
-use mbv_core::api::EmbyItem;
 
 mod episode_rows_tests;
 mod flat_latest_activation_tests;
@@ -47,7 +46,7 @@ fn narrow_keyboard_moves_and_refreshes_through_shell_intents() {
         None,
         false,
     ));
-    owner.is_wide = false;
+    owner.set_is_wide(false);
     owner.pane = Pane::Episodes;
     let key = |code| KeyEvent {
         code,

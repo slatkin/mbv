@@ -1,11 +1,7 @@
 use super::*;
-use crate::app::components::list::tree_browser::TreeOperation;
-use crate::app::components::msg::{Msg, MusicArtistTarget, ShellRequest};
 use crate::app::dispatch::library::browse::{
     build_album_index_with, recursive_album_search_eligible,
 };
-use crate::app::render::make_music_group_app_with_second_album;
-use crate::app::shell::Model;
 use crate::app::tests::{confirm_replace_queue, install_test_emby, make_app_stub, make_item};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, BrowseLevel, LibEvent, LibraryTab, PanelFocus, TabSelection,
@@ -30,7 +26,7 @@ fn remote_playback_app() -> App {
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     )
 }

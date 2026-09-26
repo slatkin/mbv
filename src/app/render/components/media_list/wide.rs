@@ -5,8 +5,8 @@ use crate::app::components::media_list::{
 };
 use crate::app::palette;
 use ratatui::layout::Rect;
-use ratatui::style::*;
-use ratatui::widgets::*;
+use ratatui::style::Color;
+use ratatui::widgets::{List, ListItem};
 use ratatui::Frame;
 
 /// Resolved paint output for [`render_wide_media_list`]: the flow geometry the
@@ -89,8 +89,10 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + Eq>(
                 // separator above it sits outside the fill too: both keep the
                 // fill the list box already painted.
                 MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
-                _ if grouped => zebra_bg.filter(|_| grouped_member_striped(rows, source_row)),
-                _ => {
+                MediaListRow::Item { .. } if grouped => {
+                    zebra_bg.filter(|_| grouped_member_striped(rows, source_row))
+                }
+                MediaListRow::Item { .. } => {
                     let alternate_bg = zebra_bg.filter(|_| striped);
                     striped = !striped;
                     alternate_bg
@@ -195,7 +197,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + Eq>(
     list.finish_view(
         claim_rect,
         content_rect,
-        paint.row_geometry,
-        paint.selected_row_rect,
+        &paint.row_geometry,
+        paint.selected_row_rect.as_ref(),
     );
 }

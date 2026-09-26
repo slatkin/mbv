@@ -138,21 +138,3 @@ pub fn make_music_group_app() -> App {
 
     app
 }
-
-/// Builds on `make_music_group_app` by adding a second sibling album
-/// ("Second Album", also by "Alpha") to the same nav level. Shared by the
-/// cache-miss/loading and cache-hit/rendered inline-detail tests, which
-/// both need a following album to assert framing around the selected one.
-pub fn make_music_group_app_with_second_album() -> App {
-    let mut app = make_music_group_app();
-    let mut second_album = make_item("Second Album", "MusicAlbum");
-    second_album.id = "album-2".into();
-    second_album.artist = "Alpha".into();
-    app.libs[0]
-        .nav_stack
-        .last_mut()
-        .unwrap()
-        .items
-        .push(second_album);
-    app
-}

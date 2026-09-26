@@ -80,10 +80,9 @@ impl Model {
         if !has_session {
             return;
         }
-        if self
-            .active_inline_search_session_ref()
-            .is_some_and(|host| host.uses_local_filter())
-        {
+        if self.active_inline_search_session_ref().is_some_and(
+            super::super::components::inline_search::InlineSearchHost::uses_local_filter,
+        ) {
             // Grouped Music keeps the tree as the sole browser owner. Its
             // InlineSearch is only the shared editor/debounce/bar projection.
             return;
@@ -142,10 +141,9 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        if self
-            .active_inline_search_session_ref()
-            .is_some_and(|host| host.uses_local_filter())
-        {
+        if self.active_inline_search_session_ref().is_some_and(
+            super::super::components::inline_search::InlineSearchHost::uses_local_filter,
+        ) {
             return;
         }
         if self.app.recursive_album_search_enabled(index) {
@@ -172,18 +170,18 @@ impl Model {
         changed
     }
 
-    pub(in crate::app) fn activate_inline_search_item(&mut self, id: String, item_type: String) {
+    pub(in crate::app) fn activate_inline_search_item(&mut self, id: &str, item_type: &str) {
         let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
             return;
         };
-        let selected = self
-            .active_inline_search_session_ref()
-            .and_then(|host| host.selected_inline_search_item());
+        let selected = self.active_inline_search_session_ref().and_then(
+            super::super::components::inline_search::InlineSearchHost::selected_inline_search_item,
+        );
         if self.app.recursive_album_search_enabled(lib_idx) {
             let library_id = self.app.libs[lib_idx].library.id.clone();
             let entry = match self.app.album_indexes.get(&library_id) {
                 Some(AlbumIndexState::Ready(index)) => index
-                    .get(&id)
+                    .get(id)
                     .filter(|entry| entry.album.item_type == item_type)
                     .cloned(),
                 _ => None,

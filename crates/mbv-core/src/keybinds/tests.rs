@@ -177,119 +177,44 @@ fn non_prefix_addressable_actions_are_the_documented_exceptions() {
 
 // ── Task 1.2: parser and defaults ───────────────────────────────────────
 
+fn chord_case(input: &'static str, mods: KeyMods, key: Key) -> (&'static str, Chord) {
+    (input, Chord { mods, key })
+}
+
 #[test]
 fn parser_accepts_canonical_and_reordered_forms() {
-    let cases: &[(&str, Chord)] = &[
-        (
-            "Ctrl+b",
-            Chord {
-                mods: KeyMods::CTRL,
-                key: Key::Char('b'),
-            },
-        ),
-        (
-            "F8",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::F(8),
-            },
-        ),
-        (
-            "Shift+Left",
-            Chord {
-                mods: KeyMods::SHIFT,
-                key: Key::Left,
-            },
-        ),
-        (
+    let cases = [
+        chord_case("Ctrl+b", KeyMods::CTRL, Key::Char('b')),
+        chord_case("F8", KeyMods::NONE, Key::F(8)),
+        chord_case("Shift+Left", KeyMods::SHIFT, Key::Left),
+        chord_case(
             "Shift+Ctrl+b",
-            Chord {
-                mods: KeyMods::CTRL.union(KeyMods::SHIFT),
-                key: Key::Char('b'),
-            },
+            KeyMods::CTRL.union(KeyMods::SHIFT),
+            Key::Char('b'),
         ),
-        (
+        chord_case(
             "Alt+Ctrl+Shift+x",
-            Chord {
-                mods: KeyMods::CTRL.union(KeyMods::SHIFT).union(KeyMods::ALT),
-                key: Key::Char('x'),
-            },
+            KeyMods::CTRL.union(KeyMods::SHIFT).union(KeyMods::ALT),
+            Key::Char('x'),
         ),
-        (
+        chord_case(
             "control+alt+del",
-            Chord {
-                mods: KeyMods::CTRL.union(KeyMods::ALT),
-                key: Key::Delete,
-            },
+            KeyMods::CTRL.union(KeyMods::ALT),
+            Key::Delete,
         ),
-        (
-            "Escape",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::Esc,
-            },
-        ),
-        (
-            "BackTab",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::BackTab,
-            },
-        ),
-        (
-            "Space",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::Char(' '),
-            },
-        ),
-        (
-            "+",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::Char('+'),
-            },
-        ),
-        (
-            "-",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::Char('-'),
-            },
-        ),
-        (
-            "<",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::Char('<'),
-            },
-        ),
-        (
-            "Ctrl+=",
-            Chord {
-                mods: KeyMods::CTRL,
-                key: Key::Char('='),
-            },
-        ),
-        (
-            "q",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::Char('q'),
-            },
-        ),
-        (
-            "N",
-            Chord {
-                mods: KeyMods::NONE,
-                key: Key::Char('N'),
-            },
-        ),
+        chord_case("Escape", KeyMods::NONE, Key::Esc),
+        chord_case("BackTab", KeyMods::NONE, Key::BackTab),
+        chord_case("Space", KeyMods::NONE, Key::Char(' ')),
+        chord_case("+", KeyMods::NONE, Key::Char('+')),
+        chord_case("-", KeyMods::NONE, Key::Char('-')),
+        chord_case("<", KeyMods::NONE, Key::Char('<')),
+        chord_case("Ctrl+=", KeyMods::CTRL, Key::Char('=')),
+        chord_case("q", KeyMods::NONE, Key::Char('q')),
+        chord_case("N", KeyMods::NONE, Key::Char('N')),
     ];
     for (input, expected) in cases {
-        assert_eq!(&Chord::parse(input), &Ok(*expected), "parsing `{input}`");
+        assert_eq!(&Chord::parse(input), &Ok(expected), "parsing `{input}`");
     }
-    // Modifier order is not significant.
     assert_eq!(Chord::parse("Shift+Ctrl+b"), Chord::parse("Ctrl+Shift+b"));
     assert_eq!(
         Chord::parse("Shift+Alt+Ctrl+x"),
@@ -495,7 +420,7 @@ fn load_accepts_an_absent_keys_section_and_a_redundant_default_override() {
         prefix: None,
         sections: vec![raw_router("global", &[("help_open", "F1")])],
     };
-    assert!(load(&raw).is_ok());
+    load(&raw).unwrap();
 }
 
 /// Each rejection class, with the expected error naming the offending entry
@@ -575,6 +500,13 @@ fn load_rejects_every_validation_class() {
             },
             &["bogus"],
         ),
+    ];
+    assert_rejected_cases(cases);
+}
+
+#[test]
+fn load_rejects_section_and_prefix_namespace_validation_classes() {
+    let cases: Vec<(&str, RawKeybinds, KeybindsError, &[&str])> = vec![
         (
             "case-variant duplicate section names",
             RawKeybinds {
@@ -639,6 +571,13 @@ fn load_rejects_every_validation_class() {
             },
             &["F1", "keys.Global.help_open"],
         ),
+    ];
+    assert_rejected_cases(cases);
+}
+
+#[test]
+fn load_rejects_collision_validation_classes() {
+    let cases: Vec<(&str, RawKeybinds, KeybindsError, &[&str])> = vec![
         (
             "prefix collides with a configured override",
             RawKeybinds {
@@ -709,7 +648,10 @@ fn load_rejects_every_validation_class() {
             &["n", "next_library_tab", "toggle_play_pause"],
         ),
     ];
+    assert_rejected_cases(cases);
+}
 
+fn assert_rejected_cases(cases: Vec<(&str, RawKeybinds, KeybindsError, &[&str])>) {
     for (name, raw, expected, message_parts) in cases {
         let result = load(&raw);
         assert_eq!(result.as_ref(), Err(&expected), "case `{name}`");

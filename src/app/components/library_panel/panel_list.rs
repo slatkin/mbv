@@ -139,7 +139,7 @@ mod panel_list_tests {
     use super::*;
     use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use ratatui::backend::TestBackend;
-    use ratatui::layout::{Position, Rect};
+    use ratatui::layout::Position;
     use ratatui::Terminal;
 
     fn item(target: &str) -> MediaListRow<String> {

@@ -1,4 +1,4 @@
-use super::*;
+use super::{AlbumCursorKind, Instant, Msg, ShellRequest, ToastSeverity};
 
 impl super::super::Model {
     pub(super) fn handle_music_request(
@@ -24,7 +24,7 @@ impl super::super::Model {
                 self.handle_music_artist_tracks(target, music_resize, tv_resize);
             }
             ShellRequest::MusicArtistArtwork { target } => {
-                self.request_music_artist_artwork(target);
+                self.request_music_artist_artwork(&target);
                 self.push_music_workspace_content();
             }
             ShellRequest::MusicAlbumCursor { target, kind } => {
@@ -35,7 +35,7 @@ impl super::super::Model {
                 items,
                 origin,
                 unresolved_targets,
-            } => self.handle_music_artist_action(action, items, origin, unresolved_targets),
+            } => self.handle_music_artist_action(action, items, origin, &unresolved_targets),
             ShellRequest::MusicTreeTrackActivate {
                 album_target,
                 track_id,
@@ -54,7 +54,7 @@ impl super::super::Model {
                 self.push_music_workspace_content();
             }
             ShellRequest::MusicArtistTrackActivate { target, track_id } => {
-                self.handle_music_artist_track_activate(target, track_id);
+                self.handle_music_artist_track_activate(&target, &track_id);
             }
             ShellRequest::MusicGroupSwitch { delta } => {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
@@ -76,7 +76,7 @@ impl super::super::Model {
             ShellRequest::MusicAlbumActivate { item } => {
                 let owner_has_target = self
                     .music_owner()
-                    .and_then(|owner| owner.selected_item())
+                    .and_then(crate::app::components::music_content::MusicContent::selected_item)
                     .is_some_and(|selected| selected.id == item.id);
                 if self.app.tab.emby_library_index().is_some()
                     && !self.app.is_right_panel_wide()
@@ -115,7 +115,7 @@ impl super::super::Model {
             self.app
                 .maybe_fetch_next_page_for_music_artist(lib_idx, &target.album_targets);
         }
-        self.request_music_artist_tracks(target.clone());
+        self.request_music_artist_tracks(&target);
         self.handle_terminal_message(
             Msg::Shell(Box::new(ShellRequest::MusicArtistArtwork { target })),
             music_resize,
@@ -163,7 +163,7 @@ impl super::super::Model {
         action: crate::app::components::msg::MusicTreeAction,
         items: Vec<mbv_core::api::EmbyItem>,
         origin: crate::app::components::media_list::SelectionOrigin,
-        unresolved_targets: Vec<String>,
+        unresolved_targets: &[String],
     ) {
         use crate::app::components::msg::MusicTreeAction;
 
@@ -193,10 +193,10 @@ impl super::super::Model {
                 format!(
                     "{} artist album{} unavailable",
                     unresolved_targets.len(),
-                    if unresolved_targets.len() != 1 {
-                        "s"
-                    } else {
+                    if unresolved_targets.len() == 1 {
                         ""
+                    } else {
+                        "s"
                     }
                 ),
                 ToastSeverity::Warning,
@@ -207,12 +207,12 @@ impl super::super::Model {
 
     fn handle_music_artist_track_activate(
         &mut self,
-        target: super::super::components::msg::MusicArtistTarget,
-        track_id: String,
+        target: &super::super::components::msg::MusicArtistTarget,
+        track_id: &str,
     ) {
         self.app.set_panel_focus(crate::app::PanelFocus::Library);
         let resolved = self.music_owner().and_then(|owner| {
-            let detail = owner.artist_detail_for_target(&target)?;
+            let detail = owner.artist_detail_for_target(target)?;
             let tracks: Vec<mbv_core::api::EmbyItem> = detail
                 .track_groups
                 .iter()

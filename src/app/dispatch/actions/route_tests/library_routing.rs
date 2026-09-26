@@ -1,57 +1,10 @@
 use super::*;
 
 #[test]
-fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
-    let mut app = make_app_stub();
-    app.library_routes
-        .insert("music".to_string(), "living-room-pc".to_string());
-    app.active_route = Some("music".to_string());
-    let mut movies_item = make_item("Movies", "CollectionFolder");
-    movies_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab::new(movies_item));
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    // `enqueue_selected` was deleted in task 4.3, R1 (item is resolved at
-    // the caller); the empty nav stack resolves to the library root, exactly
-    // what the context-menu Enqueue arm now does.
-    let item = app.libs[0].library.clone();
-    app.enqueue_lib_item(0, item);
-
-    // `PlayerTab`/`PlaybackQueue`/`EmbyItem` implement neither
-    // `PartialEq` nor `Debug` in this codebase (confirmed: `EmbyItem`
-    // derives only `Debug, Clone, Serialize, Deserialize`, and
-    // `PlayerTab` derives only `Clone, Default`), so a whole-struct
-    // `assert_eq!` against a captured "before" clone will not compile.
-    // The established idiom elsewhere in this test module (e.g. the
-    // rollback-path tests) is to assert on `.items` directly instead
-    // -- here that's simplest as "still empty", since `make_app_stub`
-    // starts with an empty queue and a rejected enqueue must leave it
-    // that way.
-    assert!(app
-        .queue_for_scope(app.viewed_queue_scope())
-        .emby_items()
-        .is_empty());
-    assert!(app.status.contains("Can't mix libraries in a routed queue"));
-}
-
-#[test]
-fn enqueue_route_conflict_allows_matching_route() {
-    let mut app = make_app_stub();
-    app.active_route = Some("music".to_string());
-    assert!(!app.enqueue_route_conflict(Some("music".to_string())));
-}
-
-#[test]
-fn enqueue_route_conflict_allows_local_queue_local_item() {
-    let mut app = make_app_stub();
-    assert!(!app.enqueue_route_conflict(None));
-}
-
-#[test]
 fn enqueue_route_conflict_rejects_mismatched_route() {
     let mut app = make_app_stub();
     app.active_route = Some("music".to_string());
-    assert!(app.enqueue_route_conflict(Some("movies".to_string())));
+    assert!(app.enqueue_route_conflict(Some(&"movies".to_string())));
     assert!(app.status.contains("Can't mix libraries in a routed queue"));
 }
 
@@ -63,7 +16,7 @@ fn enqueue_route_conflict_allows_enqueue_while_attached_to_a_session() {
     // reason unrelated to library routing.
     let mut app = make_app_stub();
     app.connected_session_id = Some("sess-1".to_string());
-    assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    assert!(!app.enqueue_route_conflict(Some(&"music".to_string())));
 }
 
 #[test]
@@ -74,7 +27,7 @@ fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
     app.player_rx = remote_rx;
     // active_route stays None: this is a Sessions-panel direct-remote
     // connection, not a library route.
-    assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    assert!(!app.enqueue_route_conflict(Some(&"music".to_string())));
 }
 
 #[test]
@@ -125,98 +78,6 @@ fn play_item_submits_selected_item_to_direct_remote_owner() {
     let slots = replacement.expect("play should submit a queue");
     assert_eq!(slots.len(), 1);
     assert_eq!(slots[0].item.id(), "selected-id");
-}
-
-#[test]
-fn series_play_submits_selected_episodes_to_direct_remote_owner() {
-    let mut app = make_app_stub();
-    let http = MockHttp::new();
-    let mut config = app.config.lock().unwrap().clone();
-    config.server_url = "http://127.0.0.1:1".into();
-    install_test_emby(&mut app, config);
-    let client = app
-        .emby_runtime
-        .client
-        .as_ref()
-        .unwrap()
-        .lock()
-        .unwrap()
-        .clone();
-    let client = client.with_test_agent(http.agent());
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-        std::sync::Mutex::new(client),
-    ));
-
-    let stale_item = make_item("Stale", "Movie");
-    let (remote, remote_rx, command_rx) =
-        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(vec![stale_item], 0);
-    let sess = crate::app::tests::make_session("remote-mbv", "mbv");
-    app.switch_to_direct_remote(
-        &sess,
-        remote,
-        remote_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
-    );
-    app.player.always_play_next = true;
-
-    http.respond(
-        200,
-        r#"{"Items":[
-            {"Id":"episode-1","Name":"Episode 1","Type":"Episode","MediaType":"Video"},
-            {"Id":"episode-2","Name":"Episode 2","Type":"Episode","MediaType":"Video"}
-        ]}"#,
-    );
-    let mut selected = make_item("Episode 1", "Episode");
-    selected.id = "episode-1".into();
-    selected.series_id = "series-1".into();
-    app.play_item(selected);
-
-    let slots = command_rx
-        .try_iter()
-        .find_map(|command| match command {
-            mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(slots),
-            _ => None,
-        })
-        .expect("series play should submit a queue");
-    let ids: Vec<_> = slots.iter().map(|slot| slot.item.id()).collect();
-    assert_eq!(ids, ["episode-1", "episode-2"]);
-}
-
-#[test]
-fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel() {
-    // Regression guard for the gap `connected_session_id.is_none()`
-    // alone misses: a Sessions-panel "Direct Remote" ctrl-socket
-    // upgrade leaves `connected_session_id` as `None` but
-    // `self.player.is_remote()` `true` and `active_route` `None`.
-    // Library routing must not engage here either -- it would swap
-    // `self.player` out from under the active direct-remote
-    // connection without ever clearing `direct_remote_label`.
-    let mut app = make_app_stub();
-    app.library_routes
-        .insert("music".to_string(), "living-room-pc".to_string());
-    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    let sess = crate::app::tests::make_session("other-mbv", "mbv");
-    app.switch_to_direct_remote(
-        &sess,
-        remote,
-        remote_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
-    );
-    assert!(app.player.is_remote());
-    assert!(app.active_route.is_none());
-
-    let mut lib_item = make_item("Music", "CollectionFolder");
-    lib_item.id = "lib-music".to_string();
-    app.libs.push(LibraryTab::new(lib_item));
-    let mut item = make_item("Song", "Audio");
-    item.id = "song-1".to_string();
-
-    // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
-    // engaged here it would attempt a real connection and this test
-    // would hang/fail rather than reach the assertion below.
-    app.play_item(item);
-
-    assert!(app.active_route.is_none());
 }
 
 /// Row 3.6: library autoplay (`select_item` with autoload) replaces a

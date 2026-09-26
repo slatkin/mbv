@@ -104,26 +104,91 @@ fn unified_queue_replace_clears_observed_active_slot() {
     // active slot until the first TrackChanged arrives.
     assert_eq!(owner.core.queue.len(), 1);
     assert_eq!(owner.core.queue.slots()[0].slot_id.raw(), 77);
-    assert_eq!(owner.core.queue.active_slot_id().map(|s| s.raw()), Some(77));
+    assert_eq!(
+        owner
+            .core
+            .queue
+            .active_slot_id()
+            .map(crate::playback_queue::QueueSlotId::raw),
+        Some(77)
+    );
     assert_eq!(owner.core.observed_active_slot(), None);
     assert_eq!(*shared_queue.observed_active_slot.lock().unwrap(), None);
     // The spy receiver stays attached so the submit path's cold-start thread
     // targets the test player, mirroring `replace_queue_succeeds_unconditionally`.
 }
 
+/// Shared wiring for the source-update tests: a cold player with a command
+/// spy, one registered local client, and an owner holding one loaded video
+/// slot. Both tests dispatch through the same local-role context.
+struct SourceUpdateFixture {
+    player: Player,
+    commands: mpsc::Receiver<PlayerCommand>,
+    client: Arc<Mutex<EmbyClient>>,
+    registry: Arc<Mutex<CtrlClients>>,
+    client_id: u64,
+    client_rx: mpsc::Receiver<CtrlOutbound>,
+    reply_tx: mpsc::Sender<CtrlOutbound>,
+    reply_rx: mpsc::Receiver<CtrlOutbound>,
+    shared_queue: SharedQueueState,
+    merged_tx: mpsc::Sender<DaemonEvent>,
+    owner: DaemonPlayerOwner,
+}
+
+impl SourceUpdateFixture {
+    fn new() -> Self {
+        let player = cold_player();
+        let commands = player.spy_on_commands();
+        let client = queue_op_client("test-token");
+        let registry = Arc::new(Mutex::new(CtrlClients::default()));
+        let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
+        let (reply_tx, reply_rx) = mpsc::channel();
+        let shared_queue = shared_queue_state();
+        let (merged_tx, _merged_rx) = mpsc::channel();
+        let owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+        Self {
+            player,
+            commands,
+            client,
+            registry,
+            client_id,
+            client_rx,
+            reply_tx,
+            reply_rx,
+            shared_queue,
+            merged_tx,
+            owner,
+        }
+    }
+
+    /// Dispatch one command as a registered local client.
+    fn dispatch(&mut self, client_id: u64, cmd: CtrlCmd) {
+        handle_ctrl_for_role(
+            cmd,
+            CtrlContext {
+                reply_tx: &self.reply_tx,
+                client_id,
+                client: &self.client,
+                player: &self.player,
+                audio_only: false,
+                owner: &mut self.owner,
+                shared_queue: &self.shared_queue,
+                ctrl_clients: &self.registry,
+                has_audiobookshelf: false,
+                merged_tx: &self.merged_tx,
+                stay_alive: true,
+                role: crate::daemon::DaemonRole::Local,
+            },
+        );
+    }
+}
+
 #[test]
 fn matching_source_update_publishes_without_replacing_queue_or_playback() {
-    let player = cold_player();
-    let commands = player.spy_on_commands();
-    let client = queue_op_client("test-token");
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let shared_queue = shared_queue_state();
-    let (merged_tx, _merged_rx) = mpsc::channel();
-    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+    let mut fx = SourceUpdateFixture::new();
 
-    handle_ctrl_for_role(
+    fx.dispatch(
+        fx.client_id,
         CtrlCmd::UnifiedQueueLoadIdle {
             request_id: 71,
             slots: vec![crate::ctrl::UnifiedQueueSlot {
@@ -133,43 +198,30 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
             cursor: 0,
             source: QueueSource::Album,
         },
-        CtrlContext {
-            reply_tx: &reply_tx,
-            client_id,
-            client: &client,
-            player: &player,
-            audio_only: false,
-            owner: &mut owner,
-            shared_queue: &shared_queue,
-            ctrl_clients: &registry,
-            has_audiobookshelf: false,
-            merged_tx: &merged_tx,
-            stay_alive: true,
-            role: crate::daemon::DaemonRole::Local,
-        },
     );
     assert!(matches!(
-        recv_event(&client_rx),
+        recv_event(&fx.client_rx),
         CtrlEvent::UnifiedQueueState(_)
     ));
     assert!(matches!(
-        recv_event(&reply_rx),
+        recv_event(&fx.reply_rx),
         CtrlEvent::UnifiedQueueLoadResult {
             request_id: 71,
             result: crate::ctrl::QueueLoadResult::Accepted,
         }
     ));
-    let lineage = *shared_queue.lineage.lock().unwrap();
-    let slots_before: Vec<_> = owner
+    let lineage = *fx.shared_queue.lineage.lock().unwrap();
+    let slots_before: Vec<_> = fx
+        .owner
         .core
         .queue
         .slots()
         .iter()
         .map(|slot| (slot.slot_id, slot.item.id().to_string()))
         .collect();
-    player.status.lock().unwrap().active = true;
+    fx.player.status.lock().unwrap().active = true;
     let status_before = {
-        let status = player.status.lock().unwrap();
+        let status = fx.player.status.lock().unwrap();
         (
             status.active,
             status.sequence_generation,
@@ -178,7 +230,8 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         )
     };
 
-    handle_ctrl_for_role(
+    fx.dispatch(
+        fx.client_id,
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: QueueSource::Playlist {
                 id: Some("playlist-1".to_string()),
@@ -186,28 +239,14 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
             },
             lineage,
         },
-        CtrlContext {
-            reply_tx: &reply_tx,
-            client_id,
-            client: &client,
-            player: &player,
-            audio_only: false,
-            owner: &mut owner,
-            shared_queue: &shared_queue,
-            ctrl_clients: &registry,
-            has_audiobookshelf: false,
-            merged_tx: &merged_tx,
-            stay_alive: true,
-            role: crate::daemon::DaemonRole::Local,
-        },
     );
 
-    let CtrlEvent::UnifiedQueueState(snapshot) = recv_event(&client_rx) else {
+    let CtrlEvent::UnifiedQueueState(snapshot) = recv_event(&fx.client_rx) else {
         panic!("source-only update must publish the owner snapshot");
     };
-    assert_eq!(*shared_queue.lineage.lock().unwrap(), lineage);
+    assert_eq!(*fx.shared_queue.lineage.lock().unwrap(), lineage);
     assert_eq!(snapshot.lineage, lineage);
-    assert_eq!(snapshot.source, owner.core.source);
+    assert_eq!(snapshot.source, fx.owner.core.source);
     assert_eq!(
         snapshot.source,
         QueueSource::Playlist {
@@ -216,7 +255,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         }
     );
     assert_eq!(
-        owner
+        fx.owner
             .core
             .queue
             .slots()
@@ -225,7 +264,7 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
             .collect::<Vec<_>>(),
         slots_before,
     );
-    let status = player.status.lock().unwrap();
+    let status = fx.player.status.lock().unwrap();
     assert_eq!(
         (
             status.active,
@@ -236,29 +275,23 @@ fn matching_source_update_publishes_without_replacing_queue_or_playback() {
         status_before,
     );
     assert!(matches!(
-        commands.try_recv(),
+        fx.commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)
     ));
 }
 
 #[test]
 fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
-    let player = cold_player();
-    let commands = player.spy_on_commands();
-    let client = queue_op_client("test-token");
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (client_a, rx_a) = connect_client(&mut registry.lock().unwrap());
-    let (client_b, rx_b) = connect_client(&mut registry.lock().unwrap());
-    let (reply_tx, reply_rx) = mpsc::channel();
-    let shared_queue = shared_queue_state();
-    let (merged_tx, _merged_rx) = mpsc::channel();
-    let mut owner = owner_with(vec![emby_qi("old", "Video", "Movie")], 0);
+    let mut fx = SourceUpdateFixture::new();
+    let (client_b, rx_b) = connect_client(&mut fx.registry.lock().unwrap());
+    let client_a = fx.client_id;
 
     for (request_id, client_id, item_id, playlist_name) in [
         (72, client_a, "first", "First"),
         (73, client_b, "second", "Second"),
     ] {
-        handle_ctrl_for_role(
+        fx.dispatch(
+            client_id,
             CtrlCmd::UnifiedQueueLoadIdle {
                 request_id,
                 slots: vec![crate::ctrl::UnifiedQueueSlot {
@@ -271,23 +304,9 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
                     name: playlist_name.to_string(),
                 },
             },
-            CtrlContext {
-                reply_tx: &reply_tx,
-                client_id,
-                client: &client,
-                player: &player,
-                audio_only: false,
-                owner: &mut owner,
-                shared_queue: &shared_queue,
-                ctrl_clients: &registry,
-                has_audiobookshelf: false,
-                merged_tx: &merged_tx,
-                stay_alive: true,
-                role: crate::daemon::DaemonRole::Local,
-            },
         );
         assert!(
-            matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueLoadResult {
+            matches!(recv_event(&fx.reply_rx), CtrlEvent::UnifiedQueueLoadResult {
             request_id: got,
             result: crate::ctrl::QueueLoadResult::Accepted,
         } if got == request_id)
@@ -295,24 +314,26 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
     }
     let stale_lineage = crate::ctrl::QueueLineage(1);
     assert_eq!(
-        *shared_queue.lineage.lock().unwrap(),
+        *fx.shared_queue.lineage.lock().unwrap(),
         crate::ctrl::QueueLineage(2)
     );
     // Drain both replacement broadcasts before asserting the rejection result.
-    for rx in [&rx_a, &rx_b] {
+    for rx in [&fx.client_rx, &rx_b] {
         let _ = recv_event(rx);
         let _ = recv_event(rx);
     }
-    let slots_before: Vec<_> = owner
+    let slots_before: Vec<_> = fx
+        .owner
         .core
         .queue
         .slots()
         .iter()
         .map(|slot| (slot.slot_id, slot.item.id().to_string()))
         .collect();
-    let source_before = owner.core.source.clone();
+    let source_before = fx.owner.core.source.clone();
 
-    handle_ctrl_for_role(
+    fx.dispatch(
+        client_a,
         CtrlCmd::UnifiedQueueSourceUpdate {
             source: QueueSource::Playlist {
                 id: Some("stale".to_string()),
@@ -320,37 +341,23 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
             },
             lineage: stale_lineage,
         },
-        CtrlContext {
-            reply_tx: &reply_tx,
-            client_id: client_a,
-            client: &client,
-            player: &player,
-            audio_only: false,
-            owner: &mut owner,
-            shared_queue: &shared_queue,
-            ctrl_clients: &registry,
-            has_audiobookshelf: false,
-            merged_tx: &merged_tx,
-            stay_alive: true,
-            role: crate::daemon::DaemonRole::Local,
-        },
     );
 
     assert!(
-        matches!(recv_event(&reply_rx), CtrlEvent::CommandRejected(reason)
+        matches!(recv_event(&fx.reply_rx), CtrlEvent::CommandRejected(reason)
         if reason.contains("lineage changed"))
     );
     assert!(
-        matches!(recv_event(&reply_rx), CtrlEvent::UnifiedQueueState(snapshot)
+        matches!(recv_event(&fx.reply_rx), CtrlEvent::UnifiedQueueState(snapshot)
         if snapshot.lineage == crate::ctrl::QueueLineage(2) && snapshot.source == source_before)
     );
-    assert_eq!(owner.core.source, source_before);
+    assert_eq!(fx.owner.core.source, source_before);
     assert_eq!(
-        *shared_queue.lineage.lock().unwrap(),
+        *fx.shared_queue.lineage.lock().unwrap(),
         crate::ctrl::QueueLineage(2)
     );
     assert_eq!(
-        owner
+        fx.owner
             .core
             .queue
             .slots()
@@ -360,7 +367,7 @@ fn delayed_source_update_is_rejected_after_another_client_replaces_queue() {
         slots_before,
     );
     assert!(matches!(
-        commands.try_recv(),
+        fx.commands.try_recv(),
         Err(mpsc::TryRecvError::Empty)
     ));
 }

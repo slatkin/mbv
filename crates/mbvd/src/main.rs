@@ -38,14 +38,13 @@ fn daemon_running() -> bool {
 fn stop_daemon() -> Result<String, String> {
     let path = daemon::pid_file();
     let pid = std::fs::read_to_string(&path)
-        .map_err(|_| "mbvd: no daemon running".to_string())?
+        .map_err(|error| format!("mbvd: no daemon running: {error}"))?
         .trim()
         .to_string();
     let ok = std::process::Command::new("kill")
         .arg(&pid)
         .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+        .is_ok_and(|s| s.success());
     if ok {
         let _ = std::fs::remove_file(&path);
         Ok(format!("mbvd: daemon stopped (pid {pid})"))
@@ -156,24 +155,24 @@ fn prompt(label: &str) -> Result<String, String> {
     print!("{label}: ");
     io::stdout()
         .flush()
-        .map_err(|_| "mbvd: prompt failed".to_string())?;
+        .map_err(|error| format!("mbvd: prompt failed: {error}"))?;
     let mut value = String::new();
     io::stdin()
         .read_line(&mut value)
-        .map_err(|_| "mbvd: input failed".to_string())?;
+        .map_err(|error| format!("mbvd: input failed: {error}"))?;
     Ok(value.trim().to_string())
 }
 
 fn prompt_secret(label: &str) -> Result<String, String> {
     let stdin = io::stdin();
-    let mut termios =
-        nix::sys::termios::tcgetattr(&stdin).map_err(|_| "mbvd: prompt failed".to_string())?;
+    let mut termios = nix::sys::termios::tcgetattr(&stdin)
+        .map_err(|error| format!("mbvd: prompt failed: {error}"))?;
     let original = termios.clone();
     termios
         .local_flags
         .remove(nix::sys::termios::LocalFlags::ECHO);
     nix::sys::termios::tcsetattr(&stdin, nix::sys::termios::SetArg::TCSADRAIN, &termios)
-        .map_err(|_| "mbvd: prompt failed".to_string())?;
+        .map_err(|error| format!("mbvd: prompt failed: {error}"))?;
     let result = prompt(label);
     let _ = nix::sys::termios::tcsetattr(&stdin, nix::sys::termios::SetArg::TCSADRAIN, &original);
     println!();
@@ -184,16 +183,17 @@ fn administration_lock(stem: &str) -> Result<nix::fcntl::Flock<std::fs::File>, S
     let path = config::data_dir_system_or_local().join(format!("{stem}-connect.lock"));
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|_| "mbvd: cannot create administration lock".to_string())?;
+            .map_err(|error| format!("mbvd: cannot create administration lock: {error}"))?;
     }
     let file = std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
         .write(true)
         .open(path)
-        .map_err(|_| "mbvd: cannot open administration lock".to_string())?;
-    nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock)
-        .map_err(|_| format!("mbvd: another {stem} administration command is running"))
+        .map_err(|error| format!("mbvd: cannot open administration lock: {error}"))?;
+    nix::fcntl::Flock::lock(file, nix::fcntl::FlockArg::LockExclusiveNonblock).map_err(
+        |(_, error)| format!("mbvd: another {stem} administration command is running: {error}"),
+    )
 }
 
 fn classified_auth_error(error: &str) -> String {
@@ -217,7 +217,7 @@ fn exchange_emby_credentials(
 }
 
 fn commit_emby_setup(
-    existing: Option<config::EmbySetup>,
+    existing: Option<&config::EmbySetup>,
     exchange: mbv_core::api::EmbyCredentialExchange,
 ) -> Result<config::EmbySetup, String> {
     let mut setup = config::EmbySetup::new(exchange.server_url.clone(), exchange.user_id);
@@ -233,10 +233,10 @@ fn commit_emby_setup(
         .is_some_and(|old| old.server_url == setup.server_url);
     if existing.is_none() || same_server {
         config::persist_emby_setup_and_secret(&setup, &exchange.token)
-            .map_err(|_| "mbvd: could not persist Emby setup".to_string())?;
+            .map_err(|error| format!("mbvd: could not persist Emby setup: {error}"))?;
     } else {
         config::replace_emby_setup_and_secret(&setup, &exchange.token)
-            .map_err(|_| "mbvd: could not replace Emby setup".to_string())?;
+            .map_err(|error| format!("mbvd: could not replace Emby setup: {error}"))?;
     }
     Ok(setup)
 }
@@ -252,11 +252,11 @@ fn connect_emby() -> Result<(), String> {
     let username = prompt("Username")?;
     let password = prompt_secret("Password")?;
     let config = config::load_config()
-        .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
+        .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;
     let existing = config.emby_setup.clone();
     let client = mbv_core::api::EmbyClient::new(config);
     let exchange = exchange_emby_credentials(&client, &server_url, &username, &password)?;
-    let setup = commit_emby_setup(existing, exchange)?;
+    let setup = commit_emby_setup(existing.as_ref(), exchange)?;
     if daemon_running() {
         reconcile_running_owner(config::ServiceKind::Emby, setup.revision)?;
         println!(
@@ -272,7 +272,7 @@ fn connect_emby() -> Result<(), String> {
     Ok(())
 }
 
-fn classified_abs_error(error: &mbv_core::audiobookshelf::AudiobookshelfError) -> String {
+fn classified_abs_error(error: mbv_core::audiobookshelf::AudiobookshelfError) -> String {
     use mbv_core::audiobookshelf::AudiobookshelfFailureClass;
     match error.class {
         AudiobookshelfFailureClass::AuthenticationRejected => {
@@ -301,7 +301,7 @@ fn connect_abs() -> Result<(), String> {
     let server_url = prompt("Audiobookshelf server URL")?;
     let api_key = prompt_secret("Audiobookshelf API key")?;
     let config = config::load_config()
-        .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
+        .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;
     let existing = config.audiobookshelf_setup.clone();
     let old_queue = config::load_queue_state();
     let validated = mbv_core::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
@@ -309,14 +309,14 @@ fn connect_abs() -> Result<(), String> {
         &api_key,
         Duration::from_secs(10),
     )
-    .map_err(|error| classified_abs_error(&error))?;
+    .map_err(classified_abs_error)?;
     let (setup, _user, api_key) = validated.into_parts();
     let same_server = existing
         .as_ref()
         .is_some_and(|old| old.server_url == setup.server_url);
     let revision = if existing.is_none() || same_server {
         config::persist_audiobookshelf_setup_and_secret(&setup, &api_key)
-            .map_err(|_| "mbvd: could not persist Audiobookshelf setup".to_string())?
+            .map_err(|error| format!("mbvd: could not persist Audiobookshelf setup: {error}"))?
     } else {
         config::replace_audiobookshelf_setup_and_secret(
             &setup,
@@ -328,7 +328,7 @@ fn connect_abs() -> Result<(), String> {
                 }
             },
         )
-        .map_err(|_| "mbvd: could not replace Audiobookshelf setup".to_string())?
+        .map_err(|error| format!("mbvd: could not replace Audiobookshelf setup: {error}"))?
     };
     if daemon_running() {
         reconcile_running_owner(config::ServiceKind::Audiobookshelf, revision)?;
@@ -352,13 +352,13 @@ fn disconnect_abs() -> Result<(), String> {
     std::env::set_var("MBV_SYSTEM", "1");
     let _lock = administration_lock("abs")?;
     let config = config::load_config()
-        .map_err(|_| "mbvd: could not load owner configuration".to_string())?;
+        .map_err(|error| format!("mbvd: could not load owner configuration: {error}"))?;
     let was_installed = config.audiobookshelf_setup.is_some();
     config::remove_audiobookshelf_setup_and_secret_with_owned_state(
         clear_audiobookshelf_owned_state,
         || {},
     )
-    .map_err(|_| "mbvd: could not remove Audiobookshelf setup".to_string())?;
+    .map_err(|error| format!("mbvd: could not remove Audiobookshelf setup: {error}"))?;
     if was_installed {
         println!("mbvd: Audiobookshelf credential removed");
     } else {
@@ -379,7 +379,7 @@ fn disconnect_abs() -> Result<(), String> {
     Ok(())
 }
 
-fn reconcile_event_outcome(event: mbv_core::ctrl::CtrlEvent) -> Option<Result<(), String>> {
+fn reconcile_event_outcome(event: &mbv_core::ctrl::CtrlEvent) -> Option<Result<(), String>> {
     match event {
         mbv_core::ctrl::CtrlEvent::ServiceSetupApplied { .. } => Some(Ok(())),
         mbv_core::ctrl::CtrlEvent::ServiceSetupRejected { reason, .. } => Some(Err(format!(
@@ -391,12 +391,13 @@ fn reconcile_event_outcome(event: mbv_core::ctrl::CtrlEvent) -> Option<Result<()
 
 fn wait_for_reconcile_outcome(reader: impl BufRead) -> Result<(), String> {
     for next in reader.lines() {
-        let line = next.map_err(|_| {
-            "mbvd: restart required (setup acknowledgement unavailable)".to_string()
+        let line = next.map_err(|error| {
+            format!("mbvd: restart required (setup acknowledgement unavailable): {error}")
         })?;
-        let event = serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line)
-            .map_err(|_| "mbvd: restart required (invalid setup acknowledgement)".to_string())?;
-        if let Some(outcome) = reconcile_event_outcome(event) {
+        let event = serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line).map_err(|error| {
+            format!("mbvd: restart required (invalid setup acknowledgement): {error}")
+        })?;
+        if let Some(outcome) = reconcile_event_outcome(&event) {
             return outcome;
         }
     }
@@ -404,26 +405,26 @@ fn wait_for_reconcile_outcome(reader: impl BufRead) -> Result<(), String> {
 }
 
 fn connect_running_owner() -> Result<(UnixStream, BufReader<UnixStream>), String> {
-    let stream = UnixStream::connect(config::control_socket_path()).map_err(|_error| {
-        "mbvd: restart required (packaged daemon ctrl unavailable)".to_string()
+    let stream = UnixStream::connect(config::control_socket_path()).map_err(|error| {
+        format!("mbvd: restart required (packaged daemon ctrl unavailable): {error}")
     })?;
     stream
         .set_read_timeout(Some(Duration::from_secs(6)))
-        .map_err(|_error| {
-            "mbvd: restart required (cannot read packaged daemon ctrl)".to_string()
+        .map_err(|error| {
+            format!("mbvd: restart required (cannot read packaged daemon ctrl): {error}")
         })?;
-    let writer = stream.try_clone().map_err(|_error| {
-        "mbvd: restart required (cannot write packaged daemon ctrl)".to_string()
+    let writer = stream.try_clone().map_err(|error| {
+        format!("mbvd: restart required (cannot write packaged daemon ctrl): {error}")
     })?;
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
-    reader.read_line(&mut line).map_err(|_error| {
-        "mbvd: restart required (packaged daemon did not acknowledge)".to_string()
+    reader.read_line(&mut line).map_err(|error| {
+        format!("mbvd: restart required (packaged daemon did not acknowledge): {error}")
     })?;
     match serde_json::from_str::<mbv_core::ctrl::CtrlEvent>(&line) {
         Ok(mbv_core::ctrl::CtrlEvent::Hello(hello)) => hello
             .validate_peer()
-            .map_err(|_error| "mbvd: restart required (ctrl protocol mismatch)".to_string())?,
+            .map_err(|error| format!("mbvd: restart required (ctrl protocol mismatch): {error}"))?,
         _ => return Err("mbvd: restart required (invalid packaged daemon ctrl hello)".into()),
     }
     Ok((writer, reader))
@@ -437,17 +438,19 @@ fn send_reconcile_request(
     let hello = serde_json::to_string(&mbv_core::ctrl::CtrlCmd::Hello(
         mbv_core::ctrl::CtrlHello::current(),
     ))
-    .map_err(|_error| "mbvd: restart required (cannot serialize ctrl hello)".to_string())?;
+    .map_err(|error| format!("mbvd: restart required (cannot serialize ctrl hello): {error}"))?;
     writeln!(writer, "{hello}")
         .and_then(|()| {
             serde_json::to_string(&mbv_core::ctrl::CtrlCmd::ApplyServiceSetup { kind, revision })
-                .map_err(|_error| io::Error::other("cannot serialize setup request"))
+                .map_err(|error| {
+                    io::Error::other(format!("cannot serialize setup request: {error}"))
+                })
                 .and_then(|request| writeln!(writer, "{request}"))
         })
-        .map_err(|_error| "mbvd: restart required (cannot send setup request)".to_string())?;
+        .map_err(|error| format!("mbvd: restart required (cannot send setup request): {error}"))?;
     writer
         .flush()
-        .map_err(|_error| "mbvd: restart required (cannot flush setup request)".to_string())
+        .map_err(|error| format!("mbvd: restart required (cannot flush setup request): {error}"))
 }
 
 fn reconcile_running_owner(kind: config::ServiceKind, revision: u64) -> Result<(), String> {
@@ -469,12 +472,12 @@ fn install_panic_hook() {
 }
 
 fn install_signal_handlers() {
+    let handler = signal_handler as *const () as libc::sighandler_t;
+    // SAFETY: each signal is a valid fatal signal, and handler has the C ABI
+    // signature expected by libc::signal.
     unsafe {
         for &sig in &[libc::SIGSEGV, libc::SIGILL, libc::SIGBUS, libc::SIGFPE] {
-            libc::signal(
-                sig,
-                signal_handler as extern "C" fn(libc::c_int) as libc::sighandler_t,
-            );
+            libc::signal(sig, handler);
         }
     }
 }
@@ -488,6 +491,8 @@ extern "C" fn signal_handler(sig: libc::c_int) {
         _ => b"CRASH: fatal signal\n",
     };
 
+    // SAFETY: `msg` points to a static byte string valid for `msg.len()`;
+    // write is async-signal-safe, and sig is the signal currently handled.
     unsafe {
         libc::write(libc::STDERR_FILENO, msg.as_ptr().cast(), msg.len());
         libc::signal(sig, libc::SIG_DFL);

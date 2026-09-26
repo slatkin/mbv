@@ -1,10 +1,17 @@
-use super::*;
-
+use super::super::{
+    mpsc, mpv_position_ticks, quit_timeout_stop_flags, refresh_tracks, thread, Duration, Event,
+    Instant, Ordering, PlayerCommand, PlayerEvent, PreparedSource, PropertyData,
+};
+use super::{PlaybackRun, ProgressGuard};
+use crate::playback_queue::QueueItem;
+use libmpv2::Mpv;
 use std::os::unix::io::RawFd;
 
 fn command_quit_async(mpv: &Mpv) {
     let quit = std::ffi::CString::new("quit").unwrap();
     let mut args = [quit.as_ptr(), std::ptr::null()];
+    // SAFETY: `mpv` owns a live context, and both argument pointers refer to
+    // NUL-terminated strings that stay alive for the duration of this call.
     unsafe {
         libmpv2_sys::mpv_command_async(mpv.ctx.as_ptr(), 0, args.as_mut_ptr());
     }
@@ -26,15 +33,19 @@ fn poll_wakeup(fd: RawFd, timeout_ms: i32) {
         events: libc::POLLIN,
         revents: 0,
     };
+    // SAFETY: `pfd` is a valid, writable pollfd for this call; the caller
+    // passes an open self-pipe descriptor owned by the playback run.
     unsafe {
-        libc::poll(&mut pfd, 1, timeout_ms);
+        libc::poll(&raw mut pfd, 1, timeout_ms);
     }
 }
 
 fn drain_wakeup(fd: RawFd) {
     let mut buf = [0u8; 64];
     loop {
-        let n = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, buf.len()) };
+        // SAFETY: the caller owns this open self-pipe read descriptor, and
+        // `buf` supplies `buf.len()` writable bytes for the read.
+        let n = unsafe { libc::read(fd, buf.as_mut_ptr().cast::<libc::c_void>(), buf.len()) };
         if n <= 0 {
             break;
         }
@@ -49,8 +60,8 @@ impl PlaybackRun {
     pub(in crate::player) fn run(
         mut self,
         mut mpv: Mpv,
-        stop_rx: mpsc::Receiver<()>,
-        cmd_rx: mpsc::Receiver<PlayerCommand>,
+        stop_rx: &mpsc::Receiver<()>,
+        cmd_rx: &mpsc::Receiver<PlayerCommand>,
         mut progress: ProgressGuard,
         wakeup_read_fd: RawFd,
         wakeup_write_fd: RawFd,
@@ -72,8 +83,11 @@ impl PlaybackRun {
         if wakeup_write_fd >= 0 {
             mpv.set_wakeup_callback(move || {
                 let byte = [0u8; 1];
+                // SAFETY: the run keeps the self-pipe write descriptor open
+                // until the callback is removed with its Mpv instance; `byte`
+                // points to one readable byte for this write.
                 unsafe {
-                    libc::write(wakeup_write_fd, byte.as_ptr() as *const libc::c_void, 1);
+                    libc::write(wakeup_write_fd, byte.as_ptr().cast::<libc::c_void>(), 1);
                 }
             });
         }
@@ -83,14 +97,16 @@ impl PlaybackRun {
                 &mpv,
                 &mut progress,
                 &progress_report_tx,
-                &stop_rx,
-                &cmd_rx,
+                stop_rx,
+                cmd_rx,
                 wakeup_read_fd,
             ) {
                 return;
             }
         })); // end catch_unwind
         if wakeup_read_fd >= 0 {
+            // SAFETY: this run exclusively owns the read descriptor and closes
+            // it once, after its polling loop has stopped.
             unsafe {
                 libc::close(wakeup_read_fd);
             }
@@ -98,7 +114,7 @@ impl PlaybackRun {
         if let Err(panic) = result {
             let msg = panic
                 .downcast_ref::<&str>()
-                .map(|s| s.to_string())
+                .map(ToString::to_string)
                 .or_else(|| panic.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".to_string());
             log::error!(target: "player", "PlaybackRun panicked: {msg}");
@@ -179,7 +195,7 @@ impl PlaybackRun {
         // active slot, so a QueueMove/QueueRemove drained before the
         // deferred Stopped emit cannot rename the occurrence (D2).
         self.stop_slot = self.active_slot_id();
-        self.stop_runtime = self.active_item().map(|item| item.runtime_ticks());
+        self.stop_runtime = self.active_item().map(QueueItem::runtime_ticks);
     }
 
     /// Emit the final `Stopped` after the quit timeout elapsed.
@@ -189,7 +205,7 @@ impl PlaybackRun {
         }
         let runtime = self
             .stop_runtime
-            .or_else(|| self.active_item().map(|item| item.runtime_ticks()))
+            .or_else(|| self.active_item().map(QueueItem::runtime_ticks))
             .unwrap_or(0);
         let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
         let (played, consume) = quit_timeout_stop_flags(
@@ -251,7 +267,7 @@ impl PlaybackRun {
                         .is_some_and(PreparedSource::has_sensitive_lifecycle),
                     text,
                 ) {
-                    log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
+                    log::warn!(target: "mpv", "[{prefix}/{level}] {t}");
                 }
                 false
             }
@@ -264,7 +280,7 @@ impl PlaybackRun {
                 true
             }
             Err(e) => {
-                if self.on_mpv_error(e, progress) {
+                if self.on_mpv_error(&e, progress) {
                     return true;
                 }
                 false
@@ -306,7 +322,8 @@ impl PlaybackRun {
     ) {
         match (name, change) {
             ("volume", PropertyData::Double(vol)) => {
-                self.status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
+                self.status.lock().unwrap().volume =
+                    super::super::saturating_i64_from_f64(vol * vol / 100.0);
             }
             (_, PropertyData::Double(pos_secs)) => {
                 self.on_time_pos(pos_secs, mpv);
@@ -339,7 +356,7 @@ impl PlaybackRun {
                 self.status.lock().unwrap().video_height = h;
             }
             ("video-params/h", change) => {
-                log::warn!(target: "player", "video-params/h (playlist) unexpected type: {:?}", change);
+                log::warn!(target: "player", "video-params/h (playlist) unexpected type: {change:?}");
             }
             ("audio-codec-name", PropertyData::Str(s)) => {
                 self.status.lock().unwrap().audio_codec = s.to_lowercase();
@@ -352,7 +369,7 @@ impl PlaybackRun {
                 self.on_playlist_pos_changed(pos, mpv_position_ticks(mpv));
             }
             ("playlist-count", PropertyData::Int64(count)) if self.load_state.is_ready() => {
-                self.on_playlist_count_changed(count as usize);
+                self.on_playlist_count_changed(usize::try_from(count).unwrap_or(usize::MAX));
             }
             _ => {}
         }

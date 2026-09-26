@@ -15,6 +15,7 @@ pub struct EmbyOwnerContext {
 }
 
 impl EmbyOwnerContext {
+    #[must_use]
     pub fn from_client(client: crate::api::EmbyClient, revision: u64) -> Self {
         Self {
             client: std::sync::Arc::new(std::sync::Mutex::new(client)),
@@ -34,8 +35,8 @@ impl EmbyOwnerContext {
             return Err("Emby setup is incomplete in owner storage".to_string());
         }
         let mut client = crate::api::EmbyClient::new(config.clone());
-        client.config.server_url = setup.server_url.clone();
-        client.user_id = setup.user_id.clone();
+        client.config.server_url.clone_from(&setup.server_url);
+        client.user_id.clone_from(&setup.user_id);
         client.token = token;
         Ok(Self::from_client(client, setup.revision))
     }
@@ -81,6 +82,7 @@ pub struct DaemonStartupContext {
 }
 
 impl DaemonStartupContext {
+    #[must_use]
     pub fn new(config: crate::config::Config, role: DaemonRole) -> Self {
         let emby = EmbyOwnerContext::from_packaged_storage_result(&config).ok();
         let audiobookshelf = AudiobookshelfOwnerContext::from_packaged_storage_result(&config).ok();

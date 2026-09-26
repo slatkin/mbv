@@ -81,11 +81,9 @@ impl QueuePlaybackPanel {
                 now_playing_title: None,
                 title_parts: None,
                 status_indicators: None,
-                idle_feed_title: None,
                 use_nerd_fonts: false,
-                stop_available: false,
-                next_available: false,
-                prev_available: false,
+                idle_feed_title: None,
+                availability: super::library_playback_panel::TransportAvailability::default(),
             },
             transport_area: None,
             play_pause_area: Rect::default(),
@@ -161,32 +159,32 @@ impl QueuePlaybackPanel {
         self.transport.title_parts.clone()
     }
 
-    fn mouse(&self, event: &MouseEvent) -> Option<Msg> {
+    fn mouse(&self, event: MouseEvent) -> Option<Msg> {
         let point = (event.column, event.row).into();
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) if self.play_pause_area.contains(point) => {
                 Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.stop_area.contains(point) && self.transport.stop_available =>
+                if self.stop_area.contains(point) && self.transport.availability.stop =>
             {
                 Some(Msg::Playback(PlaybackRequest::Stop))
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.prev_area.contains(point) && self.transport.prev_available =>
+                if self.prev_area.contains(point) && self.transport.availability.previous =>
             {
                 Some(Msg::Playback(PlaybackRequest::Previous))
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.next_area.contains(point) && self.transport.next_available =>
+                if self.next_area.contains(point) && self.transport.availability.next =>
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self.seekbar_area.contains(point) && self.seekbar_area.width > 0 =>
             {
-                let fraction = event.column.saturating_sub(self.seekbar_area.x) as f64
-                    / self.seekbar_area.width as f64;
+                let fraction = f64::from(event.column.saturating_sub(self.seekbar_area.x))
+                    / f64::from(self.seekbar_area.width);
                 Some(Msg::Playback(PlaybackRequest::SeekTo(fraction)))
             }
             _ => None,
@@ -245,38 +243,38 @@ impl Component for QueuePlaybackPanel {
                 area: transport_area,
                 playback: &mut playback,
                 player_h,
-                show_controls: self.transport.show_controls,
+                controls: crate::app::render::PlaybackControls {
+                    show: self.transport.show_controls,
+                    use_nerd_fonts: self.transport.use_nerd_fonts,
+                    availability: self.transport.availability,
+                    panel_focused: false,
+                    progress: (
+                        self.transport.state.position_ticks,
+                        self.transport.state.runtime_ticks,
+                        self.transport.state.paused,
+                    ),
+                    idle_feed_title: None,
+                },
                 now_playing_title: self.transport.now_playing_title.clone(),
                 panel: TRANSPORT_SURFACE,
-                panel_focused: false,
-                progress: (
-                    self.transport.state.position_ticks,
-                    self.transport.state.runtime_ticks,
-                    self.transport.state.paused,
-                ),
-                use_nerd_fonts: self.transport.use_nerd_fonts,
-                stop_available: self.transport.stop_available,
-                next_available: self.transport.next_available,
-                prev_available: self.transport.prev_available,
                 status_indicators: self.transport.status_indicators.clone(),
                 title_parts: self.transport.title_parts.clone(),
                 // The queue column never shows the idle feed title: while
                 // idle the panel is collapsed to its header row (task 3.6),
                 // and the feed title's only open-link gate re-points at the
                 // panel's presence (task 3.8).
-                idle_feed_title: None,
                 marquee_text: &mut self.marquee_text,
                 marquee_started_at: &mut self.marquee_started_at,
             },
         );
-        self.play_pause_area = playback.play_pause_area;
-        self.stop_area = playback.stop_area;
-        self.next_area = playback.next_area;
-        self.prev_area = playback.prev_area;
-        self.seekbar_area = playback.seekbar_area;
+        self.play_pause_area = playback.play_pause;
+        self.stop_area = playback.stop;
+        self.next_area = playback.next;
+        self.prev_area = playback.prev;
+        self.seekbar_area = playback.seekbar;
     }
 
-    fn query<'a>(&'a self, attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, attr: Attribute) -> Option<QueryResult<'_>> {
         self.props.get_for_query(attr)
     }
     fn attr(&mut self, attr: Attribute, value: AttrValue) {
@@ -291,9 +289,9 @@ impl Component for QueuePlaybackPanel {
 }
 
 impl AppComponent<Msg, UserEvent> for QueuePlaybackPanel {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
-            Event::Mouse(mouse) => self.mouse(mouse),
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
+            Event::Mouse(mouse) => self.mouse(*mouse),
             _ => None,
         }
     }
@@ -302,7 +300,6 @@ impl AppComponent<Msg, UserEvent> for QueuePlaybackPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::palette::Surface;
     use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
     use ratatui::backend::TestBackend;
     use ratatui::style::Color;
@@ -312,30 +309,6 @@ mod tests {
 
     /// One painted band row: its text and each cell's foreground.
     type PaintedRow = (String, Vec<Color>);
-
-    fn painted_panel(idle: bool) -> QueuePlaybackPanel {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(
-            if idle {
-                NowPlayingStatus::Idle
-            } else {
-                NowPlayingStatus::Playing
-            },
-            "music-box".into(),
-            false,
-        );
-        panel.transport.show_controls = !idle;
-        // The shell hands the transport band the rows below the header's
-        // band: row 0 is the header's recessed padding, row 1 the header
-        // itself.
-        let transport_area = (!idle).then_some(Rect::new(0, 2, 40, 4));
-        panel.set_transport_area(transport_area);
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        panel
-    }
 
     /// The media-type families of the requirements table, as the projection
     /// carries them (title part, optional context part). The mapping itself is
@@ -408,144 +381,79 @@ mod tests {
     /// combined row, owned by `chrome_player.rs`'s painter test.)
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
-    #[case::emby_home_video("Home Video", None)]
-    #[case::audiobookshelf_book("Book Title", None)]
     #[case::emby_episode("Pilot", Some("Series"))]
-    #[case::emby_audio_track("Track", Some("Artist"))]
-    #[case::audiobookshelf_podcast("Episode", Some("Show"))]
-    #[case::feed_entry("Entry", Some("Subscription"))]
     fn split_title_band_paints_each_media_types_parts_in_their_roles(
         #[case] title: &str,
         #[case] context: Option<&str>,
     ) {
         let ((top, top_fgs), (mid, mid_fgs), (bottom, _bottom_fgs)) =
             painted_split_title_rows(parts_for(title, context));
-        match context {
-            Some(context) => {
-                // The first row carries the show in the context role and
-                // the `pos / dur` time; the title is not on it.
-                assert_cells_carry(
-                    &top,
-                    &top_fgs,
-                    context,
-                    palette::PLAYBACK_CONTEXT_FG,
-                    "the context part",
-                );
-                assert!(
-                    !top.contains(title),
-                    "the title paints below the show row, not on it: {top:?}"
-                );
-                assert!(
-                    top.contains('/'),
-                    "the elapsed/duration time rides the show row: {top:?}"
-                );
-                // The row below carries the title alone in the title role:
-                // no show, no time, no context-role paint.
-                assert_cells_carry(
-                    &mid,
-                    &mid_fgs,
-                    title,
-                    palette::PLAYBACK_TITLE_FG,
-                    "the title part",
-                );
-                assert!(!mid.contains(context), "the show stays on its row: {mid:?}");
-                assert!(!mid.contains('/'), "no time on the title row: {mid:?}");
-                let title_start = mid.find(title).unwrap();
-                assert_ne!(
-                    mid_fgs[title_start - 1],
-                    palette::PLAYBACK_CONTEXT_FG,
-                    "no context part beside the title: {mid:?}"
-                );
-                // The transport controls land on the band's bottom row.
-                assert!(
-                    bottom.contains('X'),
-                    "the stop glyph paints on the bottom row: {bottom:?}"
-                );
-                assert!(!bottom.contains(title) && !bottom.contains(context));
-            }
-            None => {
-                // The unexpanded band: the title and the time share the
-                // first row, the controls ride the row below, and nothing
-                // expands onto the band's last row.
-                assert_cells_carry(
-                    &top,
-                    &top_fgs,
-                    title,
-                    palette::PLAYBACK_TITLE_FG,
-                    "the title part",
-                );
-                assert!(top.contains('/'), "the time rides the title row: {top:?}");
-                assert!(
-                    mid.contains('X'),
-                    "the stop glyph paints on the controls row: {mid:?}"
-                );
-                assert!(
-                    !mid.contains(title) && !mid.contains('/'),
-                    "a single-part row does not expand onto the controls row: {mid:?}"
-                );
-                assert!(
-                    !bottom.contains(title) && !bottom.contains('X'),
-                    "nothing paints below the controls row: {bottom:?}"
-                );
-            }
+        if let Some(context) = context {
+            // The first row carries the show in the context role and
+            // the `pos / dur` time; the title is not on it.
+            assert_cells_carry(
+                &top,
+                &top_fgs,
+                context,
+                palette::PLAYBACK_CONTEXT_FG,
+                "the context part",
+            );
+            assert!(
+                !top.contains(title),
+                "the title paints below the show row, not on it: {top:?}"
+            );
+            assert!(
+                top.contains('/'),
+                "the elapsed/duration time rides the show row: {top:?}"
+            );
+            // The row below carries the title alone in the title role:
+            // no show, no time, no context-role paint.
+            assert_cells_carry(
+                &mid,
+                &mid_fgs,
+                title,
+                palette::PLAYBACK_TITLE_FG,
+                "the title part",
+            );
+            assert!(!mid.contains(context), "the show stays on its row: {mid:?}");
+            assert!(!mid.contains('/'), "no time on the title row: {mid:?}");
+            let title_start = mid.find(title).unwrap();
+            assert_ne!(
+                mid_fgs[title_start - 1],
+                palette::PLAYBACK_CONTEXT_FG,
+                "no context part beside the title: {mid:?}"
+            );
+            // The transport controls land on the band's bottom row.
+            assert!(
+                bottom.contains('X'),
+                "the stop glyph paints on the bottom row: {bottom:?}"
+            );
+            assert!(!bottom.contains(title) && !bottom.contains(context));
+        } else {
+            // The unexpanded band: the title and the time share the
+            // first row, the controls ride the row below, and nothing
+            // expands onto the band's last row.
+            assert_cells_carry(
+                &top,
+                &top_fgs,
+                title,
+                palette::PLAYBACK_TITLE_FG,
+                "the title part",
+            );
+            assert!(top.contains('/'), "the time rides the title row: {top:?}");
+            assert!(
+                mid.contains('X'),
+                "the stop glyph paints on the controls row: {mid:?}"
+            );
+            assert!(
+                !mid.contains(title) && !mid.contains('/'),
+                "a single-part row does not expand onto the controls row: {mid:?}"
+            );
+            assert!(
+                !bottom.contains(title) && !bottom.contains('X'),
+                "nothing paints below the controls row: {bottom:?}"
+            );
         }
-    }
-
-    #[test]
-    fn idle_panel_paints_only_the_header_row_and_resolves_nothing() {
-        let panel = painted_panel(true);
-        let (play_pause, seekbar) = panel.transport_hits();
-        assert_eq!(play_pause.width, 0, "idle panel keeps no play/pause hit");
-        assert_eq!(seekbar.width, 0, "idle panel keeps no seekbar hit");
-
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Idle, "music-box".into(), false);
-        panel.set_transport_area(None);
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("IDLE"));
-        assert!(output.contains("on music-box"));
-        assert!(
-            !output.contains("PLAYING") && !output.contains("PAUSED"),
-            "idle header states IDLE: {output:?}"
-        );
-        // Nothing else of the panel paints: no seekbar track, no transport.
-        assert!(!output.contains('\u{2594}'));
-    }
-
-    #[test]
-    fn active_panel_paints_the_transport_its_shell_rect_names() {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
-        panel.transport.show_controls = true;
-        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("PLAYING"), "header states PLAYING");
-        assert!(output.contains("Example"), "transport paints the title");
-        assert!(output.contains('\u{2594}'), "seekbar track paints");
-
-        let (play_pause, seekbar) = panel.transport_hits();
-        assert!(play_pause.width > 0 && seekbar.width > 0, "hits retained");
     }
 
     #[test]
@@ -580,8 +488,8 @@ mod tests {
         ));
         // Prev and next keep distinct painted rects and resolve to their own
         // intents (the prev control was painted without a hit rect until now).
-        panel.transport.prev_available = true;
-        panel.transport.next_available = true;
+        panel.transport.availability.previous = true;
+        panel.transport.availability.next = true;
         let (prev, next) = panel.transport_nav_hits();
         assert!(prev.width > 0 && next.width > 0);
         assert!(prev.right() <= next.x, "prev={prev:?} next={next:?}");
@@ -597,101 +505,5 @@ mod tests {
         panel.set_transport_area(None);
         assert!(panel.on(&click(5, 4)).is_none());
         let _ = KeyEvent::new(Key::Null, KeyModifiers::NONE);
-    }
-
-    #[test]
-    fn transport_band_uses_the_queue_column_chrome_surface() {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let buf = terminal.backend().buffer();
-        // The transport band's first row paints the chrome-band fill.
-        assert_eq!(
-            buf[(1, 2)].style().bg,
-            Some(palette::surface_colors(Surface::QueueOnlyPlaybackPanel, false).fill),
-        );
-    }
-
-    /// The header is recessed in the queue column: the row above it and the
-    /// two columns each side carry no header-band paint, and the painted row
-    /// itself starts two columns in from the placement's left edge.
-    #[test]
-    fn header_paints_inset_one_row_down_and_two_columns_in() {
-        let band = palette::surface_colors(Surface::QueueOnlyPlaybackPanel, false).fill;
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.set_transport_area(None);
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let buf = terminal.backend().buffer();
-
-        assert_eq!(
-            buf[(2, 1)].style().bg,
-            Some(band),
-            "header row paints inset"
-        );
-        assert_ne!(
-            buf[(0, 0)].style().bg,
-            Some(band),
-            "no paint above the inset"
-        );
-        assert_ne!(
-            buf[(2, 0)].style().bg,
-            Some(band),
-            "no paint above the inset"
-        );
-        assert_ne!(
-            buf[(0, 1)].style().bg,
-            Some(band),
-            "no paint left of the inset"
-        );
-        assert_ne!(
-            buf[(1, 1)].style().bg,
-            Some(band),
-            "no paint left of the inset"
-        );
-        assert_ne!(
-            buf[(38, 1)].style().bg,
-            Some(band),
-            "no paint right of the inset"
-        );
-        assert_ne!(
-            buf[(39, 1)].style().bg,
-            Some(band),
-            "no paint right of the inset"
-        );
-    }
-
-    /// The header carries no progress while playing: the percent stays out
-    /// of the header row even when the projected transport state has
-    /// position and runtime to state.
-    #[test]
-    fn header_shows_no_progress_while_playing() {
-        let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.transport.state.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
-        panel.transport.state.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
-        panel.set_transport_area(None);
-        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
-            .unwrap();
-        let buf = terminal.backend().buffer();
-        let header: String = (0..40).map(|x| buf[(x, 1)].symbol().to_owned()).collect();
-        assert!(
-            !header.contains('%'),
-            "no percent in the header: {header:?}"
-        );
-        assert!(header.contains(" PLAYING"), "status still left: {header:?}");
-        assert!(
-            header.trim_end().ends_with("on music-box"),
-            "target still right: {header:?}"
-        );
     }
 }

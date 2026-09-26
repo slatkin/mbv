@@ -48,7 +48,7 @@ impl UiRootComponent {
 impl Component for UiRootComponent {
     fn view(&mut self, _frame: &mut Frame, _area: Rect) {}
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -64,8 +64,8 @@ impl Component for UiRootComponent {
 }
 
 impl AppComponent<Msg, UserEvent> for UiRootComponent {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        let observed = match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        let observed = match ev {
             Event::Keyboard(key) => TerminalObserverEvent::Key(*key),
             Event::WindowResize(width, height) => TerminalObserverEvent::Resize {
                 width: *width,
@@ -101,7 +101,7 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+    use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
     #[test]
     fn root_observer_marks_none_returning_local_key_as_processed() {

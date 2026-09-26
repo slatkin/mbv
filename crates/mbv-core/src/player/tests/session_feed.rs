@@ -148,7 +148,7 @@ fn feed_cancel_pending_quit_clears_state(
 
     assert!(session.quit_at.is_none());
     assert!(session.shutdown_report_timeout.lock().unwrap().is_none());
-    assert_eq!(session.progress_join_budget(), Duration::from_secs(30));
+    assert_eq!(PlaybackRun::progress_join_budget(), Duration::from_secs(30));
 }
 
 // ── Feed append semantics ──────────────────────────────────────────────────
@@ -330,7 +330,7 @@ fn mixed_queue_feed_advances_to_next_emby_item() {
         ids.0 = ItemId::new("ep3");
         ids.1 = MediaSourceId::new("msid-ep3");
         ids.2 = EmbySessionId::new("sid-ep3");
-    }
+    };
     assert!(session.reporter.has_session());
     // Succeeds instantly on the mock instead of failing against no server
     // with a 500ms retry sleep.

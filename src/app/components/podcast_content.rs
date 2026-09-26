@@ -7,6 +7,7 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
+#[cfg(test)]
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use mbv_core::api::TICKS_PER_SECOND;
@@ -175,6 +176,10 @@ impl PodcastContent {
     /// The active pill's scoped episode view: a show pill ignores play
     /// state; a state pill filters every fetched show's episodes (spec:
     /// state and show selections never combine).
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     fn active_episodes(&self) -> Vec<AudiobookshelfDownloadedEpisode> {
         if self.on_latest() {
             return self
@@ -268,12 +273,18 @@ impl PodcastContent {
                         semantic_state: match progress {
                             Some(progress) if progress.is_finished => MediaSemanticState::Played,
                             Some(progress) if progress.current_time_seconds > 0.0 => {
+                                #[expect(
+                                    clippy::cast_possible_truncation,
+                                    clippy::cast_sign_loss,
+                                    reason = "progress percentage through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                                )]
                                 let percent = episode
                                     .duration_seconds
                                     .filter(|duration| *duration > 0.0)
                                     .map(|duration| {
-                                        ((progress.current_time_seconds * 100.0 / duration) as u16)
-                                            .min(100)
+                                        (progress.current_time_seconds * 100.0 / duration)
+                                            .clamp(0.0, 100.0)
+                                            as u16
                                     });
                                 MediaSemanticState::active(percent)
                             }
@@ -351,8 +362,16 @@ impl PodcastContent {
     /// sends (one path, both inputs).
     fn cycle_pill(&mut self, delta: i64) -> Option<Msg> {
         let count = 1 + STATE_PILL_COUNT + self.state.shows.len();
-        let next = (self.active_pill_index().unwrap_or(0) as i64 + delta).rem_euclid(count as i64)
-            as usize;
+        let current = self.active_pill_index().unwrap_or(0);
+        let next = if delta < 0 {
+            if current == 0 {
+                count - 1
+            } else {
+                current - 1
+            }
+        } else {
+            (current + 1) % count
+        };
         let pill = if next == 0 {
             PillSelection::Latest
         } else if next <= STATE_PILL_COUNT {
@@ -438,21 +457,15 @@ impl PodcastContent {
         self.episodes.selected_target().cloned()
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn episode_rows(&self) -> &[MediaListRow<PodcastEpisodeTarget>] {
-        self.episodes.rows()
-    }
-
-    /// The episode list's declared title-reveal policy: the destination opts
-    /// in once at construction and the shared row painter applies it.
-    #[cfg(test)]
-    pub(in crate::app) fn episode_title_reveal(&self) -> MediaListTitleReveal {
-        self.episodes.wide().title_reveal()
-    }
-
     /// The selected episode as the existing hero producer's input: the
     /// downloaded episode over its parent show's identity (title, author,
     /// cover).
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     fn selected_episode_item(&self) -> Option<AudiobookshelfQueueItem> {
         let target = self.episodes.selected_target()?;
         if self.on_latest() {
@@ -540,7 +553,7 @@ impl PodcastContent {
             ),
             active: self.active_pill_index(),
         });
-        let list = if !has_shows && !(self.on_latest() && !self.latest_items.is_empty()) {
+        let list = if !has_shows && (!self.on_latest() || self.latest_items.is_empty()) {
             ListSlot::Empty {
                 loading: !self.state.loading_pages.is_empty(),
                 text: self

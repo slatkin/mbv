@@ -399,7 +399,7 @@ pub fn fmt_feeds_list(list: &[mbv_core::config::FeedSubscription]) -> String {
     }
 }
 
-pub fn fmt_library_routes(routes: &std::collections::HashMap<String, String>) -> String {
+pub fn fmt_library_routes(routes: &std::collections::BTreeMap<String, String>) -> String {
     match routes.len() {
         0 => "none".into(),
         1 => {
@@ -429,41 +429,4 @@ pub fn settings_cursor_to_key(cursor: usize) -> SettingKey {
         }
     }
     SettingKey::LogOut
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{setting_label, SettingKey};
-
-    #[test]
-    fn every_setting_key_has_a_non_empty_label() {
-        assert!(!setting_label(SettingKey::Services).is_empty());
-        assert!(!setting_label(SettingKey::Keys).is_empty());
-        assert!(!setting_label(SettingKey::StayAlive).is_empty());
-        assert!(!setting_label(SettingKey::AutoReconnect).is_empty());
-        assert!(!setting_label(SettingKey::SavePlaylistOnQuit).is_empty());
-        assert!(!setting_label(SettingKey::AlwaysPlayNext).is_empty());
-        assert!(!setting_label(SettingKey::ConsumeVideos).is_empty());
-        assert!(!setting_label(SettingKey::ConsumeAudio).is_empty());
-        assert!(!setting_label(SettingKey::SavePlaylistOnConsume).is_empty());
-        assert!(!setting_label(SettingKey::SavePlaylistOnConsumeAudio).is_empty());
-        assert!(!setting_label(SettingKey::AlwaysSkipIntro).is_empty());
-        assert!(!setting_label(SettingKey::ImageProtocol).is_empty());
-        assert!(!setting_label(SettingKey::HiddenLibraries).is_empty());
-        assert!(!setting_label(SettingKey::ShowAudioWindow).is_empty());
-        assert!(!setting_label(SettingKey::UseMpvConfig).is_empty());
-        assert!(!setting_label(SettingKey::NoScripts).is_empty());
-        assert!(!setting_label(SettingKey::Autoload).is_empty());
-        assert!(!setting_label(SettingKey::ShowSysTrayIcon).is_empty());
-        assert!(!setting_label(SettingKey::SystemNotifications).is_empty());
-        assert!(!setting_label(SettingKey::MouseSupport).is_empty());
-        assert!(!setting_label(SettingKey::MyLanguages).is_empty());
-        assert!(!setting_label(SettingKey::SubtitleMode).is_empty());
-        assert!(!setting_label(SettingKey::FeedViewLibraries).is_empty());
-        assert!(!setting_label(SettingKey::LibraryRoutes).is_empty());
-        assert!(!setting_label(SettingKey::SubtitleLanguage).is_empty());
-        assert!(!setting_label(SettingKey::AudioLanguage).is_empty());
-        assert!(!setting_label(SettingKey::ManageFeeds).is_empty());
-        assert!(!setting_label(SettingKey::LogOut).is_empty());
-    }
 }

@@ -41,8 +41,14 @@
 //! a second input to the resolver: the queue-only branch names it, and its
 //! recess rects share the value through the panel context.
 
+use ratatui::style::Color;
+
+use super::palette::Palette;
 use super::surface::{FocusSource, Level, Row, Surface};
-use super::*;
+use super::{
+    ACCENT, ACCENT_ACTIVE, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_BACKDROP,
+    SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_RESTING, SURFACE_SIDEBAR,
+};
 
 /// The row for one surface: its level, which column's focus (if any) drove
 /// its focused appearance in main, whether it takes the soft content-body
@@ -69,6 +75,16 @@ const fn chrome_band_row() -> Row {
         focus: FocusSource::Fixed,
         soft: false,
         resting: SURFACE_CHROME,
+    }
+}
+
+/// The pill family's fixed chrome rows: identical but for the resting value.
+const fn pill_row(resting: Color) -> Row {
+    Row {
+        level: Level::ChromeBand,
+        focus: FocusSource::Fixed,
+        soft: false,
+        resting,
     }
 }
 
@@ -186,29 +202,18 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: Palette::Grey2.color(),
         },
         // --- chrome band ---
+        // Sidebar band and tab bar share the same fixed chrome value as the
+        // queue/panel bands below (`chrome_band_row`).
         Surface::QueueCardVisualizer
         | Surface::StatusBar
         | Surface::StatusBarPill
         | Surface::QueuePanelBand
-        | Surface::QueueOnlyPlaybackPanel => chrome_band_row(),
-        Surface::PillRow => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: PILL_ROW_BG,
-        },
-        Surface::PillChip => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: PILL_BG,
-        },
-        Surface::PillChipSelected => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: PILL_SELECTED_BG,
-        },
+        | Surface::QueueOnlyPlaybackPanel
+        | Surface::SidebarBand
+        | Surface::TabBar => chrome_band_row(),
+        Surface::PillRow => pill_row(PILL_ROW_BG),
+        Surface::PillChip => pill_row(PILL_BG),
+        Surface::PillChipSelected => pill_row(PILL_SELECTED_BG),
         // The queue's selected scope pill paints the Direct-remote aqua
         // (`CONTEXT.md`, "Direct remote control"; `render/components/queue.rs:259,271`)
         // rather than the library pill's selected blue, so it carries its own
@@ -232,7 +237,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_BACKDROP,
         },
-        Surface::SidebarBand | Surface::TabBar => chrome_band_row(),
         // --- popup ---
         // Every modal caller passes `SURFACE_FOCUSED` as its frame background
         // (`render/components/modal_frame.rs:47` and its remaining callers).

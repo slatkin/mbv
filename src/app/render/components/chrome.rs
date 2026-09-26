@@ -1,5 +1,5 @@
 use crate::app::palette;
-use crate::app::ui_util::*;
+use crate::app::ui_util::trunc_str;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};

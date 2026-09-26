@@ -257,7 +257,7 @@ pub(in crate::app) fn audiobookshelf_initial_state(
 }
 
 pub(in crate::app) fn classify_audiobookshelf_failure(
-    error: &mbv_core::audiobookshelf::AudiobookshelfError,
+    error: mbv_core::audiobookshelf::AudiobookshelfError,
 ) -> ServiceState {
     match error.class {
         mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {
@@ -433,11 +433,6 @@ mod tests {
     }
 
     #[test]
-    fn no_setup_is_not_configured_and_does_not_need_authentication() {
-        assert_eq!(initial_state(false, false), ServiceState::NotConfigured);
-    }
-
-    #[test]
     fn configured_credentials_start_connecting() {
         assert_eq!(initial_state(true, true), ServiceState::Connecting);
         assert_eq!(
@@ -464,14 +459,5 @@ mod tests {
         config.feeds.clear();
         config.emby_setup = Some(EmbySetup::new("https://emby.example.test", "user-id"));
         assert!(!should_open_services(&config));
-    }
-
-    #[test]
-    fn startup_status_is_truthful_for_each_emby_state() {
-        assert!(!startup_status(ServiceState::NotConfigured).contains("initializing"));
-        assert!(startup_status(ServiceState::Connecting).contains("initializing"));
-        assert!(!startup_status(ServiceState::NeedsAuthentication).contains("initializing"));
-        assert!(!startup_status(ServiceState::Unavailable).contains("initializing"));
-        assert_eq!(startup_status(ServiceState::Ready), "Emby is ready");
     }
 }

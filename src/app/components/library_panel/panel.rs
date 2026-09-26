@@ -57,6 +57,10 @@ struct SplitGeometry {
 /// The Library panel: owner map, focus, painted-slot geometry, and the Wide
 /// split drag. Content owners are plain types beneath it (design D2); they
 /// are never mounted, focused, subscribed, or given a `ComponentId`.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "focused, split_changed, hero_overlay_open, and mini_view_hero_auto_open are independent panel interaction/lifecycle flags, not one mode (design analysis, issue #804)"
+)]
 pub struct LibraryPanel {
     owners: LibraryOwners,
     focused: bool,
@@ -265,21 +269,6 @@ impl LibraryPanel {
         self.split.as_ref().map(|split| split.gap)
     }
 
-    /// The split geometry the last painted Wide frame retained: the gap, the
-    /// content-area origin, the content width and the current list-pane
-    /// width (the facts the former shell-side gesture carried).
-    #[cfg(test)]
-    pub(in crate::app) fn test_split(&self) -> Option<(ratatui::layout::Rect, u16, u16, u16)> {
-        self.split.as_ref().map(|split| {
-            (
-                split.gap,
-                split.pane_origin_x,
-                split.content_width,
-                split.width,
-            )
-        })
-    }
-
     /// The painted list slot's rect, for the breakpoint-transition test path.
     #[cfg(test)]
     pub(in crate::app) fn test_list_rect(&self) -> Option<ratatui::layout::Rect> {
@@ -294,12 +283,6 @@ impl LibraryPanel {
         &self.hits.selector
     }
 
-    /// The selector markers projected into the last mounted panel frame.
-    #[cfg(test)]
-    pub(in crate::app) fn test_selector_markers(&self) -> &[bool] {
-        &self.projected_selector_markers
-    }
-
     #[cfg(test)]
     pub(in crate::app) fn test_hovered_selector(&self) -> Option<usize> {
         self.hovered_selector
@@ -310,15 +293,6 @@ impl LibraryPanel {
         &self,
     ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
         &self.hits.links
-    }
-
-    /// The Workspace selector row's retained hit regions (task 8.4: TV's
-    /// season pills), for the pill-click test path.
-    #[cfg(test)]
-    pub(in crate::app) fn test_workspace_selector_hits(
-        &self,
-    ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
-        &self.hits.workspace_selector
     }
 
     /// The last painted Wide skeleton geometry, for the panel-output test
@@ -356,15 +330,6 @@ impl LibraryPanel {
     #[cfg(test)]
     pub(in crate::app) fn test_narrow_geometry(&self) -> Option<WideSkeletonGeometry> {
         self.narrow_geometry.clone()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_hero_scroll_offset(&self) -> usize {
-        self.owners
-            .active_key()
-            .and_then(|key| self.owners.get(key))
-            .map(|owner| owner.hero_scroll_offset())
-            .unwrap_or_default()
     }
 
     // ── Shell-directed owner projection (task 5.10, design D9) ───────────

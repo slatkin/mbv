@@ -1,7 +1,13 @@
 use crate::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
-use super::super::*;
+use super::super::{
+    advance_decision, is_near_end, mpv_end_file_reason, mpv_position_ticks, retry_mark_played,
+    send_ep_info, spawn_progress_reporter, AdvanceDecisionInput, CompletedMedia, Drained,
+    EndFileReason, FinishReason, ItemId, Mpv, PlaybackOrigin, PlaybackRun, PlayerEvent,
+    ProgressGuard, QueueItem, QueueSlotId, StopReport,
+};
 use super::event_classifiers::{is_superseded_jump_end_file, provider_lifecycle_close_pos};
+use std::sync::atomic::Ordering;
 
 /// The completed item's outcome, past the end of the queue (`stop_at_queue_end`).
 struct QueueEndStop<'a> {
@@ -72,13 +78,24 @@ impl PlaybackRun {
             completed_runtime,
         );
         let was_next_up = std::mem::replace(&mut self.next_up_jump, false);
-        let (track_finished, played_out, consume_track, completed_pos) = advance_decision(
-            completed_is_audio,
-            natural,
-            near_end,
-            was_next_up,
-            self.last_valid_pos,
-        );
+        let (track_finished, played_out, consume_track, completed_pos) =
+            advance_decision(&AdvanceDecisionInput {
+                media: if completed_is_audio {
+                    CompletedMedia::Audio
+                } else {
+                    CompletedMedia::Video
+                },
+                finish: if natural {
+                    FinishReason::Natural
+                } else if near_end {
+                    FinishReason::NearEnd
+                } else if was_next_up {
+                    FinishReason::NextUp
+                } else {
+                    FinishReason::Unfinished
+                },
+                last_valid_pos: self.last_valid_pos,
+            });
         if is_superseded_jump_end_file(reason, self.forced_slot_id.is_some(), track_finished) {
             return self.handle_superseded_jump(reason, completed_slot_id, mpv);
         }
@@ -131,10 +148,10 @@ impl PlaybackRun {
             completed_runtime,
         };
         if next_idx >= self.queue_len() {
-            return self.stop_at_queue_end(end, progress);
+            return self.stop_at_queue_end(&end, progress);
         }
 
-        return self.advance_to_next_track(mpv, progress, end, next_idx, settling_transition);
+        self.advance_to_next_track(mpv, progress, &end, next_idx, settling_transition)
     }
 
     /// Advance to the already-bounds-checked next track: select it, emit the
@@ -145,7 +162,7 @@ impl PlaybackRun {
         &mut self,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
-        end: QueueEndStop<'_>,
+        end: &QueueEndStop<'_>,
         next_idx: usize,
         settling_transition: Option<crate::playback_transition::Transition>,
     ) -> bool {
@@ -191,7 +208,7 @@ impl PlaybackRun {
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
         // Stop progress reporter during transition to prevent stale reports.
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         self.start_next_item_reporting(&next_item);
         *progress = spawn_progress_reporter(self.reporter.clone());
 
@@ -213,7 +230,7 @@ impl PlaybackRun {
         false
     }
 
-    /// Swallow EndFiles displaced by a queue submission while its drain is
+    /// Swallow `EndFiles` displaced by a queue submission while its drain is
     /// pending. Returns true when the caller must `continue`.
     fn swallow_pending_load(&mut self) -> bool {
         if self.load_state.is_ready() {
@@ -243,7 +260,7 @@ impl PlaybackRun {
         }
         self.active_file_starting = false;
         self.close_prepared_source();
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         self.close_prepared_source_at(self.last_valid_pos);
         self.status.lock().unwrap().active = false;
         let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -271,7 +288,7 @@ impl PlaybackRun {
         if self.origin != PlaybackOrigin::Queue || reason != mpv_end_file_reason::Quit {
             return None;
         }
-        let completed_runtime = self.active_item().map_or(0, |item| item.runtime_ticks());
+        let completed_runtime = self.active_item().map_or(0, QueueItem::runtime_ticks);
         self.stop_runtime = Some(completed_runtime);
         let near_end = is_near_end(
             completed_is_audio,
@@ -295,7 +312,7 @@ impl PlaybackRun {
         Some(true) // wait for Shutdown to fire PlayerEvent::Stopped
     }
 
-    /// Completed slot vanished under a concurrent QueueRemove: stop rather
+    /// Completed slot vanished under a concurrent `QueueRemove`: stop rather
     /// than advancing from garbage (H11).
     fn stop_for_missing_completed(
         &mut self,
@@ -305,7 +322,7 @@ impl PlaybackRun {
     ) -> bool {
         log::warn!(target: "player", "on_end_file: completed_idx={completed_idx:?} out of bounds (len={}), stopping",
             self.queue_len());
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
         self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
         let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -320,7 +337,7 @@ impl PlaybackRun {
         false
     }
 
-    /// Debris EndFile from a superseded JumpTo vs a real abandonment where
+    /// Debris `EndFile` from a superseded `JumpTo` vs a real abandonment where
     /// mpv left the entry by itself: mpv's current entry tells them apart.
     fn handle_superseded_jump(
         &mut self,
@@ -365,9 +382,9 @@ impl PlaybackRun {
     }
 
     /// Past the end of the queue: report the completed item stopped and end
-    /// the run (signals run() to return).
-    fn stop_at_queue_end(&mut self, stop: QueueEndStop<'_>, progress: &mut ProgressGuard) -> bool {
-        progress.stop_and_join(self.progress_join_budget());
+    /// the run (signals `run()` to return).
+    fn stop_at_queue_end(&mut self, stop: &QueueEndStop<'_>, progress: &mut ProgressGuard) -> bool {
+        progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
         self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(stop.completed_pos));
         self.close_prepared_source_at(provider_lifecycle_close_pos(
@@ -395,7 +412,7 @@ impl PlaybackRun {
         progress: &mut ProgressGuard,
     ) -> bool {
         let error = AudiobookshelfError::from_class(AudiobookshelfFailureClass::Unavailable);
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         self.status.lock().unwrap().active = false;
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             slot_id: completed_slot_id,
@@ -438,13 +455,13 @@ impl PlaybackRun {
     fn mark_played_id_or_retry(&self, id: ItemId) {
         if let Err(e) = self.reporter.client.mark_played(id.as_str()) {
             log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
-            retry_mark_played(self.reporter.client.clone(), id);
+            retry_mark_played(std::sync::Arc::clone(&self.reporter.client), id);
         }
     }
 
     /// Point Emby reporting at the item now playing — or clear the session
     /// for a non-Emby item so the reporter becomes a no-op. The outgoing
-    /// item's report_stopped was already sent with the original IDs.
+    /// item's `report_stopped` was already sent with the original IDs.
     fn start_next_item_reporting(&mut self, next_item: &QueueItem) {
         if let Some(emby) = next_item.as_emby() {
             let (urls, ok) = self.reporter.start_item(emby);

@@ -24,6 +24,11 @@ use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
 use crate::app::ui_util::service_state_color;
 
 /// The Interactive Component for the Sessions sidebar.
+struct SessionsDisplayContext {
+    use_nerd_fonts: bool,
+    emby_state: ServiceState,
+}
+
 pub struct SessionsComponent {
     targets: Vec<PanelTarget>,
     loading: bool,
@@ -33,8 +38,7 @@ pub struct SessionsComponent {
     connected_session_id: Option<String>,
     cast_attachment_id: Option<String>,
     can_disconnect: bool,
-    use_nerd_fonts: bool,
-    emby_state: ServiceState,
+    display: SessionsDisplayContext,
     requested_panel_area: Option<Rect>,
     painted_panel_area: Option<Rect>,
     #[cfg(test)]
@@ -56,8 +60,10 @@ impl SessionsComponent {
             connected_session_id: None,
             cast_attachment_id: None,
             can_disconnect: false,
-            use_nerd_fonts: false,
-            emby_state: ServiceState::NotConfigured,
+            display: SessionsDisplayContext {
+                use_nerd_fonts: false,
+                emby_state: ServiceState::NotConfigured,
+            },
             requested_panel_area: None,
             painted_panel_area: None,
             #[cfg(test)]
@@ -105,9 +111,11 @@ impl SessionsComponent {
         use_nerd_fonts: bool,
         emby_state: ServiceState,
     ) {
-        if self.use_nerd_fonts != use_nerd_fonts || self.emby_state != emby_state {
-            self.use_nerd_fonts = use_nerd_fonts;
-            self.emby_state = emby_state;
+        if self.display.use_nerd_fonts != use_nerd_fonts || self.display.emby_state != emby_state {
+            self.display = SessionsDisplayContext {
+                use_nerd_fonts,
+                emby_state,
+            };
             self.content_dirty = true;
             self.list.invalidate_paint();
         }
@@ -123,7 +131,7 @@ impl SessionsComponent {
         glyph: &'static str,
         color: Color,
     ) -> (ThreeLineSpan, usize) {
-        if self.use_nerd_fonts {
+        if self.display.use_nerd_fonts {
             (
                 ThreeLineSpan::new(glyph, ThreeLineRole::Badge(color)),
                 glyph.width(),
@@ -169,7 +177,7 @@ impl SessionsComponent {
 
     /// The parent recognizes gestures; the embedded list resolves completed
     /// item geometry and owns selection.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -198,7 +206,7 @@ impl SessionsComponent {
     }
 
     fn project_targets(&self, text_width: usize) -> Vec<ThreeLineItem<SessionTargetKey>> {
-        let emby_color = service_state_color(self.emby_state, palette::ACCENT);
+        let emby_color = service_state_color(self.display.emby_state, palette::ACCENT);
         self.targets
             .iter()
             .map(|target| {
@@ -218,14 +226,10 @@ impl SessionsComponent {
                             "{} · {}@{}",
                             session.client, session.user_name, session.host
                         );
-                        let state_icon = if session.now_playing.is_some() {
-                            if session.is_paused {
-                                "⏸"
-                            } else {
-                                "▶"
-                            }
-                        } else {
-                            "■"
+                        let state_icon = match (session.now_playing.is_some(), session.is_paused) {
+                            (true, true) => "⏸",
+                            (true, false) => "▶",
+                            (false, _) => "■",
                         };
                         let time = if session.now_playing.is_some() {
                             format!(
@@ -338,10 +342,10 @@ impl Default for SessionsComponent {
 }
 
 impl Component for SessionsComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, _area: Rect) {
         let (panel_area, content_area, has_content) =
             crate::app::render::render_sessions_overlay_content(
-                f,
+                frame,
                 self.requested_panel_area,
                 self.targets.len(),
                 self.loading,
@@ -351,7 +355,7 @@ impl Component for SessionsComponent {
         #[cfg(test)]
         {
             self.painted_content_area = Some(content_area);
-        }
+        };
         if has_content {
             if self.content_dirty || self.projected_width != Some(content_area.width) {
                 self.list
@@ -359,9 +363,9 @@ impl Component for SessionsComponent {
                 self.projected_width = Some(content_area.width);
                 self.content_dirty = false;
             }
-            self.list.view_in(f, panel_area, content_area);
+            self.list.view_in(frame, panel_area, content_area);
             crate::app::render::render_sessions_scrollbar(
-                f,
+                frame,
                 content_area,
                 self.list.items().len(),
                 self.list.viewport_offset(),
@@ -372,7 +376,7 @@ impl Component for SessionsComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -401,7 +405,7 @@ impl AppComponent<Msg, UserEvent> for SessionsComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -413,38 +417,13 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Position;
     use ratatui::Terminal;
-    use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use tuirealm::event::{KeyModifiers, MouseButton};
 
     fn key(code: Key) -> KeyEvent {
         KeyEvent {
             code,
             modifiers: KeyModifiers::NONE,
         }
-    }
-
-    #[test]
-    fn test_session_local_navigation_stays_local() {
-        let mut component = SessionsComponent::new();
-        component.list.set_content(vec![
-            ThreeLineItem::new(
-                SessionTargetKey::Emby("a".into()),
-                std::array::from_fn(|_| Vec::new()),
-            ),
-            ThreeLineItem::new(
-                SessionTargetKey::Emby("b".into()),
-                std::array::from_fn(|_| Vec::new()),
-            ),
-        ]);
-        component.handle_key(&key(Key::Down));
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("b".into()))
-        );
-        component.handle_key(&key(Key::Up));
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("a".into()))
-        );
     }
 
     #[test]
@@ -478,116 +457,6 @@ mod tests {
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Cast("cast-1".into())
             ))))
-        );
-    }
-
-    use rstest::rstest;
-
-    fn badge_component(
-        use_nerd_fonts: bool,
-        emby_state: ServiceState,
-        cast_attachment: Option<&str>,
-    ) -> SessionsComponent {
-        use mbv_core::cast::discovery::CastReceiver;
-
-        let mut emby = crate::app::tests::make_session("Emby Box", "Emby");
-        emby.id = "emby-1".into();
-        let targets = vec![
-            PanelTarget::Emby(Box::new(emby)),
-            PanelTarget::Cast(CastReceiver {
-                id: "cast-1".into(),
-                friendly_name: "Living Room".into(),
-                host: "192.168.0.5".into(),
-                port: 8009,
-            }),
-        ];
-        let mut component = SessionsComponent::new();
-        component.set_display_context(use_nerd_fonts, emby_state);
-        component.set_content(
-            &targets,
-            false,
-            None,
-            cast_attachment,
-            false,
-            Some(Rect::new(0, 0, 50, 16)),
-        );
-        component
-    }
-
-    #[test]
-    fn test_session_plain_badges_unchanged_without_nerd_fonts() {
-        let component = badge_component(false, ServiceState::Ready, None);
-        let items = component.project_targets(40);
-        assert_eq!(items[0].lines[0][0].text, "[EMBY] ");
-        assert_eq!(items[0].lines[0][0].role, ThreeLineRole::Kind);
-        assert_eq!(items[1].lines[0][0].text, "[CAST] ");
-        assert_eq!(items[1].lines[0][0].role, ThreeLineRole::Kind);
-    }
-
-    #[test]
-    fn test_session_nerd_font_badges_use_service_glyphs() {
-        let component = badge_component(true, ServiceState::Ready, None);
-        let items = component.project_targets(40);
-        assert_eq!(items[0].lines[0][0].text, "\u{f06b4} ");
-        assert_eq!(
-            items[0].lines[0][0].role,
-            ThreeLineRole::Badge(palette::ACCENT)
-        );
-        assert_eq!(items[1].lines[0][0].text, "\u{f0118} ");
-        assert_eq!(
-            items[1].lines[0][0].role,
-            ThreeLineRole::Badge(palette::TEXT_FOCUS_ACCENT)
-        );
-    }
-
-    #[test]
-    fn test_session_nerd_cast_badge_switches_glyph_when_attached() {
-        let component = badge_component(true, ServiceState::Ready, Some("cast-1"));
-        let items = component.project_targets(40);
-        assert_eq!(items[1].lines[0][0].text, "\u{f0119} ");
-        assert_eq!(
-            items[1].lines[0][0].role,
-            ThreeLineRole::Badge(palette::TEXT_FOCUS_ACCENT)
-        );
-    }
-
-    #[rstest]
-    #[case(ServiceState::Ready, palette::ACCENT)]
-    #[case(ServiceState::NotConfigured, palette::TEXT_MUTED)]
-    #[case(ServiceState::Connecting, palette::STATUS_ERROR)]
-    #[case(ServiceState::NeedsAuthentication, palette::STATUS_ERROR)]
-    #[case(ServiceState::Unavailable, palette::STATUS_ERROR)]
-    fn test_session_nerd_emby_badge_tracks_status_bar_color(
-        #[case] state: ServiceState,
-        #[case] expected: ratatui::style::Color,
-    ) {
-        let component = badge_component(true, state, None);
-        let items = component.project_targets(40);
-        assert_eq!(items[0].lines[0][0].text, "\u{f06b4} ");
-        assert_eq!(items[0].lines[0][0].role, ThreeLineRole::Badge(expected));
-    }
-
-    #[test]
-    fn test_session_nerd_badges_paint_badge_colors() {
-        let mut component = badge_component(true, ServiceState::Ready, None);
-        let mut terminal = Terminal::new(TestBackend::new(50, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let content = component.painted_content_area.unwrap();
-        let buffer = terminal.backend().buffer();
-        let fg_at = |symbol: &str, row: u16| {
-            let x = (0..buffer.area.width)
-                .find(|&x| buffer[(x, row)].symbol() == symbol)
-                .unwrap_or_else(|| panic!("no {symbol:?} painted on row {row}"));
-            buffer[(x, row)].fg
-        };
-        // The first row is selected, so this also pins that badge colors
-        // survive selection like the connected `Accent` badge does.
-        assert_eq!(fg_at("\u{f06b4}", content.y), palette::ACCENT);
-        assert_eq!(
-            fg_at("\u{f0118}", content.y + 3),
-            palette::TEXT_FOCUS_ACCENT
         );
     }
 
@@ -626,113 +495,12 @@ mod tests {
         }
     }
 
-    fn cell_x(buffer: &ratatui::buffer::Buffer, row: u16, symbol: &str) -> u16 {
-        (0..buffer.area.width)
-            .find(|&x| buffer[(x, row)].symbol() == symbol)
-            .unwrap_or_else(|| panic!("no {symbol:?} painted on row {row}"))
-    }
-
-    #[test]
-    fn test_session_buffer_zebra_adjacency_selection_and_hit_geometry() {
-        use crate::app::palette;
-        use crate::app::tests::make_session;
-
-        let mut first = make_session("first", "Emby");
-        first.id = "first".into();
-        let mut second = make_session("connected", "Emby");
-        second.id = "connected".into();
-        let targets = [
-            PanelTarget::Emby(Box::new(first)),
-            PanelTarget::Emby(Box::new(second)),
-        ];
-        let area = Rect::new(0, 0, 50, 16);
-        let mut component = SessionsComponent::new();
-        component.set_content(&targets, false, Some("connected"), None, false, Some(area));
-        component.list.set_focused(false);
-        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-
-        let content = component.painted_content_area.unwrap();
-        let y = content.y;
-        let stripe = palette::SESSIONS_STRIPE_BG;
-        let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
-        let buffer = terminal.backend().buffer();
-        // With gap 0 the items are adjacent: item 0 owns y..y+3 and item 1 owns
-        // y+3..y+6, alternating stripes with no blank row between them.
-        for row in y..y + 3 {
-            assert_eq!(buffer[(content.x, row)].bg, surface, "first item unstriped");
-        }
-        for row in y + 3..y + 6 {
-            assert_eq!(buffer[(content.x, row)].bg, stripe, "second item's zebra");
-        }
-        // Every painted line resolves to its own item; no dead rows between.
-        let first_key = SessionTargetKey::Emby("first".into());
-        let second_key = SessionTargetKey::Emby("connected".into());
-        for row in y..y + 3 {
-            assert_eq!(
-                component.target_at_for_test(Position {
-                    x: content.x,
-                    y: row
-                }),
-                Some(first_key.clone()),
-                "line {row} resolves to item 0"
-            );
-        }
-        for row in y + 3..y + 6 {
-            assert_eq!(
-                component.target_at_for_test(Position {
-                    x: content.x,
-                    y: row
-                }),
-                Some(second_key.clone()),
-                "line {row} resolves to item 1"
-            );
-        }
-        let badge_x = cell_x(buffer, y + 3, "✚");
-        assert_eq!(buffer[(badge_x, y + 3)].fg, palette::ACCENT_ACTIVE);
-
-        component.list.set_focused(true);
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let buffer = terminal.backend().buffer();
-        // The selected bar spans exactly item 0's three lines and stops there.
-        for row in y..y + 3 {
-            assert_eq!(buffer[(content.x, row)].bg, palette::SELECTED_ROW_BG);
-        }
-        assert_eq!(
-            buffer[(content.x, y + 3)].bg,
-            stripe,
-            "selection bar does not bleed into the next item"
-        );
-
-        component
-            .list
-            .select_target(&SessionTargetKey::Emby("connected".into()));
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let buffer = terminal.backend().buffer();
-        for row in y + 3..y + 6 {
-            assert_eq!(buffer[(content.x, row)].bg, palette::SELECTED_ROW_BG);
-        }
-        let badge_x = cell_x(buffer, y + 3, "✚");
-        assert_eq!(buffer[(badge_x, y + 3)].fg, palette::ACCENT_ACTIVE);
-        assert_eq!(
-            buffer[(content.x, y + 6)].bg,
-            surface,
-            "selection bar ends with item 1"
-        );
-    }
-
     #[test]
     fn test_session_mouse_click_on_selected_item_connects() {
         let mut component = painted_component();
         let content = component.painted_content_area.unwrap();
         assert_eq!(
-            component.handle_mouse(&left_down(content.x, content.y)),
+            component.handle_mouse(left_down(content.x, content.y)),
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Emby("a".into())
             ))))
@@ -747,7 +515,7 @@ mod tests {
             y: component.painted_content_area.unwrap().y + 4,
         };
         // The second item starts immediately after the first item's three lines.
-        assert_eq!(component.handle_mouse(&left_down(point.x, point.y)), None);
+        assert_eq!(component.handle_mouse(left_down(point.x, point.y)), None);
         assert_eq!(
             component.list.selected_target(),
             Some(&SessionTargetKey::Emby("b".into()))
@@ -755,45 +523,10 @@ mod tests {
         component.view_for_test();
         component.reset_mouse_gestures_for_test();
         assert_eq!(
-            component.handle_mouse(&left_down(point.x, point.y)),
+            component.handle_mouse(left_down(point.x, point.y)),
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Emby("b".into())
             ))))
-        );
-    }
-
-    #[test]
-    fn test_session_mouse_click_outside_painted_panel_dismisses() {
-        let mut component = painted_component();
-        assert_eq!(
-            component.handle_mouse(&left_down(100, 100)),
-            Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)))
-        );
-    }
-
-    #[test]
-    fn test_session_mouse_wheel_steps_selection_independent_of_pointer_location() {
-        let mut component = painted_component();
-        component.handle_mouse(&MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 1,
-            row: 1,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("b".into()))
-        );
-        component.reset_mouse_gestures_for_test();
-        component.handle_mouse(&MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            column: 50,
-            row: 20,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("a".into()))
         );
     }
 

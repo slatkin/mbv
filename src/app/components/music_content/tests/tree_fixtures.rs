@@ -3,20 +3,6 @@
 //! interaction test drives the owner through.
 
 use super::*;
-use crate::app::components::music_tree_target::MusicTreeTarget;
-
-/// The first projected target matching a predicate.
-pub(super) fn find(
-    owner: &MusicContent,
-    predicate: impl Fn(&MusicTreeTarget) -> bool,
-) -> MusicTreeTarget {
-    owner
-        .browser
-        .visible_targets()
-        .into_iter()
-        .find(|target| predicate(target))
-        .expect("the case's painted tree node")
-}
 
 // ── Task 2.4: tree chord mapping through the component boundary ──────────
 
@@ -86,36 +72,4 @@ pub(super) fn press(owner: &mut MusicContent, code: Key) -> Option<Msg> {
         code,
         modifiers: KeyModifiers::NONE,
     })
-}
-
-pub(super) fn selected_row(owner: &MusicContent) -> usize {
-    let selected = owner
-        .browser
-        .selected_target()
-        .cloned()
-        .expect("a node is selected");
-    owner
-        .browser
-        .visible_targets()
-        .iter()
-        .position(|target| *target == selected)
-        .expect("the selected node is projected")
-}
-
-pub(super) fn paint_tree(owner: &mut MusicContent, area: Rect) {
-    let mut terminal =
-        Terminal::new(TestBackend::new(area.width, area.height)).expect("tree terminal");
-    terminal
-        .draw(|frame| tuirealm::component::Component::view(&mut owner.browser, frame, area))
-        .expect("tree frame");
-}
-
-/// The retained painted point of a target's row in the latest tree frame,
-/// resolved through the shared read-only stable-target row geometry (never a
-/// projection index or a paint-local point scan).
-pub(super) fn tree_point(owner: &MusicContent, target: &MusicTreeTarget) -> Position {
-    (0..100)
-        .flat_map(|y| (0..200).map(move |x| Position::new(x, y)))
-        .find(|point| owner.browser.resolve_current_point(*point) == Some(target))
-        .expect("node is inside the painted viewport")
 }

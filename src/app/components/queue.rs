@@ -117,8 +117,8 @@ impl QueueComponent {
     #[cfg(test)]
     pub(in crate::app) fn set_content(
         &mut self,
-        slots: Vec<QueueSlot>,
-        cursor: QueueCursorUpdate,
+        slots: &[QueueSlot],
+        cursor: &QueueCursorUpdate,
         scope: QueueScope,
         playback: PlaybackState,
     ) {
@@ -128,9 +128,9 @@ impl QueueComponent {
     }
 
     /// Replace projected rows while preserving the canonical list's selection.
-    pub(in crate::app) fn set_rows(&mut self, slots: Vec<QueueSlot>, playback: PlaybackState) {
+    pub(in crate::app) fn set_rows(&mut self, slots: &[QueueSlot], playback: PlaybackState) {
         self.carrier
-            .set_content(queue_media_rows(&slots, playback, self.pending_slot));
+            .set_content(queue_media_rows(slots, playback, self.pending_slot));
     }
 
     /// The semantic states of the projected rows, in row order (tick-test
@@ -151,19 +151,19 @@ impl QueueComponent {
     /// Patch one projected row by stable target without rebuilding the list.
     pub(in crate::app) fn set_row_patch(
         &mut self,
-        target: &QueueSlotId,
+        target: QueueSlotId,
         row: MediaListRow<QueueSlotId>,
     ) -> bool {
-        self.carrier.patch_row(target, row)
+        self.carrier.patch_row(&target, row)
     }
 
     /// Deliver an authoritative cursor command independently of row delivery.
     /// This is the adjudicated Queue shell-push seam (design.md D5): the shell
     /// owns the Queue cursor command, so this one numeric re-anchor and its
     /// resting-scroll clamp are sanctioned rather than delegated.
-    pub(in crate::app) fn set_cursor(&mut self, cursor: QueueCursorUpdate) {
+    pub(in crate::app) fn set_cursor(&mut self, cursor: &QueueCursorUpdate) {
         if let QueueCursorUpdate::Set(idx) = cursor {
-            self.carrier.select_index(idx);
+            self.carrier.select_index(*idx);
         }
         let scroll = self.carrier.scroll();
         let clamped = scroll.min(self.carrier.cursor());
@@ -360,7 +360,7 @@ impl Component for QueueComponent {
         // retains the current painted row geometry for later point resolution.
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, attr: Attribute, value: AttrValue) {
@@ -377,13 +377,13 @@ impl Component for QueueComponent {
 }
 
 impl AppComponent<Msg, UserEvent> for QueueComponent {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         // Keep the shared owner in the presentation the fixed Queue contract
         // selects before any row-local input touches it (design.md D1).
         self.ensure_carrier();
-        match event {
+        match ev {
             Event::Keyboard(key) => self.handle_key_result(key).into_option(),
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }

@@ -1,4 +1,10 @@
-use super::*;
+#[cfg(any(test, feature = "test"))]
+use super::Ordering;
+use super::{
+    mpsc, mpv_end_file_reason, Arc, AtomicBool, AudiobookshelfPlayerContext, Duration, EmbyClient,
+    EmbyItem, EndFileReason, ExecSlot, ItemId, Mutex, PlaybackOrigin, Player, PlayerCommand,
+    PlayerStatus, QuitHandle, SubtitlePrefs,
+};
 
 #[derive(Debug)]
 enum PlayerProxyInner {
@@ -17,7 +23,7 @@ pub struct PlayerProxy {
 impl PlayerProxy {
     /// Test helper for root-crate integration tests that need a local player
     /// proxy without starting a real mpv session.
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     pub fn stub(status: Arc<Mutex<PlayerStatus>>) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
         let mut player = Player::new(
@@ -31,13 +37,13 @@ impl PlayerProxy {
             tx,
             None,
         );
-        player.status = status.clone();
+        player.status = Arc::clone(&status);
         // Never construct the real external from the stub: an inhibited
         // player keeps the queue/status seeding a submit performs but skips
         // the player thread whose first act is a real `init_mpv` handle
         // (issue #757).
         player.mpv_inhibited.store(true, Ordering::Relaxed);
-        let subtitle_prefs = player.subtitle_prefs.clone();
+        let subtitle_prefs = Arc::clone(&player.subtitle_prefs);
         PlayerProxy {
             always_play_next: false,
             status,
@@ -50,7 +56,7 @@ impl PlayerProxy {
     /// receiving end, so a test can assert on what `send_command` actually sent
     /// without a real mpv thread running.
     /// Test helper that exposes the next command sent through a local proxy.
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     pub fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
         let (tx, rx) = mpsc::channel();
         if let PlayerProxyInner::Local(p) = &self.inner {
@@ -61,8 +67,8 @@ impl PlayerProxy {
     }
 
     pub fn local(player: Player, always_play_next: bool) -> Self {
-        let status = player.status.clone();
-        let subtitle_prefs = player.subtitle_prefs.clone();
+        let status = Arc::clone(&player.status);
+        let subtitle_prefs = Arc::clone(&player.subtitle_prefs);
         PlayerProxy {
             always_play_next,
             status,
@@ -75,7 +81,7 @@ impl PlayerProxy {
     /// their queue/status seeding but never spawn the player thread — whose
     /// first act is a real `init_mpv` handle unit tests must not construct
     /// (it raced process teardown at test exit; issue #757).
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     pub fn inhibit_mpv(&self) {
         if let PlayerProxyInner::Local(p) = &self.inner {
             p.mpv_inhibited.store(true, Ordering::Relaxed);
@@ -103,8 +109,8 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(player) => player.can_admit_audiobookshelf(),
             PlayerProxyInner::Remote(remote) => {
-                remote.ctrl_compatibility.supports_abs_queue
-                    && remote.ctrl_compatibility.supports_abs_book_queue
+                remote.ctrl_compatibility.audiobookshelf.queue
+                    && remote.ctrl_compatibility.audiobookshelf.book_queue
             }
         }
     }
@@ -119,7 +125,7 @@ impl PlayerProxy {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     pub fn audiobookshelf_generation(&self) -> Option<crate::service_runtime::SetupGeneration> {
         match &self.inner {
             PlayerProxyInner::Local(player) => player.audiobookshelf_generation(),
@@ -127,7 +133,7 @@ impl PlayerProxy {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     pub fn emby_credentials(&self) -> Option<(String, String)> {
         match &self.inner {
             PlayerProxyInner::Local(player) => player.emby_credentials(),
@@ -135,9 +141,10 @@ impl PlayerProxy {
         }
     }
 
+    #[must_use]
     pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
-        let status = remote.status.clone();
-        let subtitle_prefs = remote.subtitle_prefs.clone();
+        let status = Arc::clone(&remote.status);
+        let subtitle_prefs = Arc::clone(&remote.subtitle_prefs);
         PlayerProxy {
             always_play_next,
             status,
@@ -203,12 +210,12 @@ impl PlayerProxy {
                     return false;
                 }
                 if slots.iter().any(|slot| slot.item.is_audiobookshelf())
-                    && !r.ctrl_compatibility.supports_abs_queue
+                    && !r.ctrl_compatibility.audiobookshelf.queue
                 {
                     return false;
                 }
                 if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
-                    && !r.ctrl_compatibility.supports_abs_book_queue
+                    && !r.ctrl_compatibility.audiobookshelf.book_queue
                 {
                     return false;
                 }
@@ -312,12 +319,12 @@ impl PlayerProxy {
             PlayerProxyInner::Local(p) => p.queue_append(slots),
             PlayerProxyInner::Remote(r) => {
                 if slots.iter().any(|slot| slot.item.is_audiobookshelf())
-                    && !r.ctrl_compatibility.supports_abs_queue
+                    && !r.ctrl_compatibility.audiobookshelf.queue
                 {
                     return false;
                 }
                 if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
-                    && !r.ctrl_compatibility.supports_abs_book_queue
+                    && !r.ctrl_compatibility.audiobookshelf.book_queue
                 {
                     return false;
                 }
@@ -403,9 +410,9 @@ impl PlayerProxy {
         matches!(self.inner, PlayerProxyInner::Remote(_))
     }
 
-    /// Returns a clone of the underlying RemotePlayer if this proxy wraps
+    /// Returns a clone of the underlying `RemotePlayer` if this proxy wraps
     /// one, or None for a local player. Used by the coordinated shutdown
-    /// path to invoke request_shutdown on the current player
+    /// path to invoke `request_shutdown` on the current player
     /// when it is a live Local connection.
     pub fn as_remote(&self) -> Option<crate::remote_player::RemotePlayer> {
         match &self.inner {
@@ -432,7 +439,7 @@ impl PlayerProxy {
     /// local/remote swaps on `self`.
     pub fn local_cmd_tx(&self) -> Option<Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>> {
         match &self.inner {
-            PlayerProxyInner::Local(p) => Some(p.cmd_tx.clone()),
+            PlayerProxyInner::Local(p) => Some(Arc::clone(&p.cmd_tx)),
             PlayerProxyInner::Remote(_) => None,
         }
     }
@@ -480,7 +487,7 @@ impl PlayerProxy {
     pub fn command_sender(&self) -> Arc<dyn Fn(PlayerCommand) + Send + Sync> {
         match &self.inner {
             PlayerProxyInner::Local(p) => {
-                let cmd_tx = p.cmd_tx.clone();
+                let cmd_tx = Arc::clone(&p.cmd_tx);
                 Arc::new(move |cmd: PlayerCommand| {
                     if let Some(tx) = cmd_tx.lock().unwrap().as_ref() {
                         let _ = tx.send(cmd);
@@ -490,7 +497,7 @@ impl PlayerProxy {
             PlayerProxyInner::Remote(r) => {
                 let remote = r.clone();
                 Arc::new(move |cmd: PlayerCommand| {
-                    remote.send_command(cmd);
+                    let _ = remote.send_command(cmd);
                 })
             }
         }
@@ -501,15 +508,15 @@ impl PlayerProxy {
     pub fn quit_handle(&self) -> Option<QuitHandle> {
         match &self.inner {
             PlayerProxyInner::Local(p) => Some(QuitHandle {
-                stop_tx: p.stop_tx.clone(),
-                shutdown_report_timeout: p.shutdown_report_timeout.clone(),
+                stop_tx: Arc::clone(&p.stop_tx),
+                shutdown_report_timeout: Arc::clone(&p.shutdown_report_timeout),
             }),
             PlayerProxyInner::Remote(_) => None,
         }
     }
 }
 
-/// Retry mark_played in a detached thread with exponential backoff.
+/// Retry `mark_played` in a detached thread with exponential backoff.
 /// Max 3 attempts (initial + 2 retries), delays: 500ms, 2s.
 pub(super) fn retry_mark_played(client: Arc<EmbyClient>, item_id: ItemId) {
     std::thread::spawn(move || {

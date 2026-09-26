@@ -1,6 +1,26 @@
 use crate::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
-use super::*;
+use super::active_item_state;
+use super::{
+    end_file_stop_report_context, ActiveItemLifecycle, EndFileReason, ExecSlot, ExecutionSequence,
+    IntroState, ItemId, LoadState, Mpv, NextUp, PlaybackRun, PlayerEvent, PreparedSource,
+    ProgressGuard, QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport,
+    StopReportContext, TICKS_PER_SECOND,
+};
+use crate::player::{divergent_entry, prepare_source};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+
+struct InitialItemState {
+    position_ticks: i64,
+    osd_title: String,
+    series_id: ItemId,
+    season: i64,
+    episode: i64,
+    intro_start: i64,
+    intro_end: i64,
+    past: bool,
+}
 
 impl PlaybackRun {
     /// The ordinal a relative step (Next/Previous) advances from: the active
@@ -68,7 +88,7 @@ impl PlaybackRun {
             self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
         } else {
             let handle = progress.handle.take();
-            let budget = self.progress_join_budget();
+            let budget = Self::progress_join_budget();
             let stopped = self.reporter.stopped_report_data(self.last_valid_pos);
             let _ = self
                 .reporter
@@ -99,7 +119,7 @@ impl PlaybackRun {
     /// transitions. There is no time pressure, so a generous fixed budget
     /// just guards against a truly stuck thread without adding latency to
     /// the common fast case.
-    pub(in crate::player) fn progress_join_budget(&self) -> Duration {
+    pub(in crate::player) fn progress_join_budget() -> Duration {
         Duration::from_secs(30)
     }
 
@@ -260,22 +280,19 @@ impl PlaybackRun {
     /// session for a non-Emby item — the same switch a track transition makes,
     /// so reporting identity always names the item playback is on.
     pub(in crate::player) fn report_active_item(&mut self) {
-        match self.active_item().cloned() {
-            Some(QueueItem::Emby(emby)) => {
-                let (urls, ok) = self.reporter.start_item(&emby);
-                self.ext_sub_urls = urls;
-                if !ok {
-                    log::warn!(
-                        target: "player",
-                        "start_item failed for adopted item={}",
-                        emby.id
-                    );
-                }
+        if let Some(QueueItem::Emby(emby)) = self.active_item().cloned() {
+            let (urls, ok) = self.reporter.start_item(&emby);
+            self.ext_sub_urls = urls;
+            if !ok {
+                log::warn!(
+                    target: "player",
+                    "start_item failed for adopted item={}",
+                    emby.id
+                );
             }
-            _ => {
-                self.ext_sub_urls = vec![];
-                self.reporter.clear_session();
-            }
+        } else {
+            self.ext_sub_urls = vec![];
+            self.reporter.clear_session();
         }
     }
 
@@ -399,6 +416,10 @@ impl PlaybackRun {
         self.active_lifecycle.close(position_ticks);
         self.active_lifecycle = ActiveItemLifecycle::None;
         if let Some(mut prepared) = self.prepared_source.take() {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
             prepared.close(position_ticks as f64 / TICKS_PER_SECOND as f64);
         }
     }
@@ -476,60 +497,16 @@ impl PlaybackRun {
             .map(|slot| slot.item.clone())
             .expect("PlaybackRun::new requires at least one item");
 
-        let (initial_pos, osd_title, series_id, season, episode, intro_start, intro_end, past) =
-            match &initial_item {
-                QueueItem::Emby(emby) => {
-                    let pos = if emby.is_audio() {
-                        0
-                    } else {
-                        emby.playback_position_ticks
-                    };
-                    let (intro_start, intro_end) = (0, 0);
-                    let past = intro_end > 0 && pos >= intro_end;
-                    let sid = if emby.item_type == "Episode" {
-                        ItemId::new(emby.series_id.clone())
-                    } else {
-                        ItemId::empty()
-                    };
-                    (
-                        pos,
-                        emby.display_name(),
-                        sid,
-                        emby.parent_index_number,
-                        emby.index_number,
-                        intro_start,
-                        intro_end,
-                        past,
-                    )
-                }
-                QueueItem::Feed(entry) => {
-                    let runtime = entry.duration_ticks.unwrap_or(0) as i64;
-                    let pos = if crate::api::should_resume(entry.position_ticks, runtime) {
-                        entry.position_ticks
-                    } else {
-                        0
-                    };
-                    (pos, entry.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
-                }
-                QueueItem::Audiobookshelf(ep) => {
-                    let runtime = ep.duration_ticks.unwrap_or(0) as i64;
-                    let pos = if crate::api::should_resume(ep.position_ticks, runtime) {
-                        ep.position_ticks
-                    } else {
-                        0
-                    };
-                    (pos, ep.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
-                }
-                QueueItem::AudiobookshelfBook(book) => {
-                    let runtime = book.duration_ticks.unwrap_or(0) as i64;
-                    let pos = if crate::api::should_resume(book.position_ticks, runtime) {
-                        book.position_ticks
-                    } else {
-                        0
-                    };
-                    (pos, book.title.clone(), ItemId::empty(), 0, 0, 0, 0, false)
-                }
-            };
+        let InitialItemState {
+            position_ticks: initial_pos,
+            osd_title,
+            series_id,
+            season,
+            episode,
+            intro_start,
+            intro_end,
+            past,
+        } = initial_item_state(&initial_item);
 
         log::info!(
             target: "player",
@@ -593,6 +570,87 @@ impl PlaybackRun {
             intro_end,
             intro_state: IntroState::new(past),
             osd_title,
+        }
+    }
+}
+
+fn initial_item_state(item: &QueueItem) -> InitialItemState {
+    match item {
+        QueueItem::Emby(emby) => {
+            let position_ticks = if emby.is_audio() {
+                0
+            } else {
+                emby.playback_position_ticks
+            };
+            let intro_start = 0;
+            let intro_end = 0;
+            let past = intro_end > 0 && position_ticks >= intro_end;
+            let series_id = if emby.item_type == "Episode" {
+                ItemId::new(emby.series_id.clone())
+            } else {
+                ItemId::empty()
+            };
+            InitialItemState {
+                position_ticks,
+                osd_title: emby.display_name(),
+                series_id,
+                season: emby.parent_index_number,
+                episode: emby.index_number,
+                intro_start,
+                intro_end,
+                past,
+            }
+        }
+        QueueItem::Feed(entry) => {
+            let runtime = i64::try_from(entry.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
+            InitialItemState {
+                position_ticks: if crate::api::should_resume(entry.position_ticks, runtime) {
+                    entry.position_ticks
+                } else {
+                    0
+                },
+                osd_title: entry.title.clone(),
+                series_id: ItemId::empty(),
+                season: 0,
+                episode: 0,
+                intro_start: 0,
+                intro_end: 0,
+                past: false,
+            }
+        }
+        QueueItem::Audiobookshelf(ep) => {
+            let runtime = i64::try_from(ep.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
+            InitialItemState {
+                position_ticks: if crate::api::should_resume(ep.position_ticks, runtime) {
+                    ep.position_ticks
+                } else {
+                    0
+                },
+                osd_title: ep.title.clone(),
+                series_id: ItemId::empty(),
+                season: 0,
+                episode: 0,
+                intro_start: 0,
+                intro_end: 0,
+                past: false,
+            }
+        }
+        QueueItem::AudiobookshelfBook(book) => {
+            let runtime = i64::try_from(book.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
+            InitialItemState {
+                position_ticks: if crate::api::should_resume(book.position_ticks, runtime) {
+                    book.position_ticks
+                } else {
+                    0
+                },
+                osd_title: book.title.clone(),
+                series_id: ItemId::empty(),
+                season: 0,
+                episode: 0,
+                intro_start: 0,
+                intro_end: 0,
+                past: false,
+            }
         }
     }
 }

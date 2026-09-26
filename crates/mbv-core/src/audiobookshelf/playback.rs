@@ -266,7 +266,10 @@ impl AudiobookshelfClient {
             )?
             .body_mut()
             .read_json::<serde_json::Value>()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!(target: "audiobookshelf", "invalid playback response JSON: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         let opened_id = response
             .get("id")
             .and_then(serde_json::Value::as_str)
@@ -276,7 +279,10 @@ impl AudiobookshelfClient {
             .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let decoded = serde_json::from_value::<PlaybackSessionWire>(response)
-            .map_err(|_| AudiobookshelfError::malformed())
+            .map_err(|error| {
+                log::debug!(target: "audiobookshelf", "invalid playback session response: {error}");
+                AudiobookshelfError::malformed()
+            })
             .and_then(|response| {
                 self.decode_playback_session(response, library_item_id, episode_id)
             });
@@ -330,7 +336,10 @@ impl AudiobookshelfClient {
             )?
             .body_mut()
             .read_json::<serde_json::Value>()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!(target: "audiobookshelf", "invalid book playback response JSON: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         let opened_id = response
             .get("id")
             .and_then(serde_json::Value::as_str)
@@ -340,7 +349,10 @@ impl AudiobookshelfClient {
             .and_then(serde_json::Value::as_f64)
             .unwrap_or(0.0);
         let decoded = serde_json::from_value::<BookPlaybackSessionWire>(response)
-            .map_err(|_| AudiobookshelfError::malformed())
+            .map_err(|error| {
+                log::debug!(target: "audiobookshelf", "invalid book playback session response: {error}");
+                AudiobookshelfError::malformed()
+            })
             .and_then(|response| self.decode_book_playback_session(response, library_item_id));
         if decoded.is_err() {
             if let Some(session_id) = opened_id {
@@ -507,7 +519,7 @@ impl AudiobookshelfClient {
             .header("Authorization", &format!("Bearer {api_key}"))
             .header("Content-Type", "application/json")
             .send_json(body)
-            .map_err(super::catalog::map_error)
+            .map_err(|error| super::catalog::map_error(&error))
     }
 
     fn wait_for_hls_ready(
@@ -525,7 +537,10 @@ impl AudiobookshelfClient {
                     let body = response
                         .body_mut()
                         .read_to_string()
-                        .map_err(|_| AudiobookshelfError::malformed())?;
+                        .map_err(|error| {
+                            log::debug!(target: "audiobookshelf", "invalid HLS playlist response: {error}");
+                            AudiobookshelfError::malformed()
+                        })?;
                     if body.starts_with("#EXTM3U") {
                         return Ok(());
                     }

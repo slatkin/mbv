@@ -20,8 +20,7 @@ impl App {
         }
         self.music_levels
             .get(stack_len - 1)
-            .map(|s| s == "album")
-            .unwrap_or(false)
+            .is_some_and(|s| s == "album")
     }
 
     /// True when a miss against `lib_idx`'s current root corpus is not yet
@@ -183,7 +182,7 @@ impl App {
         level.set_resting_scroll(0);
         level.loading = false;
         // Ensure the series detail (seasons + episodes) is fetched.
-        self.fetch_series_detail(item.id.clone());
+        self.fetch_series_detail(&item.id);
         self.save_default_library_position(lib_idx);
         true
     }
@@ -212,11 +211,11 @@ impl App {
         // the episode-only identity must not leak into the Series item.
         let mut reveal = item.clone();
         reveal.item_type = "Series".into();
-        reveal.id = item.series_id.clone();
+        reveal.id.clone_from(&item.series_id);
         reveal.is_folder = true;
         reveal.series_id.clear();
         if !item.series_name.is_empty() {
-            reveal.name = item.series_name.clone();
+            reveal.name.clone_from(&item.series_name);
         }
         // The episode's `SortName` (often "Show S01E05") must not decide the
         // series' letter range; fall back to the article-stripped series name.
@@ -233,8 +232,7 @@ impl App {
             // index 2.
             let pill_index = if large {
                 LetterFilter::for_sort_key_for_kind(effective_sort_str(&reveal), filter_kind)
-                    .map(|filter| filter.index + 2)
-                    .unwrap_or(2)
+                    .map_or(2, |filter| filter.index + 2)
             } else {
                 2
             };
@@ -282,7 +280,7 @@ impl App {
             return;
         }
         // Ensure the series detail (seasons + episodes) is fetched.
-        self.fetch_series_detail(item.id.clone());
+        self.fetch_series_detail(&item.id);
     }
 
     pub(in crate::app) fn handle_series_detail_fetched(

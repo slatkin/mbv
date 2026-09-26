@@ -5,7 +5,11 @@ use super::super::library_panel::hero::hero_content_feed;
 use super::super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::super::library_panel::HeroContentData;
 use super::super::media_list::MediaListOperation;
-use super::*;
+use super::{
+    trunc_str, FeedGroupKey, FeedsContent, FeedsFilter, FeedsSelectorKey, HeroImageState, Key,
+    KeyEvent, LeafKeyResult, LibraryItemIdentity, MediaListSurfaceInput, Msg, RowIntent,
+    SelectorIdentity, ShellRequest, TerminalObserverEvent, WatchedFilter, MAX_GROUP_LABEL,
+};
 
 impl FeedsContent {
     fn on_selector_picked(&mut self, index: usize) -> Option<Msg> {
@@ -119,8 +123,7 @@ impl LibraryContentOwner for FeedsContent {
                         .subscriptions
                         .iter()
                         .position(|subscription| &subscription.url == url)
-                        .map(|index| index + 1)
-                        .unwrap_or(0);
+                        .map_or(0, |index| index + 1);
                     self.watched_filter = WatchedFilter::All;
                 }
                 _ => {

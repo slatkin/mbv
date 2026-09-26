@@ -100,21 +100,6 @@ pub(crate) enum PanelPlacement {
     QueueBoundary(Rect),
 }
 
-impl PanelPlacement {
-    #[cfg(test)]
-    pub(crate) fn rect(self) -> Rect {
-        match self {
-            Self::Tab(rect)
-            | Self::Library(rect)
-            | Self::LibraryPlayback(rect)
-            | Self::Queue(rect)
-            | Self::QueuePlayback(rect)
-            | Self::StatusBar(rect)
-            | Self::QueueBoundary(rect) => rect,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct RootFrame {
     /// Tab bar at the top of the library column (`TabPanel`, task 2.1).
@@ -250,46 +235,30 @@ pub(in crate::app) fn queue_playback_rows(
     .bottom()
 }
 
-/// Computes the root/chrome geometry for one frame without reading app state.
-pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChromeGeometry {
-    let area = input.area;
-    // Left panel (card + queue) | Right panel (library, remaining).
-    let left_w = match input.panel_mode {
-        PanelMode::Both => input.queue_column_width,
-        PanelMode::LibraryOnly => 0,
-        PanelMode::QueueOnly => area.width,
-    };
-    let right_w = area.width.saturating_sub(left_w);
-    let right_visible = input.panel_mode != PanelMode::QueueOnly;
-
-    let content_h = area.height;
-    let left_area = if input.panel_mode == PanelMode::LibraryOnly {
-        Rect::default()
-    } else {
-        Rect {
-            x: area.x,
-            y: area.y,
-            width: left_w,
-            height: content_h,
-        }
-    };
-    let panel_area = if input.terminal_width < crate::app::MINI_VIEW_THRESHOLD
-        && input.panel_mode == PanelMode::LibraryOnly
-    {
-        area
-    } else {
-        left_area
-    };
-    // Inner content area with padding inside the colored box (queue uses this).
-    let left_content = queue_panel_inset(left_area);
-
+/// The right (library) column's chrome rects for one `PanelMode`, returned as
+/// `(tab_bar, library content, playback-strip band, status-bar band)`: the
+/// tab bar at the top, the library content area, the LibraryOnly
+/// playback-strip band below the tab bar, and the floating status-bar band
+/// at the bottom. The second element is the library panel's placement: the
+/// right column between the tab bar and the status row. In LibraryOnly it
+/// starts below the playback strip's band (placed as `library_playback`);
+/// in a queue-visible layout the band is not reserved (task 4.1), so the
+/// library starts at the tab bar's bottom edge. Either way the right
+/// column's present placements -- tab, library, status bar -- tile it with
+/// no unowned rows.
+fn right_column_geometry(
+    area: Rect,
+    left_w: u16,
+    right_w: u16,
+    panel_mode: PanelMode,
+) -> (Rect, Rect, Rect, Rect) {
     let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
     // The playback strip's rows are reserved only where the strip paints
     // (task 4.1, D10): a `PLAYER_BOX_HEIGHT` band between the tab bar and
     // the library in LibraryOnly, nothing in a queue-visible layout — there
     // the frame's one transport is the Queue playback panel's, and the
     // library reclaims the band.
-    let strip_h = if input.panel_mode == PanelMode::LibraryOnly {
+    let strip_h = if panel_mode == PanelMode::LibraryOnly {
         PLAYER_BOX_HEIGHT
     } else {
         0
@@ -298,15 +267,15 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         x: area.x + left_w + COLUMN_GAP,
         y: area.y + tab_h + strip_h,
         width: right_w.saturating_sub(COLUMN_GAP),
-        height: content_h
+        height: area
+            .height
             .saturating_sub(STATUS_BAR_BAND_HEIGHT)
             .saturating_sub(tab_h)
             .saturating_sub(strip_h),
     };
-
     // The playback strip's band below the tab bar (library column only;
     // task 4.1).
-    let player_area = if input.panel_mode == PanelMode::LibraryOnly {
+    let player_area = if panel_mode == PanelMode::LibraryOnly {
         Rect {
             x: right_area.x,
             y: area.y + tab_h,
@@ -316,7 +285,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
     } else {
         Rect::default()
     };
-
     // The floating status bar band sits at the bottom of the right panel
     // only: one gap row, the status row, one padding row below it. The
     // panel paints the row inset inside the band (`status_bar_row`), so
@@ -328,7 +296,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         width: right_area.width,
         height: STATUS_BAR_BAND_HEIGHT,
     };
-
     // Tab bar at the very top of the right column.
     let tab_bar_area = Rect {
         x: right_area.x,
@@ -336,25 +303,28 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         width: right_area.width,
         height: tab_h,
     };
+    (tab_bar_area, right_area, player_area, status_area)
+}
 
-    // The library panel's placement: the right column between the tab bar
-    // and the status row. In LibraryOnly it starts below the playback
-    // strip's band (placed as `library_playback`); in a queue-visible layout
-    // the band is not reserved (task 4.1), so the library starts at the tab
-    // bar's bottom edge. Either way the right column's present placements --
-    // tab, library, status bar -- tile it with no unowned rows.
-    let library_area = right_area;
-
-    // Root panel placements (D1, task 1.3): which panels the current Panel
-    // mode mounts, and where. The queue column splits into the Queue playback
-    // panel's region (header row plus the visual slot/transport rows and the
-    // separator row between the slot/transport band and the Queue panel) and
-    // the Queue panel below it; while idle only the header row is reserved,
-    // the panel's recessed inset being the single space row. Both placements
-    // come from the shared `queue_panel_geometry` (task 3.2: the header row is
-    // one input alongside the visual-slot and transport heights, single
-    // source), so they tile the queue column's content exactly.
-    let queue_col_visible = input.panel_mode != PanelMode::LibraryOnly;
+/// The queue column's placements for one frame, returned as
+/// `(playback region, panel, boundary hit column)`: the `Queue` playback
+/// region above the Queue panel, the Queue panel itself, and the boundary
+/// hit column over the queue panel's rightmost edge.
+fn queue_column_geometry(
+    input: &ChromeGeometryInput,
+    area: Rect,
+    left_w: u16,
+    left_area: Rect,
+) -> (Rect, Rect, Rect) {
+    // Root panel placements (D1, task 1.3): the queue column splits into the
+    // Queue playback panel's region (header row plus the visual
+    // slot/transport rows and the separator row between the slot/transport
+    // band and the Queue panel) and the Queue panel below it; while idle only
+    // the header row is reserved, the panel's recessed inset being the single
+    // space row. Both placements come from the shared `queue_panel_geometry`
+    // (task 3.2: the header row is one input alongside the visual-slot and
+    // transport heights, single source), so they tile the queue column's
+    // content exactly.
     let playback_rows = queue_playback_rows(
         queue_playback_column_wide(left_area.width),
         input.card_height,
@@ -381,12 +351,59 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         width: 1,
         height: area.height,
     };
+    (
+        queue_playback_area,
+        queue_geo.panel_area,
+        queue_boundary_area,
+    )
+}
+
+/// Computes the root/chrome geometry for one frame without reading app state.
+pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChromeGeometry {
+    let area = input.area;
+    // Left panel (card + queue) | Right panel (library, remaining).
+    let left_w = match input.panel_mode {
+        PanelMode::Both => input.queue_column_width,
+        PanelMode::LibraryOnly => 0,
+        PanelMode::QueueOnly => area.width,
+    };
+    let right_w = area.width.saturating_sub(left_w);
+    let right_visible = input.panel_mode != PanelMode::QueueOnly;
+
+    let left_area = if input.panel_mode == PanelMode::LibraryOnly {
+        Rect::default()
+    } else {
+        Rect {
+            x: area.x,
+            y: area.y,
+            width: left_w,
+            height: area.height,
+        }
+    };
+    let panel_area = if input.terminal_width < crate::app::MINI_VIEW_THRESHOLD
+        && input.panel_mode == PanelMode::LibraryOnly
+    {
+        area
+    } else {
+        left_area
+    };
+    // Inner content area with padding inside the colored box (queue uses this).
+    let left_content = queue_panel_inset(left_area);
+
+    let (tab_bar_area, right_area, player_area, status_area) =
+        right_column_geometry(area, left_w, right_w, input.panel_mode);
+    let (queue_playback_area, queue_panel_area, queue_boundary_area) =
+        queue_column_geometry(&input, area, left_w, left_area);
+
+    // Root panel placements (D1, task 1.3): which panels the current Panel
+    // mode mounts, and where.
+    let queue_col_visible = input.panel_mode != PanelMode::LibraryOnly;
     let tab = placed_when(right_visible, tab_bar_area);
-    let library = placed_when(right_visible, library_area);
+    let library = placed_when(right_visible, right_area);
     let library_playback = placed_when(input.panel_mode == PanelMode::LibraryOnly, player_area);
-    let queue = placed_when(queue_col_visible, queue_geo.panel_area);
+    let queue = placed_when(queue_col_visible, queue_panel_area);
     let queue_playback = placed_when(
-        queue_col_visible && queue_geo.panel_area.height > 0,
+        queue_col_visible && queue_panel_area.height > 0,
         queue_playback_area,
     );
     let status_bar = placed_when(right_visible, status_area);

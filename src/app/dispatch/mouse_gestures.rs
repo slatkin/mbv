@@ -16,14 +16,24 @@ impl App {
             let runtime_s = self
                 .connected_session_state
                 .as_ref()
-                .map(|s| s.runtime_s)
-                .unwrap_or(0);
+                .map_or(0, |s| s.runtime_s);
             if runtime_s == 0 {
                 return;
             }
+            #[expect(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
             let ticks = (fraction * (runtime_s * mbv_core::api::TICKS_PER_SECOND) as f64) as i64;
             let id = conn_id.clone();
-            self.remote_pos_s = (fraction * runtime_s as f64) as i64;
+            #[expect(
+                clippy::cast_precision_loss,
+                clippy::cast_possible_truncation,
+                reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
+            let remote_pos_s = (fraction * runtime_s as f64) as i64;
+            self.remote_pos_s = remote_pos_s;
             self.remote_pos_at = Instant::now();
             self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
             self.do_session_command(move |c| c.session_seek(&id, ticks));
@@ -33,6 +43,10 @@ impl App {
         if runtime_ticks == 0 {
             return;
         }
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
         let target_secs = (fraction * runtime_ticks as f64) / TICKS_PER_SECOND as f64;
         self.player
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
@@ -48,11 +62,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_mouse_single_click_emby(
-        &mut self,
-        lib_idx: usize,
-        target: String,
-    ) {
+    pub(in crate::app) fn handle_mouse_single_click_emby(&mut self, lib_idx: usize, target: &str) {
         self.set_panel_focus(crate::app::PanelFocus::Library);
         if let Some(level) = self
             .libs
@@ -101,12 +111,8 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn handle_mouse_double_click_emby(
-        &mut self,
-        lib_idx: usize,
-        target: String,
-    ) {
-        self.handle_mouse_single_click_emby(lib_idx, target.clone());
+    pub(in crate::app) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: &str) {
+        self.handle_mouse_single_click_emby(lib_idx, target);
         if self.is_viewing_album_folders(lib_idx) {
             // The mounted Music owner handles album-folder activation through
             // its Library Hero overlay; this legacy Emby mouse path is a
@@ -139,7 +145,7 @@ impl App {
         // of being recovered from `queue_cursor`, so a follow update cannot
         // play a different row.
         if let Some(index) = self.handle_mouse_single_click_queue(slot_id) {
-            self.dispatch(Command::QueuePlayCursor(index));
+            self.dispatch(&Command::QueuePlayCursor(index));
         }
     }
 

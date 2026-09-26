@@ -116,13 +116,19 @@ impl<Target> WideMediaList<Target> {
         &mut self,
         claim_rect: Rect,
         content_rect: Rect,
-        row_geometry: RowGeometry<Target>,
-        selected_row_rect: Option<Rect>,
+        row_geometry: &RowGeometry<Target>,
+        selected_row_rect: Option<&Rect>,
     ) where
         Target: Clone,
     {
         let rows = row_geometry.target_rects(claim_rect, content_rect);
-        PaintRetained::finish(self, claim_rect, content_rect, rows, selected_row_rect);
+        PaintRetained::finish(
+            self,
+            claim_rect,
+            content_rect,
+            rows,
+            selected_row_rect.copied(),
+        );
     }
 
     /// The current frame's content rectangle, if `view` completed.
@@ -336,7 +342,7 @@ impl<Target: Clone + Eq> Component for WideMediaList<Target> {
         crate::app::render::render_wide_media_list_component(frame, area, self, self.policy);
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 

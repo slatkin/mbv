@@ -14,6 +14,16 @@ use crate::app::state::types::feeds_manage::{
 };
 use mbv_core::config::FeedSubscription;
 
+fn require_feed_entries<T>(result: Result<Vec<T>, String>) -> Result<(), String> {
+    result.and_then(|entries| {
+        if entries.is_empty() {
+            Err("response did not contain any valid RSS or Atom entries".to_string())
+        } else {
+            Ok(())
+        }
+    })
+}
+
 impl super::Model {
     /// Mount the feeds-management component and seed it (task 5.3c/5.3d).
     /// The component owns the stage/cursor; `Model::feeds_manage` carries
@@ -71,8 +81,7 @@ impl super::Model {
 
     fn feeds_manage_cursor(&mut self) -> usize {
         self.feeds_manage_component_mut()
-            .map(|component| component.cursor())
-            .unwrap_or(0)
+            .map_or(0, |component| component.cursor())
     }
 
     /// Route a semantic feeds-management intent to the existing shell effects.
@@ -248,19 +257,13 @@ impl super::Model {
             let (resolved_url, result) =
                 match crate::app::infra::feed_parse::normalize_feed_url(&url) {
                     Ok(resolved_url) => {
-                        let result = crate::app::infra::feed_parse::fetch_and_parse_entries(
-                            &resolved_url,
-                            kind,
-                            &resolved_url,
-                        )
-                        .and_then(|entries| {
-                            if entries.is_empty() {
-                                Err("response did not contain any valid RSS or Atom entries"
-                                    .to_string())
-                            } else {
-                                Ok(())
-                            }
-                        });
+                        let result = require_feed_entries(
+                            crate::app::infra::feed_parse::fetch_and_parse_entries(
+                                &resolved_url,
+                                kind,
+                                &resolved_url,
+                            ),
+                        );
                         (resolved_url, result)
                     }
                     Err(error) => (url, Err(error)),

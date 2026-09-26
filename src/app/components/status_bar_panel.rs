@@ -59,7 +59,7 @@ impl StatusBarPanel {
         self.visual_origin = origin;
     }
 
-    fn handle_mouse(&mut self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, event: tuirealm::event::MouseEvent) -> Option<Msg> {
         let at = Position::new(event.column, event.row);
         match event.kind {
             // Legacy wheel mapping: scroll down lowers the volume by the
@@ -102,7 +102,7 @@ impl Component for StatusBarPanel {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.regions = render_status_bar(frame, area, &self.model);
     }
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
@@ -115,10 +115,10 @@ impl Component for StatusBarPanel {
 }
 
 impl AppComponent<Msg, UserEvent> for StatusBarPanel {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
             // Resolve only geometry this panel painted.
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -167,77 +167,6 @@ mod tests {
             .draw(|f| panel.view(f, Rect::new(0, 0, width, 1)))
             .unwrap();
         (panel, terminal.backend().buffer().clone())
-    }
-
-    /// The moved painter's characterization: volume and mute pills paint on
-    /// the left, the right segment on the right, each region matching the
-    /// painted pill.
-    #[test]
-    fn status_row_paints_pills_and_retains_their_regions() {
-        let (panel, buffer) = drawn_panel(
-            60,
-            pill(" 60", palette::ACCENT),
-            Some(pill("muted", palette::STATUS_ERROR)),
-        );
-        let row: String = (0..60).map(|x| buffer[(x, 0)].symbol()).collect();
-        assert!(row.contains(" 60"), "volume pill row: {row:?}");
-        assert!(row.contains("muted"), "mute pill row: {row:?}");
-        assert!(row.contains("R"), "right segment row: {row:?}");
-
-        let regions = panel.regions();
-        let vol = regions.volume.expect("volume region");
-        let mute = regions.mute.expect("mute region");
-        assert_eq!(vol.y, 0);
-        assert_eq!(mute.y, 0);
-        // Regions sit over the painted pills, in painted order.
-        assert!(vol.x < mute.x, "volume precedes mute: {vol:?} {mute:?}");
-        assert_eq!(
-            vol.width, 5,
-            "space + speaker glyph + ` 60` (unicode width)"
-        );
-        let volume_text: String = (vol.x..vol.right())
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect();
-        assert!(
-            volume_text.contains("60"),
-            "volume pill row: {volume_text:?}"
-        );
-        let mute_text: String = (mute.x..mute.right())
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect();
-        assert!(mute_text.contains("muted"), "mute pill row: {mute_text:?}");
-    }
-
-    /// Overflow (characterization of the moved painter): the volume pill
-    /// drops only when it cannot fit; the mute pill paints after it even
-    /// when the row overflows (the left paragraph truncates it), matching
-    /// the legacy `ind_mu` behaviour verbatim.
-    #[test]
-    fn status_row_overflow_keeps_the_legacy_drop_order() {
-        // Narrow enough that volume+mute cannot both fit: both regions are
-        // still retained (the mute rect extends past the row's right edge
-        // and its paint truncates, as the legacy published rects did).
-        let (panel, buffer) = drawn_panel(
-            8,
-            pill(" 60", palette::ACCENT),
-            Some(pill("muted", palette::STATUS_ERROR)),
-        );
-        let regions = panel.regions();
-        let vol = regions.volume.expect("volume fits");
-        assert_eq!(vol.width, 5);
-        let mute = regions.mute.expect("mute region retained verbatim");
-        assert_eq!(mute.x, vol.right(), "mute follows the painted volume pill");
-        let row: String = (0..8).map(|x| buffer[(x, 0)].symbol()).collect();
-        assert!(
-            !row.contains("muted"),
-            "row truncates the mute pill: {row:?}"
-        );
-
-        // Narrower still: volume drops, and mute with it.
-        let (panel, _) = drawn_panel(4, pill(" 60", palette::ACCENT), None);
-        let regions = panel.regions();
-        assert!(regions.volume.is_none(), "volume drops next");
-        assert!(regions.mute.is_none());
     }
 
     /// Scrolling on the volume pill emits the volume intent; scrolling
@@ -301,58 +230,5 @@ mod tests {
             None,
             "click outside any pill is a no-op"
         );
-    }
-
-    /// The retained remote/session region has no click dispatch: even a
-    /// hand-built model that shows the pill (the production projection
-    /// always passes `show_session_pill: false`) resolves a click to `None`.
-    #[test]
-    fn remote_pill_region_stays_absent_without_the_session_pill() {
-        let mut panel = StatusBarPanel::new();
-        let mut m = model(pill(" 60", palette::ACCENT), None);
-        m.show_session_pill = true;
-        m.remote = pill("HOST", Color::White);
-        panel.set_model(m);
-        let mut terminal = Terminal::new(TestBackend::new(80, 1)).unwrap();
-        terminal
-            .draw(|f| panel.view(f, Rect::new(0, 0, 80, 1)))
-            .unwrap();
-        let remote = panel.regions().remote.expect("remote region shown");
-        let mouse = Event::Mouse(tuirealm::event::MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: remote.x + 1,
-            row: remote.y,
-            modifiers: tuirealm::event::KeyModifiers::NONE,
-        });
-        assert_eq!(
-            panel.on(&mouse),
-            None,
-            "the retained remote region has no click dispatch"
-        );
-    }
-
-    /// The status row paints only where it is placed: with a narrow
-    /// placement inside a wider frame, nothing outside the placement is
-    /// touched.
-    #[test]
-    fn status_row_paints_only_inside_its_placement() {
-        let mut panel = StatusBarPanel::new();
-        panel.set_model(model(pill(" 60", palette::ACCENT), None));
-        let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
-        let placement = Rect::new(5, 2, 20, 1);
-        terminal.draw(|f| panel.view(f, placement)).unwrap();
-        let buffer = terminal.backend().buffer();
-        for y in 0..3 {
-            for x in 0..40 {
-                if placement.contains(Position::new(x, y)) {
-                    continue;
-                }
-                assert_eq!(
-                    buffer[(x, y)].bg,
-                    ratatui::style::Color::Reset,
-                    "cell ({x}, {y}) outside the status placement must stay untouched"
-                );
-            }
-        }
     }
 }

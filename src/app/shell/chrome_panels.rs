@@ -15,7 +15,7 @@ use super::components::{
     ComponentId, LibraryPlaybackPanel, Msg, QueueComponent, QueuePlaybackPanel, StatusBarPanel,
     TabPanel, UserEvent,
 };
-use super::*;
+use super::{App, DestinationLatestSource, Model, PanelFocus};
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::layout::CardGeometry;
 use crate::app::render::arrangements::chrome::{
@@ -223,12 +223,14 @@ impl Model {
             self.application
                 .get_component(&ComponentId::Queue)
                 .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
-                .map(|queue| queue.selection_summary())
+                .map(super::super::components::queue::QueueComponent::selection_summary)
         } else {
             self.application
                 .get_component_mut(&ComponentId::Library)
                 .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-                .and_then(|panel| panel.focused_summary())
+                .and_then(
+                    super::super::components::library_panel::panel::LibraryPanel::focused_summary,
+                )
         };
         let visual_origin = focused_summary
             .as_ref()
@@ -276,7 +278,9 @@ impl Model {
         transport.panel_focused = false;
         let status = self.app.now_playing_status();
         let (host, host_is_remote) = self.app.playback_host_label_and_remote();
-        let transport_area = if status != NowPlayingStatus::Idle {
+        let transport_area = if status == NowPlayingStatus::Idle {
+            None
+        } else {
             placement.map(|placement| {
                 let inset = queue_panel_inset(placement);
                 let slot_region = Rect {
@@ -297,8 +301,6 @@ impl Model {
                         .is_some_and(|parts| parts.context.is_some()),
                 )
             })
-        } else {
-            None
         };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {

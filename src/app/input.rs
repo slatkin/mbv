@@ -1,6 +1,9 @@
 mod browse_dispatch;
 mod confirm_keys;
 mod key_policy;
+pub(in crate::app) use key_policy::{
+    OverlayFocus, RemotePlaybackTarget, RouterOverlayState, RouterPlaybackState,
+};
 mod lib_keys;
 mod playlist_keys;
 mod queue_keys;
@@ -15,15 +18,8 @@ mod music_track_test_support;
 
 use super::{App, PanelFocus, TabSelection};
 use mbv_core::api::EmbyItem;
-// The following are unused by input.rs's own code (the code that used them
-// moved to input_mouse.rs / input_context_menu.rs in #365 step 2 lane B, and
-// the input_*_keys.rs siblings in #367 lane L2), but input's `#[cfg(test)]`
-// submodules (declared below) rely on `use super::*;` to reach them.
-#[cfg(test)]
-use super::ContextAction;
-
 impl App {
-    pub(in crate::app) fn context_menu_play_state(&self, item: &EmbyItem) -> bool {
+    pub(in crate::app) fn context_menu_play_state(item: &EmbyItem) -> bool {
         if item.is_folder {
             item.unplayed_item_count == 0
         } else {
@@ -47,7 +43,7 @@ impl App {
     pub(in crate::app) fn tab_count(&self) -> usize {
         1 + self.libs.len()
             + self.audiobookshelf_libraries.len()
-            + if self.has_feeds_subscriptions() { 1 } else { 0 }
+            + usize::from(self.has_feeds_subscriptions())
     }
 
     pub(in crate::app) fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
@@ -97,20 +93,22 @@ impl App {
     /// Tab-bar title widths: Continue + one per library + Feeds when present.
     pub(in crate::app) fn tab_title_widths(&self) -> Vec<u16> {
         let pad: u16 = 2;
-        let mut w = vec![
-            crate::app::ui_util::continue_tab_title(self.use_nerd_fonts)
-                .chars()
-                .count() as u16
-                + pad,
-        ];
+        let title_width = |title: &str| {
+            u16::try_from(title.chars().count())
+                .unwrap_or(u16::MAX)
+                .saturating_add(pad)
+        };
+        let mut w = vec![title_width(crate::app::ui_util::continue_tab_title(
+            self.use_nerd_fonts,
+        ))];
         for l in &self.libs {
-            w.push(l.library.name.chars().count() as u16 + pad);
+            w.push(title_width(&l.library.name));
         }
         for l in &self.audiobookshelf_libraries {
-            w.push(l.name.chars().count() as u16 + pad);
+            w.push(title_width(&l.name));
         }
         if self.has_feeds_subscriptions() {
-            w.push("Feeds".chars().count() as u16 + pad);
+            w.push(title_width("Feeds"));
         }
         w
     }

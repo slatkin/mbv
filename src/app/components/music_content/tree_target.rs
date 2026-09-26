@@ -1,6 +1,8 @@
 // The module's documentation and shared imports live in the parent module.
 use super::workspace::track_row_label;
-use super::*;
+use super::{MediaSemanticState, MusicContent, MusicTreeTarget};
+use crate::app::components::list::tree_browser::{TreeMarkPolicy, TreeNode};
+use std::collections::HashMap;
 
 // The destination's stable-target translation layer (design D6): Music
 // resolves its own domain facts — the selected album/track identity, the
@@ -194,19 +196,18 @@ impl MusicContent {
             // when Emby represents its rows as `Folder`. Ignore stored played
             // state while retaining a positive playback position as the live
             // `Active` distinction.
-            let semantic_state = self
-                .context
-                .list
-                .items
-                .get(index)
-                .map(|item| {
-                    MediaSemanticState::from_progress(
-                        false,
-                        item.playback_position_ticks,
-                        item.runtime_ticks,
-                    )
-                })
-                .unwrap_or(MediaSemanticState::Ordinary);
+            let semantic_state =
+                self.context
+                    .list
+                    .items
+                    .get(index)
+                    .map_or(MediaSemanticState::Ordinary, |item| {
+                        MediaSemanticState::from_progress(
+                            false,
+                            item.playback_position_ticks,
+                            item.runtime_ticks,
+                        )
+                    });
             let album_node = TreeNode::new(
                 MusicTreeTarget::Album(album_target.clone()),
                 Some(artist_target),

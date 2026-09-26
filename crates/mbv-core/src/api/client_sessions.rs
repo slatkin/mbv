@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    parse_item, parse_session_media_info, EmbyClient, EmbyItem, ItemId, SessionInfo,
+    TICKS_PER_SECOND,
+};
 use serde_json::Value;
 
 impl EmbyClient {
@@ -40,12 +43,10 @@ impl EmbyClient {
                 if found {
                     return Some(parse_item(v));
                 }
-                if v["Id"].as_str().unwrap_or("") == from_item_id.as_str() {
+                (v["Id"].as_str().unwrap_or("") == from_item_id.as_str()).then(|| {
                     found = true;
-                    Some(parse_item(v))
-                } else {
-                    None
-                }
+                    parse_item(v)
+                })
             })
             .collect();
         if items.is_empty() {

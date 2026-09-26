@@ -98,7 +98,7 @@ fn parse_video_cache_settings_and_save_round_trip() {
     assert_eq!(reparsed.video_cache_forward_mb, 75);
     assert_eq!(reparsed.video_cache_back_mb, 125);
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[cfg(test)]
@@ -131,7 +131,7 @@ fn mouse_support_round_trips_and_defaults_on() {
     assert!(!reparsed.mouse_support);
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[cfg(test)]
@@ -324,7 +324,7 @@ fn save_config_settings_round_trips_consume_audio_flags() {
     assert_eq!(reparsed.audio_device, "alsa/hw:Loopback,0,0");
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -430,7 +430,7 @@ fn save_config_settings_round_trips_auto_reconnect_values() {
     }
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -475,7 +475,7 @@ feed_view_libraries = ["YouTube"]
     );
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -490,7 +490,7 @@ url = "http://host"
 
 #[test]
 fn resolve_library_route_has_no_wildcard_fallback() {
-    let mut routes = std::collections::HashMap::new();
+    let mut routes = std::collections::BTreeMap::new();
     routes.insert("music".to_string(), "tcp://192.168.0.104:47788".to_string());
     assert_eq!(
         resolve_library_route(&routes, "Music"),
@@ -508,7 +508,7 @@ fn resolve_library_route_rejects_a_bare_device_name_as_malformed() {
     // accept it as a bogus Unix(PathBuf) socket path. Library routing
     // is tcp://-only (#239 addendum), so anything that doesn't parse
     // to Tcp(_) is treated as malformed: logged and skipped.
-    let mut routes = std::collections::HashMap::new();
+    let mut routes = std::collections::BTreeMap::new();
     routes.insert("music".to_string(), "living-room-pc".to_string());
     assert_eq!(resolve_library_route(&routes, "music"), None);
 }
@@ -518,7 +518,7 @@ fn resolve_library_route_rejects_unix_and_local_endpoints() {
     // Library routing is remote-only -- a unix:// or bare "local"
     // value is well-formed as a DaemonEndpoint but not a valid
     // library route, so it must still resolve to None.
-    let mut routes = std::collections::HashMap::new();
+    let mut routes = std::collections::BTreeMap::new();
     routes.insert("music".to_string(), "unix:///run/mbvd.sock".to_string());
     routes.insert("movies".to_string(), "local".to_string());
     assert_eq!(resolve_library_route(&routes, "music"), None);
@@ -527,5 +527,5 @@ fn resolve_library_route_rejects_unix_and_local_endpoints() {
 
 #[test]
 fn parse_invalid_toml_errors() {
-    assert!(parse_config("not [ valid toml !!!").is_err());
+    parse_config("not [ valid toml !!!").unwrap_err();
 }

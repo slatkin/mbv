@@ -5,8 +5,8 @@ use crate::app::components::media_list::{
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
 use crate::app::ui_util::trunc_str;
-use ratatui::style::*;
-use ratatui::text::*;
+use ratatui::style::{Color, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::ListItem;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
@@ -132,11 +132,11 @@ const QUIET_GAP: usize = 2;
 /// stays straight-line.
 fn paint_item_row(item: &ItemRow<'_>, mut paint: RowPaint<'_>) -> ListItem<'static> {
     let style = semantic_paint(item.semantic_state);
-    let gutter = gutter_text(item.trailing);
+    let gutter = gutter_text(item.trailing.as_ref());
     // `Collection` rows never show a duration, even if one is
     // projected — one enforcement point so parents can't re-diverge.
     let duration = effective_duration(item.duration, item.kind);
-    let trailing = inline_trailing(&style.progress);
+    let trailing = inline_trailing(style.progress.as_ref());
     // The row's own selection bit, before the focus folding below:
     // the title reveal follows the selection, while the selected-row
     // bar and the marquee follow the focused selection.
@@ -149,7 +149,7 @@ fn paint_item_row(item: &ItemRow<'_>, mut paint: RowPaint<'_>) -> ListItem<'stat
     let date_reserve = usize::from(gutter.is_some()) * (QUIET_GAP + DATE_GUTTER_W);
     let separator_reserve = usize::from(item.secondary.is_some_and(|text| !text.is_empty()));
     let icon_reserve = style.live_icon.map_or(0, UnicodeWidthStr::width);
-    let widths = title_budget(BudgetInputs {
+    let widths = title_budget(&BudgetInputs {
         inner_width: paint.inner_width,
         has_scrollbar: paint.has_scrollbar,
         trailing_w,
@@ -197,7 +197,7 @@ fn paint_item_row(item: &ItemRow<'_>, mut paint: RowPaint<'_>) -> ListItem<'stat
     let paint_selected = focused_selected;
     finish_row_bar(
         &mut spans,
-        BarFinish {
+        &BarFinish {
             inner_width: paint.inner_width,
             content_w: widths.content_w,
             paint_selected,
@@ -259,7 +259,7 @@ fn semantic_paint(semantic_state: &MediaSemanticState) -> SemanticPaint {
     }
 }
 
-fn gutter_text(trailing: &Option<MediaListTrailing>) -> Option<&str> {
+fn gutter_text(trailing: Option<&MediaListTrailing>) -> Option<&str> {
     match trailing {
         Some(MediaListTrailing::Gutter(text)) if !text.is_empty() => Some(text.as_str()),
         _ => None,
@@ -272,7 +272,7 @@ fn effective_duration(duration: Option<&str>, kind: MediaKind) -> Option<&str> {
         .filter(|_| !matches!(kind, MediaKind::Collection))
 }
 
-fn inline_trailing(progress: &Option<String>) -> Vec<(String, Color)> {
+fn inline_trailing(progress: Option<&String>) -> Vec<(String, Color)> {
     let mut pieces = Vec::new();
     if let Some(pct) = progress {
         pieces.push((pct.clone(), palette::PROGRESS_PERCENT));
@@ -296,7 +296,7 @@ struct Budget {
     title_width: usize,
 }
 
-fn title_budget(inputs: BudgetInputs) -> Budget {
+fn title_budget(inputs: &BudgetInputs) -> Budget {
     let content_w = row_content_w(inputs.inner_width, inputs.has_scrollbar);
     let title_width = content_w.saturating_sub(
         LEFT_INSET
@@ -497,7 +497,7 @@ struct BarFinish {
     progress_index: Option<usize>,
 }
 
-fn finish_row_bar(spans: &mut Vec<Span<'static>>, finish: BarFinish) {
+fn finish_row_bar(spans: &mut Vec<Span<'static>>, finish: &BarFinish) {
     if finish.paint_selected {
         // Pad the selected row's spans out to the full row width (up to
         // the scrollbar column) so the highlighted background bar spans

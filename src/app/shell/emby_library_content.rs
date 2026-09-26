@@ -19,6 +19,7 @@ use super::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryConte
 use super::components::{LibraryKey, LibraryKind};
 use super::Model;
 use super::TabSelection;
+use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -58,7 +59,7 @@ impl Model {
         kind: LibraryKind,
         f: impl FnOnce(&mut EmbyLibraryContent) -> R,
     ) -> Option<R> {
-        self.update_library_owner(key.clone(), || Box::new(EmbyLibraryContent::new(kind)), f)
+        self.update_library_owner(key, || Box::new(EmbyLibraryContent::new(kind)), f)
     }
 
     /// The browse identity of library `index`'s current level (mirrors
@@ -77,8 +78,32 @@ impl Model {
             feed_group: lib
                 .feed_home_video
                 .as_ref()
-                .map(|s| s.selected_group_index()),
+                .map(super::super::state::types::feed::FeedHomeVideoState::selected_group_index),
         }
+    }
+
+    /// The feed/home-video group-level snapshot for the owner push: the
+    /// selected group's items, its cursor/scroll, and the group's
+    /// outstanding-load flag (falling back to the root level's while the
+    /// group state is still unseeded).
+    fn feed_home_video_owner_snapshot(&self, index: usize) -> (Vec<EmbyItem>, usize, usize, bool) {
+        let items = self.app.feed_home_video_selected_items(index);
+        let (cursor, scroll) = self.app.libs[index]
+            .feed_home_video
+            .as_ref()
+            .map_or((0, 0), |state| (state.video_cursor, state.video_scroll));
+        let loading = self.app.libs[index]
+            .feed_home_video
+            .as_ref()
+            .map(|state| state.loading)
+            .or_else(|| {
+                self.app.libs[index]
+                    .nav_stack
+                    .first()
+                    .map(|root| root.loading)
+            })
+            .unwrap_or(false);
+        (items, cursor, scroll, loading)
     }
 
     /// Event-scoped content projection for the migrated owner (mirrors
@@ -102,25 +127,16 @@ impl Model {
         self.app.ensure_feed_home_video_group_level(index);
         let feed_group_view = self.app.is_feed_home_video_group_view(index);
         let show_letter_pills = self.app.should_show_letter_pills(index);
+        let selector_mode = if feed_group_view {
+            super::components::emby_library_content::EmbySelectorMode::FeedGroups
+        } else if show_letter_pills {
+            super::components::emby_library_content::EmbySelectorMode::Letters
+        } else {
+            super::components::emby_library_content::EmbySelectorMode::None
+        };
         let (items, total_count, library_total, letter_filter, loading, cursor, scroll) =
             if feed_group_view {
-                let items = self.app.feed_home_video_selected_items(index);
-                let (cursor, scroll) = self.app.libs[index]
-                    .feed_home_video
-                    .as_ref()
-                    .map(|state| (state.video_cursor, state.video_scroll))
-                    .unwrap_or((0, 0));
-                let loading = self.app.libs[index]
-                    .feed_home_video
-                    .as_ref()
-                    .map(|state| state.loading)
-                    .or_else(|| {
-                        self.app.libs[index]
-                            .nav_stack
-                            .first()
-                            .map(|root| root.loading)
-                    })
-                    .unwrap_or(false);
+                let (items, cursor, scroll, loading) = self.feed_home_video_owner_snapshot(index);
                 let total_count = items.len();
                 (items, total_count, None, None, loading, cursor, scroll)
             } else {
@@ -186,8 +202,7 @@ impl Model {
             library_total,
             letter_filter,
             loading,
-            group_pills: feed_group_view,
-            show_letter_pills,
+            selector_mode,
             feed_groups,
             feed_group_ids,
             feed_group_cursor,

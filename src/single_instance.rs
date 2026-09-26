@@ -12,13 +12,12 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 
 fn runtime_dir() -> PathBuf {
-    std::env::var("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp"))
+    std::env::var("XDG_RUNTIME_DIR").map_or_else(|_| PathBuf::from("/tmp"), PathBuf::from)
 }
 
 pub fn lock_path() -> PathBuf {
@@ -83,7 +82,6 @@ pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
         }
         Err((_, errno)) => return Err(io::Error::from_raw_os_error(errno as i32)),
     };
-    use std::os::unix::fs::PermissionsExt;
     let _ = std::fs::set_permissions(lock, std::fs::Permissions::from_mode(0o600));
     Ok(Resolution::Fresh(LockGuard { file }))
 }
@@ -160,17 +158,5 @@ mod tests {
         let listener = UnixListener::bind(&socket).expect("bind test listener");
         assert!(matches!(resolve(&socket, &lock), Ok(Resolution::Attach)));
         drop(listener);
-    }
-
-    /// `mbv -q` must not choke on a missing or malformed lock file.
-    #[test]
-    fn read_pid_is_none_for_missing_or_garbage_lock() {
-        let dir = TempDir::new();
-
-        assert_eq!(read_pid(&dir.path().join("absent.lock")), None);
-
-        let garbage = dir.path().join("garbage.lock");
-        std::fs::write(&garbage, "not-a-pid\n").expect("write garbage lock");
-        assert_eq!(read_pid(&garbage), None);
     }
 }

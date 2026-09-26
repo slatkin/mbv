@@ -90,13 +90,12 @@ fn persisted_token_http_401_and_403_are_authentication_rejections() {
         let http = MockHttp::new();
         http.respond(status, "");
         let client = emby_client(&http);
-        let failure = match client.authenticate_service_setup_bounded(
+        let Err(failure) = client.authenticate_service_setup_bounded(
             "persisted-token".into(),
             &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
             std::time::Duration::from_secs(1),
-        ) {
-            Ok(_) => panic!("rejected token unexpectedly authenticated"),
-            Err(failure) => failure,
+        ) else {
+            panic!("rejected token unexpectedly authenticated");
         };
         assert_eq!(
             failure.class,
@@ -110,13 +109,12 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     let http = MockHttp::new();
     http.respond(500, "server failure");
     let client = emby_client(&http);
-    let failure = match client.authenticate_service_setup_bounded(
+    let Err(failure) = client.authenticate_service_setup_bounded(
         "persisted-token".into(),
         &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
         std::time::Duration::from_secs(1),
-    ) {
-        Ok(_) => panic!("availability failure unexpectedly succeeded"),
-        Err(failure) => failure,
+    ) else {
+        panic!("availability failure unexpectedly succeeded");
     };
     assert_eq!(
         failure.class,
@@ -126,9 +124,8 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     let http = MockHttp::new();
     http.respond(200, "not-json");
     let client = emby_client(&http);
-    let failure = match client.get_views_classified() {
-        Ok(_) => panic!("malformed availability response unexpectedly succeeded"),
-        Err(failure) => failure,
+    let Err(failure) = client.get_views_classified() else {
+        panic!("malformed availability response unexpectedly succeeded");
     };
     assert_eq!(
         failure.class,
@@ -138,13 +135,12 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     let http = MockHttp::new();
     http.fail(std::io::ErrorKind::ConnectionRefused);
     let client = emby_client(&http);
-    let failure = match client.authenticate_service_setup_bounded(
+    let Err(failure) = client.authenticate_service_setup_bounded(
         "persisted-token".into(),
         &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
         std::time::Duration::from_secs(1),
-    ) {
-        Ok(_) => panic!("dead endpoint unexpectedly authenticated"),
-        Err(failure) => failure,
+    ) else {
+        panic!("dead endpoint unexpectedly authenticated");
     };
     assert_eq!(
         failure.class,

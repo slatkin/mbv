@@ -16,8 +16,8 @@ fn log_level_flag_accepts_supported_values_and_rejects_invalid_values() {
             })
         );
     }
-    assert!(parse_action(&["--log-level".into(), "trace".into()]).is_err());
-    assert!(parse_action(&["--log-level".into()]).is_err());
+    parse_action(&["--log-level".into(), "trace".into()]).unwrap_err();
+    parse_action(&["--log-level".into()]).unwrap_err();
 }
 
 #[test]
@@ -66,7 +66,7 @@ fn connect_diagnostics_redact_candidate_and_remote_material() {
 fn abs_diagnostics_classify_auth_rejection_and_other_failures() {
     use mbv_core::audiobookshelf::{AudiobookshelfError, AudiobookshelfFailureClass};
 
-    let auth = classified_abs_error(&AudiobookshelfError {
+    let auth = classified_abs_error(AudiobookshelfError {
         class: AudiobookshelfFailureClass::AuthenticationRejected,
     });
     assert_eq!(auth, "mbvd: Audiobookshelf authentication rejected");
@@ -78,7 +78,7 @@ fn abs_diagnostics_classify_auth_rejection_and_other_failures() {
         AudiobookshelfFailureClass::MalformedResponse,
         AudiobookshelfFailureClass::Unavailable,
     ] {
-        let other = classified_abs_error(&AudiobookshelfError { class });
+        let other = classified_abs_error(AudiobookshelfError { class });
         assert_eq!(
             other,
             "mbvd: Audiobookshelf server unavailable or returned an invalid response"
@@ -130,14 +130,14 @@ fn reconcile_outcome_distinguishes_applied_rejected_and_unrelated_events() {
     use mbv_core::ctrl::{CtrlEvent, ServiceSetupRejection};
 
     assert_eq!(
-        reconcile_event_outcome(CtrlEvent::ServiceSetupApplied {
+        reconcile_event_outcome(&CtrlEvent::ServiceSetupApplied {
             kind: config::ServiceKind::Emby,
             revision: 1,
         }),
         Some(Ok(()))
     );
     assert_eq!(
-        reconcile_event_outcome(CtrlEvent::ServiceSetupRejected {
+        reconcile_event_outcome(&CtrlEvent::ServiceSetupRejected {
             kind: config::ServiceKind::Emby,
             revision: 1,
             reason: ServiceSetupRejection::RevisionMismatch,
@@ -147,7 +147,7 @@ fn reconcile_outcome_distinguishes_applied_rejected_and_unrelated_events() {
         ))
     );
     assert_eq!(
-        reconcile_event_outcome(CtrlEvent::StatusOnly(
+        reconcile_event_outcome(&CtrlEvent::StatusOnly(
             mbv_core::player::PlayerStatus::default()
         )),
         None

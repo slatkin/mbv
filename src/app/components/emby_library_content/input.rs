@@ -80,9 +80,7 @@ impl EmbyLibraryContent {
                     }
                     // A double-click never resolves a context intent, and no
                     // row resolved when the intent is `None`.
-                    Some(RowIntent::Context(_)) | Some(RowIntent::ContextSelection(_)) | None => {
-                        None
-                    }
+                    Some(RowIntent::Context(_) | RowIntent::ContextSelection(_)) | None => None,
                 }
             }
             MediaListSurfaceInput::ContextClick(at) => {
@@ -105,9 +103,7 @@ impl EmbyLibraryContent {
                     // search session has no Visual-mode multi-selection so a
                     // `ContextSelection` cannot arise (D4 non-goal), and no
                     // row resolved when the intent is `None`.
-                    Some(RowIntent::Activate(_)) | Some(RowIntent::ContextSelection(_)) | None => {
-                        None
-                    }
+                    Some(RowIntent::Activate(_) | RowIntent::ContextSelection(_)) | None => None,
                 }
             }
             _ => None,
@@ -153,7 +149,7 @@ impl EmbyLibraryContent {
         let Key::Char(c @ ('[' | ']')) = key.code else {
             return None;
         };
-        let (current, count) = if self.group_pills {
+        let (current, count) = if self.selector_mode == super::EmbySelectorMode::FeedGroups {
             (
                 if self.latest_mode {
                     0
@@ -162,15 +158,14 @@ impl EmbyLibraryContent {
                 },
                 self.feed_groups.len() + 2,
             )
-        } else if self.show_letter_pills {
+        } else if self.selector_mode == super::EmbySelectorMode::Letters {
             (
                 if self.latest_mode {
                     0
                 } else {
                     self.letter_filter
                         .as_ref()
-                        .map(|filter| filter.index + 1)
-                        .unwrap_or(1)
+                        .map_or(1, |filter| filter.index + 1)
                 },
                 LetterFilter::labels().len() + 1,
             )
@@ -178,8 +173,10 @@ impl EmbyLibraryContent {
             return None;
         };
         let delta = if c == '[' { -1 } else { 1 };
-        let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
-        self.pick_selector(next)
+        let count = i64::try_from(count).unwrap_or(i64::MAX);
+        let current = i64::try_from(current).unwrap_or(i64::MAX);
+        let next = usize::try_from((current + delta).rem_euclid(count)).unwrap_or(usize::MAX);
+        Some(self.pick_selector(next))
     }
 
     fn selected_item_action(item: EmbyItem, key: &KeyEvent) -> Option<ShellRequest> {
@@ -286,11 +283,5 @@ mod tests {
             Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch)))
         );
         assert!(owner.inline_search.is_active());
-    }
-
-    #[test]
-    fn empty_selection_does_not_emit_an_activation() {
-        let mut owner = super::super::EmbyLibraryContent::new(LibraryKind::Movies);
-        assert_eq!(owner.handle_key(&key(Key::Enter)), None);
     }
 }

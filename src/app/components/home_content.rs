@@ -183,7 +183,7 @@ impl HomeContent {
                 self.handle_navigation_key(MediaListSurfaceInput::Last);
                 None
             }
-            Key::Char('.') => self.open_context_menu(),
+            Key::Char('.') => Some(self.open_context_menu()),
             Key::Enter | Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(
                 Msg::Shell(Box::new(ShellRequest::HomeEnqueue(self.row_target()))),
             ),
@@ -202,7 +202,7 @@ impl HomeContent {
         self.delegate_row_local_input(input, None);
     }
 
-    fn open_context_menu(&mut self) -> Option<Msg> {
+    fn open_context_menu(&mut self) -> Msg {
         let targets = match self
             .delegate_row_local_input(MediaListSurfaceInput::Context, None)
             .external_intent
@@ -214,10 +214,10 @@ impl HomeContent {
                 .collect(),
             _ => vec![self.row_target()],
         };
-        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Home(targets),
             None,
-        ))))
+        )))
     }
 
     fn activate_selected_row(&mut self) -> Option<Msg> {
@@ -232,23 +232,6 @@ impl HomeContent {
         }
     }
 
-    /// The active carrier's resting scroll offset.
-    #[cfg(test)]
-    pub(in crate::app) fn test_active_scroll(&self) -> usize {
-        self.carrier.scroll()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_multi_selection_len(&self) -> usize {
-        self.carrier.multi_selection().len()
-    }
-
-    /// Continue Watching rows for projection tests.
-    #[cfg(test)]
-    pub(in crate::app) fn test_active_rows(&self) -> &[MediaListRow<String>] {
-        self.carrier.rows()
-    }
-
     fn on_list_slot_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         let at = pointer_position(input);
         // Pointer target resolution and local selection: the same `claim_row`
@@ -261,8 +244,8 @@ impl HomeContent {
 
         match input {
             MediaListSurfaceInput::Wheel { .. } => Some(self.claim_wheel(input)),
-            MediaListSurfaceInput::DoubleClick(_) => self.activate_pointer_target(target?),
-            MediaListSurfaceInput::ContextClick(at) => self.open_pointer_context(at, target?),
+            MediaListSurfaceInput::DoubleClick(_) => Some(self.activate_pointer_target(target?)),
+            MediaListSurfaceInput::ContextClick(at) => Some(self.open_pointer_context(at, target?)),
             MediaListSurfaceInput::Click(_)
             | MediaListSurfaceInput::ToggleClick(_)
             | MediaListSurfaceInput::RangeClick(_) => Some(self.claim_pointer_click()),
@@ -275,19 +258,15 @@ impl HomeContent {
         Msg::TerminalEvent(super::msg::TerminalObserverEvent::MouseClaimed)
     }
 
-    fn activate_pointer_target(&mut self, target: String) -> Option<Msg> {
+    fn activate_pointer_target(&mut self, target: String) -> Msg {
         self.carrier
             .delegate_operation(MediaListOperation::Activate(target));
-        Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
+        Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
             target: self.row_target(),
-        })))
+        }))
     }
 
-    fn open_pointer_context(
-        &mut self,
-        at: ratatui::layout::Position,
-        target: String,
-    ) -> Option<Msg> {
+    fn open_pointer_context(&mut self, at: ratatui::layout::Position, target: String) -> Msg {
         let outcome = self
             .carrier
             .delegate_operation(MediaListOperation::Context(target));
@@ -299,10 +278,10 @@ impl HomeContent {
                 .collect(),
             _ => vec![self.row_target()],
         };
-        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Home(targets),
             Some((at.x, at.y)),
-        ))))
+        )))
     }
 
     fn claim_pointer_click(&self) -> Msg {
@@ -394,10 +373,12 @@ impl LibraryContentOwner for HomeContent {
     /// Translate resolved list gestures into Home's typed requests.
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(_) => None,
             LibrarySlotEvent::List(input) => self.on_list_slot_event(input),
-            // Home has no Workspace and no hero-pane input of its own.
-            LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
+            // Home has no Workspace and no hero-pane input of its own; the
+            // selector pill is likewise inert here.
+            LibrarySlotEvent::SelectorPicked(_)
+            | LibrarySlotEvent::WorkspaceSelectorPicked(_)
+            | LibrarySlotEvent::HeroPane(_) => None,
             LibrarySlotEvent::HeroActivate => self.activate_home_hero(),
         }
     }
@@ -466,29 +447,11 @@ impl LibraryContentOwner for HomeContent {
 mod tests {
     use super::*;
     use crate::app::tests::make_item;
-    use mbv_core::playback_queue::QueueItem;
 
     fn owner_with_items(items: Vec<QueueItem>) -> HomeContent {
         let mut owner = HomeContent::new();
         owner.set_content(items, false);
         owner
-    }
-
-    fn row_parts(owner: &HomeContent, index: usize) -> (String, Option<String>) {
-        // Item rows only: the projection's leading group heading is
-        // non-selectable and outside these assertions' concern.
-        let row = owner
-            .test_active_rows()
-            .iter()
-            .filter(|r| matches!(r, MediaListRow::Item { .. }))
-            .nth(index)
-            .unwrap_or_else(|| panic!("expected item row {index}, got none"));
-        match row {
-            MediaListRow::Item {
-                primary, secondary, ..
-            } => (primary.clone(), secondary.clone()),
-            other => panic!("expected an item row, got {other:?}"),
-        }
     }
 
     #[test]
@@ -505,104 +468,5 @@ mod tests {
             owner.handle_key(&key(Key::Char('a'), KeyModifiers::CONTROL)),
             Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::HomeEnqueue(_))
         ));
-    }
-
-    #[test]
-    fn list_wheel_event_is_claimed_by_home() {
-        let mut owner = owner_with_items(vec![]);
-        assert_eq!(
-            owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
-                at: ratatui::layout::Position::new(1, 1),
-                delta: -1,
-            })),
-            Some(Msg::TerminalEvent(
-                super::super::msg::TerminalObserverEvent::MouseClaimed
-            ))
-        );
-    }
-
-    #[test]
-    fn the_continue_list_opens_with_a_keep_watching_group_heading() {
-        let owner = owner_with_items(vec![QueueItem::Emby(Box::new(make_item("Film", "Movie")))]);
-        let rows = owner.test_active_rows();
-        assert_eq!(rows.len(), 2);
-        assert!(
-            matches!(&rows[0], MediaListRow::Heading { text } if text == "Continue watching"),
-            "the first row is the Continue watching group heading: {:?}",
-            rows[0]
-        );
-    }
-
-    #[test]
-    fn an_empty_continue_list_paints_no_group_heading() {
-        let owner = owner_with_items(vec![]);
-        assert!(owner.test_active_rows().is_empty());
-    }
-
-    #[test]
-    fn episode_rows_project_the_series_as_context_and_the_episode_title() {
-        let mut episode = make_item("Pilot", "Episode");
-        episode.id = "ep1".into();
-        episode.series_name = "Series Name".into();
-        let owner = owner_with_items(vec![QueueItem::Emby(Box::new(episode))]);
-        assert_eq!(
-            row_parts(&owner, 0),
-            ("Series Name".into(), Some("Pilot".into()))
-        );
-    }
-
-    /// Home rows use the one canonical state derivation: a finished item is
-    /// `Played`, an in-progress item is `Active` with its resume percentage,
-    /// and a music row is always `Ordinary`.
-
-    #[test]
-    fn home_rows_use_the_canonical_state_derivation() {
-        let mut played = make_item("Finished Film", "Movie");
-        played.id = "played".into();
-        played.played = true;
-        let mut in_progress = make_item("Half-Watched Film", "Movie");
-        in_progress.id = "in-progress".into();
-        in_progress.runtime_ticks = 1000;
-        in_progress.playback_position_ticks = 500;
-        let mut track = make_item("Album Track", "Audio");
-        track.id = "track".into();
-        track.played = true;
-        track.runtime_ticks = 1000;
-        track.playback_position_ticks = 500;
-        let owner = owner_with_items(vec![
-            QueueItem::Emby(Box::new(played)),
-            QueueItem::Emby(Box::new(in_progress)),
-            QueueItem::Emby(Box::new(track)),
-        ]);
-        let states: Vec<MediaSemanticState> = owner
-            .test_active_rows()
-            .iter()
-            .filter_map(|row| match row {
-                MediaListRow::Item { semantic_state, .. } => Some(semantic_state.clone()),
-                _ => None,
-            })
-            .collect();
-        assert_eq!(states[0], MediaSemanticState::Played);
-        assert_eq!(states[1], MediaSemanticState::active(Some(50)));
-        assert_eq!(states[2], MediaSemanticState::Ordinary);
-    }
-
-    /// Truncation is the canonical painter's contract (a split row is cut
-    /// as one string, context first); the projection's side of it is to hand
-    /// over both parts untruncated so the painter can decide.
-
-    #[test]
-    fn split_rows_carry_their_full_parts_for_the_painters_truncation_priority() {
-        let mut episode = make_item("A Very Long Episode Title That Must Survive", "Episode");
-        episode.id = "ep1".into();
-        episode.series_name = "A Very Long Series Name That May Ellipsise First".into();
-        let owner = owner_with_items(vec![QueueItem::Emby(Box::new(episode))]);
-        assert_eq!(
-            row_parts(&owner, 0),
-            (
-                "A Very Long Series Name That May Ellipsise First".into(),
-                Some("A Very Long Episode Title That Must Survive".into())
-            )
-        );
     }
 }

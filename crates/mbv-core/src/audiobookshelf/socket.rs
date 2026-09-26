@@ -65,6 +65,7 @@ struct ProgressWire {
 
 /// Build a `wss://` (or `ws://`) WebSocket URL for Audiobookshelf's
 /// Engine.IO v4 endpoint from the configured server URL.
+#[must_use]
 pub fn socket_url(server_url: &str) -> Option<String> {
     let rest = server_url
         .strip_prefix("https://")
@@ -87,12 +88,10 @@ fn parse(text: &str) -> Option<SocketEvent> {
     match text.as_bytes().first()? {
         // Engine.IO open packet: `0{...}`
         b'0' => parse_open(&text[1..]),
-        // Engine.IO close packet: `1` — handled at connection layer.
-        b'1' => None,
-        // Engine.IO ping/pong — handled at connection layer (reply pong / update activity).
-        b'2' | b'3' => None,
         // Engine.IO message packet: `4...` → decode Socket.IO packet type at text[1].
         b'4' => parse_socket_io(&text[1..]),
+        // Close, ping, pong, and unknown packet types are handled or ignored
+        // at the connection layer.
         _ => None,
     }
 }
@@ -112,11 +111,9 @@ fn parse_socket_io(payload: &str) -> Option<SocketEvent> {
     match payload.as_bytes().first()? {
         // 0 = CONNECT. Server sends `40{"sid":"..."}` as connect acknowledgement.
         b'0' => Some(SocketEvent::ConnectAck),
-        // 1 = DISCONNECT — server closing the namespace. Handled at connection layer.
-        b'1' => None,
         // 2 = EVENT. Payload is a JSON array: `["event_name", ...]`.
         b'2' => parse_event(&payload[1..]),
-        // 3 = ACK, 4 = CONNECT_ERROR, 5 = BINARY_EVENT, 6 = BINARY_ACK — not handled.
+        // DISCONNECT and every other packet type are not handled here.
         _ => None,
     }
 }
@@ -143,7 +140,7 @@ fn parse_event(args_json: &str) -> Option<SocketEvent> {
 }
 
 /// The `user_item_progress_updated` event payload is `{"id": ..., "data": {...}}`
-/// where `data` is a full MediaProgress object matching `ProgressWire`.
+/// where `data` is a full `MediaProgress` object matching `ProgressWire`.
 fn decode_progress(payload: &Value) -> Option<AudiobookshelfProgress> {
     let data = &payload["data"];
     let wire: ProgressWire = serde_json::from_value(data.clone()).ok()?;
@@ -362,7 +359,7 @@ mod tests {
                 ping_interval,
                 ping_timeout,
             }) => {
-                assert_eq!(ping_interval, Duration::from_millis(30_000));
+                assert_eq!(ping_interval, Duration::from_secs(30));
                 assert_eq!(ping_timeout, Duration::from_millis(10_000));
             }
             other => panic!("expected Open, got {other:?}"),
@@ -377,8 +374,8 @@ mod tests {
                 ping_interval,
                 ping_timeout,
             }) => {
-                assert_eq!(ping_interval, Duration::from_millis(25_000));
-                assert_eq!(ping_timeout, Duration::from_millis(20_000));
+                assert_eq!(ping_interval, Duration::from_secs(25));
+                assert_eq!(ping_timeout, Duration::from_secs(20));
             }
             other => panic!("expected Open, got {other:?}"),
         }

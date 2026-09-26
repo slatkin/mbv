@@ -1,12 +1,16 @@
 // Queue, library-position, and last-remote-connection state persistence.
 
-use super::*;
+use super::{
+    home_latest_launch_path, library_position_state_path, queue_state_path, state_dir,
+    stay_alive_queue_state_path, LibraryPositionState, QueueSource, QueueState,
+};
 use std::path::PathBuf;
 
 pub fn save_queue_state(state: &QueueState) -> Result<(), String> {
     save_json_atomic(&queue_state_path(), state, "queue state")
 }
 
+#[must_use]
 pub fn load_queue_state() -> Option<QueueState> {
     load_json(&queue_state_path(), "queue_state.json")
 }
@@ -64,6 +68,7 @@ pub(crate) fn load_stay_alive_queue_state_at(
     load_json(path, "owner queue state")
 }
 
+#[must_use]
 pub fn load_stay_alive_queue_state() -> Option<StayAliveQueueState> {
     load_stay_alive_queue_state_at(&stay_alive_queue_state_path())
 }
@@ -131,6 +136,7 @@ pub(super) fn load_home_latest_launch_at(path: &std::path::Path) -> Option<u64> 
     (state.version == HOME_LATEST_LAUNCH_STATE_VERSION).then_some(state.launch_secs)
 }
 
+#[must_use]
 pub fn load_home_latest_launch() -> Option<u64> {
     load_home_latest_launch_at(&home_latest_launch_path())
 }
@@ -241,10 +247,10 @@ pub fn save_library_position_state_result(state: &LibraryPositionState) -> Resul
         .map_err(|error| format!("rename {} to {}: {error}", tmp.display(), path.display()))
 }
 
+#[must_use]
 pub fn load_library_position_state() -> LibraryPositionState {
-    let text = match std::fs::read_to_string(library_position_state_path()) {
-        Ok(text) => text,
-        Err(_) => return LibraryPositionState::default(),
+    let Ok(text) = std::fs::read_to_string(library_position_state_path()) else {
+        return LibraryPositionState::default();
     };
     match serde_json::from_str(&text) {
         Ok(state) => state,
@@ -299,6 +305,7 @@ impl QueueState {
     /// Audiobookshelf snapshots remain intact for mixed queue restoration.
     /// After this change Emby removal preserves non-Emby items (Feed +
     /// Audiobookshelf) as required by the Audiobookshelf lifecycle.
+    #[must_use]
     pub fn without_emby(&self) -> Self {
         self.without_items(|item| !matches!(item, crate::playback_queue::QueueItem::Emby(_)))
     }
@@ -307,6 +314,7 @@ impl QueueState {
     /// their keyed positions. Emby and Feed items remain intact. Used on
     /// confirmed Audiobookshelf Service replacement/removal to purge
     /// Service-owned queue state without affecting other Services.
+    #[must_use]
     pub fn without_audiobookshelf(&self) -> Self {
         self.without_items(|item| !item.is_audiobookshelf_any())
     }

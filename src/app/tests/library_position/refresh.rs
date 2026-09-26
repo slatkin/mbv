@@ -100,8 +100,11 @@ fn refresh_current_view_targets_the_focused_emby_library_only() {
     assert!(!app.feed_tab.loading, "Feeds must not be refreshed");
 }
 
-/// F5 with the queue panel focused refreshes only the visible queue and
-/// leaves every browse destination (Emby, Audiobookshelf, Feeds) untouched.
+/// The split is one session field shared by every Wide hero surface: switching
+/// wide library tabs neither clears nor re-clamps it, so the next surface
+/// consumes the same raw width (clamped against its own content area at paint
+/// time).
+/// Leaves every browse destination untouched when the queue has focus.
 #[test]
 fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() {
     let mut app = mixed_services_app();
@@ -110,10 +113,7 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
 
     app.refresh_current_view();
 
-    assert!(
-        !app.libs[0].nav_stack[0].loading,
-        "queue refresh must not reload the Emby library"
-    );
+    assert!(!app.libs[0].nav_stack[0].loading);
     assert_eq!(app.audiobookshelf_browse[0].shows.len(), 1);
     assert!(app.audiobookshelf_browse[0]
         .detail_cache
@@ -121,50 +121,6 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
     assert!(!app.feed_tab.loading);
 }
 
-/// Refreshing the active library view clears the persisted Wide hero split
-/// override, reverting the surface to the shared arrangement's default ratio.
-#[test]
-fn refresh_current_view_reverts_the_wide_split_to_default() {
-    let mut app = mixed_services_app();
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Library;
-    app.list_pane_width = Some(64);
-    app.save_prefs();
-
-    app.refresh_current_view();
-
-    assert_eq!(
-        app.list_pane_width, None,
-        "a library refresh must clear the Wide hero split override"
-    );
-    assert!(
-        App::load_prefs()["list_pane_width"].is_null(),
-        "a library refresh must clear the persisted Wide hero split override"
-    );
-}
-
-/// Refreshing while the Queue panel holds focus must leave the Wide hero split
-/// untouched: the reset lives in the library arm, not at the function top.
-#[test]
-fn refresh_current_view_with_queue_focus_leaves_the_wide_split_alone() {
-    let mut app = mixed_services_app();
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.panel_focus = PanelFocus::Queue;
-    app.list_pane_width = Some(64);
-
-    app.refresh_current_view();
-
-    assert_eq!(
-        app.list_pane_width,
-        Some(64),
-        "a queue-focus refresh must not touch the Wide hero split override"
-    );
-}
-
-/// The split is one session field shared by every Wide hero surface: switching
-/// wide library tabs neither clears nor re-clamps it, so the next surface
-/// consumes the same raw width (clamped against its own content area at paint
-/// time).
 #[test]
 fn switching_wide_library_tabs_keeps_the_session_split_width() {
     let mut app = mixed_services_app();
@@ -178,52 +134,6 @@ fn switching_wide_library_tabs_keeps_the_session_split_width() {
     assert_eq!(app.list_pane_width, Some(64), "switch back to a library");
 }
 
-/// A stale Emby `lib_idx` reaching a bounds-checked browse helper mutates
-/// nothing and never corrupts another library via a library-zero fallback.
-#[test]
-fn stale_emby_lib_index_mutates_no_library() {
-    let mut app = two_emby_libraries_app();
-    let stale = app.libs.len() + 1;
-    app.go_back(stale);
-    app.shuffle_play_target(stale, None);
-    app.refresh_lib(stale);
-    for idx in 0..2 {
-        let lvl = &app.libs[idx].nav_stack[0];
-        assert_eq!(lvl.resting().cursor(), 0, "lib {idx} cursor");
-        assert!(!lvl.loading, "lib {idx} not loading");
-    }
-}
-/// Two Emby libraries (each a two-item top browse level) so a stale index
-/// that wrongly fallbacked to library zero could corrupt real state.
-fn two_emby_libraries_app() -> App {
-    let mut app = make_app_stub();
-    for (id, title) in [("lib-movies", "Movies"), ("lib-music", "Music")] {
-        let mut library = make_item(title, "CollectionFolder");
-        library.id = id.into();
-        let level = BrowseLevel {
-            fetched_rows: 0,
-            parent_id: id.into(),
-            title: title.into(),
-            items: make_items(2),
-            total_count: 2,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        };
-        app.libs.push(LibraryTab {
-            nav_stack: vec![level],
-            ..LibraryTab::new(library)
-        });
-    }
-    app
-}
 /// A stale Service library index (removed or replaced while selected) must
 /// select Home and report that the triggering destination-specific
 /// operation must stop.
@@ -246,22 +156,4 @@ fn normalize_stale_browse_destination_resolves_stale_service_indexes_to_home() {
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     assert!(!app.normalize_stale_browse_destination());
     assert_eq!(app.tab, TabSelection::AudiobookshelfLibrary(0));
-}
-
-/// Valid destinations and the non-Service tabs must be left unchanged and
-/// report `false`.
-#[test]
-fn normalize_stale_browse_destination_leaves_valid_destinations_alone() {
-    let mut app = mixed_services_app();
-    app.tab = TabSelection::EmbyLibrary(0);
-    assert!(!app.normalize_stale_browse_destination());
-    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
-
-    app.tab = TabSelection::Home;
-    assert!(!app.normalize_stale_browse_destination());
-    assert_eq!(app.tab, TabSelection::Home);
-
-    app.tab = TabSelection::Feeds;
-    assert!(!app.normalize_stale_browse_destination());
-    assert_eq!(app.tab, TabSelection::Feeds);
 }

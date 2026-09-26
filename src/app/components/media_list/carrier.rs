@@ -111,9 +111,7 @@ impl<Target: Clone + Eq> MediaListCarrier<Target> {
     }
 
     pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
-        if matches!(key.code, Key::Char('v') | Key::Char('V'))
-            && key.modifiers == KeyModifiers::SHIFT
-        {
+        if matches!(key.code, Key::Char('v' | 'V')) && key.modifiers == KeyModifiers::SHIFT {
             self.enter_visual_mode();
             return Some(self.multi_selection().len());
         }

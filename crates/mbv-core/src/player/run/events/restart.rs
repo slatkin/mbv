@@ -1,4 +1,8 @@
-use super::super::*;
+use super::super::{
+    auto_select_tracks, mpv_err_str, mpv_position_ticks, send_ep_info, Duration, Instant, Ordering,
+    PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId, StopReport, TICKS_PER_SECOND,
+};
+use libmpv2::Mpv;
 
 impl PlaybackRun {
     pub(in crate::player) fn settle_idle_jump_on_restart(
@@ -67,13 +71,17 @@ impl PlaybackRun {
     /// A re-visited playlist entry only honors its baked `start=` option the
     /// first time it ever loads; mpv reopens it from scratch on a later
     /// `playlist-pos` jump, discarding whatever was watched in this session.
-    /// `forced_resume_ticks` (armed by the JumpTo handler from the canonical
+    /// `forced_resume_ticks` (armed by the `JumpTo` handler from the canonical
     /// queue's current position) repairs that with an explicit seek now that
     /// the entry is actually loaded and seekable.
     fn apply_forced_resume(&mut self, mpv: &Mpv) {
         let Some(ticks) = self.forced_resume_ticks.take() else {
             return;
         };
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "forced-resume ticks → mpv seek seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
         let seconds = ticks as f64 / TICKS_PER_SECOND as f64;
         if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
             log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
@@ -137,7 +145,7 @@ impl PlaybackRun {
             st.video_height = h;
             st.audio_codec = codec.to_lowercase();
             st.video_is_image = is_img;
-        }
+        };
         if self.startup_pause.is_holding() {
             self.startup_pause.clear();
             log::info!(
@@ -147,10 +155,10 @@ impl PlaybackRun {
             let _ = mpv.set_property("pause", false);
         }
         let mut event_name = "TimeUpdate";
-        if !self.tracks_initialized {
-            self.init_tracks_once(mpv);
-        } else {
+        if self.tracks_initialized {
             event_name = self.settle_seek_osd(mpv, event_name);
+        } else {
+            self.init_tracks_once(mpv);
         }
         self.report_restart_progress(event_name);
         if was_seek {

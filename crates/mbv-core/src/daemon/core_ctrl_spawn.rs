@@ -1,6 +1,6 @@
 use super::control_queue::unified_queue_state_for_peer;
 use super::core::{DaemonEvent, SharedQueueState};
-use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello};
+use crate::ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use crate::daemon::ctrl::{ClientRegistry, CtrlOutbound, CtrlTransport};
 use crate::stream::SocketStream;
 use std::io::{BufRead, BufReader, Write};
@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 fn ctrl_client_capabilities(
     line: &str,
     control_credential: Option<&str>,
-) -> Option<(bool, bool, bool, bool, bool)> {
+) -> Option<(CtrlAudiobookshelfCapabilities, bool)> {
     match serde_json::from_str::<CtrlCmd>(line) {
         Ok(CtrlCmd::Hello(info)) => {
             if let Err(e) = info.validate_peer() {
@@ -28,10 +28,12 @@ fn ctrl_client_capabilities(
                 }
             }
             Some((
-                info.supports_abs_queue(),
-                info.supports_abs_progress(),
-                info.supports_abs_book_queue(),
-                info.supports_abs_book_progress(),
+                CtrlAudiobookshelfCapabilities {
+                    queue: info.supports_abs_queue(),
+                    progress: info.supports_abs_progress(),
+                    book_queue: info.supports_abs_book_queue(),
+                    book_progress: info.supports_abs_book_progress(),
+                },
                 info.supports_owner_queue_load(),
             ))
         }
@@ -127,13 +129,8 @@ pub(in crate::daemon) fn spawn_ctrl_client(
         let Some(Ok(line)) = lines.next() else {
             return;
         };
-        let Some((
-            supports_abs_queue,
-            supports_abs_progress,
-            supports_abs_book_queue,
-            supports_abs_book_progress,
-            supports_owner_queue_load,
-        )) = ctrl_client_capabilities(&line, control_credential.as_deref())
+        let Some((audiobookshelf, supports_owner_queue_load)) =
+            ctrl_client_capabilities(&line, control_credential.as_deref())
         else {
             return;
         };
@@ -142,17 +139,14 @@ pub(in crate::daemon) fn spawn_ctrl_client(
             &player_status,
             &shared_queue,
             &ev_tx,
-            supports_abs_queue,
-            supports_abs_book_queue,
+            audiobookshelf.queue,
+            audiobookshelf.book_queue,
         );
         let reply_tx = ev_tx.clone();
         let client_id = ctrl_clients.lock().unwrap().connect(
             ev_tx,
             transport,
-            supports_abs_queue,
-            supports_abs_progress,
-            supports_abs_book_queue,
-            supports_abs_book_progress,
+            audiobookshelf,
             supports_owner_queue_load,
         );
 

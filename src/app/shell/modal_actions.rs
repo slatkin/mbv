@@ -50,13 +50,7 @@ impl Model {
             return false;
         }
         match intent {
-            DaemonLostIntent::RestartWithTray => {
-                if let Err(error) = self.app.restart_local_daemon() {
-                    self.set_daemon_lost_restart_error(error);
-                }
-                false
-            }
-            DaemonLostIntent::RestartWithoutTray => {
+            DaemonLostIntent::RestartWithTray | DaemonLostIntent::RestartWithoutTray => {
                 if let Err(error) = self.app.restart_local_daemon() {
                     self.set_daemon_lost_restart_error(error);
                 }
@@ -156,33 +150,22 @@ fn confirm_key_dismisses(action: &ConfirmAction, key: KeyCode) -> bool {
         ConfirmAction::RemoveEmby | ConfirmAction::RemoveAudiobookshelf => {
             matches!(
                 key,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter | KeyCode::Esc
+                KeyCode::Char('y' | 'Y') | KeyCode::Enter | KeyCode::Esc
             )
         }
         ConfirmAction::ReplaceEmby(_) | ConfirmAction::ReplaceAudiobookshelf(_) => {
             matches!(
                 key,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter | KeyCode::Esc
+                KeyCode::Char('y' | 'Y') | KeyCode::Enter | KeyCode::Esc
             )
         }
         ConfirmAction::PlayLocallyInstead => matches!(
             key,
-            KeyCode::Char('y')
-                | KeyCode::Char('Y')
-                | KeyCode::Enter
-                | KeyCode::Char('n')
-                | KeyCode::Char('N')
-                | KeyCode::Esc
+            KeyCode::Char('y' | 'Y' | 'n' | 'N') | KeyCode::Enter | KeyCode::Esc
         ),
         ConfirmAction::DiscardOrSaveDirtyPlaylist => matches!(
             key,
-            KeyCode::Char('s')
-                | KeyCode::Char('S')
-                | KeyCode::Char('d')
-                | KeyCode::Char('D')
-                | KeyCode::Char('c')
-                | KeyCode::Char('C')
-                | KeyCode::Esc
+            KeyCode::Char('s' | 'S' | 'd' | 'D' | 'c' | 'C') | KeyCode::Esc
         ),
     }
 }

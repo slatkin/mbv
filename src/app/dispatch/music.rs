@@ -6,6 +6,13 @@ use crate::app::{App, BrowseLevel};
 /// with the shape that `is_music_group_view` exposes to the shell: the
 /// configured path must begin at the grouping level, have a group and album
 /// level on the stack.
+fn wrapped_index(current: usize, delta: i64, count: usize) -> usize {
+    let current = i128::try_from(current).expect("usize fits in i128");
+    let count = i128::try_from(count).expect("usize fits in i128");
+    usize::try_from((current + i128::from(delta)).rem_euclid(count))
+        .expect("wrapped index fits in usize")
+}
+
 fn is_grouped_music_path(music_levels: &[String], nav_stack: &[BrowseLevel]) -> bool {
     music_levels.first().is_some_and(|level| level == "group")
         && nav_stack.len() >= 2
@@ -104,10 +111,9 @@ impl App {
         let cur = self.libs[lib_idx]
             .nav_stack
             .last()
-            .map(|l| l.resting().cursor())
-            .unwrap_or(0);
+            .map_or(0, |l| l.resting().cursor());
         // Wrap-around navigation (unlike seasons which clamp).
-        let new_cursor = (cur as i64 + delta).rem_euclid(n as i64) as usize;
+        let new_cursor = wrapped_index(cur, delta, n);
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             group_lvl.set_resting_cursor(new_cursor);
         }
@@ -469,9 +475,8 @@ impl App {
                     .nav_stack
                     .last()
                     .and_then(|level| level.letter_filter.as_ref())
-                    .map(|filter| filter.index)
-                    .unwrap_or(0);
-                let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+                    .map_or(0, |filter| filter.index);
+                let next = wrapped_index(current, delta, count);
                 self.libs[lib_idx].tv_content_mode = None;
                 self.select_letter_pill(lib_idx, next);
                 return;
@@ -493,7 +498,11 @@ impl App {
                     }
                 }
             };
-            let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
+            let next = wrapped_index(
+                current,
+                delta,
+                usize::try_from(count).expect("small pill count"),
+            );
             self.select_letter_pill(lib_idx, next);
             return;
         }
@@ -508,9 +517,8 @@ impl App {
             .nav_stack
             .last()
             .and_then(|l| l.letter_filter.as_ref())
-            .map(|f| f.index)
-            .unwrap_or(0);
-        let next = (current as i64 + delta).rem_euclid(n as i64) as usize;
+            .map_or(0, |f| f.index);
+        let next = wrapped_index(current, delta, n);
         self.select_letter_pill(lib_idx, next);
     }
 
@@ -522,11 +530,7 @@ impl App {
             return;
         }
         let should_push = self.libs[lib_idx].library.collection_type == "music"
-            && self
-                .music_levels
-                .first()
-                .map(|s| s == "group")
-                .unwrap_or(false)
+            && self.music_levels.first().is_some_and(|s| s == "group")
             && self.libs[lib_idx].nav_stack.len() == 1
             && !self.libs[lib_idx].nav_stack[0].items.is_empty();
         if !should_push {
@@ -587,20 +591,12 @@ impl App {
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
         let should_auto_push_music = self.tab.emby_library_index() == Some(lib_idx)
-            && self
-                .libs
-                .get(lib_idx)
-                .map(|lib| {
-                    lib.library.collection_type == "music"
-                        && self
-                            .music_levels
-                            .first()
-                            .map(|s| s == "group")
-                            .unwrap_or(false)
-                        && lib.nav_stack.len() == 1
-                        && !lib.nav_stack[0].items.is_empty()
-                })
-                .unwrap_or(false);
+            && self.libs.get(lib_idx).is_some_and(|lib| {
+                lib.library.collection_type == "music"
+                    && self.music_levels.first().is_some_and(|s| s == "group")
+                    && lib.nav_stack.len() == 1
+                    && !lib.nav_stack[0].items.is_empty()
+            });
 
         if should_auto_push_music {
             let (group_id, group_name) = self

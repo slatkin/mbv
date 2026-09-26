@@ -132,23 +132,22 @@ pub fn signal_local_daemon_service_setup(
     revision: u64,
 ) -> Result<(), String> {
     let path = PathBuf::from(crate::config::control_socket_path());
-    let stream = match UnixStream::connect(&path) {
-        Ok(stream) => stream,
-        Err(_) => return Ok(()),
+    let Ok(stream) = UnixStream::connect(&path) else {
+        return Ok(());
     };
     stream
         .set_read_timeout(Some(Duration::from_secs(6)))
-        .map_err(|_| "restart required (cannot read local daemon ctrl)".to_string())?;
+        .map_err(|error| format!("restart required (cannot read local daemon ctrl): {error}"))?;
     let (mut reader, _state, _compatibility) =
         perform_handshake(SocketStream::Unix(stream), || {
             crate::config::load_or_create_control_credential()
         })
-        .map_err(|_| "restart required (local daemon handshake failed)".to_string())?;
+        .map_err(|error| format!("restart required (local daemon handshake failed): {error}"))?;
     let request = serde_json::to_string(&CtrlCmd::ApplyServiceSetup { kind, revision })
-        .map_err(|_| "restart required (cannot serialize setup request)".to_string())?;
+        .map_err(|error| format!("restart required (cannot serialize setup request): {error}"))?;
     writeln!(reader.get_mut(), "{request}")
         .and_then(|()| reader.get_mut().flush())
-        .map_err(|_| "restart required (cannot send setup request)".to_string())?;
+        .map_err(|error| format!("restart required (cannot send setup request): {error}"))?;
     await_service_setup_acknowledgement(&mut reader)
 }
 
@@ -281,7 +280,7 @@ fn apply_disconnected_event(
     if !notify {
         return;
     }
-    let msg = disconnect_reason_message(&reason).to_string();
+    let msg = disconnect_reason_message(reason).to_string();
     match reason {
         DisconnectReason::TakenOverByEmbyRemote => {
             let _ = event_tx.send(PlayerEvent::EmbyAuthorityTaken(msg));
@@ -293,7 +292,7 @@ fn apply_disconnected_event(
     }
 }
 
-fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
+fn disconnect_reason_message(reason: DisconnectReason) -> &'static str {
     match reason {
         DisconnectReason::TakenOverByEmbyRemote => {
             "Emby remote control took over — returned to local mode"
@@ -433,29 +432,29 @@ fn connect_stream(
 
     // Reader thread: deserializes CtrlEvent lines from daemon
     let reader_state = ReaderThreadState {
-        status: status.clone(),
-        items: items.clone(),
-        unified_queue: unified_queue.clone(),
-        queue_source: queue_source.clone(),
-        pending_playback: pending_playback.clone(),
-        disconnected: disconnected.clone(),
-        disconnect_notified: disconnect_notified.clone(),
-        shutdown_announced: shutdown_announced.clone(),
-        shutdown_request: shutdown_request_tx.clone(),
+        status: Arc::clone(&status),
+        items: Arc::clone(&items),
+        unified_queue: Arc::clone(&unified_queue),
+        queue_source: Arc::clone(&queue_source),
+        pending_playback: Arc::clone(&pending_playback),
+        disconnected: Arc::clone(&disconnected),
+        disconnect_notified: Arc::clone(&disconnect_notified),
+        shutdown_announced: Arc::clone(&shutdown_announced),
+        shutdown_request: Arc::clone(&shutdown_request_tx),
         event_tx: event_tx.clone(),
     };
     std::thread::spawn(move || read_remote_events(reader, reader_state));
 
     // Writer thread: serializes CtrlCmd to daemon
-    let disconnected_w = disconnected.clone();
+    let disconnected_w = Arc::clone(&disconnected);
     std::thread::spawn(move || {
         write_remote_commands(
             stream,
-            cmd_rx,
-            disconnected_w,
-            disconnect_notified,
-            event_tx,
-        )
+            &cmd_rx,
+            &disconnected_w,
+            &disconnect_notified,
+            &event_tx,
+        );
     });
 
     Ok((
@@ -495,7 +494,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
     for line in reader.lines() {
         match line {
             Err(_) => break,
-            Ok(l) if l.is_empty() => continue,
+            Ok(l) if l.is_empty() => {}
             Ok(l) => {
                 let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else {
                     log::warn!(target: "remote", "unrecognized event from daemon: {l}");
@@ -553,13 +552,7 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
     }
 
     log::info!(target: "remote", "daemon disconnected");
-    if !expected_disconnect {
-        if !disconnect_notified.swap(true, Ordering::SeqCst) {
-            let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
-                crate::player::CONNECTION_LOST_MESSAGE.to_string(),
-            ));
-        }
-    } else {
+    if expected_disconnect {
         // An "expected"/structured disconnect (e.g. an Emby Remote
         // takeover, or a deliberate daemon shutdown) never sends a
         // Stopped PlayerEvent, so nothing else clears `status`.
@@ -578,15 +571,19 @@ fn read_remote_events(reader: BufReader<SocketStream>, state: ReaderThreadState)
         // deliberate daemon shutdown.
         shutdown_announced.store(true, Ordering::SeqCst);
         let _ = event_tx.send(PlayerEvent::DaemonShutdownAnnounced);
+    } else if !disconnect_notified.swap(true, Ordering::SeqCst) {
+        let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
+            crate::player::CONNECTION_LOST_MESSAGE.to_string(),
+        ));
     }
 }
 
 fn write_remote_commands(
     mut stream: SocketStream,
-    cmd_rx: mpsc::Receiver<CtrlCmd>,
-    disconnected: Arc<AtomicBool>,
-    disconnect_notified: Arc<AtomicBool>,
-    event_tx: mpsc::Sender<PlayerEvent>,
+    cmd_rx: &mpsc::Receiver<CtrlCmd>,
+    disconnected: &Arc<AtomicBool>,
+    disconnect_notified: &Arc<AtomicBool>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
 ) {
     while let Ok(cmd) = cmd_rx.recv() {
         let Ok(json) = serde_json::to_string(&cmd) else {
@@ -611,7 +608,7 @@ fn write_remote_commands(
 /// i.e. once `RemotePlayer::disconnect()` (or dropping the owner) shuts the
 /// client end down -- the hermetic oracle for "the previous remote was
 /// disconnected" without a listener or spawned product process.
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 pub fn connect_stub_daemon_pair() -> Result<
     (
         RemotePlayer,

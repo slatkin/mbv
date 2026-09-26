@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    clear_service_secret_result, config_path, load_config, save_service_secret_at,
+    service_secret_path, write_config_text_at, AudiobookshelfSetup, ServiceKind,
+};
 
 pub(super) fn save_audiobookshelf_setup_at(
     setup: &AudiobookshelfSetup,
@@ -27,7 +30,7 @@ pub(super) fn save_audiobookshelf_setup_at(
     section.insert("url".into(), toml::Value::String(setup.server_url.clone()));
     section.insert(
         "revision".into(),
-        toml::Value::Integer(setup.revision as i64),
+        toml::Value::Integer(i64::try_from(setup.revision).unwrap_or(i64::MAX)),
     );
     section.remove("api_key");
     section.remove("user_id");

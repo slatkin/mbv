@@ -1,8 +1,12 @@
-use super::*;
+use super::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, QueueItem};
 
 const AUDIOBOOKSHELF_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
 fn seconds_from_ticks(ticks: i64) -> f64 {
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     let seconds = ticks.max(0) as f64 / crate::api::TICKS_PER_SECOND as f64;
     (seconds * 1_000_000.0).round() / 1_000_000.0
 }
@@ -108,10 +112,6 @@ pub(crate) struct AudiobookshelfLifecycle<U: SessionProgressUpdate> {
 }
 
 impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
-    // Kept (not bundled): these 9 args are exactly the lifecycle's stored
-    // session fields, so a params struct would be a 1:1 shadow of this
-    // constructor with no independent meaning — no real unit to name.
-    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         generation: crate::service_runtime::SetupGeneration,
         client: crate::audiobookshelf::AudiobookshelfClient,
@@ -219,7 +219,13 @@ impl<U: SessionProgressUpdate> AudiobookshelfLifecycle<U> {
 
 impl<U: SessionProgressUpdate> Drop for AudiobookshelfLifecycle<U> {
     fn drop(&mut self) {
-        self.close((self.current_position * crate::api::TICKS_PER_SECOND as f64).round() as i64);
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "current position seconds → ticks through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
+        self.close(super::saturating_i64_from_f64(
+            (self.current_position * crate::api::TICKS_PER_SECOND as f64).round(),
+        ));
     }
 }
 
@@ -341,7 +347,7 @@ mod reporting_tests {
             people: Vec::new(),
             external_urls: Vec::new(),
             playlist_item_id: String::new(),
-            image_tags: Default::default(),
+            image_tags: crate::api::EmbyImageTags::default(),
         }))
     }
 
@@ -436,7 +442,7 @@ mod reporting_tests {
         time.observe(start, true);
         time.observe(start + Duration::from_secs(2), true);
         assert!((time.take() - 2.0).abs() < 0.001);
-        assert_eq!(time.take(), 0.0);
+        assert!(time.take().abs() < f64::EPSILON);
         time.observe(start + Duration::from_secs(7), true);
         assert!((time.take() - 5.0).abs() < 0.001);
     }
@@ -468,6 +474,6 @@ mod reporting_tests {
 
         assert_eq!(lifecycle.last_sync, failed_at);
         assert!(lifecycle.last_acknowledgement.is_none());
-        assert_eq!(lifecycle.listening_time.take(), 0.0);
+        assert!(lifecycle.listening_time.take().abs() < f64::EPSILON);
     }
 }

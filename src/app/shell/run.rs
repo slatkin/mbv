@@ -1,7 +1,14 @@
-use super::*;
-use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+
+use super::{
+    init_terminal, install_signal_handlers, restore_terminal, service_startup, start_quit_watchdog,
+    IdleFeed, Model, Msg, PanelFocus, PollStrategy, QUIT_REQUESTED,
+};
+// The run-loop tests reach `App` through this module's scope.
+#[cfg(test)]
+use super::App;
+use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {
@@ -23,7 +30,6 @@ impl Model {
         self.sync_sidebar_overlays();
         self.sync_library_playback_panel();
         self.sync_feeds();
-        self.sync_audiobookshelf_book();
         self.sync_queue();
         self.sync_queue_boundary();
         self.sync_tab_panel();
@@ -123,25 +129,25 @@ impl Model {
             let Some(placement) = placement else { continue };
             match placement {
                 crate::app::render::arrangements::chrome::PanelPlacement::Tab(area) => {
-                    self.render_tab_panel_at(f, area)
+                    self.render_tab_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::Library(area) => {
-                    self.render_library_panel_at(f, area)
+                    self.render_library_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::LibraryPlayback(area) => {
-                    self.render_library_playback_panel_at(f, area)
+                    self.render_library_playback_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::Queue(area) => {
-                    self.render_queue_panel_at(f, area)
+                    self.render_queue_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::QueuePlayback(area) => {
-                    self.render_queue_playback_panel(f, area)
+                    self.render_queue_playback_panel(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::StatusBar(area) => {
-                    self.render_status_bar_panel_at(f, area)
+                    self.render_status_bar_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::QueueBoundary(area) => {
-                    self.render_queue_boundary_at(f, area)
+                    self.render_queue_boundary_at(f, area);
                 }
             }
         }
@@ -157,6 +163,15 @@ impl Model {
     /// re-push. The infix is the only Series-family marker, so both live chains
     /// (Wide's Thumb-first, narrow's `Primary`) gate without a suffix list that
     /// can drift from the key the painter builds.
+    fn evict_excess_card_images(&mut self) {
+        while self.app.image_lru.len() > self.app.image_cache_size_total {
+            let Some(evict) = self.app.image_lru.pop_front() else {
+                break;
+            };
+            self.app.card_image_states.remove(&evict);
+        }
+    }
+
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let mut series_image_changed = false;
         let mut drained = false;
@@ -186,11 +201,7 @@ impl Model {
             if entry.img.is_some() {
                 self.app.image_lru.retain(|k| k != &cache_key);
                 self.app.image_lru.push_back(cache_key.clone());
-                while self.app.image_lru.len() > self.app.image_cache_size_total {
-                    if let Some(evict) = self.app.image_lru.pop_front() {
-                        self.app.card_image_states.remove(&evict);
-                    }
-                }
+                self.evict_excess_card_images();
             }
             self.app.card_image_states.insert(cache_key, entry);
             if let Some(event) = artist_completion {
@@ -234,9 +245,8 @@ impl Model {
             let items = self
                 .tv_latest_snapshots
                 .get(&library_id)
-                .map(|snapshot| snapshot.items.clone())
-                .unwrap_or(items);
-            self.update_emby_latest_snapshot(library_id, title, items);
+                .map_or(items, |snapshot| snapshot.items.clone());
+            self.update_emby_latest_snapshot(&library_id, title, items);
         }
     }
 
@@ -254,13 +264,10 @@ impl Model {
         // no pending flash, mirroring the render loop's own expiry check.
         let has_live_flash = self.app.status_expires.is_some_and(|t| t > Instant::now());
         if !has_live_flash {
-            self.app.status = self
-                .app
-                .emby_client()
-                .map(|_| "Loading...".into())
-                .unwrap_or_else(|| {
-                    service_startup::startup_status(self.app.emby_runtime.state).into()
-                });
+            self.app.status = self.app.emby_client().map_or_else(
+                || service_startup::startup_status(self.app.emby_runtime.state).into(),
+                |_| "Loading...".into(),
+            );
         }
         self.home_content.loading = true;
         terminal.draw(|f| self.draw_frame(f, false, false))?;
@@ -279,7 +286,9 @@ impl Model {
         let quit_timeout = Duration::from_secs(self.app.config.lock().unwrap().quit_timeout_secs);
         start_quit_watchdog(self.app.player.quit_handle(), quit_timeout);
 
-        let mut last_render = Instant::now() - Duration::from_secs(2);
+        let mut last_render = Instant::now()
+            .checked_sub(Duration::from_secs(2))
+            .unwrap_or_else(Instant::now);
 
         'outer: loop {
             let mut had_events = false;

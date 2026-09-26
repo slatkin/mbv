@@ -16,6 +16,13 @@ impl PagingPolicy {
     }
 }
 
+fn leading_structural_offset<Target: Eq>(flow: &RowFlow<Target>, mut offset: usize) -> usize {
+    while offset > 0 && flow.row_at(offset - 1).is_some_and(Row::is_structural) {
+        offset -= 1;
+    }
+    offset
+}
+
 /// Primitive viewport state and shared visibility arithmetic.
 ///
 /// A shape supplies only offset access and its [`Cursored`] target hooks. The
@@ -68,9 +75,7 @@ pub trait Viewported<Target: Eq>: Cursored<Target> {
             if position < offset {
                 offset = position;
                 if self.raise_over_leading_structural_rows() {
-                    while offset > 0 && flow.row_at(offset - 1).is_some_and(Row::is_structural) {
-                        offset -= 1;
-                    }
+                    offset = leading_structural_offset(flow, offset);
                 }
             } else if position >= offset.saturating_add(height) {
                 offset = position + 1 - height;

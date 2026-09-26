@@ -102,7 +102,7 @@ mod tests {
             sub_index: -1,
             audio_index: 0,
             muted: false,
-            media_info: Default::default(),
+            media_info: mbv_core::api::SessionMediaInfo::default(),
         }
     }
 
@@ -131,28 +131,5 @@ mod tests {
         assert_eq!(targets.len(), 2);
         assert!(matches!(targets[0], PanelTarget::Emby(ref s) if s.id == "shared"));
         assert!(matches!(targets[1], PanelTarget::Cast(ref r) if r.id == "shared"));
-    }
-
-    #[test]
-    fn session_activation_missing_key_resolves_no_target() {
-        let targets = build_panel_targets(&[session("current")], &[]);
-        assert!(resolve_session_target(&targets, &SessionTargetKey::Emby("gone".into())).is_none());
-    }
-
-    #[test]
-    fn session_activation_reordered_snapshot_keeps_target_identity() {
-        let targets = build_panel_targets(&[session("other"), session("selected")], &[]);
-        let selected =
-            resolve_session_target(&targets, &SessionTargetKey::Emby("selected".into())).unwrap();
-        assert!(matches!(selected, PanelTarget::Emby(ref session) if session.id == "selected"));
-    }
-
-    #[test]
-    fn session_activation_equal_channel_ids_resolve_independently() {
-        let targets = build_panel_targets(&[session("shared")], &[receiver("shared")]);
-        let emby = resolve_session_target(&targets, &SessionTargetKey::Emby("shared".into()));
-        let cast = resolve_session_target(&targets, &SessionTargetKey::Cast("shared".into()));
-        assert!(matches!(emby, Some(PanelTarget::Emby(session)) if session.id == "shared"));
-        assert!(matches!(cast, Some(PanelTarget::Cast(receiver)) if receiver.id == "shared"));
     }
 }

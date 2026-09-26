@@ -29,6 +29,7 @@ pub fn browse_cast_receivers(timeout: Duration) -> Vec<CastReceiver> {
 /// Re-runs discovery and resolves a previously persisted receiver by its
 /// stable identifier. Returns `None` (unavailable) rather than a stale
 /// address when the receiver does not appear in the fresh browse.
+#[must_use]
 pub fn resolve_cast_receiver(id: &str, timeout: Duration) -> Option<CastReceiver> {
     find_by_id(browse_cast_receivers(timeout), id)
 }
@@ -76,7 +77,7 @@ fn collect_receivers(rx: &Receiver<ServiceEvent>, timeout: Duration) -> Vec<Cast
                     receivers.insert(receiver.id.clone(), receiver);
                 }
             }
-            Ok(_) => continue,
+            Ok(_) => {}
             Err(_) => break,
         }
     }

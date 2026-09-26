@@ -98,8 +98,8 @@ impl LiveClient {
         if status != 200 {
             return Err(format!("play returned HTTP {status}"));
         }
-        let value: Value =
-            serde_json::from_str(&text).map_err(|_| "play returned malformed JSON")?;
+        let value: Value = serde_json::from_str(&text)
+            .map_err(|error| format!("play returned malformed JSON: {error}"))?;
         let session = value
             .get("id")
             .and_then(Value::as_str)
@@ -152,7 +152,7 @@ fn read_response(mut response: ureq::http::Response<ureq::Body>) -> Result<(u16,
         .body_mut()
         .read_to_string()
         .map(|text| (status, text))
-        .map_err(|_| "response body could not be read".into())
+        .map_err(|error| format!("response body could not be read: {error}"))
 }
 
 fn duration(value: &Value) -> Result<f64, String> {
@@ -176,7 +176,7 @@ fn source(value: &Value) -> Result<(&str, bool), String> {
         .and_then(Value::as_str)
         .ok_or("audio track omitted contentUrl")?;
     let hls = value.get("playMethod").and_then(Value::as_u64) == Some(2)
-        || url.ends_with(".m3u8")
+        || url.to_ascii_lowercase().ends_with(".m3u8")
         || url.contains("/hls/");
     Ok((url, hls))
 }
@@ -201,7 +201,7 @@ fn wait_hls(client: &LiveClient, url: &str) -> Result<usize, String> {
                 let body = response
                     .body_mut()
                     .read_to_string()
-                    .map_err(|_| "playlist body unreadable")?;
+                    .map_err(|error| format!("playlist body unreadable: {error}"))?;
                 if body.starts_with("#EXTM3U") {
                     return Ok(attempts);
                 }
@@ -226,19 +226,19 @@ fn mpv_probe(url: &str, token: Option<&str>) -> Result<(String, String), String>
         }
         Ok(())
     })
-    .map_err(|_| "libmpv initialization failed")?;
+    .map_err(|error| format!("libmpv initialization failed: {error}"))?;
     mpv.command("loadfile", &[url, "replace", "-1", ""])
-        .map_err(|_| "libmpv loadfile failed")?;
+        .map_err(|error| format!("libmpv loadfile failed: {error}"))?;
     wait_for_restart(&mpv)?;
     let before: f64 = mpv
         .get_property("time-pos")
-        .map_err(|_| "libmpv omitted initial time-pos")?;
+        .map_err(|error| format!("libmpv omitted initial time-pos: {error}"))?;
     mpv.command("seek", &["1", "absolute"])
-        .map_err(|_| "libmpv seek failed")?;
+        .map_err(|error| format!("libmpv seek failed: {error}"))?;
     wait_for_restart(&mpv)?;
     let after: f64 = mpv
         .get_property("time-pos")
-        .map_err(|_| "libmpv omitted post-seek time-pos")?;
+        .map_err(|error| format!("libmpv omitted post-seek time-pos: {error}"))?;
     if after < 0.5 {
         return Err("libmpv ordinary seek did not advance".into());
     }
@@ -271,10 +271,9 @@ fn sanitize(value: &Value) -> Value {
                         value.clone()
                     } else if key == "contentUrl" {
                         Value::String(
-                            if value
-                                .as_str()
-                                .is_some_and(|s| s.ends_with(".m3u8") || s.contains("/hls/"))
-                            {
+                            if value.as_str().is_some_and(|s| {
+                                s.to_ascii_lowercase().ends_with(".m3u8") || s.contains("/hls/")
+                            }) {
                                 "<HLS_PATH>".into()
                             } else {
                                 "<DIRECT_PATH>".into()
@@ -339,10 +338,11 @@ fn session_fixture(value: &Value) -> Value {
 }
 
 fn controlled_failure(status: u16, body: &'static str) -> Result<Value, String> {
-    let listener = TcpListener::bind("127.0.0.1:0").map_err(|_| "loopback bind failed")?;
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(|error| format!("loopback bind failed: {error}"))?;
     let address = listener
         .local_addr()
-        .map_err(|_| "loopback address failed")?;
+        .map_err(|error| format!("loopback address failed: {error}"))?;
     let worker = std::thread::spawn(move || {
         if let Ok((mut stream, _)) = listener.accept() {
             let mut request = [0u8; 2048];
@@ -372,8 +372,23 @@ fn controlled_failure(status: u16, body: &'static str) -> Result<Value, String> 
     )
 }
 
-fn main() -> Result<(), String> {
-    let mut live = LiveClient::load()?;
+struct PlaybackProbe {
+    direct: Value,
+    direct_seek: (String, String),
+    sync: (u16, String),
+    close: (u16, String),
+    direct_closed_status: u16,
+    hls: Value,
+    readiness_attempts: usize,
+    hls_seek: (String, String),
+    hls_close: (u16, String),
+    hls_closed_status: u16,
+    hls_after_close_status: u16,
+}
+
+fn first_podcast_episode(
+    live: &LiveClient,
+) -> Result<mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode, String> {
     let catalog = AudiobookshelfClient::new(&live.base).map_err(|error| error.to_string())?;
     let library = catalog
         .libraries_bounded(&live.token, REQUEST_BOUND)
@@ -388,13 +403,18 @@ fn main() -> Result<(), String> {
         .into_iter()
         .next()
         .ok_or("no podcast show available")?;
-    let episode = catalog
+    catalog
         .podcast_detail_bounded(&live.token, &show.library_item_id, REQUEST_BOUND)
         .map_err(|error| error.to_string())?
         .into_iter()
         .next()
-        .ok_or("no downloaded podcast episode available")?;
+        .ok_or_else(|| "no downloaded podcast episode available".into())
+}
 
+fn probe_playback(
+    live: &mut LiveClient,
+    episode: &mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode,
+) -> Result<PlaybackProbe, String> {
     let direct = live.play(&episode.library_item_id, &episode.episode_id, false)?;
     let direct_session = direct["id"]
         .as_str()
@@ -422,11 +442,82 @@ fn main() -> Result<(), String> {
         return Err("forced transcode did not return HLS".into());
     }
     let hls_url = absolute_url(&live.base, hls_path)?;
-    let readiness_attempts = wait_hls(&live, &hls_url)?;
+    let readiness_attempts = wait_hls(live, &hls_url)?;
     let hls_seek = mpv_probe(&hls_url, None)?;
     let hls_close = live.close(&hls_session, hls_duration)?;
     let hls_closed_status = live.get_status(&format!("/api/session/{hls_session}"), true)?;
     let hls_after_close_status = live.get_status(hls_path, false)?;
+
+    Ok(PlaybackProbe {
+        direct,
+        direct_seek,
+        sync,
+        close,
+        direct_closed_status,
+        hls,
+        readiness_attempts,
+        hls_seek,
+        hls_close,
+        hls_closed_status,
+        hls_after_close_status,
+    })
+}
+
+fn insert_playback_output(output: &mut Map<String, Value>, probe: &PlaybackProbe) {
+    output.insert(
+        "absVersion".into(),
+        probe
+            .direct
+            .get("serverVersion")
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    output.insert("directPlay".into(), session_fixture(&probe.direct));
+    output.insert("forcedTranscode".into(), session_fixture(&probe.hls));
+    output.insert(
+        "mpv".into(),
+        json!({
+            "direct": {"started": true, "seekFrom": probe.direct_seek.0, "seekTo": probe.direct_seek.1},
+            "hls": {"restOnlyReady": true, "readinessAttempts": probe.readiness_attempts,
+                "pollIntervalMs": 250, "boundMs": READY_BOUND.as_millis(), "started": true,
+                "seekFrom": probe.hls_seek.0, "seekTo": probe.hls_seek.1, "socketIoUsed": false}
+        }),
+    );
+}
+
+fn insert_session_output(output: &mut Map<String, Value>, probe: &PlaybackProbe) {
+    output.insert(
+        "sync".into(),
+        json!({"status": probe.sync.0, "bodyBytes": probe.sync.1.len()}),
+    );
+    output.insert(
+        "close".into(),
+        json!({"status": probe.close.0, "bodyBytes": probe.close.1.len()}),
+    );
+    output.insert(
+        "hlsClose".into(),
+        json!({"status": probe.hls_close.0, "bodyBytes": probe.hls_close.1.len()}),
+    );
+}
+
+fn insert_cleanup_output(
+    output: &mut Map<String, Value>,
+    live: &LiveClient,
+    probe: &PlaybackProbe,
+) {
+    output.insert(
+        "cleanup".into(),
+        json!({"openSessions": live.open_sessions.len(),
+            "directSessionAfterCloseStatus":probe.direct_closed_status,
+            "hlsSessionAfterCloseStatus":probe.hls_closed_status,
+            "hlsPathAfterCloseStatus":probe.hls_after_close_status}),
+    );
+}
+
+fn main() -> Result<(), String> {
+    let mut live = LiveClient::load()?;
+    let episode = first_podcast_episode(&live)?;
+    let probe = probe_playback(&mut live, &episode)?;
 
     let auth = live
         .agent
@@ -440,24 +531,8 @@ fn main() -> Result<(), String> {
     };
 
     let mut output = Map::new();
-    output.insert(
-        "absVersion".into(),
-        direct.get("serverVersion").cloned().unwrap_or(Value::Null),
-    );
-    output.insert("directPlay".into(), session_fixture(&direct));
-    output.insert("forcedTranscode".into(), session_fixture(&hls));
-    output.insert(
-        "sync".into(),
-        json!({"status": sync.0, "bodyBytes": sync.1.len()}),
-    );
-    output.insert(
-        "close".into(),
-        json!({"status": close.0, "bodyBytes": close.1.len()}),
-    );
-    output.insert(
-        "hlsClose".into(),
-        json!({"status": hls_close.0, "bodyBytes": hls_close.1.len()}),
-    );
+    insert_playback_output(&mut output, &probe);
+    insert_session_output(&mut output, &probe);
     output.insert(
         "authenticationFailure".into(),
         json!({"provenance":"live ABS 2.36.0", "status":auth_status}),
@@ -467,22 +542,7 @@ fn main() -> Result<(), String> {
         controlled_failure(500, "{\"error\":\"<MESSAGE>\"}")?,
     );
     output.insert("malformedResponse".into(), controlled_failure(200, "{")?);
-    output.insert(
-        "mpv".into(),
-        json!({
-            "direct": {"started": true, "seekFrom": direct_seek.0, "seekTo": direct_seek.1},
-            "hls": {"restOnlyReady": true, "readinessAttempts": readiness_attempts,
-                "pollIntervalMs": 250, "boundMs": READY_BOUND.as_millis(), "started": true,
-                "seekFrom": hls_seek.0, "seekTo": hls_seek.1, "socketIoUsed": false}
-        }),
-    );
-    output.insert(
-        "cleanup".into(),
-        json!({"openSessions": live.open_sessions.len(),
-            "directSessionAfterCloseStatus":direct_closed_status,
-            "hlsSessionAfterCloseStatus":hls_closed_status,
-            "hlsPathAfterCloseStatus":hls_after_close_status}),
-    );
+    insert_cleanup_output(&mut output, &live, &probe);
     println!(
         "{}",
         serde_json::to_string_pretty(&Value::Object(output)).unwrap()

@@ -98,7 +98,7 @@ fn shift_clamped(current: usize, delta: isize, len: usize) -> usize {
     if delta.is_negative() {
         current.saturating_sub(delta.unsigned_abs())
     } else {
-        current.saturating_add(delta as usize).min(last)
+        current.saturating_add(delta.unsigned_abs()).min(last)
     }
 }
 

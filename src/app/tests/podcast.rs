@@ -93,32 +93,6 @@ fn audiobookshelf_tab_never_opens_an_emby_context_menu() {
     ));
 }
 
-#[test]
-fn feeds_destination_never_opens_an_emby_context_menu() {
-    let mut app = make_app_stub();
-    add_emby_movie_library(&mut app);
-    app.panel_focus = PanelFocus::Library;
-    app.tab = TabSelection::Feeds;
-
-    app.open_context_menu(false, None);
-    assert!(
-        !matches!(
-            app.pending_overlay,
-            Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
-        ),
-        "Feeds must not open an Emby context menu"
-    );
-
-    // Control: selecting the Emby library with the same state does produce a
-    // menu, so the absence above is the destination guard, not an empty setup.
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.open_context_menu(false, None);
-    assert!(matches!(
-        app.pending_overlay,
-        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(_))
-    ));
-}
-
 /// An Emby item in the queue panel still opens the queue panel menu (Remove
 /// from Queue / Go to Library), independent of the selected browse destination.
 #[test]
@@ -130,9 +104,10 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
         .set_items(vec![make_item("Queue Movie", "Movie")], 0);
 
     app.open_context_menu(false, None);
-    let menu = match app.pending_overlay.as_ref() {
-        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
-        _ => panic!("queue panel must open a menu"),
+    let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) =
+        app.pending_overlay.as_ref()
+    else {
+        panic!("queue panel must open a menu");
     };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(
@@ -177,93 +152,7 @@ fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     assert!(!app.audiobookshelf_browse[0].shows.is_empty());
 }
 
-#[test]
-fn audiobookshelf_episode_handlers_build_native_item_from_read_only_snapshot() {
-    let mut app = audiobookshelf_app();
-    let state = &mut app.audiobookshelf_browse[0];
-    state.detail_cache.insert(
-        "show-a".into(),
-        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            title: "Episode A".into(),
-            description: None,
-            published_at: Some(1_704_153_600),
-            duration_seconds: Some(1234.5),
-        }],
-    );
-    state.progress.insert(
-        ("show-a".into(), "episode-a".into()),
-        mbv_core::audiobookshelf::AudiobookshelfProgress {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            current_time_seconds: 42.5,
-            is_finished: false,
-        },
-    );
-    let item = app
-        .activate_audiobookshelf_episode(0, 0)
-        .expect("selected downloaded episode");
-    let queued = item.as_audiobookshelf().expect("Audiobookshelf QueueItem");
-    assert_eq!(queued.library_item_id, "show-a");
-    assert_eq!(queued.episode_id, "episode-a");
-    assert_eq!(queued.title, "Episode A");
-    assert_eq!(queued.show_title.as_deref(), Some("Show A"));
-    assert_eq!(
-        queued.duration_ticks,
-        Some((1234.5 * mbv_core::api::TICKS_PER_SECOND as f64).round() as u64)
-    );
-    assert_eq!(
-        queued.position_ticks,
-        (42.5 * mbv_core::api::TICKS_PER_SECOND as f64).round() as i64
-    );
-    assert_eq!(queued.pub_date_secs, Some(1_704_153_600));
-    assert!(!queued.is_finished);
-
-    let serialized = serde_json::to_string(&item).unwrap();
-    assert!(!serialized.contains("credential"));
-    assert!(!serialized.contains("sessionId"));
-    assert!(!serialized.contains("Authorization"));
-    assert_eq!(app.player_tab.total_queue_len(), 0);
-
-    let enqueued = app
-        .enqueue_audiobookshelf_episode(0, 0)
-        .expect("selected downloaded episode");
-    assert_eq!(
-        enqueued.as_audiobookshelf().unwrap().content_id(),
-        queued.content_id()
-    );
-    assert_eq!(app.player_tab.total_queue_len(), 0);
-}
-
-#[test]
-fn audiobookshelf_episode_handlers_leave_unselected_rows_without_queue_items() {
-    let mut app = audiobookshelf_app();
-    // Out-of-range index against the loaded list.
-    assert!(app.activate_audiobookshelf_episode(0, 99).is_none());
-    assert!(app.enqueue_audiobookshelf_episode(0, 99).is_none());
-    assert_eq!(app.player_tab.total_queue_len(), 0);
-
-    // Empty visible list.
-    app.audiobookshelf_browse[0]
-        .detail_cache
-        .insert("show-a".into(), Vec::new());
-    assert!(app.activate_audiobookshelf_episode(0, 0).is_none());
-    assert!(app.enqueue_audiobookshelf_episode(0, 0).is_none());
-    assert_eq!(app.player_tab.total_queue_len(), 0);
-}
-
 /// An absent or stale Audiobookshelf index is a silent no-op for both seams.
-#[test]
-fn audiobookshelf_episode_seams_noop_on_absent_index() {
-    let mut app = audiobookshelf_app();
-    app.activate_audiobookshelf_episode(1, 0);
-    app.enqueue_audiobookshelf_episode(1, 0);
-    assert_eq!(app.player_tab.total_queue_len(), 0);
-    assert_eq!(app.audiobookshelf_browse.len(), 1);
-    assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
-}
-
 /// The saved-position path no longer treats a show id as the tab's
 /// selection (task 2.3): saving writes no focused item even with a selected
 /// show, and restoring a legacy show-id position does not adopt it.

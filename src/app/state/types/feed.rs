@@ -32,10 +32,7 @@ impl FeedHomeVideoState {
         if group == 0 {
             self.all_items.len()
         } else {
-            self.groups
-                .get(group - 1)
-                .map(|g| g.items.len())
-                .unwrap_or(0)
+            self.groups.get(group - 1).map_or(0, |g| g.items.len())
         }
     }
 }

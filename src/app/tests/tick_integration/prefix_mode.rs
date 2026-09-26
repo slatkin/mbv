@@ -273,7 +273,7 @@ fn armed_chords_reach_no_component_and_a_mapped_chord_dispatches() {
     );
     harness
         .model_mut()
-        .dispatch_router_command(Command::CyclePanelMode);
+        .dispatch_router_command(&Command::CyclePanelMode);
     assert_ne!(
         harness.model().app.panel_mode,
         crate::app::PanelMode::default(),

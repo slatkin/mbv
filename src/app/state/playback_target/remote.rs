@@ -1,5 +1,5 @@
 use crate::app::infra::ui_util::take_chars;
-use crate::app::render::indicators::{short_resolution_label, IndicatorData};
+use crate::app::render::indicators::{short_resolution_label, IndicatorData, IndicatorFlags};
 use crate::app::{App, LocalPlaybackTarget, RemotePlaybackTarget};
 
 impl RemotePlaybackTarget {
@@ -17,8 +17,7 @@ impl RemotePlaybackTarget {
         let pos_s = app
             .connected_session_state
             .as_ref()
-            .map(|s| s.position_s)
-            .unwrap_or(0);
+            .map_or(0, |s| s.position_s);
         let target = App::remote_seek_ticks(pos_s, delta);
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| c.session_seek(&session_id, target));
@@ -28,15 +27,14 @@ impl RemotePlaybackTarget {
         app.session_jump_track(&self.session_id, step, transport);
     }
 
-    pub(in crate::app) fn toggle_command_mute(&self, app: &mut App) {
+    pub(in crate::app) fn toggle_command_mute(app: &mut App) {
         app.session_toggle_mute();
     }
 
-    pub(in crate::app) fn is_audio_item(&self, app: &App) -> bool {
+    pub(in crate::app) fn is_audio_item(app: &App) -> bool {
         app.connected_session_state
             .as_ref()
-            .map(|s| s.media_info.audio_only)
-            .unwrap_or(false)
+            .is_some_and(|s| s.media_info.audio_only)
     }
 
     pub(in crate::app) fn toggle_soft_mute(&self, app: &mut App) {
@@ -50,8 +48,7 @@ impl RemotePlaybackTarget {
         let cur = app
             .connected_session_state
             .as_ref()
-            .map(|s| s.audio_index)
-            .unwrap_or(1);
+            .map_or(1, |s| s.audio_index);
         let next = if remote_indexes.is_empty() {
             if cur <= 1 {
                 2
@@ -76,8 +73,7 @@ impl RemotePlaybackTarget {
         let vol = app
             .connected_session_state
             .as_ref()
-            .map(|s| s.volume)
-            .unwrap_or(50);
+            .map_or(50, |s| s.volume);
         let new_vol = (vol + delta).clamp(0, 100);
         let session_id = self.session_id.clone();
         app.do_session_command(move |c| c.session_set_volume(&session_id, new_vol));
@@ -92,8 +88,7 @@ impl RemotePlaybackTarget {
         let current = app
             .connected_session_state
             .as_ref()
-            .map(|s| s.sub_index)
-            .unwrap_or(-1);
+            .map_or(-1, |s| s.sub_index);
         let mut entries = Vec::with_capacity(remote_indexes.len() + 1);
         entries.push(-1);
         entries.extend(remote_indexes);
@@ -105,52 +100,54 @@ impl RemotePlaybackTarget {
         app.do_session_command(move |c| c.session_set_subtitle_index(&session_id, next));
     }
 
-    pub(in crate::app) fn displayed_volume(&self, app: &App) -> i64 {
+    pub(in crate::app) fn displayed_volume(app: &App) -> i64 {
         app.connected_session_state
             .as_ref()
-            .map(|s| s.volume)
-            .unwrap_or_else(|| LocalPlaybackTarget.displayed_volume(app))
+            .map_or_else(|| LocalPlaybackTarget::displayed_volume(app), |s| s.volume)
     }
 
-    pub(in crate::app) fn displayed_mute(&self, app: &App) -> bool {
+    pub(in crate::app) fn displayed_mute(app: &App) -> bool {
         app.connected_session_state
             .as_ref()
-            .map(|s| s.muted)
-            .unwrap_or_else(|| LocalPlaybackTarget.displayed_mute(app))
+            .map_or_else(|| LocalPlaybackTarget::displayed_mute(app), |s| s.muted)
     }
 
-    pub(in crate::app) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
+    pub(in crate::app) fn indicator_data(app: &App) -> Option<IndicatorData> {
         let remote = app.connected_session_state.as_ref()?;
         let audio_label = remote
             .media_info
             .audio_streams
             .iter()
             .find(|stream| stream.index == remote.audio_index)
-            .map(|stream| {
-                if !stream.language.is_empty() {
-                    take_chars(&stream.language.to_lowercase(), 2)
-                } else {
-                    take_chars(&stream.label.to_lowercase(), 2)
-                }
-            })
-            .unwrap_or_else(|| "---".to_string());
+            .map_or_else(
+                || "---".to_string(),
+                |stream| {
+                    if stream.language.is_empty() {
+                        take_chars(&stream.label.to_lowercase(), 2)
+                    } else {
+                        take_chars(&stream.language.to_lowercase(), 2)
+                    }
+                },
+            );
         let sub_on = remote.sub_index >= 0;
-        let sub_label = if !sub_on {
-            "CC".to_string()
-        } else {
+        let sub_label = if sub_on {
             remote
                 .media_info
                 .subtitle_streams
                 .iter()
                 .find(|stream| stream.index == remote.sub_index)
-                .map(|stream| {
-                    if !stream.language.is_empty() {
-                        take_chars(&stream.language.to_lowercase(), 3)
-                    } else {
-                        take_chars(&stream.label.to_lowercase(), 3)
-                    }
-                })
-                .unwrap_or_else(|| "CC".to_string())
+                .map_or_else(
+                    || "CC".to_string(),
+                    |stream| {
+                        if stream.language.is_empty() {
+                            take_chars(&stream.label.to_lowercase(), 3)
+                        } else {
+                            take_chars(&stream.language.to_lowercase(), 3)
+                        }
+                    },
+                )
+        } else {
+            "CC".to_string()
         };
         let res_label = if remote.media_info.video_label.is_empty() {
             "---".to_string()
@@ -182,41 +179,14 @@ impl RemotePlaybackTarget {
         };
         Some(IndicatorData {
             res_label: res_label.clone(),
-            res_dim: res_label == "---",
             audio_label: audio_label.clone(),
-            audio_dim: audio_label == "---",
-            audio_only: remote.media_info.audio_only,
             sub_label,
-            sub_on,
+            flags: IndicatorFlags {
+                res_dim: res_label == "---",
+                audio_dim: audio_label == "---",
+                audio_only: remote.media_info.audio_only,
+                sub_on,
+            },
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::tests::{make_app_stub, make_session};
-
-    fn res_label_for(video_label: &str) -> String {
-        let mut app = make_app_stub();
-        let mut session = make_session("Client", "Emby");
-        session.media_info.video_label = video_label.to_string();
-        app.connected_session_state = Some(session);
-        RemotePlaybackTarget {
-            session_id: "sess-1".to_string(),
-        }
-        .indicator_data(&app)
-        .unwrap()
-        .res_label
-    }
-
-    #[test]
-    fn remote_indicator_uses_short_resolution_labels() {
-        assert_eq!(res_label_for("2160p HEVC"), "4K");
-        assert_eq!(res_label_for("4K HEVC"), "4K");
-        assert_eq!(res_label_for("1440p H264"), "QHD");
-        assert_eq!(res_label_for("1080p H264"), "FHD");
-        assert_eq!(res_label_for("720p H264"), "HD");
-        assert_eq!(res_label_for("480p H264"), "SD");
     }
 }

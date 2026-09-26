@@ -28,7 +28,14 @@ impl App {
         // playback before the takeover -- see #175.
         let mpris_remote = remote.clone();
 
-        if !self.player.is_remote() {
+        if self.player.is_remote() {
+            // #233: tear down the previous remote connection's socket
+            // before dropping the old PlayerProxy, so its reader thread
+            // observes the shutdown and exits instead of leaking.
+            self.player.disconnect_remote();
+            self.player = PlayerProxy::remote(remote, always_play_next);
+            self.player_rx = remote_rx;
+        } else {
             self.reset_bare_transitions();
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
@@ -51,13 +58,6 @@ impl App {
                 audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
             };
             self.suspended_local = Some(suspended);
-        } else {
-            // #233: tear down the previous remote connection's socket
-            // before dropping the old PlayerProxy, so its reader thread
-            // observes the shutdown and exits instead of leaking.
-            self.player.disconnect_remote();
-            self.player = PlayerProxy::remote(remote, always_play_next);
-            self.player_rx = remote_rx;
         }
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.sync_subtitle_prefs_to_player();
@@ -66,9 +66,9 @@ impl App {
             let disconnected = mpris_remote.disconnected_flag();
             crate::mpris::rebind(
                 handle,
-                mpris_remote.status.clone(),
+                std::sync::Arc::clone(&mpris_remote.status),
                 move |cmd| {
-                    mpris_remote.send_command(cmd);
+                    let _ = mpris_remote.send_command(cmd);
                 },
                 Some(disconnected),
             );
@@ -93,8 +93,12 @@ impl App {
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.remote_pos_at = Instant::now();
-        self.remote_api_pos_advanced_at = Instant::now() - Duration::from_secs(60);
-        self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
+        self.remote_api_pos_advanced_at = Instant::now()
+            .checked_sub(Duration::from_secs(60))
+            .unwrap_or_else(Instant::now);
+        self.remote_seek_pending_until = Instant::now()
+            .checked_sub(Duration::from_secs(1))
+            .unwrap_or_else(Instant::now);
         self.runtime_zero_since = None;
         self.next_up_item = None;
         if has_initial_items {
@@ -144,7 +148,14 @@ impl App {
         // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
         let mpris_remote = remote.clone();
 
-        if !self.player.is_remote() {
+        if self.player.is_remote() {
+            // #233: tear down the previous remote connection's socket
+            // before dropping the old PlayerProxy, so its reader thread
+            // observes the shutdown and exits instead of leaking.
+            self.player.disconnect_remote();
+            self.player = PlayerProxy::remote(remote, always_play_next);
+            self.player_rx = remote_rx;
+        } else {
             self.reset_bare_transitions();
             self.player.stop();
             self.player.join_or_timeout(Duration::from_secs(5));
@@ -167,13 +178,6 @@ impl App {
                 audiobookshelf_socket_generation: self.audiobookshelf_socket_generation.take(),
             };
             self.suspended_local = Some(suspended);
-        } else {
-            // #233: tear down the previous remote connection's socket
-            // before dropping the old PlayerProxy, so its reader thread
-            // observes the shutdown and exits instead of leaking.
-            self.player.disconnect_remote();
-            self.player = PlayerProxy::remote(remote, always_play_next);
-            self.player_rx = remote_rx;
         }
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.sync_subtitle_prefs_to_player();
@@ -182,9 +186,9 @@ impl App {
             let disconnected = mpris_remote.disconnected_flag();
             crate::mpris::rebind(
                 handle,
-                mpris_remote.status.clone(),
+                std::sync::Arc::clone(&mpris_remote.status),
                 move |cmd| {
-                    mpris_remote.send_command(cmd);
+                    let _ = mpris_remote.send_command(cmd);
                 },
                 Some(disconnected),
             );
@@ -200,8 +204,12 @@ impl App {
         self.active_route = Some(library_name.to_string());
         self.remote_pos_s = 0;
         self.remote_pos_at = Instant::now();
-        self.remote_api_pos_advanced_at = Instant::now() - Duration::from_secs(60);
-        self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
+        self.remote_api_pos_advanced_at = Instant::now()
+            .checked_sub(Duration::from_secs(60))
+            .unwrap_or_else(Instant::now);
+        self.remote_seek_pending_until = Instant::now()
+            .checked_sub(Duration::from_secs(1))
+            .unwrap_or_else(Instant::now);
         self.runtime_zero_since = None;
         self.next_up_item = None;
         if has_initial_items {
@@ -222,6 +230,13 @@ impl App {
     /// Prepare a local player without changing the current attachment. A
     /// suspended player is preferred; otherwise this constructs the same
     /// local player used by `new_independent`.
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::unnecessary_wraps,
+            reason = "the Err path is exercised only through the test-only LOCAL_PLAYER_PREPARE_OVERRIDE failure-propagation seam (6d7571b75); clippy cannot see cfg(test) callers (approved, issue #804)"
+        )
+    )]
     pub(in crate::app) fn prepare_local_player(
         &mut self,
     ) -> Result<Option<SuspendedLocalSession>, String> {
@@ -231,7 +246,11 @@ impl App {
         if let Some(suspended) = self.suspended_local.take() {
             return Ok(Some(suspended));
         }
-        self.construct_local_session().map(Some)
+        #[cfg(test)]
+        if let Some(prepare) = *crate::app::LOCAL_PLAYER_PREPARE_OVERRIDE.lock().unwrap() {
+            prepare()?;
+        }
+        Ok(Some(self.construct_local_session()))
     }
 
     /// Install a prepared local session over the current attachment: swap
@@ -255,7 +274,7 @@ impl App {
             let sender = self.player.command_sender();
             crate::mpris::rebind(
                 handle,
-                self.player.status.clone(),
+                std::sync::Arc::clone(&self.player.status),
                 move |cmd| sender(cmd),
                 self.player.disconnected_flag(),
             );
@@ -354,7 +373,7 @@ impl App {
             // suspended above. Reconnect to the local daemon directly so
             // "restore local mode" actually lands back on this app's real
             // baseline instead of leaving the player disconnected.
-            match self.try_daemon_route_connect(
+            match Self::try_daemon_route_connect(
                 &mbv_core::remote_player::DaemonEndpoint::Local,
                 "local daemon",
             ) {
@@ -415,7 +434,7 @@ impl App {
                 log::info!(target: "library_route", "already-active route no-op route={name:?} item_id={:?}", item.id);
             }
             (Some((name, endpoint)), was_routed) => {
-                match self.try_daemon_route_connect(&endpoint, &name) {
+                match Self::try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
                     }
@@ -437,7 +456,7 @@ impl App {
                 self.restore_local_mode("Local playback restored");
             }
             (None, None) => {
-                log::info!(target: "library_route", "no route resolved while local item_id={:?}; staying local", item.id)
+                log::info!(target: "library_route", "no route resolved while local item_id={:?}; staying local", item.id);
             }
         }
     }
@@ -459,7 +478,7 @@ impl App {
         // should skip this.
         if self.player_owner_is_on_this_machine() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
-                match self.connect_direct_endpoint(&endpoint) {
+                match Self::connect_direct_endpoint(&endpoint) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_direct_remote(sess, remote, remote_rx, &endpoint);
                         return;

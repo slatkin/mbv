@@ -66,7 +66,7 @@ impl App {
                         client.config.server_url.clone(),
                         client.token.clone(),
                     );
-                }
+                };
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
@@ -263,7 +263,7 @@ impl App {
                     config.username.clear();
                     config.password.clear();
                     config.api_key.clear();
-                }
+                };
                 self.emby_setup_form = None;
                 self.flash("Emby is ready".into(), ToastSeverity::Success);
                 Some(content)

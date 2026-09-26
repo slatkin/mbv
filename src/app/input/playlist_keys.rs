@@ -20,7 +20,7 @@ impl App {
         let mutation_id = self.next_playlist_mutation;
         self.next_playlist_mutation = self.next_playlist_mutation.saturating_add(1);
         self.enqueue_playlist_mutation(
-            existing_id.to_string(),
+            existing_id,
             PlaylistMutation::Replace {
                 mutation_id,
                 origin,

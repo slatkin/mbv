@@ -97,7 +97,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "adopted");
     assert!(!player.status.lock().unwrap().active);
-    assert!(player_cmd_rx.try_recv().is_err());
+    player_cmd_rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -288,10 +288,10 @@ fn adopted_queue_refresh_does_not_overwrite_played_progress() {
     let slot_id = owner.core.queue.slots()[0].slot_id;
     owner.core.apply_completion_progress(slot_id, 9, true);
 
-    let mut stale_refresh = item("played", "Video", "Movie");
-    stale_refresh.playback_position_ticks = 2;
+    let mut refresh_item = item("played", "Video", "Movie");
+    refresh_item.playback_position_ticks = 2;
     apply_queue_enriched(
-        vec![(slot_id, stale_refresh)],
+        vec![(slot_id, refresh_item)],
         &mut owner,
         &player,
         &shared_queue,
@@ -299,9 +299,9 @@ fn adopted_queue_refresh_does_not_overwrite_played_progress() {
     );
 
     assert!(client_rx.try_recv().is_err());
-    let played = owner.core.queue.slots()[0].item.as_emby().unwrap();
-    assert_eq!(played.playback_position_ticks, 9);
-    assert!(played.played);
+    let refreshed_item = owner.core.queue.slots()[0].item.as_emby().unwrap();
+    assert_eq!(refreshed_item.playback_position_ticks, 9);
+    assert!(refreshed_item.played);
 }
 
 #[test]

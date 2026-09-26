@@ -17,7 +17,7 @@ pub enum ToastSeverity {
 }
 
 impl ToastSeverity {
-    pub fn ttl(&self) -> Duration {
+    pub fn ttl(self) -> Duration {
         match self {
             ToastSeverity::Neutral | ToastSeverity::Success => Duration::from_secs(2),
             ToastSeverity::Warning | ToastSeverity::Error => Duration::from_secs(5),
@@ -35,7 +35,7 @@ impl App {
                 .arg(msg)
                 .stderr(std::process::Stdio::null());
             std::thread::spawn(move || {
-                if !cmd.output().map(|o| o.status.success()).unwrap_or(false) {
+                if !cmd.output().is_ok_and(|o| o.status.success()) {
                     let _ = tx.send("__notif_failed__".into());
                 }
             });
@@ -89,7 +89,10 @@ impl App {
     /// `library_routes` entry would be wrongly rejected for a reason
     /// unrelated to library routing. Mirrors the same condition Task 9
     /// uses to gate `apply_route_for_playback`.
-    pub(in crate::app) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
+    pub(in crate::app) fn enqueue_route_conflict(
+        &mut self,
+        resolved_name: Option<&String>,
+    ) -> bool {
         if self.in_non_library_thin_client_mode() {
             log::info!(
                 target: "library_route",
@@ -97,14 +100,14 @@ impl App {
             );
             return false;
         }
-        if resolved_name != self.active_route {
+        if resolved_name == self.active_route.as_ref() {
+            false
+        } else {
             self.flash(
                 "Can't mix libraries in a routed queue -- clear queue first".to_string(),
                 ToastSeverity::Error,
             );
             true
-        } else {
-            false
         }
     }
 }

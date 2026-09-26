@@ -214,20 +214,19 @@ impl App {
         let limit = loaded_count.max(PAGE_SIZE);
         let (name_ge, name_lt) = letter_filter
             .as_ref()
-            .map(|f| (f.name_ge, f.name_lt))
-            .unwrap_or((None, None));
+            .map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
-            match client.get_items_sorted_ranged(
-                &parent_id,
-                item_types.as_deref(),
+            match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+                parent_id: &parent_id,
+                item_types: item_types.as_deref(),
                 unplayed_only,
-                0,
+                start_index: 0,
                 limit,
-                &sort_by,
-                &sort_order,
+                sort_by: &sort_by,
+                sort_order: &sort_order,
                 name_ge,
                 name_lt,
-            ) {
+            }) {
                 Ok((items, total_count)) => {
                     log::info!(target: "browse", "Refreshed lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
                         items.len(),
@@ -293,9 +292,8 @@ impl App {
         limit: usize,
     ) {
         let lib = &self.libs[lib_idx];
-        let lvl = match lib.nav_stack.last() {
-            Some(l) => l,
-            None => return,
+        let Some(lvl) = lib.nav_stack.last() else {
+            return;
         };
         if lvl.loading {
             return;

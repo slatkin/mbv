@@ -1,6 +1,6 @@
 //! The Library-local Hero overlay lifecycle: opening, dismissal, and sync against the active destination owner.
 
-use super::*;
+use super::LibraryPanel;
 
 impl LibraryPanel {
     /// Open the Library-local Hero overlay for the active Hero, retaining the
@@ -86,15 +86,6 @@ impl LibraryPanel {
         self.overlay_geometry
             .as_ref()
             .map(|geometry| (geometry.pane, geometry.frame))
-    }
-
-    /// The Library Hero overlay's painted Workspace box (panel, content)
-    /// rects, for the overlay-pixel test path.
-    #[cfg(test)]
-    pub(in crate::app) fn test_overlay_workspace_box(
-        &self,
-    ) -> Option<(ratatui::layout::Rect, ratatui::layout::Rect)> {
-        self.overlay_geometry.as_ref()?.hero.workspace
     }
 
     fn can_open_hero_overlay(&mut self) -> bool {

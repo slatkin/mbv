@@ -1,6 +1,7 @@
 use super::*;
+use crate::api::EmbyImageTags;
 use crate::config::QueueSource;
-use crate::playback_queue::QueueItem;
+use crate::playback_queue::{FeedEntry, QueueItem};
 use std::net::SocketAddr;
 
 fn make_media_item(id: &str) -> EmbyItem {
@@ -39,7 +40,7 @@ fn make_media_item(id: &str) -> EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: EmbyImageTags::default(),
     }
 }
 
@@ -51,9 +52,23 @@ fn status_with_idx_and_len(current_idx: usize, queue_len: usize) -> PlayerStatus
     RemotePlayer::stub_status(current_idx, queue_len)
 }
 
-fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerEvent>, UnixStream) {
-    use std::io::{BufRead, BufReader, Write};
+fn make_feed_entry(guid: &str) -> FeedEntry {
+    FeedEntry {
+        guid: guid.into(),
+        title: guid.into(),
+        enclosure_url: None,
+        link: None,
+        mime_type: None,
+        duration_ticks: None,
+        pub_date_secs: None,
+        feed_kind: None,
+        feed_id: None,
+        position_ticks: 0,
+        played: false,
+    }
+}
 
+fn connected_pair_for_disconnect_test() -> (RemotePlayer, mpsc::Receiver<PlayerEvent>, UnixStream) {
     let (client, daemon) = UnixStream::pair().unwrap();
     let (daemon_tx, daemon_rx) = mpsc::channel();
     let peer = std::thread::spawn(move || {
@@ -318,9 +333,9 @@ fn daemon_endpoint_rejects_unsupported_schemes() {
         DaemonEndpoint::parse("tcp://10.0.0.1:1234").unwrap(),
         DaemonEndpoint::Tcp(SocketAddr::from(([10, 0, 0, 1], 1234)))
     );
-    assert!(DaemonEndpoint::parse("tcp://[::1]:4321").is_err());
-    assert!(DaemonEndpoint::parse("unix://").is_err());
-    assert!(DaemonEndpoint::parse("http://localhost:1234").is_err());
+    DaemonEndpoint::parse("tcp://[::1]:4321").unwrap_err();
+    DaemonEndpoint::parse("unix://").unwrap_err();
+    DaemonEndpoint::parse("http://localhost:1234").unwrap_err();
 }
 
 #[test]
@@ -519,32 +534,8 @@ fn unified_queue_state_preserves_canonical_coordinates_and_source() {
     // an index into the legacy Emby-only projection.
     let e0 = make_media_item("e0");
     let e2 = make_media_item("e2");
-    let f1 = crate::playback_queue::FeedEntry {
-        guid: "f1".into(),
-        title: "f1".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: None,
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    };
-    let f3 = crate::playback_queue::FeedEntry {
-        guid: "f3".into(),
-        title: "f3".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: None,
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    };
+    let f1 = make_feed_entry("f1");
+    let f3 = make_feed_entry("f3");
 
     let unified = UnifiedQueueStateData {
         status: status_with_idx_and_len(1, 4),

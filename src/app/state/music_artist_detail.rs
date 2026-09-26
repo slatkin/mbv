@@ -206,8 +206,7 @@ fn current_album_ids(
             let title = context
                 .album_info
                 .get(index)
-                .map(|(_, _, title)| title.clone())
-                .unwrap_or_else(|| item.display_name());
+                .map_or_else(|| item.display_name(), |(_, _, title)| title.clone());
             Some((index, row_target.clone(), item.id.clone(), title))
         })
         .collect()
@@ -246,7 +245,7 @@ impl App {
     pub(in crate::app) fn request_artist_tracks(
         &mut self,
         destination: LibraryKey,
-        target: MusicArtistTarget,
+        target: &MusicArtistTarget,
     ) {
         let Some(artist_id) = target.artist_id.clone() else {
             let album_ids = target
@@ -350,10 +349,10 @@ impl App {
     /// and never borrows a root album image.
     pub(in crate::app) fn request_artist_artwork(
         &mut self,
-        destination: LibraryKey,
-        target: MusicArtistTarget,
+        destination: &LibraryKey,
+        target: &MusicArtistTarget,
     ) {
-        let Some(key) = self.artist_detail_key(&destination, &target) else {
+        let Some(key) = self.artist_detail_key(destination, target) else {
             return;
         };
         let cache_key = artist_artwork_cache_key(&key.destination, key.generation, &key.artist_id);
@@ -399,23 +398,23 @@ impl App {
 
     pub(in crate::app) fn handle_artist_tracks_fetched(
         &mut self,
-        destination: LibraryKey,
+        destination: &LibraryKey,
         generation: SetupGeneration,
-        artist_id: String,
+        artist_id: &str,
         revision: u64,
         result: Result<Vec<EmbyItem>, String>,
     ) {
         let key = ArtistDetailKey {
             destination: destination.clone(),
             generation: generation.value(),
-            artist_id: artist_id.clone(),
+            artist_id: artist_id.to_string(),
             revision,
         };
         // Retire only this exact request. A newer revision has a different
         // key and must remain loading when this old response arrives.
         self.artist_detail_loading.remove(&key);
         if !self.emby_runtime.accepts(generation)
-            || !current_artist_scope(self, &destination, revision, &artist_id)
+            || !current_artist_scope(self, destination, revision, artist_id)
         {
             return;
         }
@@ -425,32 +424,29 @@ impl App {
                 || cached.artist_id != key.artist_id
                 || *cached == key
         });
-        match result {
-            Ok(mut tracks) => {
-                sort_audio_tracks(&mut tracks);
-                self.artist_detail_cache.insert(
-                    key,
-                    ArtistDetailCacheEntry {
-                        tracks,
-                        failed: false,
-                    },
-                );
-            }
-            Err(_) => {
-                self.artist_detail_cache.insert(
-                    key,
-                    ArtistDetailCacheEntry {
-                        tracks: Vec::new(),
-                        failed: true,
-                    },
-                );
-                // The documented fallback for an unavailable artist-ID query
-                // is the per-album aggregation; queue those fetches for the
-                // root's still-current in-scope albums behind the bounded
-                // fan-out rather than arming them all at once.
-                let album_ids = scoped_album_ids(self, &destination, revision, &artist_id);
-                self.enqueue_artist_album_tracks(album_ids);
-            }
+        if let Ok(mut tracks) = result {
+            sort_audio_tracks(&mut tracks);
+            self.artist_detail_cache.insert(
+                key,
+                ArtistDetailCacheEntry {
+                    tracks,
+                    failed: false,
+                },
+            );
+        } else {
+            self.artist_detail_cache.insert(
+                key,
+                ArtistDetailCacheEntry {
+                    tracks: Vec::new(),
+                    failed: true,
+                },
+            );
+            // The documented fallback for an unavailable artist-ID query
+            // is the per-album aggregation; queue those fetches for the
+            // root's still-current in-scope albums behind the bounded
+            // fan-out rather than arming them all at once.
+            let album_ids = scoped_album_ids(self, destination, revision, artist_id);
+            self.enqueue_artist_album_tracks(album_ids);
         }
     }
 
@@ -458,21 +454,21 @@ impl App {
         &mut self,
         destination: LibraryKey,
         generation: SetupGeneration,
-        artist_id: String,
+        artist_id: &str,
         revision: u64,
-        cache_key: String,
+        cache_key: &str,
         available: bool,
     ) {
         if !self.emby_runtime.accepts(generation)
-            || cache_key != artist_artwork_cache_key(&destination, generation.value(), &artist_id)
-            || !current_artist_scope(self, &destination, revision, &artist_id)
+            || cache_key != artist_artwork_cache_key(&destination, generation.value(), artist_id)
+            || !current_artist_scope(self, &destination, revision, artist_id)
         {
             return;
         }
         let key = ArtistDetailKey {
             destination,
             generation: generation.value(),
-            artist_id,
+            artist_id: artist_id.to_string(),
             revision,
         };
         self.artist_artwork_status.insert(
@@ -494,9 +490,9 @@ impl App {
         &self,
         destination: &LibraryKey,
         mut context: MusicWideRenderCtx,
-        target: MusicArtistTarget,
+        target: &MusicArtistTarget,
     ) -> MusicWideRenderCtx {
-        let albums = current_album_ids(&context, &target);
+        let albums = current_album_ids(&context, target);
         // Immediate summary facts (task 6.2): the in-scope album count and
         // the settled albums' release-year span, derived without any fetch.
         let mut years = Vec::new();
@@ -518,7 +514,7 @@ impl App {
         };
 
         let artist_entry = self
-            .artist_detail_key(destination, &target)
+            .artist_detail_key(destination, target)
             .and_then(|key| self.artist_detail_cache.get(&key));
         let artist_cache = artist_entry
             .filter(|entry| !entry.failed)
@@ -563,7 +559,7 @@ impl App {
         context.selected_album = None;
         context.album_tracks = None;
         context.artist_detail = Some(ArtistDetailProjection {
-            target,
+            target: target.clone(),
             summary,
             track_groups,
         });

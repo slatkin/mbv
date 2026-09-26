@@ -118,8 +118,14 @@ fn visualizer_resolves_to_router_command() {
 #[test]
 fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
     let snapshot = RouterSnapshot {
-        player_active: true,
-        blocking_overlay_open: true,
+        playback: crate::app::input::RouterPlaybackState {
+            player_active: true,
+            ..Default::default()
+        },
+        overlays: crate::app::input::RouterOverlayState {
+            focus: crate::app::input::OverlayFocus::Blocking,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     };
 
@@ -151,8 +157,11 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
 #[test]
 fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     let snapshot = RouterSnapshot {
-        has_remote_session: true,
-        idle_feed_link_available: true,
+        playback: crate::app::input::RouterPlaybackState {
+            remote_target: crate::app::input::RemotePlaybackTarget::DirectRemote,
+            idle_feed_link_available: true,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     };
     assert_eq!(
@@ -167,7 +176,10 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
 
     let queue_only_idle = RouterSnapshot {
         panel_mode: crate::app::state::types::settings::PanelMode::QueueOnly,
-        queue_only_idle: true,
+        playback: crate::app::input::RouterPlaybackState {
+            queue_only_idle: true,
+            ..snapshot.playback
+        },
         ..snapshot
     };
     assert_eq!(
@@ -184,7 +196,10 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     // present + idle fact in the two-panel layout is suppressed too.
     let both_idle = RouterSnapshot {
         panel_mode: crate::app::state::types::settings::PanelMode::Both,
-        queue_only_idle: true,
+        playback: crate::app::input::RouterPlaybackState {
+            queue_only_idle: true,
+            ..snapshot.playback
+        },
         ..snapshot
     };
     assert_eq!(
@@ -201,7 +216,10 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     // displays the feed), so the link opens.
     let library_only_idle = RouterSnapshot {
         panel_mode: crate::app::state::types::settings::PanelMode::LibraryOnly,
-        queue_only_idle: false,
+        playback: crate::app::input::RouterPlaybackState {
+            queue_only_idle: false,
+            ..snapshot.playback
+        },
         ..snapshot
     };
     assert_eq!(
@@ -215,7 +233,10 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     );
 
     let connected = RouterSnapshot {
-        connected_session_id_present: true,
+        playback: crate::app::input::RouterPlaybackState {
+            remote_target: crate::app::input::RemotePlaybackTarget::Session,
+            ..snapshot.playback
+        },
         ..snapshot
     };
     assert_eq!(

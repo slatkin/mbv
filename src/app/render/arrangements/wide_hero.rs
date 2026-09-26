@@ -54,8 +54,8 @@ pub(in crate::app) const PANE_PAD_Y: u16 = 1;
 /// right.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct WideHeroPanes {
-    pub browser: Rect,
-    pub hero: Rect,
+    pub left: Rect,
+    pub right: Rect,
 }
 
 /// Whether `area` fits the Wide hero two-pane presentation (the shared
@@ -83,7 +83,10 @@ pub(in crate::app::render) fn wide_hero_presentation(
     // placement, so reserving a second row here only left a stray blank row
     // under the panel's bottom spacer.
     let (browser, hero) = wide_hero_split(content_area, override_width);
-    WideHeroPanes { browser, hero }
+    WideHeroPanes {
+        left: hero,
+        right: browser,
+    }
 }
 
 /// The Wide hero arrangement's right (list) pane geometry: a one-row pill
@@ -102,9 +105,9 @@ pub(in crate::app) struct WideHeroBrowserPane {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct PillBarAreas {
-    pub pills_area: Rect,
-    pub spacer_area: Rect,
-    pub content_area: Rect,
+    pub pills: Rect,
+    pub spacer: Rect,
+    pub content: Rect,
 }
 
 /// Places the shared one-row pill bar, its one-row parent-background spacer,
@@ -112,16 +115,16 @@ pub(in crate::app) struct PillBarAreas {
 pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
     let reserved = WIDE_HERO_PILL_BAND_HEIGHT;
     PillBarAreas {
-        pills_area: Rect {
+        pills: Rect {
             height: WIDE_HERO_PILLS_ROW_HEIGHT.min(area.height),
             ..area
         },
-        spacer_area: Rect {
+        spacer: Rect {
             y: area.y.saturating_add(WIDE_HERO_PILLS_ROW_HEIGHT),
             height: WIDE_HERO_PILLS_GAP_ROWS.min(area.height.saturating_sub(1)),
             ..area
         },
-        content_area: Rect {
+        content: Rect {
             y: area.y.saturating_add(reserved),
             height: area.height.saturating_sub(reserved),
             ..area
@@ -132,9 +135,9 @@ pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
 /// Omits both the Selector row and its gap, giving all of the area to content.
 pub(in crate::app) fn no_selector_areas(area: Rect) -> PillBarAreas {
     PillBarAreas {
-        pills_area: Rect::new(area.x, area.y, area.width, 0),
-        spacer_area: Rect::new(area.x, area.y, area.width, 0),
-        content_area: area,
+        pills: Rect::new(area.x, area.y, area.width, 0),
+        spacer: Rect::new(area.x, area.y, area.width, 0),
+        content: area,
     }
 }
 
@@ -155,9 +158,9 @@ pub(in crate::app) fn wide_hero_browser_pane_with_selector(
         no_selector_areas(area)
     };
     WideHeroBrowserPane {
-        pills_area: areas.pills_area,
-        spacer_area: areas.spacer_area,
-        list_panel: areas.content_area,
+        pills_area: areas.pills,
+        spacer_area: areas.spacer,
+        list_panel: areas.content,
     }
 }
 
@@ -179,7 +182,7 @@ pub(in crate::app) fn wide_hero_hero_pane(
     override_width: Option<u16>,
 ) -> Rect {
     let WideHeroPanes {
-        hero: hero_panel, ..
+        left: hero_panel, ..
     } = wide_hero_presentation(content_area, override_width);
     let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
     f.render_widget(
@@ -205,7 +208,9 @@ pub(in crate::app::render) fn wide_hero_split(
         override_width,
         content_area.width,
     )
-    .unwrap_or_else(|| (content_area.width as u32 * 2 / 5) as u16)
+    .unwrap_or_else(|| {
+        u16::try_from(u32::from(content_area.width) * 2 / 5).expect("2/5 of a u16 width fits u16")
+    })
     .max(WIDE_HERO_MIN_PANE_WIDTH)
     .min(
         content_area

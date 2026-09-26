@@ -115,8 +115,8 @@ fn hello_current_advertises_abs_capabilities() {
 #[test]
 fn ctrl_compatibility_current_supports_abs_capabilities() {
     let compat = CtrlCompatibility::current();
-    assert!(compat.supports_abs_queue);
-    assert!(compat.supports_abs_progress);
+    assert!(compat.audiobookshelf.queue);
+    assert!(compat.audiobookshelf.progress);
 }
 
 // Guards for task 3.3: prove that the Audiobookshelf ctrl wire types contain

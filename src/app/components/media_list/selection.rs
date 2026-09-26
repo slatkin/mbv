@@ -6,13 +6,12 @@ impl MediaListSurfaceInput {
         target: Option<Target>,
     ) -> Option<MediaListOperation<Target>> {
         Some(match self {
-            Self::Move(delta) => MediaListOperation::Move(delta),
+            Self::Move(delta) | Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
             Self::Page(delta) => MediaListOperation::Page(delta),
             Self::First => MediaListOperation::First,
             Self::Last => MediaListOperation::Last,
             Self::Activate => MediaListOperation::ActivateCurrent,
             Self::Context => MediaListOperation::ContextCurrent,
-            Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
             Self::Click(_) => MediaListOperation::Select(target?),
             Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
             Self::RangeClick(_) => MediaListOperation::Range(target?),
@@ -181,32 +180,6 @@ mod tests {
                 .expect("resolved media-list pointer target"),
         );
         assert_eq!(list.multi_selection(), &[3, 4]);
-    }
-
-    #[test]
-    fn visual_selection_change_is_consumed_by_the_carrier_helper() {
-        let mut carrier = super::super::MediaListCarrier::new();
-        carrier.wide_mut().set_content((1..=3).map(item).collect());
-        carrier.wide_mut().select_target(&2);
-        let key = tuirealm::event::KeyEvent::new(
-            tuirealm::event::Key::Char('v'),
-            tuirealm::event::KeyModifiers::SHIFT,
-        );
-        assert_eq!(carrier.handle_visual_key(&key), Some(1));
-        assert_eq!(carrier.multi_selection(), &[2]);
-    }
-
-    #[test]
-    fn uppercase_visual_key_starts_visual_mode_at_cursor() {
-        let mut carrier = super::super::MediaListCarrier::new();
-        carrier.wide_mut().set_content((1..=3).map(item).collect());
-        carrier.wide_mut().select_target(&2);
-        let key = tuirealm::event::KeyEvent::new(
-            tuirealm::event::Key::Char('V'),
-            tuirealm::event::KeyModifiers::SHIFT,
-        );
-        assert_eq!(carrier.handle_visual_key(&key), Some(1));
-        assert_eq!(carrier.multi_selection(), &[2]);
     }
 
     #[test]

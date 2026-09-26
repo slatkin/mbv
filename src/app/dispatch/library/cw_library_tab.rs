@@ -89,13 +89,15 @@ impl App {
                 .libs
                 .get(index)
                 .and_then(|library| self.legacy_position_for_key(&library.library.id))
-                .map(|position| self.legacy_identities(&position, false))
-                .unwrap_or((None, None)),
+                .map_or((None, None), |position| {
+                    self.legacy_identities(&position, false)
+                }),
             TabSelection::AudiobookshelfLibrary(index) => self
                 .audiobookshelf_position_key(index)
                 .and_then(|key| self.legacy_position_for_key(key.as_str()))
-                .map(|position| self.legacy_identities(&position, true))
-                .unwrap_or((None, None)),
+                .map_or((None, None), |position| {
+                    self.legacy_identities(&position, true)
+                }),
             TabSelection::Home | TabSelection::Feeds => (None, None),
         };
         let tab = match tab {
@@ -209,8 +211,7 @@ impl App {
                     self.libs
                         .iter()
                         .position(|library| library.library.id == library_id)
-                        .map(TabSelection::EmbyLibrary)
-                        .unwrap_or(TabSelection::Home),
+                        .map_or(TabSelection::Home, TabSelection::EmbyLibrary),
                 )
             }
             ServiceKind::Audiobookshelf => {
@@ -221,8 +222,7 @@ impl App {
                     self.audiobookshelf_libraries
                         .iter()
                         .position(|library| library.id == library_id)
-                        .map(TabSelection::AudiobookshelfLibrary)
-                        .unwrap_or(TabSelection::Home),
+                        .map_or(TabSelection::Home, TabSelection::AudiobookshelfLibrary),
                 )
             }
         }
@@ -362,6 +362,6 @@ impl App {
     }
 
     pub(in crate::app) fn cw_toggle_watched(&mut self, item: EmbyItem) {
-        self.toggle_watched_home_item(item);
+        self.toggle_watched_home_item(&item);
     }
 }

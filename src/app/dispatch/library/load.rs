@@ -131,7 +131,7 @@ impl App {
                                     .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                             }
                             Err(e) => {
-                                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error)
+                                self.flash(format!("Refresh error: {e}"), ToastSeverity::Error);
                             }
                         }
                     }

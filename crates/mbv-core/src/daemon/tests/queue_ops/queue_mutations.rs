@@ -162,7 +162,7 @@ fn unified_queue_move_unknown_slot_is_rejected_without_mutation() {
     );
 
     assert_eq!(owner.core.queue.len(), 1);
-    assert!(cmd_rx.try_recv().is_err());
+    cmd_rx.try_recv().unwrap_err();
     match recv_event(&reply_rx) {
         CtrlEvent::CommandRejected(reason) => {
             assert_eq!(reason, "slot not found; move skipped");
@@ -192,7 +192,7 @@ fn unified_queue_remove_unknown_slot_is_rejected() {
     );
 
     assert_eq!(owner.core.queue.len(), 1);
-    assert!(cmd_rx.try_recv().is_err());
+    cmd_rx.try_recv().unwrap_err();
     match recv_event(&reply_rx) {
         CtrlEvent::CommandRejected(reason) => {
             assert_eq!(reason, "slot not found; remove skipped");
@@ -342,7 +342,7 @@ fn unified_queue_remove_slots_skips_unknown_ids_and_no_ops_when_empty() {
         &registry,
     );
     assert_eq!(owner.core.queue.len(), 1);
-    assert!(cmd_rx.try_recv().is_err());
+    cmd_rx.try_recv().unwrap_err();
     assert!(
         client_rx.try_recv().is_err(),
         "no snapshot for a no-op batch"

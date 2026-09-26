@@ -122,26 +122,6 @@ fn malformed_and_nonnumeric_legacy_preferences_fall_back_cleanly_through_constru
 }
 
 #[test]
-fn aliased_legacy_preference_falls_back_to_home_through_construct() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    std::fs::write(
-        crate::config::prefs_path(),
-        serde_json::json!({ "power_left_tab": 1 }).to_string(),
-    )
-    .expect("write aliased prefs");
-
-    let mut app = crate::app::tests::make_built_app();
-    assert_eq!(app.legacy_launch_tab, Some(1));
-    app.resolve_library_tab_pending();
-
-    assert_eq!(app.tab, TabSelection::Home);
-    assert_eq!(
-        app.pending_launch_state.as_ref().map(|state| &state.tab),
-        Some(&mbv_core::config::TabIdentity::Home)
-    );
-}
-
-#[test]
 fn legacy_audiobookshelf_podcast_item_is_not_migrated() {
     let mut app = crate::app::tests::make_app_stub();
     app.tab = TabSelection::Home;

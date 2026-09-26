@@ -1,10 +1,13 @@
-use super::*;
-
+use super::{
+    mpv_title_opt, mpv_url_for_queue_item, resume_start_pos, saturating_i64_from_f64,
+    AudiobookshelfBookPlaybackLifecycle, AudiobookshelfPlaybackLifecycle, PreparedLifecycle,
+};
 use crate::audiobookshelf::{
     AudiobookshelfAudioSource, AudiobookshelfClient, AudiobookshelfError,
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
 };
 use crate::config::AudiobookshelfSetup;
+use crate::playback_queue::QueueItem;
 use crate::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem};
 use crate::service_runtime::SetupGeneration;
 
@@ -54,6 +57,7 @@ impl std::fmt::Debug for AudiobookshelfPlayerContext {
 }
 
 impl AudiobookshelfPlayerContext {
+    #[must_use]
     pub fn new(
         generation: SetupGeneration,
         setup: AudiobookshelfSetup,
@@ -73,6 +77,7 @@ impl AudiobookshelfPlayerContext {
         })
     }
 
+    #[must_use]
     pub fn with_progress_updates(
         mut self,
         sender: std::sync::mpsc::Sender<AudiobookshelfProgressUpdate>,
@@ -81,6 +86,7 @@ impl AudiobookshelfPlayerContext {
         self
     }
 
+    #[must_use]
     pub fn with_book_progress_updates(
         mut self,
         sender: std::sync::mpsc::Sender<AudiobookshelfBookProgressUpdate>,
@@ -89,6 +95,7 @@ impl AudiobookshelfPlayerContext {
         self
     }
 
+    #[must_use]
     pub const fn generation(&self) -> SetupGeneration {
         self.generation
     }
@@ -142,7 +149,13 @@ impl PreparedSource {
 
     pub(super) fn close(&mut self, current_time: f64) {
         if let Some(lifecycle) = self.lifecycle.as_mut() {
-            lifecycle.close((current_time.max(0.0) * crate::api::TICKS_PER_SECOND as f64) as i64);
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "mpv current time seconds → ticks through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
+            lifecycle.close(saturating_i64_from_f64(
+                current_time.max(0.0) * crate::api::TICKS_PER_SECOND as f64,
+            ));
         }
         self.lifecycle = None;
     }
@@ -300,7 +313,7 @@ mod tests {
         ) else {
             panic!("valid context");
         };
-        let rendered = format!("{:?}", context);
+        let rendered = format!("{context:?}");
         assert!(rendered.contains("AudiobookshelfPlayerContext"));
         assert!(!rendered.contains("abs-secret-credential"));
     }

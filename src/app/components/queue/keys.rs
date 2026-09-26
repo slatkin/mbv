@@ -52,7 +52,7 @@ impl QueueComponent {
         if let Some(message) = self.handle_scope_key(key) {
             return Some(message);
         }
-        if let Some(message) = self.handle_resize_key(key) {
+        if let Some(message) = Self::handle_resize_key(key) {
             return Some(message);
         }
         match key.code {
@@ -67,7 +67,7 @@ impl QueueComponent {
             {
                 Some(Msg::Queue(QueueRequest::Undo { scope: self.scope }))
             }
-            Key::Char('.') if key.modifiers.is_empty() => self.open_context_menu(),
+            Key::Char('.') if key.modifiers.is_empty() => Some(self.open_context_menu()),
             Key::Char('i') => self.navigate_to_selection(),
             Key::Char('p') => Some(Msg::Shell(Box::new(ShellRequest::QueueIntent(
                 QueueIntent::PlayNow,
@@ -110,7 +110,7 @@ impl QueueComponent {
         Some(Msg::Queue(QueueRequest::Scope(self.scope)))
     }
 
-    fn handle_resize_key(&self, key: &KeyEvent) -> Option<Msg> {
+    fn handle_resize_key(key: &KeyEvent) -> Option<Msg> {
         if !matches!(key.code, Key::Left | Key::Right)
             || key.modifiers != tuirealm::event::KeyModifiers::SHIFT
         {
@@ -156,11 +156,11 @@ impl QueueComponent {
             return None;
         }
         match key.code {
-            Key::PageUp => {
-                self.move_cursor(-(self.content_area.height.saturating_sub(1).max(1) as i64))
-            }
+            Key::PageUp => self.move_cursor(-i64::from(
+                self.content_area.height.saturating_sub(1).max(1),
+            )),
             Key::PageDown => {
-                self.move_cursor(self.content_area.height.saturating_sub(1).max(1) as i64)
+                self.move_cursor(i64::from(self.content_area.height.saturating_sub(1).max(1)))
             }
             Key::Home => {
                 self.delegate_row_local_input(MediaListSurfaceInput::First, None);
@@ -200,22 +200,22 @@ impl QueueComponent {
             .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Remove { scope, slot_id }))
     }
 
-    fn open_context_menu(&mut self) -> Option<Msg> {
+    fn open_context_menu(&mut self) -> Msg {
         // `.` is a selection-dependent chord owned by the focused component.
         match self
             .delegate_row_local_input(MediaListSurfaceInput::Context, None)
             .external_intent
         {
-            Some(RowIntent::Context(slot_id)) => Some(Msg::Shell(Box::new(
+            Some(RowIntent::Context(slot_id)) => Msg::Shell(Box::new(
                 ShellRequest::RowContextMenu(ContextMenuTargets::Queue(vec![slot_id]), None),
-            ))),
-            Some(RowIntent::ContextSelection(slot_ids)) => Some(Msg::Shell(Box::new(
+            )),
+            Some(RowIntent::ContextSelection(slot_ids)) => Msg::Shell(Box::new(
                 ShellRequest::RowContextMenu(ContextMenuTargets::Queue(slot_ids), None),
-            ))),
-            _ => Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+            )),
+            _ => Msg::Shell(Box::new(ShellRequest::RowContextMenu(
                 ContextMenuTargets::Queue(vec![]),
                 None,
-            )))),
+            ))),
         }
     }
 

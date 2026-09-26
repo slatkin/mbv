@@ -1,11 +1,14 @@
-use super::*;
+use super::{
+    AudiobookshelfBookIntent, BookContent, LibrarySlotEvent, MediaListSurfaceInput, Msg,
+    ShellRequest,
+};
 
 impl BookContent {
     pub(super) fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
                 self.select_bucket(index);
-                self.bucket_request()
+                Some(self.bucket_request())
             }
             LibrarySlotEvent::List(input) => self.book_list_event(input),
             LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
@@ -22,13 +25,10 @@ impl BookContent {
 
     fn book_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         match input {
-            MediaListSurfaceInput::Wheel { at, delta } => {
-                if self.carrier.claims_current_point(at) {
-                    self.move_book(MediaListSurfaceInput::Wheel { at, delta })
-                } else {
-                    None
-                }
-            }
+            MediaListSurfaceInput::Wheel { at, delta } => self
+                .carrier
+                .claims_current_point(at)
+                .then(|| self.move_book(MediaListSurfaceInput::Wheel { at, delta })),
             MediaListSurfaceInput::Click(at)
             | MediaListSurfaceInput::ToggleClick(at)
             | MediaListSurfaceInput::RangeClick(at) => {
@@ -38,9 +38,9 @@ impl BookContent {
                         .into_operation(Some(target))
                         .expect("resolved media-list pointer target"),
                 );
-                let _ = ();
+                let () = ();
                 self.sync_book_from_owner();
-                self.book_request()
+                Some(self.book_request())
             }
             MediaListSurfaceInput::DoubleClick(at) => {
                 let target = self.carrier.resolve_current_point(at)?.clone();
@@ -80,7 +80,7 @@ impl BookContent {
                         .into_operation(Some(target))
                         .expect("resolved media-list pointer target"),
                 );
-                self.chapter_focus_request()
+                Some(self.chapter_focus_request())
             }
             MediaListSurfaceInput::DoubleClick(at) | MediaListSurfaceInput::ContextClick(at) => {
                 let target = self.chapter_list.resolve_current_point(at).copied()?;

@@ -34,7 +34,7 @@ impl LoadState {
         }
     }
 
-    pub(crate) fn is_ready(&self) -> bool {
+    pub(crate) fn is_ready(self) -> bool {
         matches!(self, LoadState::Ready)
     }
 }
@@ -59,11 +59,11 @@ impl StopReport {
         *self = StopReport::NotSent;
     }
 
-    pub(crate) fn is_accepted(&self) -> bool {
+    pub(crate) fn is_accepted(self) -> bool {
         matches!(self, StopReport::Accepted)
     }
 
-    pub(crate) fn is_sent(&self) -> bool {
+    pub(crate) fn is_sent(self) -> bool {
         !matches!(self, StopReport::NotSent)
     }
 }
@@ -90,7 +90,7 @@ impl NextUp {
         *self = NextUp::Idle;
     }
 
-    pub(crate) fn is_fired(&self) -> bool {
+    pub(crate) fn is_fired(self) -> bool {
         matches!(self, NextUp::Fired)
     }
 }
@@ -119,7 +119,7 @@ impl IntroState {
         *self = IntroState::Dismissed;
     }
 
-    pub(crate) fn is_pending(&self) -> bool {
+    pub(crate) fn is_pending(self) -> bool {
         matches!(self, IntroState::Pending)
     }
 }
@@ -157,7 +157,7 @@ impl StartupPause {
         *self = StartupPause::None;
     }
 
-    pub(crate) fn is_holding(&self) -> bool {
+    pub(crate) fn is_holding(self) -> bool {
         matches!(self, StartupPause::Holding { .. })
     }
 }

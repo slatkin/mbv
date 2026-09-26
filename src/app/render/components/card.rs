@@ -283,10 +283,9 @@ impl App {
         // placeholder itself. Resolved from the image cache's authority —
         // a read, never a fetch.
         let artwork_key = projection.cache_key.clone().filter(|key| {
-            !self
-                .card_image_states
+            self.card_image_states
                 .get(key)
-                .is_some_and(|entry| entry.img.is_none())
+                .is_none_or(|entry| entry.img.is_some())
         });
         let placeholder_slot = artwork_key.is_none();
         if placeholder_slot {

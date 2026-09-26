@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::EmbyImageTags;
 use crate::player::PlayerOwnerState;
 
 pub fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
@@ -37,7 +38,7 @@ pub fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: EmbyImageTags::default(),
     }
 }
 
@@ -63,7 +64,17 @@ pub fn video_feed_qi(guid: &str) -> QueueItem {
 /// Connects a client the same way the accept thread does.
 pub fn connect_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
-    let id = clients.connect(tx, CtrlTransport::Local, true, true, true, true, true);
+    let id = clients.connect(
+        tx,
+        CtrlTransport::Local,
+        crate::ctrl::CtrlAudiobookshelfCapabilities {
+            queue: true,
+            progress: true,
+            book_queue: true,
+            book_progress: true,
+        },
+        true,
+    );
     (id, rx)
 }
 

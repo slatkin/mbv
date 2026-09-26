@@ -40,7 +40,7 @@ fn active_app(panel_mode: PanelMode) -> crate::app::App {
         status.current_idx = 0;
         status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
         status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
-    }
+    };
     app
 }
 
@@ -87,7 +87,6 @@ fn drawn_harness(mut app: crate::app::App, width: u16, height: u16) -> (TickHarn
 #[cfg(test)]
 mod strip_hits {
     use super::*;
-    use crate::app::components::LibraryPlaybackPanel;
 
     /// Draw one real library-only frame (the strip paints and retains its
     /// transport hit geometry), then switch to `both` and draw again.
@@ -457,7 +456,7 @@ fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
         status.active = true;
         status.current_idx = 0;
         status.queue_len = 2;
-    }
+    };
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let rows = queue_media_rows(

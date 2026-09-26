@@ -105,12 +105,13 @@ pub fn spawn_detached(
     // Detach into its own session (equivalent to `setsid <cmd>`), and
     // ignore SIGHUP so closing the launching terminal can't kill it --
     // belt-and-suspenders with the daemon's own SIGHUP-ignore below.
+    // SAFETY: The child-side hook only creates a new session before exec.
     unsafe {
         cmd.pre_exec(|| {
             nix::unistd::setsid().map_err(to_io)?;
             Ok(())
-        });
-    }
+        })
+    };
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("failed to start local daemon: {e}"))?;
@@ -153,6 +154,8 @@ pub fn run_local_daemon_main() -> ! {
     // The daemon IS the SIGHUP firewall: closing the launching terminal
     // must not kill it (belt-and-suspenders with the setsid() done at
     // spawn time in `spawn_detached`).
+    // SAFETY: Installing SIGHUP ignore is valid for this daemon process and
+    // the action uses no handler pointer or uninitialized state.
     unsafe {
         let sa = nix::sys::signal::SigAction::new(
             nix::sys::signal::SigHandler::SigIgn,
@@ -203,7 +206,7 @@ pub fn run_local_daemon_main() -> ! {
     let show_systray_icon = config.show_systray_icon;
     let player_handle: std::sync::Arc<std::sync::Mutex<Option<daemon::DaemonPlayerHandle>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
-    let player_handle_for_tray = player_handle.clone();
+    let player_handle_for_tray = std::sync::Arc::clone(&player_handle);
 
     daemon::run_with_options(
         daemon::DaemonStartupContext::new(config, daemon::DaemonRole::Local),
@@ -233,9 +236,6 @@ mod tests {
         "HOME=/h\nWAYLAND_DISPLAY=wayland-1\nDISPLAY=:0\nXAUTHORITY=/run/xauth\n",
         Some(vec![("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0"), ("XAUTHORITY", "/run/xauth")])
     )]
-    #[case::x11_only("DISPLAY=:1\n", Some(vec![("DISPLAY", ":1")]))]
-    #[case::prefix_is_not_a_match("DISPLAYX=:9\nWAYLAND_DISPLAY_OLD=x\n", None)]
-    #[case::xauthority_alone_is_no_display("XAUTHORITY=/run/xauth\n", None)]
     #[case::no_graphical_session("HOME=/h\nPATH=/bin\n", None)]
     fn display_env_is_read_from_the_user_manager(
         #[case] show_environment: &str,

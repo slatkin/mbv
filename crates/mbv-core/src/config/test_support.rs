@@ -2,14 +2,14 @@
 // (see `config.rs`) so callers reach it as `crate::config::TestTempDir`, next
 // to `TestStateDirGuard` in `config_types_paths.rs`.
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 use std::path::PathBuf;
 
 /// Scratch directory for tests that must exercise a real filesystem path.
 ///
 /// Removes itself on drop -- including when the test panics -- so a failing
 /// run cannot accumulate directories under the system temp dir.
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 #[derive(Debug)]
 pub struct TestTempDir {
     dir: PathBuf,
@@ -18,9 +18,10 @@ pub struct TestTempDir {
     prev_config_home: Option<std::ffi::OsString>,
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 impl TestTempDir {
     /// Fresh `mbv-test-<uuid>` directory under the system temp dir.
+    #[must_use]
     pub fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&dir);
@@ -42,6 +43,7 @@ impl TestTempDir {
     /// that lives to the end of the test -- a borrowed return would drop the
     /// temporary at the end of that statement, restoring the env and deleting
     /// the directory before the test body ran.
+    #[must_use]
     pub fn as_xdg_home(mut self) -> Self {
         std::env::set_var("XDG_STATE_HOME", &self.dir);
         std::env::set_var("XDG_CONFIG_HOME", &self.dir);
@@ -50,6 +52,7 @@ impl TestTempDir {
         self
     }
 
+    #[must_use]
     pub fn path(&self) -> &std::path::Path {
         &self.dir
     }
@@ -59,14 +62,14 @@ impl TestTempDir {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 impl Default for TestTempDir {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 impl Drop for TestTempDir {
     fn drop(&mut self) {
         // Restore before deleting: a later test in the same process must never
@@ -79,7 +82,7 @@ impl Drop for TestTempDir {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
     match value {
         Some(value) => std::env::set_var(name, value),
@@ -103,7 +106,7 @@ fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
 // only visible on the thread that set it, so two tests running on different
 // threads can never observe (or clobber) each other's override, no lock
 // required. See `TestStateDirGuard` and issue #106.
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 thread_local! {
     pub(super) static TEST_STATE_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
         const { std::cell::RefCell::new(None) };
@@ -118,7 +121,7 @@ thread_local! {
 // config.toml. `TestStateDirGuard` sets this override alongside its own so
 // every test that already uses it (including, automatically, every `App`
 // built in a test binary via `_test_state_dir_guard`) gets both for free.
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 thread_local! {
     pub(super) static TEST_CONFIG_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
         const { std::cell::RefCell::new(None) };
@@ -127,11 +130,11 @@ thread_local! {
 #[cfg(test)]
 pub(super) static TEST_DEFAULT_STATE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 #[derive(Debug)]
 pub struct TestStateDirGuard;
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 impl TestStateDirGuard {
     /// Points `state_dir()` at a fresh, unique tempdir for the lifetime of
     /// this guard, visible only on the calling thread. Use this in any test
@@ -139,6 +142,7 @@ impl TestStateDirGuard {
     /// `save_queue_state`/`restore_queue_state` (e.g. via consume-mode event
     /// handling) but isn't itself testing path resolution -- so it never
     /// touches a real on-disk path or races a sibling test.
+    #[must_use]
     pub fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
         Self::new_at(dir)
@@ -159,6 +163,7 @@ impl TestStateDirGuard {
     /// Installs a fresh override only when this thread does not already have
     /// one. This lets broad app-test fixtures isolate incidental queue-state
     /// writes without shadowing tests that explicitly seeded queue state first.
+    #[must_use]
     pub fn new_if_unset() -> Option<Self> {
         if TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().is_some()) {
             None
@@ -168,14 +173,14 @@ impl TestStateDirGuard {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 impl Default for TestStateDirGuard {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 impl Drop for TestStateDirGuard {
     fn drop(&mut self) {
         // Both overrides point at the same physical directory (see

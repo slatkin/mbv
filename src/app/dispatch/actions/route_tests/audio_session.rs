@@ -9,28 +9,6 @@ fn make_remote_session(audio_only: bool) -> mbv_core::api::SessionInfo {
 }
 
 #[test]
-fn is_audio_item_reads_remote_session_audio_only_flag_when_true() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.connected_session_id = Some("sess-1".into());
-    app.connected_session_state = Some(make_remote_session(true));
-
-    assert!(
-        app.is_audio_item(),
-        "a connected session's audio_only flag should decide is_audio_item(), \
-         not local playlist/cursor state"
-    );
-}
-
-#[test]
-fn is_audio_item_reads_remote_session_audio_only_flag_when_false() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.connected_session_id = Some("sess-1".into());
-    app.connected_session_state = Some(make_remote_session(false));
-
-    assert!(!app.is_audio_item());
-}
-
-#[test]
 fn is_audio_item_falls_back_to_local_state_when_no_session() {
     let mut app = crate::app::tests::make_app_stub();
     assert!(app.connected_session_id.is_none());

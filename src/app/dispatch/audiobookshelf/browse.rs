@@ -454,9 +454,9 @@ impl App {
             .shows
             .iter()
             .find(|show| show.library_item_id == episode.library_item_id);
-        let position_ticks = progress
-            .map(|progress| seconds_to_ticks(progress.current_time_seconds))
-            .unwrap_or(0);
+        let position_ticks = progress.map_or(0, |progress| {
+            seconds_to_ticks(progress.current_time_seconds)
+        });
         let is_finished = progress.is_some_and(|progress| progress.is_finished);
 
         Some(QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
@@ -552,7 +552,6 @@ impl App {
     /// handler exists only so the `ChapterFocus` request stays claimed and
     /// routed (a redraw nudge); it stores nothing shell-side.
     pub(in crate::app) fn set_audiobookshelf_book_chapter_focus(
-        &mut self,
         _selection: Option<crate::app::components::msg::BookChapterTarget>,
     ) {
     }
@@ -758,9 +757,9 @@ pub(in crate::app) fn audiobookshelf_book_queue_item(
             })
         });
     let progress = state.progress.get(&book.library_item_id);
-    let position_ticks = progress
-        .map(|progress| seconds_to_ticks(progress.current_time_seconds))
-        .unwrap_or(0);
+    let position_ticks = progress.map_or(0, |progress| {
+        seconds_to_ticks(progress.current_time_seconds)
+    });
     let is_finished = progress.is_some_and(|progress| progress.is_finished);
 
     Some(QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
@@ -775,6 +774,12 @@ pub(in crate::app) fn audiobookshelf_book_queue_item(
     }))
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+)]
 fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
     (seconds.is_finite() && seconds >= 0.0)
         .then(|| (seconds * TICKS_PER_SECOND as f64).round() as u64)
@@ -782,6 +787,3 @@ fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
 
 #[cfg(test)]
 mod book_seek_tests;
-
-#[cfg(test)]
-mod split_browse_state_book_tests;

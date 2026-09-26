@@ -36,7 +36,7 @@ fn stub_media_item() -> crate::api::EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: crate::api::EmbyImageTags::default(),
     }
 }
 
@@ -50,7 +50,7 @@ fn stub_feed_entry() -> crate::playback_queue::FeedEntry {
         link: None,
         mime_type: Some("audio/mpeg".into()),
         duration_ticks: Some((3_600 * crate::api::TICKS_PER_SECOND) as u64),
-        pub_date_secs: Some(1700000000),
+        pub_date_secs: Some(1_700_000_000),
         feed_kind: Some(crate::config::FeedKind::Audio),
         feed_id: None,
         position_ticks: 0,

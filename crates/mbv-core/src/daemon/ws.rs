@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    audio_only_rejection, broadcast_queue_state, take_authority_for_emby_remote, ClientRegistry,
+    SharedQueueState,
+};
 use crate::api::EmbyClient;
 use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{Player, PlayerCommand};
@@ -140,13 +143,17 @@ fn handle_ws_play(event: WsEvent, context: WsPlayContext<'_>) {
     start_remote_playback(playback, client, &fetched, start_idx, start_position_ticks);
 }
 
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "seek target ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
+)]
 fn handle_ws_control(
-    ev: WsEvent,
+    ev: &WsEvent,
     player: &Player,
     queue: &PlaybackQueue,
     ctrl_clients: &ClientRegistry,
 ) {
-    let changed = match ev {
+    let changed = match *ev {
         WsEvent::Stop => {
             player.stop();
             !queue.is_empty()
@@ -233,7 +240,7 @@ pub(crate) fn handle_ws(
                 playback: player,
             },
         ),
-        event => handle_ws_control(event, player, queue, ctrl_clients),
+        event => handle_ws_control(&event, player, queue, ctrl_clients),
     }
 }
 

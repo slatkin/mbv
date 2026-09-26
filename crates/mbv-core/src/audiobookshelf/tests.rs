@@ -14,7 +14,7 @@ fn validated_setup_debug_redacts_api_key() {
         },
         "abs-secret-key".to_string(),
     );
-    let rendered = format!("{:?}", setup);
+    let rendered = format!("{setup:?}");
     assert!(rendered.contains("AudiobookshelfValidatedSetup"));
     assert!(!rendered.contains("abs-secret-key"));
 }

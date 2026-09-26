@@ -1,5 +1,5 @@
 use super::*;
-use crate::api::{EmbyItem, TICKS_PER_SECOND};
+use crate::api::{EmbyImageTags, EmbyItem, TICKS_PER_SECOND};
 use title_parts::emby_item_of_type;
 
 fn item(id: &str) -> EmbyItem {
@@ -38,7 +38,7 @@ fn item(id: &str) -> EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: EmbyImageTags::default(),
     }
 }
 

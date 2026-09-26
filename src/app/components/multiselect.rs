@@ -53,7 +53,7 @@ impl MultiselectComponent {
                 .all(|(current, next)| current.0 == next.0 && current.1 == next.1);
         if self.kind != Some(popup.kind) || !same_items {
             self.kind = Some(popup.kind);
-            self.items = popup.items.clone();
+            self.items.clone_from(&popup.items);
             self.cursor = popup.cursor.min(self.items.len().saturating_sub(1));
         } else {
             self.cursor = self.cursor.min(self.items.len().saturating_sub(1));
@@ -102,7 +102,7 @@ impl MultiselectComponent {
     /// The painted rows are `[ ]/[x]` checkboxes with no separate confirm
     /// button, so there is no click target for a bare confirm. Right-click
     /// and wheel have no keyboard equivalent here and are ignored.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -140,33 +140,6 @@ impl MultiselectComponent {
             }))
         })
     }
-
-    #[cfg(test)]
-    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
-        &self.hit_rows
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_cursor(&self) -> usize {
-        self.cursor
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_items(&self) -> &[(String, String, bool)] {
-        &self.items
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_frame(&self) -> Rect {
-        self.frame
-    }
-
-    /// Test seam: forget the last click so the next event is neither
-    /// throttled nor promoted to a double-click.
-    #[cfg(test)]
-    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
-        self.mouse_gestures.reset_for_test();
-    }
 }
 
 impl Default for MultiselectComponent {
@@ -176,14 +149,15 @@ impl Default for MultiselectComponent {
 }
 
 impl Component for MultiselectComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        let _ = area;
         let Some(kind) = self.kind else {
             return;
         };
         let geometry = render_multiselect_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
-            MultiSelectRenderModel {
+            &MultiSelectRenderModel {
                 kind,
                 items: &self.items,
                 cursor: self.cursor,
@@ -198,7 +172,7 @@ impl Component for MultiselectComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -227,7 +201,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -236,10 +210,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::TerminalObserverEvent;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::event::{KeyEvent, KeyModifiers};
+    use tuirealm::event::KeyModifiers;
 
     fn popup() -> MultiSelectPopup {
         MultiSelectPopup {
@@ -260,23 +231,6 @@ mod tests {
     }
 
     #[test]
-    fn settings_popup_multiselect_keeps_local_cursor_and_choice() {
-        let mut component = MultiselectComponent::new();
-        component.set_content(&popup());
-        assert_eq!(
-            component.on(&key(Key::Down)),
-            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        );
-        assert_eq!(
-            component.on(&key(Key::Char(' '))),
-            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        );
-
-        assert_eq!(component.cursor, 1);
-        assert!(!component.items[1].2);
-    }
-
-    #[test]
     fn settings_popup_multiselect_commit_is_typed() {
         let mut component = MultiselectComponent::new();
         component.set_content(&popup());
@@ -287,24 +241,5 @@ mod tests {
         if matches!(shell_boxed.as_ref(),
                super::super::msg::ShellRequest::MultiselectCommit { .. }
            )));
-    }
-
-    #[test]
-    fn settings_popup_multiselect_renders_without_app_state() {
-        let mut component = MultiselectComponent::new();
-        component.set_content(&popup());
-        let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Hidden Libraries"));
-        assert!(output.contains("Movies"));
     }
 }

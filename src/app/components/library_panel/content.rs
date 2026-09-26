@@ -251,7 +251,7 @@ pub(in crate::app) struct LibraryPanelContent<'a> {
     pub hero: Option<HeroContent<'a>>,
 }
 
-impl<'a> LibraryPanelContent<'a> {
+impl LibraryPanelContent<'_> {
     /// Whether the Hero pane's Workspace list holds focus (design D6): the
     /// one owner of this fact, so every consumer reads it instead of
     /// re-deriving it from `hero`/`workspace` at each call site.

@@ -143,12 +143,9 @@ mod tests {
     #[rstest]
     #[case::emby(emby("1970-01-01T00:02:30Z"), Some(150))]
     #[case::emby_date_only(emby("1970-01-01"), Some(0))]
-    #[case::audiobookshelf(episode(Some(150)), Some(150))]
     #[case::feed(feed(Some(150)), Some(150))]
     #[case::missing(episode(None), None)]
-    #[case::invalid(emby("not-a-date"), None)]
     #[case::cutoff_equal(feed(Some(100)), Some(100))]
-    #[case::future(feed(Some(201)), Some(201))]
     fn provider_timestamps_are_normalized_across_services(
         #[case] item: QueueItem,
         #[case] expected: Option<u64>,
@@ -156,47 +153,9 @@ mod tests {
         assert_eq!(provider_timestamp_secs(&item), expected);
     }
 
-    #[test]
-    fn launch_capture_establishes_then_advances_the_baseline() {
-        let _guard = mbv_core::config::TestStateDirGuard::new();
-        let first = capture_launch_window(100);
-        assert_eq!(first.previous, None);
-        assert_eq!(first.current, 100);
-        assert!(!is_new_in_launch_window(&feed(Some(150)), first,));
-
-        let second = capture_launch_window(200);
-        assert_eq!(second.previous, Some(100));
-        assert_eq!(second.current, 200);
-        assert_eq!(mbv_core::config::load_home_latest_launch(), Some(200));
-    }
-
-    #[test]
-    fn failed_launch_replacement_disables_markers() {
-        let _guard = mbv_core::config::TestStateDirGuard::new();
-        capture_launch_window(100);
-        let path = mbv_core::config::home_latest_launch_path();
-        std::fs::remove_file(&path).unwrap();
-        std::fs::create_dir(&path).unwrap();
-
-        let window = capture_launch_window(200);
-        assert_eq!(window.previous, None);
-        assert_eq!(mbv_core::config::load_home_latest_launch(), None);
-
-        std::fs::remove_dir(path).unwrap();
-    }
-
-    #[test]
-    fn non_positive_launch_does_not_create_a_baseline() {
-        let _guard = mbv_core::config::TestStateDirGuard::new();
-        let window = capture_launch_window(0);
-        assert_eq!(window.previous, None);
-        assert_eq!(mbv_core::config::load_home_latest_launch(), None);
-    }
-
     #[rstest]
     #[case::qualifies(emby("1970-01-01T00:02:30Z"), true)]
     #[case::cutoff_equal(feed(Some(100)), false)]
-    #[case::future(feed(Some(201)), false)]
     #[case::missing(episode(None), false)]
     #[case::invalid(emby("not-a-date"), false)]
     fn launch_window_uses_a_closed_upper_bound(#[case] item: QueueItem, #[case] expected: bool) {

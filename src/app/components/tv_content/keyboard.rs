@@ -2,7 +2,9 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::inline_search::InlineSearchAction;
 use super::super::list::tree_browser::TreeOperation;
-use super::{Msg, Pane, ShellRequest, TerminalObserverEvent, TvContent, TvTreeTarget};
+use super::{
+    Msg, Pane, ShellRequest, TerminalObserverEvent, TvContent, TvDisplayMode, TvTreeTarget,
+};
 use crate::app::components::media_list::MediaListSurfaceInput;
 use mbv_core::api::EmbyItem;
 
@@ -68,7 +70,7 @@ impl TvContent {
         // geometry, so the actual breakpoint — not the pushed bit alone —
         // gates these arms: a stale bit in Wide must never shadow the Wide
         // workspace's own handling.
-        if !self.is_wide
+        if self.display_mode == TvDisplayMode::Narrow
             && self.hero_overlay_open
             && self.pane == Pane::Episodes
             && !self.flat_episode_mode()
@@ -78,7 +80,7 @@ impl TvContent {
         if !self.flat_episode_mode() && self.pane == Pane::Series {
             return self.handle_show_tree_key(key);
         }
-        if self.is_wide {
+        if self.display_mode == TvDisplayMode::Wide {
             self.handle_key_wide(key)
         } else {
             self.handle_key_narrow(key)
@@ -191,7 +193,7 @@ impl TvContent {
     /// which is why the `Enter` and `Right` arms share it.
     fn activate_show_tree_selection(&mut self, item: Option<EmbyItem>) -> Option<ShellRequest> {
         let item = item?;
-        if self.is_wide {
+        if self.display_mode == TvDisplayMode::Wide {
             self.episodes.select_first();
             self.pane = Pane::Episodes;
         }
@@ -248,8 +250,8 @@ impl TvContent {
         item: Option<EmbyItem>,
     ) -> Option<Msg> {
         let request = match key.code {
-            Key::Enter => return self.activate_show_tree_key(item),
-            Key::Right => return self.expand_show_tree_right(target, item),
+            Key::Enter => return Some(self.activate_show_tree_key(item)),
+            Key::Right => return Some(self.expand_show_tree_right(target, item)),
             Key::Left => return self.collapse_show_tree_left(target),
             Key::Char('.') => self.show_tree_context_request(),
             _ => None,
@@ -257,7 +259,7 @@ impl TvContent {
         request.map(|request| Msg::Shell(Box::new(request)))
     }
 
-    fn activate_show_tree_key(&mut self, item: Option<EmbyItem>) -> Option<Msg> {
+    fn activate_show_tree_key(&mut self, item: Option<EmbyItem>) -> Msg {
         let activated = match self.browser.apply(TreeOperation::Activate).external_intent {
             Some(crate::app::components::list::tree_browser::TreeExternalIntent::Activate(
                 target,
@@ -265,17 +267,18 @@ impl TvContent {
             _ => None,
         };
         match activated {
-            Some(TvTreeTarget::Show(_)) => self
-                .activate_show_tree_selection(item)
-                .map(|request| Msg::Shell(Box::new(request))),
-            Some(target @ TvTreeTarget::Season { .. }) => Some(
-                self.toggle_tree_expansion(target)
-                    .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+            Some(TvTreeTarget::Show(_)) => self.activate_show_tree_selection(item).map_or(
+                Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed),
+                |request| Msg::Shell(Box::new(request)),
             ),
-            Some(TvTreeTarget::Episode { .. }) => item
-                .map(|episode| ShellRequest::TvEpisodeActivate { episode })
-                .map(|request| Msg::Shell(Box::new(request))),
-            None => None,
+            Some(target @ TvTreeTarget::Season { .. }) => self
+                .toggle_tree_expansion(target)
+                .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+            Some(TvTreeTarget::Episode { .. }) => item.map_or(
+                Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed),
+                |episode| Msg::Shell(Box::new(ShellRequest::TvEpisodeActivate { episode })),
+            ),
+            None => Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed),
         }
     }
 
@@ -283,11 +286,11 @@ impl TvContent {
         &mut self,
         target: Option<TvTreeTarget>,
         item: Option<EmbyItem>,
-    ) -> Option<Msg> {
+    ) -> Msg {
         if let Some(target) = target {
             if !self.browser.is_expanded(&target) {
                 if let Some(message) = self.toggle_tree_expansion(target) {
-                    return Some(message);
+                    return message;
                 }
             }
         }
@@ -298,10 +301,9 @@ impl TvContent {
             )) => self.activate_show_tree_selection(item),
             _ => None,
         };
-        Some(
-            activation
-                .map(|request| Msg::Shell(Box::new(request)))
-                .unwrap_or(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+        activation.map_or(
+            Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed),
+            |request| Msg::Shell(Box::new(request)),
         )
     }
 
@@ -421,12 +423,14 @@ impl TvContent {
                 Some(ShellRequest::TvMoveRows { rows: 1 })
             }
             Key::PageUp => {
-                let rows = -(self.painted_viewport_height().saturating_sub(1).max(1) as i64);
+                let height = i64::try_from(self.painted_viewport_height()).unwrap_or(i64::MAX);
+                let rows = -(height.saturating_sub(1).max(1));
                 self.move_rows(rows);
                 Some(ShellRequest::TvMoveRows { rows })
             }
             Key::PageDown => {
-                let rows = self.painted_viewport_height().saturating_sub(1).max(1) as i64;
+                let height = i64::try_from(self.painted_viewport_height()).unwrap_or(i64::MAX);
+                let rows = height.saturating_sub(1).max(1);
                 self.move_rows(rows);
                 Some(ShellRequest::TvMoveRows { rows })
             }

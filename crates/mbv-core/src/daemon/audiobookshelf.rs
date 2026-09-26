@@ -1,15 +1,38 @@
-use super::core::DaemonEvent;
-use super::*;
+use super::core::{
+    broadcast_audiobookshelf_book_progress, broadcast_audiobookshelf_progress, DaemonEvent,
+};
+use super::{AudiobookshelfOwnerContext, ClientRegistry};
 use crate::playback_queue::PlaybackQueue;
 use crate::player::Player;
 use std::sync::mpsc;
+
+fn ticks_from_seconds(seconds: f64) -> i64 {
+    const I64_MIN_AS_F64: f64 = -9_223_372_036_854_775_808.0;
+    const I64_MAX_EXCLUSIVE_AS_F64: f64 = 9_223_372_036_854_775_808.0;
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
+    let ticks = seconds * crate::api::TICKS_PER_SECOND as f64;
+    if ticks.is_nan() {
+        0
+    } else if ticks >= I64_MAX_EXCLUSIVE_AS_F64 {
+        i64::MAX
+    } else if ticks <= I64_MIN_AS_F64 {
+        i64::MIN
+    } else {
+        format!("{:.0}", ticks.trunc())
+            .parse()
+            .expect("truncated bounded float fits i64")
+    }
+}
 
 /// Install (or clear) the daemon player's Audiobookshelf context from the
 /// owner runtime, wiring the player's acknowledged-progress sender into the
 /// daemon event loop. Mirrors the bare-mode install in the TUI app.
 pub(super) fn install_daemon_audiobookshelf_context(
     player: &Player,
-    runtime: &Option<AudiobookshelfOwnerContext>,
+    runtime: Option<&AudiobookshelfOwnerContext>,
     merged_tx: &mpsc::Sender<DaemonEvent>,
 ) {
     let Some(runtime) = runtime else {
@@ -67,7 +90,7 @@ pub(super) fn install_daemon_audiobookshelf_context(
 /// progress to capable clients. Drops updates from a stale setup generation
 /// without either side effect.
 pub(crate) fn apply_audiobookshelf_progress(
-    update: crate::player::AudiobookshelfProgressUpdate,
+    update: &crate::player::AudiobookshelfProgressUpdate,
     current_generation: Option<crate::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,
     ctrl_clients: &ClientRegistry,
@@ -78,7 +101,7 @@ pub(crate) fn apply_audiobookshelf_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = (update.current_time_seconds * crate::api::TICKS_PER_SECOND as f64) as i64;
+    let position_ticks = ticks_from_seconds(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()
@@ -116,7 +139,7 @@ pub(crate) fn apply_audiobookshelf_progress(
 /// redacted book progress to capable clients. Drops updates from a stale
 /// setup generation without either side effect.
 pub(crate) fn apply_audiobookshelf_book_progress(
-    update: crate::player::AudiobookshelfBookProgressUpdate,
+    update: &crate::player::AudiobookshelfBookProgressUpdate,
     current_generation: Option<crate::service_runtime::SetupGeneration>,
     queue: &mut PlaybackQueue,
     ctrl_clients: &ClientRegistry,
@@ -127,7 +150,7 @@ pub(crate) fn apply_audiobookshelf_book_progress(
     if current != update.generation {
         return;
     }
-    let position_ticks = (update.current_time_seconds * crate::api::TICKS_PER_SECOND as f64) as i64;
+    let position_ticks = ticks_from_seconds(update.current_time_seconds);
     let matching_slot_ids: Vec<_> = queue
         .slots()
         .iter()

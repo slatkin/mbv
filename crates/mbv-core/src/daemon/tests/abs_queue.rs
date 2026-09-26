@@ -24,7 +24,12 @@ pub fn abs_qi(library_item_id: &str, episode_id: &str) -> QueueItem {
 fn connect_old_unified_peer(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
     let (tx, rx) = mpsc::channel();
     // abs_queue=false, abs_progress=false, abs_book_*=false
-    let id = clients.connect(tx, CtrlTransport::Local, false, false, false, false, false);
+    let id = clients.connect(
+        tx,
+        CtrlTransport::Local,
+        crate::ctrl::CtrlAudiobookshelfCapabilities::default(),
+        false,
+    );
     (id, rx)
 }
 
@@ -129,7 +134,7 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let capable_data = match super::unified_queue_state_for_peer(
+    let CtrlEvent::UnifiedQueueState(capable_data) = super::unified_queue_state_for_peer(
         &status,
         &queue,
         &source,
@@ -139,11 +144,10 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         true,
         false,
-    ) {
-        CtrlEvent::UnifiedQueueState(d) => d,
-        _ => panic!("expected UnifiedQueueState"),
+    ) else {
+        panic!("expected UnifiedQueueState");
     };
-    let old_data = match super::unified_queue_state_for_peer(
+    let CtrlEvent::UnifiedQueueState(old_data) = super::unified_queue_state_for_peer(
         &status,
         &queue,
         &source,
@@ -153,9 +157,8 @@ fn abs_queue_projection_includes_abs_slots_for_capable_peer_only() {
         None,
         false,
         false,
-    ) {
-        CtrlEvent::UnifiedQueueState(d) => d,
-        _ => panic!("expected UnifiedQueueState"),
+    ) else {
+        panic!("expected UnifiedQueueState");
     };
 
     assert_eq!(capable_data.slots.len(), 2, "capable peer sees ABS+Emby");
@@ -177,7 +180,7 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
     let status = crate::player::PlayerStatus::default();
     let source = crate::config::QueueSource::Unknown;
 
-    let old_data = match super::unified_queue_state_for_peer(
+    let CtrlEvent::UnifiedQueueState(old_data) = super::unified_queue_state_for_peer(
         &status,
         &queue,
         &source,
@@ -187,9 +190,8 @@ fn abs_queue_projection_clears_active_slot_for_old_peer_when_abs_is_active() {
         None,
         false,
         false,
-    ) {
-        CtrlEvent::UnifiedQueueState(d) => d,
-        _ => panic!("expected UnifiedQueueState"),
+    ) else {
+        panic!("expected UnifiedQueueState");
     };
 
     assert_eq!(old_data.slots.len(), 1);
@@ -532,7 +534,7 @@ fn acknowledged_progress_updates_bound_slot_and_broadcasts() {
     let mut queue = abs_queue_with_slot();
 
     apply_audiobookshelf_progress(
-        progress_update(1, 30.0, false),
+        &progress_update(1, 30.0, false),
         Some(SetupGeneration::new(1)),
         &mut queue,
         &registry,
@@ -564,7 +566,7 @@ fn acknowledged_completion_marks_slot_done_and_broadcasts() {
     let mut queue = abs_queue_with_slot();
 
     apply_audiobookshelf_progress(
-        progress_update(1, 100.0, true),
+        &progress_update(1, 100.0, true),
         Some(SetupGeneration::new(1)),
         &mut queue,
         &registry,
@@ -595,7 +597,7 @@ fn stale_generation_progress_is_dropped_without_side_effects() {
         .position_ticks;
 
     apply_audiobookshelf_progress(
-        progress_update(1, 30.0, false),
+        &progress_update(1, 30.0, false),
         Some(SetupGeneration::new(2)),
         &mut queue,
         &registry,
@@ -649,7 +651,7 @@ fn progress_event_carries_no_credentials_and_is_gated_to_capable_peer() {
     let mut queue = abs_queue_with_slot();
 
     apply_audiobookshelf_progress(
-        progress_update(1, 30.0, false),
+        &progress_update(1, 30.0, false),
         Some(SetupGeneration::new(1)),
         &mut queue,
         &registry,
@@ -700,7 +702,7 @@ fn emission_resumes_to_new_capable_client_after_previous_client_exits() {
 
     // First emission — the initial client receives it.
     apply_audiobookshelf_progress(
-        progress_update(1, 30.0, false),
+        &progress_update(1, 30.0, false),
         Some(SetupGeneration::new(1)),
         &mut queue,
         &registry,
@@ -721,7 +723,7 @@ fn emission_resumes_to_new_capable_client_after_previous_client_exits() {
 
     // Second emission must reach the new client.
     apply_audiobookshelf_progress(
-        progress_update(1, 60.0, false),
+        &progress_update(1, 60.0, false),
         Some(SetupGeneration::new(1)),
         &mut queue,
         &registry,
@@ -747,25 +749,25 @@ fn acknowledged_progress_advances_through_play_pause_seek_and_completion() {
     let mut queue = abs_queue_with_slot();
 
     // (seconds, is_finished): play → pause (same pos) → seek back → resume → complete.
-    let steps: &[(f64, bool)] = &[
-        (10.0, false),
-        (30.0, false),
-        (30.0, false), // pause: same position re-reported
-        (10.0, false), // seek back to an earlier point
-        (45.0, false),
-        (80.0, false),
-        (100.0, true), // natural completion
+    let steps: &[(u8, bool)] = &[
+        (10, false),
+        (30, false),
+        (30, false), // pause: same position re-reported
+        (10, false), // seek back to an earlier point
+        (45, false),
+        (80, false),
+        (100, true), // natural completion
     ];
 
     for &(secs, finished) in steps {
         apply_audiobookshelf_progress(
-            progress_update(1, secs, finished),
+            &progress_update(1, f64::from(secs), finished),
             Some(SetupGeneration::new(1)),
             &mut queue,
             &registry,
         );
 
-        let expected_ticks = (secs * crate::api::TICKS_PER_SECOND as f64) as i64;
+        let expected_ticks = i64::from(secs) * crate::api::TICKS_PER_SECOND;
         let ep = queue.slots()[0].item.as_audiobookshelf().unwrap();
         assert_eq!(
             ep.position_ticks, expected_ticks,

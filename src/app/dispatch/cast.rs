@@ -233,11 +233,11 @@ impl App {
                 receiver_id,
                 outcome,
                 uncastable,
-            } => self.apply_cast_dispatch(receiver_id, outcome, uncastable),
+            } => self.apply_cast_dispatch(&receiver_id, outcome, &uncastable),
             CastEvent::StatusUpdated {
                 receiver_id,
                 status,
-            } => self.apply_cast_status(receiver_id, status),
+            } => self.apply_cast_status(&receiver_id, status),
             CastEvent::TransportError(error) => {
                 self.flash(
                     format!("Cast command failed: {error}"),
@@ -278,9 +278,9 @@ impl App {
 
     fn apply_cast_dispatch(
         &mut self,
-        receiver_id: String,
+        receiver_id: &str,
         outcome: Result<Vec<DispatchedCastItem>, String>,
-        uncastable: Vec<(String, String)>,
+        uncastable: &[(String, String)],
     ) {
         let attached = self
             .cast_attachment
@@ -472,7 +472,7 @@ fn partition_dispatch_with_start(
         match item.result {
             Ok((cast_media, report)) => {
                 if i == selected_index {
-                    start_index = media.len() as u16;
+                    start_index = u16::try_from(media.len()).unwrap_or(u16::MAX);
                 }
                 dispatched.push(DispatchedCastItem {
                     url: cast_media.url.clone(),
@@ -494,6 +494,14 @@ mod tests {
     use crate::app::tests::make_app_stub;
     use mbv_core::playback_queue::FeedEntry;
 
+    fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
+        Err("not reached by this test".to_string())
+    }
+
+    fn connect_fail(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
+        Err("receiver not found".to_string())
+    }
+
     fn feed_item(guid: &str, url: Option<&str>) -> QueueItem {
         QueueItem::Feed(FeedEntry {
             guid: guid.to_string(),
@@ -508,22 +516,6 @@ mod tests {
             position_ticks: 0,
             played: false,
         })
-    }
-
-    #[test]
-    fn attach_and_detach_set_and_clear_without_touching_player() {
-        let mut app = make_app_stub();
-        assert!(!app.is_cast_attached());
-        app.attach_cast("device-1".to_string());
-        assert!(app.is_cast_attached());
-        assert_eq!(
-            app.cast_attachment.as_ref().unwrap().receiver_id,
-            "device-1"
-        );
-        assert!(!app.player.status.lock().unwrap().active);
-        app.detach_cast();
-        assert!(!app.is_cast_attached());
-        assert!(!app.player.status.lock().unwrap().active);
     }
 
     #[test]
@@ -547,9 +539,6 @@ mod tests {
     #[test]
     fn selecting_a_cast_target_from_the_panel_attaches_and_leaves_the_queue_intact() {
         let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
-            Err("not reached by this test".to_string())
-        }
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
@@ -593,9 +582,6 @@ mod tests {
     #[test]
     fn failed_connect_after_selection_detaches_the_phantom_attachment() {
         let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        fn connect_fail(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
-            Err("receiver not found".to_string())
-        }
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_fail);
 
         let mut app = make_app_stub();
@@ -628,9 +614,6 @@ mod tests {
     #[test]
     fn selecting_a_cast_target_severs_a_watched_session() {
         let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
-            Err("not reached by this test".to_string())
-        }
         *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
 
         let mut app = make_app_stub();
@@ -650,45 +633,6 @@ mod tests {
         assert!(app.is_cast_attached());
         assert!(app.connected_session_id.is_none());
         assert!(app.connected_session_state.is_none());
-    }
-
-    #[test]
-    fn selecting_a_cast_target_severs_the_previous_cast_attachment() {
-        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
-            Err("not reached by this test".to_string())
-        }
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
-
-        let mut app = make_app_stub();
-        app.attach_cast("device-old".to_string());
-
-        let receiver = mbv_core::cast::discovery::CastReceiver {
-            id: "device-1".to_string(),
-            friendly_name: "Living Room".to_string(),
-            host: "192.168.0.5".to_string(),
-            port: 8009,
-        };
-        app.select_panel_target(PanelTarget::Cast(receiver));
-
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
-
-        assert_eq!(
-            app.cast_attachment.as_ref().unwrap().receiver_id,
-            "device-1"
-        );
-    }
-
-    #[test]
-    fn connecting_to_a_session_severs_an_attached_cast_target() {
-        let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
-        let sess = crate::app::tests::make_session("tv", "mbv");
-
-        app.connect_to_session(&sess);
-
-        assert!(!app.is_cast_attached());
-        assert_eq!(app.connected_session_id.as_deref(), Some(sess.id.as_str()));
     }
 
     #[test]

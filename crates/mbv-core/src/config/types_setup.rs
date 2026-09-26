@@ -2,6 +2,7 @@
 // (see `config.rs`), so callers reach them as `crate::config::…`.
 
 /// Emby-specific setup (server URL + user ID) stored in config.toml `[server]`.
+///
 /// The corresponding API token is stored separately in a per-Service mode-0600
 /// secret file, never in config.toml. The flat `server_url`/`username`/
 /// `password`/`api_key` fields on `Config` serve backward compat during
@@ -74,6 +75,7 @@ pub enum ServiceKind {
 impl ServiceKind {
     /// Filesystem-safe name for this Service kind, used for per-Service
     /// secret file names.
+    #[must_use]
     pub fn secret_name(self) -> &'static str {
         match self {
             ServiceKind::Emby => "emby",

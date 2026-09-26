@@ -36,6 +36,10 @@ use crate::app::ui_util::{clean_overview, fmt_duration_gutter};
 /// The plain Books content owner. Its list controls retain cursor, scroll,
 /// selected targets, and chapter-pane focus locally; shell pushes replace
 /// only the content snapshot and never mirror those interaction values.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "initialized/chapter_focused/focused are independent lifecycle and focus state; images_enabled is a separate rendering option (design analysis, issue #804)"
+)]
 pub struct BookContent {
     pub(in crate::app) state: AudiobookshelfBookBrowseState,
     /// `false` until the first `set_content`: the initial projection adopts
@@ -156,16 +160,16 @@ impl BookContent {
         self.carrier.selected_target().map(String::as_str)
     }
 
-    pub(in crate::app) fn book_request(&self) -> Option<Msg> {
-        Some(Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
+    pub(in crate::app) fn book_request(&self) -> Msg {
+        Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::Book(self.carrier.selected_target().cloned()),
-        ))))
+        )))
     }
 
-    pub(in crate::app) fn bucket_request(&self) -> Option<Msg> {
-        Some(Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
+    pub(in crate::app) fn bucket_request(&self) -> Msg {
+        Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::Bucket(self.selected_bucket),
-        ))))
+        )))
     }
 
     /// The one seam through which the component offers an already-normalized
@@ -174,7 +178,7 @@ impl BookContent {
     /// provider-neutral outcome; the component mirrors the owner's selection
     /// into the projected snapshot and returns the typed book-move request
     /// (design.md D3).
-    pub(in crate::app) fn move_book(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+    pub(in crate::app) fn move_book(&mut self, input: MediaListSurfaceInput) -> Msg {
         self.carrier.delegate_operation(
             input
                 .into_operation(None)
@@ -260,8 +264,9 @@ impl BookContent {
         if count == 0 {
             return;
         }
-        let next = (self.selected_bucket as i64 + delta).rem_euclid(count as i64) as usize;
-        self.select_bucket(next);
+        let next = (i64::try_from(self.selected_bucket).unwrap_or(i64::MAX) + delta)
+            .rem_euclid(i64::try_from(count).unwrap_or(i64::MAX));
+        self.select_bucket(usize::try_from(next).unwrap_or(0));
     }
 
     pub(in crate::app) fn select_bucket_edge(&mut self, end: bool) {
@@ -366,11 +371,11 @@ impl BookContent {
         match key.code {
             Key::Char('[') if key.modifiers.is_empty() => {
                 self.cycle_bucket(-1);
-                self.bucket_request()
+                Some(self.bucket_request())
             }
             Key::Char(']') if key.modifiers.is_empty() => {
                 self.cycle_bucket(1);
-                self.bucket_request()
+                Some(self.bucket_request())
             }
             _ => None,
         }
@@ -380,11 +385,11 @@ impl BookContent {
         match key.code {
             Key::Up | Key::Char('k') if self.chapter_focused => {
                 self.move_chapter(-1);
-                self.chapter_focus_request()
+                Some(self.chapter_focus_request())
             }
             Key::Down | Key::Char('j') if self.chapter_focused => {
                 self.move_chapter(1);
-                self.chapter_focus_request()
+                Some(self.chapter_focus_request())
             }
             _ => None,
         }
@@ -393,22 +398,24 @@ impl BookContent {
     fn on_book_navigation_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         match key.code {
             Key::Up | Key::Char('k') if !self.chapter_focused => {
-                self.move_book(MediaListSurfaceInput::Move(-1))
+                Some(self.move_book(MediaListSurfaceInput::Move(-1)))
             }
             Key::Down | Key::Char('j') if !self.chapter_focused => {
-                self.move_book(MediaListSurfaceInput::Move(1))
+                Some(self.move_book(MediaListSurfaceInput::Move(1)))
             }
-            Key::PageUp if !self.chapter_focused => self.move_book(MediaListSurfaceInput::Page(-1)),
+            Key::PageUp if !self.chapter_focused => {
+                Some(self.move_book(MediaListSurfaceInput::Page(-1)))
+            }
             Key::PageDown if !self.chapter_focused => {
-                self.move_book(MediaListSurfaceInput::Page(1))
+                Some(self.move_book(MediaListSurfaceInput::Page(1)))
             }
             Key::Home if !self.chapter_focused => {
                 self.select_bucket_edge(false);
-                self.book_request()
+                Some(self.book_request())
             }
             Key::End if !self.chapter_focused => {
                 self.select_bucket_edge(true);
-                self.book_request()
+                Some(self.book_request())
             }
             _ => None,
         }
@@ -418,7 +425,7 @@ impl BookContent {
         match key.code {
             Key::Esc | Key::Backspace if self.chapter_focused => {
                 self.clear_chapter_focus();
-                self.chapter_focus_request()
+                Some(self.chapter_focus_request())
             }
             _ => None,
         }
@@ -577,7 +584,7 @@ impl LibraryContentOwner for BookContent {
     }
 
     fn set_hero_image(&mut self, state: HeroImageState) {
-        self.set_hero_image(state)
+        self.set_hero_image(state);
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {

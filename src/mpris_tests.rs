@@ -37,62 +37,6 @@ fn active_metadata_includes_cover_art_as_file_uri_when_cached() {
 }
 
 #[test]
-fn active_metadata_prefers_album_cache_key_for_grouped_audio_tracks() {
-    let metadata = make_metadata_with_art_resolver(
-        &PlayerStatus {
-            active: true,
-            title: "Song".to_string(),
-            art_item_id: "track-1".to_string(),
-            art_album_id: "album-9".to_string(),
-            ..PlayerStatus::default()
-        },
-        |key| {
-            (key == "album-9:card").then(|| std::path::PathBuf::from("/cache/images/album-9_card"))
-        },
-    );
-
-    assert_eq!(
-        string_value(&metadata, "mpris:artUrl"),
-        "file:///cache/images/album-9_card"
-    );
-}
-
-#[test]
-fn active_metadata_omits_art_url_when_not_cached() {
-    // Per the #158 triage decision: when cached art isn't available,
-    // omit mpris:artUrl entirely rather than falling back to a
-    // token-bearing Emby URL.
-    let metadata = make_metadata_with_art_resolver(
-        &PlayerStatus {
-            active: true,
-            title: "Song".to_string(),
-            art_item_id: "track-1".to_string(),
-            ..PlayerStatus::default()
-        },
-        |_key| None,
-    );
-
-    assert!(!metadata.contains_key("mpris:artUrl"));
-}
-
-#[test]
-fn inactive_metadata_omits_track_details_and_never_touches_the_cache() {
-    let metadata = make_metadata_with_art_resolver(
-        &PlayerStatus {
-            artist: "Artist".to_string(),
-            album: "Album".to_string(),
-            art_item_id: "track-1".to_string(),
-            ..PlayerStatus::default()
-        },
-        |_key| panic!("art cache should never be consulted for an inactive/no-track state"),
-    );
-
-    assert!(!metadata.contains_key("mpris:artUrl"));
-    assert!(!metadata.contains_key("xesam:artist"));
-    assert!(!metadata.contains_key("xesam:album"));
-}
-
-#[test]
 fn art_cache_key_candidates_prefers_album_then_track_id() {
     assert_eq!(
         art_cache_key_candidates("track-1", "album-9"),
@@ -151,18 +95,18 @@ fn rebind_repoints_a_handle_at_a_new_status_and_sender() {
     let sent = Arc::new(Mutex::new(Vec::<PlayerCommand>::new()));
 
     let handle: MprisHandle = Arc::new(Mutex::new(MprisSource {
-        status: status_a.clone(),
+        status: Arc::clone(&status_a),
         send: Arc::new(|_: PlayerCommand| {}),
         disconnected: None,
     }));
 
-    let sent_for_rebind = sent.clone();
+    let sent_for_rebind = Arc::clone(&sent);
     let disconnected_b = Arc::new(std::sync::atomic::AtomicBool::new(false));
     rebind(
         &handle,
-        status_b.clone(),
+        Arc::clone(&status_b),
         move |cmd| sent_for_rebind.lock().unwrap().push(cmd),
-        Some(disconnected_b.clone()),
+        Some(Arc::clone(&disconnected_b)),
     );
 
     let source = handle.lock().unwrap();

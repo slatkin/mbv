@@ -83,6 +83,10 @@ impl App {
     /// rather than in `action.rs`, since it's pure session-position math with
     /// no dependency on the `Action` seam itself.
     pub(in crate::app) fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
         let moved = pos_s + delta as i64;
         let target = if delta < 0.0 { moved.max(0) } else { moved };
         target * TICKS_PER_SECOND
@@ -133,15 +137,35 @@ pub(in crate::app) fn remote_jump_target(
             .iter()
             .position(|s| s.item.id() == rid)
     })?;
-    let t = current as i64 + delta;
-    if t < 0 || (t as usize) >= player_tab.total_queue_len() {
+    let t = i128::try_from(current)
+        .ok()?
+        .checked_add(i128::from(delta))?;
+    let t = usize::try_from(t).ok()?;
+    if t >= player_tab.total_queue_len() {
         return None;
     }
-    let t = t as usize;
     Some((
         t,
         player_tab
             .emby_item_at(t)
             .map_or(0, |i| i.playback_position_ticks),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remote_jump_target_moves_to_adjacent_queue_item() {
+        let player = crate::app::PlayerTab::from_emby_items(crate::app::tests::make_items(3), 0);
+        assert_eq!(
+            remote_jump_target(&player, Some("id1"), 1).map(|(index, _)| index),
+            Some(2)
+        );
+        assert_eq!(
+            remote_jump_target(&player, Some("id1"), -1).map(|(index, _)| index),
+            Some(0)
+        );
+    }
 }

@@ -49,8 +49,9 @@ fn queue_media_row_at(
     let semantic_state = if is_pending {
         MediaSemanticState::NowPlaying { progress: None }
     } else if is_active {
-        let progress = (pos_ticks > 0 && duration_ticks > 0)
-            .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
+        let progress = (pos_ticks > 0 && duration_ticks > 0).then(|| {
+            u16::try_from((pos_ticks * 100 / duration_ticks).clamp(0, 100)).unwrap_or(u16::MAX)
+        });
         MediaSemanticState::NowPlaying {
             progress: progress.map(ActiveProgress::new),
         }
@@ -110,7 +111,7 @@ fn queue_row_fields(
             } else {
                 stored_ticks
             },
-            entry.duration_ticks.unwrap_or(0) as i64,
+            i64::try_from(entry.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
         QueueItem::Audiobookshelf(ep) => (
             ep.title.clone(),
@@ -119,7 +120,7 @@ fn queue_row_fields(
             } else {
                 stored_ticks
             },
-            ep.duration_ticks.unwrap_or(0) as i64,
+            i64::try_from(ep.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
         QueueItem::AudiobookshelfBook(book) => (
             book.title.clone(),
@@ -128,7 +129,7 @@ fn queue_row_fields(
             } else {
                 stored_ticks
             },
-            book.duration_ticks.unwrap_or(0) as i64,
+            i64::try_from(book.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX),
         ),
     }
 }

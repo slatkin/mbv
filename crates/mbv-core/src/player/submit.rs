@@ -1,4 +1,14 @@
-use super::*;
+use super::{
+    active_file_load_location, init_mpv, init_volume, make_wakeup_pipe, observe_properties,
+    prepare_source, queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
+    spawn_progress_reporter, start_queue_playback, AudiobookshelfPlayerContext, EmbyClient,
+    EmbyItem, EmbySessionId, ExecSlot, ItemId, MediaSourceId, Mpv, MpvRunConfig, PlaybackOrigin,
+    PlaybackRun, Player, PlayerCommand, PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard,
+    QueueItem, QueueSlotId, RunInit, SessionReporter, SubtitlePrefs,
+};
+use std::sync::{atomic::Ordering, mpsc, Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 impl Player {
     /// Play a freshly fetched Emby sequence with no pre-existing canonical
@@ -85,7 +95,7 @@ impl Player {
             {
                 let mut st = self.status.lock().unwrap();
                 st.seed_from_item(start_item, start_idx, items.len());
-            }
+            };
             return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
         }
 
@@ -94,15 +104,15 @@ impl Player {
         self.join();
 
         let config = self.cold_start_config(client.as_deref(), headless);
-        let status = self.status.clone();
+        let status = Arc::clone(&self.status);
         let event_tx = self.event_tx.clone();
         let ws_tx = if client.is_some() {
             self.ws_tx.lock().unwrap().clone()
         } else {
             None
         };
-        let subtitle_prefs = self.subtitle_prefs.clone();
-        let shutdown_report_timeout = self.shutdown_report_timeout.clone();
+        let subtitle_prefs = Arc::clone(&self.subtitle_prefs);
+        let shutdown_report_timeout = Arc::clone(&self.shutdown_report_timeout);
         let (server_url, token) = self.credentials.lock().unwrap().clone().unwrap_or_default();
         let audiobookshelf_context = self.audiobookshelf_context.lock().unwrap().clone();
         let origin = if items.len() == 1 {
@@ -119,7 +129,7 @@ impl Player {
             let mut st = status.lock().unwrap();
             st.seed_from_item(start_item, start_idx, items.len());
             st.active = true;
-        }
+        };
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
@@ -139,8 +149,8 @@ impl Player {
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
         let wakeup_pipe = make_wakeup_pipe();
-        let wakeup_read_fd = wakeup_pipe.as_ref().map(|(r, _)| *r).unwrap_or(-1);
-        let wakeup_write_fd = wakeup_pipe.as_ref().map(|(_, w)| w.0).unwrap_or(-1);
+        let wakeup_read_fd = wakeup_pipe.as_ref().map_or(-1, |(r, _)| *r);
+        let wakeup_write_fd = wakeup_pipe.as_ref().map_or(-1, |(_, w)| w.0);
         *self.wakeup_fd.lock().unwrap() = wakeup_pipe.map(|(_, w)| w);
         let pre_warmed = self.pre_warmed_mpv.lock().unwrap().take();
 
@@ -222,7 +232,7 @@ fn make_reporter(
 ) -> (SessionReporter, ProgressGuard) {
     let session = client.as_ref().zip(item.as_emby()).map(|(client, emby)| {
         let info = client.get_playback_info(&emby.id);
-        let report_client = client.clone();
+        let report_client = Arc::clone(client);
         let report_item = emby.clone();
         let media_source_id = info.media_source_id.clone();
         let session_id = info.session_id.clone();
@@ -297,16 +307,58 @@ struct PlayerThreadStart {
     wakeup_write_fd: std::os::unix::io::RawFd,
 }
 
-fn run_player_thread(start: PlayerThreadStart) {
+fn run_player_thread(mut start: PlayerThreadStart) {
+    let (mpv, startup_pause_for_pipe) = match start.pre_warmed.take() {
+        Some(warmed) => warmed,
+        None => match init_mpv(&start.config) {
+            Ok(value) => value,
+            Err(error) => {
+                log::error!(target: "player", "{error}");
+                start.status.lock().unwrap().active = false;
+                let _ = start.event_tx.send(PlayerEvent::Stopped {
+                    slot_id: None,
+                    run_identity: start.run_identity,
+                    position_ticks: 0,
+                    played: false,
+                    consume: false,
+                    progress_report_accepted: false,
+                    error: Some(format!("mpv startup failed: {error}")),
+                });
+                return;
+            }
+        },
+    };
+    init_volume(&mpv, &start.status, start.initial_volume);
+
+    let active_file_projection = start
+        .items
+        .iter()
+        .any(|slot| slot.item.is_audiobookshelf_any());
+    let Some(active_prepared_source) = load_queue_sources(&mpv, &start, active_file_projection)
+    else {
+        return;
+    };
+    if !active_file_projection {
+        // Design D3 load-then-play: every load above was no-play, so playback
+        // starts at the requested slot and the layout check must now pass.
+        start_queue_playback(&mpv, start.start_idx);
+        reassert_queue_layout(&mpv, start.start_idx, start.items.len());
+    }
+    if let Some(emby) = start
+        .items
+        .get(start.start_idx)
+        .and_then(|slot| slot.item.as_emby())
+    {
+        send_ep_info(&mpv, emby);
+    }
+    observe_properties(&mpv, start.config.use_mpv_config);
+
     let PlayerThreadStart {
-        pre_warmed,
         config,
         status,
         event_tx,
-        initial_volume,
         items,
         start_idx,
-        run_identity,
         server_url,
         token,
         audiobookshelf_context,
@@ -319,106 +371,10 @@ fn run_player_thread(start: PlayerThreadStart) {
         cmd_rx,
         wakeup_read_fd,
         wakeup_write_fd,
+        ..
     } = start;
-    let (mpv, startup_pause_for_pipe) = match pre_warmed {
-        Some(w) => w,
-        None => match init_mpv(&config) {
-            Ok(v) => v,
-            Err(e) => {
-                log::error!(target: "player", "{}", e);
-                status.lock().unwrap().active = false;
-                let _ = event_tx.send(PlayerEvent::Stopped {
-                    slot_id: None,
-                    run_identity,
-                    position_ticks: 0,
-                    played: false,
-                    consume: false,
-                    progress_report_accepted: false,
-                    error: Some(format!("mpv startup failed: {e}")),
-                });
-                return;
-            }
-        },
-    };
-    init_volume(&mpv, &status, initial_volume);
-
-    let active_file_projection = items.iter().any(|slot| slot.item.is_audiobookshelf_any());
-    let load_indices: Vec<_> = if active_file_projection {
-        vec![start_idx]
-    } else {
-        queue_load_indices(items.len(), start_idx).collect()
-    };
-    let mut active_prepared_source = None;
-    for i in load_indices {
-        let item = &items[i].item;
-        let prepared =
-            match prepare_source(item, &server_url, &token, audiobookshelf_context.as_ref()) {
-                Ok(source) => source,
-                Err(error) => {
-                    status.lock().unwrap().active = false;
-                    let _ = event_tx.send(PlayerEvent::Stopped {
-                        slot_id: None,
-                        run_identity,
-                        position_ticks: 0,
-                        played: false,
-                        consume: false,
-                        progress_report_accepted: false,
-                        error: Some(format!("failed to prepare media: {error}")),
-                    });
-                    return;
-                }
-            };
-        let (mode, index) = if active_file_projection {
-            // Cold active-file (Audiobookshelf): the single load is
-            // the whole playlist and this branch skips
-            // `start_queue_playback`, so the load must start
-            // playback itself — the D3 no-play plan would idle.
-            active_file_load_location()
-        } else {
-            queue_load_location(i, start_idx)
-        };
-        let opts = prepared.mpv_load_options(item);
-        if let Err(e) = mpv.command("loadfile", &[prepared.url.as_str(), mode, &index, &opts]) {
-            log::warn!(
-                target: "player",
-                "submit_queue loadfile error: {e} | mode={mode}",
-            );
-            if i == start_idx {
-                let mut prepared = prepared;
-                prepared.close(0.0);
-                status.lock().unwrap().active = false;
-                let _ = event_tx.send(PlayerEvent::Stopped {
-                    slot_id: None,
-                    run_identity,
-                    position_ticks: 0,
-                    played: false,
-                    consume: false,
-                    progress_report_accepted: false,
-                    error: Some(format!("failed to load media: {e}")),
-                });
-                return;
-            }
-        }
-        if i == start_idx {
-            active_prepared_source = Some(prepared);
-        }
-    }
-    if !active_file_projection {
-        // Design D3 load-then-play: every load above was no-play, so
-        // playback starts here, at the fully built playlist's start
-        // slot — reassert below must now observe Ok (a mismatch log
-        // means the no-play plan drifted).
-        start_queue_playback(&mpv, start_idx);
-        reassert_queue_layout(&mpv, start_idx, items.len());
-    }
-    // send_ep_info only for Emby items.
-    if let Some(emby) = items.get(start_idx).and_then(|slot| slot.item.as_emby()) {
-        send_ep_info(&mpv, emby);
-    }
-    observe_properties(&mpv, config.use_mpv_config);
-
-    let (reporter, progress) = make_reporter(client, ws_tx, &items[start_idx].item, status.clone());
-
+    let (reporter, progress) =
+        make_reporter(client, ws_tx, &items[start_idx].item, Arc::clone(&status));
     let session = PlaybackRun::new_from_slot_items(
         items,
         RunInit {
@@ -434,15 +390,84 @@ fn run_player_thread(start: PlayerThreadStart) {
             server_url,
             token,
             audiobookshelf_context,
-            prepared_source: active_prepared_source,
+            prepared_source: Some(active_prepared_source),
         },
     );
     session.run(
         mpv,
-        stop_rx,
-        cmd_rx,
+        &stop_rx,
+        &cmd_rx,
         progress,
         wakeup_read_fd,
         wakeup_write_fd,
     );
+}
+
+fn load_queue_sources(
+    mpv: &Mpv,
+    start: &PlayerThreadStart,
+    active_file_projection: bool,
+) -> Option<PreparedSource> {
+    let load_indices: Vec<_> = if active_file_projection {
+        vec![start.start_idx]
+    } else {
+        queue_load_indices(start.items.len(), start.start_idx).collect()
+    };
+    let mut active_prepared_source = None;
+    for index in load_indices {
+        let item = &start.items[index].item;
+        let prepared = match prepare_source(
+            item,
+            &start.server_url,
+            &start.token,
+            start.audiobookshelf_context.as_ref(),
+        ) {
+            Ok(source) => source,
+            Err(error) => {
+                start.status.lock().unwrap().active = false;
+                let _ = start.event_tx.send(PlayerEvent::Stopped {
+                    slot_id: None,
+                    run_identity: start.run_identity,
+                    position_ticks: 0,
+                    played: false,
+                    consume: false,
+                    progress_report_accepted: false,
+                    error: Some(format!("failed to prepare media: {error}")),
+                });
+                return None;
+            }
+        };
+        let (mode, position) = if active_file_projection {
+            // An active-file load is the whole playlist, so it must start it.
+            active_file_load_location()
+        } else {
+            queue_load_location(index, start.start_idx)
+        };
+        let options = prepared.mpv_load_options(item);
+        if let Err(error) = mpv.command(
+            "loadfile",
+            &[prepared.url.as_str(), mode, &position, &options],
+        ) {
+            log::warn!(target: "player", "submit_queue loadfile error: {error} | mode={mode}");
+            if index == start.start_idx {
+                let mut prepared = prepared;
+                prepared.close(0.0);
+                start.status.lock().unwrap().active = false;
+                let _ = start.event_tx.send(PlayerEvent::Stopped {
+                    slot_id: None,
+                    run_identity: start.run_identity,
+                    position_ticks: 0,
+                    played: false,
+                    consume: false,
+                    progress_report_accepted: false,
+                    error: Some(format!("failed to load media: {error}")),
+                });
+                return None;
+            }
+        }
+        if index == start.start_idx {
+            active_prepared_source = Some(prepared);
+        }
+    }
+    active_prepared_source
 }

@@ -1,16 +1,21 @@
 use super::core::DaemonEvent;
-use super::*;
-use crate::api::EmbyClient;
-use crate::api::EmbyItem;
+use super::{
+    audio_only_rejection, dispatch_slot_jump, reset_slot_jumps, send_to, AuthorityHolder,
+    ClientRegistry, CtrlClientId, CtrlSender, CtrlTransport, DaemonOwnerContext, DaemonPlayerOwner,
+    PendingIdleQueueLoad, SharedQueueState,
+};
+use crate::api::{EmbyClient, EmbyItem};
 use crate::ctrl::{CtrlCmd, CtrlEvent};
+use crate::playback::QueueSlotId;
 use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{Player, PlayerCommand, PlayerOwnerState};
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::{mpsc, Arc, Mutex};
 
-use super::control_queue::*;
+use super::control_queue::{
+    abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, broadcast_queue_state,
+    daemon_admits, project_queue_state, unified_queue_state_for_peer,
+};
 
 mod playback;
 mod queue_edit;
@@ -96,7 +101,7 @@ struct RejectContext<'a> {
 
 /// Sends a command rejection to the requesting client and re-publishes the
 /// current queue snapshot so the rejected client's projection resyncs.
-fn reject_command(ctx: RejectContext<'_>, reason: String) {
+fn reject_command(ctx: &RejectContext<'_>, reason: &str) {
     let RejectContext {
         reply_tx,
         ctrl_clients,
@@ -105,8 +110,8 @@ fn reject_command(ctx: RejectContext<'_>, reason: String) {
         queue,
         source,
         lineage,
-    } = ctx;
-    send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
+    } = *ctx;
+    send_to(reply_tx, &CtrlEvent::CommandRejected(reason.to_string()));
     let status = player.status.lock().unwrap().clone();
     let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
     let supports_abs_book_queue = ctrl_clients
@@ -134,18 +139,17 @@ fn reject_command(ctx: RejectContext<'_>, reason: String) {
 /// kept per-command, matching what each arm sent before the gate moved here.
 /// Matches `OwnerGateRejection` exhaustively: its 3 variants are exactly the
 /// gated commands, so there is no wildcard/unreachable arm to fall into.
-fn send_role_gate_rejection(rejection: crate::ctrl::OwnerGateRejection, ctx: RejectContext<'_>) {
+fn send_role_gate_rejection(rejection: &crate::ctrl::OwnerGateRejection, ctx: &RejectContext<'_>) {
     match rejection {
-        crate::ctrl::OwnerGateRejection::AdoptQueue => reject_command(
-            ctx,
-            "Stay-alive owner queues cannot be adopted by Clients".to_string(),
-        ),
+        crate::ctrl::OwnerGateRejection::AdoptQueue => {
+            reject_command(ctx, "Stay-alive owner queues cannot be adopted by Clients");
+        }
         crate::ctrl::OwnerGateRejection::QueueLoadIdle { request_id } => {
             queue_load::reject_queue_load(
                 ctx.reply_tx,
-                request_id,
+                *request_id,
                 "idle queue loads are supported only by the Stay-alive owner".to_string(),
-            )
+            );
         }
         crate::ctrl::OwnerGateRejection::QueueSourceUpdate => send_to(
             ctx.reply_tx,
@@ -266,13 +270,13 @@ pub(super) fn handle_ctrl_for_role(cmd: CtrlCmd, mut ctx: CtrlContext<'_>) {
         crate::ctrl::OwnerGate::OwnerOnly(rejection)
             if ctx.role != crate::daemon::DaemonRole::Local =>
         {
-            send_role_gate_rejection(rejection, ctx.rejection_context(queue_lineage));
+            send_role_gate_rejection(&rejection, &ctx.rejection_context(queue_lineage));
             return;
         }
         crate::ctrl::OwnerGate::NonOwnerOnly(rejection)
             if ctx.role == crate::daemon::DaemonRole::Local =>
         {
-            send_role_gate_rejection(rejection, ctx.rejection_context(queue_lineage));
+            send_role_gate_rejection(&rejection, &ctx.rejection_context(queue_lineage));
             return;
         }
         _ => {}

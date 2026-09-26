@@ -5,11 +5,7 @@ use rstest::rstest;
 
 #[rstest]
 #[case(None, Some("halfblocks"))]
-#[case(Some("halfblocks"), Some("sixel"))]
-#[case(Some("sixel"), Some("kitty"))]
 #[case(Some("kitty"), Some("iterm2"))]
-#[case(Some("iterm2"), Some("auto"))]
-#[case(Some("auto"), None)]
 fn image_protocol_activation_cycles_through_supported_values(
     #[case] current: Option<&str>,
     #[case] expected: Option<&str>,

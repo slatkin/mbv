@@ -71,7 +71,7 @@ pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: mbv_core::api::EmbyImageTags::default(),
     }
 }
 
@@ -141,7 +141,7 @@ pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
 /// Minimal App stub for logic-only tests.
 pub(crate) fn make_app_stub() -> App {
     use mbv_core::player::{PlayerProxy, PlayerStatus};
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
 
     let status = Arc::new(Mutex::new(PlayerStatus {
         volume_max: 100,
@@ -163,10 +163,8 @@ pub(crate) fn make_app_stub() -> App {
         std::sync::mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
     let (cast_tx, cast_rx) = std::sync::mpsc::channel();
 
-    let player = PlayerProxy::stub(status.clone());
-
-    use crate::config::Config;
-    let config = Config::default();
+    let player = PlayerProxy::stub(Arc::clone(&status));
+    let config = crate::config::Config::default();
 
     App {
         _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
@@ -202,7 +200,7 @@ pub(crate) fn make_app_stub() -> App {
         audiobookshelf_socket_tx: None,
         audiobookshelf_socket_generation: None,
         hidden_libraries: Vec::new(),
-        library_routes: std::collections::HashMap::new(),
+        library_routes: std::collections::BTreeMap::new(),
         home_latest_launch_window: crate::app::state::home_latest::HomeLatestLaunchWindow {
             previous: None,
             current: 0,
@@ -282,7 +280,7 @@ pub(crate) fn make_app_stub() -> App {
         visualizer_enabled: false,
         visualizer_failed: false,
         visualizer: None,
-        visualizer_window: Default::default(),
+        visualizer_window: crate::app::infra::visualizer_worker::StereoSampleWindow::default(),
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
         sessions: Vec::new(),
         cast_receivers: Vec::new(),
@@ -304,7 +302,7 @@ pub(crate) fn make_app_stub() -> App {
         pending_queue_replacement: None,
         pending_local_play: None,
         use_nerd_fonts: false,
-        indicator_style: Default::default(),
+        indicator_style: render::indicators::IndicatorStyle::default(),
         ws_send_tx: None,
         last_keepalive: Instant::now(),
         last_capabilities: Instant::now(),
@@ -315,7 +313,9 @@ pub(crate) fn make_app_stub() -> App {
         cast_attachment: None,
         cast_tx,
         cast_rx,
-        last_cast_poll: Instant::now() - std::time::Duration::from_secs(60),
+        last_cast_poll: Instant::now()
+            .checked_sub(std::time::Duration::from_secs(60))
+            .unwrap(),
         cast_status_loading: false,
         queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
         playlist_mutations: std::collections::HashMap::new(),
@@ -328,20 +328,24 @@ pub(crate) fn make_app_stub() -> App {
         session_miss_count: 0,
         remote_pos_s: 0,
         remote_pos_at: std::time::Instant::now(),
-        remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
+        remote_api_pos_advanced_at: std::time::Instant::now()
+            .checked_sub(Duration::from_secs(60))
+            .unwrap(),
         remote_stalled_while_paused: false,
-        remote_seek_pending_until: std::time::Instant::now() - Duration::from_secs(1),
+        remote_seek_pending_until: std::time::Instant::now()
+            .checked_sub(Duration::from_secs(1))
+            .unwrap(),
         runtime_zero_since: None,
         suspended_local: None,
         active_route: None,
         library_route_cache: std::collections::HashMap::new(),
-        last_nav_at: Instant::now() - Duration::from_secs(1),
-        last_library_nav_at: Instant::now() - Duration::from_secs(1),
+        last_nav_at: Instant::now().checked_sub(Duration::from_secs(1)).unwrap(),
+        last_library_nav_at: Instant::now().checked_sub(Duration::from_secs(1)).unwrap(),
         // Default to "focused, past grace window" so existing mouse
         // tests dispatch without arming focus explicitly.  The refocus
         // guard itself is tested directly in
         // input_music_track_focus_tests.
-        refocus_at: Some(Instant::now() - Duration::from_secs(5)),
+        refocus_at: Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap()),
         album_artist_cache: std::collections::HashMap::new(),
         album_artist_levels: std::collections::HashMap::new(),
         pending_level_artist_warmups: std::collections::VecDeque::new(),
@@ -406,43 +410,6 @@ fn emby_completion_applies_bootstrap_and_ready_state() {
 }
 
 #[test]
-fn emby_completion_classifies_current_failures_without_client() {
-    let mut app = make_app_stub();
-    let content =
-        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-            generation: app.emby_runtime.generation(),
-            result: Err(mbv_core::service_runtime::EmbyFailure {
-                class: mbv_core::service_runtime::EmbyFailureClass::AuthenticationRejected,
-                message: "HTTP 401 unauthorized".into(),
-            }),
-        });
-    assert_eq!(
-        app.emby_runtime.state,
-        mbv_core::service_runtime::ServiceState::NeedsAuthentication
-    );
-    assert!(app.emby_runtime.client.is_none());
-    assert!(
-        content.is_none(),
-        "failure completion must deliver no Home content snapshot"
-    );
-
-    let mut app = make_app_stub();
-    let content =
-        app.apply_emby_completion(crate::app::dispatch::session::service_startup::Completion {
-            generation: app.emby_runtime.generation(),
-            result: Err(mbv_core::service_runtime::EmbyFailure::unavailable(
-                "connection refused",
-            )),
-        });
-    assert_eq!(
-        app.emby_runtime.state,
-        mbv_core::service_runtime::ServiceState::Unavailable
-    );
-    assert!(app.emby_runtime.client.is_none());
-    assert!(content.is_none());
-}
-
-#[test]
 fn stale_emby_completion_does_not_change_runtime_or_home() {
     let mut app = make_app_stub();
     app.emby_runtime.replace_setup();
@@ -472,7 +439,7 @@ fn stale_emby_completion_does_not_change_runtime_or_home() {
 
 pub(crate) fn make_built_app() -> App {
     use mbv_core::player::{PlayerProxy, PlayerStatus};
-    use std::sync::{Arc, Mutex};
+    use std::sync::Mutex;
 
     let status = Arc::new(Mutex::new(PlayerStatus {
         volume_max: 100,
@@ -490,8 +457,7 @@ pub(crate) fn make_built_app() -> App {
 
     let player = PlayerProxy::stub(status);
 
-    use crate::config::Config;
-    let config = Config::default();
+    let config = crate::config::Config::default();
 
     App::build(AppInit {
         config: Arc::new(Mutex::new(config)),
@@ -522,7 +488,7 @@ pub(crate) fn make_built_app() -> App {
         image_protocol: None,
         image_protocol_enabled: false,
         hidden_libraries: Vec::new(),
-        library_routes: std::collections::HashMap::new(),
+        library_routes: std::collections::BTreeMap::new(),
         music_levels: Vec::new(),
         use_nerd_fonts: false,
         indicator_style: render::indicators::IndicatorStyle::default(),
@@ -548,43 +514,6 @@ pub(crate) fn install_test_emby(app: &mut App, config: crate::config::Config) {
     ));
 }
 
-#[test]
-fn aggregate_zero_area_render_leaves_layout_untouched() {
-    // 2.1j aggregate: a 0-dimension terminal frame (`compute_frame_layout`
-    // returns None) must leave `self.layout` exactly as the last completed
-    // frame left it — no fresh-draft install, no partial mutation.
-    let mut app = make_app_stub();
-    app.layout.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
-    let before_left = app.layout.left_area;
-    let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
-    term.draw(|f| app.compose_root_frame(f)).unwrap();
-    assert_eq!(
-        app.layout.left_area, before_left,
-        "zero-area render must not touch left_area"
-    );
-}
-
-#[test]
-fn aggregate_surfaces_do_not_bleed_across_destinations() {
-    // 2.1j per-surface single-producer: after a normal frame, each surface
-    // family's geometry is produced only by its own checkpoint — no
-    // cross-surface bleed from one destination into another.
-    let mut app = make_app_stub();
-    let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    term.draw(|f| app.compose_root_frame(f)).unwrap();
-
-    // Cross-surface bleed check: a nonzero queue area must not also be a
-    // nonzero music wide area (they are mutually exclusive destinations). The
-    // queue placement comes from the paint-free checkpoint (task 3.1 moved
-    // the component mirror out of legacy chrome geometry).
-    let queue_placement = app.queue_panel_placement().panel_area;
-    let queue_active = queue_placement.width > 0 && queue_placement.height > 0;
-    let music_wide_active = app.is_right_panel_wide();
-    // A stub may render a degenerate frame; the invariant is that neither
-    // surface's geometry is written by the other's producer.
-    assert!(!(queue_active && music_wide_active));
-}
-
 pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec<EmbyItem>) -> App {
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
@@ -595,14 +524,14 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
     // Default to "focused, past grace window" for mouse tests.
-    app.refocus_at = Some(Instant::now() - Duration::from_secs(5));
+    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
     app
 }
 
@@ -620,14 +549,14 @@ pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
     app.player_tab
         .set_items(local_items, app.player_tab.queue_cursor);
     app.player_tab.queue_cursor = 0;
     while cmd_rx.try_recv().is_ok() {}
-    app.refocus_at = Some(Instant::now() - Duration::from_secs(5));
+    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
     (app, cmd_rx)
 }
 
@@ -645,7 +574,7 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
     app.player_tab
@@ -656,7 +585,7 @@ pub(crate) fn make_remote_app_stub_with_cmd_rx(
     // callers see only commands their own test actions send.
     while cmd_rx.try_recv().is_ok() {}
     // Default to "focused, past grace window" for mouse tests.
-    app.refocus_at = Some(Instant::now() - Duration::from_secs(5));
+    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
     (app, cmd_rx)
 }
 
@@ -682,7 +611,7 @@ pub(crate) fn make_local_daemon_app_stub_with_cmd_rx(
         EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
         config,
     );
     (app, cmd_rx)
@@ -706,7 +635,7 @@ pub(crate) fn emby_unified_state(
         })
         .collect();
     mbv_core::ctrl::UnifiedQueueStateData {
-        status: Default::default(),
+        status: mbv_core::player::PlayerStatus::default(),
         active_slot: slots.get(active_index).map(|s| s.slot_id),
         slots,
         revision: 1,

@@ -20,6 +20,7 @@ pub struct PlayerOwnerState {
 impl PlayerOwnerState {
     /// Seed an owner core with an existing canonical queue and its source
     /// (queue adoption on startup / handoff).
+    #[must_use]
     pub fn new(queue: PlaybackQueue, source: crate::config::QueueSource) -> Self {
         Self {
             queue,
@@ -105,6 +106,7 @@ impl PlayerOwnerState {
     }
 
     /// The last Playback-run-observed active slot (design D3).
+    #[must_use]
     pub fn observed_active_slot(&self) -> Option<QueueSlotId> {
         self.observed_active_slot
     }
@@ -153,6 +155,7 @@ impl PlayerOwnerState {
     /// owner's equivalent of the daemon's published in-flight transition, so a
     /// Bare-mode shell can paint the selected slot as now-playing before the
     /// Playback run confirms it (design D3/D4).
+    #[must_use]
     pub fn in_flight_transition_slot(&self) -> Option<QueueSlotId> {
         self.transitions
             .in_flight()
@@ -229,7 +232,7 @@ mod tests {
             people: Vec::new(),
             external_urls: Vec::new(),
             playlist_item_id: String::new(),
-            image_tags: Default::default(),
+            image_tags: crate::api::EmbyImageTags::default(),
         }
     }
 
@@ -249,6 +252,6 @@ mod tests {
 
         let slot = owner.queue.slot(slot_id).expect("slot still present");
         assert_eq!(slot.item.playback_position_ticks(), watched_ticks);
-        assert!(owner.queue.revision() != before_revision);
+        assert_ne!(owner.queue.revision(), before_revision);
     }
 }

@@ -62,6 +62,7 @@ pub struct AudiobookshelfBookProgress {
 
 /// Surname of the first-listed author: the final title-cased whitespace token,
 /// falling back to the raw credit when nothing can be extracted.
+#[must_use]
 pub fn audiobook_author_sort_key(name: &str) -> String {
     let Some(token) = name.split_whitespace().next_back() else {
         return name.to_string();
@@ -89,6 +90,7 @@ pub fn book_author_display(author: Option<&str>, authors: Option<&[AuthorWire]>)
 }
 
 /// Sort key from the raw credit: only the first-listed author participates.
+#[must_use]
 pub fn first_listed_author_sort_key(credit: &str) -> String {
     let first = credit.split(',').next().unwrap_or_default().trim();
     if first.is_empty() {
@@ -221,11 +223,14 @@ impl AudiobookshelfClient {
             "/api/libraries/{}/items?page={page}&limit={limit}",
             crate::encode_path_segment(id)
         );
-        let response: BooksResponse = self
-            .get(key, &path)?
-            .body_mut()
-            .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+        let response: BooksResponse =
+            self.get(key, &path)?
+                .body_mut()
+                .read_json()
+                .map_err(|error| {
+                    log::debug!(target: "audiobookshelf", "invalid book catalog response: {error}");
+                    AudiobookshelfError::malformed()
+                })?;
         if response.limit == 0 {
             return Err(AudiobookshelfError::protocol());
         }
@@ -289,7 +294,10 @@ impl AudiobookshelfClient {
             )?
             .body_mut()
             .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!(target: "audiobookshelf", "invalid book detail response: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         if response.id != id {
             return Err(AudiobookshelfError::protocol());
         }
@@ -325,7 +333,10 @@ impl AudiobookshelfClient {
             .get(key, "/api/me/progress")?
             .body_mut()
             .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!(target: "audiobookshelf", "invalid book progress response: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         Ok(response
             .media_progress
             .into_iter()

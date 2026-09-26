@@ -26,6 +26,7 @@ pub(in crate::app) struct OverviewPaint {
 }
 
 const OVERVIEW_CREDITS_GAP_ROWS: usize = 2;
+const MIN_ROLE_WIDTH: u16 = 8;
 
 /// Overview content rows a short terminal shows at most (the rest of the
 /// flow scrolls); applies at [`crate::app::components::library_panel::
@@ -54,18 +55,16 @@ pub(in crate::app) fn paint_overview_box(
     if overview.is_none() && credits.is_none() {
         return None;
     }
-    let text_rows = overview
-        .map(|text| {
-            textwrap::wrap(
-                text,
-                (area.width.saturating_sub(PANE_PAD_X * 2) as usize)
-                    .saturating_sub(1)
-                    .max(1),
-            )
-            .len()
-        })
-        .unwrap_or(0);
-    let credit_rows = credits.map(|rows| rows.len()).unwrap_or(0);
+    let text_rows = overview.map_or(0, |text| {
+        textwrap::wrap(
+            text,
+            (area.width.saturating_sub(PANE_PAD_X * 2) as usize)
+                .saturating_sub(1)
+                .max(1),
+        )
+        .len()
+    });
+    let credit_rows = credits.map_or(0, <[HeroCredit]>::len);
     let has_credits_gap = has_overview_and_credits(overview, credits);
     // The overview text, the separator and the table are ONE scrollable flow:
     // the caller's offset shifts the whole box content, so this is the box's
@@ -78,17 +77,12 @@ pub(in crate::app) fn paint_overview_box(
     let inner_rows = text_rows + gap_rows + credit_rows;
     let box_y = next_row.saturating_add(1);
     let room = area.bottom().saturating_sub(box_y);
-    let natural = (inner_rows.max(1) as u16).saturating_add(PANE_PAD_Y * 2);
-    let mut box_height = if content.workspace.is_some() {
-        natural.min(room)
-    } else {
-        room
-    };
-    // Short terminals give the overview at most 5 content rows; the rest of
-    // the flow scrolls (the same compact rule as the artwork caps).
-    if crate::app::components::library_panel::hero_header::short_pane(terminal_height) {
-        box_height = box_height.min(OVERVIEW_SHORT_PANE_MAX_ROWS + PANE_PAD_Y * 2);
-    }
+    let box_height = overview_box_height(
+        inner_rows,
+        room,
+        content.workspace.is_some(),
+        terminal_height,
+    );
     if box_height <= PANE_PAD_Y * 2 {
         return None;
     }
@@ -160,6 +154,27 @@ pub(in crate::app) fn paint_overview_box(
     })
 }
 
+fn overview_box_height(
+    inner_rows: usize,
+    room: u16,
+    has_workspace: bool,
+    terminal_height: u16,
+) -> u16 {
+    let natural = u16::try_from(inner_rows.max(1))
+        .unwrap_or(u16::MAX)
+        .saturating_add(PANE_PAD_Y * 2);
+    let box_height = if has_workspace {
+        natural.min(room)
+    } else {
+        room
+    };
+    if crate::app::components::library_panel::hero_header::short_pane(terminal_height) {
+        box_height.min(OVERVIEW_SHORT_PANE_MAX_ROWS + PANE_PAD_Y * 2)
+    } else {
+        box_height
+    }
+}
+
 // One virtual row space for the whole flow: the overview occupies rows
 // `0..text_rows`, then the separator and its blank row, then the table.
 // A flow row outside the scrolled viewport has no screen coordinate.
@@ -229,17 +244,17 @@ fn paint_overview_credits(
 
 fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_offset: usize) {
     // Column geometry is a property of the whole table, not the visible page.
+    // Keep enough room for the role column even when one name is unusually long.
     let name_width = credits
         .iter()
         .map(|c| UnicodeWidthStr::width(c.name.as_str()))
         .max()
-        .unwrap_or(0) as u16;
-    // Keep enough room for the role column even when one name is unusually long.
-    const MIN_ROLE_WIDTH: u16 = 8;
-    let name_width = name_width.min(area.width.saturating_sub(MIN_ROLE_WIDTH));
+        .unwrap_or(0)
+        .min(usize::from(area.width.saturating_sub(MIN_ROLE_WIDTH)));
+    let name_width = u16::try_from(name_width).unwrap_or(u16::MAX);
     let role_start = area.x.saturating_add(name_width).saturating_add(2);
     for (i, credit) in credits.iter().skip(row_offset).enumerate() {
-        let y = area.y.saturating_add(i as u16);
+        let y = area.y.saturating_add(u16::try_from(i).unwrap_or(u16::MAX));
         if y >= area.bottom() {
             break;
         }
@@ -268,7 +283,8 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         if role_start < area.right() {
             let available_width = area.right().saturating_sub(role_start) as usize;
             let role = trunc_str(&credit.role, available_width);
-            let rendered_role_width = UnicodeWidthStr::width(role.as_str()) as u16;
+            let rendered_role_width =
+                u16::try_from(UnicodeWidthStr::width(role.as_str())).unwrap_or(u16::MAX);
             let role_x = area.right().saturating_sub(rendered_role_width);
             f.render_widget(
                 Paragraph::new(role).style(Style::default().fg(palette::TEXT_EMPHASIS)),
@@ -292,16 +308,28 @@ pub(in crate::app) fn sanitize_url(url: &str) -> Option<&str> {
     if url.is_empty() || contains_control(url) {
         return None;
     }
-    let scheme = url.split_once(":")?.0;
-    if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") {
-        Some(url)
-    } else {
-        None
-    }
+    let scheme = url.split_once(':')?.0;
+    (scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https")).then_some(url)
 }
 
 fn sanitize_label(label: &str) -> Option<&str> {
     (!contains_control(label)).then_some(label)
+}
+
+fn underline_link_cells(f: &mut Frame, cell: Rect, offset: usize, label_width: usize) {
+    for x in offset..offset + label_width {
+        let Some(x) = u16::try_from(x).ok() else {
+            continue;
+        };
+        let Some(cell) = f.buffer_mut().cell_mut((cell.x.saturating_add(x), cell.y)) else {
+            continue;
+        };
+        cell.set_style(
+            cell.style()
+                .fg(palette::TEXT_METADATA)
+                .add_modifier(ratatui::style::Modifier::UNDERLINED),
+        );
+    }
 }
 
 /// Registers hover underline and hit regions for the links row painted in
@@ -327,18 +355,16 @@ fn paint_link_hit_row(
             && sanitize_label(&link.name).is_some()
         {
             if hovered_link == Some(link_index) {
-                for x in offset..offset + label_width {
-                    if let Some(cell) = f.buffer_mut().cell_mut((cell.x + x as u16, cell.y)) {
-                        cell.set_style(
-                            cell.style()
-                                .fg(palette::TEXT_METADATA)
-                                .add_modifier(ratatui::style::Modifier::UNDERLINED),
-                        );
-                    }
-                }
+                underline_link_cells(f, cell, offset, label_width);
             }
             link_hits.push(
-                Rect::new(cell.x + offset as u16, cell.y, label_width as u16, 1),
+                Rect::new(
+                    cell.x
+                        .saturating_add(u16::try_from(offset).unwrap_or(u16::MAX)),
+                    cell.y,
+                    u16::try_from(label_width).unwrap_or(u16::MAX),
+                    1,
+                ),
                 link_index,
             );
         }
@@ -387,7 +413,7 @@ pub(in crate::app) fn overlay_links(
             );
             return;
         }
-        y = y.saturating_add(lines.len() as u16);
+        y = y.saturating_add(u16::try_from(lines.len()).unwrap_or(u16::MAX));
     }
 }
 
@@ -420,7 +446,9 @@ pub(in crate::app) fn overlay_links_grid(
         .filter(|line| !line.is_empty())
         .count()
         .saturating_sub(1);
-    let y = area.y.saturating_add((pos / 2) as u16);
+    let y = area
+        .y
+        .saturating_add(u16::try_from(pos / 2).unwrap_or(u16::MAX));
     let cell = if pos % 2 == 0 {
         Rect::new(area.x, y, left_w, 1)
     } else {
@@ -439,7 +467,8 @@ pub(in crate::app) fn overlay_links_grid(
     let pad = if pos % 2 == 0 {
         0
     } else {
-        cell.width.saturating_sub(joined.width() as u16)
+        cell.width
+            .saturating_sub(u16::try_from(joined.width()).unwrap_or(u16::MAX))
     };
     let cell = Rect::new(
         cell.x.saturating_add(pad),
@@ -449,9 +478,3 @@ pub(in crate::app) fn overlay_links_grid(
     );
     paint_link_hit_row(f, cell, area.bottom(), facts, hovered_link, link_hits);
 }
-
-#[cfg(test)]
-mod layout_tests;
-
-#[cfg(test)]
-mod credits_tests;

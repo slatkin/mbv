@@ -143,23 +143,6 @@ pub(in crate::app) struct DestinationLatestSnapshot {
 }
 
 impl DestinationLatestSnapshot {
-    #[cfg(test)]
-    pub(in crate::app) fn new(
-        title: String,
-        source: DestinationLatestSource,
-        items: Vec<QueueItem>,
-    ) -> Self {
-        Self::new_with_launch_window(
-            title,
-            source,
-            items,
-            HomeLatestLaunchWindow {
-                previous: None,
-                current: 0,
-            },
-        )
-    }
-
     pub(in crate::app) fn new_with_launch_window(
         title: String,
         source: DestinationLatestSource,

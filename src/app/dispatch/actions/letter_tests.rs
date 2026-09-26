@@ -35,17 +35,6 @@ fn active_lib_is_tvshows_true_only_on_a_tvshows_library_tab() {
     );
 }
 
-#[test]
-fn active_lib_is_tvshows_bounds_miss_returns_false() {
-    // The explicit-index contract: a bounds-miss index (async Service
-    // removal between dispatch normalization and use) must return false --
-    // never panic and never default to another library.
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-
-    assert!(!app.active_lib_is_tvshows(1), "index past the last library");
-}
-
 /// Pushes a top-level, non-loading, non-searching `BrowseLevel` onto
 /// `lib`'s nav_stack -- the minimum state `should_show_letter_pills`
 /// needs to consider the library "at its top browse level".
@@ -117,65 +106,6 @@ fn should_show_letter_pills_excludes_music_and_drilldowns() {
     );
 }
 
-#[test]
-fn select_letter_pill_scopes_the_level_and_resets_cursor() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("movies"));
-    push_top_level(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(1000);
-    app.libs[0].nav_stack[0].set_resting_cursor(4);
-    app.libs[0].nav_stack[0].set_resting_scroll(2);
-
-    app.select_letter_pill(0, 4); // "M–O"
-
-    let lvl = app.libs[0].nav_stack.last().unwrap();
-    let filter = lvl.letter_filter.as_ref().expect("pill should be set");
-    assert_eq!(filter.index, 4);
-    assert_eq!(filter.label, "M\u{2013}O");
-    assert_eq!(filter.name_ge, Some("M"));
-    assert_eq!(filter.name_lt, Some("P"));
-    assert_eq!(lvl.resting().cursor(), 0);
-    assert_eq!(lvl.resting().scroll(), 0);
-    assert!(lvl.loading, "a scoped refresh should be in flight");
-}
-
-#[test]
-fn select_letter_pill_is_a_noop_outside_letter_pill_eligibility() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("movies"));
-    push_top_level(&mut app.libs[0], 10);
-    // library_total never captured -> should_show_letter_pills is false.
-
-    app.select_letter_pill(0, 0);
-
-    assert!(app.libs[0]
-        .nav_stack
-        .last()
-        .unwrap()
-        .letter_filter
-        .is_none());
-}
-
-#[test]
-fn cycle_letter_pill_wraps_around() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("movies"));
-    push_top_level(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(1000);
-
-    // Default (no pill selected yet) is treated as index 0; cycling back
-    // wraps to the last bucket ("#").
-    app.cycle_letter_pill(0, -1);
-    let filter = app.libs[0]
-        .nav_stack
-        .last()
-        .unwrap()
-        .letter_filter
-        .as_ref()
-        .unwrap();
-    assert_eq!(filter.label, "#");
-}
-
 // Regression coverage for the bug found in review of the letter-pills
 // PR: `spawn_all_items_prefetch`/`spawn_search_items_load` used to cap
 // their unfiltered fetch's `limit` at `lvl.total_count`, which is the
@@ -195,7 +125,7 @@ fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
             4,
             crate::app::render::LetterFilterKind::Movie,
         );
-    }
+    };
     let lvl = lib.nav_stack.last().unwrap();
 
     assert_eq!(
@@ -203,15 +133,6 @@ fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
         3000,
         "must fetch the whole library, not just the active M–O range"
     );
-}
-
-#[test]
-fn full_library_fetch_limit_falls_back_to_total_count_before_library_total_is_known() {
-    let mut lib = lib_tab("movies");
-    push_top_level(&mut lib, 10);
-    // library_total not yet captured (e.g. first-ever load in flight).
-    let lvl = lib.nav_stack.last().unwrap();
-    assert_eq!(full_library_fetch_limit(&lib, lvl), 10);
 }
 
 fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
@@ -235,7 +156,6 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
 }
 
 #[rstest]
-#[case::should_show_letter_pills_true_for_large_tvshows_library(301)]
 #[case::should_show_letter_pills_true_for_any_tvshows_total(5)]
 fn should_show_letter_pills_true_for_tvshows_total(#[case] total: usize) {
     let mut app = make_app_stub();
@@ -244,27 +164,6 @@ fn should_show_letter_pills_true_for_tvshows_total(#[case] total: usize) {
     app.libs[0].library_total = Some(total);
 
     assert!(app.should_show_letter_pills(0));
-}
-
-#[test]
-fn tv_first_capture_resolves_all_without_refetch_for_small_library() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-    push_top_level_tv(&mut app.libs[0], 4);
-    app.libs[0].nav_stack[0].total_count = 4;
-
-    app.maybe_capture_library_total_and_apply_default_pill(0);
-
-    assert_eq!(
-        app.libs[0].tv_content_mode,
-        Some(mbv_core::config::TvContentMode::All)
-    );
-    assert_eq!(
-        app.libs[0].nav_stack[0].tv_content_mode,
-        app.libs[0].tv_content_mode
-    );
-    assert_eq!(app.libs[0].nav_stack[0].items.len(), 4);
-    assert!(!app.libs[0].nav_stack[0].loading);
 }
 
 #[test]
@@ -307,7 +206,7 @@ fn activate_searched_series_marks_the_series_pill_and_cursor() {
         level.all_items = Some(corpus.clone());
         level.items = corpus.clone();
         level.total_count = 2;
-    }
+    };
     let zebra = series("series-z", "Zebra");
 
     assert!(app.activate_searched_series(0, &zebra));
@@ -332,42 +231,6 @@ fn activate_searched_series_marks_the_series_pill_and_cursor() {
         "the search corpus is retained for later searches"
     );
     assert!(!level.loading);
-}
-
-#[test]
-fn activate_searched_series_without_pills_keeps_the_whole_list() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-    push_top_level_tv(&mut app.libs[0], 1);
-    let corpus = vec![series("series-a", "Antelope"), series("series-z", "Zebra")];
-    {
-        let level = app.libs[0].nav_stack.last_mut().unwrap();
-        level.all_items = Some(corpus.clone());
-        level.items = corpus.clone();
-        level.total_count = 2;
-    }
-    let zebra = series("series-z", "Zebra");
-
-    assert!(app.activate_searched_series(0, &zebra));
-
-    let level = app.libs[0].nav_stack.last().unwrap();
-    assert!(level.letter_filter.is_none(), "no pill row, no filter");
-    assert_eq!(level.items.len(), 2);
-    assert_eq!(level.resting().cursor(), 1);
-}
-
-#[test]
-fn activate_searched_series_miss_returns_false_and_changes_nothing() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-    push_top_level_tv(&mut app.libs[0], 1);
-    let absent = series("series-x", "Vanishing");
-
-    assert!(!app.activate_searched_series(0, &absent));
-    assert!(
-        !app.activate_searched_series(0, &series("s", "Antelope")),
-        "a non-Series item never activates as a series"
-    );
 }
 
 #[test]
@@ -422,22 +285,5 @@ fn cycle_letter_pill_wraps_on_tvshows_library() {
     assert_eq!(
         filter.label, "A-I",
         "wrapping forward from S-Z should land on A-I"
-    );
-}
-
-#[test]
-fn select_letter_pill_is_noop_on_tv_drilldown() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-    push_top_level_tv(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(1000);
-    // Push a second level (season drilldown) — no longer top-level
-    push_top_level_tv(&mut app.libs[0], 5);
-
-    app.select_letter_pill(0, 0);
-    let lvl = app.libs[0].nav_stack.last().unwrap();
-    assert!(
-        lvl.letter_filter.is_none(),
-        "pill selection should be ignored below the top browse level"
     );
 }

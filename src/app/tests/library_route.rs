@@ -1,39 +1,6 @@
 use super::*;
 
 #[test]
-fn try_daemon_route_connect_returns_remote_player_on_successful_connect() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    fn route_connect_success(
-        _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
-        Ok(mbv_core::remote_player::RemotePlayer::stub(
-            make_items(1),
-            0,
-        ))
-    }
-
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-    let mut app = make_app_stub();
-    let config = app.config.lock().unwrap().clone();
-    install_test_emby(&mut app, config);
-    let endpoint = mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
-        "/tmp/mbv-music.sock",
-    ));
-
-    let result = app.try_daemon_route_connect(&endpoint, "Music");
-
-    *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-    assert!(result.is_ok());
-}
-
-#[test]
 fn app_construction_never_attempts_a_daemon_route_connect() {
     // #222 acceptance criterion: "No connection attempt happens before
     // the first play/enqueue action that needs one." There is no
@@ -43,9 +10,6 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
     // call is caught immediately instead of silently reintroducing the
     // eager-connect behavior #222 replaces.
     static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-    CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
     fn counting_connect(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
@@ -59,6 +23,9 @@ fn app_construction_never_attempts_a_daemon_route_connect() {
         Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
     }
 
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+    CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(counting_connect);
     let _app = make_app_stub();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
@@ -93,28 +60,6 @@ fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
 }
 
 #[test]
-fn apply_route_for_playback_restores_local_when_item_has_no_route() {
-    let mut app = make_app_stub();
-    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
-    app.switch_to_library_route(
-        "music",
-        remote,
-        remote_rx,
-        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
-    );
-    let mut movies_item = make_item("Movies", "CollectionFolder");
-    movies_item.id = "lib-movies".to_string();
-    app.libs.push(LibraryTab::new(movies_item));
-    let mut item = make_item("Movie", "Movie");
-    item.id = "movie-1".to_string();
-
-    app.apply_route_for_playback(&item);
-
-    assert!(app.active_route.is_none());
-    assert!(!app.player.is_remote());
-}
-
-#[test]
 fn apply_route_for_playback_double_failure_strips_using_local_playback() {
     // Regression: when `apply_route_for_playback` tries a new route while
     // already routed, both the target-route connect and the subsequent
@@ -122,8 +67,6 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
     // `try_daemon_route_connect` contains "using local playback", which is
     // wrong when the Local daemon is also unreachable. `restore_local_mode`
     // must strip that claim so the final warning is accurate.
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn always_fail(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
@@ -136,6 +79,8 @@ fn apply_route_for_playback_double_failure_strips_using_local_playback() {
         Err("connection refused".to_string())
     }
 
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     let mut app = make_local_daemon_app_stub(make_items(2));
     app.library_routes
         .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());

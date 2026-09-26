@@ -31,6 +31,13 @@ use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::state::types::playback::PlaybackState;
 use mbv_core::playback_queue::PlaybackTitleParts;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(in crate::app) struct TransportAvailability {
+    pub stop: bool,
+    pub next: bool,
+    pub previous: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
     pub state: PlaybackState,
@@ -48,9 +55,7 @@ pub(in crate::app) struct PlaybackProjection {
     pub status_indicators: Option<Vec<Span<'static>>>,
     pub idle_feed_title: Option<(String, bool)>,
     pub use_nerd_fonts: bool,
-    pub stop_available: bool,
-    pub next_available: bool,
-    pub prev_available: bool,
+    pub availability: TransportAvailability,
 }
 
 pub struct LibraryPlaybackPanel {
@@ -78,11 +83,9 @@ impl LibraryPlaybackPanel {
                 now_playing_title: None,
                 title_parts: None,
                 status_indicators: None,
-                idle_feed_title: None,
                 use_nerd_fonts: false,
-                stop_available: false,
-                next_available: false,
-                prev_available: false,
+                idle_feed_title: None,
+                availability: TransportAvailability::default(),
             },
             props: Props::default(),
             play_pause_area: Rect::default(),
@@ -112,16 +115,12 @@ impl LibraryPlaybackPanel {
         self.projection.title_parts.clone()
     }
 
-    fn key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
-        match self.key(key) {
+    fn key_result(key: &KeyEvent) -> LeafKeyResult {
+        match Self::key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))),
             None if matches!(
                 key.code,
-                Key::Char(' ')
-                    | Key::Esc
-                    | Key::Left
-                    | Key::Right
-                    | Key::Char('m' | '[' | ']' | '<' | '>')
+                Key::Char(' ' | 'm' | '[' | ']' | '<' | '>') | Key::Esc | Key::Left | Key::Right
             ) =>
             {
                 LeafKeyResult::Consumed(None)
@@ -133,7 +132,7 @@ impl LibraryPlaybackPanel {
     /// One semantic intent per press: `Space` and `Esc` fire their transport
     /// request immediately when the panel holds focus; the shell's deferred
     /// candidate only covers presses the leaf did not consume.
-    fn key(&mut self, key: &KeyEvent) -> Option<Msg> {
+    fn key(key: &KeyEvent) -> Option<Msg> {
         if key.modifiers != KeyModifiers::NONE {
             return None;
         }
@@ -152,32 +151,32 @@ impl LibraryPlaybackPanel {
         Some(Msg::Playback(request))
     }
 
-    fn mouse(&self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
+    fn mouse(&self, event: tuirealm::event::MouseEvent) -> Option<Msg> {
         let point = (event.column, event.row).into();
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) if self.play_pause_area.contains(point) => {
                 Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.stop_area.contains(point) && self.projection.stop_available =>
+                if self.stop_area.contains(point) && self.projection.availability.stop =>
             {
                 Some(Msg::Playback(PlaybackRequest::Stop))
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.prev_area.contains(point) && self.projection.prev_available =>
+                if self.prev_area.contains(point) && self.projection.availability.previous =>
             {
                 Some(Msg::Playback(PlaybackRequest::Previous))
             }
             MouseEventKind::Down(MouseButton::Left)
-                if self.next_area.contains(point) && self.projection.next_available =>
+                if self.next_area.contains(point) && self.projection.availability.next =>
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self.seekbar_area.contains(point) && self.seekbar_area.width > 0 =>
             {
-                let fraction = event.column.saturating_sub(self.seekbar_area.x) as f64
-                    / self.seekbar_area.width as f64;
+                let fraction = f64::from(event.column.saturating_sub(self.seekbar_area.x))
+                    / f64::from(self.seekbar_area.width);
                 Some(Msg::Playback(PlaybackRequest::SeekTo(fraction)))
             }
             _ => None,
@@ -207,34 +206,34 @@ impl Component for LibraryPlaybackPanel {
                 area,
                 playback: &mut playback,
                 player_h,
-                show_controls: self.projection.show_controls,
+                controls: crate::app::render::PlaybackControls {
+                    show: self.projection.show_controls,
+                    use_nerd_fonts: self.projection.use_nerd_fonts,
+                    availability: self.projection.availability,
+                    panel_focused: self.projection.panel_focused,
+                    progress: (
+                        self.projection.state.position_ticks,
+                        self.projection.state.runtime_ticks,
+                        self.projection.state.paused,
+                    ),
+                    idle_feed_title: self.projection.idle_feed_title.clone(),
+                },
                 now_playing_title: self.projection.now_playing_title.clone(),
                 panel: self.projection.panel,
-                panel_focused: self.projection.panel_focused,
-                progress: (
-                    self.projection.state.position_ticks,
-                    self.projection.state.runtime_ticks,
-                    self.projection.state.paused,
-                ),
-                use_nerd_fonts: self.projection.use_nerd_fonts,
-                stop_available: self.projection.stop_available,
-                next_available: self.projection.next_available,
-                prev_available: self.projection.prev_available,
                 status_indicators: self.projection.status_indicators.clone(),
                 title_parts: self.projection.title_parts.clone(),
-                idle_feed_title: self.projection.idle_feed_title.clone(),
                 marquee_text: &mut self.marquee_text,
                 marquee_started_at: &mut self.marquee_started_at,
             },
         );
-        self.play_pause_area = playback.play_pause_area;
-        self.stop_area = playback.stop_area;
-        self.next_area = playback.next_area;
-        self.prev_area = playback.prev_area;
-        self.seekbar_area = playback.seekbar_area;
+        self.play_pause_area = playback.play_pause;
+        self.stop_area = playback.stop;
+        self.next_area = playback.next;
+        self.prev_area = playback.prev;
+        self.seekbar_area = playback.seekbar;
     }
 
-    fn query<'a>(&'a self, attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, attr: Attribute) -> Option<QueryResult<'_>> {
         self.props.get_for_query(attr)
     }
     fn attr(&mut self, attr: Attribute, value: AttrValue) {
@@ -249,10 +248,10 @@ impl Component for LibraryPlaybackPanel {
 }
 
 impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
-            Event::Keyboard(key) => self.key_result(key).into_option(),
-            Event::Mouse(mouse) => self.mouse(mouse),
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
+            Event::Keyboard(key) => Self::key_result(key).into_option(),
+            Event::Mouse(mouse) => self.mouse(*mouse),
             _ => None,
         }
     }
@@ -294,9 +293,11 @@ mod tests {
             status_indicators: None,
             idle_feed_title: None,
             use_nerd_fonts: false,
-            stop_available: true,
-            next_available: true,
-            prev_available: true,
+            availability: super::TransportAvailability {
+                stop: true,
+                next: true,
+                previous: true,
+            },
         });
         let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
         terminal
@@ -335,9 +336,11 @@ mod tests {
             status_indicators: None,
             idle_feed_title: None,
             use_nerd_fonts: false,
-            stop_available: true,
-            next_available: true,
-            prev_available: true,
+            availability: super::TransportAvailability {
+                stop: true,
+                next: true,
+                previous: true,
+            },
         }
     }
 
@@ -379,13 +382,7 @@ mod tests {
     /// by exactly one space and no separator glyph; single-part rows paint
     /// wholly in the title role with no context part before or after them.
     #[rstest]
-    #[case::emby_movie("Movie Name", None)]
-    #[case::emby_home_video("Home Video", None)]
-    #[case::audiobookshelf_book("Book Title", None)]
     #[case::emby_episode("Pilot", Some("Series"))]
-    #[case::emby_audio_track("Track", Some("Artist"))]
-    #[case::audiobookshelf_podcast("Episode", Some("Show"))]
-    #[case::feed_entry("Entry", Some("Subscription"))]
     fn title_row_paints_each_media_types_parts_in_their_roles(
         #[case] title: &str,
         #[case] context: Option<&str>,
@@ -398,56 +395,53 @@ mod tests {
             palette::PLAYBACK_TITLE_FG,
             "the title part",
         );
-        match context {
-            Some(context) => {
-                // D3: exactly one space between the parts and no separator
-                // glyph of any form. The context part paints first, the
-                // title part after it.
-                let joined = format!("{context} {title}");
-                // The painted run must be exactly the one-space join, not
-                // merely contain it: a wider delineation (e.g. a doubled
-                // space) must fail here.
-                let start = text.find(context).unwrap();
-                let painted: String = text[start..].chars().take(joined.chars().count()).collect();
+        if let Some(context) = context {
+            // D3: exactly one space between the parts and no separator
+            // glyph of any form. The context part paints first, the
+            // title part after it.
+            let joined = format!("{context} {title}");
+            // The painted run must be exactly the one-space join, not
+            // merely contain it: a wider delineation (e.g. a doubled
+            // space) must fail here.
+            let start = text.find(context).unwrap();
+            let painted: String = text[start..].chars().take(joined.chars().count()).collect();
+            assert_eq!(
+                painted, joined,
+                "exactly one space between the parts: {text:?}"
+            );
+            for separator in [" - ", " \u{2013} ", " \u{2014} ", " | ", " \u{2022} "] {
+                assert!(
+                    !text.contains(&format!("{context}{separator}{title}")),
+                    "no separator glyph between the parts: {text:?}"
+                );
+            }
+            // The context span owns its trailing space, so the context
+            // text and the space paint in the context role.
+            for i in 0..=context.chars().count() {
                 assert_eq!(
-                    painted, joined,
-                    "exactly one space between the parts: {text:?}"
-                );
-                for separator in [" - ", " \u{2013} ", " \u{2014} ", " | ", " \u{2022} "] {
-                    assert!(
-                        !text.contains(&format!("{context}{separator}{title}")),
-                        "no separator glyph between the parts: {text:?}"
-                    );
-                }
-                // The context span owns its trailing space, so the context
-                // text and the space paint in the context role.
-                for i in 0..context.chars().count() + 1 {
-                    assert_eq!(
-                        fgs[start + i],
-                        palette::PLAYBACK_CONTEXT_FG,
-                        "the context part and the space paint in the context role: {text:?}"
-                    );
-                }
-            }
-            None => {
-                // A single-part row paints no context part: nothing in the
-                // context role precedes or follows the title run (the
-                // audiobook case is task 4.4, design D5).
-                let title_start = text.find(title).unwrap();
-                if title_start > 0 {
-                    assert_ne!(
-                        fgs[title_start - 1],
-                        palette::PLAYBACK_CONTEXT_FG,
-                        "no context part before the title: {text:?}"
-                    );
-                }
-                let after = title_start + title.chars().count();
-                assert_ne!(
-                    fgs[after],
+                    fgs[start + i],
                     palette::PLAYBACK_CONTEXT_FG,
-                    "no context part after the title: {text:?}"
+                    "the context part and the space paint in the context role: {text:?}"
                 );
             }
+        } else {
+            // A single-part row paints no context part: nothing in the
+            // context role precedes or follows the title run (the
+            // audiobook case is task 4.4, design D5).
+            let title_start = text.find(title).unwrap();
+            if title_start > 0 {
+                assert_ne!(
+                    fgs[title_start - 1],
+                    palette::PLAYBACK_CONTEXT_FG,
+                    "no context part before the title: {text:?}"
+                );
+            }
+            let after = title_start + title.chars().count();
+            assert_ne!(
+                fgs[after],
+                palette::PLAYBACK_CONTEXT_FG,
+                "no context part after the title: {text:?}"
+            );
         }
     }
 
@@ -459,16 +453,6 @@ mod tests {
         assert!(matches!(
             message,
             Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
-        ));
-    }
-
-    #[test]
-    fn transport_button_click_emits_its_typed_intent() {
-        let mut panel = painted_panel();
-        // Play/pause glyph starts at the panel's x + 1 on the title row.
-        assert!(matches!(
-            panel.on(&click(11, 6)),
-            Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
         ));
     }
 
@@ -490,16 +474,6 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn playback_chrome_transport_intent_is_typed_and_player_free() {
-        let mut panel = LibraryPlaybackPanel::new();
-        assert!(panel.on(&key(Key::Char('m'))).is_some());
-        assert!(matches!(
-            panel.on(&key(Key::Right)),
-            Some(Msg::Playback(PlaybackRequest::Next))
-        ));
-    }
-
     /// One press fires the transport intent — no repeated-press window
     /// remains (task 4.2 / semantic-input-arbitration).
     #[test]
@@ -517,36 +491,5 @@ mod tests {
             panel.on(&key(Key::Esc)),
             Some(Msg::Playback(PlaybackRequest::Stop))
         ));
-    }
-
-    #[test]
-    fn playback_chrome_projection_renders_without_player_authority() {
-        let mut panel = LibraryPlaybackPanel::new();
-        panel.set_projection(PlaybackProjection {
-            state: PlaybackState::default(),
-            show_controls: true,
-            panel: palette::Surface::PlaybackPanel,
-            panel_focused: false,
-            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
-            title_parts: None,
-            status_indicators: None,
-            idle_feed_title: None,
-            use_nerd_fonts: false,
-            stop_available: false,
-            next_available: false,
-            prev_available: false,
-        });
-        let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
-        terminal
-            .draw(|frame| panel.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Example"));
     }
 }

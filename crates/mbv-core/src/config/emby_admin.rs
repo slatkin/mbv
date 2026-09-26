@@ -1,11 +1,15 @@
 // Emby setup persistence: legacy token migration and transactional
 // setup+secret writes.
 
-use super::*;
+use super::{
+    clear_service_secret_result, config_path, load_config, load_service_secret,
+    save_service_secret, save_service_secret_at, service_secret_path, token_cache_path, EmbySetup,
+    ServiceKind,
+};
 
 /// ── Legacy Emby token migration ──────────────────────────────────────
-/// One-time migration from the legacy flat `token.json` (server_url +
-/// token + user_id) to the per-Service `secrets/emby.json` + future
+/// One-time migration from the legacy flat `token.json` (`server_url` +
+/// token + `user_id`) to the per-Service `secrets/emby.json` + future
 /// `[server]` in config.toml. Write-new-before-remove-old ordering:
 /// the legacy file is only deleted after the new secret is durably
 /// written.
@@ -200,7 +204,7 @@ pub(super) fn save_emby_setup_at(setup: &EmbySetup, path: &std::path::Path) -> R
     );
     server.insert(
         "revision".to_string(),
-        toml::Value::Integer(setup.revision as i64),
+        toml::Value::Integer(i64::try_from(setup.revision).unwrap_or(i64::MAX)),
     );
     for key in ["username", "password", "api_key"] {
         server.remove(key);

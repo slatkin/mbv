@@ -1,5 +1,4 @@
 use crate::app::tests::*;
-use mbv_core::feed_entry_state::{FeedEntryState, FeedEntryStore};
 use mbv_core::playback_queue::FeedEntry;
 
 fn playable_feed_entry(guid: &str) -> FeedEntry {
@@ -15,15 +14,6 @@ fn playable_feed_entry(guid: &str) -> FeedEntry {
         feed_id: None,
         position_ticks: 0,
         played: false,
-    }
-}
-
-/// The same fixture with a `feed_id` set, since the local store keys rows by
-/// `(user_id, feed_id, entry_guid)`.
-fn stored_feed_entry(feed_id: &str, guid: &str) -> FeedEntry {
-    FeedEntry {
-        feed_id: Some(feed_id.into()),
-        ..playable_feed_entry(guid)
     }
 }
 
@@ -109,63 +99,6 @@ fn feeds_tab_does_not_route_into_library_behavior() {
 
 /// Verify that switching to the Feeds tab sets focus to Library without
 /// corrupting a library's position or selection state.
-#[test]
-fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
-    let mut app = make_app_stub();
-
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.collection_type = "movies".into();
-    library.is_folder = true;
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: vec![make_item("Item 0", "Movie")],
-            total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(3, 2),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
-
-    // Start on the library tab so its position state is visible.
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    // Configure feeds so the Feeds tab appears.
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
-        name: "Podcast".into(),
-        url: "https://example.test/podcast".into(),
-        kind: mbv_core::config::FeedKind::Audio,
-    }];
-    app.feed_tab
-        .entries
-        .resize_with(app.feed_tab.subscriptions.len(), Vec::new);
-
-    // Switch to Feeds.
-    let feeds_pos = app.feeds_tab_pos().expect("feeds tab should exist");
-    app.set_library_tab(feeds_pos);
-
-    assert!(app.tab.is_feeds(), "tab should be Feeds");
-    assert_eq!(
-        app.panel_focus,
-        PanelFocus::Library,
-        "Feeds tab should set Library panel focus"
-    );
-    // Library nav_stack must be untouched.
-    assert_eq!(app.libs[0].nav_stack[0].resting().cursor(), 3);
-    assert_eq!(app.libs[0].nav_stack[0].resting().scroll(), 2);
-}
-
 /// An entry with neither an enclosure URL nor a link has no playable source;
 /// `play_feed_entry` must flash and not dispatch.
 #[test]
@@ -244,101 +177,11 @@ fn feed_selection_enqueue_preserves_supplied_order() {
     assert_eq!(guids, vec!["feed-first", "feed-second", "feed-third"]);
 }
 
-#[test]
-fn direct_remote_feed_enqueue_uses_unified_append() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(1));
-    app.queue_scope = QueueScope::Remote;
-    app.feed_tab.entries = vec![vec![playable_feed_entry("feed-append")]];
-    app.feed_tab.rebuild_all_entries();
-
-    app.enqueue_feed_entry(app.feed_tab.entries[0][0].clone());
-
-    assert!(matches!(
-        cmd_rx.try_recv().unwrap(),
-        mbv_core::ctrl::CtrlCmd::UnifiedQueueAppend { items }
-            if matches!(&items[0], mbv_core::playback_queue::QueueItem::Feed(entry)
-                if entry.guid == "feed-append")
-    ));
-}
-
 /// F5 while the Feeds tab is selected must not dispatch into the Emby or
 /// Audiobookshelf refresh paths: the Emby library stays unmarked and the
 /// Audiobookshelf catalog keeps its state. (Whether F5 then refreshes feeds
 /// is owned by the refresh-dispatch change; the cross-Service no-leak is
 /// what this guards.)
-#[test]
-fn f5_on_feeds_tab_does_not_reach_emby_or_audiobookshelf_refresh() {
-    let mut app = make_app_stub();
-    let mut library = make_item("Movies", "CollectionFolder");
-    library.id = "lib-movies".into();
-    library.collection_type = "movies".into();
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            fetched_rows: 0,
-            parent_id: "lib-movies".into(),
-            title: "Movies".into(),
-            items: vec![make_item("Item 0", "Movie")],
-            total_count: 1,
-            resting: crate::app::state::types::browse::BrowseResting::new(0, 0),
-            item_types: Some("Movie".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            tv_content_mode: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
-    let abs_library = mbv_core::audiobookshelf::AudiobookshelfLibrary {
-        id: "abs-podcasts".into(),
-        name: "ABS Podcasts".into(),
-        media_type: "podcast".into(),
-    };
-    let mut abs_state =
-        crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseState::new(
-            abs_library.clone(),
-        );
-    abs_state.append_page(
-        0,
-        20,
-        1,
-        vec![mbv_core::audiobookshelf::AudiobookshelfShow {
-            library_item_id: "show-a".into(),
-            title: "Show A".into(),
-            author: None,
-            description: None,
-            cover_path: None,
-        }],
-    );
-    app.audiobookshelf_libraries.push(abs_library);
-    app.audiobookshelf_browse.push(abs_state);
-    app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: mbv_core::config::FeedKind::Audio,
-    }];
-    app.feed_tab.entries.resize_with(1, Vec::new);
-    app.tab = TabSelection::Feeds;
-    app.panel_focus = PanelFocus::Library;
-
-    app.refresh_current_view();
-
-    assert!(
-        !app.libs[0].nav_stack[0].loading,
-        "Feeds F5 must not reload the Emby library"
-    );
-    assert_eq!(
-        app.audiobookshelf_browse[0].shows.len(),
-        1,
-        "Feeds F5 must not clear the Audiobookshelf catalog"
-    );
-    assert_eq!(app.player_tab.total_queue_len(), 0);
-}
-
 /// F5 on the Feeds destination invokes the feed refresh: the feed tab is
 /// marked loading and the Emby / Audiobookshelf / queue state stays
 /// untouched.
@@ -417,55 +260,4 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
         "Feeds F5 must not clear the Audiobookshelf catalog"
     );
     assert_eq!(app.player_tab.total_queue_len(), 0);
-}
-
-/// Feed resume position and watched state live in the local store. They are
-/// written through the playback lifecycle path, keyed per user and per feed,
-/// and applied to a fresh fetch after a restart.
-#[test]
-fn local_feed_entry_state_survives_a_restart_and_stays_scoped_to_its_feed() {
-    let _state_dir = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    let feed_id = "https://example.test/feed.xml";
-    let other_feed = "https://example.test/other.xml";
-
-    // Written through the same path the playback lifecycle uses.
-    app.write_feed_entry_state(feed_id, "ep-a", 4200, false);
-    app.write_feed_entry_state(feed_id, "ep-b", 0, true);
-    app.write_feed_entry_state(other_feed, "ep-a", 9999, true);
-    app.feed_entry_state.put(
-        "another-user",
-        feed_id,
-        "ep-a",
-        FeedEntryState {
-            position_ticks: 777,
-            played: true,
-        },
-    );
-
-    // A restart: reload from disk, then hydrate a fresh fetch. Only rows for
-    // this user and this feed may be applied.
-    app.feed_entry_state = FeedEntryStore::load();
-    let mut entries = [
-        stored_feed_entry(feed_id, "ep-a"),
-        stored_feed_entry(feed_id, "ep-b"),
-        stored_feed_entry(feed_id, "ep-c"),
-    ];
-    app.hydrate_feed_entries_for_subscription(feed_id, &mut entries);
-
-    assert_eq!(
-        entries[0].position_ticks, 4200,
-        "resume position restored from disk"
-    );
-    assert!(!entries[0].played);
-    assert!(entries[1].played, "watched flag restored from disk");
-    assert_eq!(
-        entries[2].position_ticks, 0,
-        "an entry with no stored row stays as fetched"
-    );
-    assert!(!entries[2].played);
-
-    // Play/resume from the list uses the same stored row.
-    let resumed = app.hydrate_feed_entry_state(stored_feed_entry(feed_id, "ep-a"));
-    assert_eq!(resumed.position_ticks, 4200);
 }

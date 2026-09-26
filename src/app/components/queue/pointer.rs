@@ -16,7 +16,7 @@ impl QueueComponent {
     /// point resolution (design.md D6). The component emits a semantic `Msg`
     /// with a resolved `QueueSlotId`/scope — never raw coordinates — except
     /// the context-menu anchor (design.md D4).
-    pub(super) fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    pub(super) fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         // Queue does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;

@@ -30,8 +30,8 @@ impl Model {
         &mut self,
         f: impl FnOnce(&mut PodcastContent) -> R,
     ) -> Option<R> {
-        let key = self.abs_podcast_key()?;
-        self.update_library_owner(key, || Box::new(PodcastContent::new()), f)
+        let key: LibraryKey = self.abs_podcast_key()?;
+        self.update_library_owner(&key, || Box::new(PodcastContent::new()), f)
     }
 
     pub(in crate::app) fn push_audiobookshelf_podcast_content(&mut self) {
@@ -94,7 +94,8 @@ impl Model {
         self.app.set_panel_focus(crate::app::PanelFocus::Library);
         let index = self.app.tab.audiobookshelf_index();
         match intent {
-            PodcastEpisodeIntent::FocusOrPlay(Some(target)) => {
+            PodcastEpisodeIntent::FocusOrPlay(Some(target))
+            | PodcastEpisodeIntent::OpenOrPlay(Some(target)) => {
                 if let Some(index) = index {
                     self.app
                         .play_selected_audiobookshelf_episode_target(index, &target);
@@ -104,21 +105,15 @@ impl Model {
             // exist; a selectionless activation is a no-op (the episode
             // selection / hero-overlay paths left with the show browser,
             // reorganize-podcast-pill-navigation 3.1).
-            PodcastEpisodeIntent::FocusOrPlay(None) => {}
-            PodcastEpisodeIntent::OpenOrPlay(Some(target)) => {
-                if let Some(index) = index {
-                    self.app
-                        .play_selected_audiobookshelf_episode_target(index, &target);
-                }
-            }
-            PodcastEpisodeIntent::OpenOrPlay(None) => {}
+            PodcastEpisodeIntent::FocusOrPlay(None)
+            | PodcastEpisodeIntent::OpenOrPlay(None)
+            | PodcastEpisodeIntent::Enqueue(None) => {}
             PodcastEpisodeIntent::Enqueue(Some(target)) => {
                 if let Some(index) = index {
                     self.app
                         .enqueue_selected_audiobookshelf_episode_target(index, &target);
                 }
             }
-            PodcastEpisodeIntent::Enqueue(None) => {}
         }
     }
 }

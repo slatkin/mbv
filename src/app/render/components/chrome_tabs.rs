@@ -38,7 +38,11 @@ pub(in crate::app) struct TabBarModel<'a> {
 pub(in crate::app) fn tab_title_widths(titles: &[String]) -> Vec<u16> {
     titles
         .iter()
-        .map(|t| t.chars().count() as u16 + 2)
+        .map(|t| {
+            u16::try_from(t.chars().count())
+                .unwrap_or(u16::MAX)
+                .saturating_add(2)
+        })
         .collect()
 }
 
@@ -140,19 +144,30 @@ pub(in crate::app) fn render_tab_bar(
         width: tabs_w.saturating_sub(left_w + right_w),
         height: area.height,
     };
-    let tab_pos = model.selected;
-    let selected_tab = if tab_pos < vis_start || tab_pos >= vis_end {
+    let selected_position = model.selected;
+    let selected_tab = if selected_position < vis_start || selected_position >= vis_end {
         usize::MAX
     } else {
-        tab_pos - vis_start
+        selected_position - vis_start
     };
-    let mut tab_x = inner_tabs.x;
-    let tab_titles: Vec<Line> = model.titles[vis_start..vis_end]
+    paint_visible_tabs(f, inner_tabs, model, vis_start, vis_end, selected_tab, hits);
+}
+
+fn paint_visible_tabs(
+    f: &mut Frame,
+    area: Rect,
+    model: &TabBarModel<'_>,
+    visible_start: usize,
+    visible_end: usize,
+    selected_tab: usize,
+    hits: &mut Vec<(Rect, usize)>,
+) {
+    let mut tab_x = area.x;
+    let titles: Vec<Line<'_>> = model.titles[visible_start..visible_end]
         .iter()
         .enumerate()
-        .map(|(i, n)| {
-            let n = n.to_uppercase();
-            let position = vis_start + i;
+        .map(|(index, title)| {
+            let position = visible_start + index;
             let marked = model.markers.get(position).copied().unwrap_or(false);
             let marker_span = |style: Style| {
                 if marked {
@@ -161,13 +176,14 @@ pub(in crate::app) fn render_tab_bar(
                     Span::styled(" ", style)
                 }
             };
-            let line = if i == selected_tab {
+            let title = title.to_uppercase();
+            let line = if index == selected_tab {
                 let style = Style::default()
                     .fg(palette::TEXT_STRONG)
                     .add_modifier(Modifier::BOLD);
                 Line::from(vec![
                     Span::styled("▐", Style::default().fg(palette::ACCENT)),
-                    Span::styled(format!(" {n}"), style),
+                    Span::styled(format!(" {title}"), style),
                     marker_span(style),
                     Span::styled(" ", style),
                 ])
@@ -178,16 +194,16 @@ pub(in crate::app) fn render_tab_bar(
                     Style::default().fg(palette::TEXT_MUTED)
                 };
                 Line::from(vec![
-                    Span::styled(format!("  {n}"), style),
+                    Span::styled(format!("  {title}"), style),
                     marker_span(style),
                     Span::styled(" ", style),
                 ])
             };
-            let width = line.width() as u16;
+            let width = u16::try_from(line.width()).unwrap_or(u16::MAX);
             hits.push((
                 Rect {
                     x: tab_x,
-                    y: inner_tabs.y,
+                    y: area.y,
                     width,
                     height: 1,
                 },
@@ -198,12 +214,12 @@ pub(in crate::app) fn render_tab_bar(
         })
         .collect();
     f.render_widget(
-        Tabs::new(tab_titles)
+        Tabs::new(titles)
             .select(usize::MAX)
             .style(Style::default().fg(palette::TEXT_SECONDARY))
             .highlight_style(Style::default())
             .divider(Span::raw(""))
             .padding("", ""),
-        inner_tabs,
+        area,
     );
 }

@@ -24,12 +24,14 @@ pub struct ExecutionSequence {
 }
 
 impl ExecutionSequence {
+    #[must_use]
     pub fn empty() -> Self {
         Self::default()
     }
 
     /// Build from an owner-assigned `(slot id, item)` sequence. The active slot
     /// is retained only when it names one of the supplied slots.
+    #[must_use]
     pub fn from_slot_items(
         slots: Vec<(QueueSlotId, QueueItem)>,
         active_slot_id: Option<QueueSlotId>,
@@ -47,36 +49,44 @@ impl ExecutionSequence {
         }
     }
 
+    #[must_use]
     pub fn slots(&self) -> &[ExecSlot] {
         &self.slots
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.slots.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
     }
 
+    #[must_use]
     pub fn slot(&self, slot_id: QueueSlotId) -> Option<&ExecSlot> {
         self.slots.iter().find(|slot| slot.slot_id == slot_id)
     }
 
+    #[must_use]
     pub fn slot_index(&self, slot_id: QueueSlotId) -> Option<usize> {
         self.slots.iter().position(|slot| slot.slot_id == slot_id)
     }
 
+    #[must_use]
     pub fn active_slot_id(&self) -> Option<QueueSlotId> {
         self.active_slot_id
     }
 
+    #[must_use]
     pub fn active_slot(&self) -> Option<&ExecSlot> {
         self.active_slot_id.and_then(|id| self.slot(id))
     }
 
     /// True when the sequence contains any Audiobookshelf entries — the
     /// predicate that selects the active-file projection branch.
+    #[must_use]
     pub fn has_audiobookshelf_entries(&self) -> bool {
         self.slots
             .iter()
@@ -199,7 +209,7 @@ mod tests {
     #[should_panic(expected = "execution sequence slot identities must be unique")]
     fn rejects_duplicate_slot_ids_on_submission() {
         let id = QueueSlotId::from_raw(7);
-        ExecutionSequence::from_slot_items(vec![(id, item()), (id, item())], Some(id));
+        let _ = ExecutionSequence::from_slot_items(vec![(id, item()), (id, item())], Some(id));
     }
 
     #[test]

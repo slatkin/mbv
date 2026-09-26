@@ -42,11 +42,9 @@ impl App {
         }
         let player_vol = {
             let s = self.player.status.lock().unwrap();
-            if s.active {
-                Some(s.volume.clamp(0, 200) as u8)
-            } else {
-                None
-            }
+            s.active.then(|| {
+                u8::try_from(s.volume.clamp(0, 200)).expect("clamped player volume fits in u8")
+            })
         };
         if let Some(v) = player_vol {
             if v != self.ui_volume {
@@ -77,11 +75,11 @@ impl App {
         match ev {
             PlayerEvent::Stopped { .. } => Ok(self.handle_stopped_event(ev)),
             PlayerEvent::TrackCompleted { .. } => {
-                self.handle_track_completed_event(ev);
+                self.handle_track_completed_event(&ev);
                 Ok(false)
             }
             PlayerEvent::TrackChanged { .. } => {
-                self.handle_track_changed_event(ev);
+                self.handle_track_changed_event(&ev);
                 Ok(false)
             }
             PlayerEvent::QueueNextUp { next_idx } => {
@@ -98,7 +96,7 @@ impl App {
                 Ok(false)
             }
             PlayerEvent::UnifiedQueueUpdated(unified) => {
-                Ok(self.handle_unified_queue_updated(unified))
+                Ok(self.handle_unified_queue_updated(&unified))
             }
             PlayerEvent::RemoteDisconnected(reason) => Ok(self.handle_remote_disconnected(&reason)),
             ev => Err(ev),
@@ -113,6 +111,10 @@ impl App {
                 // config, so this client's own `always_skip_intro` is the
                 // only thing that decides whether to skip.
                 if self.config.lock().unwrap().always_skip_intro {
+                    #[expect(
+                        clippy::cast_precision_loss,
+                        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                    )]
                     let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);
@@ -227,6 +229,10 @@ impl App {
                 // stale-generation updates before emitting, and the daemon's
                 // generation counter is unrelated to this client's own runtime
                 // generation, so comparing them would reject every live event.
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                )]
                 let current_time_seconds =
                     ev.position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                 self.reconcile_audiobookshelf_progress(
@@ -430,7 +436,7 @@ impl App {
 
     /// Handle a `PlayerEvent::TrackCompleted` (extracted from
     /// `handle_player_event`).
-    fn handle_track_completed_event(&mut self, ev: PlayerEvent) {
+    fn handle_track_completed_event(&mut self, ev: &PlayerEvent) {
         let PlayerEvent::TrackCompleted {
             slot_id,
             position_ticks,
@@ -438,7 +444,7 @@ impl App {
             consume,
             progress_report_accepted,
             ..
-        } = ev
+        } = *ev
         else {
             return;
         };
@@ -505,11 +511,11 @@ impl App {
 
     /// Handle a `PlayerEvent::TrackChanged` (extracted from
     /// `handle_player_event`).
-    fn handle_track_changed_event(&mut self, ev: PlayerEvent) {
+    fn handle_track_changed_event(&mut self, ev: &PlayerEvent) {
         let PlayerEvent::TrackChanged {
             slot_id: target_slot_id,
             transition,
-        } = ev
+        } = *ev
         else {
             return;
         };
@@ -615,7 +621,7 @@ impl App {
     /// ends the tick early.
     fn handle_unified_queue_updated(
         &mut self,
-        unified: Box<mbv_core::ctrl::UnifiedQueueStateData>,
+        unified: &mbv_core::ctrl::UnifiedQueueStateData,
     ) -> bool {
         // Adopt the owner snapshot as one value. Do not combine its
         // queue with a separately delivered PlayerStatus coordinate.
@@ -658,8 +664,8 @@ impl App {
         }
 
         let queue = self.playback_queue_mut();
-        queue.set_unified_state(&unified, cursor);
-        self.adopt_owner_source(&unified);
+        queue.set_unified_state(unified, cursor);
+        self.adopt_owner_source(unified);
         false
     }
 
@@ -775,10 +781,7 @@ fn pipe_playback_message(status: &mbv_core::ctrl::PipePlaybackStatus) -> String 
         }
         PipePlaybackPhase::OutputBuffering => {
             let remaining = status.estimated_remaining_ms.unwrap_or_default();
-            format!(
-                "Output started; estimated output buffering (~{} ms remaining)",
-                remaining
-            )
+            format!("Output started; estimated output buffering (~{remaining} ms remaining)")
         }
     }
 }

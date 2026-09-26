@@ -1,11 +1,15 @@
 //! Control-client-originated daemon events: control commands, resolved play
 //! intents, client disconnects, and graceful shutdown.
 
-use super::super::*;
-use super::{DaemonLoop, EventOutcome};
+use super::super::{
+    audio_only_rejection, handle_ctrl_for_role, install_daemon_audiobookshelf_context,
+    owner_admin_transport_allowed, play_resolved_items, reconcile_packaged_audiobookshelf,
+    reconcile_packaged_emby, reset_slot_jumps, send_to, CtrlClientId, CtrlContext, CtrlSender,
+    DaemonLoop, DaemonOwnerContext, DaemonRole,
+};
+use super::EventOutcome;
 use crate::api::EmbyItem;
 use crate::ctrl::{CtrlCmd, CtrlEvent, DisconnectReason, PlaybackGeneration, PlaybackRequestId};
-use crate::daemon::ctrl::send_to;
 use crate::playback_queue::QueueItem;
 
 impl DaemonLoop {
@@ -15,7 +19,7 @@ impl DaemonLoop {
         &mut self,
         cmd: CtrlCmd,
         client_id: CtrlClientId,
-        reply_tx: CtrlSender,
+        reply_tx: &CtrlSender,
     ) -> EventOutcome {
         if !self.ctrl_clients.lock().unwrap().has_client(client_id) {
             return EventOutcome::CONTINUE;
@@ -23,9 +27,7 @@ impl DaemonLoop {
         if let CtrlCmd::ApplyServiceSetup { kind, revision } = cmd {
             let transport = self.ctrl_clients.lock().unwrap().transport(client_id);
             let allowed = owner_admin_transport_allowed(self.role, kind, transport);
-            let result = if !allowed {
-                Err(crate::ctrl::ServiceSetupRejection::TransitionRejected)
-            } else {
+            let result = if allowed {
                 match kind {
                     crate::config::ServiceKind::Emby => reconcile_packaged_emby(
                         revision,
@@ -56,14 +58,13 @@ impl DaemonLoop {
                         )
                     }
                 }
+            } else {
+                Err(crate::ctrl::ServiceSetupRejection::TransitionRejected)
             };
             match result {
-                Ok(()) => send_to(
-                    &reply_tx,
-                    &CtrlEvent::ServiceSetupApplied { kind, revision },
-                ),
+                Ok(()) => send_to(reply_tx, &CtrlEvent::ServiceSetupApplied { kind, revision }),
                 Err(reason) => send_to(
-                    &reply_tx,
+                    reply_tx,
                     &CtrlEvent::ServiceSetupRejected {
                         kind,
                         revision,
@@ -74,7 +75,7 @@ impl DaemonLoop {
             if result.is_ok() && kind == crate::config::ServiceKind::Audiobookshelf {
                 install_daemon_audiobookshelf_context(
                     &self.player,
-                    &self.audiobookshelf_runtime,
+                    self.audiobookshelf_runtime.as_ref(),
                     &self.merged_tx,
                 );
             }
@@ -84,7 +85,7 @@ impl DaemonLoop {
         handle_ctrl_for_role(
             cmd,
             CtrlContext {
-                reply_tx: &reply_tx,
+                reply_tx,
                 client_id,
                 client: &self.client,
                 player: &self.player,

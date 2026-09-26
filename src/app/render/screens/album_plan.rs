@@ -34,24 +34,21 @@ fn resolve_group_album(
     catalog: Option<&GroupedAlbumCatalog>,
     index: usize,
 ) -> (String, String, String, ArtistKey) {
-    match catalog {
-        Some(cat) => {
-            let pos = cat.index_to_entry.get(&index).copied().unwrap_or(0);
-            let entry = &cat.entries[pos];
-            (
-                entry.artist.clone(),
-                entry.year.clone(),
-                entry.name.clone(),
-                entry.artist_key.clone(),
-            )
-        }
-        None => {
-            let item = &albums[index];
-            let artist = resolve_group_album_artist(album_artist_cache, item);
-            let (year, name) = derive_album_display_name(item);
-            let key = ArtistKey::Fallback(artist.clone());
-            (artist, year, name, key)
-        }
+    if let Some(cat) = catalog {
+        let pos = cat.index_to_entry.get(&index).copied().unwrap_or(0);
+        let entry = &cat.entries[pos];
+        (
+            entry.artist.clone(),
+            entry.year.clone(),
+            entry.name.clone(),
+            entry.artist_key.clone(),
+        )
+    } else {
+        let item = &albums[index];
+        let artist = resolve_group_album_artist(album_artist_cache, item);
+        let (year, name) = derive_album_display_name(item);
+        let key = ArtistKey::Fallback(artist.clone());
+        (artist, year, name, key)
     }
 }
 

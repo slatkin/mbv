@@ -1,4 +1,12 @@
-use super::*;
+use super::PlayerStatus;
+use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
+use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc, Arc, Mutex,
+};
+use std::thread;
+use std::time::Duration;
 
 // Snapshotted inputs for a stopped-report job: the values report_stopped
 // captures today before handing off, so the worker never reads ids/status
@@ -85,11 +93,13 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
                     StartIds::Deferred { ids, is_audio } => {
                         let info = client.get_playback_info(&item.id);
                         {
-                            let mut locked = ids.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut locked = ids
+                                .lock()
+                                .unwrap_or_else(std::sync::PoisonError::into_inner);
                             locked.0 = ItemId::new(item.id.clone());
                             locked.1 = info.media_source_id.clone();
                             locked.2 = info.session_id.clone();
-                        }
+                        };
                         is_audio.store(item.is_audio(), Ordering::Relaxed);
                         (info.media_source_id, info.session_id)
                     }
@@ -171,16 +181,20 @@ impl SessionReporter {
         if !self.has_session() {
             return None;
         }
-        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let (id, msid, sid) = self
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let is_audio = self.is_audio.load(Ordering::Relaxed);
         let pos = if is_audio { 0 } else { last_valid_pos };
         let runtime_ticks = self
             .status
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .runtime_ticks;
         Some(StoppedReportData {
-            client: self.client.clone(),
+            client: Arc::clone(&self.client),
             ws_tx: self.ws_tx.clone(),
             id,
             msid,
@@ -199,7 +213,7 @@ impl SessionReporter {
         !self
             .ids
             .lock()
-            .unwrap_or_else(|e| e.into_inner())
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .0
             .as_str()
             .is_empty()
@@ -209,7 +223,10 @@ impl SessionReporter {
     /// Called when transitioning from Emby playback to a feed entry to
     /// prevent stale session state from leaking into the feed lifecycle.
     pub(super) fn clear_session(&self) {
-        let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
+        let mut ids = self
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         ids.0 = ItemId::empty();
         ids.1 = MediaSourceId::new("");
         ids.2 = EmbySessionId::new("");
@@ -223,9 +240,16 @@ impl SessionReporter {
         if !self.has_session() {
             return;
         }
-        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let (id, msid, sid) = self
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         let (pos, runtime, paused) = {
-            let s = self.status.lock().unwrap_or_else(|e| e.into_inner());
+            let s = self
+                .status
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             (s.position_ticks, s.runtime_ticks, s.paused)
         };
         let report = crate::api::ProgressReport {
@@ -280,7 +304,7 @@ impl SessionReporter {
         session_id: &EmbySessionId,
     ) {
         let _ = self.job_tx.send(ReportJob::Start {
-            client: self.client.clone(),
+            client: Arc::clone(&self.client),
             item: Box::new(item.clone()),
             ids: StartIds::Resolved {
                 media_source_id: media_source_id.clone(),
@@ -310,7 +334,12 @@ impl SessionReporter {
     }
 
     pub(super) fn report_ping(&self) {
-        let sid = self.ids.lock().unwrap_or_else(|e| e.into_inner()).2.clone();
+        let sid = self
+            .ids
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .2
+            .clone();
         self.client.report_ping(&sid);
     }
 
@@ -323,11 +352,14 @@ impl SessionReporter {
         // Update ids before report_start so the progress reporter (which reads
         // ids on a 10-second timer) always sees the new item.
         {
-            let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
+            let mut ids = self
+                .ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             ids.0 = ItemId::new(item.id.clone());
             ids.1 = info.media_source_id.clone();
             ids.2 = info.session_id.clone();
-        }
+        };
         self.is_audio.store(item.is_audio(), Ordering::Relaxed);
         let ok = self
             .client
@@ -344,11 +376,14 @@ impl SessionReporter {
         let info = self.client.get_playback_info(&new_item.id);
         let ext_sub_urls = info.external_subtitle_urls;
         {
-            let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
+            let mut ids = self
+                .ids
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             ids.0 = ItemId::new(new_item.id.clone());
             ids.1 = info.media_source_id.clone();
             ids.2 = info.session_id.clone();
-        }
+        };
         self.is_audio.store(new_item.is_audio(), Ordering::Relaxed);
         self.report_start_background(new_item, &info.media_source_id, &info.session_id);
         ext_sub_urls
@@ -361,11 +396,11 @@ impl SessionReporter {
     pub(super) fn transition_to_deferred(&self, new_item: &EmbyItem, last_valid_pos: i64) {
         self.report_stopped_background(last_valid_pos);
         let _ = self.job_tx.send(ReportJob::Start {
-            client: self.client.clone(),
+            client: Arc::clone(&self.client),
             item: Box::new(new_item.clone()),
             ids: StartIds::Deferred {
-                ids: self.ids.clone(),
-                is_audio: self.is_audio.clone(),
+                ids: Arc::clone(&self.ids),
+                is_audio: Arc::clone(&self.is_audio),
             },
         });
     }

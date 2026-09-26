@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    cache_dir, config_path, library_position_state_path, persist_emby_setup_and_secret,
+    queue_state_path, save_queue_state, service_secret_path, token_cache_path,
+    write_config_text_at, EmbySetup, QueueState, ServiceKind,
+};
 
 /// A restorable snapshot of the files owned by Emby setup administration.
 ///
@@ -35,7 +39,7 @@ pub fn snapshot_emby_owned_state() -> Result<EmbyOwnedStateSnapshot, String> {
     })
 }
 
-fn restore_file(path: &std::path::Path, bytes: &Option<Vec<u8>>) -> Result<(), String> {
+fn restore_file(path: &std::path::Path, bytes: Option<&[u8]>) -> Result<(), String> {
     match bytes {
         Some(bytes) => {
             if let Some(parent) = path.parent() {
@@ -56,11 +60,17 @@ fn restore_file(path: &std::path::Path, bytes: &Option<Vec<u8>>) -> Result<(), S
 
 /// Restore a snapshot after cleanup or persistence failed.
 pub fn restore_emby_owned_state(snapshot: &EmbyOwnedStateSnapshot) -> Result<(), String> {
-    restore_file(&queue_state_path(), &snapshot.queue)?;
-    restore_file(&library_position_state_path(), &snapshot.library_positions)?;
-    restore_file(&config_path(), &snapshot.config)?;
-    restore_file(&token_cache_path(), &snapshot.legacy_token)?;
-    restore_file(&service_secret_path(ServiceKind::Emby), &snapshot.secret)?;
+    restore_file(&queue_state_path(), snapshot.queue.as_deref())?;
+    restore_file(
+        &library_position_state_path(),
+        snapshot.library_positions.as_deref(),
+    )?;
+    restore_file(&config_path(), snapshot.config.as_deref())?;
+    restore_file(&token_cache_path(), snapshot.legacy_token.as_deref())?;
+    restore_file(
+        &service_secret_path(ServiceKind::Emby),
+        snapshot.secret.as_deref(),
+    )?;
     restore_emby_image_cache(&snapshot.image_cache)
 }
 

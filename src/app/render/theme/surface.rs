@@ -20,8 +20,7 @@
 //! wherever the declined branch moved a surface (the library column, the row
 //! above the pill bar) and never where main did not.
 
-use super::*;
-use ratatui::style::Color;
+use super::{Color, SURFACE_FOCUSED, SURFACE_RESTING};
 
 /// The nesting level of a rendered surface (design D2).
 ///
