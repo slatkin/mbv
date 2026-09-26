@@ -28,4 +28,4 @@
 
 ## 6. Final gates
 
-- [ ] 6.1 Full gates: `cargo fmt` (then `-- --check`), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv -p mbv-core`, `make check-code-file-lines`. Verify: all green; commit per repo git-workflow.
+- [x] 6.1 Full gates: `cargo fmt` (then `-- --check`), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv -p mbv-core`, `make check-code-file-lines`. Verify: all green; commit per repo git-workflow.
