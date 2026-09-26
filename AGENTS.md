@@ -108,6 +108,14 @@ per breakpoint; keyboard precedence only in `src/app/input/`.
   the user explicitly asks for a script, per request.
 * check: `cargo check -p <package>`
 * test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo test --release -- --test-threads=4` (fd-budget throttling, see `build.yml` comment); use `cargo llvm-cov` to check coverage.
+* **A test owns a contract or does not exist.** Before adding a test, name
+  the contract and the layer that owns it (mbv-frontend skill, Tests matrix);
+  if another test already covers the claim, extend that test or add nothing.
+  `#[case]` tables keep only cases whose expected outcomes differ. A
+  regression test cites the issue or commit it guards, in its name or a
+  comment. A plan item that only says "add tests" is not sufficient — name
+  the contract. Test count and coverage are never goals
+  (`docs/invariants/14-test-ownership.md`).
 * **Unit tests are hermetic mocks — no live or smoke tests.** No live mpv handle
   (`init_mpv`/`test_mpv`), real config/state dirs, or live servers; mock the
   boundary. Anything needing the real external is a manual check.
