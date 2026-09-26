@@ -285,7 +285,7 @@ impl AudiobookshelfItem {
     }
 
     #[must_use]
-    pub fn media_kind(&self) -> &str {
+    pub fn media_kind(&self) -> &'static str {
         "Audio"
     }
 
@@ -403,7 +403,7 @@ impl AudiobookshelfItem {
     }
 
     #[must_use]
-    pub fn playlist_item_id(&self) -> &str {
+    pub fn playlist_item_id(&self) -> &'static str {
         ""
     }
 
@@ -618,7 +618,7 @@ impl QueueItem {
         match self {
             Self::Emby(item) => item.display_name_parts(),
             Self::Audiobookshelf(item) => item.display_name_parts(),
-            other => (other.display_name(), None),
+            other @ Self::Feed(_) => (other.display_name(), None),
         }
     }
 

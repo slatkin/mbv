@@ -54,9 +54,9 @@ pub const CTRL_CAP_ABS_QUEUE: &str = "abs-queue";
 /// Peer can receive the redacted provider-qualified Audiobookshelf progress
 /// event. Additive — no protocol-version bump.
 pub const CTRL_CAP_ABS_PROGRESS: &str = "abs-progress";
-/// Peer can decode `QueueItem::AudiobookshelfBook` in unified queue commands,
-/// snapshots, and broadcasts. Static protocol support only — does not imply
-/// a daemon owner is eligible to bind or play the item. Additive — no
+/// Peer can decode the Audiobookshelf book shape in unified queue commands,
+/// snapshots, and broadcasts. Static protocol support only — does not imply a
+/// daemon owner is eligible to bind or play the item. Additive — no
 /// protocol-version bump.
 pub const CTRL_CAP_ABS_BOOK_QUEUE: &str = "abs-book-queue";
 /// Peer can receive the redacted provider-qualified Audiobookshelf book
