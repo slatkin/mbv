@@ -1,4 +1,5 @@
 use super::*;
+use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use rstest::rstest;
 
 // ── Feed playback plumbing (task 5.1) ─────────────────────────────────────

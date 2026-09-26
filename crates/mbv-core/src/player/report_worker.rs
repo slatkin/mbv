@@ -1,6 +1,6 @@
 use super::PlayerStatus;
 use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
-use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
+use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc, Arc, Mutex,

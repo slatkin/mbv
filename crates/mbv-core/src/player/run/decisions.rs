@@ -1,6 +1,6 @@
 use super::{IntroState, NextUp};
-use crate::id_types::ItemId;
 use crate::playback_queue::{QueueItem, QueueSlotId};
+use mbv_ids::ItemId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(in crate::player) struct ActiveItemState {

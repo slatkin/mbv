@@ -1708,6 +1708,7 @@ dependencies = [
  "libc",
  "log",
  "mbv-core",
+ "mbv-ids",
  "mimalloc",
  "nix 0.31.3",
  "pipewire",
@@ -1737,6 +1738,7 @@ dependencies = [
  "libmpv2",
  "libmpv2-sys",
  "log",
+ "mbv-ids",
  "mdns-sd",
  "percent-encoding",
  "rand 0.10.2",
@@ -1749,6 +1751,13 @@ dependencies = [
  "tungstenite",
  "ureq",
  "uuid",
+]
+
+[[package]]
+name = "mbv-ids"
+version = "0.21.2"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

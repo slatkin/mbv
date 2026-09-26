@@ -1,6 +1,5 @@
-use super::{
-    gen_session_id, parse_item, EmbyClient, EmbyItem, EmbySessionId, MediaSourceId, PlaybackInfo,
-};
+use super::{gen_session_id, parse_item, EmbyClient, EmbyItem, PlaybackInfo};
+use mbv_ids::{EmbySessionId, MediaSourceId};
 use serde_json::Value;
 
 /// The resolved cast-bound media plus the Emby session/media-source identity

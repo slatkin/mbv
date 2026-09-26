@@ -1,5 +1,6 @@
 use super::*;
 use crate::api::EmbyImageTags;
+use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 
 // ── shift_index_for_move ──────────────────────────────────────────────────
 

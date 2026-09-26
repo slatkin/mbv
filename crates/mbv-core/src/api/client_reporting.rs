@@ -1,4 +1,5 @@
-use super::{EmbyClient, EmbyItem, EmbySessionId, ItemId, MediaSourceId, TICKS_PER_SECOND};
+use super::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
+use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 
 /// One progress report for both progress transports. The two transports
 /// previously took the same adjacent same-type args (`position_ticks` /
