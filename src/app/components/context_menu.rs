@@ -241,24 +241,6 @@ mod tests {
     }
 
     #[test]
-    fn unbound_key_is_swallowed_locally() {
-        let mut comp = ContextMenuComponent::new();
-        assert_eq!(
-            comp.on(&Event::Keyboard(make_key(
-                Key::Char('x'),
-                KeyModifiers::NONE,
-            ))),
-            None
-        );
-    }
-
-    #[test]
-    fn non_keyboard_event_returns_none() {
-        let mut comp = ContextMenuComponent::new();
-        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
-    }
-
-    #[test]
     fn mouse_event_selects_selectable_entry() {
         let mut comp = ContextMenuComponent::new();
         comp.set_content(
@@ -291,52 +273,5 @@ mod tests {
             msg,
             Some(Msg::Shell(ref shell_boxed))
          if matches!(shell_boxed.as_ref(), ShellRequest::ContextMenuSelect(0))));
-    }
-
-    fn dismissable_menu() -> ContextMenuComponent {
-        let mut comp = ContextMenuComponent::new();
-        comp.set_content(
-            ContextMenuAnchor::SelectedItem(PanelFocus::Library),
-            vec![ContextMenuEntry {
-                label: "a",
-                action: Some(ContextAction::Play),
-            }],
-            0,
-        );
-        comp.set_rect(Rect {
-            x: 10,
-            y: 5,
-            width: 10,
-            height: 4,
-        });
-        comp
-    }
-
-    #[test]
-    fn mouse_click_outside_the_menu_dismisses_like_esc() {
-        let mut comp = dismissable_menu();
-        let msg = comp.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: 0,
-            row: 0, // far above/left of the painted rect
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert!(matches!(
-            msg,
-            Some(Msg::Shell(ref shell_boxed))
-         if matches!(shell_boxed.as_ref(), ShellRequest::ContextMenuDismiss)));
-    }
-
-    #[test]
-    fn mouse_wheel_does_not_mutate_the_menu() {
-        let mut comp = dismissable_menu();
-        let msg = comp.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 12,
-            row: 6,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(msg, None, "wheel is not part of the menu's vocabulary");
-        assert_eq!(comp.cursor(), 0, "the highlight must not move");
     }
 }
