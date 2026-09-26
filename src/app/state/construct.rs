@@ -98,7 +98,7 @@ impl App {
 
     #[expect(
         clippy::too_many_lines,
-        reason = "App::build is one complete App construction; splitting it before the decompose-app-god-type work would need a Default impl over ~470 non-Default fields — blocked on that change (approved, issue #804)"
+        reason = "App construction explicitly initializes heterogeneous fields after extracting four owned seams"
     )]
     pub(in crate::app) fn build(init: AppInit) -> Self {
         // Must run before `load_prefs()`: the guard redirects `config_dir()`/

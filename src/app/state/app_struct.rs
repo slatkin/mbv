@@ -73,7 +73,7 @@ impl LevelFillState {
 
 #[expect(
     clippy::struct_excessive_bools,
-    reason = "26 independent core app-state bits spanning launch/readiness, load-in-flight, persistence/UI options, and transient connection flags across unrelated subsystems; grouping would be a pure lint dodge (design analysis, issue #804)"
+    reason = "23 independent core app-state bits spanning launch/readiness, load-in-flight, persistence/UI options, and transient connection flags across unrelated subsystems; grouping would be a pure lint dodge (design analysis, issue #804)"
 )]
 pub struct App {
     /// General application configuration is independent of the optional Emby
