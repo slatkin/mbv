@@ -3,21 +3,20 @@ use crate::app::dispatch::session::service_startup::{
     AudiobookshelfStartupReceiver, SetupCompletion, Startup, StartupReceiver,
 };
 use crate::app::dispatch::session::services_settings::{AudiobookshelfSetupForm, EmbySetupForm};
-use crate::app::state::app_init::AppInit;
 use std::sync::mpsc;
 
 /// Startup, setup, and replacement state for the remote Services.
 pub(in crate::app) struct ServiceSetup {
-    /// Worker for the initial Emby setup attempt.
+    /// Worker for an Emby startup attempt, initial or retried.
     pub(in crate::app) emby_startup_rx: Option<StartupReceiver>,
-    /// Config and generation queued for initial Emby startup.
+    /// Config and generation queued for Emby startup.
     pub(in crate::app) emby_startup_request: Option<(
         crate::config::Config,
         mbv_core::service_runtime::SetupGeneration,
     )>,
-    /// Worker for the initial Audiobookshelf setup attempt.
+    /// Worker for an Audiobookshelf startup attempt, initial or retried.
     pub(in crate::app) audiobookshelf_startup_rx: Option<AudiobookshelfStartupReceiver>,
-    /// Config and generation queued for initial Audiobookshelf startup.
+    /// Config and generation queued for Audiobookshelf startup.
     pub(in crate::app) audiobookshelf_startup_request: Option<(
         crate::config::Config,
         mbv_core::service_runtime::SetupGeneration,
@@ -42,18 +41,18 @@ pub(in crate::app) struct ServiceSetup {
 }
 
 impl ServiceSetup {
-    pub(in crate::app) fn new(init: &mut AppInit) -> Self {
+    pub(in crate::app) fn new() -> Self {
         Self {
-            emby_startup_rx: init.emby_startup_rx.take(),
-            emby_startup_request: init.emby_startup_request.take(),
-            audiobookshelf_startup_rx: init.audiobookshelf_startup_rx.take(),
-            audiobookshelf_startup_request: init.audiobookshelf_startup_request.take(),
+            emby_startup_rx: None,
+            emby_startup_request: None,
+            audiobookshelf_startup_rx: None,
+            audiobookshelf_startup_request: None,
             audiobookshelf_catalog_rx: None,
-            audiobookshelf_test_rx: init.audiobookshelf_test_rx.take(),
-            audiobookshelf_setup_rx: init.audiobookshelf_setup_rx.take(),
-            emby_setup_form: init.emby_setup_form.take(),
+            audiobookshelf_test_rx: None,
+            audiobookshelf_setup_rx: None,
+            emby_setup_form: None,
             audiobookshelf_setup_form: None,
-            emby_setup_rx: init.emby_setup_rx.take(),
+            emby_setup_rx: None,
             pending_emby_replacement: None,
             pending_audiobookshelf_replacement: None,
         }

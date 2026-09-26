@@ -102,7 +102,7 @@ impl App {
         clippy::too_many_lines,
         reason = "App::build is one complete App construction; splitting it before the decompose-app-god-type work would need a Default impl over ~470 non-Default fields — blocked on that change (approved, issue #804)"
     )]
-    pub(in crate::app) fn build(mut init: AppInit) -> Self {
+    pub(in crate::app) fn build(init: AppInit) -> Self {
         // Must run before `load_prefs()`: the guard redirects `config_dir()`/
         // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
         // its path through that same lookup. Installing the guard after
@@ -129,7 +129,7 @@ impl App {
         );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         let (cast_tx, cast_rx) = mpsc::channel();
-        let setup = crate::app::state::service_setup::ServiceSetup::new(&mut init);
+        let setup = crate::app::state::service_setup::ServiceSetup::new();
         let mut app = App {
             #[cfg(test)]
             _test_state_dir_guard: test_state_dir_guard,
@@ -399,14 +399,6 @@ impl App {
                 audiobookshelf_configured,
                 audiobookshelf_credential_present,
             ),
-            emby_startup_rx: None,
-            emby_startup_request: None,
-            audiobookshelf_startup_rx: None,
-            audiobookshelf_startup_request: None,
-            audiobookshelf_test_rx: None,
-            audiobookshelf_setup_rx: None,
-            emby_setup_form: None,
-            emby_setup_rx: None,
             player,
             player_rx,
             ws_rx,

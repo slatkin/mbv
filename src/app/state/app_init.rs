@@ -12,29 +12,6 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) config: Arc<Mutex<crate::config::Config>>,
     pub(in crate::app) emby_runtime: EmbyRuntime,
     pub(in crate::app) audiobookshelf_runtime: AudiobookshelfRuntime,
-    pub(in crate::app) emby_startup_rx:
-        Option<crate::app::dispatch::session::service_startup::StartupReceiver>,
-    pub(in crate::app) emby_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(in crate::app) audiobookshelf_startup_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfStartupReceiver>,
-    pub(in crate::app) audiobookshelf_startup_request: Option<(
-        crate::config::Config,
-        mbv_core::service_runtime::SetupGeneration,
-    )>,
-    pub(in crate::app) audiobookshelf_test_rx:
-        Option<crate::app::dispatch::session::service_startup::AudiobookshelfStartupReceiver>,
-    pub(in crate::app) audiobookshelf_setup_rx: Option<
-        mpsc::Receiver<
-            crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion,
-        >,
-    >,
-    pub(in crate::app) emby_setup_form:
-        Option<crate::app::dispatch::session::services_settings::EmbySetupForm>,
-    pub(in crate::app) emby_setup_rx:
-        Option<mpsc::Receiver<crate::app::dispatch::session::service_startup::SetupCompletion>>,
     pub(in crate::app) player: PlayerProxy,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
