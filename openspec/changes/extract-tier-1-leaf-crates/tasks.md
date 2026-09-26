@@ -244,11 +244,11 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
   crates with a one-line role each, under the existing `crates/` entries.
   Verify: `AGENTS.md` names all six of `mbv-ids`, `mbv-keybinds`, `mbv-net`,
   `mbv-ws`, `mbv-visualizer`, `mbv-text`.
-- [ ] 7.2 Confirm no old path survives anywhere:
+- [x] 7.2 Confirm no old path survives anywhere:
   `rg 'mbv_core::(ws|keybinds|id_types|mock_http|native_tls_agent|ItemId|MediaSourceId|EmbySessionId)|crate::(bounded|stream|encode_path_segment|reconnect_backoff_sleep)|visualizer_worker|fuzzy_match|text_safety' src/ crates/ docs/ openspec/specs/ AGENTS.md CONTEXT.md`
   returns only hits inside the six new crates' own source. Verify: command output
   contains no path under `src/`, `crates/mbv-core/`, or `crates/mbvd/`.
-- [ ] 7.3 Run the full gate one final time plus
+- [x] 7.3 Run the full gate one final time plus
   `make check-code-file-lines` and `cargo fmt --all -- --check`. Verify: all
   clean, no governed file over 800 lines.
 - [ ] 7.4 Comment on issue #814 recording that Tier 1 is complete, listing the
