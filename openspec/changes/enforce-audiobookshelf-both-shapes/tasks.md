@@ -12,10 +12,10 @@
 
 ## 3. Fix call sites (compiler-driven)
 
-- [ ] 3.1 Fix every `mbv-core` player/, cast/ and remote_player/ compile error. Rewrite `is_audiobookshelf_any()` as `is_audiobookshelf()`, and rewrite paired `Audiobookshelf(_) | AudiobookshelfBook(_)` arms as `Audiobookshelf(_)`. Shape-specific sites (`sources.rs`, `reporting.rs`, `decisions.rs`, `player.rs`, `types.rs`, `proxy.rs` capability gates, `cast/dispatch.rs`) match `AudiobookshelfItem::Episode` or `Book` explicitly. Verify: no errors in those modules under `cargo check -p mbv-core`.
-- [ ] 3.2 Fix the remaining `mbv-core` errors (daemon/, config/, ctrl, playback/) the same way. `daemon/control_queue.rs` keeps its two separate capability gates by matching the nested shapes. Verify: `cargo check -p mbv-core` and `cargo nextest run -p mbv-core` pass.
-- [ ] 3.3 Fix the `src/app` and `crates/mbvd` errors (`dispatch/audiobookshelf/*`, `context_menu_capabilities.rs`, tests). Verify: `cargo check --workspace --all-targets` and `cargo nextest run --workspace` pass.
-- [ ] 3.4 Check that no deleted predicate is left anywhere. Verify: `rg 'is_audiobookshelf_any|is_audiobookshelf_book|QueueItem::AudiobookshelfBook'` returns nothing, and `cargo clippy --workspace --all-targets -- -D warnings` plus `cargo fmt --all -- --check` are clean.
+- [x] 3.1 Fix every `mbv-core` player/, cast/ and remote_player/ compile error. Rewrite `is_audiobookshelf_any()` as `is_audiobookshelf()`, and rewrite paired `Audiobookshelf(_) | AudiobookshelfBook(_)` arms as `Audiobookshelf(_)`. Shape-specific sites (`sources.rs`, `reporting.rs`, `decisions.rs`, `player.rs`, `types.rs`, `proxy.rs` capability gates, `cast/dispatch.rs`) match `AudiobookshelfItem::Episode` or `Book` explicitly. Verify: no errors in those modules under `cargo check -p mbv-core`.
+- [x] 3.2 Fix the remaining `mbv-core` errors (daemon/, config/, ctrl, playback/) the same way. `daemon/control_queue.rs` keeps its two separate capability gates by matching the nested shapes. Verify: `cargo check -p mbv-core` and `cargo nextest run -p mbv-core` pass.
+- [x] 3.3 Fix the `src/app` and `crates/mbvd` errors (`dispatch/audiobookshelf/*`, `context_menu_capabilities.rs`, tests). Verify: `cargo check --workspace --all-targets` and `cargo nextest run --workspace` pass.
+- [x] 3.4 Check that no deleted predicate is left anywhere. Verify: `rg 'is_audiobookshelf_any|is_audiobookshelf_book|QueueItem::AudiobookshelfBook'` returns nothing, and `cargo clippy --workspace --all-targets -- -D warnings` plus `cargo fmt --all -- --check` are clean.
 
 ## 4. Retire the invariant
 
