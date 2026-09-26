@@ -65,7 +65,7 @@ mod tests {
         }
     }
 
-    /// `(sort_str, item)` pair; sort_str stands in for `effective_sort_str`
+    /// `(sort_str, item)` pair; `sort_str` stands in for `effective_sort_str`
     /// (article-stripped where the fixture name has one).
     fn pair(sort_str: &str, target: &str) -> (String, MediaListRow<String>) {
         (sort_str.into(), item(target, target))

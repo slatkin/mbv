@@ -13,7 +13,7 @@ impl App {
     pub(super) fn handle_lib_loaded(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         mut level: BrowseLevel,
     ) {
         // Filtering belongs at the event boundary so every level-row producer
@@ -22,7 +22,6 @@ impl App {
         self.retain_grouped_music_level_items(lib_idx, &mut level);
         // The drain's own parent id tells a root load apart from a deeper
         // level's load for the pending Series landing retry below.
-        let loaded_parent_id = parent_id.clone();
         self.handle_loaded_level(lib_idx, parent_id, level);
         if let Some(mode) = self.libs[lib_idx].tv_content_mode.clone() {
             if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
@@ -44,7 +43,7 @@ impl App {
         // A pending Series landing retries once this library's ROOT level has
         // drained (U2 correction: ensure-then-land); a deeper level's load
         // re-arms and waits.
-        self.retry_pending_series_landing(lib_idx, &loaded_parent_id);
+        self.retry_pending_series_landing(lib_idx, parent_id);
     }
 
     /// On the FIRST unfiltered load of a library's top browse level, this
@@ -79,14 +78,13 @@ impl App {
         }
         let total = level.total_count;
         let parent_id = level.parent_id.clone();
-        let item_types = level.item_types.clone();
-        let unplayed_only = level.unplayed_only;
-        let sort_by = level.sort_by.clone();
-        let sort_order = level.sort_order.clone();
         let is_tv = lib.library.collection_type == "tvshows";
         let filter_kind = crate::app::render::LetterFilterKind::from_collection_type(
             lib.library.collection_type.as_str(),
         );
+        // The key clones the level's fetch fields, so build it before the
+        // mutations below release the `level` borrow.
+        let key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
         }
@@ -113,26 +111,19 @@ impl App {
             return;
         }
         let filter = crate::app::render::LetterFilter::default_filter_for_kind(filter_kind);
+        let mut key = key;
+        key.letter_filter = Some(filter.clone());
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
-            last.letter_filter = Some(filter.clone());
+            last.letter_filter = Some(filter);
         }
-        self.spawn_refresh(
-            lib_idx,
-            parent_id,
-            item_types,
-            unplayed_only,
-            sort_by,
-            sort_order,
-            0,
-            Some(filter),
-        );
+        self.spawn_refresh(lib_idx, 0, key);
     }
 
     pub(super) fn handle_lib_page_appended(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
@@ -144,7 +135,7 @@ impl App {
                 self.is_grouped_music_library(lib_idx),
             );
         }
-        self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
+        self.update_current_browse_level(lib_idx, parent_id, true, |last| {
             last.items.extend(items.take().unwrap());
             last.fetched_rows += fetched_rows;
             last.total_count = total_count;
@@ -152,7 +143,7 @@ impl App {
         });
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
-        self.maybe_aggregate_feed_after_page_append(lib_idx, &parent_id);
+        self.maybe_aggregate_feed_after_page_append(lib_idx, parent_id);
         self.maybe_fetch_next_page(
             lib_idx,
             self.libs[lib_idx]
@@ -165,18 +156,18 @@ impl App {
     pub(super) fn handle_lib_refreshed(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
-        item_types: Option<String>,
+        parent_id: &str,
+        item_types: Option<&str>,
         unplayed_only: bool,
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
         let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
-            && item_types.as_deref() == Some("Video")
+            && item_types == Some("Video")
             && unplayed_only;
         if !is_feed_video_refresh {
             let mut items = Some(items);
-            let updated = self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
+            let updated = self.update_current_browse_level(lib_idx, parent_id, false, |last| {
                 last.items = items.take().unwrap();
                 last.fetched_rows = last.items.len();
                 last.total_count = total_count;
@@ -212,19 +203,19 @@ impl App {
     pub(super) fn handle_restored_library_position(
         &mut self,
         lib_idx: usize,
-        requested_position: crate::config::LibraryPosition,
+        requested_position: &crate::config::LibraryPosition,
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
-        if self.saved_library_position(lib_idx).as_ref() != Some(&requested_position) {
+        if self.saved_library_position(lib_idx).as_ref() != Some(requested_position) {
             return;
         }
         let nav_stack =
-            self.restore_library_position_levels(lib_idx, &requested_position, nav_stack);
+            self.restore_library_position_levels(lib_idx, requested_position, nav_stack);
         let position = self.rebuild_restored_library_position(
             lib_idx,
             position,
-            &requested_position,
+            requested_position,
             &nav_stack,
         );
 

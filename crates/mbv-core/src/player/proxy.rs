@@ -58,6 +58,12 @@ impl PlayerProxy {
     /// receiving end, so a test can assert on what `send_command` actually sent
     /// without a real mpv thread running.
     /// Test helper that exposes the next command sent through a local proxy.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the wrapped local player's `cmd_tx` mutex is poisoned: a
+    /// previous owner panicked while holding it. A remote proxy takes no lock
+    /// here, so it cannot panic.
     #[cfg(any(test, feature = "test"))]
     pub fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
         let (tx, rx) = mpsc::channel();
@@ -399,6 +405,13 @@ impl PlayerProxy {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if a mutex locked on the way to the answer is poisoned: the local
+    /// shared `status` mutex (and, through the local `send_command`, `cmd_tx`
+    /// plus `wakeup_fd`), or, in remote mode, the `RemotePlayer`'s
+    /// `pending_playback` mutex. Each means a previous owner panicked while
+    /// holding the lock.
     pub fn set_paused(&self, paused: bool) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => match self.status.lock().unwrap().toggle_to_reach(paused)
@@ -490,6 +503,12 @@ impl PlayerProxy {
     /// `restore_local_mode` always routes through whatever `self.inner`
     /// currently is at the moment this is called, not whatever it was when
     /// some earlier closure was built.
+    ///
+    /// # Panics
+    ///
+    /// In local mode the returned closure panics if the local player's `cmd_tx`
+    /// mutex is poisoned — a previous owner panicked while holding it. The
+    /// remote closure takes no lock and cannot panic.
     pub fn command_sender(&self) -> Arc<dyn Fn(PlayerCommand) + Send + Sync> {
         match &self.inner {
             PlayerProxyInner::Local(p) => {

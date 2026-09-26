@@ -8,7 +8,7 @@
 //! free [`render_status_bar`] is the component's painter.
 //!
 //! The Local/Remote queue-scope pills are queue concern and paint in the
-//! QueueColumn footer (`render_queue_status`), never here.
+//! `QueueColumn` footer (`render_queue_status`), never here.
 
 use super::chrome::daemon_endpoint_label;
 use super::indicators;
@@ -586,7 +586,7 @@ pub(in crate::app) struct StatusBarRegions {
 /// and mute status groups. Right side: queue source/save-state/scope
 /// detail and the service-state glyphs (Emby, Audiobookshelf,
 /// stay-alive). The playlist status pill renders in the left queue panel
-/// instead; the Local/Remote queue-scope pills paint in the QueueColumn
+/// instead; the Local/Remote queue-scope pills paint in the `QueueColumn`
 /// footer (`render_queue_status`), never here.
 struct StatusBarLeftSegments {
     mute: Option<Vec<Span<'static>>>,

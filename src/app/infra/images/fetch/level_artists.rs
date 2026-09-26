@@ -72,7 +72,7 @@ fn path_within(path: &str, root: &str) -> bool {
 /// dropped when nothing matches — the album then resolves through the
 /// existing settle/fallback path. `tracks` must be in request order; each
 /// bucket preserves that order. Orphan re-attribution is processed in each
-/// orphan bucket's first-appearance order in `tracks` (not HashMap order),
+/// orphan bucket's first-appearance order in `tracks` (not `HashMap` order),
 /// so merged buckets append in request order and `vote_album_artist`'s
 /// first-seen tie-break is stable across runs.
 pub(super) fn bucket_tracks_by_album<'a>(

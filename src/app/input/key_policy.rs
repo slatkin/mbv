@@ -1,7 +1,7 @@
 //! Live keyboard policy for the central router (ADR 0023).
 //!
 //! The policy is an ordered, pure function over a normalized chord and a
-//! plain-data snapshot. It deliberately does not read TuiRealm attributes:
+//! plain-data snapshot. It deliberately does not read `TuiRealm` attributes:
 //! precedence belongs to the router, not to distributed component mirrors.
 
 use super::resolver::KeyChord;
@@ -41,7 +41,7 @@ pub(in crate::app) struct RouterPlaybackState {
 /// independent and live on `RouterOverlayState`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(in crate::app) enum OverlayFocus {
-    /// No overlay holds TuiRealm focus; the panels own the keyboard.
+    /// No overlay holds `TuiRealm` focus; the panels own the keyboard.
     #[default]
     Free,
     /// A non-blocking overlay (Help, a sidebar) holds focus.
@@ -59,7 +59,7 @@ impl OverlayFocus {
         matches!(self, Self::Blocking | Self::ContextMenu)
     }
 
-    /// Whether any overlay/sidebar/modal holds TuiRealm focus.
+    /// Whether any overlay/sidebar/modal holds `TuiRealm` focus.
     pub(in crate::app) fn holds_focus(self) -> bool {
         !matches!(self, Self::Free)
     }
@@ -107,7 +107,7 @@ pub(in crate::app) struct KeyPolicyEntry {
     /// Human-readable row label for the policy table; only the tests below
     /// read it, so silence dead-code just where the tests are compiled out.
     pub name: &'static str,
-    /// Whether the central router (UiRoot) owns the binding.
+    /// Whether the central router (`UiRoot`) owns the binding.
     pub global: bool,
     pub binding: KeyPolicyBinding,
     pub gate: KeyPolicyGate,

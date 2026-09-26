@@ -1,6 +1,6 @@
 //! The Library panel (design D2/D3): content types, the Wide and Narrow
 //! skeletons' slot Render Components, the object-safe [`PanelList`] surface,
-//! and the mounted [`panel::LibraryPanel`] AppComponent. The panel is the one
+//! and the mounted [`panel::LibraryPanel`] `AppComponent`. The panel is the one
 //! paint path and event boundary for library screens: destinations supply
 //! only typed [`LibraryPanelContent`], and every row, pane, fill, border, gap
 //! and placeholder position is painted here.

@@ -25,7 +25,7 @@ impl Model {
         ComponentId::Modal(ModalId::DaemonLost)
     }
 
-    /// Render the DaemonLost overlay if mounted.
+    /// Render the `DaemonLost` overlay if mounted.
     pub(in crate::app) fn render_daemon_lost_overlay(&mut self, f: &mut ratatui::Frame) {
         let id = Self::daemon_lost_id();
         if !self.application.mounted(&id) {

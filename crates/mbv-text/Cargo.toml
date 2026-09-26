@@ -8,6 +8,7 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Fuzzy-match acceptance and control-character predicates for mbv's text input."
+readme = "../../README.md"
 
 [lints]
 workspace = true

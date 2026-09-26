@@ -87,7 +87,7 @@ pub enum ShellRequest {
     },
     /// Activate a track in the Grouped Music tree. The component carries only
     /// stable tree/track identities; the shell resolves cached playable items
-    /// and feeds the resulting PendingQueueAction through its playback path.
+    /// and feeds the resulting `PendingQueueAction` through its playback path.
     MusicTreeTrackActivate {
         album_target: String,
         track_id: String,
@@ -101,14 +101,14 @@ pub enum ShellRequest {
         track: EmbyItem,
     },
     /// Activate a focused artist Workspace track. The shell resolves the
-    /// ordered discography and chosen EmbyItem from the projected detail.
+    /// ordered discography and chosen `EmbyItem` from the projected detail.
     MusicArtistTrackActivate {
         target: super::intents::MusicArtistTarget,
         track_id: String,
     },
     /// Open a context menu for already-resolved Music targets. This keeps
     /// Music's focus-before-menu policy in one shell arm without changing the
-    /// generic RowContextMenu behavior used by other destinations.
+    /// generic `RowContextMenu` behavior used by other destinations.
     MusicRowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.

@@ -63,12 +63,21 @@ pub struct QuitHandle {
 }
 
 impl QuitHandle {
+    /// # Panics
+    ///
+    /// Panics if the `stop_tx` mutex is poisoned: a previous owner panicked
+    /// while holding it.
     pub fn stop(&self) {
         if let Some(tx) = self.stop_tx.lock().unwrap().take() {
             let _ = tx.send(());
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `shutdown_report_timeout` mutex is poisoned, or if the
+    /// `stop_tx` mutex is poisoned in the `stop()` this delegates to. Both mean
+    /// a previous owner panicked while holding the lock.
     pub fn stop_for_shutdown(&self, timeout: Duration) {
         *self.shutdown_report_timeout.lock().unwrap() = Some(timeout);
         self.stop();
@@ -197,6 +206,11 @@ impl Player {
         self
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `pre_warmed_mpv` mutex is poisoned, i.e. a previous owner
+    /// panicked while holding it. The lock is only taken after `init_mpv`
+    /// succeeds; a failed pre-warm never reaches it.
     pub fn pre_warm(&self, pipe_path: Option<String>, samplerate: u32, bitdepth: u8) {
         if pipe_path.is_none() {
             return;
@@ -226,6 +240,11 @@ impl Player {
 
     /// Update the local Player owner's Emby access after late Service setup.
     /// This is intentionally an in-process seam; it is not part of ctrl.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `credentials` mutex is poisoned: a previous owner panicked
+    /// while holding it.
     pub fn update_emby_credentials(&self, server_url: String, token: String) {
         // The playback thread snapshots these fields when a run starts. The
         // mutexes keep late setup and a concurrent submission from racing.
@@ -237,6 +256,11 @@ impl Player {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `credentials` mutex is poisoned (through the
+    /// `update_emby_credentials` call below) or if the `ws_tx` mutex is
+    /// poisoned. Both mean a previous owner panicked while holding the lock.
     pub fn update_emby_runtime(&self, server_url: String, token: String, ws_tx: mbv_ws::WsSender) {
         self.update_emby_credentials(server_url, token);
         *self.ws_tx.lock().unwrap() = Some(ws_tx);
@@ -244,6 +268,11 @@ impl Player {
 
     /// Replace or clear runtime-only Audiobookshelf access. This seam is
     /// deliberately in-process and is not represented by PlayerCommand/ctrl.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `audiobookshelf_context` mutex is poisoned: a previous
+    /// owner panicked while holding it.
     pub fn update_audiobookshelf_context(&self, context: Option<AudiobookshelfPlayerContext>) {
         *self.audiobookshelf_context.lock().unwrap() = context;
     }
@@ -253,10 +282,19 @@ impl Player {
     /// lifecycle are owner-local code paths in `PlaybackRun`; the current
     /// context is the runtime gate that makes that complete capability
     /// available. Clearing it immediately makes new Bound admission fail.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `audiobookshelf_context` mutex is poisoned: a previous
+    /// owner panicked while holding it.
     pub fn can_admit_audiobookshelf(&self) -> bool {
         self.audiobookshelf_context.lock().unwrap().is_some()
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `audiobookshelf_context` mutex is poisoned: a previous
+    /// owner panicked while holding it.
     #[cfg(any(test, feature = "test"))]
     pub fn audiobookshelf_generation(&self) -> Option<crate::service_runtime::SetupGeneration> {
         self.audiobookshelf_context
@@ -266,11 +304,19 @@ impl Player {
             .map(AudiobookshelfPlayerContext::generation)
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `credentials` mutex is poisoned: a previous owner panicked
+    /// while holding it.
     #[cfg(any(test, feature = "test"))]
     pub fn emby_credentials(&self) -> Option<(String, String)> {
         self.credentials.lock().unwrap().clone()
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `thread_handle` mutex is poisoned: a previous owner
+    /// panicked while holding it.
     pub fn join(&self) {
         let handle = self.thread_handle.lock().unwrap().take();
         if let Some(h) = handle {
@@ -278,8 +324,13 @@ impl Player {
         }
     }
 
-    // Join the player thread but give up after `timeout`. Used on SIGHUP/SIGTERM
-    // so the process always exits even if an HTTP call is hanging.
+    /// Join the player thread but give up after `timeout`. Used on SIGHUP/SIGTERM
+    /// so the process always exits even if an HTTP call is hanging.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `thread_handle` mutex is poisoned: a previous owner
+    /// panicked while holding it.
     pub fn join_or_timeout(&self, timeout: std::time::Duration) {
         let handle = self.thread_handle.lock().unwrap().take();
         if let Some(h) = handle {
@@ -299,6 +350,12 @@ impl Player {
     }
 
     /// Returns `true` if the command was sent, `false` if the player thread is gone.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `cmd_tx` mutex is poisoned, or, once a command has been
+    /// sent, if the `wakeup_fd` mutex is poisoned. Both mean a previous owner
+    /// panicked while holding the lock.
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         let sent = if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {
             tx.send(cmd).is_ok()
@@ -328,6 +385,12 @@ impl Player {
         self.send_command(PlayerCommand::Previous)
     }
 
+    /// # Panics
+    ///
+    /// Panics if the local `status` mutex is poisoned, or if a mutex locked by
+    /// the `send_command` call this makes is poisoned (its `cmd_tx` and, on a
+    /// successful send, `wakeup_fd`) — in each case a previous owner panicked
+    /// while holding the lock.
     pub fn set_paused(&self, paused: bool) -> bool {
         match self.status.lock().unwrap().toggle_to_reach(paused) {
             Some(cmd) => self.send_command(cmd),
@@ -338,6 +401,11 @@ impl Player {
     /// Seed queue/status state without starting playback. Used when a freshly
     /// spawned local daemon should inherit a queue snapshot before any thin
     /// client connects, while an already-running daemon keeps its live state.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `status` mutex is poisoned: a previous owner panicked
+    /// while holding it.
     pub fn set_initial_queue(&self, items: &[QueueItem], cursor: usize) {
         let mut st = self.status.lock().unwrap();
         if items.is_empty() {
@@ -365,6 +433,10 @@ impl Player {
         client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `stop_tx` mutex is poisoned, or if the `wakeup_fd` mutex is
+    /// poisoned. Both mean a previous owner panicked while holding the lock.
     pub fn stop(&self) {
         if let Some(tx) = self.stop_tx.lock().unwrap().take() {
             let _ = tx.send(());
@@ -376,6 +448,11 @@ impl Player {
         // reach the thread so it can cancel the quit and load the new file instead.
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `shutdown_report_timeout` mutex is poisoned, or if the
+    /// `stop_tx`/`wakeup_fd` mutexes are poisoned in the `stop()` this delegates
+    /// to. All mean a previous owner panicked while holding the lock.
     pub fn stop_for_shutdown(&self, timeout: Duration) {
         *self.shutdown_report_timeout.lock().unwrap() = Some(timeout);
         self.stop();

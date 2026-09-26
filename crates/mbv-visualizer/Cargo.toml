@@ -8,6 +8,7 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "PipeWire stereo audio capture worker for mbv's visualizer."
+readme = "../../README.md"
 
 [lints]
 workspace = true

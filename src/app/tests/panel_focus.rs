@@ -66,7 +66,7 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
 }
 
 /// Task 1.2: the mini-view threshold crossing is a sync-pass side effect now.
-/// After one tick() + sync pass and without drawing, the ephemeral mini-view
+/// After one `tick()` + sync pass and without drawing, the ephemeral mini-view
 /// focus has moved to Queue while the stored wide focus is untouched.
 #[test]
 fn build_restores_panel_focus_from_prefs_for_both_values() {

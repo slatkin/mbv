@@ -86,7 +86,7 @@ impl Model {
             }
             ShellRequest::HomeToggleWatched(target) => {
                 if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
-                    self.app.cw_toggle_watched(*item);
+                    self.app.cw_toggle_watched(&item);
                 }
             }
             _ => {}

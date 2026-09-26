@@ -1,7 +1,7 @@
 //! Prefix mode through the live shell (tasks 6.1, 6.3).
 //!
 //! Proves the full prefix state machine through real `Application::tick()`
-//! runs (inject port → UiRoot observer → router fold → shell transitions):
+//! runs (inject port → `UiRoot` observer → router fold → shell transitions):
 //! arming consumes the prefix chord, an armed chord never reaches any
 //! component, mapped prefix chords dispatch and disarm, unmapped chords
 //! swallow and disarm, the double prefix re-arms, and any mouse event

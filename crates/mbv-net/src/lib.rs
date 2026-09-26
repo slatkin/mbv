@@ -19,6 +19,7 @@ const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANU
 
 /// Percent-encode a single URL path segment (an ID, name, or search term),
 /// not a full path -- do not pass a string containing `/`.
+#[must_use]
 pub fn encode_path_segment(value: &str) -> percent_encoding::PercentEncode<'_> {
     percent_encoding::utf8_percent_encode(value, PATH_SEGMENT)
 }

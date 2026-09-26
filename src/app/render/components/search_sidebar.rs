@@ -19,7 +19,7 @@ pub(in crate::app) struct SearchSidebarRenderGeometry {
     pub frame: Rect,
     /// Painted result-row rect -> absolute filtered-results index.
     pub result_rows: Vec<(Rect, usize)>,
-    /// Painted type-filter chip rect -> type_filter index (0 = All).
+    /// Painted type-filter chip rect -> `type_filter` index (0 = All).
     pub chips: Vec<(Rect, usize)>,
 }
 

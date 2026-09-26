@@ -17,7 +17,7 @@ use std::sync::{mpsc, Arc, Mutex};
 /// `switch_to_direct_remote` / `restore_local_mode` swap which target owns
 /// playback.
 ///
-/// Test builds leave `mpris` unset (build() initializes it to None):
+/// Test builds leave `mpris` unset (`build()` initializes it to None):
 /// `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real D-Bus
 /// session bus from a thread with no shutdown path -- leaked into every test
 /// process that constructs a remote App, where process teardown races it
@@ -145,6 +145,15 @@ fn remote_services(
 }
 
 impl App {
+    /// `endpoint` is the daemon endpoint the remote player is connected to.
+    /// The endpoint's `is_local()` distinguishes local-daemon attach
+    /// (`DaemonEndpoint::Local`) from a genuinely remote daemon:
+    /// - `Local`: behaves like a plain local session — one unified queue,
+    ///   normal queue-state persistence — the only difference is that the
+    ///   daemon owns mpv instead of an in-process `Player`.
+    /// - `Tcp`/`Unix`: a separate `remote_player_tab` is kept so the user
+    ///   can browse locally while a daemon elsewhere plays something else,
+    ///   with the Local/Remote scope pill to switch between them.
     #[cfg(test)]
     pub fn new_remote_with_config(
         client: EmbyClient,

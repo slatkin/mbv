@@ -103,6 +103,11 @@ impl RemotePlayer {
     /// bounded timeout. Returns `Accepted` only when the daemon has durably
     /// persisted its queue and acknowledged the request; enqueue success
     /// alone is never returned as `Accepted`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `shutdown_request_tx` mutex is poisoned: a previous owner
+    /// panicked while holding it. The early `Unsupported` return takes no lock.
     #[must_use]
     pub fn request_shutdown(&self, timeout: Duration) -> ShutdownResponse {
         if !self.supports_lifecycle_shutdown() {
@@ -152,6 +157,11 @@ impl RemotePlayer {
     /// Send a guarded playback intent through its dedicated protocol
     /// envelope. There is deliberately no conversion to `PlayerCmd` here:
     /// callers that need lifecycle correlation must use this boundary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `pending_playback` mutex is poisoned: a previous owner
+    /// panicked while holding it.
     #[must_use]
     pub fn send_playback_intent(&self, intent: PlaybackIntent) -> bool {
         let request_id = intent.request_id;
@@ -207,6 +217,11 @@ impl RemotePlayer {
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
     }
 
+    /// # Panics
+    ///
+    /// Panics if any of the projection mutexes is poisoned — `status`, `items`
+    /// or `queue_source` — i.e. a previous owner panicked while holding one of
+    /// them.
     #[must_use]
     pub fn adopt_queue(
         &self,
@@ -236,6 +251,11 @@ impl RemotePlayer {
             .is_ok()
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `items` or `queue_source` projection mutex is poisoned,
+    /// i.e. a previous owner panicked while holding it. Those locks are only
+    /// taken once the queue replace was sent.
     #[must_use]
     pub fn play(
         &self,
@@ -260,6 +280,11 @@ impl RemotePlayer {
         sent
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `items` or `queue_source` projection mutex is poisoned,
+    /// i.e. a previous owner panicked while holding it. Those locks are only
+    /// taken once the queue replace was sent.
     #[must_use]
     pub fn play_queue(
         &self,
@@ -304,6 +329,11 @@ impl RemotePlayer {
     /// when the only teardown was an implicit `Drop` of one fd duplicate.
     /// Idempotent: the stored handle is taken out on first use, so a
     /// second call is a no-op rather than a double `shutdown()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `control_stream` mutex is poisoned: a previous owner
+    /// panicked while holding it.
     pub fn disconnect(&self) {
         if let Some(stream) = self.control_stream.lock().unwrap().take() {
             if let Err(e) = stream.shutdown() {
@@ -369,6 +399,10 @@ impl RemotePlayer {
         Ok(())
     }
 
+    /// # Panics
+    ///
+    /// Panics if the `unified_queue` mutex is poisoned: a previous owner
+    /// panicked while holding it.
     #[must_use]
     pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()

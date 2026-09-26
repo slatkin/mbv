@@ -148,7 +148,7 @@ fn shell_routes_focus_to_the_active_destination_child() {
 /// (design D2): every `is_feed_home_video_group_view` Emby library — a
 /// configured home-video feed-view library — is a migrated kind whose
 /// surface routes through the mounted `LibraryPanel` at every width. Both
-/// take TuiRealm focus on `ComponentId::Library`, narrow and wide, with the
+/// take `TuiRealm` focus on `ComponentId::Library`, narrow and wide, with the
 /// embedded `EmbyLibraryContent` owner installed.
 /// unify-screens-under-panel-components task 8.4 (design D2): drive a TV
 /// library through wide -> narrow -> wide via `sync_mounted_surfaces()` in
@@ -157,7 +157,7 @@ fn shell_routes_focus_to_the_active_destination_child() {
 /// Production-style acceptance test for #610 / #607: when Queue owns
 /// panel focus, the per-tick sync sequence (`sync_queue` followed by
 /// `sync_active_destination` in `shell/run.rs`) must leave
-/// `ComponentId::Queue` as the active TuiRealm component. Without the
+/// `ComponentId::Queue` as the active `TuiRealm` component. Without the
 /// Queue-owner guard in `sync_active_destination`, the destination
 /// sync re-activates the Library child (or `UiRoot`) on top of Queue,
 /// and Queue falls back to legacy key routing.
@@ -219,8 +219,8 @@ fn shell_blocking_overlay_owns_focus_and_dismiss_returns_to_destination() {
 
 /// keep-destination-components-mounted task 4.2: with `active()` removed
 /// from every `sync_*` (D1), the FIRST tick after startup must land
-/// TuiRealm focus on the active destination child via the single
-/// `sync_active_destination` pass (D3). `Model::new` activates UiRoot;
+/// `TuiRealm` focus on the active destination child via the single
+/// `sync_active_destination` pass (D3). `Model::new` activates `UiRoot`;
 /// after the destination mounts, the focus pass must route to the child.
 #[test]
 fn shell_first_tick_focus_lands_on_the_active_destination_child() {

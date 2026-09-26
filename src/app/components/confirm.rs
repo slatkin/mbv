@@ -3,7 +3,7 @@
 //! Owns the modal's display content (title, message, hint) set by the shell
 //! via downcast before each render. The component owns key interpretation and
 //! emits semantic confirmation intents; the shell owns the `ConfirmAction` and
-//! effect dispatch. Non-key events return `None` because the permanent UiRoot
+//! effect dispatch. Non-key events return `None` because the permanent `UiRoot`
 //! observer owns the redraw signal (design D12).
 
 use ratatui::Frame;

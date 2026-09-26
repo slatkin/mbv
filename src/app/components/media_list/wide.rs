@@ -16,7 +16,7 @@ use tuirealm::state::State;
 
 /// The Queue's row palette, shared by the Queue and Grouped Music tree so
 /// their base and zebra fills cannot drift apart. The base fill is the
-/// recessed QueuePanel surface; the stripe is the QueueColumn surface.
+/// recessed `QueuePanel` surface; the stripe is the `QueueColumn` surface.
 pub(crate) fn queue_row_background(focused: bool) -> Color {
     palette::surface_colors(palette::Surface::QueuePanel, focused).fill
 }

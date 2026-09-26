@@ -131,6 +131,33 @@ pub(in crate::app) struct BrowseLevel {
         Option<crate::app::state::music_grouping::MusicGroupingState>,
 }
 
+/// The fetch key a spawned level (re)fetch must preserve: everything a
+/// `BrowseLevel` page or refresh request replays against the server. Built
+/// from the level so callers stop cloning field-by-field; callers that
+/// intentionally diverge from the level (a new filter, a forced item type)
+/// overwrite the field after building.
+pub(in crate::app) struct LevelFetchKey {
+    pub(in crate::app) parent_id: String,
+    pub(in crate::app) item_types: Option<String>,
+    pub(in crate::app) unplayed_only: bool,
+    pub(in crate::app) sort_by: String,
+    pub(in crate::app) sort_order: String,
+    pub(in crate::app) letter_filter: Option<crate::app::render::LetterFilter>,
+}
+
+impl LevelFetchKey {
+    pub(in crate::app) fn from_level(level: &BrowseLevel) -> Self {
+        Self {
+            parent_id: level.parent_id.clone(),
+            item_types: level.item_types.clone(),
+            unplayed_only: level.unplayed_only,
+            sort_by: level.sort_by.clone(),
+            sort_order: level.sort_order.clone(),
+            letter_filter: level.letter_filter.clone(),
+        }
+    }
+}
+
 impl BrowseLevel {
     /// Whether every server row for this level has been consumed.
     pub(in crate::app) fn is_fully_loaded(&self) -> bool {

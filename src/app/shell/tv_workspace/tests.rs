@@ -106,7 +106,7 @@ fn season_expansion_waits_for_detail_then_fetches_only_the_requested_season() {
         })
         .collect();
     model.app.handle_series_detail_fetched(
-        "movie-focused".into(),
+        "movie-focused",
         crate::app::SeriesDetail {
             seasons,
             episodes: std::collections::HashMap::new(),
@@ -140,7 +140,7 @@ fn late_series_detail_completion_does_not_replace_cached_detail() {
     let mut stale_season = crate::app::tests::make_item("Stale", "Season");
     stale_season.id = "stale-season".into();
     app.handle_series_detail_fetched(
-        "show-id".into(),
+        "show-id",
         crate::app::SeriesDetail {
             seasons: vec![stale_season],
             episodes: std::collections::HashMap::new(),

@@ -21,13 +21,13 @@ pub(in crate::app) const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
 
 /// Rows the right column reserves at the bottom for the floating status
 /// bar: one gap row, the status row, one padding row below it, the same
-/// floating shape as the QueueColumn footer.
+/// floating shape as the `QueueColumn` footer.
 pub(in crate::app) const STATUS_BAR_BAND_HEIGHT: u16 = 3;
 
 /// The status row inside its reserved band: two columns of padding each
 /// side plus one gap row above it, so the bar floats clear of the content
 /// above and the library column's edges instead of touching them (the
-/// QueueColumn footer's inset).
+/// `QueueColumn` footer's inset).
 pub(in crate::app) fn status_bar_row(band: Rect) -> Rect {
     Rect {
         x: band.x + 2,
@@ -105,9 +105,9 @@ pub(crate) struct RootFrame {
     /// Tab bar at the top of the library column (`TabPanel`, task 2.1).
     pub tab: Option<Rect>,
     /// The library column's content area (below the tab bar; below the
-    /// playback strip in LibraryOnly) (`LibraryPanel`, task 4.1). The
+    /// playback strip in `LibraryOnly`) (`LibraryPanel`, task 4.1). The
     /// strip's `PLAYER_BOX_HEIGHT` band is reserved only where the strip
-    /// paints (task 4.1): in LibraryOnly the library starts below it; in a
+    /// paints (task 4.1): in `LibraryOnly` the library starts below it; in a
     /// queue-visible layout the library starts at the tab bar's bottom edge
     /// and no strip rows are reserved (the frame's one transport is the
     /// Queue playback panel's).
@@ -237,10 +237,10 @@ pub(in crate::app) fn queue_playback_rows(
 
 /// The right (library) column's chrome rects for one `PanelMode`, returned as
 /// `(tab_bar, library content, playback-strip band, status-bar band)`: the
-/// tab bar at the top, the library content area, the LibraryOnly
+/// tab bar at the top, the library content area, the `LibraryOnly`
 /// playback-strip band below the tab bar, and the floating status-bar band
 /// at the bottom. The second element is the library panel's placement: the
-/// right column between the tab bar and the status row. In LibraryOnly it
+/// right column between the tab bar and the status row. In `LibraryOnly` it
 /// starts below the playback strip's band (placed as `library_playback`);
 /// in a queue-visible layout the band is not reserved (task 4.1), so the
 /// library starts at the tab bar's bottom edge. Either way the right

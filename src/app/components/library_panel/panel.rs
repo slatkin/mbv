@@ -26,7 +26,10 @@ use super::hero::HeroContentData;
 use super::hero_composition::HeroCompositionGeometry;
 use super::narrow::render_narrow_skeleton;
 use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
-use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry};
+use super::wide::{
+    render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry,
+    WideSkeletonPaintParams,
+};
 use crate::app::components::inline_search::InlineSearchHost;
 
 /// The painted split's pointer→width resolution inputs, shared by the drag

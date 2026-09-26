@@ -34,7 +34,7 @@ impl App {
                 parent_id,
                 level,
             } => {
-                self.handle_lib_loaded(lib_idx, parent_id, *level);
+                self.handle_lib_loaded(lib_idx, &parent_id, *level);
                 None
             }
             LibEvent::PageAppended {
@@ -43,7 +43,7 @@ impl App {
                 items,
                 total_count,
             } => {
-                self.handle_lib_page_appended(lib_idx, parent_id, items, total_count);
+                self.handle_lib_page_appended(lib_idx, &parent_id, items, total_count);
                 None
             }
             LibEvent::Refreshed {
@@ -56,8 +56,8 @@ impl App {
             } => {
                 self.handle_lib_refreshed(
                     lib_idx,
-                    parent_id,
-                    item_types,
+                    &parent_id,
+                    item_types.as_deref(),
                     unplayed_only,
                     items,
                     total_count,
@@ -72,7 +72,7 @@ impl App {
             } => {
                 self.handle_restored_library_position(
                     lib_idx,
-                    requested_position,
+                    &requested_position,
                     position,
                     nav_stack,
                 );
@@ -83,7 +83,7 @@ impl App {
                 parent_id,
                 items,
             } => {
-                self.handle_search_items_loaded(lib_idx, parent_id, items);
+                self.handle_search_items_loaded(lib_idx, &parent_id, items);
                 None
             }
             LibEvent::AlbumIndexBuilt { library_id, result } => {
@@ -94,7 +94,7 @@ impl App {
                 library_id,
                 nav_stack,
             } => {
-                self.handle_recursive_album_activated(library_id, nav_stack);
+                self.handle_recursive_album_activated(&library_id, nav_stack);
                 None
             }
             LibEvent::AllItemsPrefetched {
@@ -102,7 +102,7 @@ impl App {
                 parent_id,
                 items,
             } => {
-                self.handle_all_items_prefetched(lib_idx, parent_id, items);
+                self.handle_all_items_prefetched(lib_idx, &parent_id, items);
                 None
             }
             LibEvent::FeedHomeVideoAggregated {
@@ -111,7 +111,7 @@ impl App {
                 all_items,
                 groups,
             } => {
-                self.handle_feed_home_video_aggregated(lib_idx, parent_id, all_items, groups);
+                self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups);
                 None
             }
             LibEvent::NavigateTo {
@@ -129,7 +129,7 @@ impl App {
     fn handle_all_items_prefetched(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         items: Vec<mbv_core::api::EmbyItem>,
     ) {
         if let Some(last) = self
@@ -142,13 +142,13 @@ impl App {
         }
         // The whole-library corpus is exactly what a pending Series
         // landing was waiting for (U2 correction).
-        self.retry_pending_series_landing(lib_idx, &parent_id);
+        self.retry_pending_series_landing(lib_idx, parent_id);
     }
 
     fn handle_feed_home_video_aggregated(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         all_items: Vec<mbv_core::api::EmbyItem>,
         groups: Vec<crate::app::state::types::feed::FeedHomeVideoGroup>,
     ) {
@@ -246,7 +246,7 @@ impl App {
                 episodes,
             } => {
                 self.handle_series_detail_fetched(
-                    series_id,
+                    &series_id,
                     crate::app::SeriesDetail { seasons, episodes },
                 );
                 None
@@ -256,7 +256,7 @@ impl App {
                 season_id,
                 episodes,
             } => {
-                self.handle_series_season_episodes_fetched(series_id, season_id, episodes);
+                self.handle_series_season_episodes_fetched(&series_id, season_id, episodes);
                 None
             }
             LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
@@ -406,7 +406,7 @@ impl App {
     /// consume the deferred tab switch when it belongs to this navigation.
     fn handle_recursive_album_activated(
         &mut self,
-        library_id: String,
+        library_id: &str,
         nav_stack: Vec<crate::app::state::types::browse::BrowseLevel>,
     ) {
         let Some(lib_idx) = self
@@ -538,7 +538,7 @@ impl App {
     fn handle_search_items_loaded(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         items: Vec<mbv_core::api::EmbyItem>,
     ) {
         if let Some(lib) = self.libs.get_mut(lib_idx) {

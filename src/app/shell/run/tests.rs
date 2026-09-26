@@ -189,11 +189,11 @@ fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
 /// Task 3.3: a receiver whose worker exited without a completion is
 /// Disconnected; the drain reports work and drives the worker-disconnect
 /// handler. With no configured Audiobookshelf setup the resolved state is
-/// NotConfigured. Startup and test receivers share the handler.
+/// `NotConfigured`. Startup and test receivers share the handler.
 #[rstest]
 /// Task 3.3: the setup receiver runs its own disconnect handler (busy=false,
 /// form error, state reset to the form's previous state). With no form the
-/// reset lands on NotConfigured.
+/// reset lands on `NotConfigured`.
 #[test]
 fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
     let mut app = make_app_stub();
@@ -221,8 +221,8 @@ fn drain_audiobookshelf_events_setup_disconnect_reports_and_resets() {
 /// leaves the receiver dropped and produces nothing.
 /// Task 3.4: a catalog completion whose generation the runtime no longer
 /// accepts is dropped without touching browse or catalog state.
-/// Task 3.4: an AuthenticationRejected catalog failure moves the runtime to
-/// NeedsAuthentication and clears the stored credential.
+/// Task 3.4: an `AuthenticationRejected` catalog failure moves the runtime to
+/// `NeedsAuthentication` and clears the stored credential.
 #[test]
 fn drain_audiobookshelf_events_auth_rejection_needs_authentication_and_clears_credential() {
     let mut app = make_app_stub();

@@ -121,7 +121,7 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
 }
 
 /// The provider-specific resolver seams remain read-only; task 4.3 consumes
-/// their QueueItem result through ordinary actions.
+/// their `QueueItem` result through ordinary actions.
 #[test]
 fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
     let mut app = audiobookshelf_app();

@@ -499,7 +499,7 @@ impl App {
     /// and `halfblock_picker` (the #451 dimmed-backdrop fallback: modals
     /// re-encode images to halfblocks so the dim applies uniformly).
     ///
-    /// MUST run before the TuiRealm crossterm listener starts
+    /// MUST run before the `TuiRealm` crossterm listener starts
     /// (`Application::init`): `Picker::from_query_stdio` writes a
     /// `CSI 16 t` cell-size query to the terminal and reads the reply with a
     /// raw `io::stdin().read()`. If the listener thread is already draining

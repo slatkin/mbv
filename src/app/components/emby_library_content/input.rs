@@ -11,7 +11,7 @@ use mbv_core::api::EmbyItem;
 
 impl EmbyLibraryContent {
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors
-    /// the former BrowserComponent's inline-search result action): reuses the ordinary
+    /// the former `BrowserComponent`'s inline-search result action): reuses the ordinary
     /// result-row shell effects, resolved against the search cursor rather
     /// than the ordinary browse cursor.
     fn inline_search_result_action(&mut self, key: &KeyEvent) -> Option<Msg> {
