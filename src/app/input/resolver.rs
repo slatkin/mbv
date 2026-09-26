@@ -42,12 +42,12 @@ impl KeyChord {
     }
 
     /// Convert a configured chord from the keybind registry
-    /// (`mbv_core::keybinds::Chord`) into the resolver's normalized shape so
+    /// (`mbv_keybinds::Chord`) into the resolver's normalized shape so
     /// policy matching can compare it against the pressed chord. The registry
     /// carries only Ctrl/Shift/Alt, which map losslessly onto crossterm
     /// modifiers.
-    pub(in crate::app) fn from_keybinds_chord(chord: mbv_core::keybinds::Chord) -> Self {
-        use mbv_core::keybinds::Key as RegistryKey;
+    pub(in crate::app) fn from_keybinds_chord(chord: mbv_keybinds::Chord) -> Self {
+        use mbv_keybinds::Key as RegistryKey;
         let mods = registry_mods_to_modifiers(chord.mods);
         let code = match chord.key {
             RegistryKey::Backspace => KeyCode::Backspace,
@@ -75,8 +75,8 @@ impl KeyChord {
 /// Map the registry's Ctrl/Shift/Alt modifier set onto crossterm modifiers.
 /// Extracted from `KeyChord::from_keybinds_chord` (issue #803); the mapping
 /// is lossless in both directions.
-fn registry_mods_to_modifiers(mods: mbv_core::keybinds::KeyMods) -> KeyModifiers {
-    use mbv_core::keybinds::KeyMods;
+fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
+    use mbv_keybinds::KeyMods;
     let mut out = KeyModifiers::empty();
     if mods.contains(KeyMods::CTRL) {
         out.insert(KeyModifiers::CONTROL);

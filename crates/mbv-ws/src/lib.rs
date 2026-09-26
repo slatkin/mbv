@@ -245,7 +245,7 @@ fn reconnect_loop(
             Err(e) => log::warn!(target: "ws", "connect failed: {e}"),
         }
         // M3: Exponential backoff with jitter, max 60s.
-        crate::reconnect_backoff_sleep(&mut backoff_secs, "ws");
+        mbv_net::reconnect_backoff_sleep(&mut backoff_secs, "ws");
     }
 }
 

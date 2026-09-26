@@ -1,7 +1,7 @@
 //! Unarmed policy resolution: precedence, gates, rebinds, and registry parity.
 use super::test_support::*;
 use super::*;
-use mbv_core::keybinds::{Chord, KEYBIND_ACTIONS};
+use mbv_keybinds::{Chord, KEYBIND_ACTIONS};
 
 #[test]
 fn policy_entries_have_unique_ordered_names() {

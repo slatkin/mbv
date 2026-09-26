@@ -10,7 +10,7 @@ use crate::app::dispatch::action::{
 };
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
-use mbv_core::keybinds::{action_by_id, Keybinds};
+use mbv_keybinds::{action_by_id, Keybinds};
 
 /// Which attached playback target currently owns remote-control shortcuts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

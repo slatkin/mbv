@@ -2,7 +2,7 @@
 
 use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_session};
 use crate::app::*;
-use mbv_core::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 
 fn attached_app() -> App {
     let mut app = make_app_stub();

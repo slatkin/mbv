@@ -1,6 +1,6 @@
 use super::PlayerStatus;
 use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
-use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
+use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     mpsc, Arc, Mutex,
@@ -14,7 +14,7 @@ use std::time::Duration;
 // the log line (`pos` is already the zeroed-for-audio value to send).
 pub(super) struct StoppedReportData {
     client: Arc<EmbyClient>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     id: ItemId,
     msid: MediaSourceId,
     sid: EmbySessionId,
@@ -115,7 +115,7 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
                 stopped,
             } => {
                 if let Some(h) = handle {
-                    let _ = crate::bounded::run_with_hard_bound(
+                    let _ = mbv_net::bounded::run_with_hard_bound(
                         move || {
                             let _ = h.join();
                             Ok::<(), String>(())
@@ -136,7 +136,7 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
 #[derive(Clone)]
 pub(super) struct SessionReporter {
     pub(super) client: Arc<EmbyClient>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     // (item_id, msid, sid) in a single lock so progress and event-loop threads never
     // observe a torn triple during item transitions.
     pub(super) ids: Arc<Mutex<(ItemId, MediaSourceId, EmbySessionId)>>,
@@ -154,7 +154,7 @@ pub(super) struct SessionReporter {
 impl SessionReporter {
     pub(super) fn new(
         client: Arc<EmbyClient>,
-        ws_tx: Option<crate::ws::WsSender>,
+        ws_tx: Option<mbv_ws::WsSender>,
         item_id: ItemId,
         msid: MediaSourceId,
         sid: EmbySessionId,

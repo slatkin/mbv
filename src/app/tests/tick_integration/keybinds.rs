@@ -26,11 +26,11 @@ fn key(code: Key) -> Event<UserEvent> {
 fn configured_rebind_fires_through_tick() {
     let app = make_app_stub();
     let config = crate::config::Config {
-        keybinds: mbv_core::keybinds::load(&mbv_core::keybinds::RawKeybinds {
+        keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
             sections: vec![(
                 "global".into(),
-                mbv_core::keybinds::RawSection {
+                mbv_keybinds::RawSection {
                     router: vec![("help_open".into(), "F9".into())],
                     prefix: vec![],
                 },
@@ -111,11 +111,11 @@ fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
 fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
     let app = make_app_stub();
     let config = crate::config::Config {
-        keybinds: mbv_core::keybinds::load(&mbv_core::keybinds::RawKeybinds {
+        keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: None,
             sections: vec![(
                 "playback".into(),
-                mbv_core::keybinds::RawSection {
+                mbv_keybinds::RawSection {
                     router: vec![("volume_up".into(), "k".into())],
                     prefix: vec![],
                 },

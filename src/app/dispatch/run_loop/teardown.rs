@@ -11,9 +11,9 @@ fn player_join_outer_bound(quit_timeout: Duration) -> Duration {
     quit_timeout + Duration::from_millis(200) + Duration::from_secs(1)
 }
 
-fn join_visualizer_worker(handle: Option<JoinHandle<()>>) {
+fn join_visualizer_capture(handle: Option<JoinHandle<()>>) {
     if let Some(handle) = handle {
-        crate::app::infra::visualizer_worker::join_worker(handle);
+        mbv_visualizer::join_worker(handle);
     }
 }
 
@@ -89,8 +89,7 @@ impl App {
         // can stop concurrently with the player thread.
         let visualizer_handle = self.visualizer.take().and_then(|mut worker| {
             let handle = worker.signal_stop();
-            self.visualizer_window =
-                crate::app::infra::visualizer_worker::StereoSampleWindow::default();
+            self.visualizer_window = mbv_visualizer::StereoSampleWindow::default();
             handle
         });
         // Advance the queue lineage so any late work from this process cannot
@@ -144,7 +143,7 @@ impl App {
         let shutdown_response =
             self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
         if self.player.is_remote() {
-            join_visualizer_worker(visualizer_handle);
+            join_visualizer_capture(visualizer_handle);
         } else {
             self.player.stop_for_shutdown(quit_timeout);
             // During quit shutdown there is no progress-thread join and no WS
@@ -153,7 +152,7 @@ impl App {
             // one-second cushion makes the outer join bound
             // `quit_timeout + 200ms + 1s`. Join the visualizer while the
             // player is still shutting down, using its own bounded join.
-            join_visualizer_worker(visualizer_handle);
+            join_visualizer_capture(visualizer_handle);
             let outer_bound = player_join_outer_bound(quit_timeout);
             let started = Instant::now();
             self.player.join_or_timeout(outer_bound);

@@ -2,10 +2,11 @@ use super::{
     active_file_load_location, init_mpv, init_volume, make_wakeup_pipe, observe_properties,
     prepare_source, queue_load_indices, queue_load_location, reassert_queue_layout, send_ep_info,
     spawn_progress_reporter, start_queue_playback, AudiobookshelfPlayerContext, EmbyClient,
-    EmbyItem, EmbySessionId, ExecSlot, ItemId, MediaSourceId, Mpv, MpvRunConfig, PlaybackOrigin,
-    PlaybackRun, Player, PlayerCommand, PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard,
-    QueueItem, QueueSlotId, RunInit, SessionReporter, SubtitlePrefs,
+    EmbyItem, ExecSlot, Mpv, MpvRunConfig, PlaybackOrigin, PlaybackRun, Player, PlayerCommand,
+    PlayerEvent, PlayerStatus, PreparedSource, ProgressGuard, QueueItem, QueueSlotId, RunInit,
+    SessionReporter, SubtitlePrefs,
 };
+use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 use std::sync::{atomic::Ordering, mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -226,7 +227,7 @@ impl Player {
 
 fn make_reporter(
     client: Option<Arc<EmbyClient>>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     item: &QueueItem,
     status: Arc<Mutex<PlayerStatus>>,
 ) -> (SessionReporter, ProgressGuard) {
@@ -297,7 +298,7 @@ struct PlayerThreadStart {
     token: String,
     audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
     client: Option<Arc<EmbyClient>>,
-    ws_tx: Option<crate::ws::WsSender>,
+    ws_tx: Option<mbv_ws::WsSender>,
     origin: PlaybackOrigin,
     subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,

@@ -11,7 +11,6 @@ use std::{
 };
 
 use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
-use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
 use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
 #[cfg(test)]
 use crate::playback_queue::QueueMutationResult;

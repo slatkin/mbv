@@ -1,0 +1,17 @@
+[package]
+name = "mbv-visualizer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "PipeWire stereo audio capture worker for mbv's visualizer."
+
+[lints]
+workspace = true
+
+[dependencies]
+pipewire.workspace = true
+log.workspace = true

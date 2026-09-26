@@ -1,5 +1,5 @@
 use super::super::App;
-use super::visualizer_worker::PipeWireWorker;
+use mbv_visualizer::PipeWireWorker;
 
 impl App {
     pub(in crate::app) fn sync_visualizer(&mut self) {
@@ -10,14 +10,14 @@ impl App {
                 Err(error) => {
                     log::warn!(target: "visualizer", "PipeWire worker stopped; visualizer disabled for this playback: {error}");
                     self.visualizer_failed = true;
-                    self.stop_visualizer_worker();
+                    self.stop_visualizer_capture();
                 }
             }
         }
 
         let should_run = self.visualizer_should_run();
         if !should_run {
-            self.stop_visualizer_worker();
+            self.stop_visualizer_capture();
             return;
         }
         if self.visualizer.is_none() && !self.visualizer_failed {
@@ -45,12 +45,11 @@ impl App {
             && !self.visual_slot_hidden
     }
 
-    pub(in crate::app) fn stop_visualizer_worker(&mut self) {
+    pub(in crate::app) fn stop_visualizer_capture(&mut self) {
         if let Some(mut worker) = self.visualizer.take() {
             worker.stop();
         }
-        self.visualizer_window =
-            crate::app::infra::visualizer_worker::StereoSampleWindow::default();
+        self.visualizer_window = mbv_visualizer::StereoSampleWindow::default();
     }
 
     pub(in crate::app) fn toggle_visualizer(&mut self) {
@@ -62,7 +61,7 @@ impl App {
         if self.visualizer_enabled {
             self.sync_visualizer();
         } else {
-            self.stop_visualizer_worker();
+            self.stop_visualizer_capture();
         }
         self.save_prefs();
     }
@@ -123,7 +122,7 @@ mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = crate::app::tests::make_app_stub();
         app.visualizer_enabled = true;
-        app.visualizer_window.samples = vec![crate::app::infra::visualizer_worker::StereoSample {
+        app.visualizer_window.samples = vec![mbv_visualizer::StereoSample {
             left: 1.0,
             right: 1.0,
         }];

@@ -58,7 +58,7 @@ impl App {
                 std::thread::spawn(move || capability_client.register_capabilities());
                 let client = Arc::new(Mutex::new(startup.client));
                 let (ws_tx, ws_rx) = mpsc::channel();
-                self.ws_send_tx = Some(mbv_core::ws::start(ws_url, ws_tx));
+                self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
                 self.ws_rx = ws_rx;
                 {
                     let client = client.lock().unwrap();
@@ -233,7 +233,7 @@ impl App {
                 let client = Arc::new(Mutex::new(startup.client));
                 if start_network {
                     let (ws_tx, ws_rx) = mpsc::channel();
-                    self.ws_send_tx = Some(mbv_core::ws::start(ws_url, ws_tx));
+                    self.ws_send_tx = Some(mbv_ws::start(ws_url, ws_tx));
                     self.ws_rx = ws_rx;
                 }
                 let (server_url, token) = {

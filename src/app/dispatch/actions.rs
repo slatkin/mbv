@@ -7,7 +7,7 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
 use mbv_core::player::PlayerCommand;
 pub(in crate::app) use mbv_core::player::CONNECTION_LOST_MESSAGE;
-use mbv_core::ItemId;
+use mbv_ids::ItemId;
 use std::sync::Arc;
 
 /// Classification for an explicit Emby play against the attached owner.

@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-visualizer", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbv-visualizer", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -29,6 +29,7 @@ mimalloc = "0.1"
 pipewire = "0.10.1"
 nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket"] }
 rstest = { version = "0.27", default-features = false }
+fuzzy-matcher = "0.3"
 
 [workspace.lints.clippy]
 mod_module_files = "deny"
@@ -99,6 +100,12 @@ path = "src/main.rs"
 
 [dependencies]
 mbv-core = { path = "crates/mbv-core" }
+mbv-ids = { path = "crates/mbv-ids" }
+mbv-keybinds = { path = "crates/mbv-keybinds" }
+mbv-net = { path = "crates/mbv-net" }
+mbv-ws = { path = "crates/mbv-ws" }
+mbv-text = { path = "crates/mbv-text" }
+mbv-visualizer = { path = "crates/mbv-visualizer" }
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"
@@ -107,7 +114,6 @@ serde_json.workspace = true
 toml.workspace = true
 rand.workspace = true
 textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
-fuzzy-matcher = "0.3"
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 ksni = { version = "0.3", features = ["blocking"] }
@@ -120,10 +126,10 @@ mimalloc.workspace = true
 nix.workspace = true
 tui-scrollbar = "0.2.7"
 time = { version = "0.3", features = ["parsing"] }
-pipewire.workspace = true
 
 [dev-dependencies]
 mbv-core = { path = "crates/mbv-core", features = ["test"] }
+mbv-net = { path = "crates/mbv-net", features = ["test"] }
 uuid.workspace = true
 rstest.workspace = true
 

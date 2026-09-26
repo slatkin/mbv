@@ -21,7 +21,7 @@
 use mbv_core::cast::client::{CastClient, CastMediaItem, CastStatus};
 use mbv_core::cast::discovery::CastReceiver;
 use mbv_core::playback_queue::QueueItemContentId;
-use mbv_core::{EmbySessionId, MediaSourceId};
+use mbv_ids::{EmbySessionId, MediaSourceId};
 use std::sync::mpsc::Sender;
 #[cfg(test)]
 use std::sync::Arc;

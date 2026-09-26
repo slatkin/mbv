@@ -193,7 +193,7 @@ impl App {
                 let Some(client) = self.emby_snapshot() else {
                     return;
                 };
-                let item_id = mbv_core::ItemId::new(item_id.clone());
+                let item_id = mbv_ids::ItemId::new(item_id.clone());
                 let media_source_id = media_source_id.clone();
                 let session_id = session_id.clone();
                 let is_paused = report.is_paused;

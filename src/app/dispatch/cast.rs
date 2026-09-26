@@ -76,7 +76,7 @@ impl App {
             muted: false,
             disconnected: false,
         });
-        self.stop_visualizer_worker();
+        self.stop_visualizer_capture();
     }
 
     /// Selecting a target from the F3 panel (8.3): the previously connected
@@ -521,12 +521,12 @@ mod tests {
     #[test]
     fn attaching_a_cast_target_stops_a_running_pipewire_capture() {
         // No real `PipeWireWorker` is started here (no audio device in
-        // CI) -- `stop_visualizer_worker`'s window teardown is the
+        // CI) -- `stop_visualizer_capture`'s window teardown is the
         // observable half of "capture teardown runs on attach" (8.5), the
         // same shape `visualizer.rs`'s `selecting_artwork_stops_capture`
         // test uses for the same reason.
         let mut app = make_app_stub();
-        app.visualizer_window.samples = vec![crate::app::infra::visualizer_worker::StereoSample {
+        app.visualizer_window.samples = vec![mbv_visualizer::StereoSample {
             left: 1.0,
             right: 1.0,
         }];

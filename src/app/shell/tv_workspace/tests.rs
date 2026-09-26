@@ -2,7 +2,7 @@ use super::*;
 use crate::app::components::{Msg, ShellRequest};
 use crate::app::render::make_movie_app;
 use crate::app::state::types::browse::BrowseResting;
-use mbv_core::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 mod group;

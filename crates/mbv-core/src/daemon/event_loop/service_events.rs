@@ -10,7 +10,7 @@ use crate::api::EmbyItem;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate};
 use crate::service_runtime::SetupGeneration;
-use crate::ws::WsEvent;
+use mbv_ws::WsEvent;
 
 impl DaemonLoop {
     /// `DaemonEvent::Ws`: apply the service socket event when it belongs to

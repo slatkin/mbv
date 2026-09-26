@@ -51,10 +51,10 @@ impl SearchPool {
     /// words of the label.
     fn match_scores(
         &self,
-        matcher: &fuzzy_matcher::skim::SkimMatcherV2,
+        matcher: &mbv_text::fuzzy_match::SkimMatcherV2,
         query: &str,
     ) -> Vec<(usize, i64)> {
-        use crate::app::infra::fuzzy_match::word_match_score;
+        use mbv_text::fuzzy_match::word_match_score;
         match self {
             Self::Items(items) => items
                 .iter()
@@ -298,7 +298,7 @@ impl InlineSearch {
         }
         // Fully case-insensitive: media titles are searched without smart-case
         // (an uppercase query letter must not make the scan case-sensitive).
-        let matcher = fuzzy_matcher::skim::SkimMatcherV2::default().ignore_case();
+        let matcher = mbv_text::fuzzy_match::SkimMatcherV2::default().ignore_case();
         let mut scored = self.pool.match_scores(&matcher, &self.query);
         scored.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
         self.order = scored;

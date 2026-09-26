@@ -2,7 +2,7 @@ use super::control_queue::unified_queue_state_for_peer;
 use super::core::{DaemonEvent, SharedQueueState};
 use crate::ctrl::{CtrlAudiobookshelfCapabilities, CtrlCmd, CtrlEvent, CtrlHello};
 use crate::daemon::ctrl::{ClientRegistry, CtrlOutbound, CtrlTransport};
-use crate::stream::SocketStream;
+use mbv_net::stream::SocketStream;
 use std::io::{BufRead, BufReader, Write};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};

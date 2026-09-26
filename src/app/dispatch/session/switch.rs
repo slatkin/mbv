@@ -1,7 +1,7 @@
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::{App, PlayerTab, QueueScope, SuspendedLocalSession};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
-use mbv_core::ws::WsEvent;
+use mbv_ws::WsEvent;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
@@ -13,7 +13,7 @@ impl App {
         remote_rx: mpsc::Receiver<PlayerEvent>,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) {
-        self.stop_visualizer_worker();
+        self.stop_visualizer_capture();
         self.player_endpoint = Some(endpoint.clone());
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_unified_state = remote.unified_queue_state();
@@ -134,7 +134,7 @@ impl App {
         // `connect_to_session`'s sever, so a cast attachment must be severed
         // here too. No-op when nothing is attached.
         self.cast_attachment = None;
-        self.stop_visualizer_worker();
+        self.stop_visualizer_capture();
         self.player_endpoint = Some(endpoint.clone());
         let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();

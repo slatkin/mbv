@@ -9,7 +9,7 @@ mod prefix_mode {
     use crossterm::event::KeyEvent;
 
     fn prefix_keybinds(assignments: &[(&str, &str)]) -> Keybinds {
-        let mut sections: Vec<(String, mbv_core::keybinds::RawSection)> = Vec::new();
+        let mut sections: Vec<(String, mbv_keybinds::RawSection)> = Vec::new();
         for (id, chord) in assignments {
             let section = action_by_id(id)
                 .expect("declared action")
@@ -20,7 +20,7 @@ mod prefix_mode {
                 .iter()
                 .position(|(name, _)| *name == section)
                 .unwrap_or_else(|| {
-                    sections.push((section.clone(), mbv_core::keybinds::RawSection::default()));
+                    sections.push((section.clone(), mbv_keybinds::RawSection::default()));
                     sections.len() - 1
                 });
             sections[index]
@@ -28,7 +28,7 @@ mod prefix_mode {
                 .prefix
                 .push(((*id).into(), (*chord).into()));
         }
-        mbv_core::keybinds::load(&mbv_core::keybinds::RawKeybinds {
+        mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: Some("Ctrl+b".into()),
             sections,
         })

@@ -79,7 +79,7 @@ fn cancelling_album_track_replacement_leaves_the_populated_queue_unchanged() {
 fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
-    let http = mbv_core::mock_http::MockHttp::new();
+    let http = mbv_net::mock_http::MockHttp::new();
     let mut config = app.config.lock().unwrap().clone();
     config.server_url = "http://127.0.0.1:1".into();
     install_test_emby(&mut app, config);

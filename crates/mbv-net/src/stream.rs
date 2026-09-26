@@ -4,13 +4,13 @@ use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::os::unix::net::UnixStream;
 #[derive(Debug)]
-pub(crate) enum SocketStream {
+pub enum SocketStream {
     Unix(UnixStream),
     Tcp(TcpStream),
 }
 
 impl SocketStream {
-    pub(crate) fn try_clone(&self) -> io::Result<Self> {
+    pub fn try_clone(&self) -> io::Result<Self> {
         match self {
             Self::Unix(stream) => stream.try_clone().map(Self::Unix),
             Self::Tcp(stream) => stream.try_clone().map(Self::Tcp),
@@ -22,7 +22,7 @@ impl SocketStream {
     /// duplicate -- `shutdown` acts on the shared underlying socket in the
     /// kernel, so it unblocks a concurrent blocking `read()` on any other
     /// clone of the same connection immediately.
-    pub(crate) fn shutdown(&self) -> io::Result<()> {
+    pub fn shutdown(&self) -> io::Result<()> {
         match self {
             Self::Unix(stream) => stream.shutdown(Shutdown::Both),
             Self::Tcp(stream) => stream.shutdown(Shutdown::Both),

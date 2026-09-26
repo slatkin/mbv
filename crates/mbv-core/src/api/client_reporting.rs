@@ -1,4 +1,5 @@
-use super::{EmbyClient, EmbyItem, EmbySessionId, ItemId, MediaSourceId, TICKS_PER_SECOND};
+use super::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
+use mbv_ids::{EmbySessionId, ItemId, MediaSourceId};
 
 /// One progress report for both progress transports. The two transports
 /// previously took the same adjacent same-type args (`position_ticks` /
@@ -60,7 +61,7 @@ impl EmbyClient {
         }
     }
 
-    pub fn report_progress_ws(&self, report: &ProgressReport, ws_tx: &crate::ws::WsSender) {
+    pub fn report_progress_ws(&self, report: &ProgressReport, ws_tx: &mbv_ws::WsSender) {
         let ProgressReport {
             item_id,
             media_source_id,
@@ -228,7 +229,7 @@ impl EmbyClient {
             "outbound: Stopped shutdown pos={position_ticks} timeout={}ms",
             hard_bound.as_millis()
         );
-        let result = crate::bounded::run_with_hard_bound(
+        let result = mbv_net::bounded::run_with_hard_bound(
             move || {
                 client
                     .post("/Sessions/Playing/Stopped")

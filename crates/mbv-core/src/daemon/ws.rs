@@ -5,7 +5,7 @@ use super::{
 use crate::api::EmbyClient;
 use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::{Player, PlayerCommand};
-use crate::ws::WsEvent;
+use mbv_ws::WsEvent;
 use std::sync::{Arc, Mutex};
 
 /// Start the remote play on the freshly replaced queue: a single item goes
@@ -254,11 +254,11 @@ mod tests {
     use crate::api::{EmbyClient, EmbyItem};
     use crate::config::{Config, QueueSource};
     use crate::daemon::{CtrlClients, SharedQueueState};
-    use crate::mock_http::MockHttp;
     use crate::playback_queue::{PlaybackQueue, QueueItem};
     use crate::playback_transition::OwnerTransitionState;
     use crate::player::Player;
-    use crate::ws::WsEvent;
+    use mbv_net::mock_http::MockHttp;
+    use mbv_ws::WsEvent;
     use rstest::rstest;
     use std::sync::{Arc, Mutex};
 

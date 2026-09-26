@@ -129,7 +129,7 @@ impl AudiobookshelfClient {
         let episode_id = episode_id.to_owned();
         let cleanup_client = client.clone();
         let cleanup_key = api_key.clone();
-        crate::bounded::run_with_hard_bound_or_cleanup(
+        mbv_net::bounded::run_with_hard_bound_or_cleanup(
             move || {
                 client.create_playback_session(
                     &api_key,
@@ -175,7 +175,7 @@ impl AudiobookshelfClient {
         let library_item_id = library_item_id.to_owned();
         let cleanup_client = client.clone();
         let cleanup_key = api_key.clone();
-        crate::bounded::run_with_hard_bound_or_cleanup(
+        mbv_net::bounded::run_with_hard_bound_or_cleanup(
             move || {
                 client.create_book_playback_session(
                     &api_key,
@@ -227,7 +227,7 @@ impl AudiobookshelfClient {
     ) -> Result<(), AudiobookshelfError> {
         let url = url.to_owned();
         let client = self.clone();
-        crate::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound(
             move || client.wait_for_hls_ready(&url, hard_bound),
             hard_bound,
         )
@@ -259,8 +259,8 @@ impl AudiobookshelfClient {
                 api_key,
                 &format!(
                     "/api/items/{}/play/{}",
-                    crate::encode_path_segment(library_item_id),
-                    crate::encode_path_segment(episode_id)
+                    mbv_net::encode_path_segment(library_item_id),
+                    mbv_net::encode_path_segment(episode_id)
                 ),
                 &body,
             )?
@@ -292,7 +292,7 @@ impl AudiobookshelfClient {
                     api_key,
                     &format!(
                         "/api/session/{}/close",
-                        crate::encode_path_segment(&session_id)
+                        mbv_net::encode_path_segment(&session_id)
                     ),
                     &AudiobookshelfPlaybackProgress {
                         current_time: 0.0,
@@ -330,7 +330,7 @@ impl AudiobookshelfClient {
                 api_key,
                 &format!(
                     "/api/items/{}/play",
-                    crate::encode_path_segment(library_item_id)
+                    mbv_net::encode_path_segment(library_item_id)
                 ),
                 &body,
             )?
@@ -360,7 +360,7 @@ impl AudiobookshelfClient {
                     api_key,
                     &format!(
                         "/api/session/{}/close",
-                        crate::encode_path_segment(&session_id)
+                        mbv_net::encode_path_segment(&session_id)
                     ),
                     &AudiobookshelfPlaybackProgress {
                         current_time: 0.0,
@@ -491,14 +491,14 @@ impl AudiobookshelfClient {
         let client = self.clone();
         let api_key = api_key.to_owned();
         let session_id = session_id.to_owned();
-        crate::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound(
             move || {
                 client
                     .post_json(
                         &api_key,
                         &format!(
                             "/api/session/{}/{action}",
-                            crate::encode_path_segment(&session_id)
+                            mbv_net::encode_path_segment(&session_id)
                         ),
                         &progress,
                     )

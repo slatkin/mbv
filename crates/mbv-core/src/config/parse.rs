@@ -36,10 +36,10 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     // reserved chords, and both collision classes — is rejected here, at
     // the existing config error path, before the process starts.
     let keybinds = match doc.get("keys") {
-        None => crate::keybinds::Keybinds::default(),
+        None => mbv_keybinds::Keybinds::default(),
         Some(keys) => {
             let raw = parse_raw_keybinds(keys)?;
-            crate::keybinds::load(&raw).map_err(|e| e.to_string())?
+            mbv_keybinds::load(&raw).map_err(|e| e.to_string())?
         }
     };
 
@@ -486,8 +486,8 @@ fn parse_prefix_chord<'a>(
 /// string keys are router-scope overrides and whose `prefix` sub-table
 /// holds prefix-namespace assignments. Shape errors are reported here;
 /// semantic validation is the registry's (`keybinds::load`).
-fn parse_raw_keybinds(keys: &toml::Value) -> Result<crate::keybinds::RawKeybinds, String> {
-    use crate::keybinds::{RawKeybinds, RawSection};
+fn parse_raw_keybinds(keys: &toml::Value) -> Result<mbv_keybinds::RawKeybinds, String> {
+    use mbv_keybinds::{RawKeybinds, RawSection};
 
     let table = keys
         .as_table()

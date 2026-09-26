@@ -2,7 +2,7 @@
 
 use std::hash::Hash;
 
-use fuzzy_matcher::skim::SkimMatcherV2;
+use mbv_text::fuzzy_match::{word_match_score, SkimMatcherV2};
 use ratatui::layout::Rect;
 
 use crate::app::components::list::{
@@ -102,12 +102,7 @@ impl<Target: Clone + Eq + Hash> TreeBrowser<Target> {
             .iter()
             .filter_map(|id| self.arena.get(id))
             .filter(|entry| {
-                crate::app::infra::fuzzy_match::word_match_score(
-                    &matcher,
-                    &entry.node.search_text,
-                    &self.filter_query,
-                )
-                .is_some()
+                word_match_score(&matcher, &entry.node.search_text, &self.filter_query).is_some()
             })
             .map(|entry| entry.node.target.clone())
             .collect()

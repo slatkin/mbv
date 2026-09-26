@@ -11,9 +11,9 @@ use crate::ctrl::{
     CtrlEvent, PlaybackGeneration, PlaybackIntentAction, PlaybackIntentEvent,
     PlaybackIntentOutcome, PlaybackRequestId,
 };
-use crate::id_types::ItemId;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{PlayerCommand, PlayerEvent};
+use mbv_ids::ItemId;
 use std::time::Duration;
 
 impl DaemonLoop {

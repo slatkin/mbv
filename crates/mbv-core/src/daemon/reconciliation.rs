@@ -77,7 +77,7 @@ fn update_player_queue(
 pub(super) fn reconcile_packaged_emby(
     requested_revision: u64,
     current: &mut Option<EmbyOwnerContext>,
-    ws_send_tx: &mut Option<crate::ws::WsSender>,
+    ws_send_tx: &mut Option<mbv_ws::WsSender>,
     merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,
     direct_commands: &[String],
     audio_only: bool,
@@ -156,7 +156,7 @@ pub(super) fn reconcile_packaged_emby(
         previous_ws.shutdown();
     }
     let (ws_tx, ws_rx) = std::sync::mpsc::channel();
-    let ws_sender = crate::ws::start(next.client.lock().unwrap().ws_url(), ws_tx);
+    let ws_sender = mbv_ws::start(next.client.lock().unwrap().ws_url(), ws_tx);
     *ws_send_tx = Some(ws_sender.clone());
     ctx.player.update_emby_runtime(
         setup.server_url.clone(),
