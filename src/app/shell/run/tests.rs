@@ -95,7 +95,8 @@ fn series_image_completion_repushes_tv_workspace_content() {
 #[test]
 fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
     let mut app = make_app_stub();
-    app.notif_action_tx
+    app.channels
+        .notif_action_tx
         .send("clear:yes".into())
         .expect("notif channel");
 
@@ -128,7 +129,8 @@ fn drain_notif_actions_clear_yes_dismisses_and_clears_queue() {
 fn drain_session_events_dispatches_a_queued_event() {
     let mut app = make_app_stub();
     app.sessions_loading = true;
-    app.sessions_tx
+    app.channels
+        .sessions_tx
         .send(SessionEvent::Loaded {
             sessions: vec![make_session("living-room", "mbv")],
         })
@@ -179,7 +181,11 @@ fn catalog_receiver(
 fn collect_library_events(app: &mut App, expected: usize) -> Vec<LibEvent> {
     let mut events = Vec::new();
     for _ in 0..expected {
-        match app.lib_rx.recv_timeout(std::time::Duration::from_secs(1)) {
+        match app
+            .channels
+            .lib_rx
+            .recv_timeout(std::time::Duration::from_secs(1))
+        {
             Ok(event) => events.push(event),
             Err(error) => panic!(
                 "expected {expected} library-fetch events, received {}: {error:?}",

@@ -61,7 +61,7 @@ impl App {
             .detail_loading_ids
             .insert(library_item_id.clone(), request);
         let generation = self.audiobookshelf_runtime.generation();
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let result = mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
                 .and_then(|client| {
@@ -111,7 +111,7 @@ impl App {
             return;
         };
         let generation = self.audiobookshelf_runtime.generation();
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let result = mbv_core::audiobookshelf::AudiobookshelfClient::new(&setup.server_url)
                 .and_then(|client| {
@@ -214,13 +214,13 @@ impl App {
             generation,
             library_id.clone(),
             0,
-            self.lib_tx.clone(),
+            self.channels.lib_tx.clone(),
         );
         crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
             self.config.lock().unwrap().clone(),
             generation,
             library_id,
-            self.lib_tx.clone(),
+            self.channels.lib_tx.clone(),
         );
     }
 
@@ -503,7 +503,7 @@ impl App {
             generation,
             library_id,
             0,
-            self.lib_tx.clone(),
+            self.channels.lib_tx.clone(),
         );
     }
 

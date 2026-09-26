@@ -95,7 +95,7 @@ impl Model {
     /// Drain pending library events. Returns whether any event was drained.
     pub(super) fn drain_lib_events(&mut self) -> bool {
         let mut had_events = false;
-        while let Ok(ev) = self.app.lib_rx.try_recv() {
+        while let Ok(ev) = self.app.channels.lib_rx.try_recv() {
             had_events = true;
             match ev {
                 crate::app::LibEvent::EmbyLatestSnapshotFetched {

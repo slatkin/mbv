@@ -279,7 +279,7 @@ impl App {
             );
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let destination = key.destination.clone();
         let generation = SetupGeneration::new(key.generation);
         let revision = key.revision;

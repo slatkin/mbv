@@ -28,7 +28,7 @@ impl ToastSeverity {
 impl App {
     fn notify_system(&self, msg: &str) {
         if self.system_notifications {
-            let tx = self.notif_action_tx.clone();
+            let tx = self.channels.notif_action_tx.clone();
             let mut cmd = std::process::Command::new("notify-send");
             cmd.arg("--app-name=mbv")
                 .arg("mbv")

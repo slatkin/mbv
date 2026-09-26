@@ -102,7 +102,7 @@ impl App {
     /// concurrently with `spawn_sessions_load`'s `/Sessions` fetch -- callers
     /// invoke both, never wait on this one before showing Emby rows.
     pub(in crate::app) fn spawn_cast_discovery(&mut self) {
-        let tx = self.cast_tx.clone();
+        let tx = self.channels.cast_tx.clone();
         std::thread::spawn(move || {
             let receivers =
                 mbv_core::cast::discovery::browse_cast_receivers(CAST_DISCOVERY_TIMEOUT);
@@ -144,7 +144,7 @@ impl App {
         let client = attachment.client.clone();
         let emby = self.emby_snapshot();
         let abs = self.audiobookshelf_cast_context();
-        let tx = self.cast_tx.clone();
+        let tx = self.channels.cast_tx.clone();
         std::thread::spawn(move || {
             let resolved: Vec<ResolvedCastItem> = all_items
                 .iter()
@@ -210,7 +210,7 @@ impl App {
     /// blocking-network style), and neither may run on the caller's thread.
     /// Shared by attach-on-selection from the discovery panel (8.3).
     pub(in crate::app) fn connect_cast_receiver(&mut self, id: String, timeout: Duration) {
-        let tx = self.cast_tx.clone();
+        let tx = self.channels.cast_tx.clone();
         let connect = cast_connect_fn();
         std::thread::spawn(move || {
             let event = match connect(&id, timeout) {
@@ -322,7 +322,7 @@ impl App {
         let Some(client) = self.cast_attachment.as_ref().and_then(|a| a.client.clone()) else {
             return;
         };
-        let tx = self.cast_tx.clone();
+        let tx = self.channels.cast_tx.clone();
         let _ = client.send(Box::new(move |transport: &mut dyn CastTransport| {
             if let Err(e) = f(transport) {
                 let _ = tx.send(CastEvent::TransportError(e));
@@ -597,6 +597,7 @@ mod tests {
 
         // The background connect fails and reports back.
         let event = app
+            .channels
             .cast_rx
             .recv_timeout(std::time::Duration::from_secs(2))
             .unwrap();
@@ -683,6 +684,7 @@ mod tests {
         ];
         app.dispatch_selection_to_cast(items, 1);
         let event = app
+            .channels
             .cast_rx
             .recv_timeout(std::time::Duration::from_secs(2))
             .unwrap();

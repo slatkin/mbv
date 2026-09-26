@@ -222,12 +222,8 @@ pub(crate) fn make_built_app() -> App {
 
     let (_, player_rx) = std::sync::mpsc::channel();
     let (_, ws_rx) = std::sync::mpsc::channel();
-    let (lib_tx, lib_rx) = std::sync::mpsc::channel();
     let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
-    let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
-    let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
-    let (search_tx, search_rx) =
-        std::sync::mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
+    let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
 
     let player = PlayerProxy::stub(status);
 
@@ -260,16 +256,9 @@ pub(crate) fn make_built_app() -> App {
         indicator_style: render::indicators::IndicatorStyle::default(),
         image_cache_size: 50,
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
-        lib_tx,
-        lib_rx,
-        sessions_tx,
-        sessions_rx,
         card_image_tx,
         card_image_rx,
-        notif_action_tx,
-        notif_action_rx,
-        search_tx,
-        search_rx,
+        channels,
         idle_feed: None,
     })
 }

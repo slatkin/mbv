@@ -31,7 +31,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let generation = self.emby_runtime.generation();
         std::thread::spawn(move || {
             for library_id in library_ids {
@@ -178,7 +178,7 @@ impl App {
             let c = client.lock().unwrap();
             (c.config.server_url.clone(), c.token.clone())
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let url = format!(
                 "{server_url}/Items?ParentId={level_id}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={token}"

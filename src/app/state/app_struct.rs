@@ -3,11 +3,9 @@ use crate::app::render;
 use crate::app::state::panel_targets::PanelTarget;
 use crate::app::state::queue_owner::QueueEpoch;
 use crate::app::state::types::browse::{AlbumIndexState, SeriesDetail};
-use crate::app::state::types::cast::{CastAttachment, CastEvent};
+use crate::app::state::types::cast::CastAttachment;
 use crate::app::state::types::confirm::ConfirmModal;
-use crate::app::state::types::events::{
-    LibEvent, PendingSeriesHandoff, PendingSeriesLanding, SessionEvent,
-};
+use crate::app::state::types::events::{PendingSeriesHandoff, PendingSeriesLanding};
 use crate::app::state::types::feed::IdleFeed;
 use crate::app::state::types::feed::SavePlaylistDialog;
 use crate::app::state::types::feed_tab::FeedTabState;
@@ -269,12 +267,7 @@ pub struct App {
     pub(in crate::app) confirm_logout: bool,
     pub(in crate::app) system_notifications: bool,
     pub(in crate::app) notif_failed: bool,
-    pub(in crate::app) notif_action_tx: mpsc::Sender<String>,
-    pub(in crate::app) notif_action_rx: mpsc::Receiver<String>,
-    pub(in crate::app) lib_tx: mpsc::Sender<LibEvent>,
-    pub(in crate::app) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(in crate::app) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(in crate::app) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
+    pub(in crate::app) channels: crate::app::state::runtime_channels::RuntimeChannels,
     /// Whether the global Search sidebar overlay is open. The
     /// `SearchSidebarComponent` owns the sidebar state (query, cursor, scroll,
     /// results, debounce); this flag tells the legacy render/input path the
@@ -321,16 +314,12 @@ pub struct App {
     pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
-    pub(in crate::app) sessions_tx: mpsc::Sender<SessionEvent>,
-    pub(in crate::app) sessions_rx: mpsc::Receiver<SessionEvent>,
     pub(in crate::app) connected_session_id: Option<String>,
     pub(in crate::app) connected_session_state: Option<mbv_core::api::SessionInfo>,
     /// Cast attachment, beside `connected_session_id`/`connected_session_state`
     /// above: `None` means no cast target is attached. See `cast_actions.rs`
     /// for attach/detach and `cast_status_actions.rs` for status polling.
     pub(in crate::app) cast_attachment: Option<CastAttachment>,
-    pub(in crate::app) cast_tx: mpsc::Sender<CastEvent>,
-    pub(in crate::app) cast_rx: mpsc::Receiver<CastEvent>,
     pub(in crate::app) last_cast_poll: Instant,
     pub(in crate::app) cast_status_loading: bool,
     pub(in crate::app) queue_epoch: QueueEpoch,

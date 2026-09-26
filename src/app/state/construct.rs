@@ -3,10 +3,8 @@ use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::{
-    layout, spawn_resize_worker, App, AppInit, SessionEvent, SuspendedLocalSession,
-    LEFT_WIDTH_DEFAULT,
+    layout, spawn_resize_worker, App, AppInit, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
-use mbv_core::api::EmbyItem;
 use mbv_core::player::{Player, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use std::sync::{mpsc, Arc, Mutex};
@@ -128,7 +126,6 @@ impl App {
             crate::config::QueueSource::Unknown,
         );
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
-        let (cast_tx, cast_rx) = mpsc::channel();
         let setup = crate::app::state::service_setup::ServiceSetup::new();
         let mut app = App {
             #[cfg(test)]
@@ -137,6 +134,7 @@ impl App {
             emby_runtime: init.emby_runtime,
             audiobookshelf_runtime: init.audiobookshelf_runtime,
             setup,
+            channels: init.channels,
             audiobookshelf_libraries: Vec::new(),
             audiobookshelf_shelf_cache: std::collections::HashMap::new(),
             audiobookshelf_browse: Vec::new(),
@@ -173,14 +171,6 @@ impl App {
             album_indexes: std::collections::HashMap::new(),
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
-            lib_tx: init.lib_tx,
-            lib_rx: init.lib_rx,
-            search_tx: init.search_tx,
-            search_rx: init.search_rx,
-            sessions_tx: init.sessions_tx,
-            sessions_rx: init.sessions_rx,
-            notif_action_tx: init.notif_action_tx,
-            notif_action_rx: init.notif_action_rx,
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
@@ -281,8 +271,6 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             cast_attachment: None,
-            cast_tx,
-            cast_rx,
             last_cast_poll: Instant::now()
                 .checked_sub(Duration::from_secs(60))
                 .unwrap_or_else(Instant::now),
@@ -340,12 +328,9 @@ impl App {
     pub fn new_independent(app_config: &crate::config::Config) -> Self {
         let (player_tx, player_rx) = mpsc::channel();
         let (_, ws_rx) = mpsc::channel();
-        let (lib_tx, lib_rx) = mpsc::channel();
-        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
-        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
-        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
+        let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let indicator_style = ui_config.indicator_style.parse().unwrap_or_default();
         let configured = app_config.emby_setup.is_some();
@@ -403,16 +388,9 @@ impl App {
             indicator_style,
             image_cache_size: ui_config.image_cache_size,
             visualizer_glyph: ui_config.visualizer_glyph.clone(),
-            lib_tx,
-            lib_rx,
-            sessions_tx,
-            sessions_rx,
             card_image_tx,
             card_image_rx,
-            notif_action_tx,
-            notif_action_rx,
-            search_tx,
-            search_rx,
+            channels,
             idle_feed: None,
         });
         app.setup.emby_startup_request = configured.then_some((app_config.clone(), generation));

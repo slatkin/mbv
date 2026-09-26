@@ -4,8 +4,8 @@ use super::{
 use crate::app::state::bootstrap::{bootstrap_legacy_queue, LocalDaemonBootstrap};
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
-use crate::app::{bootstrap_unified_queue, AppInit, SessionEvent};
-use mbv_core::api::{EmbyClient, EmbyItem};
+use crate::app::{bootstrap_unified_queue, AppInit};
+use mbv_core::api::EmbyClient;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::remote_player::DaemonEndpoint;
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
@@ -173,12 +173,9 @@ impl App {
         app_config: crate::config::Config,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_ws::WsEvent>();
-        let (lib_tx, lib_rx) = mpsc::channel();
-        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
-        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
-        let (search_tx, search_rx) = mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
+        let channels = crate::app::state::runtime_channels::RuntimeChannels::new();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = app_config.hidden_libraries.clone();
         let library_routes = app_config.library_routes.clone();
@@ -235,16 +232,9 @@ impl App {
             indicator_style: ui_config.indicator_style.parse().unwrap_or_default(),
             image_cache_size: ui_config.image_cache_size,
             visualizer_glyph: ui_config.visualizer_glyph,
-            lib_tx,
-            lib_rx,
-            sessions_tx,
-            sessions_rx,
             card_image_tx,
             card_image_rx,
-            notif_action_tx,
-            notif_action_rx,
-            search_tx,
-            search_rx,
+            channels,
             idle_feed: None,
         });
         app.mpris = mpris_handle;

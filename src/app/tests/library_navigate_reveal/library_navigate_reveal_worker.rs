@@ -26,6 +26,7 @@ fn episode_navigation_emits_the_series_landing_without_extra_round_trips() {
     );
 
     let ev = app
+        .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("navigate event");
@@ -85,6 +86,7 @@ fn track_navigation_emits_the_album_landing_with_its_folder_chain() {
     );
 
     let ev = app
+        .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("navigate event");
@@ -134,6 +136,7 @@ fn resolve_failure_drains_the_error_event_and_flashes_without_a_tab_change() {
     );
 
     let ev = app
+        .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("error event");

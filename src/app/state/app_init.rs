@@ -1,8 +1,6 @@
-use crate::app::state::types::events::{LibEvent, SessionEvent};
 use crate::app::state::types::feed::IdleFeed;
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
-use mbv_core::api::EmbyItem;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
 use mbv_ws::WsEvent;
@@ -34,15 +32,8 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) indicator_style: crate::app::render::indicators::IndicatorStyle,
     pub(in crate::app) image_cache_size: usize,
     pub(in crate::app) visualizer_glyph: String,
-    pub(in crate::app) lib_tx: mpsc::Sender<LibEvent>,
-    pub(in crate::app) lib_rx: mpsc::Receiver<LibEvent>,
-    pub(in crate::app) sessions_tx: mpsc::Sender<SessionEvent>,
-    pub(in crate::app) sessions_rx: mpsc::Receiver<SessionEvent>,
     pub(in crate::app) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
     pub(in crate::app) card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
-    pub(in crate::app) notif_action_tx: mpsc::Sender<String>,
-    pub(in crate::app) notif_action_rx: mpsc::Receiver<String>,
-    pub(in crate::app) search_tx: mpsc::Sender<(String, Result<Vec<EmbyItem>, String>)>,
-    pub(in crate::app) search_rx: mpsc::Receiver<(String, Result<Vec<EmbyItem>, String>)>,
+    pub(in crate::app) channels: super::runtime_channels::RuntimeChannels,
     pub(in crate::app) idle_feed: Option<IdleFeed>,
 }

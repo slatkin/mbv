@@ -4,7 +4,7 @@ use crate::app::App;
 
 impl App {
     pub(in crate::app) fn spawn_search_sidebar_query(&self, client: EmbyClient, query: String) {
-        let tx = self.search_tx.clone();
+        let tx = self.channels.search_tx.clone();
         std::thread::spawn(move || {
             let result = client.search_items(&query, 100);
             let _ = tx.send((query, result));
@@ -87,7 +87,7 @@ impl App {
             return;
         };
         let levels = self.music_levels.clone();
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let mut fetch = |parent_id: &str, start: usize, limit: usize| {
                 client.get_items_sorted(
@@ -123,7 +123,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return false;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             let fetch = |parent_id: &str| {
                 let mut call = |id: &str, start: usize, limit: usize| {
@@ -212,7 +212,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         let limit = loaded_count.max(PAGE_SIZE);
         let (name_ge, name_lt) = letter_filter.map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {

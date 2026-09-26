@@ -17,6 +17,7 @@ pub(in crate::app) mod queue_owner;
 pub(in crate::app) mod queue_scope;
 pub(in crate::app) mod remote_slot;
 pub(in crate::app) mod remote_tracking;
+pub(in crate::app) mod runtime_channels;
 pub(in crate::app) mod search_sidebar;
 pub(in crate::app) mod service_setup;
 

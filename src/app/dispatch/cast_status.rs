@@ -28,7 +28,7 @@ struct CastProgressReport {
 impl App {
     pub(in crate::app) fn drain_cast_events(&mut self) -> bool {
         let mut produced = false;
-        while let Ok(event) = self.cast_rx.try_recv() {
+        while let Ok(event) = self.channels.cast_rx.try_recv() {
             produced = true;
             self.handle_cast_event(event);
         }
@@ -49,7 +49,7 @@ impl App {
         let receiver_id = attachment.receiver_id.clone();
         self.cast_status_loading = true;
         self.last_cast_poll = Instant::now();
-        let tx = self.cast_tx.clone();
+        let tx = self.channels.cast_tx.clone();
         let _ = client.send(Box::new(move |transport| {
             if let Err(e) = transport.keep_alive() {
                 log::warn!(target: "cast", "cast keep_alive failed: {e}");
@@ -396,6 +396,7 @@ mod tests {
         app.set_cast_client("device-1", job_tx);
         app.spawn_cast_status_poll();
         let event = app
+            .channels
             .cast_rx
             .recv_timeout(std::time::Duration::from_secs(2))
             .unwrap();

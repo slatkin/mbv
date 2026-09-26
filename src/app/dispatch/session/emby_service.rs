@@ -70,7 +70,7 @@ impl App {
         // through lib_tx; the shell wipes `home_content` (items, cursor,
         // latest — the `loading` flag is intentionally left alone, matching
         // the legacy clear) and re-projects.
-        let _ = self.lib_tx.send(LibEvent::HomeContentCleared);
+        let _ = self.channels.lib_tx.send(LibEvent::HomeContentCleared);
         self.libs.clear();
         self.sessions.clear();
         self.playlists.clear();
@@ -185,6 +185,7 @@ impl App {
         // wiped the pills (task 5.3d).
         let content = self.apply_emby_bootstrap(candidate.bootstrap);
         let _ = self
+            .channels
             .lib_tx
             .send(LibEvent::HomeContentRefreshed(Box::new(content)));
         let mut config = self.config.lock().unwrap();

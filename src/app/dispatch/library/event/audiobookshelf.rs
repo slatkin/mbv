@@ -43,7 +43,7 @@ impl App {
                     generation,
                     library_id,
                     next_page,
-                    self.lib_tx.clone(),
+                    self.channels.lib_tx.clone(),
                 );
             }
         }
@@ -189,7 +189,7 @@ impl App {
                     generation,
                     library_id,
                     next_page,
-                    self.lib_tx.clone(),
+                    self.channels.lib_tx.clone(),
                 );
             }
         }

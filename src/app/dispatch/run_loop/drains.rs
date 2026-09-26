@@ -184,13 +184,13 @@ impl App {
                         generation,
                         library.id.clone(),
                         0,
-                        self.lib_tx.clone(),
+                        self.channels.lib_tx.clone(),
                     );
                     crate::app::dispatch::session::service_startup::start_audiobookshelf_shelves(
                         self.config.lock().unwrap().clone(),
                         generation,
                         library.id.clone(),
-                        self.lib_tx.clone(),
+                        self.channels.lib_tx.clone(),
                     );
                 }
                 crate::app::state::types::audiobookshelf_browse::AudiobookshelfBrowseKind::Book => {
@@ -199,7 +199,7 @@ impl App {
                         generation,
                         library.id.clone(),
                         0,
-                        self.lib_tx.clone(),
+                        self.channels.lib_tx.clone(),
                     );
                 }
             }
@@ -212,7 +212,7 @@ impl App {
     /// received so the caller can fold that into its own `had_events` for render scheduling.
     pub(in crate::app) fn drain_notif_actions(&mut self) -> bool {
         let mut produced = false;
-        while let Ok(action) = self.notif_action_rx.try_recv() {
+        while let Ok(action) = self.channels.notif_action_rx.try_recv() {
             produced = true;
             match action.as_str() {
                 "clear:yes" => {
@@ -234,7 +234,7 @@ impl App {
     /// `had_events`.
     pub(in crate::app) fn drain_session_events(&mut self) -> bool {
         let mut produced = false;
-        while let Ok(ev) = self.sessions_rx.try_recv() {
+        while let Ok(ev) = self.channels.sessions_rx.try_recv() {
             produced = true;
             self.handle_session_event(ev);
         }

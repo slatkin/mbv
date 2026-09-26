@@ -210,7 +210,7 @@ impl Model {
             }
             self.app.images.card_image_states.insert(cache_key, entry);
             if let Some(event) = artist_completion {
-                let _ = self.app.lib_tx.send(event);
+                let _ = self.app.channels.lib_tx.send(event);
             }
         }
         if series_image_changed {

@@ -343,7 +343,7 @@ impl App {
             .map(|context| {
                 let (sender, receiver) = std::sync::mpsc::channel();
                 let context = context.with_progress_updates(sender);
-                let lib_tx = self.lib_tx.clone();
+                let lib_tx = self.channels.lib_tx.clone();
                 let _ = std::thread::spawn(move || {
                     forward_audiobookshelf_updates(
                         &receiver,
@@ -353,7 +353,7 @@ impl App {
                 });
                 let (book_sender, book_receiver) = std::sync::mpsc::channel();
                 let context = context.with_book_progress_updates(book_sender);
-                let lib_tx = self.lib_tx.clone();
+                let lib_tx = self.channels.lib_tx.clone();
                 let _ = std::thread::spawn(move || {
                     forward_audiobookshelf_updates(
                         &book_receiver,

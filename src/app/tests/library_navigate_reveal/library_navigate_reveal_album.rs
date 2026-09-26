@@ -37,6 +37,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
     assert_eq!(app.tab, TabSelection::Home, "switch deferred to the drain");
 
     let ev = app
+        .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("album activated");
@@ -101,6 +102,7 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
     });
 
     let ev = app
+        .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("album activated");
@@ -158,6 +160,7 @@ fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
     );
 
     let ev = app
+        .channels
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
         .expect("album activated");

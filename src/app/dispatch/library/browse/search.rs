@@ -127,7 +127,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             if let Ok((items, _)) = client.get_items_sorted(
                 &parent_id,
@@ -164,7 +164,7 @@ impl App {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
-        let tx = self.lib_tx.clone();
+        let tx = self.channels.lib_tx.clone();
         std::thread::spawn(move || {
             if let Ok((items, _)) = client.get_items_sorted(
                 &parent_id,
