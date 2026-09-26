@@ -7,8 +7,8 @@ use crate::audiobookshelf::{
     AudiobookshelfFailureClass, AudiobookshelfSourceMethod,
 };
 use crate::config::AudiobookshelfSetup;
-use crate::playback_queue::QueueItem;
 use crate::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem};
+use crate::playback_queue::{AudiobookshelfItem, QueueItem};
 use crate::service_runtime::SetupGeneration;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -176,8 +176,12 @@ pub(super) fn prepare_source(
     context: Option<&AudiobookshelfPlayerContext>,
 ) -> Result<PreparedSource, AudiobookshelfError> {
     match item {
-        QueueItem::Audiobookshelf(episode) => prepare_episode_source(episode, context),
-        QueueItem::AudiobookshelfBook(book) => prepare_book_source(book, context),
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(episode)) => {
+            prepare_episode_source(episode, context)
+        }
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
+            prepare_book_source(book, context)
+        }
         _ => Ok(PreparedSource::plain(item, server_url, token)),
     }
 }

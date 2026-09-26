@@ -1,4 +1,5 @@
 use super::{AudiobookshelfBookProgressUpdate, AudiobookshelfProgressUpdate, QueueItem};
+use crate::playback_queue::AudiobookshelfItem;
 
 const AUDIOBOOKSHELF_REPORT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -262,13 +263,13 @@ impl ActiveItemLifecycle {
     pub(super) fn for_item(item: &QueueItem, lifecycle: Option<PreparedLifecycle>) -> Self {
         match item {
             QueueItem::Emby(_) => Self::Emby,
-            QueueItem::Audiobookshelf(_) => match lifecycle {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(_)) => match lifecycle {
                 Some(PreparedLifecycle::Episode(lifecycle)) => {
                     Self::Audiobookshelf(Box::new(lifecycle))
                 }
                 _ => Self::None,
             },
-            QueueItem::AudiobookshelfBook(_) => match lifecycle {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(_)) => match lifecycle {
                 Some(PreparedLifecycle::Book(lifecycle)) => {
                     Self::AudiobookshelfBook(Box::new(lifecycle))
                 }
@@ -308,7 +309,9 @@ impl ActiveItemLifecycle {
 mod reporting_tests {
     use super::{ActiveItemLifecycle, ListeningTime};
     use crate::api::EmbyItem;
-    use crate::playback_queue::{AudiobookshelfQueueItem, FeedEntry, QueueItem};
+    use crate::playback_queue::{
+        AudiobookshelfItem, AudiobookshelfQueueItem, FeedEntry, QueueItem,
+    };
     use std::time::{Duration, Instant};
 
     fn emby() -> QueueItem {
@@ -368,7 +371,7 @@ mod reporting_tests {
     }
 
     fn audiobook() -> QueueItem {
-        QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+        QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(AudiobookshelfQueueItem {
             library_item_id: "library".into(),
             episode_id: "episode".into(),
             title: "ABS".into(),
@@ -381,7 +384,7 @@ mod reporting_tests {
             pub_date_secs: None,
             is_finished: false,
             cover_path: None,
-        })
+        }))
     }
 
     fn episode_lifecycle(position: f64, duration: f64) -> super::AudiobookshelfPlaybackLifecycle {

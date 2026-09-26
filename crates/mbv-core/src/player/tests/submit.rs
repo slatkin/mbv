@@ -281,33 +281,37 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
 }
 
 fn audiobookshelf_item() -> QueueItem {
-    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfQueueItem {
-        library_item_id: "show-1".into(),
-        episode_id: "episode-1".into(),
-        title: "Episode 1".into(),
-        show_title: Some("Show".into()),
-        author: None,
-        description: None,
-        duration_ticks: Some(100),
-        position_ticks: 0,
-        played: false,
-        pub_date_secs: None,
-        is_finished: false,
-        cover_path: None,
-    })
+    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(
+        crate::playback_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-1".into(),
+            episode_id: "episode-1".into(),
+            title: "Episode 1".into(),
+            show_title: Some("Show".into()),
+            author: None,
+            description: None,
+            duration_ticks: Some(100),
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        },
+    ))
 }
 
 fn audiobookshelf_book_item() -> QueueItem {
-    QueueItem::AudiobookshelfBook(crate::playback_queue::AudiobookshelfBookQueueItem {
-        library_item_id: "book-1".into(),
-        title: "Book 1".into(),
-        author: None,
-        duration_ticks: Some(100),
-        position_ticks: 0,
-        played: false,
-        is_finished: false,
-        cover_path: None,
-    })
+    QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Book(
+        crate::playback_queue::AudiobookshelfBookQueueItem {
+            library_item_id: "book-1".into(),
+            title: "Book 1".into(),
+            author: None,
+            duration_ticks: Some(100),
+            position_ticks: 0,
+            played: false,
+            is_finished: false,
+            cover_path: None,
+        },
+    ))
 }
 
 fn audiobookshelf_context() -> AudiobookshelfPlayerContext {

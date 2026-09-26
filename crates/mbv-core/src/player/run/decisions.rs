@@ -45,19 +45,11 @@ pub(in crate::player) fn active_item_state(item: Option<&QueueItem>) -> ActiveIt
             };
         }
         Some(QueueItem::Audiobookshelf(item)) => {
-            state.osd_title.clone_from(&item.title);
-            let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
-            state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
-                item.position_ticks
-            } else {
-                0
-            };
-        }
-        Some(QueueItem::AudiobookshelfBook(item)) => {
-            state.osd_title.clone_from(&item.title);
-            let runtime = i64::try_from(item.duration_ticks.unwrap_or(0)).unwrap_or(i64::MAX);
-            state.last_valid_pos = if crate::api::should_resume(item.position_ticks, runtime) {
-                item.position_ticks
+            state.osd_title = item.title().to_owned();
+            let runtime = i64::try_from(item.duration().unwrap_or(0)).unwrap_or(i64::MAX);
+            let position_ticks = item.playback_position_ticks();
+            state.last_valid_pos = if crate::api::should_resume(position_ticks, runtime) {
+                position_ticks
             } else {
                 0
             };

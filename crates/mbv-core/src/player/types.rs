@@ -1,6 +1,6 @@
 use crate::api::EmbyItem;
 use crate::playback_execution_sequence::ExecSlot;
-use crate::playback_queue::{QueueItem, QueueSlotId};
+use crate::playback_queue::{AudiobookshelfItem, QueueItem, QueueSlotId};
 use libmpv2::Mpv;
 use mbv_ids::ItemId;
 use std::sync::{Arc, Mutex};
@@ -95,11 +95,11 @@ impl PlayerStatus {
                 self.title.clone_from(&entry.title);
                 self.art_item_id.clone_from(&entry.guid);
             }
-            QueueItem::Audiobookshelf(ep) => {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(ep)) => {
                 self.title.clone_from(&ep.title);
                 self.art_item_id.clone_from(&ep.episode_id);
             }
-            QueueItem::AudiobookshelfBook(book) => {
+            QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
                 self.title.clone_from(&book.title);
                 self.art_item_id.clone_from(&book.library_item_id);
             }

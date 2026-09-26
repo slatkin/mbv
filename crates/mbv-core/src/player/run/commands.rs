@@ -408,10 +408,7 @@ impl PlaybackRun {
             self.append_items_to_queue(new_items);
             return;
         }
-        if new_items
-            .iter()
-            .any(|slot| slot.item.is_audiobookshelf_any())
-        {
+        if new_items.iter().any(|slot| slot.item.is_audiobookshelf()) {
             let Some(active_item) = self.active_item().cloned() else {
                 return;
             };
@@ -522,7 +519,7 @@ impl PlaybackRun {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        if self.active_file || items.iter().any(|slot| slot.item.is_audiobookshelf_any()) {
+        if self.active_file || items.iter().any(|slot| slot.item.is_audiobookshelf()) {
             self.replace_with_queue_items(items, start_idx, mpv, progress);
             return;
         }

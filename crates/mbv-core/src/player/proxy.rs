@@ -216,7 +216,9 @@ impl PlayerProxy {
                 {
                     return false;
                 }
-                if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
+                if slots
+                    .iter()
+                    .any(|slot| slot.item.as_audiobookshelf_book().is_some())
                     && !r.ctrl_compatibility.audiobookshelf.book_queue
                 {
                     return false;
@@ -325,7 +327,9 @@ impl PlayerProxy {
                 {
                     return false;
                 }
-                if slots.iter().any(|slot| slot.item.is_audiobookshelf_book())
+                if slots
+                    .iter()
+                    .any(|slot| slot.item.as_audiobookshelf_book().is_some())
                     && !r.ctrl_compatibility.audiobookshelf.book_queue
                 {
                     return false;
