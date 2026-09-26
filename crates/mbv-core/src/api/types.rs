@@ -2,6 +2,47 @@ pub use crate::config::Config;
 use mbv_ids::{EmbySessionId, MediaSourceId};
 
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
+// Keep this equal to TICKS_PER_SECOND; the f64 form avoids repeated integer casts.
+pub const TICKS_PER_SECOND_F64: f64 = 10_000_000.0;
+
+/// Convert ticks to seconds. The i64-to-f64 conversion is exact for |ticks| < 2^53
+/// (about 28,500 years of media).
+#[must_use]
+#[expect(
+    clippy::cast_precision_loss,
+    reason = "i64 ticks to f64 seconds is exact for |ticks| < 2^53 (about 28,500 years of media)"
+)]
+pub fn ticks_to_seconds(ticks: i64) -> f64 {
+    ticks as f64 / TICKS_PER_SECOND_F64
+}
+
+/// Convert an f64 to i64, mapping NaN to zero and saturating at i64 bounds.
+///
+/// Rust's `as` cast from float to int has been saturating (and NaN-mapping-to-zero)
+/// since 1.45, so this is exactly that cast, exposed under its own name so call
+/// sites document intent instead of re-deriving the cast's behavior.
+#[must_use]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the `as` cast saturates/truncates by design; that is this function's contract"
+)]
+pub fn saturating_i64_from_f64(value: f64) -> i64 {
+    value as i64
+}
+
+/// Convert seconds to ticks, truncating fractional ticks and saturating at i64 bounds.
+#[must_use]
+pub fn seconds_to_ticks(seconds: f64) -> i64 {
+    saturating_i64_from_f64(seconds * TICKS_PER_SECOND_F64)
+}
+
+/// Convert a non-negative `i64` magnitude (a volume, a seconds count, a pixel
+/// dimension) to `f64`, saturating at `u32::MAX` for values that don't fit.
+/// mbv's magnitudes here never approach that bound, so this is effectively exact.
+#[must_use]
+pub fn i64_to_f64_saturating(value: i64) -> f64 {
+    f64::from(u32::try_from(value).unwrap_or(u32::MAX))
+}
 
 /// Inclusive lower-bound percentage of known runtime at which a saved
 /// position qualifies for resume. Exactly this percent qualifies.
@@ -387,12 +428,8 @@ impl EmbyItem {
     }
 
     #[must_use]
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "playback position ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     pub fn resume_seconds(&self) -> f64 {
-        self.playback_position_ticks as f64 / TICKS_PER_SECOND as f64
+        ticks_to_seconds(self.playback_position_ticks)
     }
 
     #[must_use]
@@ -401,12 +438,8 @@ impl EmbyItem {
     }
 
     #[must_use]
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "runtime ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     pub fn runtime_seconds(&self) -> f64 {
-        self.runtime_ticks as f64 / TICKS_PER_SECOND as f64
+        ticks_to_seconds(self.runtime_ticks)
     }
 
     #[must_use]
@@ -608,6 +641,42 @@ impl std::fmt::Debug for EmbyClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ticks_per_second_f64_matches_integer_constant() {
+        assert_eq!(
+            TICKS_PER_SECOND_F64.to_bits(),
+            f64::from(i32::try_from(TICKS_PER_SECOND).unwrap()).to_bits()
+        );
+    }
+
+    #[test]
+    fn ticks_seconds_round_trip_preserves_representative_ticks() {
+        assert_eq!(seconds_to_ticks(ticks_to_seconds(0)), 0);
+        assert_eq!(
+            seconds_to_ticks(ticks_to_seconds(TICKS_PER_SECOND)),
+            TICKS_PER_SECOND
+        );
+        let day_ticks = 24 * 60 * 60 * TICKS_PER_SECOND;
+        assert_eq!(seconds_to_ticks(ticks_to_seconds(day_ticks)), day_ticks);
+    }
+
+    #[test]
+    fn seconds_to_ticks_truncates_fractional_ticks() {
+        assert_eq!(seconds_to_ticks(1.9 / TICKS_PER_SECOND_F64), 1);
+        assert_eq!(seconds_to_ticks(-1.9 / TICKS_PER_SECOND_F64), -1);
+    }
+
+    #[test]
+    fn seconds_to_ticks_saturates_and_maps_nan_to_zero() {
+        assert_eq!(seconds_to_ticks(f64::NAN), 0);
+        assert_eq!(seconds_to_ticks(f64::MAX), i64::MAX);
+        assert_eq!(seconds_to_ticks(-f64::MAX), i64::MIN);
+        assert_eq!(saturating_i64_from_f64(f64::INFINITY), i64::MAX);
+        assert_eq!(saturating_i64_from_f64(f64::NEG_INFINITY), i64::MIN);
+        assert_eq!(saturating_i64_from_f64(f64::MAX), i64::MAX);
+        assert_eq!(saturating_i64_from_f64(-f64::MAX), i64::MIN);
+    }
 
     #[test]
     fn debug_redacts_token() {

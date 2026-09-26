@@ -135,11 +135,7 @@ impl PlaybackRun {
             PlayerCommand::SetVolume(volume) => {
                 let vol_max = self.status.lock().unwrap().volume_max;
                 let (volume, raw) = volume_decision(volume, vol_max);
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "computed volume (i64) → f64 for the mpv volume property; mpv stores volume as a float (approved, issue #804)"
-                )]
-                let _ = mpv.set_property("volume", raw as f64);
+                let _ = mpv.set_property("volume", crate::api::i64_to_f64_saturating(raw));
                 self.status.lock().unwrap().volume = volume;
                 let _ = mpv.command("show-text", &[&format!("Volume: {volume}%"), "1500"]);
             }

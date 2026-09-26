@@ -229,16 +229,10 @@ pub(super) fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShel
             .as_deref()
             .map(crate::api::html_to_text),
         duration_ticks: duration_seconds.map(|seconds| {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "podcast duration seconds → ticks through f64; fractional seconds have no integer representation (approved, issue #804)"
-            )]
-            let ticks = seconds * crate::api::TICKS_PER_SECOND as f64;
-            if ticks.is_nan() || ticks <= 0.0 {
-                0
-            } else {
-                ticks.trunc().to_string().parse().unwrap_or(u64::MAX)
-            }
+            let ticks = crate::api::saturating_i64_from_f64(
+                (seconds * crate::api::TICKS_PER_SECOND_F64).trunc(),
+            );
+            u64::try_from(ticks).unwrap_or(0)
         }),
         position_ticks: 0,
         played: false,

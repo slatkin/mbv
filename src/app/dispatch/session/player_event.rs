@@ -111,11 +111,7 @@ impl App {
                 // config, so this client's own `always_skip_intro` is the
                 // only thing that decides whether to skip.
                 if self.config.lock().unwrap().always_skip_intro {
-                    #[expect(
-                        clippy::cast_precision_loss,
-                        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-                    )]
-                    let secs = intro_end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+                    let secs = mbv_core::api::ticks_to_seconds(intro_end_ticks);
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);
                 }
@@ -229,12 +225,7 @@ impl App {
                 // stale-generation updates before emitting, and the daemon's
                 // generation counter is unrelated to this client's own runtime
                 // generation, so comparing them would reject every live event.
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-                )]
-                let current_time_seconds =
-                    ev.position_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+                let current_time_seconds = mbv_core::api::ticks_to_seconds(ev.position_ticks);
                 self.reconcile_audiobookshelf_progress(
                     &ev.library_item_id,
                     &ev.episode_id,

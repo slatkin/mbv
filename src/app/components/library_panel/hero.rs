@@ -412,18 +412,23 @@ fn abs_book_meta_rows(
     }
     if book.is_finished {
         rows.push("Finished".into());
-    } else if book.position_ticks > 0 && book.duration_ticks.is_some_and(|t| t > 0) {
-        #[expect(
-            clippy::cast_precision_loss,
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "duration fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let pct = (book.position_ticks as f64 * 100.0 / book.duration_ticks.unwrap() as f64)
+    } else if book.position_ticks > 0 {
+        if let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0) {
+            let numerator = book.position_ticks.checked_mul(100).unwrap_or(i64::MAX);
+            let denominator = i64::try_from(duration_ticks).unwrap_or(i64::MAX);
+            let percent = (mbv_core::api::ticks_to_seconds(numerator)
+                / mbv_core::api::ticks_to_seconds(denominator))
             .floor()
-            .clamp(1.0, 99.0) as u8;
-        progress_row = Some(rows.len());
-        rows.push(format!("{pct}%"));
+            .clamp(1.0, 99.0);
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "percent is clamped to [1.0, 99.0] just above; the cast is exact"
+            )]
+            let pct = percent as u8;
+            progress_row = Some(rows.len());
+            rows.push(format!("{pct}%"));
+        }
     }
     (rows, duration_row, progress_row)
 }

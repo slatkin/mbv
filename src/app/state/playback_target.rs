@@ -158,19 +158,16 @@ impl App {
                     .iter()
                     .position(|s| s.item.id() == id)
             });
-            #[expect(
-                clippy::cast_precision_loss,
-                clippy::cast_possible_truncation,
-                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
             let pos_ticks = {
                 let elapsed_s = if remote.is_paused {
                     0.0
                 } else {
                     self.remote_pos_at.elapsed().as_secs_f64()
                 };
-                let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
-                (pos_s * mbv_core::api::TICKS_PER_SECOND as f64) as i64
+                let remote_pos_s = mbv_core::api::i64_to_f64_saturating(self.remote_pos_s);
+                let runtime_s = mbv_core::api::i64_to_f64_saturating(remote.runtime_s);
+                let pos_s = (remote_pos_s + elapsed_s).min(runtime_s);
+                mbv_core::api::seconds_to_ticks(pos_s)
             };
             crate::app::PlaybackState {
                 active: remote.now_playing.is_some(),

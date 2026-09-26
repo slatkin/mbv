@@ -3,7 +3,7 @@
 use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
 use crate::app::{App, QueueScope};
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use mbv_core::api::{i64_to_f64_saturating, seconds_to_ticks, EmbyItem};
 use mbv_core::player::PlayerCommand;
 use std::time::{Duration, Instant};
 
@@ -20,19 +20,14 @@ impl App {
             if runtime_s == 0 {
                 return;
             }
-            #[expect(
-                clippy::cast_precision_loss,
-                clippy::cast_possible_truncation,
-                reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
-            let ticks = (fraction * (runtime_s * mbv_core::api::TICKS_PER_SECOND) as f64) as i64;
+            let runtime_s_f64 = i64_to_f64_saturating(runtime_s);
+            let ticks = seconds_to_ticks(fraction * runtime_s_f64);
             let id = conn_id.clone();
             #[expect(
-                clippy::cast_precision_loss,
                 clippy::cast_possible_truncation,
-                reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                reason = "fractional remote seek is truncated to integer seconds"
             )]
-            let remote_pos_s = (fraction * runtime_s as f64) as i64;
+            let remote_pos_s = (fraction * runtime_s_f64) as i64;
             self.remote_pos_s = remote_pos_s;
             self.remote_pos_at = Instant::now();
             self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
@@ -43,11 +38,7 @@ impl App {
         if runtime_ticks == 0 {
             return;
         }
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-        )]
-        let target_secs = (fraction * runtime_ticks as f64) / TICKS_PER_SECOND as f64;
+        let target_secs = fraction * mbv_core::api::ticks_to_seconds(runtime_ticks);
         self.player
             .send_command(PlayerCommand::SeekAbsolute(target_secs));
         // Mark a pending Feed seek so the next OutputStarted persists

@@ -323,7 +323,7 @@ impl PlaybackRun {
         match (name, change) {
             ("volume", PropertyData::Double(vol)) => {
                 self.status.lock().unwrap().volume =
-                    super::super::saturating_i64_from_f64(vol * vol / 100.0);
+                    crate::api::saturating_i64_from_f64(vol * vol / 100.0);
             }
             (_, PropertyData::Double(pos_secs)) => {
                 self.on_time_pos(pos_secs, mpv);
