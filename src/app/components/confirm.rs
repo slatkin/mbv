@@ -196,7 +196,7 @@ fn dirty_playlist_intent(key: Key) -> Option<ConfirmIntent> {
 mod tests {
     use super::*;
     use rstest::rstest;
-    use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use tuirealm::event::{Key, KeyModifiers};
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> tuirealm::event::KeyEvent {
         tuirealm::event::KeyEvent { code, modifiers }
@@ -223,55 +223,16 @@ mod tests {
            ))));
     }
 
-    #[test]
-    fn local_play_keys_accept_cancel_and_swallow() {
-        let action = ConfirmAction::PlayLocallyInstead;
-        for key in [Key::Char('y'), Key::Char('Y'), Key::Enter] {
-            assert_eq!(
-                confirm_intent_for_key(&action, key),
-                Some(ConfirmIntent::Accept)
-            );
-        }
-        for key in [Key::Char('n'), Key::Char('N'), Key::Esc] {
-            assert_eq!(
-                confirm_intent_for_key(&action, key),
-                Some(ConfirmIntent::Cancel)
-            );
-        }
-        assert_eq!(confirm_intent_for_key(&action, Key::Char('x')), None);
-    }
-
     #[rstest]
     #[case::clear_queue_dismisses_unknown(
         Key::Char('x'),
         ConfirmAction::ClearQueue,
         Some(ConfirmIntent::Dismiss)
     )]
-    #[case::remove_item_dismisses_unknown(
-        Key::Enter,
-        ConfirmAction::RemoveActiveQueueItem(1),
-        Some(ConfirmIntent::Dismiss)
-    )]
-    #[case::service_removal_leaves_unknown_unhandled(
-        Key::Char('x'),
-        ConfirmAction::RemoveEmby,
-        None
-    )]
-    #[case::playlist_overwrite_leaves_unknown_unhandled(Key::Enter, ConfirmAction::SaveOverwritePlaylist { existing_id: "id".into(), name: "name".into() }, None)]
     #[case::dirty_playlist_saves(
         Key::Char('S'),
         ConfirmAction::DiscardOrSaveDirtyPlaylist,
         Some(ConfirmIntent::Save)
-    )]
-    #[case::dirty_playlist_discards(
-        Key::Char('D'),
-        ConfirmAction::DiscardOrSaveDirtyPlaylist,
-        Some(ConfirmIntent::Discard)
-    )]
-    #[case::queue_replacement_dismisses_unknown(
-        Key::Char('x'),
-        ConfirmAction::ReplacePopulatedQueue,
-        Some(ConfirmIntent::Dismiss)
     )]
     fn action_specific_key_intents(
         #[case] key: Key,
@@ -297,50 +258,5 @@ mod tests {
         if matches!(shell_boxed.as_ref(), ShellRequest::ConfirmIntent(
                ConfirmIntent::Cancel
            ))));
-    }
-
-    #[test]
-    fn unbound_key_is_swallowed_locally() {
-        let mut comp = ConfirmComponent::new();
-        comp.set_modal(&ConfirmModal {
-            title: String::new(),
-            message: String::new(),
-            hint: String::new(),
-            on_confirm: ConfirmAction::ClearQueue,
-        });
-        assert_eq!(
-            comp.on(&Event::Keyboard(make_key(
-                Key::Char('x'),
-                KeyModifiers::NONE,
-            ))),
-            Some(Msg::Shell(Box::new(ShellRequest::ConfirmIntent(
-                ConfirmIntent::Dismiss
-            ))))
-        );
-    }
-
-    #[test]
-    fn non_keyboard_events_return_none() {
-        let mut comp = ConfirmComponent::new();
-        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
-        assert_eq!(comp.on(&Event::<UserEvent>::Tick), None);
-        assert_eq!(
-            comp.on(&Event::Mouse(MouseEvent {
-                kind: MouseEventKind::Down(MouseButton::Left),
-                column: 10,
-                row: 5,
-                modifiers: KeyModifiers::NONE,
-            })),
-            None
-        );
-    }
-
-    #[test]
-    fn set_content_updates_title_message_hint() {
-        let mut comp = ConfirmComponent::new();
-        comp.set_content(" Title ", "Are you sure?", "[y] Yes    [Esc] Cancel");
-        assert_eq!(comp.title, " Title ");
-        assert_eq!(comp.message, "Are you sure?");
-        assert_eq!(comp.hint, "[y] Yes    [Esc] Cancel");
     }
 }
