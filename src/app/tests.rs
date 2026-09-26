@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::state::types::settings::SettingsDestination;
 
 mod actions_tests_queue_state_reseat;
 mod audiobookshelf_browse_actions_sibling_tests;
@@ -138,247 +137,22 @@ pub(crate) fn make_audio_items(n: usize) -> Vec<EmbyItem> {
         .collect()
 }
 
-/// Minimal App stub for logic-only tests.
+/// Minimal App stub for logic-only tests: the ordinary `App::build`
+/// construction (`make_built_app`) plus the stub-friendly defaults below.
 pub(crate) fn make_app_stub() -> App {
-    use mbv_core::player::{PlayerProxy, PlayerStatus};
-    use std::sync::Mutex;
-
-    let status = Arc::new(Mutex::new(PlayerStatus {
-        volume_max: 100,
-        ..Default::default()
-    }));
-
-    let (_, player_rx) = std::sync::mpsc::channel();
-    let (_, ws_rx) = std::sync::mpsc::channel();
-    let (lib_tx, lib_rx) = std::sync::mpsc::channel();
-    let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
-    // No worker thread spawned here: `image_picker` is always `None` in
-    // this stub, so no `ThreadProtocol` is ever built and nothing sends
-    // on `resize_register_tx`/reads `resize_response_rx`.
-    let (resize_register_tx, _resize_register_rx) = std::sync::mpsc::channel();
-    let (_resize_response_tx, resize_response_rx) = std::sync::mpsc::channel();
-    let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
-    let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
-    let (search_tx, search_rx) =
-        std::sync::mpsc::channel::<(String, Result<Vec<EmbyItem>, String>)>();
-    let (cast_tx, cast_rx) = std::sync::mpsc::channel();
-
-    let player = PlayerProxy::stub(Arc::clone(&status));
-    let config = crate::config::Config::default();
-
-    App {
-        _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
-        config: Arc::new(Mutex::new(config)),
-        emby_runtime: mbv_core::service_runtime::EmbyRuntime::default(),
-        audiobookshelf_runtime: mbv_core::service_runtime::AudiobookshelfRuntime::new(false),
-        emby_startup_rx: None,
-        emby_startup_request: None,
-        audiobookshelf_startup_rx: None,
-        audiobookshelf_startup_request: None,
-        audiobookshelf_test_rx: None,
-        audiobookshelf_setup_rx: None,
-        audiobookshelf_catalog_rx: None,
-        audiobookshelf_libraries: Vec::new(),
-        audiobookshelf_shelf_cache: std::collections::HashMap::new(),
-        audiobookshelf_browse: Vec::new(),
-        audiobookshelf_book_browse: Vec::new(),
-        emby_setup_form: None,
-        audiobookshelf_setup_form: None,
-        emby_setup_rx: None,
-        pending_emby_replacement: None,
-        pending_audiobookshelf_replacement: None,
-        player,
-        bare_owner: mbv_core::player_owner_state::PlayerOwnerState::default(),
-        mpris: None,
-        launched_as_remote: false,
-        player_rx,
-        ws_rx,
-        audiobookshelf_socket_rx: {
-            let (_, rx) = std::sync::mpsc::channel();
-            rx
-        },
-        audiobookshelf_socket_tx: None,
-        audiobookshelf_socket_generation: None,
-        hidden_libraries: Vec::new(),
-        library_routes: std::collections::BTreeMap::new(),
-        home_latest_launch_window: crate::app::state::home_latest::HomeLatestLaunchWindow {
-            previous: None,
-            current: 0,
-        },
-        music_levels: Vec::new(),
-        album_indexes: std::collections::HashMap::new(),
-        player_tab: PlayerTab::default(),
-        remote_player_tab: None,
-        libs: Vec::new(),
-        status: String::new(),
-        status_expires: None,
-        status_severity: crate::app::dispatch::notify::ToastSeverity::default(),
-        layout: layout::AppLayout::default(),
-        terminal_width: 80,
-        terminal_height: 24,
-
-        pending_overlay: None,
-        pending_exit_message: None,
-        pending_delete_slot: None,
-        queue_undo_stack: Vec::new(),
-        remote_queue_undo_stack: Vec::new(),
-        pending_remote_move_cursor: None,
-        pending_queue_edit_cursor: None,
-        pending_queue_cursor_reanchor: None,
-        next_up_item: None,
-        panel_focus: PanelFocus::default(),
-        tab: TabSelection::Home,
-        queue_column_width: LEFT_WIDTH_DEFAULT,
-        list_pane_width: None,
-        visual_slot_hidden: false,
-        panel_mode: PanelMode::default(),
-        mini_view_focus: PanelFocus::Queue,
-        library_tab_pending: 0,
-        pending_launch_state: None,
-        pending_launch_tab_resolved: false,
-        legacy_launch_tab: None,
-        legacy_launch_migration_attempted: false,
-        emby_catalog_ready: false,
-        audiobookshelf_catalog_ready: false,
-        pending_navigate_tab_switch: None,
-        pending_series_landing: None,
-        pending_series_handoff: None,
-        pending_track_selection: None,
-        last_played_item_id: None,
-        last_played_completed: false,
-        card_image_states: std::collections::HashMap::new(),
-        card_image_loading: std::collections::HashSet::new(),
-        last_card_height: 0,
-        last_card_width: 0,
-        queue_card_projection: crate::app::render::components::card::QueueCardProjection::default(),
-        card_image_tx,
-        card_image_rx,
-        resize_register_tx,
-        resize_response_rx,
-        image_picker: None,
-        halfblock_picker: None,
-        dim_backdrop_active: false,
-        image_cache_size_total: 50,
-        settings_destination: SettingsDestination::Main,
-        settings_save_at: None,
-        mouse_capture_pending: None,
-        confirm_logout: false,
-        system_notifications: false,
-        notif_failed: false,
-        notif_action_tx,
-        notif_action_rx,
-        lib_tx,
-        lib_rx,
-        search_tx,
-        search_rx,
-        force_clear: false,
-        prefix_armed: false,
-        tab_scroll: 0,
-        ui_volume: 100,
-        pre_mute_volume: None,
-        mute_on: false,
-        visualizer_enabled: false,
-        visualizer_failed: false,
-        visualizer: None,
-        visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
-        visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
-        sessions: Vec::new(),
-        cast_receivers: Vec::new(),
-        panel_targets: Vec::new(),
-        sessions_loading: false,
-        playlists: Vec::new(),
-        playlists_cursor: 0,
-        playlists_scroll: 0,
-        playlists_loading: false,
-        playlists_open: None,
-        playlists_open_items: Vec::new(),
-        playlists_open_cursor: 0,
-        playlists_open_scroll: 0,
-        playlists_open_loading: false,
-        queue_source: crate::config::QueueSource::Unknown,
-        queue_dirty: false,
-        pending_owner_source_update: None,
-        pending_queue_action: None,
-        pending_queue_replacement: None,
-        pending_local_play: None,
-        use_nerd_fonts: false,
-        indicator_style: render::indicators::IndicatorStyle::default(),
-        ws_send_tx: None,
-        last_keepalive: Instant::now(),
-        last_capabilities: Instant::now(),
-        sessions_tx,
-        sessions_rx,
-        connected_session_id: None,
-        connected_session_state: None,
-        cast_attachment: None,
-        cast_tx,
-        cast_rx,
-        last_cast_poll: Instant::now()
-            .checked_sub(std::time::Duration::from_secs(60))
-            .unwrap(),
-        cast_status_loading: false,
-        queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
-        playlist_mutations: std::collections::HashMap::new(),
-        next_playlist_mutation: 1,
-        next_owner_queue_load_request: 1,
-        direct_remote_connected: false,
-        direct_remote_label: None,
-        direct_remote_session_id: None,
-        last_session_poll: std::time::Instant::now(),
-        session_miss_count: 0,
-        remote_pos_s: 0,
-        remote_pos_at: std::time::Instant::now(),
-        remote_api_pos_advanced_at: std::time::Instant::now()
-            .checked_sub(Duration::from_secs(60))
-            .unwrap(),
-        remote_stalled_while_paused: false,
-        remote_seek_pending_until: std::time::Instant::now()
-            .checked_sub(Duration::from_secs(1))
-            .unwrap(),
-        runtime_zero_since: None,
-        suspended_local: None,
-        active_route: None,
-        library_route_cache: std::collections::HashMap::new(),
-        last_nav_at: Instant::now().checked_sub(Duration::from_secs(1)).unwrap(),
-        last_library_nav_at: Instant::now().checked_sub(Duration::from_secs(1)).unwrap(),
-        // Default to "focused, past grace window" so existing mouse
-        // tests dispatch without arming focus explicitly.  The refocus
-        // guard itself is tested directly in
-        // input_music_track_focus_tests.
-        refocus_at: Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap()),
-        album_artist_cache: std::collections::HashMap::new(),
-        album_artist_levels: std::collections::HashMap::new(),
-        pending_level_artist_warmups: std::collections::VecDeque::new(),
-        level_artist_warmups_in_flight: std::collections::HashSet::new(),
-        album_tracks_cache: std::collections::HashMap::new(),
-        album_tracks_loading: std::collections::HashSet::new(),
-        pending_artist_album_track_fetches: std::collections::VecDeque::new(),
-        artist_album_track_fetches_in_flight: std::collections::HashSet::new(),
-        artist_detail_cache: std::collections::HashMap::new(),
-        artist_detail_loading: std::collections::HashSet::new(),
-        artist_artwork_requests: std::collections::HashMap::new(),
-        artist_artwork_status: std::collections::HashMap::new(),
-        series_detail_cache: std::collections::HashMap::new(),
-        series_detail_loading: std::collections::HashSet::new(),
-        series_season_loading: std::collections::HashSet::new(),
-        pending_series_season_expansions: std::collections::HashSet::new(),
-        image_lru: std::collections::VecDeque::new(),
-        pending_image_fetches: std::collections::VecDeque::new(),
-        image_fetches_active: 0,
-        image_cache_size: 50,
-        image_protocol: None,
-        image_protocol_enabled: false,
-        library_position_state: crate::config::LibraryPositionState::default(),
-        queue_scope: QueueScope::Local,
-        player_endpoint: None,
-        home_is_local_daemon: false,
-        idle_feed: None,
-        feed_seek_pending_slot: None,
-        feed_tab: crate::app::state::types::feed_tab::FeedTabState::default(),
-        feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::default(),
-        card_image_fetch_calls: 0,
-        image_protocol_builds: std::cell::Cell::new(0),
-    }
+    let mut app = make_built_app();
+    // `build` doubles the configured image cache size; the stub keeps its
+    // original (undoubled) budget so eviction behaviour is unchanged.
+    app.image_cache_size_total = 50;
+    // Never start with a session poll already due.
+    app.last_session_poll = Instant::now();
+    // Ignore any on-disk feed entry state; a stub starts empty.
+    app.feed_entry_state = mbv_core::feed_entry_state::FeedEntryStore::default();
+    // Default to "focused, past grace window" so existing mouse tests dispatch
+    // without arming focus explicitly. The refocus guard itself is tested
+    // directly in input_music_track_focus_tests.
+    app.refocus_at = Some(Instant::now().checked_sub(Duration::from_secs(5)).unwrap());
+    app
 }
 
 #[test]

@@ -98,7 +98,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
 
     // Inject the live ABS queue slot (simulates the daemon broadcasting its
     // queue to the newly attached client via PlayerEvent::UnifiedQueueUpdated).
-    let acknowledged_position_ticks = (30.0 * mbv_core::api::TICKS_PER_SECOND as f64) as i64;
+    let acknowledged_position_ticks = 30 * mbv_core::api::TICKS_PER_SECOND;
     let abs_item = mbv_core::playback_queue::QueueItem::Audiobookshelf(
         mbv_core::playback_queue::AudiobookshelfQueueItem {
             library_item_id: "show-a".into(),

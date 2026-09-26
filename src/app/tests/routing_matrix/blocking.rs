@@ -24,7 +24,7 @@ fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
     let out = fold_tick_focused(
         leaf,
         key(KeyCode::Char('x')),
-        Some(ComponentId::Modal(ModalId::Confirm)),
+        Some(&ComponentId::Modal(ModalId::Confirm)),
         snapshot,
     );
     assert_eq!(out.len(), 1, "the overlay's own request must stand");
@@ -48,7 +48,7 @@ fn focused_blocking_overlay_keeps_its_own_global_chord() {
     let out = fold_tick_focused(
         leaf,
         key(KeyCode::Char('q')),
-        Some(ComponentId::Modal(ModalId::Confirm)),
+        Some(&ComponentId::Modal(ModalId::Confirm)),
         snapshot,
     );
     assert_eq!(
@@ -93,8 +93,8 @@ fn injected_swallow_discards_leaf_message() {
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('x')),
-        Some(ComponentId::Modal(ModalId::Confirm)),
-        RouterOutcome::Swallow,
+        Some(&ComponentId::Modal(ModalId::Confirm)),
+        &RouterOutcome::Swallow,
     );
     assert!(
         out.is_empty(),
@@ -107,8 +107,8 @@ fn router_command_discards_focused_leaf_message() {
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('q')),
-        Some(ComponentId::Library),
-        RouterOutcome::Command(Command::Stop),
+        Some(&ComponentId::Library),
+        &RouterOutcome::Command(Command::Stop),
     );
     assert!(
         out.is_empty(),
@@ -121,8 +121,8 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Down),
-        Some(ComponentId::Library),
-        RouterOutcome::FallThrough,
+        Some(&ComponentId::Library),
+        &RouterOutcome::FallThrough,
     );
     assert_eq!(out.len(), 1, "exactly one leaf message must stand");
     assert!(
@@ -134,8 +134,8 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
     let out = fold_tick_with_outcome(
         None,
         key(KeyCode::Down),
-        Some(ComponentId::Library),
-        RouterOutcome::FallThrough,
+        Some(&ComponentId::Library),
+        &RouterOutcome::FallThrough,
     );
     assert!(
         out.is_empty(),

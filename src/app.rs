@@ -65,7 +65,7 @@ use mbv_core::playback_queue::RemoveSlotResult;
 #[cfg(test)]
 use mbv_core::player::PlayerEvent;
 #[cfg(test)]
-use std::sync::{mpsc, Arc};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 #[cfg(test)]

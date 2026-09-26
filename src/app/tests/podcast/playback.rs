@@ -158,7 +158,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     );
 
     let generation = app.audiobookshelf_runtime.generation();
-    let position_ticks = (120.0 * mbv_core::api::TICKS_PER_SECOND as f64) as i64;
+    let position_ticks = 120 * mbv_core::api::TICKS_PER_SECOND;
 
     // (a)(b)(c): completion via daemon route.
     app.handle_player_event(PlayerEvent::AudiobookshelfProgress(
@@ -289,10 +289,7 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
         })
         .expect("episode-a slot");
     let episode = slot.item.as_audiobookshelf().unwrap();
-    assert_eq!(
-        episode.position_ticks,
-        (42.5 * TICKS_PER_SECOND as f64) as i64
-    );
+    assert_eq!(episode.position_ticks, 85 * TICKS_PER_SECOND / 2);
     assert!(episode.is_finished);
 
     // Browse map updated.

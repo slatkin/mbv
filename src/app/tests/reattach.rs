@@ -19,8 +19,9 @@ fn reattach_is_a_noop_when_auto_reconnect_is_disabled() {
 fn reattach_reconnects_to_remote_endpoint_and_adopts_live_queue() {
     fn route_connect_success(
         _endpoint: &DaemonEndpoint,
-    ) -> Result<(RemotePlayer, std::sync::mpsc::Receiver<PlayerEvent>), String> {
-        Ok(RemotePlayer::stub(make_items(2), 1))
+    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+        let (remote, events) = RemotePlayer::stub(make_items(2), 1);
+        crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
     }
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
@@ -46,8 +47,8 @@ fn reattach_reconnects_to_remote_endpoint_and_adopts_live_queue() {
 fn reattach_falls_back_when_daemon_stays_unreachable() {
     fn always_fail(
         _endpoint: &DaemonEndpoint,
-    ) -> Result<(RemotePlayer, std::sync::mpsc::Receiver<PlayerEvent>), String> {
-        Err("connection refused".to_string())
+    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+        crate::app::test_seams::DaemonRouteConnectOutcome::Failed("connection refused".to_string())
     }
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(always_fail);

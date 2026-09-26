@@ -56,7 +56,7 @@ pub(crate) fn keybinds_with_override(id: &'static str, chord: &str) -> Keybinds 
 pub(crate) fn fold_tick(
     leaf: Option<Msg>,
     key: KeyEvent,
-    focused: Option<ComponentId>,
+    focused: Option<&ComponentId>,
     snapshot: RouterSnapshot,
 ) -> Vec<Msg> {
     let mut messages = Vec::new();
@@ -65,7 +65,7 @@ pub(crate) fn fold_tick(
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
     let outcome = resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds());
-    fold_keyboard_messages(messages, focused.as_ref(), &outcome)
+    fold_keyboard_messages(messages, focused, &outcome)
 }
 
 pub(crate) fn key(code: KeyCode) -> KeyEvent {
@@ -75,21 +75,21 @@ pub(crate) fn key(code: KeyCode) -> KeyEvent {
 pub(crate) fn fold_tick_with_outcome(
     leaf: Option<Msg>,
     key: KeyEvent,
-    focused: Option<ComponentId>,
-    outcome: RouterOutcome,
+    focused: Option<&ComponentId>,
+    outcome: &RouterOutcome,
 ) -> Vec<Msg> {
     let mut messages = Vec::new();
     if let Some(leaf) = leaf {
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    fold_keyboard_messages(messages, focused.as_ref(), &outcome)
+    fold_keyboard_messages(messages, focused, outcome)
 }
 
 pub(crate) fn fold_tick_focused(
     leaf: Option<Msg>,
     key: KeyEvent,
-    focused: Option<ComponentId>,
+    focused: Option<&ComponentId>,
     snapshot: RouterSnapshot,
 ) -> Vec<Msg> {
     let mut messages = Vec::new();
@@ -97,9 +97,8 @@ pub(crate) fn fold_tick_focused(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    let outcome =
-        resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref(), &default_keybinds());
-    fold_keyboard_messages(messages, focused.as_ref(), &outcome)
+    let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused, &default_keybinds());
+    fold_keyboard_messages(messages, focused, &outcome)
 }
 
 pub(crate) fn idle_snapshot() -> RouterSnapshot {
@@ -132,16 +131,16 @@ fn stale_summary_does_not_change_current_leaf_arbitration() {
     let messages = fold_tick_with_outcome(
         Some(stale_summary.clone()),
         key(KeyCode::Char('z')),
-        focused.clone(),
-        RouterOutcome::FallThrough,
+        focused.as_ref(),
+        &RouterOutcome::FallThrough,
     );
     assert_eq!(messages, vec![stale_summary.clone()]);
 
     let swallowed = fold_tick_with_outcome(
         Some(stale_summary),
         key(KeyCode::Char('z')),
-        focused,
-        RouterOutcome::Swallow,
+        focused.as_ref(),
+        &RouterOutcome::Swallow,
     );
     assert!(swallowed.is_empty());
 }
@@ -156,8 +155,8 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
     let command = fold_tick_with_outcome(
         leaf.clone(),
         key(KeyCode::Char('q')),
-        focused.clone(),
-        RouterOutcome::Command(crate::app::dispatch::action::Command::Quit),
+        focused.as_ref(),
+        &RouterOutcome::Command(crate::app::dispatch::action::Command::Quit),
     );
     assert!(
         command.is_empty(),
@@ -167,8 +166,8 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
     let swallow = fold_tick_with_outcome(
         leaf.clone(),
         key(KeyCode::Char('q')),
-        focused.clone(),
-        RouterOutcome::Swallow,
+        focused.as_ref(),
+        &RouterOutcome::Swallow,
     );
     assert!(
         swallow.is_empty(),
@@ -178,8 +177,8 @@ fn immediate_router_outcomes_have_distinct_fold_behavior() {
     let fall_through = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('z')),
-        focused,
-        RouterOutcome::FallThrough,
+        focused.as_ref(),
+        &RouterOutcome::FallThrough,
     );
     assert_eq!(fall_through.len(), 1, "FallThrough keeps the leaf request");
     assert!(matches!(fall_through[0], Msg::Shell(_)));

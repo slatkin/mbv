@@ -336,18 +336,21 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
         "podcast progress must not land in the book map"
     );
 
-    let events = collect_library_events(&mut app, 3);
+    assert_catalog_fetches(&mut app, generation);
+}
+
+fn assert_catalog_fetches(app: &mut App, generation: mbv_core::service_runtime::SetupGeneration) {
     let mut podcast_shows = 0;
     let mut podcast_shelves = 0;
     let mut book_fetches = 0;
-    for event in &events {
+    for event in collect_library_events(app, 3) {
         match event {
             LibEvent::AudiobookshelfShowsFetched {
                 generation: event_generation,
                 library_id,
                 ..
             } => {
-                assert_eq!(*event_generation, generation);
+                assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "pod-1");
                 podcast_shows += 1;
             }
@@ -356,7 +359,7 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
                 library_id,
                 ..
             } => {
-                assert_eq!(*event_generation, generation);
+                assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "pod-1");
                 podcast_shelves += 1;
             }
@@ -365,7 +368,7 @@ fn drain_audiobookshelf_events_catalog_success_builds_browse_and_dispatches() {
                 library_id,
                 ..
             } => {
-                assert_eq!(*event_generation, generation);
+                assert_eq!(event_generation, generation);
                 assert_eq!(library_id, "book-1");
                 book_fetches += 1;
             }

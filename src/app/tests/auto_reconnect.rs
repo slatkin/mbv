@@ -46,17 +46,9 @@ fn new_remote_restores_a_persisted_route_when_attached_to_the_local_daemon() {
     // manual `try_auto_reconnect()` call -- mirrors bare mode's `App::new`.
     fn route_connect_success(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
-    ) -> Result<
-        (
-            mbv_core::remote_player::RemotePlayer,
-            mpsc::Receiver<PlayerEvent>,
-        ),
-        String,
-    > {
-        Ok(mbv_core::remote_player::RemotePlayer::stub(
-            make_items(1),
-            0,
-        ))
+    ) -> crate::app::test_seams::DaemonRouteConnectOutcome {
+        let (remote, events) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        crate::app::test_seams::DaemonRouteConnectOutcome::Connected(remote, events)
     }
     let _guard = crate::config::TestStateDirGuard::new();
     let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
