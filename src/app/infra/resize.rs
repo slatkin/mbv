@@ -9,6 +9,19 @@ pub(in crate::app) type ResizeRegisterTx = mpsc::Sender<(String, mpsc::Receiver<
 /// `card_image_states` cache key they belong to; see `spawn_resize_worker`.
 pub(in crate::app) type ResizeResponseRx = mpsc::Receiver<(String, ResizeResponse)>;
 
+fn resize_and_send(
+    key: String,
+    request: ResizeRequest,
+    response_tx: &mpsc::Sender<(String, ResizeResponse)>,
+) {
+    // catch_unwind keeps one bad image from killing the long-lived worker.
+    if let Ok(Ok(response)) =
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| request.resize_encode()))
+    {
+        let _ = response_tx.send((key, response));
+    }
+}
+
 /// Spawns the single background worker that performs
 /// `StatefulProtocol::resize_encode()` — resample + terminal-protocol encode
 /// (e.g. kitty's base64 payload) — off the render thread (#164).
@@ -54,12 +67,7 @@ pub(in crate::app) fn spawn_resize_worker() -> (ResizeRegisterTx, ResizeResponse
                         // catch_unwind: a panic here must not kill this
                         // long-lived worker thread, which would silently
                         // stall every other key's resize requests forever.
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            request.resize_encode()
-                        }));
-                        if let Ok(Ok(response)) = result {
-                            let _ = response_tx.send((key, response));
-                        }
+                        resize_and_send(key, request, &response_tx);
                         i += 1;
                     }
                     Err(mpsc::TryRecvError::Empty) => i += 1,

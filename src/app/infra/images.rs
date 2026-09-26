@@ -214,6 +214,34 @@ impl App {
     /// `hero_artwork_box` derives from it, so a resize, split drag, or
     /// Workspace shrink re-encodes at the new box size on the next sync pass
     /// and the placeholder shows for at most that one frame.
+    fn fetch_hero_logo(
+        &mut self,
+        artwork: &crate::app::components::library_panel::HeroArtwork,
+        panel_area: ratatui::layout::Rect,
+    ) -> Option<String> {
+        use crate::app::components::library_panel::content::ArtworkSource;
+        if !wide_landscape_hero_eligible(artwork, panel_area) {
+            return None;
+        }
+        let Some(ArtworkSource::Emby {
+            item_id,
+            series_id,
+            image_types,
+            cache_key,
+        }) = artwork.decoration.as_ref()
+        else {
+            return None;
+        };
+        let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
+        self.fetch_card_image(
+            cache_key.clone(),
+            item_id.clone(),
+            series_id.clone(),
+            &types,
+        );
+        Some(cache_key.clone())
+    }
+
     pub(in crate::app) fn project_hero_image(
         &mut self,
         facts: &crate::app::components::library_panel::HeroFacts,
@@ -309,32 +337,11 @@ impl App {
                 // and only for a Movie Landscape hero at Wide geometry. A base
                 // that resolved empty, and every other presentation, stays
                 // undecorated and issues no Logo request.
-                let logo_cache_key = if wide_landscape_hero_eligible(artwork, panel_area) {
-                    match artwork.decoration.as_ref() {
-                        Some(ArtworkSource::Emby {
-                            item_id,
-                            series_id,
-                            image_types,
-                            cache_key,
-                        }) => {
-                            let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
-                            self.fetch_card_image(
-                                cache_key.clone(),
-                                item_id.clone(),
-                                series_id.clone(),
-                                &types,
-                            );
-                            Some(cache_key.as_str())
-                        }
-                        _ => None,
-                    }
-                } else {
-                    None
-                };
+                let logo_cache_key = self.fetch_hero_logo(artwork, panel_area);
                 if !self.ensure_hero_cover_protocol(
                     &cache_key,
                     (box_cells.width, box_cells.height),
-                    logo_cache_key,
+                    logo_cache_key.as_deref(),
                 ) {
                     return State::Loading;
                 }

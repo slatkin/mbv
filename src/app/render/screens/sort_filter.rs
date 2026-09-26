@@ -7,23 +7,31 @@ pub(crate) fn parse_album_folder_name(name: &str) -> Option<(String, u32, String
     let mut search_from = 0;
     while let Some(rel) = name[search_from..].find(" (") {
         let sp_pos = search_from + rel; // position of the space before '('
-        let after_open = sp_pos + 2; // position of first char after '('
-        if let Some(close_rel) = name[after_open..].find(')') {
-            let year_str = &name[after_open..after_open + close_rel];
-            if year_str.len() == 4 {
-                if let Ok(year) = year_str.parse::<u32>() {
-                    let close_pos = after_open + close_rel; // position of ')'
-                    if name[close_pos..].starts_with(") ") {
-                        let artist = name[..sp_pos].to_string();
-                        let album = name[close_pos + 2..].to_string();
-                        return Some((artist, year, album));
-                    }
-                }
-            }
+        if let Some(album) = parse_album_folder_candidate(name, sp_pos) {
+            return Some(album);
         }
         search_from = sp_pos + 2;
     }
     None
+}
+
+fn parse_album_folder_candidate(name: &str, sp_pos: usize) -> Option<(String, u32, String)> {
+    let after_open = sp_pos + 2; // position of first char after '('
+    let close_rel = name[after_open..].find(')')?;
+    let year_str = &name[after_open..after_open + close_rel];
+    if year_str.len() != 4 {
+        return None;
+    }
+    let year = year_str.parse::<u32>().ok()?;
+    let close_pos = after_open + close_rel; // position of ')'
+    if !name[close_pos..].starts_with(") ") {
+        return None;
+    }
+    Some((
+        name[..sp_pos].to_string(),
+        year,
+        name[close_pos + 2..].to_string(),
+    ))
 }
 
 /// Strips a leading article ("The ", "A ", "An ") from `s` (case-insensitive).
