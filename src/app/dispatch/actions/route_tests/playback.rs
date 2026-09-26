@@ -71,10 +71,6 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
     command_rx.try_recv().unwrap_err();
 }
 
-fn fail_local_player_preparation() -> Result<(), String> {
-    Err("test preparation failure".into())
-}
-
 #[test]
 fn local_preparation_restores_a_suspended_player_before_detach() {
     let mut app = make_app_stub();

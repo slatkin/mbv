@@ -19,16 +19,6 @@ use ratatui::Terminal;
 use tuirealm::component::Component;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-fn music_group_app_two_albums() -> crate::app::App {
-    let mut app = make_music_group_app();
-    let mut second = make_item("Second Album", "MusicAlbum");
-    second.id = "album-2".into();
-    second.artist = "Alpha".into();
-    app.libs[0].nav_stack[1].items.push(second);
-    app.libs[0].nav_stack[1].total_count = 2;
-    app
-}
-
 fn wide(model: &mut Model) {
     model.app.terminal_width = 160;
     model.app.terminal_height = 40;

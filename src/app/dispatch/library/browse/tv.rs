@@ -289,18 +289,6 @@ mod tv_latest_tests {
         }
     }
 
-    struct FakeUpcomingSource {
-        request: RefCell<Option<(String, usize)>>,
-        items: Vec<EmbyItem>,
-    }
-
-    impl TvUpcomingSource for FakeUpcomingSource {
-        fn get_upcoming(&self, parent_id: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
-            *self.request.borrow_mut() = Some((parent_id.into(), limit));
-            Ok(self.items.clone())
-        }
-    }
-
     #[test]
     fn latest_library_fetch_uses_home_feed_request_without_home_state() {
         let mut episode = crate::app::tests::make_item("Feed episode", "Episode");

@@ -322,9 +322,6 @@ mod tests {
         {"Id":"a","Name":"A","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":111}},
         {"Id":"b","Name":"B","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":222}}
     ]}"#;
-    const PLAY_ONE_ITEM: &str = r#"{"Items":[
-        {"Id":"a","Name":"A","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":111}}
-    ]}"#;
 
     /// `Play` issues a real Emby fetch (`get_items_by_ids`), so its queue
     /// replacement, `Remote` source, honoured start position, and persisted

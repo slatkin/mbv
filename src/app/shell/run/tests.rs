@@ -41,13 +41,6 @@ fn wide_tv_shows_placeholder(model: &mut Model) -> bool {
         .is_none()
 }
 
-/// The fixture has no Emby client, so `spawn_image_fetch` resolves its own
-/// request synchronously into `card_image_rx`. A step that must start from a
-/// quiet channel drops those completions first.
-fn drop_pending_image_completions(model: &mut Model) {
-    while model.app.card_image_rx.try_recv().is_ok() {}
-}
-
 /// Task 2.3: a Series completion is what re-projects the wide workspace, so the
 /// cached Thumb-first entry replaces the placeholder. The gate covers the
 /// `:ser:` family the painter builds its keys under.
