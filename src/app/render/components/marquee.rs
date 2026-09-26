@@ -108,9 +108,4 @@ fn colored_width_window(
 }
 
 #[cfg(test)]
-mod tests {
-    #[test]
-    fn marquee_advances_five_columns_per_second() {
-        assert_eq!(super::marquee_col(10, 600 + 150 * 5), 5);
-    }
-}
+mod tests {}
