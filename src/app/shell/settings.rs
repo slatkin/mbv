@@ -5,7 +5,7 @@ use super::components::{
 use super::Model;
 use crate::app::state::types::settings;
 use crate::app::state::types::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
-use mbv_core::keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
+use mbv_keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use ratatui::layout::Rect;
 use std::fmt::Write as _;
 
@@ -305,7 +305,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbv_core::keybinds::{Chord, KeySection, SectionBindings};
+    use mbv_keybinds::{Chord, KeySection, SectionBindings};
 
     #[test]
     fn settings_service_request_stays_at_shell_boundary() {
@@ -375,7 +375,7 @@ mod tests {
         let mut app = crate::app::tests::make_app_stub();
         app.settings_destination = SettingsDestination::Keys;
         let mut model = Model::new(app);
-        model.keybinds = mbv_core::keybinds::Keybinds {
+        model.keybinds = mbv_keybinds::Keybinds {
             prefix: Some(Chord::parse("Ctrl+k").unwrap()),
             sections: vec![(
                 KeySection::Playback,

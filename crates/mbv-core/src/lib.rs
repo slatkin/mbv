@@ -9,7 +9,6 @@ pub mod config;
 pub mod ctrl;
 pub mod daemon;
 pub mod feed_entry_state;
-pub mod keybinds;
 #[cfg(any(test, feature = "test"))]
 pub mod mock_http;
 pub mod playback;

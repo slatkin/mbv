@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -101,6 +101,7 @@ path = "src/main.rs"
 [dependencies]
 mbv-core = { path = "crates/mbv-core" }
 mbv-ids = { path = "crates/mbv-ids" }
+mbv-keybinds = { path = "crates/mbv-keybinds" }
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"

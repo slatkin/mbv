@@ -190,7 +190,7 @@ pub struct Model {
     /// prefix chord plus per-section router overrides and prefix-namespace
     /// assignments. Shell-owned plain data the router reads as its
     /// `&Keybinds` parameter (Unit 3); never mirrored into components.
-    pub keybinds: mbv_core::keybinds::Keybinds,
+    pub keybinds: mbv_keybinds::Keybinds,
     /// The focus displaced by arming prefix mode (design D6, task 6.1).
     /// tuirealm forwards every chord to the focused component before the
     /// router fold, so armed capture blurs focus for the armed ticks; this

@@ -4,7 +4,7 @@ use crate::config::{config_path, parse_config, save_config_settings, Config};
 // ── `[keys]` config parse + save (change add-configurable-keybinds, U2) ──
 //
 // Parse routes every entry through the registry validator
-// (`crate::keybinds::load`), so the rejection tests here pin the surface
+// (`mbv_keybinds::load`), so the rejection tests here pin the surface
 // through the existing config error path (`parse_config` -> `Err(String)`)
 // while `keybinds_tests.rs` owns the validator's own unit coverage. Save
 // goes through the read-patch-write path (`save_config_settings_at`).
@@ -12,11 +12,11 @@ use crate::config::{config_path, parse_config, save_config_settings, Config};
 #[test]
 fn keys_section_absent_yields_default_keybinds() {
     let cfg = parse_config("[server]\nurl = \"http://localhost:8096/\"\n").unwrap();
-    assert_eq!(cfg.keybinds, crate::keybinds::Keybinds::default());
+    assert_eq!(cfg.keybinds, mbv_keybinds::Keybinds::default());
     assert!(cfg.keybinds.prefix.is_none());
     assert!(cfg.keybinds.router_override("help_open").is_none());
     // Absent section falls back to the declared default chords.
-    let help = crate::keybinds::action_by_id("help_open").unwrap();
+    let help = mbv_keybinds::action_by_id("help_open").unwrap();
     assert_eq!(
         cfg.keybinds.router_chords(help),
         help.parsed_default_chords()
@@ -32,7 +32,7 @@ help_open = "F9"
     let cfg = parse_config(toml).unwrap();
     assert_eq!(
         cfg.keybinds.router_override("help_open"),
-        Some(crate::keybinds::Chord::parse("F9").unwrap())
+        Some(mbv_keybinds::Chord::parse("F9").unwrap())
     );
     // Untouched actions keep no override: they resolve to their defaults.
     assert!(cfg.keybinds.router_override("settings_open").is_none());
@@ -57,26 +57,26 @@ help_open = "F9"
     let cfg = parse_config(toml).unwrap();
     assert_eq!(
         cfg.keybinds.prefix,
-        Some(crate::keybinds::Chord::parse("Ctrl+b").unwrap())
+        Some(mbv_keybinds::Chord::parse("Ctrl+b").unwrap())
     );
     assert_eq!(
         cfg.keybinds.router_override("next_library_tab"),
-        Some(crate::keybinds::Chord::parse("T").unwrap())
+        Some(mbv_keybinds::Chord::parse("T").unwrap())
     );
     assert_eq!(
         cfg.keybinds.router_override("help_open"),
-        Some(crate::keybinds::Chord::parse("F9").unwrap())
+        Some(mbv_keybinds::Chord::parse("F9").unwrap())
     );
     assert_eq!(
         cfg.keybinds.prefix_assignment("search_open"),
-        Some(crate::keybinds::Chord::parse("s").unwrap())
+        Some(mbv_keybinds::Chord::parse("s").unwrap())
     );
     // A rebound action no longer fires its declared default chord.
-    let next_tab = crate::keybinds::action_by_id("next_library_tab").unwrap();
+    let next_tab = mbv_keybinds::action_by_id("next_library_tab").unwrap();
     assert!(!cfg
         .keybinds
         .router_chords(next_tab)
-        .contains(&crate::keybinds::Chord::parse("Tab").unwrap()));
+        .contains(&mbv_keybinds::Chord::parse("Tab").unwrap()));
 }
 
 #[test]
@@ -88,7 +88,7 @@ help_open = "F9"
     let cfg = parse_config(toml).unwrap();
     assert_eq!(
         cfg.keybinds.router_override("help_open"),
-        Some(crate::keybinds::Chord::parse("F9").unwrap())
+        Some(mbv_keybinds::Chord::parse("F9").unwrap())
     );
 }
 
@@ -100,10 +100,10 @@ fn keys_alias_default_is_replaced_not_extended() {
 volume_up = "w"
 "#;
     let cfg = parse_config(toml).unwrap();
-    let volume_up = crate::keybinds::action_by_id("volume_up").unwrap();
+    let volume_up = mbv_keybinds::action_by_id("volume_up").unwrap();
     assert_eq!(
         cfg.keybinds.router_chords(volume_up),
-        vec![crate::keybinds::Chord::parse("w").unwrap()]
+        vec![mbv_keybinds::Chord::parse("w").unwrap()]
     );
 }
 
@@ -140,15 +140,15 @@ search_open = "s"
     assert_eq!(reparsed.keybinds, cfg.keybinds);
     assert_eq!(
         reparsed.keybinds.prefix,
-        Some(crate::keybinds::Chord::parse("Ctrl+b").unwrap())
+        Some(mbv_keybinds::Chord::parse("Ctrl+b").unwrap())
     );
     assert_eq!(
         reparsed.keybinds.router_override("help_open"),
-        Some(crate::keybinds::Chord::parse("F9").unwrap())
+        Some(mbv_keybinds::Chord::parse("F9").unwrap())
     );
     assert_eq!(
         reparsed.keybinds.prefix_assignment("search_open"),
-        Some(crate::keybinds::Chord::parse("s").unwrap())
+        Some(mbv_keybinds::Chord::parse("s").unwrap())
     );
     assert_eq!(reparsed.server_url, "http://localhost:8096");
 }
@@ -172,18 +172,18 @@ fn keys_default_configuration_prunes_the_keys_table() {
         "pruned table must be gone: {saved}"
     );
     let reparsed = parse_config(&saved).unwrap();
-    assert_eq!(reparsed.keybinds, crate::keybinds::Keybinds::default());
+    assert_eq!(reparsed.keybinds, mbv_keybinds::Keybinds::default());
 }
 
 #[test]
 fn keys_saved_section_names_are_lowercase_file_shape() {
     let _guard = crate::config::TestStateDirGuard::new();
     let cfg = Config {
-        keybinds: crate::keybinds::load(&crate::keybinds::RawKeybinds {
+        keybinds: mbv_keybinds::load(&mbv_keybinds::RawKeybinds {
             prefix: Some("Ctrl+b".into()),
             sections: vec![(
                 "GLOBAL".into(),
-                crate::keybinds::RawSection {
+                mbv_keybinds::RawSection {
                     router: vec![("help_open".into(), "F9".into())],
                     prefix: vec![],
                 },

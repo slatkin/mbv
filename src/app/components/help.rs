@@ -24,7 +24,7 @@ use crate::app::render::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
 use crate::app::{PanelFocus, TabSelection};
-use mbv_core::keybinds::Keybinds;
+use mbv_keybinds::Keybinds;
 
 /// The Interactive Component for the Help sidebar.
 ///
