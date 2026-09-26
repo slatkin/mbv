@@ -39,7 +39,7 @@ fn ctrl_key(code: Key) -> Event<UserEvent> {
 }
 
 /// Task 1.1: the saved-tab restore runs in the sync pass, before any draw.
-/// After one tick() + sync pass and without drawing, the pending tab is
+/// After one `tick()` + sync pass and without drawing, the pending tab is
 /// resolved; `render_main` no longer writes `self.tab`.
 #[test]
 fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
@@ -530,11 +530,11 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     assert!(messages.is_empty());
 }
 
-/// Task 3.3 (add-mouse-support-option): the Display section's MouseSupport
+/// Task 3.3 (add-mouse-support-option): the Display section's `MouseSupport`
 /// row routes Enter through the shell sync pass to `handle_settings_activate`,
 /// flipping the config value and arming the live capture flip for the run
-/// loop (item ordinal 7: Services, 4 Playback, ImageProtocol,
-/// SystemNotifications).
+/// loop (item ordinal 7: Services, 4 Playback, `ImageProtocol`,
+/// `SystemNotifications`).
 #[test]
 fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     let mut harness = TickHarness::new(make_app_stub());
@@ -605,7 +605,7 @@ mod sessions;
 
 /// A function key pressed while the Help overlay is open must dismiss Help and
 /// open its sidebar. Help stays mounted otherwise, and (painting after
-/// Settings/Playlists in OVERLAY_IDS) it hid the sidebar the key just opened —
+/// Settings/Playlists in `OVERLAY_IDS`) it hid the sidebar the key just opened —
 /// F2/F4 looked dead while F3 (painted after Help) worked.
 #[test]
 fn function_keys_from_help_dismiss_help_and_open_their_sidebar() {

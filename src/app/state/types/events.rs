@@ -147,7 +147,7 @@ pub(in crate::app) enum LibEvent {
     },
     /// Track list for the album currently highlighted in the
     /// album-folder listing, fetched proactively (#145) so the inline album
-    /// detail pane has data without a nav_stack drilldown.
+    /// detail pane has data without a `nav_stack` drilldown.
     AlbumTracksFetched {
         album_id: String,
         tracks: Vec<EmbyItem>,
@@ -238,7 +238,7 @@ pub(in crate::app) enum LibEvent {
     AudiobookshelfProgressAcknowledged(mbv_core::player::AudiobookshelfProgressUpdate),
     AudiobookshelfBookProgressAcknowledged(mbv_core::player::AudiobookshelfBookProgressUpdate),
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
-    /// false for startup restore (just populate nav_stack, stay on current tab).
+    /// false for startup restore (just populate `nav_stack`, stay on current tab).
     NavigateTo {
         lib_idx: usize,
         landing: NavigateLanding,

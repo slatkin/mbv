@@ -175,7 +175,7 @@ pub(in crate::app) struct CastAttachment {
     pub(in crate::app) status: Option<CastStatus>,
     pub(in crate::app) status_at: Instant,
     /// `CastClient` exposes only `set_volume`/`set_muted`, never a getter --
-    /// rust_cast 0.21 has no volume-status read separate from the receiver
+    /// `rust_cast` 0.21 has no volume-status read separate from the receiver
     /// status channel this stage doesn't parse. Tracked optimistically here,
     /// the same way local playback tracks `ui_volume` while inactive.
     pub(in crate::app) volume: u8,
@@ -215,7 +215,7 @@ pub(in crate::app) enum CastEvent {
     },
     /// A background cast discovery browse (`cast_actions::spawn_cast_discovery`)
     /// completed -- possibly empty, since `browse_cast_receivers` never
-    /// errors (see cast_discovery.rs). Drives `App::rebuild_panel_targets`
+    /// errors (see `cast_discovery.rs`). Drives `App::rebuild_panel_targets`
     /// (8.1/8.2).
     DiscoveryCompleted(Vec<CastReceiver>),
 }

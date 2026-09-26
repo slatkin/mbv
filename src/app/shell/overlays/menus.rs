@@ -19,7 +19,7 @@ impl Model {
         ComponentId::Overlay(OverlayId::ContextMenu)
     }
 
-    /// Context-menu geometry for any migrated LibraryPanel owner, regardless
+    /// Context-menu geometry for any migrated `LibraryPanel` owner, regardless
     /// of tab (task 5.11 generalized): the panel's own last-painted list
     /// geometry. The panel gains this geometry from its own `view()` paint,
     /// so the menu placement tracks the panel's real paint rather than any
@@ -111,7 +111,7 @@ impl Model {
         }
     }
 
-    /// Render the ContextMenu overlay if mounted. Placement is recomputed from
+    /// Render the `ContextMenu` overlay if mounted. Placement is recomputed from
     /// `AppLayout` each frame (so it follows the fresh layout after a resize),
     /// then passed to the component via downcast (task 5.3c).
     pub(in crate::app) fn render_context_menu_overlay(&mut self, f: &mut ratatui::Frame) {

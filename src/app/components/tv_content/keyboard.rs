@@ -136,7 +136,7 @@ impl TvContent {
     /// refresh, search, letter-pill cycle) live in
     /// [`Self::shared_library_effect`]; this entry point resolves the tree's
     /// item and delegates those chords before its own navigation/activation/
-    /// context arms. `.` stays caller-specific: show-tree resolves TreeBrowser
+    /// context arms. `.` stays caller-specific: show-tree resolves `TreeBrowser`
     /// context targets while Wide uses `context_menu_request`.
     fn shared_library_effect(&mut self, key: &KeyEvent, item: Option<EmbyItem>) -> Option<Msg> {
         if let Some(request) = Self::shared_library_item_effect(key, item) {

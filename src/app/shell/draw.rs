@@ -48,7 +48,7 @@ impl App {
         }
     }
 
-    /// Publish the frame's RootFrame placements. Painting is exclusively done
+    /// Publish the frame's `RootFrame` placements. Painting is exclusively done
     /// by mounted panels and the overlay stack in `Model::draw_frame`.
     pub(in crate::app) fn compose_root_frame(&mut self, frame: &mut Frame) {
         let Some(chrome) = self.compute_frame_layout(frame.area()) else {

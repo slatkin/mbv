@@ -11,8 +11,8 @@ use crate::app::render::arrangements::wide_hero::wide_hero_browser_pane_with_sel
 
 use super::content::LibraryPanelContent;
 use super::wide::{
-    paint_browser_pane, selector_row_visible, SkeletonHits, SkeletonPillWindows,
-    WideSkeletonGeometry,
+    paint_browser_pane, selector_row_visible, BrowserPanePaintParams, SkeletonHits,
+    SkeletonPillWindows, WideSkeletonGeometry,
 };
 
 /// Paint the non-Wide Library skeleton: the panel is the whole browser pane,
@@ -34,11 +34,13 @@ pub(in crate::app) fn render_narrow_skeleton(
         f,
         pane,
         content,
-        browser_focused,
-        browser_focused,
-        hovered_selector,
-        hits,
-        windows,
+        BrowserPanePaintParams {
+            list_focused: browser_focused,
+            panel_focused: browser_focused,
+            hovered_selector,
+            hits,
+            windows,
+        },
     );
     WideSkeletonGeometry {
         browser: area,

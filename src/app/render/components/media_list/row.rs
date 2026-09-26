@@ -558,7 +558,7 @@ fn row_content_w(inner_width: usize, has_scrollbar: bool) -> usize {
 /// quiet indent and the right inset stay parent background (and the
 /// scrollbar is painted separately), so the stripe bands of items, group
 /// headings and blank spacers all cover the same columns. Ratatui fills a
-/// ListItem's whole row allocation when its style has a background, so the
+/// `ListItem`'s whole row allocation when its style has a background, so the
 /// row style stays unstyled and the trailing padding span carries the stripe
 /// out to the content edge.
 fn stripe_spans(

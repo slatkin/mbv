@@ -42,11 +42,11 @@ impl App {
     pub(in crate::app) fn handle_loaded_level(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         level: BrowseLevel,
     ) {
         let mut level = Some(level);
-        self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
+        self.update_current_browse_level(lib_idx, parent_id, true, |last| {
             *last = level.take().unwrap();
         });
         self.normalize_current_browse_level_items(lib_idx);

@@ -485,7 +485,7 @@ impl App {
     /// The context still contains the complete settled album tree; only the
     /// artist detail is added, so the tree remains the sole browser owner and
     /// the task-6.4 content switch reads one field. Album artwork is resolved
-    /// later by MusicContent from the selected artist album/track group.
+    /// later by `MusicContent` from the selected artist album/track group.
     pub(in crate::app) fn project_music_artist_detail(
         &self,
         destination: &LibraryKey,

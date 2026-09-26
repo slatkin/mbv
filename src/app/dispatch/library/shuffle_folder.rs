@@ -17,7 +17,7 @@ impl App {
     /// level's parent is shuffled (falling back to the library id exactly as
     /// the legacy shuffle path did). The folder target comes from the supplied item,
     /// never from re-reading `BrowseLevel.cursor`.
-    pub(in crate::app) fn shuffle_play_selected(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub(in crate::app) fn shuffle_play_selected(&mut self, lib_idx: usize, item: &EmbyItem) {
         let explicit_folder = item.is_folder.then_some(item.id.clone());
         self.shuffle_play_target(lib_idx, explicit_folder);
     }

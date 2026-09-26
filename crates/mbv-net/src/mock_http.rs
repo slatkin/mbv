@@ -89,12 +89,22 @@ impl MockHttp {
     }
 
     /// The full wire text of every request transmitted so far, in order.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `requests` mutex is poisoned: a previous holder panicked
+    /// while holding the lock.
     #[must_use]
     pub fn requests(&self) -> Vec<String> {
         self.shared.requests.lock().unwrap().clone()
     }
 
     /// Number of requests transmitted so far, without cloning them.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `requests` mutex is poisoned: a previous holder panicked
+    /// while holding the lock.
     #[must_use]
     pub fn request_count(&self) -> usize {
         self.shared.requests.lock().unwrap().len()

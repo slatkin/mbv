@@ -7,7 +7,7 @@
 //! module keeps the `Command` variants, the idle-feed link's availability
 //! condition, and `dispatch`'s state transitions.
 //!
-//! The help overlay was converted to a TuiRealm Interactive Component
+//! The help overlay was converted to a `TuiRealm` Interactive Component
 //! (`src/app/components/help.rs`) and no longer routes through this `Command`
 //! enum. Other modal handlers still speak directly to `App` and are expected to
 //! migrate to this same `Command` enum over time, one handler at a time.
@@ -99,7 +99,7 @@ pub(in crate::app) enum Command {
     OpenSessions,
     OpenPlaylists,
     OpenSearch,
-    /// Model-owned because mounting Help belongs to the TuiRealm shell.
+    /// Model-owned because mounting Help belongs to the `TuiRealm` shell.
     OpenHelp,
     FocusPanel(crate::app::PanelFocus),
 }

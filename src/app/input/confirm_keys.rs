@@ -231,7 +231,7 @@ impl App {
         }
     }
 
-    /// Show the clear-queue confirmation modal (called from QueueIntent::Clear).
+    /// Show the clear-queue confirmation modal (called from `QueueIntent::Clear`).
     pub(in crate::app) fn request_clear_queue(&mut self) {
         let scope = self.viewed_queue_scope();
         // Legacy `handle_key_clear_queue_prompt` refused a Queue-focused remote

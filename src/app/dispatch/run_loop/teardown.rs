@@ -216,7 +216,7 @@ impl App {
     /// `PlayerEvent::Stopped` that carries this update is never processed after
     /// the event loop breaks, and `last_valid_pos` (never zeroed during track
     /// transitions) is preferred over `position_ticks` (transiently 0 when
-    /// QueueSession advances to the next track).
+    /// `QueueSession` advances to the next track).
     fn flush_playing_position_on_teardown(
         &mut self,
         was_playing: bool,
@@ -277,7 +277,7 @@ impl App {
         Self::invoke_shutdown_via_short_lived_local(quit_timeout)
     }
 
-    /// After a failed shutdown request (Rejected, Disconnected, TimedOut,
+    /// After a failed shutdown request (Rejected, Disconnected, `TimedOut`,
     /// Unsupported, or no response at all), set a post-terminal message that
     /// the local daemon may still be running and names `mbv -q`.
     fn record_shutdown_failure(
@@ -325,8 +325,8 @@ impl App {
         }
     }
 
-    /// Creates a short-lived DaemonEndpoint::Local connection and
-    /// invoke request_shutdown through it without replacing self.player or
+    /// Creates a short-lived `DaemonEndpoint::Local` connection and
+    /// invoke `request_shutdown` through it without replacing self.player or
     /// mutating route, queue-scope, MPRIS, or auto-reconnect state. Returns
     /// None if the connection cannot be established.
     fn invoke_shutdown_via_short_lived_local(

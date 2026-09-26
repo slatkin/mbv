@@ -33,6 +33,9 @@ fuzzy-matcher = "0.3"
 
 [workspace.lints.clippy]
 mod_module_files = "deny"
+# Cannot be overridden by an inline allow/expect: params structs, not
+# suppressions (issue #809).
+too_many_arguments = "forbid"
 cognitive_complexity = "warn"
 excessive_nesting = "warn"
 cargo = { level = "warn", priority = -1 }
@@ -43,6 +46,7 @@ perf = { level = "warn", priority = -1 }
 style = { level = "warn", priority = -1 }
 suspicious = { level = "warn", priority = -1 }
 # nursery = { level = "warn", priority = -1 }  # optional, might cause more false positives
+allow_attributes = "warn"
 allow_attributes_without_reason = "warn"
 as_pointer_underscore = "warn"
 assertions_on_result_states = "warn"
@@ -63,12 +67,15 @@ unnecessary_safety_comment = "warn"
 unnecessary_safety_doc = "warn"
 unneeded_field_pattern = "warn"
 unused_result_ok = "warn"
-too_long_first_doc_paragraph = "warn"
 # May cause issues with structured logging otherwise.
 literal_string_with_formatting_args = "allow"
 # Transitive dependency version skew (thiserror, getrandom, zbus family, etc.) —
 # no source fix exists; converges as upstreams update (issue #804).
 multiple-crate-versions = { level = "allow" }
+# No rustdoc is published and the flagged fns are only reachable by same-repo
+# path-dependency siblings, so hand-written `# Errors` sections would be filler
+# (resolve-clippy-doc-lints / issue #816).
+missing_errors_doc = { level = "allow" }
 
 [workspace.lints.rust]
 ambiguous_negative_literals = "warn"

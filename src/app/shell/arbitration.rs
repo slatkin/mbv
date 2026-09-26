@@ -9,10 +9,10 @@ use crate::app::input::router::{
 /// tick's message list and return the messages that survive.
 ///
 /// `Application::tick` returns the focused component's message first, then the
-/// UiRoot observer's `TerminalEvent`. With `PollStrategy::Once` there is at
+/// `UiRoot` observer's `TerminalEvent`. With `PollStrategy::Once` there is at
 /// most one terminal event per tick, so the messages for a key chord are:
 ///
-/// * **UiRoot focused** — only the observer's `TerminalEvent(Key)`. This is
+/// * **`UiRoot` focused** — only the observer's `TerminalEvent(Key)`. This is
 ///   the active component's own message; `FallThrough` keeps it, while
 ///   `Command`/`Swallow` replace it (the command is dispatched by the caller).
 /// * **Leaf focused** — the leaf's request (or `None`) plus the observer's

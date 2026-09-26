@@ -244,10 +244,9 @@ impl App {
             let Some(level) = self.libs[lib_idx].nav_stack.last_mut() else {
                 return false;
             };
-            let parent_id = level.parent_id.clone();
-            let unplayed_only = level.unplayed_only;
-            let sort_by = level.sort_by.clone();
-            let sort_order = level.sort_order.clone();
+            let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+            key.item_types = Some("Series".into());
+            key.letter_filter = None;
             level.tv_content_mode = Some(mbv_core::config::TvContentMode::All);
             level.letter_filter = None;
             level.all_items = None;
@@ -257,16 +256,7 @@ impl App {
             level.set_resting_cursor(0);
             level.set_resting_scroll(0);
             self.libs[lib_idx].tv_content_mode = Some(mbv_core::config::TvContentMode::All);
-            self.spawn_refresh(
-                lib_idx,
-                parent_id,
-                Some("Series".into()),
-                unplayed_only,
-                sort_by,
-                sort_order,
-                0,
-                None,
-            );
+            self.spawn_refresh(lib_idx, 0, key);
         }
         // The placeholder never plays: report handled even if the landing is
         // somehow already unsatisfiable, so no empty-id item reaches playback.
@@ -285,19 +275,19 @@ impl App {
 
     pub(in crate::app) fn handle_series_detail_fetched(
         &mut self,
-        series_id: String,
+        series_id: &str,
         detail: SeriesDetail,
     ) {
         // A late completion must not replace a newer cached projection (for
         // example, a refresh that completed while this request was in flight).
         self.series_detail_cache
-            .entry(series_id.clone())
+            .entry(series_id.to_string())
             .or_insert(detail);
-        self.series_detail_loading.remove(&series_id);
+        self.series_detail_loading.remove(series_id);
         let pending_seasons = self
             .pending_series_season_expansions
             .iter()
-            .filter(|(pending_series, _)| pending_series == &series_id)
+            .filter(|(pending_series, _)| pending_series.as_str() == series_id)
             .cloned()
             .collect::<Vec<_>>();
         for key in &pending_seasons {
@@ -305,38 +295,38 @@ impl App {
         }
         let first_season_id = self
             .series_detail_cache
-            .get(&series_id)
+            .get(series_id)
             .and_then(|detail| detail.seasons.first())
             .map(|season| season.id.clone());
         if let Some(season_id) = first_season_id {
-            self.fetch_series_season_episodes(series_id.clone(), season_id);
+            self.fetch_series_season_episodes(series_id.to_string(), season_id);
         }
         for (_, season_id) in pending_seasons {
-            self.fetch_series_season_episodes(series_id.clone(), season_id);
+            self.fetch_series_season_episodes(series_id.to_string(), season_id);
         }
-        self.refresh_series_detail_loading(&series_id);
+        self.refresh_series_detail_loading(series_id);
     }
 
     pub(in crate::app) fn handle_series_season_episodes_fetched(
         &mut self,
-        series_id: String,
+        series_id: &str,
         season_id: String,
         episodes: Vec<EmbyItem>,
     ) {
-        let key = (series_id.clone(), season_id.clone());
+        let key = (series_id.to_string(), season_id.clone());
         self.series_season_loading.remove(&key);
-        let Some(detail) = self.series_detail_cache.get_mut(&series_id) else {
-            self.refresh_series_detail_loading(&series_id);
+        let Some(detail) = self.series_detail_cache.get_mut(series_id) else {
+            self.refresh_series_detail_loading(series_id);
             return;
         };
         if !detail.seasons.iter().any(|season| season.id == season_id)
             || detail.episodes.contains_key(&season_id)
         {
-            self.refresh_series_detail_loading(&series_id);
+            self.refresh_series_detail_loading(series_id);
             return;
         }
         detail.episodes.insert(season_id, episodes);
-        self.refresh_series_detail_loading(&series_id);
+        self.refresh_series_detail_loading(series_id);
     }
 
     fn refresh_series_detail_loading(&mut self, series_id: &str) {

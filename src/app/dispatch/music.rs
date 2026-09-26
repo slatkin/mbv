@@ -296,28 +296,16 @@ impl App {
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return;
         };
-        let parent_id = level.parent_id.clone();
-        let item_types = level.item_types.clone();
-        let unplayed_only = level.unplayed_only;
-        let sort_by = level.sort_by.clone();
-        let sort_order = level.sort_order.clone();
+        let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        key.letter_filter = Some(filter.clone());
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-            level.letter_filter = Some(filter.clone());
+            level.letter_filter = Some(filter);
             level.set_resting_cursor(0);
             level.set_resting_scroll(0);
             level.loading = true;
             level.items.clear();
         }
-        self.spawn_refresh(
-            lib_idx,
-            parent_id,
-            item_types,
-            unplayed_only,
-            sort_by,
-            sort_order,
-            0,
-            Some(filter),
-        );
+        self.spawn_refresh(lib_idx, 0, key);
         self.save_default_library_position(lib_idx);
     }
 
@@ -375,16 +363,15 @@ impl App {
                     last.loading = true;
                     last.item_types = Some("Series".into());
                 }
-                self.spawn_refresh(
-                    lib_idx,
+                let key = crate::app::state::types::browse::LevelFetchKey {
                     parent_id,
-                    Some("Series".into()),
+                    item_types: Some("Series".into()),
                     unplayed_only,
                     sort_by,
                     sort_order,
-                    0,
-                    None,
-                );
+                    letter_filter: None,
+                };
+                self.spawn_refresh(lib_idx, 0, key);
             }
             mbv_core::config::TvContentMode::Range(index) => {
                 let Some(filter) = crate::app::render::LetterFilter::for_index_for_kind(
@@ -398,16 +385,15 @@ impl App {
                     last.item_types = Some("Series".into());
                     last.letter_filter = Some(filter.clone());
                 }
-                self.spawn_refresh(
-                    lib_idx,
+                let key = crate::app::state::types::browse::LevelFetchKey {
                     parent_id,
-                    Some("Series".into()),
+                    item_types: Some("Series".into()),
                     unplayed_only,
                     sort_by,
                     sort_order,
-                    0,
-                    Some(filter),
-                );
+                    letter_filter: Some(filter),
+                };
+                self.spawn_refresh(lib_idx, 0, key);
             }
         }
     }
@@ -427,29 +413,17 @@ impl App {
         if level.letter_filter.as_ref() == Some(&filter) {
             return;
         }
-        let parent_id = level.parent_id.clone();
-        let item_types = level.item_types.clone();
-        let unplayed_only = level.unplayed_only;
-        let sort_by = level.sort_by.clone();
-        let sort_order = level.sort_order.clone();
+        let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        key.letter_filter = Some(filter.clone());
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-            last.letter_filter = Some(filter.clone());
+            last.letter_filter = Some(filter);
             last.set_resting_cursor(0);
             last.set_resting_scroll(0);
             last.loading = true;
             last.items.clear();
             last.all_items = None;
         }
-        self.spawn_refresh(
-            lib_idx,
-            parent_id,
-            item_types,
-            unplayed_only,
-            sort_by,
-            sort_order,
-            0,
-            Some(filter),
-        );
+        self.spawn_refresh(lib_idx, 0, key);
         self.save_default_library_position(lib_idx);
     }
 
@@ -522,7 +496,7 @@ impl App {
         self.select_letter_pill(lib_idx, next);
     }
 
-    /// If the music-group library's nav_stack was truncated back to just the
+    /// If the music-group library's `nav_stack` was truncated back to just the
     /// group level (e.g., by a stale breadcrumb click), immediately re-push the
     /// current group's album level so the combined view stays intact.
     pub(in crate::app) fn ensure_music_group_album_level(&mut self, lib_idx: usize) {

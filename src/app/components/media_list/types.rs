@@ -254,7 +254,7 @@ pub enum MediaListDisposition {
     Consumed,
 }
 
-/// Stable coordination identity for a MediaList selection. This identifies
+/// Stable coordination identity for a `MediaList` selection. This identifies
 /// the list that produced a projection or delayed action; it never carries
 /// selection membership.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -270,7 +270,7 @@ pub enum LibrarySelectionOrigin {
     Service(LibraryKey),
 }
 
-/// Read-only presentation projection of a MediaList selection. Membership is
+/// Read-only presentation projection of a `MediaList` selection. Membership is
 /// deliberately private to the owner and cannot be reconstructed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectionSummary {

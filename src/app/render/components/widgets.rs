@@ -35,7 +35,7 @@ pub(in crate::app) const TAB_LEFT_PAD: u16 = 2;
 /// Rows of top padding between the right panel's content and whatever sits
 /// above it (tab bar, or the top of the terminal in mini view): previously
 /// supplied incidentally by the wide playback strip's reserved band, which
-/// now mounts only in LibraryOnly and no longer covers Both.
+/// now mounts only in `LibraryOnly` and no longer covers Both.
 pub(in crate::app) const RIGHT_PANEL_TOP_PAD: u16 = 1;
 
 pub(in crate::app) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
@@ -139,7 +139,7 @@ pub(in crate::app) fn render_scrollbar_with_viewport_at(
     );
 }
 
-/// The QueuePanel's recessed content box inside its QueueColumn placement:
+/// The `QueuePanel`'s recessed content box inside its `QueueColumn` placement:
 /// two columns of horizontal padding, one row of vertical padding.
 pub(in crate::app) fn queue_panel_inset(area: Rect) -> Rect {
     Rect {

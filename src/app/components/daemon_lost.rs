@@ -1,10 +1,10 @@
 //! Interactive Component for the Daemon-lost modal overlay (design D3–D9).
 //!
-//! Owns the modal's display content (last_playing_title, daemon_log_path,
-//! restart_error) set by the shell via downcast before each render. The shell
+//! Owns the modal's display content (`last_playing_title`, `daemon_log_path`,
+//! `restart_error`) set by the shell via downcast before each render. The shell
 //! owns restart/quit dispatch in the shell; the component interprets keys as
 //! semantic restart/quit intents. Mouse and other events are swallowed by the
-//! blocking modal; UiRoot's permanent observer supplies the redraw signal
+//! blocking modal; `UiRoot`'s permanent observer supplies the redraw signal
 //! (design D12).
 
 use tuirealm::command::{Cmd, CmdResult};

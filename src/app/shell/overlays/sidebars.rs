@@ -150,7 +150,7 @@ impl Model {
             .expect("activate Help");
     }
 
-    /// Unmount the Help overlay; TuiRealm's LIFO focus stack auto-restores
+    /// Unmount the Help overlay; `TuiRealm`'s LIFO focus stack auto-restores
     /// focus to the prior component.
     pub(in crate::app) fn umount_help(&mut self) {
         let _ = self

@@ -49,7 +49,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
         music_grouping: None,
     };
 
-    app.handle_loaded_level(0, "parent".into(), level);
+    app.handle_loaded_level(0, "parent", level);
 
     let last = app.libs[0].nav_stack.last().unwrap();
     assert_eq!(last.title, "Loaded");

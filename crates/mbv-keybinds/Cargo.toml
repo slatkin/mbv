@@ -8,6 +8,7 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Configurable keybinding registry, chord grammar, and validation for mbv."
+readme = "../../README.md"
 
 [lints]
 workspace = true

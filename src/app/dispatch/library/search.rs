@@ -195,26 +195,26 @@ impl App {
     // `select_letter_pill` (moved to `music_actions.rs`) plus
     // `refresh_lib`/`maybe_capture_library_total_and_apply_default_pill`,
     // which stay behind in `actions.rs`.
-    #[allow(clippy::too_many_arguments)]
     pub(in crate::app) fn spawn_refresh(
         &self,
         lib_idx: usize,
-        parent_id: String,
-        item_types: Option<String>,
-        unplayed_only: bool,
-        sort_by: String,
-        sort_order: String,
         loaded_count: usize,
-        letter_filter: Option<crate::app::render::LetterFilter>,
+        key: crate::app::state::types::browse::LevelFetchKey,
     ) {
+        let crate::app::state::types::browse::LevelFetchKey {
+            parent_id,
+            item_types,
+            unplayed_only,
+            sort_by,
+            sort_order,
+            letter_filter,
+        } = key;
         let Some(client) = self.emby_snapshot() else {
             return;
         };
         let tx = self.lib_tx.clone();
         let limit = loaded_count.max(PAGE_SIZE);
-        let (name_ge, name_lt) = letter_filter
-            .as_ref()
-            .map_or((None, None), |f| (f.name_ge, f.name_lt));
+        let (name_ge, name_lt) = letter_filter.map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
             match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
                 parent_id: &parent_id,
@@ -322,25 +322,10 @@ impl App {
             return;
         }
         let start_index = lvl.fetched_rows;
-        let parent_id = lvl.parent_id.clone();
-        let item_types = lvl.item_types.clone();
-        let unplayed_only = lvl.unplayed_only;
-        let sort_by = lvl.sort_by.clone();
-        let sort_order = lvl.sort_order.clone();
-        let letter_filter = lvl.letter_filter.clone();
+        let key = crate::app::state::types::browse::LevelFetchKey::from_level(lvl);
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
         }
-        self.spawn_browse_page_sized(
-            lib_idx,
-            parent_id,
-            start_index,
-            item_types,
-            unplayed_only,
-            sort_by,
-            sort_order,
-            letter_filter,
-            limit,
-        );
+        self.spawn_browse_page_sized(lib_idx, start_index, limit, key);
     }
 }

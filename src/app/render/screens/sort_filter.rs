@@ -119,7 +119,7 @@ pub(crate) fn resolve_tv_content_mode(
 ///
 /// KNOWN LIMITATION (see `letter_bucket`'s doc comment): the `"#"` pill's
 /// bounds (`NameLessThan("A")`) only reach titles that sort *before* "A".
-/// An accented title whose SortName starts with a codepoint after 'Z'
+/// An accented title whose `SortName` starts with a codepoint after 'Z'
 /// (e.g. "Æon Flux") is fetched by the `V–Z` pill but rendered under a
 /// `"#"` in-list header, and so is unreachable from the `"#"` pill itself.
 const LETTER_FILTER_BUCKETS: &[(&str, Option<&str>, Option<&str>)] = &[

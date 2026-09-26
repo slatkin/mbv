@@ -201,11 +201,8 @@ impl Model {
         if level.letter_filter.is_none() {
             return;
         }
-        let parent_id = level.parent_id.clone();
-        let item_types = level.item_types.clone();
-        let unplayed_only = level.unplayed_only;
-        let sort_by = level.sort_by.clone();
-        let sort_order = level.sort_order.clone();
+        let mut key = crate::app::state::types::browse::LevelFetchKey::from_level(level);
+        key.letter_filter = None;
         if let Some(level) = self.app.libs[lib_idx].nav_stack.last_mut() {
             level.letter_filter = None;
             level.set_resting_cursor(0);
@@ -214,16 +211,7 @@ impl Model {
             level.items.clear();
             level.all_items = None;
         }
-        self.app.spawn_refresh(
-            lib_idx,
-            parent_id,
-            item_types,
-            unplayed_only,
-            sort_by,
-            sort_order,
-            0,
-            None,
-        );
+        self.app.spawn_refresh(lib_idx, 0, key);
         self.app.save_default_library_position(lib_idx);
     }
 

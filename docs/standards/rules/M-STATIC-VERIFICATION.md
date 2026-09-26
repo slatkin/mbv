@@ -71,12 +71,15 @@ unnecessary_safety_comment = "warn"
 unnecessary_safety_doc = "warn"
 unneeded_field_pattern = "warn"
 unused_result_ok = "warn"
-too_long_first_doc_paragraph = "warn"
 
 # May cause issues with structured logging otherwise.
 literal_string_with_formatting_args = "allow"
 
 # Define custom opt outs here
+# No rustdoc is published and the flagged fns are only reachable by same-repo
+# path-dependency siblings, so hand-written `# Errors` sections would be filler
+# (issue #816).
+missing_errors_doc = { level = "allow" }
 # ...
 ```
 

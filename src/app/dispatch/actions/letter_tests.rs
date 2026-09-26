@@ -36,7 +36,7 @@ fn active_lib_is_tvshows_true_only_on_a_tvshows_library_tab() {
 }
 
 /// Pushes a top-level, non-loading, non-searching `BrowseLevel` onto
-/// `lib`'s nav_stack -- the minimum state `should_show_letter_pills`
+/// `lib`'s `nav_stack` -- the minimum state `should_show_letter_pills`
 /// needs to consider the library "at its top browse level".
 fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
     lib.nav_stack.push(BrowseLevel {

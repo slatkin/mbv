@@ -16,7 +16,7 @@ enum WorkerDrain {
 }
 
 impl Model {
-    /// One take/try_recv/match step shared by the startup-worker channels:
+    /// One `take/try_recv/match` step shared by the startup-worker channels:
     /// a completion runs `on_completion`, `Empty` leaves the receiver for the
     /// caller to put back into its slot, and a disconnected channel runs
     /// `on_disconnect` (slot stays empty).
@@ -226,7 +226,7 @@ impl Model {
     /// the bare-key cache entry (#164). Returns whether any response was
     /// drained. A response for an evicted/replaced/absent key is silently
     /// dropped here; `update_resized_protocol` also guards on
-    /// ThreadProtocol's internal id, so a stale response racing a newer
+    /// `ThreadProtocol`'s internal id, so a stale response racing a newer
     /// resize request for the same (still-present) key is a no-op too.
     pub(super) fn drain_resize_responses(&mut self) -> bool {
         let mut had_events = false;

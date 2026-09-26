@@ -112,28 +112,114 @@ pub(in crate::app) struct BrowserPaneGeometry {
     pub(in crate::app) selected: Option<Rect>,
 }
 
+/// Paint inputs for one Browser pane pass: the panel/list focus bits and
+/// the pointer/hit plumbing the painter feeds. Bundled so the painter keeps
+/// a short signature without losing the per-input docs.
+pub(in crate::app) struct BrowserPanePaintParams<'a> {
+    /// Whether the browser list slot holds focus (drives the list's focused
+    /// surface and the Wide paint policy).
+    pub(in crate::app) list_focused: bool,
+    /// The whole panel's own bit (what the shell paints the column body
+    /// with): the Selector row's spacer is the panel showing through, so the
+    /// full-width spacer band follows that bit, not the list pane's narrower
+    /// one.
+    pub(in crate::app) panel_focused: bool,
+    /// Selector pill row under the pointer, if any.
+    pub(in crate::app) hovered_selector: Option<usize>,
+    /// Skeleton hit rects, accumulated by the painter.
+    pub(in crate::app) hits: &'a mut SkeletonHits,
+    /// Skeleton pill windows, accumulated by the painter.
+    pub(in crate::app) windows: &'a mut SkeletonPillWindows,
+}
+
+/// Paints the Browser pane's list slot in the inset row-flow rect: the
+/// slot's content (search chrome + results, media list, or placeholder),
+/// viewport-clamped and geometry-set for this pass.
+fn paint_browser_list_slot(
+    f: &mut Frame,
+    pills_area: Rect,
+    list_panel: Rect,
+    list_area: Rect,
+    content: &mut LibraryPanelContent<'_>,
+    list_focused: bool,
+) {
+    match &mut content.list {
+        ListSlot::Search(search) => {
+            // The search bar is the Selector row's chrome; the result rows are
+            // the session's embedded canonical carrier painted through the
+            // same PanelList surface as `ListSlot::Media` (design D3).
+            let query = search.query().to_string();
+            let loading = search.loading();
+            render_search_box(f, pills_area, &query, loading);
+            if search.results_len() == 0 {
+                // Zero rows: the same placeholder states an empty list box
+                // paints (string parity with the legacy empty branch).
+                let msg = if loading {
+                    " Loading\u{2026}"
+                } else {
+                    " (empty)"
+                };
+                render_placeholder(f, list_area, msg);
+            } else {
+                search.clamp_viewport(list_area.height.max(1) as usize);
+                search.set_paint_policy(PanelListPaintPolicy::Wide {
+                    focused: list_focused,
+                });
+                // The canonical rail owns the full panel row, exactly as for
+                // `ListSlot::Media` (see that arm below).
+                search.set_geometry(full_width_claim(list_panel, list_area), list_area);
+                search.view(f, list_area);
+            }
+        }
+        ListSlot::Media(list) => {
+            if let Some((query, loading)) = list.search_bar() {
+                render_search_box(f, pills_area, &query, loading);
+            }
+            // The panel drives the viewport clamp and the paint policy
+            // (design D3): the slot fixes focus and the list-backdrop
+            // selected row (design D6).
+            list.clamp_viewport(list_area.height.max(1) as usize);
+            list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
+                focused: list_focused,
+            });
+            // The canonical rail owns the full panel row (matching the
+            // pre-migration wide rail): the selected background reaches
+            // `list_panel`'s border while the row flow/hit geometry stays on
+            // the inset `list_area`, so `media_list_row`'s own 2-column text
+            // indent is the row's only indent instead of stacking atop
+            // `list_area`'s inset.
+            list.set_geometry(full_width_claim(list_panel, list_area), list_area);
+            list.view(f, list_area);
+        }
+        ListSlot::Empty { loading, text } => {
+            let msg = if *loading {
+                " Loading\u{2026}"
+            } else {
+                text.as_str()
+            };
+            if !msg.is_empty() {
+                render_placeholder(f, list_area, msg);
+            }
+        }
+    }
+}
+
 /// Paints the Browser pane (Selector row and list box) and returns the role
-/// rects it placed. Pure painting over the supplied
-/// pane geometry; the hero pane and workspace content are painted elsewhere.
-///
-/// `panel_focused` is the whole panel's own bit (what the shell paints the
-/// column body with): the Selector row's spacer is the panel showing
-/// through, so the full-width spacer band follows that bit, not the list
-/// pane's narrower one.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the wide browser painter takes the panel content plus each pane's focus bit; bundling them into a struct would only move the argument list"
-)]
+/// rects it placed. Pure painting over the supplied pane geometry; the hero
+/// pane and workspace content are painted elsewhere.
 pub(in crate::app) fn paint_browser_pane(
     f: &mut Frame,
     pane: WideHeroBrowserPane,
     content: &mut LibraryPanelContent<'_>,
-    list_focused: bool,
-    panel_focused: bool,
-    hovered_selector: Option<usize>,
-    hits: &mut SkeletonHits,
-    windows: &mut SkeletonPillWindows,
+    params: BrowserPanePaintParams<'_>,
 ) -> BrowserPaneGeometry {
+    let BrowserPanePaintParams {
+        list_focused,
+        panel_focused,
+        hovered_selector,
+        hits,
+        windows,
+    } = params;
     // Selector row: one pill bar + the panel's spacer. When neither a
     // SelectorRow nor search is present, the arrangement gives the content
     // area directly to the list; while searching, the box takes the bar's rect.
@@ -193,65 +279,14 @@ pub(in crate::app) fn paint_browser_pane(
     } else {
         list_area
     };
-    match &mut content.list {
-        ListSlot::Search(search) => {
-            // The search bar is the Selector row's chrome; the result rows are
-            // the session's embedded canonical carrier painted through the
-            // same PanelList surface as `ListSlot::Media` (design D3).
-            let query = search.query().to_string();
-            let loading = search.loading();
-            render_search_box(f, pane.pills_area, &query, loading);
-            if search.results_len() == 0 {
-                // Zero rows: the same placeholder states an empty list box
-                // paints (string parity with the legacy empty branch).
-                let msg = if loading {
-                    " Loading\u{2026}"
-                } else {
-                    " (empty)"
-                };
-                render_placeholder(f, list_area, msg);
-            } else {
-                search.clamp_viewport(list_area.height.max(1) as usize);
-                search.set_paint_policy(PanelListPaintPolicy::Wide {
-                    focused: list_focused,
-                });
-                // The canonical rail owns the full panel row, exactly as for
-                // `ListSlot::Media` (see that arm below).
-                search.set_geometry(full_width_claim(list_panel, list_area), list_area);
-                search.view(f, list_area);
-            }
-        }
-        ListSlot::Media(list) => {
-            if let Some((query, loading)) = list.search_bar() {
-                render_search_box(f, pane.pills_area, &query, loading);
-            }
-            // The panel drives the viewport clamp and the paint policy
-            // (design D3): the slot fixes focus and the list-backdrop
-            // selected row (design D6).
-            list.clamp_viewport(list_area.height.max(1) as usize);
-            list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
-                focused: list_focused,
-            });
-            // The canonical rail owns the full panel row (matching the
-            // pre-migration wide rail): the selected background reaches
-            // `list_panel`'s border while the row flow/hit geometry stays on
-            // the inset `list_area`, so `media_list_row`'s own 2-column text
-            // indent is the row's only indent instead of stacking atop
-            // `list_area`'s inset.
-            list.set_geometry(full_width_claim(list_panel, list_area), list_area);
-            list.view(f, list_area);
-        }
-        ListSlot::Empty { loading, text } => {
-            let msg = if *loading {
-                " Loading\u{2026}"
-            } else {
-                text.as_str()
-            };
-            if !msg.is_empty() {
-                render_placeholder(f, list_area, msg);
-            }
-        }
-    }
+    paint_browser_list_slot(
+        f,
+        pane.pills_area,
+        list_panel,
+        list_area,
+        content,
+        list_focused,
+    );
 
     // The list slot's painted selection is the context-menu anchor's painted
     // truth.
@@ -281,24 +316,47 @@ pub(in crate::app) fn paint_browser_pane(
 /// `ListSlot::Search` is active, the search box paints in the Selector band's
 /// rect and the results in the list box, and the rest of the panel is
 /// unchanged.
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the wide skeleton painter composes selector, list, hero, and workspace slots, each with its own inputs"
-)]
+/// Paint inputs for the Wide skeleton pass: focus, pointer, hit plumbing,
+/// and the breakpoint/layout knobs the skeleton needs. Bundled so the
+/// painter keeps a short signature without losing the per-input docs.
+pub(in crate::app) struct WideSkeletonPaintParams<'a> {
+    /// Whether the browser panel holds focus.
+    pub(in crate::app) browser_focused: bool,
+    /// Width override for the hero pane, when one is active.
+    pub(in crate::app) override_width: Option<u16>,
+    /// The hero overview's scroll offset.
+    pub(in crate::app) overview_scroll: usize,
+    /// Selector pill row under the pointer, if any.
+    pub(in crate::app) hovered_selector: Option<usize>,
+    /// Hero overview link under the pointer, if any.
+    pub(in crate::app) hovered_link: Option<usize>,
+    /// Skeleton hit rects, accumulated by the painter.
+    pub(in crate::app) hits: &'a mut SkeletonHits,
+    /// Skeleton pill windows, accumulated by the painter.
+    pub(in crate::app) windows: &'a mut SkeletonPillWindows,
+    /// Terminal height, feeding the hero overview's viewport math.
+    pub(in crate::app) terminal_height: u16,
+    /// Whether the hero pane participates in this breakpoint's layout.
+    pub(in crate::app) show_hero_pane: bool,
+}
+
 pub(in crate::app) fn render_wide_skeleton(
     f: &mut Frame,
     area: Rect,
     content: &mut LibraryPanelContent<'_>,
-    browser_focused: bool,
-    override_width: Option<u16>,
-    overview_scroll: usize,
-    hovered_selector: Option<usize>,
-    hovered_link: Option<usize>,
-    hits: &mut SkeletonHits,
-    windows: &mut SkeletonPillWindows,
-    terminal_height: u16,
-    show_hero_pane: bool,
+    params: WideSkeletonPaintParams<'_>,
 ) -> Option<WideSkeletonGeometry> {
+    let WideSkeletonPaintParams {
+        browser_focused,
+        override_width,
+        overview_scroll,
+        hovered_selector,
+        hovered_link,
+        hits,
+        windows,
+        terminal_height,
+        show_hero_pane,
+    } = params;
     let WideLibraryPanes {
         pills_area,
         spacer_area,
@@ -328,11 +386,13 @@ pub(in crate::app) fn render_wide_skeleton(
         f,
         pane,
         content,
-        list_focused,
-        browser_focused,
-        hovered_selector,
-        hits,
-        windows,
+        BrowserPanePaintParams {
+            list_focused,
+            panel_focused: browser_focused,
+            hovered_selector,
+            hits,
+            windows,
+        },
     );
 
     // Hero pane: always the resting fill. It never takes the focused

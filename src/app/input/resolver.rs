@@ -24,7 +24,7 @@ impl KeyChord {
     /// Crossterm delivers Shift+Tab as `BackTab` with SHIFT set, while the
     /// registry stores the `previous_library_tab` default as a bare `BackTab`
     /// (the legacy literal matched the code with no modifier check). SHIFT is
-    /// redundant on BackTab — BackTab *is* Shift+Tab — so it is normalized
+    /// redundant on `BackTab` — `BackTab` *is* Shift+Tab — so it is normalized
     /// away here for both the pressed chord (`from_key`) and the configured
     /// chord (`from_keybinds_chord`). Other non-Char codes keep SHIFT:
     /// literal bindings such as the queue-column-width entry match on it.
@@ -90,7 +90,7 @@ fn registry_mods_to_modifiers(mods: mbv_keybinds::KeyMods) -> KeyModifiers {
     out
 }
 
-/// Convert a TuiRealm `KeyEvent` to a crossterm `KeyEvent` for the
+/// Convert a `TuiRealm` `KeyEvent` to a crossterm `KeyEvent` for the
 /// central keyboard router.
 pub(in crate::app) fn tuirealm_key_to_crossterm(
     key: tuirealm::event::KeyEvent,

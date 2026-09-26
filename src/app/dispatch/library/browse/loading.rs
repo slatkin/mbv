@@ -295,26 +295,26 @@ impl App {
         });
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(in crate::app) fn spawn_browse_page_sized(
         &self,
         lib_idx: usize,
-        parent_id: String,
         start_index: usize,
-        item_types: Option<String>,
-        unplayed_only: bool,
-        sort_by: String,
-        sort_order: String,
-        letter_filter: Option<crate::app::render::LetterFilter>,
         limit: usize,
+        key: crate::app::state::types::browse::LevelFetchKey,
     ) {
+        let crate::app::state::types::browse::LevelFetchKey {
+            parent_id,
+            item_types,
+            unplayed_only,
+            sort_by,
+            sort_order,
+            letter_filter,
+        } = key;
         let Some(client) = self.emby_snapshot() else {
             return;
         };
         let tx = self.lib_tx.clone();
-        let (name_ge, name_lt) = letter_filter
-            .as_ref()
-            .map_or((None, None), |f| (f.name_ge, f.name_lt));
+        let (name_ge, name_lt) = letter_filter.map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
             match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
                 parent_id: &parent_id,

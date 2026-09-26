@@ -90,13 +90,13 @@ impl App {
                 .get(index)
                 .and_then(|library| self.legacy_position_for_key(&library.library.id))
                 .map_or((None, None), |position| {
-                    self.legacy_identities(&position, false)
+                    Self::legacy_identities(&position, false)
                 }),
             TabSelection::AudiobookshelfLibrary(index) => self
                 .audiobookshelf_position_key(index)
                 .and_then(|key| self.legacy_position_for_key(key.as_str()))
                 .map_or((None, None), |position| {
-                    self.legacy_identities(&position, true)
+                    Self::legacy_identities(&position, true)
                 }),
             TabSelection::Home | TabSelection::Feeds => (None, None),
         };
@@ -157,7 +157,6 @@ impl App {
     }
 
     fn legacy_identities(
-        &self,
         position: &crate::config::LibraryPosition,
         audiobookshelf: bool,
     ) -> (Option<SelectorIdentity>, Option<LibraryItemIdentity>) {
@@ -313,7 +312,7 @@ impl App {
         self.save_prefs();
     }
 
-    /// Jump directly to left-panel tab `idx` (0 = Home, 1..=libs.len() =
+    /// Jump directly to left-panel tab `idx` (0 = Home, `1..=libs.len()` =
     /// library index `idx - 1`, or Feeds at the end when present).
     pub(in crate::app) fn set_library_tab(&mut self, idx: usize) {
         if idx >= self.tab_count() {
@@ -361,7 +360,7 @@ impl App {
         self.enqueue_home_item(item);
     }
 
-    pub(in crate::app) fn cw_toggle_watched(&mut self, item: EmbyItem) {
-        self.toggle_watched_home_item(&item);
+    pub(in crate::app) fn cw_toggle_watched(&mut self, item: &EmbyItem) {
+        self.toggle_watched_home_item(item);
     }
 }

@@ -268,7 +268,7 @@ impl App {
     /// launch: synchronously from `App::new_remote`'s local-daemon-attach
     /// path (construct.rs) when the Emby client is already available at
     /// construction, or from `apply_emby_completion`
-    /// (app_emby_service_completion.rs) once the async Emby startup used by
+    /// (`app_emby_service_completion.rs`) once the async Emby startup used by
     /// `App::new_independent` completes. A genuinely remote
     /// `--connect-daemon` launch is a separate, unaffected mechanism per
     /// ADR 0010. A no-op unless `auto_reconnect` is enabled and

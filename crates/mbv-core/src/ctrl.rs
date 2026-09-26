@@ -270,6 +270,12 @@ impl CtrlCompatibility {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if `for_peer` rejects `CTRL_PROTOCOL_VERSION`, i.e. if the
+    /// "local ctrl protocol version is compatible" invariant is violated.
+    /// `for_peer` accepts exactly that version, so the compatible local
+    /// protocol version always resolves.
     #[must_use]
     pub fn current() -> Self {
         Self::for_peer(CTRL_PROTOCOL_VERSION).expect("local ctrl protocol version is compatible")

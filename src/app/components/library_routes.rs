@@ -89,7 +89,7 @@ impl LibraryRoutesComponent {
     /// Mouse handling (task 5.1): only actions with a keyboard equivalent.
     /// A row click selects (Up/Down equivalent), a double-click enters
     /// (Enter equivalent), an outside click follows the Esc path — which
-    /// closes the picker on PickLibrary and steps back on PickDevice —
+    /// closes the picker on `PickLibrary` and steps back on `PickDevice` —
     /// by emitting the same `LibraryRoutesEsc` request. Right-click and
     /// wheel have no keyboard equivalent here and are ignored.
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {

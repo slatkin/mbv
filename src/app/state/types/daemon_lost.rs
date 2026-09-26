@@ -2,7 +2,7 @@
 /// lost with no announced shutdown (a crash) -- see `player_event.rs`'s
 /// `PlayerEvent::Stopped` handling and `render/overlays/daemon_lost_modal.rs`.
 /// Only one blocking modal can be active at a time:
-/// Option<DaemonLostModal>`), mirroring `ConfirmModal`'s convention.
+/// `Option<DaemonLostModal>`), mirroring `ConfirmModal`'s convention.
 pub(in crate::app) struct DaemonLostModal {
     /// The label of whatever was playing right before the daemon vanished,
     /// if known.

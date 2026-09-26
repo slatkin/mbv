@@ -62,7 +62,7 @@ impl App {
                 series_id,
                 season_id,
                 episodes,
-            } => self.handle_series_season_episodes_fetched(series_id, season_id, episodes),
+            } => self.handle_series_season_episodes_fetched(&series_id, season_id, episodes),
             event @ LibEvent::AudiobookshelfDetailFetched { .. } => {
                 self.handle_audiobookshelf_podcast_detail_fetched_event(event);
             }
@@ -127,7 +127,7 @@ impl App {
         else {
             return;
         };
-        self.handle_lib_loaded(lib_idx, parent_id, *level);
+        self.handle_lib_loaded(lib_idx, &parent_id, *level);
     }
 
     fn handle_page_appended_event(&mut self, event: LibEvent) {
@@ -140,7 +140,7 @@ impl App {
         else {
             return;
         };
-        self.handle_lib_page_appended(lib_idx, parent_id, items, total_count);
+        self.handle_lib_page_appended(lib_idx, &parent_id, items, total_count);
     }
 
     fn handle_search_items_loaded_event(&mut self, event: LibEvent) {
@@ -201,7 +201,7 @@ impl App {
             return;
         };
         self.handle_series_detail_fetched(
-            series_id,
+            &series_id,
             crate::app::SeriesDetail { seasons, episodes },
         );
     }
@@ -250,8 +250,8 @@ impl App {
         };
         self.handle_lib_refreshed(
             lib_idx,
-            parent_id,
-            item_types,
+            &parent_id,
+            item_types.as_deref(),
             unplayed_only,
             items,
             total_count,
@@ -304,7 +304,7 @@ impl App {
         else {
             return;
         };
-        self.handle_restored_library_position(lib_idx, requested_position, position, nav_stack);
+        self.handle_restored_library_position(lib_idx, &requested_position, position, nav_stack);
     }
     fn handle_all_items_prefetched(
         &mut self,

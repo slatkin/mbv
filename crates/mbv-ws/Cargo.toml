@@ -8,6 +8,7 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Emby websocket client transport for mbv."
+readme = "../../README.md"
 
 [lints]
 workspace = true

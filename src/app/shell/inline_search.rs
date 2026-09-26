@@ -226,7 +226,7 @@ impl Model {
 
     /// Drain tail for the inline search (called from the shell's `lib_rx`
     /// loop): completions that can change the mounted search's projected pool
-    /// — flat nav_stack completions (`Loaded`), flat
+    /// — flat `nav_stack` completions (`Loaded`), flat
     /// items/`all_items`, or recursive `album_indexes` —
     /// re-push it after the App handles the event. The deleted per-frame
     /// mirror's projection is driven at async event boundaries.

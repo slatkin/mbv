@@ -59,7 +59,7 @@ mod run;
 mod settings;
 mod tv_workspace;
 
-/// How often the TuiRealm crossterm listener worker polls the terminal for
+/// How often the `TuiRealm` crossterm listener worker polls the terminal for
 /// events. The listener's `poll` blocks for half of this; the worker cycle is
 /// this long. Set to 8 ms so event latency matches the legacy loop's fastest
 /// cadence (the visualizer's 8 ms poll). The main thread's per-iteration wait
@@ -113,7 +113,7 @@ pub(in crate::app) struct MusicTrackSelection {
     pub(in crate::app) track_id: String,
 }
 
-/// Shell model holding the legacy `App` and the TuiRealm `Application`.
+/// Shell model holding the legacy `App` and the `TuiRealm` `Application`.
 pub struct Model {
     pub app: App,
     pub(in crate::app) application: Application<ComponentId, Msg, UserEvent>,
@@ -152,7 +152,7 @@ pub struct Model {
     pub(in crate::app) feeds_manage: Option<FeedsManagePopup>,
     /// Model-owned Home content (task 5.3d): the sole snapshot pushed to
     /// `HomeComponent`; App-internal writers deliver computed snapshots via
-    /// lib_tx; `loading` mirrors the deleted `App.home_loading`.
+    /// `lib_tx`; `loading` mirrors the deleted `App.home_loading`.
     pub(in crate::app) home_content: HomeContent,
     /// Shell-owned acknowledgement shared by Home and TV Latest surfaces.
     pub(in crate::app) acknowledged_home_latest_sources:
@@ -209,7 +209,7 @@ pub struct Model {
 }
 
 impl Model {
-    /// Construct the model, starting the TuiRealm crossterm listener and
+    /// Construct the model, starting the `TuiRealm` crossterm listener and
     /// mounting the permanent root observer.
     #[cfg(test)]
     pub fn new(app: App) -> Self {

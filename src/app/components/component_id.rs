@@ -43,7 +43,7 @@ pub enum ComponentId {
 }
 
 /// Top-level overlay identity (design D3 names: Search, Settings, Sessions,
-/// Playlists, Help, and ContextMenu).
+/// Playlists, Help, and `ContextMenu`).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum OverlayId {
     Search,
@@ -54,7 +54,7 @@ pub enum OverlayId {
     ContextMenu,
 }
 
-/// Blocking modal identity (design D3 names: Confirm, DaemonLost, SavePlaylist).
+/// Blocking modal identity (design D3 names: Confirm, `DaemonLost`, `SavePlaylist`).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum ModalId {
     Confirm,
@@ -63,7 +63,7 @@ pub enum ModalId {
 }
 
 /// Nested Settings popup identity (design D3 names: Multiselect,
-/// LibraryRoutes, FeedManage).
+/// `LibraryRoutes`, `FeedManage`).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum PopupId {
     Multiselect,

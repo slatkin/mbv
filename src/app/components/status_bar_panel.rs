@@ -11,7 +11,7 @@
 //! the overflow drop-order, pill geometry and event resolution.
 //!
 //! The Local/Remote queue-scope pills are queue concern and live in the
-//! QueueColumn footer (`QueueComponent`), never here.
+//! `QueueColumn` footer (`QueueComponent`), never here.
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;

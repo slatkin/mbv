@@ -181,7 +181,7 @@ impl QueueComponent {
     }
 
     /// Project the status pill row (playlist source + autosave) and the
-    /// scope pills, painted at the QueueColumn footer below the recessed box.
+    /// scope pills, painted at the `QueueColumn` footer below the recessed box.
     pub(in crate::app) fn set_status_pills(
         &mut self,
         playlist: Vec<Span<'static>>,

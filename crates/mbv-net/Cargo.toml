@@ -8,6 +8,7 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Shared HTTP, TLS-agent, socket and retry primitives for mbv."
+readme = "../../README.md"
 
 [lints]
 workspace = true

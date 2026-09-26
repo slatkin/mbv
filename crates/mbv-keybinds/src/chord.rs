@@ -81,6 +81,12 @@ impl Chord {
     /// `F1`–`F12`, or a named key such as `Esc`, `Tab`, `BackTab`, `Enter`,
     /// `Space`, arrows, `Home`, `End`, `PageUp`, `PageDown`, `Delete`,
     /// `Insert`, `Backspace`). A lone `+` or `-` is a character chord.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `+`-split has no last token, i.e. if the "a non-empty
+    /// trimmed string splits into at least one token" invariant is violated.
+    /// `s` is already known non-empty here, so the split always yields one.
     pub fn parse(s: &str) -> Result<Self, ChordParseError> {
         let s = s.trim();
         if s.is_empty() {

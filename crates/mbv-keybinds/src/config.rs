@@ -59,6 +59,12 @@ impl Keybinds {
     }
 
     /// The first chord that fires an action under this configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the action resolves to no chords, i.e. if the "every action
+    /// resolves to at least one chord" invariant is violated. An action always
+    /// has either a configured router override or a declared default chord.
     #[must_use]
     pub fn router_chord(&self, action: &KeybindAction) -> Chord {
         self.router_chords(action)
@@ -229,6 +235,11 @@ impl std::error::Error for KeybindsError {}
 
 /// Compile a raw `[keys]` configuration into validated `Keybinds`, rejecting
 /// every malformed or colliding entry at load (design D5).
+///
+/// # Panics
+///
+/// Panics if a `RESERVED_CHORDS` literal fails to parse, i.e. if the
+/// "reserved chord must parse" invariant is violated.
 pub fn load(raw: &RawKeybinds) -> Result<Keybinds, KeybindsError> {
     let reserved: Vec<Chord> = RESERVED_CHORDS
         .iter()
