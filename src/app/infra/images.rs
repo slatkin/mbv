@@ -355,12 +355,10 @@ impl App {
                 // that resolved empty, and every other presentation, stays
                 // undecorated and issues no Logo request.
                 let logo_cache_key = self.fetch_hero_logo(artwork, panel_area);
-                let protocol_suffix = self.current_protocol_suffix();
-                if !self.images.ensure_hero_cover_protocol(
+                if !self.ensure_hero_cover_protocol(
                     &cache_key,
                     (box_cells.width, box_cells.height),
                     logo_cache_key.as_deref(),
-                    protocol_suffix,
                 ) {
                     return State::Loading;
                 }
@@ -369,11 +367,7 @@ impl App {
             // The Library Hero overlay paints the same reserved-box flow; a
             // Landscape hero there is cover-fit for the overlay's own box
             // (its provider-link row stays plain, so no Logo).
-            let protocol_suffix = self.current_protocol_suffix();
-            if !self
-                .images
-                .ensure_hero_cover_protocol(&cache_key, box_cells, None, protocol_suffix)
-            {
+            if !self.ensure_hero_cover_protocol(&cache_key, box_cells, None) {
                 return State::Loading;
             }
         }

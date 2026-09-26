@@ -89,9 +89,224 @@ impl App {
     pub(in crate::app) fn current_protocol_suffix(&self) -> &'static str {
         self.picker_and_suffix().map_or("halfblock", |(_, s)| s)
     }
+
+    /// Returns the protocol to render `bare_key` with under the currently
+    /// active suffix, lazily re-encoding the retained source image when that
+    /// suffix's protocol isn't cached yet (#451). The re-encode runs off the
+    /// render thread (via the resize worker), so the first frame after a
+    /// protocol switch still shows the placeholder while it completes.
+    pub(in crate::app) fn cached_image_protocol_mut(
+        &mut self,
+        bare_key: &str,
+    ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
+        let suffix = self.current_protocol_suffix();
+        let picker = self.images.picker_for_suffix(suffix)?;
+        let reencode = self
+            .images
+            .card_image_states
+            .get(bare_key)
+            .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
+        if reencode {
+            let (img, cover_box, stored_logo_key) = self
+                .images
+                .card_image_states
+                .get(bare_key)
+                .and_then(|e| {
+                    e.img
+                        .clone()
+                        .map(|img| (img, e.cover_box, e.applied_logo_key.clone()))
+                })
+                .expect("img present, just checked");
+            let logo_key = self.images.ready_logo_key(stored_logo_key.as_deref());
+            // A hero entry's protocols carry the cover-fit crop (task 5.10,
+            // design D5): rebuild from the source through the same cover step
+            // so a suffix switch keeps the cropped aspect.
+            let img = match cover_box {
+                Some((w, h)) => {
+                    let (px_w, px_h) = self.hero_box_pixels(w, h);
+                    cover_fill_hero_box(&img, px_w, px_h)
+                }
+                None => img,
+            };
+            let img = self.images.decorate_with_logo(img, logo_key.as_deref());
+            let proto = self.images.build_protocol(bare_key, suffix, picker, img);
+            if let Some(entry) = self.images.card_image_states.get_mut(bare_key) {
+                entry.protocols.insert(suffix, proto);
+                entry.applied_logo_key = logo_key;
+            }
+        }
+        self.images
+            .card_image_states
+            .get_mut(bare_key)?
+            .protocols
+            .get_mut(suffix)
+    }
+
+    /// The active picker's terminal font size — the cell-to-pixel ratio the
+    /// hero cover fit's box pixels derive from. Falls back to the picker
+    /// constructor's default when no picker is active.
+    pub(in crate::app) fn image_font_size(&self) -> ratatui_image::FontSize {
+        self.picker_and_suffix()
+            .map_or(ratatui_image::FontSize::new(10, 20), |(picker, _)| {
+                picker.font_size()
+            })
+    }
+
+    /// One hero artwork box's pixel size from its cell size (task 5.10,
+    /// design D5's cover-fit input).
+    pub(in crate::app) fn hero_box_pixels(&self, box_w: u16, box_h: u16) -> (u32, u32) {
+        let font = self.image_font_size();
+        (
+            u32::from(box_w) * u32::from(font.width.max(1)),
+            u32::from(box_h) * u32::from(font.height.max(1)),
+        )
+    }
+
+    /// Ensure the hero cover-fit protocol for `cache_key` matches
+    /// `box_cells` (task 5.10, design D5): the protocol is rebuilt from the
+    /// decoded source through `cover_fill_hero_box` at the box's pixel size
+    /// whenever the box changed (resize, split drag, Workspace shrink — the
+    /// next sync pass's "re-encode request keyed by the new box size"), and
+    /// the painters show the placeholder for at most that one frame.
+    /// Returns whether a ready protocol is available.
+    pub(in crate::app) fn ensure_hero_cover_protocol(
+        &mut self,
+        cache_key: &str,
+        box_cells: (u16, u16),
+        logo_cache_key: Option<&str>,
+    ) -> bool {
+        let Some(entry) = self.images.card_image_states.get(cache_key) else {
+            return false;
+        };
+        let Some(source) = entry.img.clone() else {
+            return false;
+        };
+        let desired_logo_key = self.images.ready_logo_key(logo_cache_key);
+        if entry.cover_box == Some(box_cells)
+            && entry.applied_logo_key == desired_logo_key
+            && !entry.protocols.is_empty()
+        {
+            return true;
+        }
+        let Some((picker, suffix)) = self
+            .picker_and_suffix()
+            .map(|(picker, suffix)| (picker.clone(), suffix))
+        else {
+            return false;
+        };
+        let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
+        let cropped = self.images.decorate_with_logo(
+            cover_fill_hero_box(&source, px_w, px_h),
+            desired_logo_key.as_deref(),
+        );
+        let bare_key = cache_key.to_string();
+        let proto = self
+            .images
+            .build_protocol(&bare_key, suffix, &picker, cropped);
+        if let Some(entry) = self.images.card_image_states.get_mut(cache_key) {
+            entry.protocols.clear();
+            entry.protocols.insert(suffix, proto);
+            entry.cover_box = Some(box_cells);
+            entry.applied_logo_key = desired_logo_key;
+        }
+        true
+    }
+
+    /// Paints the panel's retained hero image paint (task 5.10, design D9):
+    /// the cached protocol rendered into the projected box (cover-fit keyed
+    /// by the box at the projection), or — while that one frame's encode is
+    /// still completing — the shared loading placeholder in the same box, so
+    /// the placeholder never shows for more than the one frame the spec
+    /// allows.
+    pub(in crate::app) fn paint_panel_hero_image(
+        &mut self,
+        f: &mut ratatui::Frame,
+        paint: &crate::app::components::library_panel::PanelHeroImagePaint,
+    ) {
+        if paint.area.width == 0 || paint.area.height == 0 {
+            return;
+        }
+        if let Some(state) = self.cached_image_protocol_mut(&paint.cache_key) {
+            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+            let avail = ratatui::layout::Size {
+                width: paint.area.width,
+                height: paint.area.height,
+            };
+            if let Some(actual) =
+                state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
+            {
+                let img_rect = ratatui::layout::Rect {
+                    x: paint.area.x + paint.area.width.saturating_sub(actual.width) / 2,
+                    y: paint.area.y,
+                    width: actual.width,
+                    height: actual.height,
+                };
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+                    img_rect,
+                    state,
+                );
+                return;
+            }
+        }
+        f.render_widget(
+            ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(
+                palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false).fill,
+            )),
+            paint.area,
+        );
+    }
+
+    /// Spawn queued image fetches until the in-flight limit is reached. Called
+    /// whenever an in-flight fetch completes and frees a slot (see the card-image
+    /// receiver in `images.rs`).
+    pub(in crate::app) fn drain_image_fetches(&mut self) {
+        while self.images.image_fetches_active < MAX_IMAGE_FETCHES {
+            let Some(req) = self.images.pending_image_fetches.pop_front() else {
+                break;
+            };
+            self.spawn_image_fetch(req);
+        }
+    }
+
+    pub(super) fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
+        self.images.image_fetches_active += 1;
+        let (server_url, token) = if matches!(req.source, ImageSource::Emby) {
+            let Some(client) = self.emby_client() else {
+                self.images.image_fetches_active =
+                    self.images.image_fetches_active.saturating_sub(1);
+                let _ = self.images.card_image_tx.send((req.cache_key, None));
+                return;
+            };
+            let c = client.lock().unwrap();
+            (c.config.server_url.clone(), c.token.clone())
+        } else {
+            (String::new(), String::new())
+        };
+        let tx = self.images.card_image_tx.clone();
+        std::thread::spawn(move || {
+            // catch_unwind so a panic during fetch/decode still reports a result,
+            // freeing the in-flight slot and the loading reservation (H9). Exactly
+            // one message is sent per spawn, so the receiver can balance the count.
+            let cache_key = req.cache_key.clone();
+            let cache_key_outer = cache_key.clone();
+            let tx_outer = tx.clone();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let bytes = fetch_image_bytes(req, &server_url, &token);
+                // Decode off the UI thread; the main loop only builds the protocol.
+                let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
+                let _ = tx.send((cache_key, img));
+            }));
+            if result.is_err() {
+                let _ = tx_outer.send((cache_key_outer, None));
+            }
+        });
+    }
 }
 
 impl ImageCache {
+    /// Query the terminal for its image protocol and apply the configured
+    /// protocol override when one is set.
     fn build_image_picker(&self) -> Picker {
         use ratatui_image::picker::ProtocolType;
         let protocol_override = self.image_protocol.clone();
@@ -103,7 +318,7 @@ impl ImageCache {
                 "kitty" => Some(ProtocolType::Kitty),
                 "iterm2" => Some(ProtocolType::Iterm2),
                 "halfblocks" => Some(ProtocolType::Halfblocks),
-                _ => None,
+                _ => None, // "auto" or unknown: use picker's detected protocol
             });
         if let Some(proto) = proto {
             picker.set_protocol_type(proto);
@@ -111,6 +326,15 @@ impl ImageCache {
         picker
     }
 
+    /// Populate `image_picker` (terminal-detected, with the config override)
+    /// and `halfblock_picker` (the #451 dimmed-backdrop fallback).
+    ///
+    /// MUST run before the `TuiRealm` crossterm listener starts
+    /// (`Application::init`): `Picker::from_query_stdio` writes a `CSI 16 t`
+    /// cell-size query to the terminal and reads the reply with a raw stdin
+    /// read. If the listener is already draining stdin it eats the reply, the
+    /// picker falls back to a wrong cell size, and Kitty renders images clipped
+    /// on the right/bottom (#654).
     pub(in crate::app) fn init_image_pickers(&mut self) {
         let picker = self.build_image_picker();
         log::debug!(
@@ -160,55 +384,6 @@ impl ImageCache {
         entry
     }
 
-    /// Returns the protocol to render `bare_key` with under the currently
-    /// active suffix, lazily re-encoding the retained source image when that
-    /// suffix's protocol isn't cached yet (#451). The re-encode runs off the
-    /// render thread (via the resize worker), so the first frame after a
-    /// protocol switch still shows the placeholder while it completes.
-    pub(in crate::app) fn cached_image_protocol_mut(
-        &mut self,
-        bare_key: &str,
-        suffix: &'static str,
-    ) -> Option<&mut ratatui_image::thread::ThreadProtocol> {
-        let picker = self.picker_for_suffix(suffix)?;
-        let reencode = self
-            .card_image_states
-            .get(bare_key)
-            .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
-        if reencode {
-            let (img, cover_box, stored_logo_key) = self
-                .card_image_states
-                .get(bare_key)
-                .and_then(|e| {
-                    e.img
-                        .clone()
-                        .map(|img| (img, e.cover_box, e.applied_logo_key.clone()))
-                })
-                .expect("img present, just checked");
-            let logo_key = self.ready_logo_key(stored_logo_key.as_deref());
-            // A hero entry's protocols carry the cover-fit crop (task 5.10,
-            // design D5): rebuild from the source through the same cover step
-            // so a suffix switch keeps the cropped aspect.
-            let img = match cover_box {
-                Some((w, h)) => {
-                    let (px_w, px_h) = self.hero_box_pixels(w, h, suffix);
-                    crate::app::infra::images::cover_fill_hero_box(&img, px_w, px_h)
-                }
-                None => img,
-            };
-            let img = self.decorate_with_logo(img, logo_key.as_deref());
-            let proto = self.build_protocol(bare_key, suffix, picker, img);
-            if let Some(entry) = self.card_image_states.get_mut(bare_key) {
-                entry.protocols.insert(suffix, proto);
-                entry.applied_logo_key = logo_key;
-            }
-        }
-        self.card_image_states
-            .get_mut(bare_key)?
-            .protocols
-            .get_mut(suffix)
-    }
-
     fn build_protocol(
         &self,
         bare_key: &str,
@@ -243,82 +418,9 @@ impl ImageCache {
             Some(ProtocolType::Halfblocks) | None => "halfblock",
         }
     }
-}
 
-impl App {
-    /// Spawn queued image fetches until the in-flight limit is reached. Called
-    /// whenever an in-flight fetch completes and frees a slot (see the card-image
-    /// receiver in `images.rs`).
-    pub(in crate::app) fn drain_image_fetches(&mut self) {
-        while self.images.image_fetches_active < MAX_IMAGE_FETCHES {
-            let Some(req) = self.images.pending_image_fetches.pop_front() else {
-                break;
-            };
-            self.spawn_image_fetch(req);
-        }
-    }
-
-    pub(super) fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
-        self.images.image_fetches_active += 1;
-        let (server_url, token) = if matches!(req.source, ImageSource::Emby) {
-            let Some(client) = self.emby_client() else {
-                self.images.image_fetches_active =
-                    self.images.image_fetches_active.saturating_sub(1);
-                let _ = self.images.card_image_tx.send((req.cache_key, None));
-                return;
-            };
-            let c = client.lock().unwrap();
-            (c.config.server_url.clone(), c.token.clone())
-        } else {
-            (String::new(), String::new())
-        };
-        let tx = self.images.card_image_tx.clone();
-        std::thread::spawn(move || {
-            // catch_unwind so a panic during fetch/decode still reports a result,
-            // freeing the in-flight slot and the loading reservation (H9). Exactly
-            // one message is sent per spawn, so the receiver can balance the count.
-            let cache_key = req.cache_key.clone();
-            let cache_key_outer = cache_key.clone();
-            let tx_outer = tx.clone();
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                let bytes = fetch_image_bytes(req, &server_url, &token);
-                // Decode off the UI thread; the main loop only builds the protocol.
-                let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
-                let _ = tx.send((cache_key, img));
-            }));
-            if result.is_err() {
-                let _ = tx_outer.send((cache_key_outer, None));
-            }
-        });
-    }
-}
-
-impl ImageCache {
     pub(in crate::app) fn images_enabled(&self) -> bool {
         self.image_protocol_enabled
-    }
-
-    /// The active picker's terminal font size — the cell-to-pixel ratio the
-    /// hero cover fit's box pixels derive from. Falls back to the halfblock
-    /// picker and then the picker constructor's default.
-    pub(in crate::app) fn image_font_size(&self, suffix: &'static str) -> ratatui_image::FontSize {
-        self.picker_for_suffix(suffix)
-            .map_or(ratatui_image::FontSize::new(10, 20), Picker::font_size)
-    }
-
-    /// One hero artwork box's pixel size from its cell size (task 5.10,
-    /// design D5's cover-fit input).
-    pub(in crate::app) fn hero_box_pixels(
-        &self,
-        box_w: u16,
-        box_h: u16,
-        suffix: &'static str,
-    ) -> (u32, u32) {
-        let font = self.image_font_size(suffix);
-        (
-            u32::from(box_w) * u32::from(font.width.max(1)),
-            u32::from(box_h) * u32::from(font.height.max(1)),
-        )
     }
 
     /// Resolve an optional Logo cache key to the key of a Logo that has decoded
@@ -348,98 +450,6 @@ impl ImageCache {
             return img;
         };
         crate::app::infra::images::composite_landscape_logo(&img, logo)
-    }
-
-    /// Ensure the hero cover-fit protocol for `cache_key` matches
-    /// `box_cells` (task 5.10, design D5): the protocol is rebuilt from the
-    /// decoded source through `cover_fill_hero_box` at the box's pixel size
-    /// whenever the box changed (resize, split drag, Workspace shrink — the
-    /// next sync pass's "re-encode request keyed by the new box size"), and
-    /// the painters show the placeholder for at most that one frame.
-    /// Returns whether a ready protocol is available.
-    pub(in crate::app) fn ensure_hero_cover_protocol(
-        &mut self,
-        cache_key: &str,
-        box_cells: (u16, u16),
-        logo_cache_key: Option<&str>,
-        suffix: &'static str,
-    ) -> bool {
-        let Some(entry) = self.card_image_states.get(cache_key) else {
-            return false;
-        };
-        let Some(source) = entry.img.clone() else {
-            return false;
-        };
-        let desired_logo_key = self.ready_logo_key(logo_cache_key);
-        if entry.cover_box == Some(box_cells)
-            && entry.applied_logo_key == desired_logo_key
-            && !entry.protocols.is_empty()
-        {
-            return true;
-        }
-        let Some(picker) = self.picker_for_suffix(suffix).cloned() else {
-            return false;
-        };
-        let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1, suffix);
-        let cropped = self.decorate_with_logo(
-            cover_fill_hero_box(&source, px_w, px_h),
-            desired_logo_key.as_deref(),
-        );
-        let bare_key = cache_key.to_string();
-        let proto = self.build_protocol(&bare_key, suffix, &picker, cropped);
-        if let Some(entry) = self.card_image_states.get_mut(cache_key) {
-            entry.protocols.clear();
-            entry.protocols.insert(suffix, proto);
-            entry.cover_box = Some(box_cells);
-            entry.applied_logo_key = desired_logo_key;
-        }
-        true
-    }
-
-    /// Paints the panel's retained hero image paint (task 5.10, design D9):
-    /// the cached protocol rendered into the projected box (cover-fit keyed
-    /// by the box at the projection), or — while that one frame's encode is
-    /// still completing — the shared loading placeholder in the same box, so
-    /// the placeholder never shows for more than the one frame the spec
-    /// allows.
-    pub(in crate::app) fn paint_panel_hero_image(
-        &mut self,
-        f: &mut ratatui::Frame,
-        paint: &crate::app::components::library_panel::PanelHeroImagePaint,
-        suffix: &'static str,
-    ) {
-        if paint.area.width == 0 || paint.area.height == 0 {
-            return;
-        }
-        if let Some(state) = self.cached_image_protocol_mut(&paint.cache_key, suffix) {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-            let avail = ratatui::layout::Size {
-                width: paint.area.width,
-                height: paint.area.height,
-            };
-            if let Some(actual) =
-                state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
-            {
-                let img_rect = ratatui::layout::Rect {
-                    x: paint.area.x + paint.area.width.saturating_sub(actual.width) / 2,
-                    y: paint.area.y,
-                    width: actual.width,
-                    height: actual.height,
-                };
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                    img_rect,
-                    state,
-                );
-                return;
-            }
-        }
-        f.render_widget(
-            ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(
-                palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false).fill,
-            )),
-            paint.area,
-        );
     }
 }
 
@@ -613,17 +623,13 @@ mod protocol_tests {
     fn arriving_logo_rebuilds_base_only_protocol_once() {
         let mut app = app_with_base();
 
-        assert!(app
-            .images
-            .ensure_hero_cover_protocol(BASE_KEY, BOX, None, "kitty"));
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
         assert_eq!(build_count(&app), 1);
 
         app.images
             .card_image_states
             .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
-        assert!(app
-            .images
-            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&app), 2);
         assert_eq!(
             app.images
@@ -633,21 +639,15 @@ mod protocol_tests {
             Some(LOGO_KEY)
         );
 
-        assert!(app
-            .images
-            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&app), 2);
     }
 
     #[test]
     fn failed_or_absent_logo_keeps_base_only_protocol_valid() {
         let mut absent = app_with_base();
-        assert!(absent
-            .images
-            .ensure_hero_cover_protocol(BASE_KEY, BOX, None, "kitty"));
-        assert!(absent
-            .images
-            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
+        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
+        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&absent), 1);
         assert!(absent
             .images
@@ -660,12 +660,8 @@ mod protocol_tests {
             .images
             .card_image_states
             .insert(LOGO_KEY.to_owned(), CachedImage::empty());
-        assert!(failed
-            .images
-            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
-        assert!(failed
-            .images
-            .ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY), "kitty"));
+        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
         assert_eq!(build_count(&failed), 1);
         assert!(failed
             .images

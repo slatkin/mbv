@@ -512,10 +512,7 @@ impl Model {
             .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
             .and_then(LibraryPanel::take_image_paint);
         if let Some(paint) = image_paint {
-            let suffix = self.app.current_protocol_suffix();
-            self.app
-                .images
-                .paint_panel_hero_image(frame, &paint, suffix);
+            self.app.paint_panel_hero_image(frame, &paint);
         }
     }
 
