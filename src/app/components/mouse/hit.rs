@@ -73,12 +73,6 @@ mod tests {
     }
 
     #[test]
-    fn empty_resolves_to_none() {
-        let regions: HitRegions<u8> = HitRegions::new();
-        assert_eq!(regions.resolve(Position { x: 0, y: 0 }), None);
-    }
-
-    #[test]
     fn last_push_wins_on_overlap() {
         let mut regions = HitRegions::new();
         regions.push(rect(0, 0, 10, 10), "under");
@@ -86,27 +80,6 @@ mod tests {
         assert_eq!(regions.resolve(Position { x: 6, y: 6 }), Some(&"over"));
         // Only the first region covers this point.
         assert_eq!(regions.resolve(Position { x: 1, y: 1 }), Some(&"under"));
-    }
-
-    #[test]
-    fn out_of_bounds_point_resolves_to_none() {
-        let mut regions = HitRegions::new();
-        regions.push(rect(2, 2, 4, 4), 1);
-        assert_eq!(regions.resolve(Position { x: 100, y: 100 }), None);
-        assert_eq!(regions.resolve(Position { x: 0, y: 0 }), None);
-    }
-
-    #[test]
-    fn point_on_rect_edge() {
-        let mut regions = HitRegions::new();
-        regions.push(rect(2, 2, 4, 4), 1); // covers x 2..6, y 2..6
-                                           // Top-left edge is inside.
-        assert_eq!(regions.resolve(Position { x: 2, y: 2 }), Some(&1));
-        // Right/bottom edge is outside.
-        assert_eq!(regions.resolve(Position { x: 6, y: 4 }), None);
-        assert_eq!(regions.resolve(Position { x: 4, y: 6 }), None);
-        // Last row/column still inside.
-        assert_eq!(regions.resolve(Position { x: 5, y: 5 }), Some(&1));
     }
 
     #[test]

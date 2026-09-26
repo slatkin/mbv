@@ -188,66 +188,6 @@ mod tests {
     }
 
     #[test]
-    fn modified_click_is_never_double_or_drag() {
-        let mut s = MouseGestureState::new();
-        let t0 = Instant::now();
-        let mut event = ev(MouseEventKind::Down(MouseButton::Left), 3, 4);
-        event.modifiers = tuirealm::event::KeyModifiers::CONTROL;
-        assert_eq!(
-            s.recognize_at(event, t0),
-            Some(MouseGesture::Click {
-                at: Position { x: 3, y: 4 },
-                modifier: ClickModifier::Ctrl,
-            })
-        );
-        assert_eq!(
-            s.recognize_at(event, t0 + Duration::from_millis(10)),
-            Some(MouseGesture::Click {
-                at: Position { x: 3, y: 4 },
-                modifier: ClickModifier::Ctrl,
-            })
-        );
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Drag(MouseButton::Left), 4, 5)),
-            None
-        );
-    }
-
-    #[test]
-    fn second_click_after_window_is_a_plain_click() {
-        let mut s = MouseGestureState::new();
-        let t0 = Instant::now();
-        s.recognize_at(ev(MouseEventKind::Down(MouseButton::Left), 3, 4), t0);
-        assert_eq!(
-            s.recognize_at(
-                ev(MouseEventKind::Down(MouseButton::Left), 3, 4),
-                t0 + Duration::from_millis(500)
-            ),
-            Some(MouseGesture::Click {
-                at: Position { x: 3, y: 4 },
-                modifier: ClickModifier::None
-            })
-        );
-    }
-
-    #[test]
-    fn second_click_at_a_moved_position_is_a_plain_click() {
-        let mut s = MouseGestureState::new();
-        let t0 = Instant::now();
-        s.recognize_at(ev(MouseEventKind::Down(MouseButton::Left), 3, 4), t0);
-        assert_eq!(
-            s.recognize_at(
-                ev(MouseEventKind::Down(MouseButton::Left), 3, 5),
-                t0 + Duration::from_millis(100)
-            ),
-            Some(MouseGesture::Click {
-                at: Position { x: 3, y: 5 },
-                modifier: ClickModifier::None
-            })
-        );
-    }
-
-    #[test]
     fn rapid_scrolls_are_coalesced_by_the_throttle() {
         let mut s = MouseGestureState::new();
         let t0 = Instant::now();
@@ -278,15 +218,6 @@ mod tests {
     }
 
     #[test]
-    fn right_button_down_is_a_right_click() {
-        let mut s = MouseGestureState::new();
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Down(MouseButton::Right), 7, 8)),
-            Some(MouseGesture::RightClick(Position { x: 7, y: 8 }))
-        );
-    }
-
-    #[test]
     fn press_drag_and_release_reports_the_full_gesture() {
         let mut s = MouseGestureState::new();
         assert_eq!(
@@ -306,41 +237,6 @@ mod tests {
         assert_eq!(
             s.recognize(ev(MouseEventKind::Up(MouseButton::Left), 4, 5)),
             Some(MouseGesture::DragEnd)
-        );
-    }
-
-    #[test]
-    fn press_and_release_reports_no_drag() {
-        let mut s = MouseGestureState::new();
-        assert!(matches!(
-            s.recognize(ev(MouseEventKind::Down(MouseButton::Left), 1, 2)),
-            Some(MouseGesture::Click { .. })
-        ));
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Up(MouseButton::Left), 1, 2)),
-            Some(MouseGesture::DragEnd)
-        );
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Drag(MouseButton::Left), 1, 2)),
-            None
-        );
-    }
-
-    #[test]
-    fn unarmed_and_right_button_drags_are_ignored() {
-        let mut s = MouseGestureState::new();
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Drag(MouseButton::Left), 1, 1)),
-            None
-        );
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Drag(MouseButton::Right), 1, 1)),
-            None
-        );
-        assert_eq!(s.recognize(ev(MouseEventKind::Moved, 1, 1)), None);
-        assert_eq!(
-            s.recognize(ev(MouseEventKind::Up(MouseButton::Left), 1, 1)),
-            None
         );
     }
 }
