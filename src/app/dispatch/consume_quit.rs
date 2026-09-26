@@ -21,15 +21,7 @@ impl App {
                 if let Some(playlist_id) = playlist_id {
                     let deadline = Instant::now()
                         + Duration::from_secs(self.config.lock().unwrap().quit_timeout_secs);
-                    while self.playlist_mutations.contains_key(&playlist_id)
-                        && Instant::now() < deadline
-                    {
-                        let remaining = deadline.saturating_duration_since(Instant::now());
-                        match self.sessions_rx.recv_timeout(remaining) {
-                            Ok(event) => self.handle_session_event(event),
-                            Err(_) => break,
-                        }
-                    }
+                    self.wait_for_playlist_mutations(&playlist_id, deadline);
                 }
             } else {
                 self.on_queue_replace_silent();
@@ -41,6 +33,16 @@ impl App {
             self.player.stop();
         }
         true
+    }
+
+    fn wait_for_playlist_mutations(&mut self, playlist_id: &str, deadline: Instant) {
+        while self.playlist_mutations.contains_key(playlist_id) && Instant::now() < deadline {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match self.sessions_rx.recv_timeout(remaining) {
+                Ok(event) => self.handle_session_event(event),
+                Err(_) => break,
+            }
+        }
     }
 
     /// Called when a video item is removed from the queue because "consume" is enabled.

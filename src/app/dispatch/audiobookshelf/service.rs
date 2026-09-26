@@ -3,6 +3,21 @@ use crate::app::App;
 use mbv_core::config::QueueState;
 use mbv_core::service_runtime::ServiceState;
 
+fn forward_audiobookshelf_updates<T, F>(
+    receiver: std::sync::mpsc::Receiver<T>,
+    sender: std::sync::mpsc::Sender<crate::app::state::types::events::LibEvent>,
+    event: F,
+) where
+    T: Send + 'static,
+    F: Fn(T) -> crate::app::state::types::events::LibEvent + Send + 'static,
+{
+    for update in receiver {
+        if sender.send(event(update)).is_err() {
+            break;
+        }
+    }
+}
+
 impl App {
     fn update_local_audiobookshelf_context(
         &self,
@@ -331,37 +346,23 @@ impl App {
                 let (sender, receiver) = std::sync::mpsc::channel();
                 let context = context.with_progress_updates(sender);
                 let lib_tx = self.lib_tx.clone();
-                let _ =
-                    std::thread::spawn(move || {
-                        for update in receiver {
-                            if lib_tx
-                            .send(crate::app::state::types::events::LibEvent::AudiobookshelfProgressAcknowledged(
-                                update,
-                            ))
-                            .is_err()
-                        {
-                            break;
-                        }
-                        }
-                    });
+                let _ = std::thread::spawn(move || {
+                    forward_audiobookshelf_updates(
+                        receiver,
+                        lib_tx,
+                        crate::app::state::types::events::LibEvent::AudiobookshelfProgressAcknowledged,
+                    );
+                });
                 let (book_sender, book_receiver) = std::sync::mpsc::channel();
                 let context = context.with_book_progress_updates(book_sender);
                 let lib_tx = self.lib_tx.clone();
-                let _ =
-                    std::thread::spawn(move || {
-                        for update in book_receiver {
-                            if lib_tx
-                            .send(
-                                crate::app::state::types::events::LibEvent::AudiobookshelfBookProgressAcknowledged(
-                                    update,
-                                ),
-                            )
-                            .is_err()
-                        {
-                            break;
-                        }
-                        }
-                    });
+                let _ = std::thread::spawn(move || {
+                    forward_audiobookshelf_updates(
+                        book_receiver,
+                        lib_tx,
+                        crate::app::state::types::events::LibEvent::AudiobookshelfBookProgressAcknowledged,
+                    );
+                });
                 context
             })
         });

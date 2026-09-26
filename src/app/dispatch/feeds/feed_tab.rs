@@ -34,6 +34,12 @@ impl App {
         self.feed_tab.entries.resize_with(n, Vec::new);
     }
 
+    fn replace_feed_entries(&mut self, index: usize, entries: Vec<FeedEntry>) {
+        if let Some(slot) = self.feed_tab.entries.get_mut(index) {
+            *slot = entries;
+        }
+    }
+
     /// Drain completed background fetch results from the channel.
     pub(in crate::app) fn drain_feed_tab_results(&mut self) -> bool {
         let mut had_events = false;
@@ -56,9 +62,7 @@ impl App {
                 match result.entries {
                     Ok(mut entries) => {
                         self.hydrate_feed_entries_for_subscription(&feed_id, &mut entries);
-                        if let Some(slot) = self.feed_tab.entries.get_mut(idx) {
-                            *slot = entries;
-                        }
+                        self.replace_feed_entries(idx, entries);
                     }
                     Err(e) => {
                         self.flash(

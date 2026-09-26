@@ -9,6 +9,10 @@ use crate::app::{
 mod audiobookshelf;
 mod browse_loads;
 
+fn feed_home_video_selection(state: &FeedHomeVideoState) -> (usize, usize, usize) {
+    (state.selected_group, state.video_cursor, state.video_scroll)
+}
+
 impl App {
     pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
         let Some(ev) = self.handle_audiobookshelf_event(ev) else {
@@ -98,12 +102,13 @@ impl App {
                 parent_id,
                 items,
             } => {
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last.parent_id == parent_id {
-                            last.all_items = Some(items);
-                        }
-                    }
+                if let Some(last) = self
+                    .libs
+                    .get_mut(lib_idx)
+                    .and_then(|lib| lib.nav_stack.last_mut())
+                    .filter(|last| last.parent_id == parent_id)
+                {
+                    last.all_items = Some(items);
                 }
                 // The whole-library corpus is exactly what a pending Series
                 // landing was waiting for (U2 correction).
@@ -126,10 +131,7 @@ impl App {
                         let (selected_group, video_cursor, video_scroll) = lib
                             .feed_home_video
                             .as_ref()
-                            .map(|state| {
-                                (state.selected_group, state.video_cursor, state.video_scroll)
-                            })
-                            .unwrap_or((0, 0, 0));
+                            .map_or((0, 0, 0), feed_home_video_selection);
                         lib.feed_home_video = Some(FeedHomeVideoState {
                             all_items,
                             groups,
@@ -153,6 +155,13 @@ impl App {
                 None
             }
             ev => Some(ev),
+        }
+    }
+
+    fn cache_nonempty_album_artist(&mut self, album_id: &str, artist: &str) {
+        if !artist.is_empty() {
+            self.album_artist_cache
+                .insert(album_id.to_string(), artist.to_string());
         }
     }
 
@@ -250,10 +259,7 @@ impl App {
                         // free to settle via the fallback path instead. It
                         // still advances candidates (as a known-unknown) so
                         // one arrival resolves every waiting album at once.
-                        if !artist.is_empty() {
-                            self.album_artist_cache
-                                .insert(album_id.clone(), artist.clone());
-                        }
+                        self.cache_nonempty_album_artist(&album_id, &artist);
                         self.advance_music_grouping_candidates(&album_id, &artist);
                     }
                     self.album_artist_levels

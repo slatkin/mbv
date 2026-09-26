@@ -86,6 +86,20 @@ fn build_tv_upcoming_level<S: TvUpcomingSource>(
 }
 
 impl App {
+    fn refresh_completed_feed_home_videos(&mut self, item_id: &str) {
+        for lib_idx in 0..self.libs.len() {
+            if self.is_feed_home_video_group_view(lib_idx)
+                || self.is_feed_home_video_library(lib_idx)
+            {
+                self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
+                if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                    state.loading = true;
+                }
+                self.log_feed_home_video_state(lib_idx, "refresh_after_stop_completed");
+            }
+        }
+    }
+
     pub(in crate::app) fn refresh_after_stop(&mut self) {
         if let Ok(content) = self.fetch_home() {
             // The fetch runs synchronously (order-sensitive side
@@ -96,18 +110,8 @@ impl App {
                 .send(LibEvent::HomeContentRefreshed(Box::new(content)));
         }
         if self.last_played_completed {
-            if let Some(ref item_id) = self.last_played_item_id.clone() {
-                for lib_idx in 0..self.libs.len() {
-                    if self.is_feed_home_video_group_view(lib_idx)
-                        || self.is_feed_home_video_library(lib_idx)
-                    {
-                        self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
-                        if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-                            state.loading = true;
-                        }
-                        self.log_feed_home_video_state(lib_idx, "refresh_after_stop_completed");
-                    }
-                }
+            if let Some(item_id) = self.last_played_item_id.clone() {
+                self.refresh_completed_feed_home_videos(&item_id);
             }
         }
         let fetches: Vec<BrowseRefresh> = self

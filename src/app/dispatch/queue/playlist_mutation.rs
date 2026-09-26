@@ -376,14 +376,15 @@ impl App {
             // Apply locally-saved positions where they are fresher than what Emby returned.
             // Emby's UserData may lag by up to a few seconds after a Stopped report.
             for item in &mut items {
-                if let Some(&saved_pos) = positions.get(&item.id) {
-                    if saved_pos > item.playback_position_ticks {
-                        log::info!(target: "player", "restore: applying saved pos={}s (Emby had {}s) for item={}",
-                            saved_pos / mbv_core::api::TICKS_PER_SECOND,
-                            item.playback_position_ticks / mbv_core::api::TICKS_PER_SECOND,
-                            item.id);
-                        item.playback_position_ticks = saved_pos;
-                    }
+                if let Some(&saved_pos) = positions
+                    .get(&item.id)
+                    .filter(|&&saved_pos| saved_pos > item.playback_position_ticks)
+                {
+                    log::info!(target: "player", "restore: applying saved pos={}s (Emby had {}s) for item={}",
+                        saved_pos / mbv_core::api::TICKS_PER_SECOND,
+                        item.playback_position_ticks / mbv_core::api::TICKS_PER_SECOND,
+                        item.id);
+                    item.playback_position_ticks = saved_pos;
                 }
             }
             let _ = tx.send(LibEvent::QueueEnriched { items });

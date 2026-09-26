@@ -395,11 +395,12 @@ impl App {
                 && !item.series_id.is_empty()
                 && self.player.always_play_next
             {
-                if let Some(episodes) = self.series_episodes_from(&item) {
-                    if episodes.len() > 1 {
-                        self.defer_local_play(episodes, 0, crate::config::QueueSource::Series);
-                        return;
-                    }
+                if let Some(episodes) = self
+                    .series_episodes_from(&item)
+                    .filter(|episodes| episodes.len() > 1)
+                {
+                    self.defer_local_play(episodes, 0, crate::config::QueueSource::Series);
+                    return;
                 }
             }
             self.defer_local_play(vec![item], 0, self.queue_source.clone());

@@ -25,9 +25,8 @@ impl App {
                     Ok(page) => {
                         state.append_page_books(page.page, page.total, page.items);
                         next_page = state.needs_page();
-                        if !state.detail_loading {
-                            selected_detail = state.selected_id.clone();
-                        }
+                        selected_detail =
+                            state.selected_id.clone().filter(|_| !state.detail_loading);
                     }
                     Err(error) => state.error = Some(error.to_string()),
                 }

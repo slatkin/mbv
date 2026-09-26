@@ -2,6 +2,29 @@ use crate::app::state::types::browse::BrowseResting;
 use crate::app::{App, BrowseLevel, LibEvent, PAGE_SIZE};
 use mbv_core::api::EmbyItem;
 
+fn restored_tv_content_mode(
+    is_tv_library: bool,
+    library_total: Option<usize>,
+    saved_mode: Option<&mbv_core::config::TvContentMode>,
+) -> Option<mbv_core::config::TvContentMode> {
+    is_tv_library.then(|| {
+        crate::app::render::resolve_tv_content_mode(library_total.unwrap_or_default(), saved_mode)
+    })
+}
+
+fn restored_letter_filter(
+    index: Option<usize>,
+    kind: crate::app::render::LetterFilterKind,
+) -> Option<crate::app::render::LetterFilter> {
+    let index = index?;
+    if kind == crate::app::render::LetterFilterKind::Tv
+        && index >= crate::app::render::LetterFilter::count_for_kind(kind)
+    {
+        return None;
+    }
+    crate::app::render::LetterFilter::for_index_for_kind(index, kind)
+}
+
 pub(in crate::app) fn retain_grouped_music_items(items: &mut Vec<EmbyItem>, grouped_music: bool) {
     if grouped_music {
         items.retain(|item| !(item.is_folder && item.child_count == Some(0)));
@@ -40,13 +63,13 @@ impl App {
                         self.libs[idx].library.collection_type.as_str(),
                     );
                     self.libs[idx].library_total = root.library_total;
-                    self.libs[idx].tv_content_mode =
-                        (self.libs[idx].library.collection_type == "tvshows").then(|| {
-                            crate::app::render::resolve_tv_content_mode(
-                                root.library_total.unwrap_or_default(),
-                                root.tv_content_mode.as_ref(),
-                            )
-                        });
+                    self.libs[idx].tv_content_mode = restored_tv_content_mode(
+                        self.libs[idx].library.collection_type == "tvshows",
+                        root.library_total,
+                        root.tv_content_mode.as_ref(),
+                    );
+                    let letter_filter =
+                        restored_letter_filter(root.letter_filter_index, filter_kind);
                     self.libs[idx].nav_stack.push(BrowseLevel {
                         parent_id: root.parent_id.clone(),
                         title: root.title.clone(),
@@ -61,19 +84,7 @@ impl App {
                         loading: true,
 
                         all_items: None,
-                        letter_filter: root.letter_filter_index.and_then(|index| {
-                            if filter_kind == crate::app::render::LetterFilterKind::Tv
-                                && index
-                                    >= crate::app::render::LetterFilter::count_for_kind(filter_kind)
-                            {
-                                None
-                            } else {
-                                crate::app::render::LetterFilter::for_index_for_kind(
-                                    index,
-                                    filter_kind,
-                                )
-                            }
-                        }),
+                        letter_filter,
                         tv_content_mode: root.tv_content_mode.clone(),
                         music_grouping: None,
                     });

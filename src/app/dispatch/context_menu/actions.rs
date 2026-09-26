@@ -316,33 +316,8 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
-                if played {
-                    // `lib_idx` is the explicitly matched Emby library from
-                    // the action dispatch (`None` on Home/queue). If guard:
-                    // no feed/video cleanup when there is no Emby library.
-                    if let Some(lib_idx) = lib_idx {
-                        if self.is_feed_home_video_group_view(lib_idx) {
-                            if let Some(state) = self
-                                .libs
-                                .get_mut(lib_idx)
-                                .and_then(|lib| lib.feed_home_video.as_mut())
-                            {
-                                state.loading = true;
-                            }
-                            self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
-                            self.log_feed_home_video_state(lib_idx, "context_set_played_feed");
-                        } else if let Some(lvl) = self
-                            .libs
-                            .get_mut(lib_idx)
-                            .and_then(|l| l.nav_stack.last_mut())
-                        {
-                            if lvl.unplayed_only {
-                                let id = item_id.to_string();
-                                lvl.items.retain(|i| i.id != id);
-                                lvl.total_count = lvl.total_count.saturating_sub(1);
-                            }
-                        }
-                    }
+                if let Some(lib_idx) = lib_idx.filter(|_| played) {
+                    self.remove_played_item_from_library(lib_idx, item_id);
                 }
                 if self.tab.is_home() {
                     match self.fetch_home() {
@@ -365,6 +340,30 @@ impl App {
                 format!("Couldn't update play status: {e}"),
                 ToastSeverity::Error,
             ),
+        }
+    }
+
+    fn remove_played_item_from_library(&mut self, lib_idx: usize, item_id: &str) {
+        if self.is_feed_home_video_group_view(lib_idx) {
+            if let Some(state) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.feed_home_video.as_mut())
+            {
+                state.loading = true;
+            }
+            self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
+            self.log_feed_home_video_state(lib_idx, "context_set_played_feed");
+        } else if let Some(lvl) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        {
+            if lvl.unplayed_only {
+                let id = item_id.to_string();
+                lvl.items.retain(|item| item.id != id);
+                lvl.total_count = lvl.total_count.saturating_sub(1);
+            }
         }
     }
 
@@ -467,20 +466,7 @@ impl App {
         match result {
             Ok(()) => {
                 if !item.played {
-                    if self.is_feed_home_video_group_view(lib_idx) {
-                        if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
-                            state.loading = true;
-                        }
-                        self.remove_item_from_feed_home_video_cache(lib_idx, &item.id);
-                        self.log_feed_home_video_state(lib_idx, "toggle_watched_feed");
-                    } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-                        if lvl.unplayed_only {
-                            if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
-                                lvl.items.remove(pos);
-                                lvl.total_count = lvl.total_count.saturating_sub(1);
-                            }
-                        }
-                    }
+                    self.remove_watched_item_from_library(lib_idx, &item.id);
                 }
                 self.refresh_lib(lib_idx);
             }
@@ -488,6 +474,23 @@ impl App {
                 format!("Couldn't update play status: {e}"),
                 ToastSeverity::Error,
             ),
+        }
+    }
+
+    fn remove_watched_item_from_library(&mut self, lib_idx: usize, item_id: &str) {
+        if self.is_feed_home_video_group_view(lib_idx) {
+            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                state.loading = true;
+            }
+            self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
+            self.log_feed_home_video_state(lib_idx, "toggle_watched_feed");
+        } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            if lvl.unplayed_only {
+                if let Some(pos) = lvl.items.iter().position(|item| item.id == item_id) {
+                    lvl.items.remove(pos);
+                    lvl.total_count = lvl.total_count.saturating_sub(1);
+                }
+            }
         }
     }
 

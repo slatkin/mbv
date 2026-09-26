@@ -336,9 +336,11 @@ impl App {
                 lib.nav_stack.pop();
                 if let (Some(folder_id), Some(parent)) = (child_folder_id, lib.nav_stack.last_mut())
                 {
-                    if let Some(idx) = parent.items.iter().position(|i| i.id == folder_id) {
-                        parent.set_resting_cursor(idx);
-                    }
+                    let _ = parent
+                        .items
+                        .iter()
+                        .position(|i| i.id == folder_id)
+                        .map(|idx| parent.set_resting_cursor(idx));
                 }
                 true
             } else {
@@ -370,9 +372,11 @@ impl App {
                 if let (Some(fid), Some(parent)) =
                     (child_id2, self.libs[lib_idx].nav_stack.last_mut())
                 {
-                    if let Some(idx) = parent.items.iter().position(|i| i.id == fid) {
-                        parent.set_resting_cursor(idx);
-                    }
+                    let _ = parent
+                        .items
+                        .iter()
+                        .position(|i| i.id == fid)
+                        .map(|idx| parent.set_resting_cursor(idx));
                 }
             }
         }
