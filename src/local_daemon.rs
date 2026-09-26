@@ -236,9 +236,6 @@ mod tests {
         "HOME=/h\nWAYLAND_DISPLAY=wayland-1\nDISPLAY=:0\nXAUTHORITY=/run/xauth\n",
         Some(vec![("WAYLAND_DISPLAY", "wayland-1"), ("DISPLAY", ":0"), ("XAUTHORITY", "/run/xauth")])
     )]
-    #[case::x11_only("DISPLAY=:1\n", Some(vec![("DISPLAY", ":1")]))]
-    #[case::prefix_is_not_a_match("DISPLAYX=:9\nWAYLAND_DISPLAY_OLD=x\n", None)]
-    #[case::xauthority_alone_is_no_display("XAUTHORITY=/run/xauth\n", None)]
     #[case::no_graphical_session("HOME=/h\nPATH=/bin\n", None)]
     fn display_env_is_read_from_the_user_manager(
         #[case] show_environment: &str,

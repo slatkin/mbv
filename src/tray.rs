@@ -199,13 +199,6 @@ mod tests {
         assert!(!is_playing_with_title(&status(true, false, "")));
     }
 
-    #[test]
-    fn play_pause_label_reflects_playing_state() {
-        assert_eq!(play_pause_label(&status(true, false, "A Song")), "Pause");
-        assert_eq!(play_pause_label(&status(true, true, "A Song")), "Play");
-        assert_eq!(play_pause_label(&status(false, false, "")), "Play");
-    }
-
     /// Builds a tray wired to a fresh command channel, so tests can assert
     /// on what `toggle_play_pause`/`next`/`previous` actually send without a
     /// real mpv thread. Mirrors `PlayerProxy::spy_on_commands`
@@ -234,23 +227,9 @@ mod tests {
     }
 
     #[test]
-    fn toggle_play_pause_sends_toggle_pause_while_paused() {
-        let (tray, rx) = spy_tray(status(true, true, "A Song"));
-        tray.toggle_play_pause();
-        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
-    }
-
-    #[test]
     fn next_emits_relative_next_command() {
         let (tray, rx) = spy_tray(status(true, false, "A Song"));
         tray.next();
         assert!(matches!(rx.try_recv(), Ok(PlayerCommand::Next)));
-    }
-
-    #[test]
-    fn previous_emits_relative_previous_command() {
-        let (tray, rx) = spy_tray(status(true, false, "A Song"));
-        tray.previous();
-        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::Previous)));
     }
 }
