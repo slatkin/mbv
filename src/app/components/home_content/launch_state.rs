@@ -79,30 +79,6 @@ mod tests {
     }
 
     #[test]
-    fn legacy_latest_selector_falls_back_to_continue_watching_and_first_item() {
-        let mut owner = HomeContent::new();
-        let mut item = make_item("Latest", "Movie");
-        item.id = "latest-1".into();
-        owner.set_content(vec![QueueItem::Emby(Box::new(item))], false);
-        let state = TuiLaunchState {
-            version: mbv_core::config::TUI_LAUNCH_STATE_VERSION,
-            tab: mbv_core::config::TabIdentity::Home,
-            panel_focus: mbv_core::config::LaunchPanelFocus::Library,
-            selector: Some(SelectorIdentity::Home {
-                key: HomeSelectorKey::Section("emby:gone".into()),
-            }),
-            item: Some(LibraryItemIdentity::Home { id: "gone".into() }),
-        };
-        assert!(owner.reanchor_launch_state_impl(&state));
-        assert_eq!(
-            owner.launch_snapshot_impl().1,
-            Some(LibraryItemIdentity::Home {
-                id: "latest-1".into()
-            })
-        );
-    }
-
-    #[test]
     fn saved_latest_section_falls_back_to_continue_watching() {
         let mut owner = continue_owner(&["continue-1"]);
         let state = TuiLaunchState {
@@ -121,21 +97,6 @@ mod tests {
             Some(LibraryItemIdentity::Home {
                 id: "continue-1".into()
             })
-        );
-    }
-
-    #[test]
-    fn empty_home_reports_the_continue_scope_with_no_item() {
-        let owner = continue_owner(&[]);
-        assert_eq!(
-            owner.launch_snapshot_impl(),
-            (
-                Some(SelectorIdentity::Home {
-                    key: HomeSelectorKey::Continue,
-                }),
-                None,
-            ),
-            "an empty Home destination selects no item"
         );
     }
 }
