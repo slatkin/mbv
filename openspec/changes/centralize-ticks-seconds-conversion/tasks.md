@@ -2,8 +2,8 @@
 
 ## 1. Conversion API (mbv-core)
 
-- [ ] 1.1 In `crates/mbv-core/src/api/types.rs`, add beside `TICKS_PER_SECOND`: the `TICKS_PER_SECOND_F64` const, `ticks_to_seconds(i64) -> f64` (the family's single `#[expect(clippy::cast_precision_loss)]` + 2^53-exactness domain doc), `i64_ticks_saturating(f64) -> i64` (promote `saturating_i64_from_f64` from `crates/mbv-core/src/player.rs:84`), and `seconds_to_ticks(f64) -> i64`. Delete the private copy in `player.rs` and the duplicated private copy in `crates/mbv-core/src/daemon/audiobookshelf.rs:10`, repointing in-crate callers. Verify: `cargo check -p mbv-core`, `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core`.
-- [ ] 1.2 Unit test in `api/types.rs` owning the round-trip/exactness contract: `TICKS_PER_SECOND_F64 == TICKS_PER_SECOND as f64`; `ticks_to_seconds`→`seconds_to_ticks` identity for representative values (0, 1 s, 24 h); saturation at f64 extremes (NaN→0, ±huge→clamped). Verify: `cargo nextest run -p mbv-core`.
+- [x] 1.1 In `crates/mbv-core/src/api/types.rs`, add beside `TICKS_PER_SECOND`: the `TICKS_PER_SECOND_F64` const, `ticks_to_seconds(i64) -> f64` (the family's single `#[expect(clippy::cast_precision_loss)]` + 2^53-exactness domain doc), `i64_ticks_saturating(f64) -> i64` (promote `saturating_i64_from_f64` from `crates/mbv-core/src/player.rs:84`), and `seconds_to_ticks(f64) -> i64`. Delete the private copy in `player.rs` and the duplicated private copy in `crates/mbv-core/src/daemon/audiobookshelf.rs:10`, repointing in-crate callers. Verify: `cargo check -p mbv-core`, `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core`.
+- [x] 1.2 Unit test in `api/types.rs` owning the round-trip/exactness contract: `TICKS_PER_SECOND_F64 == TICKS_PER_SECOND as f64`; `ticks_to_seconds`→`seconds_to_ticks` identity for representative values (0, 1 s, 24 h); saturation at f64 extremes (NaN→0, ±huge→clamped). Verify: `cargo nextest run -p mbv-core`.
 
 ## 2. Family A — ticks→seconds (~19 sites)
 
