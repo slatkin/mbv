@@ -428,7 +428,13 @@ impl PlaybackRun {
             return;
         }
         for slot in &new_items {
-            let url = mpv_url_for_queue_item(&slot.item, &self.server_url, &self.token);
+            let Some(source) = slot.item.mpv_url_source() else {
+                let reason = "Queue append rejected: item has no direct mpv URL source".to_string();
+                log::warn!(target: "player", "{reason}");
+                let _ = self.event_tx.send(PlayerEvent::CommandRejected(reason));
+                return;
+            };
+            let url = mpv_url_for_queue_item(source, &self.server_url, &self.token);
             let opts = mpv_load_opts(&slot.item);
             if let Err(e) = mpv.command(
                 "loadfile",
@@ -550,7 +556,14 @@ impl PlaybackRun {
         let _ = mpv.command("stop", &[]);
         for i in queue_load_indices(items.len(), start_idx) {
             let item = &items[i].item;
-            let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
+            let Some(source) = item.mpv_url_source() else {
+                let reason =
+                    "Queue submission rejected: item has no direct mpv URL source".to_string();
+                log::warn!(target: "player", "{reason}");
+                let _ = self.event_tx.send(PlayerEvent::CommandRejected(reason));
+                return;
+            };
+            let url = mpv_url_for_queue_item(source, &self.server_url, &self.token);
             let (mode, index) = queue_load_location(i, start_idx);
             let opts = mpv_load_opts(item);
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]) {

@@ -442,6 +442,13 @@ pub enum QueueItem {
     Audiobookshelf(AudiobookshelfItem),
 }
 
+/// A queued source that can be resolved directly to an mpv URL.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum MpvUrlSource<'a> {
+    Emby(&'a EmbyItem),
+    Feed(&'a FeedEntry),
+}
+
 // Serialize through the original flat internally-tagged representation. This
 // preserves both the legacy discriminator and the inner fields' wire order.
 #[derive(serde::Serialize)]
@@ -522,6 +529,15 @@ impl<'de> serde::Deserialize<'de> for QueueItem {
 }
 
 impl QueueItem {
+    #[must_use]
+    pub(crate) fn mpv_url_source(&self) -> Option<MpvUrlSource<'_>> {
+        match self {
+            Self::Emby(item) => Some(MpvUrlSource::Emby(item)),
+            Self::Feed(entry) => Some(MpvUrlSource::Feed(entry)),
+            Self::Audiobookshelf(_) => None,
+        }
+    }
+
     #[must_use]
     pub fn title(&self) -> &str {
         match self {

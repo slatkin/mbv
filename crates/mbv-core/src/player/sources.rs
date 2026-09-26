@@ -117,9 +117,14 @@ pub(crate) struct PreparedSource {
 }
 
 impl PreparedSource {
-    fn plain(item: &QueueItem, server_url: &str, token: &str) -> Self {
+    fn plain(
+        item: &QueueItem,
+        source: crate::playback_queue::MpvUrlSource<'_>,
+        server_url: &str,
+        token: &str,
+    ) -> Self {
         Self {
-            url: mpv_url_for_queue_item(item, server_url, token),
+            url: mpv_url_for_queue_item(source, server_url, token),
             mpv_options: Vec::new(),
             start_seconds: resume_start_pos(item),
             book_extra_sources: Vec::new(),
@@ -182,7 +187,12 @@ pub(super) fn prepare_source(
         QueueItem::Audiobookshelf(AudiobookshelfItem::Book(book)) => {
             prepare_book_source(book, context)
         }
-        _ => Ok(PreparedSource::plain(item, server_url, token)),
+        _ => {
+            let source = item.mpv_url_source().ok_or_else(|| {
+                AudiobookshelfError::from_class(AudiobookshelfFailureClass::Unavailable)
+            })?;
+            Ok(PreparedSource::plain(item, source, server_url, token))
+        }
     }
 }
 

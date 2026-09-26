@@ -72,6 +72,17 @@ fn audiobookshelf_book(library_item_id: &str) -> AudiobookshelfBookQueueItem {
     }
 }
 
+#[test]
+fn audiobookshelf_shapes_have_no_direct_mpv_url_source() {
+    let episode = QueueItem::Audiobookshelf(AudiobookshelfItem::Episode(audiobookshelf_episode(
+        "lib1", "ep1",
+    )));
+    let book = QueueItem::Audiobookshelf(AudiobookshelfItem::Book(audiobookshelf_book("lib1")));
+
+    assert!(episode.mpv_url_source().is_none());
+    assert!(book.mpv_url_source().is_none());
+}
+
 fn item_with_progress(id: &str, position_seconds: i64, played: bool) -> EmbyItem {
     let mut item = item(id);
     item.playback_position_ticks = position_seconds * TICKS_PER_SECOND;

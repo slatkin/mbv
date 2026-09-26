@@ -7,6 +7,7 @@ use super::{
     QueueItem, QueueSlotId, ReportJob, RunInit, StartupPause, StopReport, StopReportContext,
     TICKS_PER_SECOND,
 };
+use crate::playback_queue::MpvUrlSource;
 use crate::player::{divergent_entry, prepare_source};
 use mbv_ids::ItemId;
 use std::sync::mpsc;
@@ -649,27 +650,21 @@ pub(in crate::player) fn reject_stale_jump(
     let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
 }
 
-/// Constructs the mpv loadfile URL for a queued item.
+/// Constructs the mpv loadfile URL for a direct mpv URL source.
 pub(in crate::player) fn mpv_url_for_queue_item(
-    item: &QueueItem,
+    source: MpvUrlSource<'_>,
     server_url: &str,
     token: &str,
 ) -> String {
-    match item {
-        QueueItem::Emby(emby) => {
+    match source {
+        MpvUrlSource::Emby(emby) => {
             let ep = if emby.is_audio() { "Audio" } else { "Videos" };
             format!(
                 "{}/{}/{}/stream?static=true&api_key={}",
                 server_url, ep, emby.id, token
             )
         }
-        QueueItem::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
-        QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Episode(_)) => {
-            unreachable!("Audiobookshelf admission must precede URL resolution")
-        }
-        QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfItem::Book(_)) => {
-            unreachable!("Audiobookshelf book admission must precede URL resolution")
-        }
+        MpvUrlSource::Feed(entry) => entry.primary_source().unwrap_or("").to_string(),
     }
 }
 
