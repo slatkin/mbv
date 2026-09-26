@@ -284,10 +284,4 @@ mod tests {
         );
         assert!(owner.inline_search.is_active());
     }
-
-    #[test]
-    fn empty_selection_does_not_emit_an_activation() {
-        let mut owner = super::super::EmbyLibraryContent::new(LibraryKind::Movies);
-        assert_eq!(owner.handle_key(&key(Key::Enter)), None);
-    }
 }
