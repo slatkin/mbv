@@ -4,9 +4,7 @@ pub use mbv_core::config::{
     LibraryPositionLevel, LibraryPositionState, QueueSource, QueueState,
 };
 #[cfg(test)]
-pub use mbv_core::config::{
-    load_last_remote_connection, save_last_remote_connection, save_library_position_state,
-};
+pub use mbv_core::config::{load_last_remote_connection, save_last_remote_connection};
 #[cfg(test)]
 pub use mbv_core::config::{LastRemoteConnection, TestStateDirGuard};
 

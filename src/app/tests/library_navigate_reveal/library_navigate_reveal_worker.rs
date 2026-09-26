@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::state::types::events::NavigateLanding;
-use std::time::Duration;
 
 #[test]
 fn episode_navigation_emits_the_series_landing_without_extra_round_trips() {

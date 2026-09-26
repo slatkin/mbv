@@ -87,7 +87,6 @@ fn drawn_harness(mut app: crate::app::App, width: u16, height: u16) -> (TickHarn
 #[cfg(test)]
 mod strip_hits {
     use super::*;
-    use crate::app::components::LibraryPlaybackPanel;
 
     /// Draw one real library-only frame (the strip paints and retains its
     /// transport hit geometry), then switch to `both` and draw again.

@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::state::types::events::NavigateLanding;
-use std::time::Duration;
 
 #[test]
 fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
