@@ -2,7 +2,7 @@
 
 ## 1. Lint table
 
-- [ ] 1.1 Remove `missing_errors_doc` and `too_long_first_doc_paragraph` from `[workspace.lints.clippy]` in `Cargo.toml`; keep `missing_panics_doc` (already covered by `pedantic`) and `doc_markdown` (already covered by `pedantic`) enabled. Verify: `cargo clippy --workspace --all-targets -- -D warnings 2>&1 | grep -c "missing_errors_doc\|too_long_first_doc_paragraph"` returns 0.
+- [x] 1.1 Remove `missing_errors_doc` and `too_long_first_doc_paragraph` from `[workspace.lints.clippy]` in `Cargo.toml`; keep `missing_panics_doc` (already covered by `pedantic`) and `doc_markdown` (already covered by `pedantic`) enabled. Verify: `cargo clippy --workspace --all-targets -- -D warnings 2>&1 | grep -c "missing_errors_doc\|too_long_first_doc_paragraph"` returns 0.
 
 ## 2. Mechanical doc_markdown fixes
 
