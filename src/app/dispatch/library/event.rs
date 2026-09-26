@@ -14,122 +14,54 @@ fn feed_home_video_selection(state: &FeedHomeVideoState) -> (usize, usize, usize
 }
 
 impl App {
+    #[rustfmt::skip]
     pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
-        let Some(ev) = self.handle_audiobookshelf_event(ev) else {
-            return;
-        };
-        let Some(ev) = self.handle_browse_event(ev) else {
-            return;
-        };
-        let Some(ev) = self.handle_music_event(ev) else {
-            return;
-        };
-        self.handle_playlist_event(ev);
-    }
-
-    fn handle_browse_event(&mut self, ev: LibEvent) -> Option<LibEvent> {
         match ev {
-            LibEvent::Loaded {
-                lib_idx,
-                parent_id,
-                level,
-            } => {
-                self.handle_lib_loaded(lib_idx, parent_id, *level);
-                None
-            }
-            LibEvent::PageAppended {
-                lib_idx,
-                parent_id,
-                items,
-                total_count,
-            } => {
-                self.handle_lib_page_appended(lib_idx, parent_id, items, total_count);
-                None
-            }
-            LibEvent::Refreshed {
-                lib_idx,
-                parent_id,
-                item_types,
-                unplayed_only,
-                items,
-                total_count,
-            } => {
-                self.handle_lib_refreshed(
-                    lib_idx,
-                    parent_id,
-                    item_types,
-                    unplayed_only,
-                    items,
-                    total_count,
-                );
-                None
-            }
-            LibEvent::RestoreLibraryPosition {
-                lib_idx,
-                requested_position,
-                position,
-                nav_stack,
-            } => {
-                self.handle_restored_library_position(
-                    lib_idx,
-                    requested_position,
-                    position,
-                    nav_stack,
-                );
-                None
-            }
-            LibEvent::SearchItemsLoaded {
-                lib_idx,
-                parent_id,
-                items,
-            } => {
-                self.handle_search_items_loaded(lib_idx, parent_id, items);
-                None
-            }
-            LibEvent::AlbumIndexBuilt { library_id, result } => {
-                self.handle_album_index_built(library_id, result);
-                None
-            }
-            LibEvent::RecursiveAlbumActivated {
-                library_id,
-                nav_stack,
-            } => {
-                self.handle_recursive_album_activated(library_id, nav_stack);
-                None
-            }
-            LibEvent::AllItemsPrefetched {
-                lib_idx,
-                parent_id,
-                items,
-            } => {
-                self.handle_all_items_prefetched(lib_idx, parent_id, items);
-                None
-            }
-            LibEvent::FeedHomeVideoAggregated {
-                lib_idx,
-                parent_id,
-                all_items,
-                groups,
-            } => {
-                self.handle_feed_home_video_aggregated(lib_idx, parent_id, all_items, groups);
-                None
-            }
-            LibEvent::NavigateTo {
-                lib_idx,
-                landing,
-                switch_tab,
-            } => {
-                self.handle_navigate_to_event(lib_idx, landing, switch_tab);
-                None
-            }
-            ev => Some(ev),
+            LibEvent::Loaded { lib_idx, parent_id, level } => { self.handle_lib_loaded(lib_idx, parent_id, *level); }
+            LibEvent::EmbyLatestSnapshotFetched { .. } => { Self::handle_emby_latest_snapshot_fetched(); }
+            LibEvent::PageAppended { lib_idx, parent_id, items, total_count } => { self.handle_lib_page_appended(lib_idx, parent_id, items, total_count); }
+            LibEvent::Refreshed { lib_idx, parent_id, item_types, unplayed_only, items, total_count } => { self.handle_lib_refreshed(lib_idx, parent_id, item_types, unplayed_only, items, total_count); }
+            LibEvent::SearchItemsLoaded { lib_idx, parent_id, items } => { self.handle_search_items_loaded(lib_idx, &parent_id, items); }
+            LibEvent::AlbumIndexBuilt { library_id, result } => { self.handle_album_index_built(library_id, result); }
+            LibEvent::RecursiveAlbumActivated { library_id, nav_stack } => { self.handle_recursive_album_activated(&library_id, nav_stack); }
+            LibEvent::AllItemsPrefetched { lib_idx, parent_id, items } => { self.handle_all_items_prefetched(lib_idx, &parent_id, items); }
+            LibEvent::FeedHomeVideoAggregated { lib_idx, parent_id, all_items, groups } => { self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups); }
+            LibEvent::AlbumArtistLevelFetched { level_id, artists } => { self.handle_album_artist_level_fetched(level_id, artists); }
+            LibEvent::MusicGroupWarmupListed { generation, groups } => { self.handle_music_group_warmup_listed(generation, groups); }
+            LibEvent::AlbumTracksFetched { album_id, tracks } => { self.handle_album_tracks_fetched(album_id, tracks); }
+            LibEvent::ArtistTracksFetched { destination, generation, artist_id, revision, result } => { self.handle_artist_tracks_fetched(&destination, generation, &artist_id, revision, result); }
+            LibEvent::ArtistArtworkFetched { destination, generation, artist_id, revision, cache_key, available } => { self.handle_artist_artwork_fetched(destination, generation, &artist_id, revision, &cache_key, available); }
+            LibEvent::SeriesDetailFetched { series_id, seasons, episodes } => { self.handle_series_detail_fetched(series_id, crate::app::SeriesDetail { seasons, episodes }); }
+            LibEvent::SeriesSeasonEpisodesFetched { series_id, season_id, episodes } => { self.handle_series_season_episodes_fetched(series_id, season_id, episodes); }
+            LibEvent::AudiobookshelfDetailFetched { generation, request, library_item_id, result } => { self.handle_audiobookshelf_detail_fetched(generation, request, library_item_id, result); }
+            LibEvent::AudiobookshelfShowsFetched { generation, library_id, result } => { self.handle_audiobookshelf_shows_fetched(generation, library_id, result); }
+            LibEvent::AudiobookshelfBooksFetched { generation, library_id, result } => { self.handle_audiobookshelf_books_fetched(generation, library_id, result); }
+            LibEvent::AudiobookshelfShelfFetched { generation, library_id, result } => { self.handle_audiobookshelf_shelf_fetched(generation, library_id, result); }
+            LibEvent::AudiobookshelfBookDetailFetched { generation, library_item_id, result } => { self.handle_audiobookshelf_book_detail_fetched(generation, &library_item_id, result); }
+            LibEvent::AudiobookshelfProgressAcknowledged(update) => { self.handle_audiobookshelf_progress_acknowledged(&update); }
+            LibEvent::AudiobookshelfBookProgressAcknowledged(update) => { self.handle_audiobookshelf_book_progress_acknowledged(&update); }
+            LibEvent::NavigateTo { lib_idx, landing, switch_tab } => { self.handle_navigate_to_event(lib_idx, landing, switch_tab); }
+            LibEvent::RestoreLibraryPosition { lib_idx, requested_position, position, nav_stack } => { self.handle_restored_library_position(lib_idx, requested_position, position, nav_stack); }
+            LibEvent::PlaylistsLoaded(items) => { self.handle_playlists_loaded(items); }
+            LibEvent::PlaylistsLoadError(error) => { self.handle_playlists_load_error(error); }
+            LibEvent::PlaylistItemsLoaded { playlist_id, items } => { self.handle_playlist_items_loaded(&playlist_id, items); }
+            LibEvent::PlaylistItemsLoadError { playlist_id, error } => { self.handle_playlist_items_load_error(&playlist_id, error); }
+            LibEvent::PlaylistRenamed { new_name } => { self.handle_playlist_renamed(&new_name); }
+            LibEvent::PlaylistDeleted { name } => { self.handle_playlist_deleted(&name); }
+            LibEvent::QueueEnriched { items } => { self.handle_queue_enriched(items); }
+            LibEvent::HomeContentRefreshed(_) => { Self::handle_home_content_refreshed(); }
+            LibEvent::HomeContentCleared => { Self::handle_home_content_cleared(); }
+            LibEvent::Error(error) => { self.handle_error(&error); }
         }
     }
+
+    // The shell drain applies the Model-owned latest snapshot.
+    fn handle_emby_latest_snapshot_fetched() {}
 
     fn handle_all_items_prefetched(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         items: Vec<mbv_core::api::EmbyItem>,
     ) {
         if let Some(last) = self
@@ -142,13 +74,13 @@ impl App {
         }
         // The whole-library corpus is exactly what a pending Series
         // landing was waiting for (U2 correction).
-        self.retry_pending_series_landing(lib_idx, &parent_id);
+        self.retry_pending_series_landing(lib_idx, parent_id);
     }
 
     fn handle_feed_home_video_aggregated(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         all_items: Vec<mbv_core::api::EmbyItem>,
         groups: Vec<crate::app::state::types::feed::FeedHomeVideoGroup>,
     ) {
@@ -180,109 +112,6 @@ impl App {
         if !artist.is_empty() {
             self.album_artist_cache
                 .insert(album_id.to_string(), artist.to_string());
-        }
-    }
-
-    fn handle_music_event(&mut self, ev: LibEvent) -> Option<LibEvent> {
-        match ev {
-            LibEvent::AlbumTracksFetched {
-                album_id,
-                mut tracks,
-            } => {
-                // A fallback artist fetch frees its bounded slot here, and the
-                // drain arms the next in-scope album so rows keep appearing
-                // progressively; selection-driven fetches share the cache but
-                // hold no slot.
-                let fallback_completed =
-                    self.artist_album_track_fetches_in_flight.remove(&album_id);
-                self.album_tracks_loading.remove(&album_id);
-                // The cache is also the cursor's source of truth while the
-                // album is open, so normalize it once before rendering or
-                // resolving the focused track for playback.
-                sort_audio_tracks(&mut tracks);
-                self.album_tracks_cache.insert(album_id, tracks);
-                if fallback_completed {
-                    self.drain_artist_album_track_fetches();
-                }
-                None
-            }
-            LibEvent::ArtistTracksFetched {
-                destination,
-                generation,
-                artist_id,
-                revision,
-                result,
-            } => {
-                self.handle_artist_tracks_fetched(
-                    &destination,
-                    generation,
-                    &artist_id,
-                    revision,
-                    result,
-                );
-                None
-            }
-            LibEvent::ArtistArtworkFetched {
-                destination,
-                generation,
-                artist_id,
-                revision,
-                cache_key,
-                available,
-            } => {
-                self.handle_artist_artwork_fetched(
-                    destination,
-                    generation,
-                    &artist_id,
-                    revision,
-                    &cache_key,
-                    available,
-                );
-                None
-            }
-            LibEvent::SeriesDetailFetched {
-                series_id,
-                seasons,
-                episodes,
-            } => {
-                self.handle_series_detail_fetched(
-                    series_id,
-                    crate::app::SeriesDetail { seasons, episodes },
-                );
-                None
-            }
-            LibEvent::SeriesSeasonEpisodesFetched {
-                series_id,
-                season_id,
-                episodes,
-            } => {
-                self.handle_series_season_episodes_fetched(series_id, season_id, episodes);
-                None
-            }
-            LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
-                self.handle_album_artist_level_fetched(level_id, artists);
-                None
-            }
-            LibEvent::MusicGroupWarmupListed { generation, groups } => {
-                // One level fill per group-level child (design D5), deduped
-                // through the same `LevelFillState::action_for` decision
-                // candidate creation uses (`spawn_level_artist_fetch`'s
-                // guard). `albums` stays empty: warm-up holds only the group
-                // listing, so orphan-`Path` attribution (design D3) has no
-                // in-hand album paths. A successful warm-up is marked with
-                // orphan risk and receives one path-aware upgrade when that
-                // level is later browsed. A fill failure arrives as an empty
-                // `AlbumArtistLevelFetched`, marking the level `Failed`
-                // (retryable) with no UI error; browsing state is untouched.
-                if !self.emby_runtime.accepts(generation) {
-                    return None;
-                }
-                for group in groups {
-                    self.enqueue_level_artist_warmup(group.id);
-                }
-                None
-            }
-            ev => Some(ev),
         }
     }
 
@@ -319,94 +148,103 @@ impl App {
         }
     }
 
-    fn handle_playlist_event(&mut self, ev: LibEvent) {
-        match ev {
-            LibEvent::PlaylistsLoaded(items) => {
-                self.playlists = items;
-                self.playlists_loading = false;
-                self.playlists_cursor = self
-                    .playlists_cursor
-                    .min(self.playlists.len().saturating_sub(1));
-            }
-            LibEvent::PlaylistsLoadError(e) => {
-                self.playlists_loading = false;
-                self.flash_error(e);
-            }
-            LibEvent::PlaylistItemsLoaded { playlist_id, items } => {
-                if self
-                    .playlists_open
-                    .as_ref()
-                    .is_some_and(|p| p.id == playlist_id)
-                {
-                    self.playlists_open_items = items;
-                    self.playlists_open_loading = false;
-                }
-            }
-            LibEvent::PlaylistItemsLoadError { playlist_id, error } => {
-                if self
-                    .playlists_open
-                    .as_ref()
-                    .is_some_and(|p| p.id == playlist_id)
-                {
-                    self.playlists_open_loading = false;
-                }
-                self.flash_error(error);
-            }
-            LibEvent::PlaylistRenamed { new_name } => {
-                self.dismiss_save_playlist();
-                self.force_clear = true;
-                self.flash(format!("Renamed to '{new_name}'"), ToastSeverity::Success);
-            }
-            LibEvent::PlaylistDeleted { name } => {
-                self.dismiss_confirm();
-                self.flash(format!("Deleted '{name}'"), ToastSeverity::Success);
-            }
-            LibEvent::QueueEnriched { items } => {
-                let _ = self.merge_refreshed_queue(QueueScope::Local, items);
-            }
-            // Shell-intercepted content-delivery variants: the lib_rx drain
-            // handles them at the Model boundary, so they are unreachable
-            // here; the arms keep the exhaustive match total.
-            LibEvent::EmbyLatestSnapshotFetched { .. }
-            | LibEvent::HomeContentRefreshed(_)
-            | LibEvent::HomeContentCleared => {}
-            LibEvent::Error(e) => {
-                self.pending_navigate_tab_switch = None;
-                self.pending_series_landing = None;
-                self.flash(format!("Library error: {e}"), ToastSeverity::Error);
-            }
-            LibEvent::AudiobookshelfDetailFetched { .. }
-            | LibEvent::AudiobookshelfShowsFetched { .. }
-            | LibEvent::AudiobookshelfBooksFetched { .. }
-            | LibEvent::AudiobookshelfBookDetailFetched { .. }
-            | LibEvent::AudiobookshelfShelfFetched { .. }
-            | LibEvent::AudiobookshelfProgressAcknowledged(_)
-            | LibEvent::AudiobookshelfBookProgressAcknowledged(_)
-            | LibEvent::Loaded { .. }
-            | LibEvent::PageAppended { .. }
-            | LibEvent::Refreshed { .. }
-            | LibEvent::RestoreLibraryPosition { .. }
-            | LibEvent::SearchItemsLoaded { .. }
-            | LibEvent::AlbumIndexBuilt { .. }
-            | LibEvent::RecursiveAlbumActivated { .. }
-            | LibEvent::AllItemsPrefetched { .. }
-            | LibEvent::FeedHomeVideoAggregated { .. }
-            | LibEvent::AlbumTracksFetched { .. }
-            | LibEvent::ArtistTracksFetched { .. }
-            | LibEvent::ArtistArtworkFetched { .. }
-            | LibEvent::SeriesDetailFetched { .. }
-            | LibEvent::SeriesSeasonEpisodesFetched { .. }
-            | LibEvent::AlbumArtistLevelFetched { .. }
-            | LibEvent::MusicGroupWarmupListed { .. }
-            | LibEvent::NavigateTo { .. } => unreachable!(),
+    fn handle_music_group_warmup_listed(
+        &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
+        groups: Vec<mbv_core::api::EmbyItem>,
+    ) {
+        // Queue one level fill per child, deduped through the same action decision as candidate creation.
+        if !self.emby_runtime.accepts(generation) {
+            return;
         }
+        for group in groups {
+            self.enqueue_level_artist_warmup(group.id);
+        }
+    }
+
+    fn handle_album_tracks_fetched(
+        &mut self,
+        album_id: String,
+        mut tracks: Vec<mbv_core::api::EmbyItem>,
+    ) {
+        let fallback_completed = self.artist_album_track_fetches_in_flight.remove(&album_id);
+        self.album_tracks_loading.remove(&album_id);
+        sort_audio_tracks(&mut tracks);
+        self.album_tracks_cache.insert(album_id, tracks);
+        if fallback_completed {
+            self.drain_artist_album_track_fetches();
+        }
+    }
+
+    fn handle_playlists_loaded(&mut self, items: Vec<mbv_core::api::EmbyItem>) {
+        self.playlists = items;
+        self.playlists_loading = false;
+        self.playlists_cursor = self
+            .playlists_cursor
+            .min(self.playlists.len().saturating_sub(1));
+    }
+
+    fn handle_playlists_load_error(&mut self, error: String) {
+        self.playlists_loading = false;
+        self.flash_error(error);
+    }
+
+    fn handle_playlist_items_loaded(
+        &mut self,
+        playlist_id: &str,
+        items: Vec<mbv_core::api::EmbyItem>,
+    ) {
+        if self
+            .playlists_open
+            .as_ref()
+            .is_some_and(|playlist| playlist.id == playlist_id)
+        {
+            self.playlists_open_items = items;
+            self.playlists_open_loading = false;
+        }
+    }
+
+    fn handle_playlist_items_load_error(&mut self, playlist_id: &str, error: String) {
+        if self
+            .playlists_open
+            .as_ref()
+            .is_some_and(|playlist| playlist.id == playlist_id)
+        {
+            self.playlists_open_loading = false;
+        }
+        self.flash_error(error);
+    }
+
+    fn handle_playlist_renamed(&mut self, new_name: &str) {
+        self.dismiss_save_playlist();
+        self.force_clear = true;
+        self.flash(format!("Renamed to '{new_name}'"), ToastSeverity::Success);
+    }
+
+    fn handle_playlist_deleted(&mut self, name: &str) {
+        self.dismiss_confirm();
+        self.flash(format!("Deleted '{name}'"), ToastSeverity::Success);
+    }
+
+    fn handle_queue_enriched(&mut self, items: Vec<mbv_core::api::EmbyItem>) {
+        let _ = self.merge_refreshed_queue(QueueScope::Local, items);
+    }
+
+    // The shell drain applies both Model-owned Home content events.
+    fn handle_home_content_refreshed() {}
+    fn handle_home_content_cleared() {}
+
+    fn handle_error(&mut self, error: &str) {
+        self.pending_navigate_tab_switch = None;
+        self.pending_series_landing = None;
+        self.flash(format!("Library error: {error}"), ToastSeverity::Error);
     }
 
     /// The `RecursiveAlbumActivated` arm: install the landed nav stack and
     /// consume the deferred tab switch when it belongs to this navigation.
     fn handle_recursive_album_activated(
         &mut self,
-        library_id: String,
+        library_id: &str,
         nav_stack: Vec<crate::app::state::types::browse::BrowseLevel>,
     ) {
         let Some(lib_idx) = self
@@ -538,7 +376,7 @@ impl App {
     fn handle_search_items_loaded(
         &mut self,
         lib_idx: usize,
-        parent_id: String,
+        parent_id: &str,
         items: Vec<mbv_core::api::EmbyItem>,
     ) {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
