@@ -7,7 +7,7 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
-use mbv_core::api::TICKS_PER_SECOND_F64;
+use mbv_core::api::{i64_ticks_saturating, ticks_to_seconds, TICKS_PER_SECOND_F64};
 use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_core::config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
@@ -186,9 +186,9 @@ impl PodcastContent {
                     title: item.title.clone(),
                     description: item.description.clone(),
                     published_at: item.pub_date_secs,
-                    duration_seconds: item.duration_ticks.map(|ticks| {
-                        ticks.to_string().parse::<f64>().unwrap_or(0.0) / TICKS_PER_SECOND_F64
-                    }),
+                    duration_seconds: item
+                        .duration_ticks
+                        .map(|ticks| ticks_to_seconds(i64::try_from(ticks).unwrap_or(i64::MAX))),
                 })
                 .collect();
         }
@@ -483,12 +483,8 @@ impl PodcastContent {
             author: show.and_then(|show| show.author.clone()),
             description: episode.description.clone(),
             duration_ticks: episode.duration_seconds.map(|seconds| {
-                let ticks = seconds * TICKS_PER_SECOND_F64;
-                if ticks.is_nan() || ticks <= 0.0 {
-                    0
-                } else {
-                    ticks.trunc().to_string().parse().unwrap_or(u64::MAX)
-                }
+                let ticks = i64_ticks_saturating((seconds * TICKS_PER_SECOND_F64).trunc());
+                u64::try_from(ticks).unwrap_or(0)
             }),
             position_ticks: 0,
             played: false,
