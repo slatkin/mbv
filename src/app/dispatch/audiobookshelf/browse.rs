@@ -2,7 +2,7 @@ use crate::app::dispatch::notify::ToastSeverity;
 #[cfg(test)]
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::App;
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::{i64_ticks_saturating, TICKS_PER_SECOND_F64};
 use mbv_core::playback_queue::{AudiobookshelfItem, AudiobookshelfQueueItem, QueueItem};
 
 mod books;
@@ -501,15 +501,11 @@ pub(in crate::app) fn seconds_to_ticks(seconds: f64) -> i64 {
         .and_then(|ticks| i64::try_from(ticks).ok())
         .unwrap_or(0)
 }
-#[expect(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-)]
 pub(super) fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
-    (seconds.is_finite() && seconds >= 0.0)
-        .then(|| (seconds * TICKS_PER_SECOND as f64).round() as u64)
+    (seconds.is_finite() && seconds >= 0.0).then(|| {
+        let ticks = i64_ticks_saturating((seconds * TICKS_PER_SECOND_F64).round());
+        u64::try_from(ticks).unwrap_or(0)
+    })
 }
 
 #[cfg(test)]

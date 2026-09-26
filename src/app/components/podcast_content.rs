@@ -7,7 +7,7 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::TICKS_PER_SECOND_F64;
 use mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode;
 use mbv_core::config::{
     AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey, LibraryItemIdentity, SelectorIdentity,
@@ -175,10 +175,6 @@ impl PodcastContent {
     /// The active pill's scoped episode view: a show pill ignores play
     /// state; a state pill filters every fetched show's episodes (spec:
     /// state and show selections never combine).
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     fn active_episodes(&self) -> Vec<AudiobookshelfDownloadedEpisode> {
         if self.on_latest() {
             return self
@@ -190,9 +186,9 @@ impl PodcastContent {
                     title: item.title.clone(),
                     description: item.description.clone(),
                     published_at: item.pub_date_secs,
-                    duration_seconds: item
-                        .duration_ticks
-                        .map(|ticks| ticks as f64 / TICKS_PER_SECOND as f64),
+                    duration_seconds: item.duration_ticks.map(|ticks| {
+                        ticks.to_string().parse::<f64>().unwrap_or(0.0) / TICKS_PER_SECOND_F64
+                    }),
                 })
                 .collect();
         }
@@ -459,12 +455,6 @@ impl PodcastContent {
     /// The selected episode as the existing hero producer's input: the
     /// downloaded episode over its parent show's identity (title, author,
     /// cover).
-    #[expect(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
-    )]
     fn selected_episode_item(&self) -> Option<AudiobookshelfQueueItem> {
         let target = self.episodes.selected_target()?;
         if self.on_latest() {
@@ -492,9 +482,14 @@ impl PodcastContent {
             show_title: show.map(|show| show.title.clone()),
             author: show.and_then(|show| show.author.clone()),
             description: episode.description.clone(),
-            duration_ticks: episode
-                .duration_seconds
-                .map(|seconds| (seconds * TICKS_PER_SECOND as f64) as u64),
+            duration_ticks: episode.duration_seconds.map(|seconds| {
+                let ticks = seconds * TICKS_PER_SECOND_F64;
+                if ticks.is_nan() || ticks <= 0.0 {
+                    0
+                } else {
+                    ticks.trunc().to_string().parse().unwrap_or(u64::MAX)
+                }
+            }),
             position_ticks: 0,
             played: false,
             pub_date_secs: episode.published_at,

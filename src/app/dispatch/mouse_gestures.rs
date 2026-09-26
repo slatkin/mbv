@@ -3,7 +3,7 @@
 use crate::app::components::msg::TvHit;
 use crate::app::dispatch::action::Command;
 use crate::app::{App, QueueScope};
-use mbv_core::api::EmbyItem;
+use mbv_core::api::{seconds_to_ticks, EmbyItem};
 use mbv_core::player::PlayerCommand;
 use std::time::{Duration, Instant};
 
@@ -20,12 +20,10 @@ impl App {
             if runtime_s == 0 {
                 return;
             }
-            #[expect(
-                clippy::cast_precision_loss,
-                clippy::cast_possible_truncation,
-                reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
-            )]
-            let ticks = (fraction * (runtime_s * mbv_core::api::TICKS_PER_SECOND) as f64) as i64;
+            let ticks = seconds_to_ticks(
+                fraction
+                    * mbv_core::api::ticks_to_seconds(runtime_s * mbv_core::api::TICKS_PER_SECOND),
+            );
             let id = conn_id.clone();
             #[expect(
                 clippy::cast_precision_loss,
