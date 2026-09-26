@@ -152,26 +152,26 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 4. `mbv-ws`
 
-- [ ] 4.1 Create `crates/mbv-ws/Cargo.toml`: `name = "mbv-ws"`, `description`
+- [x] 4.1 Create `crates/mbv-ws/Cargo.toml`: `name = "mbv-ws"`, `description`
   ("Emby websocket client transport for mbv."), the seven `*.workspace = true`
   package fields, `[lints] workspace = true`, and `tungstenite.workspace = true`,
   `serde_json.workspace = true`, `log.workspace = true`,
   `mbv-net = { path = "../mbv-net" }`. Register it in `members` and
   `default-members`. Verify: `cargo check -p mbv-ws` succeeds on the empty crate.
-- [ ] 4.2 Move `crates/mbv-core/src/ws.rs` to `crates/mbv-ws/src/lib.rs` and
+- [x] 4.2 Move `crates/mbv-core/src/ws.rs` to `crates/mbv-ws/src/lib.rs` and
   change its one internal call, `crate::reconnect_backoff_sleep(&mut
   backoff_secs, "ws")`, to `mbv_net::reconnect_backoff_sleep(…)` — keep the
   `"ws"` log target string unchanged. Verify: `cargo check -p mbv-ws` succeeds
   and `OutboundMessage`, `WsSender`, `WsEvent` and `start` are `pub`.
-- [ ] 4.3 Delete `pub mod ws;` from `crates/mbv-core/src/lib.rs`, add
+- [x] 4.3 Delete `pub mod ws;` from `crates/mbv-core/src/lib.rs`, add
   `mbv-ws = { path = "../mbv-ws" }` to `mbv-core`'s `[dependencies]`, and
   rewrite its `crate::ws::` references to `mbv_ws::`. Verify:
   `cargo check -p mbv-core --all-targets` succeeds.
-- [ ] 4.4 Add `mbv-ws = { path = "crates/mbv-ws" }` to the `mbv` package's
+- [x] 4.4 Add `mbv-ws = { path = "crates/mbv-ws" }` to the `mbv` package's
   `[dependencies]` and rewrite every `mbv_core::ws::` reference in `src/` to
   `mbv_ws::`. Verify: `rg 'mbv_core::ws|crate::ws::' src/ crates/` returns
   nothing.
-- [ ] 4.5 Run the group gate for `mbv-ws`.
+- [x] 4.5 Run the group gate for `mbv-ws`.
 
 ## 5. `mbv-visualizer`
 
