@@ -181,6 +181,10 @@ fn us_to_seconds(microseconds: i64) -> f64 {
     microseconds as f64 / 1_000_000.0
 }
 
+/// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
+/// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
+/// it's cloned/called every poll tick without hesitation; kept independent of
+/// the D-Bus connection.
 #[cfg(not(test))]
 fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
     if disconnected {
