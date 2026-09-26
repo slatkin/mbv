@@ -337,8 +337,9 @@ _Avoid_: MediaItem, media item, emby entry
 
 **QueueItem**:
 The queue's media snapshot — an EmbyItem, FeedEntry, or AudiobookshelfItem
-(Episode(AudiobookshelfQueueItem) | Book(AudiobookshelfBookQueueItem)). Generic queue operations use shared presentation
-and identity behavior; Service-specific admission, source preparation,
+(Episode(AudiobookshelfQueueItem) | Book(AudiobookshelfBookQueueItem)).
+Generic queue operations use shared presentation and identity behavior;
+Service-specific admission, source preparation,
 lifecycle, progress, and cleanup remain explicit boundaries. Persistence
 round-trips tagged QueueItem values; legacy untagged Emby-only payloads remain
 readable.
@@ -852,6 +853,12 @@ book timeline, as Audiobookshelf's `chapters[]` reports it (it may span audio
 files). mbv renders each as a first-class row and issues one absolute seek to
 `start` on the merged timeline on activation.
 _Avoid_: track, segment, file part
+
+**AudiobookshelfItem**:
+The nested Audiobookshelf shape of a QueueItem: `Episode(AudiobookshelfQueueItem)` or
+`Book(AudiobookshelfBookQueueItem)`. Ownership follows the QueueItem variant;
+shape questions follow the inner variant.
+_Avoid_: ABS item, episode-or-book
 
 **AudiobookshelfBookQueueItem**:
 The QueueItem snapshot of a book: content identity, presentation, progress,
