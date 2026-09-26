@@ -131,7 +131,7 @@ fn player_command_round_trips_through_wire_command() {
     let json = serde_json::to_string(&wire).unwrap();
     let decoded: WireCommand = serde_json::from_str(&json).unwrap();
     match PlayerCommand::from(decoded) {
-        PlayerCommand::SeekAbsolute(s) => assert_eq!(s, 12.5),
+        PlayerCommand::SeekAbsolute(s) => assert!((s - 12.5).abs() < f64::EPSILON),
         _ => panic!("expected SeekAbsolute"),
     }
 }

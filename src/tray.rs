@@ -80,7 +80,7 @@ impl ksni::Tray for MbvTray {
     }
 
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
-        use ksni::menu::*;
+        use ksni::menu::{MenuItem, StandardItem};
         let status = self.status.lock().unwrap().clone();
 
         let mut items: Vec<MenuItem<Self>> = vec![

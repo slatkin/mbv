@@ -23,11 +23,13 @@ impl Keybinds {
     /// The all-defaults configuration: no prefix, every action on its
     /// declared chords. Compiled from `KEYBIND_ACTIONS` through the
     /// resolution helpers below.
+    #[must_use]
     pub fn defaults() -> Self {
         Self::default()
     }
 
     /// The configured router-scope chord for an action id, if any.
+    #[must_use]
     pub fn router_override(&self, id: &str) -> Option<Chord> {
         self.sections
             .iter()
@@ -37,6 +39,7 @@ impl Keybinds {
     }
 
     /// The configured prefix-namespace chord for an action id, if any.
+    #[must_use]
     pub fn prefix_assignment(&self, id: &str) -> Option<Chord> {
         self.sections
             .iter()
@@ -47,6 +50,7 @@ impl Keybinds {
 
     /// The chords that fire an action under this configuration: its single
     /// configured chord, or all of its declared default chords.
+    #[must_use]
     pub fn router_chords(&self, action: &KeybindAction) -> Vec<Chord> {
         match self.router_override(action.id) {
             Some(chord) => vec![chord],
@@ -55,6 +59,7 @@ impl Keybinds {
     }
 
     /// The first chord that fires an action under this configuration.
+    #[must_use]
     pub fn router_chord(&self, action: &KeybindAction) -> Chord {
         self.router_chords(action)
             .into_iter()
@@ -77,6 +82,7 @@ impl Keybinds {
     /// (design D7). Counted as distinct action ids — an action bound by
     /// more than one router entry still counts once — and a configured
     /// chord equal to a declared default is not a deviation.
+    #[must_use]
     pub fn override_count(&self) -> usize {
         let mut overridden: Vec<&'static str> = self
             .sections

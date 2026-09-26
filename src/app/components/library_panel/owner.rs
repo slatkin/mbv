@@ -158,7 +158,7 @@ impl LibraryKey {
             Self::Service {
                 service,
                 library_id,
-                kind: _,
+                ..
             } => TabIdentity::ServiceLibrary {
                 kind: *service,
                 library_id: library_id.clone(),
@@ -228,8 +228,9 @@ pub(in crate::app) trait LibraryContentOwner {
 
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         self.on_key(key)
-            .map(|message| LeafKeyResult::Consumed(Some(Box::new(message))))
-            .unwrap_or(LeafKeyResult::Unhandled)
+            .map_or(LeafKeyResult::Unhandled, |message| {
+                LeafKeyResult::Consumed(Some(Box::new(message)))
+            })
     }
 
     fn hero_overlay_available(&mut self) -> bool {

@@ -1,19 +1,11 @@
 use ratatui::style::Color;
 use ratatui::Frame;
 
-/// Fraction of each color channel kept when dimming the backdrop behind a
-/// blocking modal (the rest is blended toward black).
-const DIM_FACTOR: f32 = 0.5;
-
 fn dim(color: Color) -> Color {
     match color {
         Color::White => Color::Rgb(127, 127, 127),
         Color::Black | Color::Reset => Color::Rgb(0, 0, 0),
-        Color::Rgb(r, g, b) => Color::Rgb(
-            (r as f32 * DIM_FACTOR) as u8,
-            (g as f32 * DIM_FACTOR) as u8,
-            (b as f32 * DIM_FACTOR) as u8,
-        ),
+        Color::Rgb(r, g, b) => Color::Rgb(r / 2, g / 2, b / 2),
         // Indexed (256-color) and Named variants pass through undimmed because
         // we have no portable way to look up their actual RGB values — the
         // mapping is defined by the running terminal, not by ratatui.

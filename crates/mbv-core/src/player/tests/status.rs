@@ -193,8 +193,7 @@ fn lang_code_to_name_matches_api_table() {
         assert_eq!(
             lang_code_to_name(code),
             *expected,
-            "lang_code_to_name({:?})",
-            code
+            "lang_code_to_name({code:?})"
         );
     }
 }

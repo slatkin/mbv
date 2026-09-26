@@ -31,8 +31,7 @@ fn owner_push(items: Vec<mbv_core::api::EmbyItem>) -> BrowserOwnerPush {
         library_total: None,
         letter_filter: None,
         loading: false,
-        group_pills: false,
-        show_letter_pills: false,
+        selector_mode: crate::app::components::emby_library_content::EmbySelectorMode::None,
         feed_groups: Vec::new(),
         feed_group_ids: Vec::new(),
         feed_group_cursor: 0,
@@ -304,7 +303,7 @@ fn browser_owner_latest_pill_switches_rows_and_restores_home_video_group_positio
         item.id = "latest-movie".into();
         item
     }];
-    push.group_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::FeedGroups;
     push.feed_groups = vec!["Group One".into()];
     push.feed_group_ids = vec!["group-one".into()];
     push.feed_group_cursor = 1;
@@ -367,7 +366,8 @@ fn browser_owner_latest_pill_switches_rows_and_restores_home_video_group_positio
             },
         ]);
         push.latest_items = vec![make_item("Latest Movie", "Movie")];
-        push.group_pills = true;
+        push.selector_mode =
+            crate::app::components::emby_library_content::EmbySelectorMode::FeedGroups;
         push.feed_groups = vec!["Group One".into()];
         push.feed_group_ids = vec!["group-one".into()];
         push.feed_group_cursor = 1;
@@ -389,7 +389,7 @@ fn browser_owner_latest_pill_switches_rows_and_restores_home_video_group_positio
 #[test]
 fn browser_owner_latest_participates_in_letter_and_group_cycle() {
     let mut push = owner_push(make_items(2));
-    push.show_letter_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::Letters;
     let mut owner = BrowserOwner::new(LibraryKind::Movies);
     owner.set_content(push);
     assert_eq!(
@@ -414,7 +414,7 @@ fn browser_owner_latest_participates_in_letter_and_group_cycle() {
     assert!(!owner.latest_mode());
 
     let mut push = owner_push(make_items(2));
-    push.group_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::FeedGroups;
     push.feed_groups = vec!["Group".into()];
     push.feed_group_ids = vec!["group-id".into()];
     push.feed_group_cursor = 0;
@@ -450,7 +450,7 @@ fn browser_owner_launch_snapshot_reports_letter_pill_and_item_identities() {
     let bucket = LetterFilter::for_index_for_kind(2, crate::app::render::LetterFilterKind::Movie)
         .expect("letter buckets exist");
     let mut push = owner_push(make_items(3));
-    push.show_letter_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::Letters;
     push.letter_filter = Some(bucket);
     let mut owner = BrowserOwner::new(LibraryKind::Movies);
     owner.set_content(push);
@@ -480,7 +480,7 @@ fn browser_owner_reanchors_selector_before_item_and_falls_back_when_item_is_miss
 
     let mut owner = BrowserOwner::new(LibraryKind::Movies);
     let mut push = owner_push(make_items(3));
-    push.show_letter_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::Letters;
     push.letter_filter =
         LetterFilter::for_index_for_kind(2, crate::app::render::LetterFilterKind::Movie);
     owner.set_content(push);
@@ -506,7 +506,7 @@ fn browser_owner_launch_snapshot_reports_group_content_id_never_the_display_name
     use mbv_core::config::{EmbySelectorKey, SelectorIdentity};
 
     let mut push = owner_push(make_items(2));
-    push.group_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::FeedGroups;
     push.feed_groups = vec!["Displayed Name".to_string()];
     push.feed_group_ids = vec!["folder-id-7".to_string()];
     push.feed_group_cursor = 1;
@@ -543,7 +543,7 @@ fn browser_owner_launch_snapshot_reports_absence_for_unfiltered_and_empty_views(
     // The "All" group pill is the unfiltered scope: it has an explicit
     // selector identity so it is distinct from a destination with no pills.
     let mut push = owner_push(make_items(2));
-    push.group_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::FeedGroups;
     push.feed_groups = vec!["Displayed Name".to_string()];
     push.feed_group_ids = vec!["folder-id-7".to_string()];
     push.feed_group_cursor = 0;
@@ -563,7 +563,7 @@ fn browser_owner_launch_snapshot_reports_absence_for_unfiltered_and_empty_views(
 
     // Letter pills shown but no bucket filtered: the unfiltered scope again.
     let mut push = owner_push(make_items(2));
-    push.show_letter_pills = true;
+    push.selector_mode = crate::app::components::emby_library_content::EmbySelectorMode::Letters;
     push.letter_filter = None;
     owner.set_content(push);
     assert_eq!(

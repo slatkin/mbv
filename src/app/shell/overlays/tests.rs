@@ -103,7 +103,7 @@ fn settings_popup_library_routes_shell_syncs_and_routes_escape() {
     let ShellRequest::LibraryRoutesEsc = *shell_boxed else {
         panic!("Library routes should emit a shell request");
     };
-    model.handle_library_routes_request(ShellRequest::LibraryRoutesEsc);
+    model.handle_library_routes_request(&ShellRequest::LibraryRoutesEsc);
 
     assert!(!model.application.mounted(&id));
 }
@@ -210,7 +210,11 @@ fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
         .as_any_mut()
         .downcast_mut::<SearchSidebarComponent>()
         .expect("search sidebar type")
-        .debounce_deadline = Some(Instant::now() - std::time::Duration::from_millis(1));
+        .debounce_deadline = Some(
+        Instant::now()
+            .checked_sub(std::time::Duration::from_millis(1))
+            .unwrap_or_else(Instant::now),
+    );
 
     // Sweep after the deadline: the production run loop calls
     // handle_service_request on the returned Msg. With no Emby client

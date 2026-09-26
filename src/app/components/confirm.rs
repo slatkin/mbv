@@ -74,9 +74,9 @@ impl Default for ConfirmComponent {
 }
 
 impl Component for ConfirmComponent {
-    fn view(&mut self, f: &mut Frame, _area: ratatui::layout::Rect) {
+    fn view(&mut self, frame: &mut Frame, _area: ratatui::layout::Rect) {
         render_confirm_modal_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
             &self.title,
             &self.message,
@@ -84,7 +84,7 @@ impl Component for ConfirmComponent {
         );
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -125,10 +125,10 @@ impl AppComponent<Msg, UserEvent> for ConfirmComponent {
 fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmIntent> {
     match action {
         ConfirmAction::ClearQueue | ConfirmAction::ReplacePopulatedQueue => {
-            clear_or_replace_queue_intent(key)
+            Some(clear_or_replace_queue_intent(key))
         }
         ConfirmAction::RemoveActiveQueueItem(_) | ConfirmAction::RemoveFeedSubscription(_) => {
-            remove_item_intent(key)
+            Some(remove_item_intent(key))
         }
         ConfirmAction::RescanLibrary(_)
         | ConfirmAction::RemoveEmby
@@ -143,19 +143,19 @@ fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmInt
     }
 }
 
-fn clear_or_replace_queue_intent(key: Key) -> Option<ConfirmIntent> {
+fn clear_or_replace_queue_intent(key: Key) -> ConfirmIntent {
     match key {
-        Key::Char('y' | 'Y') | Key::Enter => Some(ConfirmIntent::Accept),
-        Key::Esc => Some(ConfirmIntent::Cancel),
-        _ => Some(ConfirmIntent::Dismiss),
+        Key::Char('y' | 'Y') | Key::Enter => ConfirmIntent::Accept,
+        Key::Esc => ConfirmIntent::Cancel,
+        _ => ConfirmIntent::Dismiss,
     }
 }
 
-fn remove_item_intent(key: Key) -> Option<ConfirmIntent> {
+fn remove_item_intent(key: Key) -> ConfirmIntent {
     match key {
-        Key::Char('y') => Some(ConfirmIntent::Accept),
-        Key::Esc => Some(ConfirmIntent::Cancel),
-        _ => Some(ConfirmIntent::Dismiss),
+        Key::Char('y') => ConfirmIntent::Accept,
+        Key::Esc => ConfirmIntent::Cancel,
+        _ => ConfirmIntent::Dismiss,
     }
 }
 

@@ -64,7 +64,7 @@ impl App {
 
     pub(in crate::app) fn apply_cast_status(
         &mut self,
-        receiver_id: String,
+        receiver_id: &str,
         status: Result<CastStatus, String>,
     ) {
         self.cast_status_loading = false;
@@ -97,6 +97,11 @@ impl App {
 
     /// `None` when no cast target is attached; the caller falls back to
     /// local/remote-session playback state.
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     pub(in crate::app) fn cast_effective_playback_state(
         &self,
     ) -> Option<crate::app::PlaybackState> {
@@ -116,11 +121,11 @@ impl App {
         let active = status.state != CastPlaybackState::Idle;
         let position_seconds = cast_extrapolate(status, cast.status_at).unwrap_or(0.0);
         let runtime_ticks =
-            (status.duration_seconds.unwrap_or(0.0) as f64 * TICKS_PER_SECOND as f64) as i64;
+            (f64::from(status.duration_seconds.unwrap_or(0.0)) * TICKS_PER_SECOND as f64) as i64;
         Some(crate::app::PlaybackState {
             active,
             active_idx: self.cast_active_queue_index(cast),
-            position_ticks: (position_seconds as f64 * TICKS_PER_SECOND as f64) as i64,
+            position_ticks: (f64::from(position_seconds) * TICKS_PER_SECOND as f64) as i64,
             runtime_ticks,
             paused: status.state == CastPlaybackState::Paused,
         })
@@ -138,7 +143,7 @@ impl App {
 
     /// Title text for the now-playing header while a cast target is attached
     /// (6.2). `None` when the receiver reports no active media.
-    pub(in crate::app) fn cast_now_playing_title(&self, cast: &CastAttachment) -> Option<String> {
+    pub(in crate::app) fn cast_now_playing_title(cast: &CastAttachment) -> Option<String> {
         if cast.disconnected {
             return Some("Cast: disconnected".to_string());
         }
@@ -162,6 +167,11 @@ impl App {
     /// Reports progress to the matched item's provider (6.6). No-op when
     /// nothing is attached, no status has been reported yet, or the
     /// receiver's playing entry can't be matched back to a dispatched item.
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     pub(in crate::app) fn report_cast_progress(&mut self) {
         let Some(cast) = self.cast_attachment.as_ref() else {
             return;
@@ -172,7 +182,7 @@ impl App {
         let Some((item, report)) = cast_progress_for_status(cast, status) else {
             return;
         };
-        let position_ticks = (report.position_seconds as f64 * TICKS_PER_SECOND as f64) as i64;
+        let position_ticks = (f64::from(report.position_seconds) * TICKS_PER_SECOND as f64) as i64;
         match &item.report {
             CastProgressTarget::Emby {
                 item_id,
@@ -216,7 +226,7 @@ impl App {
                 };
                 let session_id = session_id.clone();
                 let duration = *duration_seconds;
-                let position_seconds = report.position_seconds as f64;
+                let position_seconds = f64::from(report.position_seconds);
                 std::thread::spawn(move || {
                     // `time_listened` drives Audiobookshelf's listening-time
                     // stats, not resume position (`current_time` is what's
@@ -291,7 +301,6 @@ mod tests {
     use super::*;
     use crate::app::state::types::cast::CastProgressTarget as ProgressTarget;
     use crate::app::tests::make_app_stub;
-    use mbv_core::cast::client::CastStatus;
     use mbv_core::playback_queue::QueueItemContentId;
 
     fn dispatched(url: &str) -> DispatchedCastItem {
@@ -348,7 +357,9 @@ mod tests {
     fn extrapolates_steady_playback_by_elapsed_time_and_rate() {
         let mut status = playing_status(10.0, "https://a");
         status.playback_rate = 2.0;
-        let status_at = Instant::now() - Duration::from_secs(3);
+        let status_at = Instant::now()
+            .checked_sub(Duration::from_secs(3))
+            .unwrap_or_else(Instant::now);
         let position = cast_extrapolate(&status, status_at).unwrap();
         // 10s reported + 3s elapsed * 2.0 rate = 16s, with slack for test timing.
         assert!((15.5..=16.5).contains(&position), "position={position}");
@@ -358,7 +369,9 @@ mod tests {
     fn holds_position_while_buffering() {
         let mut status = playing_status(10.0, "https://a");
         status.state = CastPlaybackState::Buffering;
-        let status_at = Instant::now() - Duration::from_secs(5);
+        let status_at = Instant::now()
+            .checked_sub(Duration::from_secs(5))
+            .unwrap_or_else(Instant::now);
         assert_eq!(cast_extrapolate(&status, status_at), Some(10.0));
     }
 
@@ -366,7 +379,9 @@ mod tests {
     fn holds_position_while_paused() {
         let mut status = playing_status(10.0, "https://a");
         status.state = CastPlaybackState::Paused;
-        let status_at = Instant::now() - Duration::from_secs(5);
+        let status_at = Instant::now()
+            .checked_sub(Duration::from_secs(5))
+            .unwrap_or_else(Instant::now);
         assert_eq!(cast_extrapolate(&status, status_at), Some(10.0));
     }
 
@@ -375,16 +390,10 @@ mod tests {
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
         app.cast_attachment.as_mut().unwrap().dispatched = vec![dispatched("https://a")];
-        app.apply_cast_status(
-            "device-1".to_string(),
-            Ok(playing_status(10.0, "https://a")),
-        );
+        app.apply_cast_status("device-1", Ok(playing_status(10.0, "https://a")));
         // A later report disagrees with where extrapolation from the first
         // report would have put the position by now.
-        app.apply_cast_status(
-            "device-1".to_string(),
-            Ok(playing_status(50.0, "https://a")),
-        );
+        app.apply_cast_status("device-1", Ok(playing_status(50.0, "https://a")));
         let position = app.cast_extrapolated_position_seconds().unwrap();
         assert!((49.5..=50.5).contains(&position), "position={position}");
     }
@@ -413,26 +422,23 @@ mod tests {
             state: CastPlaybackState::Idle,
             playing_content_id: None,
         });
-        let app = make_app_stub();
-        assert_eq!(app.cast_now_playing_title(&cast), None);
+        let _app = make_app_stub();
+        assert_eq!(App::cast_now_playing_title(&cast), None);
     }
 
     #[test]
     fn now_playing_title_is_the_matched_dispatched_item_while_playing() {
         let mut cast = attachment(vec![dispatched("https://a")]);
         cast.status = Some(playing_status(10.0, "https://a"));
-        let app = make_app_stub();
-        assert_eq!(app.cast_now_playing_title(&cast).as_deref(), Some("Title"));
+        let _app = make_app_stub();
+        assert_eq!(App::cast_now_playing_title(&cast).as_deref(), Some("Title"));
     }
 
     #[test]
     fn status_update_stores_position_duration_rate_state_and_playing_entry() {
         let mut app = make_app_stub();
         app.attach_cast("device-1".to_string());
-        app.apply_cast_status(
-            "device-1".to_string(),
-            Ok(playing_status(12.5, "https://a")),
-        );
+        app.apply_cast_status("device-1", Ok(playing_status(12.5, "https://a")));
         let status = app
             .cast_attachment
             .as_ref()
@@ -479,13 +485,13 @@ mod tests {
         );
         app.set_cast_client("device-1", job_tx);
 
-        app.apply_cast_status("device-1".to_string(), Err("connection lost".to_string()));
+        app.apply_cast_status("device-1", Err("connection lost".to_string()));
 
         let attachment = app.cast_attachment.as_ref().unwrap();
         assert!(attachment.disconnected);
         assert!(attachment.client.is_none());
         assert_eq!(
-            app.cast_now_playing_title(attachment).as_deref(),
+            App::cast_now_playing_title(attachment).as_deref(),
             Some("Cast: disconnected")
         );
         assert_eq!(

@@ -54,7 +54,7 @@ fn cycle_sub_local_active_does_not_fall_back_to_subtitle_mode() {
         status.active = true;
         status.sub_tracks = vec![(1, "English".to_string(), false)];
         status.sub_id = 0;
-    }
+    };
     let before = app.config.lock().unwrap().subtitle_mode.clone();
 
     app.cycle_sub();

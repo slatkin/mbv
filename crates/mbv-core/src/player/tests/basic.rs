@@ -1,4 +1,5 @@
 use super::*;
+use crate::api::EmbyImageTags;
 
 // ── shift_index_for_move ──────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ pub(in crate::player) fn make_media_item(id: &str) -> crate::api::EmbyItem {
         people: Vec::new(),
         external_urls: Vec::new(),
         playlist_item_id: String::new(),
-        image_tags: Default::default(),
+        image_tags: EmbyImageTags::default(),
     }
 }
 
@@ -160,7 +161,7 @@ fn queue_session_for_pos_tests_with_client(
         queue_len: items.len(),
         runtime_ticks: emby_items[start_idx].runtime_ticks,
         title: emby_items[start_idx].display_name(),
-        ..Default::default()
+        ..PlayerStatus::default()
     }));
     let reporter = SessionReporter::new(
         client,
@@ -169,7 +170,7 @@ fn queue_session_for_pos_tests_with_client(
         MediaSourceId::new("msid"),
         EmbySessionId::new("sid"),
         false,
-        status.clone(),
+        Arc::clone(&status),
     );
     let (event_tx, event_rx) = mpsc::channel();
     let session = PlaybackRun::new_from_slot_items(
@@ -191,7 +192,7 @@ fn queue_session_for_pos_tests_with_client(
                 audio_device: None,
             },
             startup_pause_for_pipe: false,
-            status: status.clone(),
+            status: Arc::clone(&status),
             event_tx,
             subtitle_prefs: Arc::new(Mutex::new(SubtitlePrefs::default())),
             shutdown_report_timeout: Arc::new(Mutex::new(None)),

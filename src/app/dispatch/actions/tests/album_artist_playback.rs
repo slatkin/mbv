@@ -34,7 +34,7 @@ fn album_playback_routes_with_album_queue_source() {
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     );
     let mut track = make_item("Track", "Audio");
@@ -86,7 +86,7 @@ fn artist_dispatch_model() -> (Model, MusicArtistTarget) {
         }
         let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
             &level.items,
-            &Default::default(),
+            &std::collections::HashMap::default(),
         );
         catalog.revision = 7;
         catalog.parent_id = level.parent_id.clone();
@@ -95,7 +95,7 @@ fn artist_dispatch_model() -> (Model, MusicArtistTarget) {
             candidate: None,
             settled: Some(catalog),
         });
-    }
+    };
 
     let mut model = Model::new(app);
     model.app.panel_focus = PanelFocus::Library;

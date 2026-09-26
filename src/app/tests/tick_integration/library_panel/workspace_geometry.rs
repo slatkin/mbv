@@ -5,7 +5,7 @@ fn non_wide_saved_geometry_agrees_with_the_painted_frame() {
     let (mut harness, _log) = migrated_home();
     let terminal = draw_frame_at_model_size(&mut harness);
     let narrow = panel_of(&harness)
-        .and_then(|panel| panel.test_narrow_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_narrow_geometry)
         .expect("the frame is non-Wide");
     let panel = panel_of(&harness).expect("the Library panel is mounted");
 
@@ -53,7 +53,7 @@ fn overlay_sheet_and_workspace_box_rest_at_the_hero_box_slate() {
     let terminal = draw_frame_at_model_size(&mut harness);
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "the overlay is open in non-Wide geometry"
     );
@@ -61,7 +61,7 @@ fn overlay_sheet_and_workspace_box_rest_at_the_hero_box_slate() {
 
     // The sheet's own surface: the overlay frame's top-left corner cell.
     let (_, frame) = panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .expect("the overlay painted");
     assert_eq!(
         buf[(frame.x, frame.y)].bg,
@@ -75,7 +75,7 @@ fn overlay_sheet_and_workspace_box_rest_at_the_hero_box_slate() {
     // longer expressible: the selected row's bar shares the resting fill's
     // value, so the box body's fill is proven on its own padding row below.
     let (box_panel, _) = panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_workspace_box())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_workspace_box)
         .expect("the overlay's Workspace box painted");
     let resting_body = surface_colors(Surface::MainContentBox, false).fill;
     let focused_body = surface_colors(Surface::MainContentBox, true).fill;
@@ -104,12 +104,12 @@ fn overlay_sheet_and_workspace_box_rest_at_the_hero_box_slate() {
     let terminal = draw_frame_at_model_size(&mut harness);
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "the overlay stays open while the Queue holds focus"
     );
     let (box_panel, _) = panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_workspace_box())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_workspace_box)
         .expect("the overlay's Workspace box stays painted");
     assert_eq!(
         terminal.backend().buffer()[(box_panel.x + 1, box_panel.bottom() - 1)].bg,
@@ -133,7 +133,7 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     let _ = harness.step();
     let terminal = draw_frame_at_model_size(&mut harness);
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
 
     // Walk the cursor into the overflow first (the keyboard path, already
@@ -180,7 +180,7 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     );
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "the wheel leaves the overlay open"
     );
@@ -224,7 +224,7 @@ fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
     let _ = harness.step();
     drop(draw_frame_sized(&mut harness));
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
     assert!(
         !harness
@@ -293,6 +293,16 @@ fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
         "the covered album browser must not move"
     );
 
+    assert_music_workspace_focus_round_trip_and_clear(&mut harness, &music_key);
+}
+
+fn assert_music_workspace_focus_round_trip_and_clear(
+    harness: &mut TickHarness,
+    music_key: &LibraryKey,
+) {
+    use crate::app::components::MusicContent;
+    use tuirealm::event::{Key, KeyEvent};
+
     // Queue takes focus and gives it back: the Workspace keys keep working.
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
     harness.model_mut().sync_mounted_surfaces();
@@ -306,7 +316,7 @@ fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
     assert_eq!(
         harness
             .model()
-            .library_owner::<MusicContent>(&music_key)
+            .library_owner::<MusicContent>(music_key)
             .unwrap()
             .selected_track_item()
             .map(|track| track.id),
@@ -322,7 +332,7 @@ fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
     assert!(
         !harness
             .model()
-            .library_owner::<MusicContent>(&music_key)
+            .library_owner::<MusicContent>(music_key)
             .unwrap()
             .track_focused(),
         "the shell's focus clear takes effect over the open overlay"
@@ -331,7 +341,7 @@ fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
     assert!(
         !harness
             .model()
-            .library_owner::<MusicContent>(&music_key)
+            .library_owner::<MusicContent>(music_key)
             .unwrap()
             .track_focused(),
         "no push re-seizes the focus after the shell's clear"
@@ -356,7 +366,7 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
     let _ = harness.step();
     drop(draw_frame_at_model_size(&mut harness));
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
 
     harness.inject(Event::Keyboard(KeyEvent {
@@ -467,7 +477,7 @@ fn stale_overlay_bit_never_shadows_wide_keyboard_handling() {
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "Enter opens the overlay in narrow geometry"
     );
@@ -520,12 +530,12 @@ fn overlay_workspace_paints_its_cursor_row() {
     let terminal = draw_frame_at_model_size(&mut harness);
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "the overlay is open in non-Wide geometry"
     );
     let (_, content) = panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_workspace_box())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_workspace_box)
         .expect("the overlay's Workspace box painted");
     // TV's Workspace carries no header row, so the only bar row inside the
     // box's content is the cursor's own selected row, painted with the

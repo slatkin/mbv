@@ -111,7 +111,7 @@ fn long_overview_scrolls_inside_a_short_box() {
                 0,
                 palette::Surface::HeroPane,
                 6,
-            )
+            );
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
@@ -193,7 +193,7 @@ fn overview_separator_and_credits_scroll_as_one_flow() {
                     offset,
                     palette::Surface::HeroPane,
                     60,
-                )
+                );
             })
             .unwrap();
         (terminal.backend().buffer().clone(), paint.unwrap())

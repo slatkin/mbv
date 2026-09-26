@@ -3,7 +3,12 @@ name = "mbvd"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Daemon process for mbv media playback."
+readme = "../../README.md"
 
 [[bin]]
 name = "mbvd"

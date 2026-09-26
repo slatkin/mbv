@@ -24,10 +24,6 @@ use super::*;
 use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::shell::Model;
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, TabSelection};
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
 
 fn saved_level(
@@ -328,7 +324,7 @@ fn selected_feed_row_region(output: &str, title: &str) -> String {
         .iter()
         .position(|line| line.starts_with("  ") && line.contains(title))
         .unwrap_or_else(|| panic!("selected feed row must be rendered: {output}"));
-    lines[row..row + 1].join("\n")
+    lines[row..=row].join("\n")
 }
 
 #[test]
@@ -391,7 +387,7 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(LibraryPanel::test_list_rect)
         .expect("the Library panel painted a list slot");
     let total_rows = model.app.libs[0]
         .feed_home_video

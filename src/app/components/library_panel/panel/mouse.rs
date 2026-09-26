@@ -1,6 +1,15 @@
 //! Pointer-event interpretation against the last painted frame's retained slot geometry, resolving pill, list, hero, and split-drag gestures into typed Msgs.
 
-use super::*;
+use super::{
+    normalize_list_pane_width, ClickModifier, LeafKeyResult, LibraryKey, LibraryPanel,
+    LibrarySlotEvent, MediaListSurfaceInput, MouseButton, MouseEvent, MouseEventKind, MouseGesture,
+    MouseGestureState, Msg, Position, ShellRequest, SkeletonHits, TerminalObserverEvent,
+};
+
+enum HeroWheelOutcome {
+    Unhandled,
+    Handled(Option<Msg>),
+}
 
 impl LibraryPanel {
     /// The list slot's row-flow rect from the last painted frame, when one
@@ -40,28 +49,31 @@ impl LibraryPanel {
         Some(Msg::TerminalEvent(claim))
     }
 
-    fn hero_wheel_result(&mut self, at: Position, delta: i64) -> (bool, Option<Msg>) {
+    fn hero_wheel_result(&mut self, at: Position, delta: i64) -> HeroWheelOutcome {
         let Some(geometry) = self.wide_geometry.as_ref() else {
-            return (false, None);
+            return HeroWheelOutcome::Unhandled;
         };
         let Some(rect) = geometry.overview_box else {
-            return (false, None);
+            return HeroWheelOutcome::Unhandled;
         };
         if !rect.contains(at) || geometry.overview_content_length <= geometry.overview_viewport {
-            return (false, None);
+            return HeroWheelOutcome::Unhandled;
         }
         let max = geometry.overview_content_length - geometry.overview_viewport;
+        // Saturate: wheel deltas are tiny, and the hero scroll clamps at its
+        // own bounds anyway.
+        let scroll_delta =
+            i16::try_from(delta).unwrap_or(if delta < 0 { i16::MIN } else { i16::MAX });
         let message = self.owners.active_mut().map(|owner| {
-            owner.hero_scroll(delta as i16, max);
+            owner.hero_scroll(scroll_delta, max);
             Msg::TerminalEvent(crate::app::components::msg::TerminalObserverEvent::MouseClaimed)
         });
-        (true, message)
+        HeroWheelOutcome::Handled(message)
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         if let LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel { at, delta }) = event {
-            let (handled, message) = self.hero_wheel_result(at, delta);
-            if handled {
+            if let HeroWheelOutcome::Handled(message) = self.hero_wheel_result(at, delta) {
                 return message;
             }
             // Otherwise preserve the owner's existing HeroPane behavior.
@@ -157,7 +169,7 @@ impl LibraryPanel {
     /// Interpret one non-gap mouse event against the panel's own painted
     /// slot geometry: pill rows resolve their slot events first, then the
     /// list slot delegates the normalized row-local input.
-    fn surface_gesture(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn surface_gesture(&mut self, mouse: MouseEvent) -> Option<Msg> {
         let gesture = self.gestures.recognize(mouse)?;
         let at = match gesture {
             MouseGesture::Click { at, .. }
@@ -167,7 +179,7 @@ impl LibraryPanel {
             MouseGesture::Drag { .. } | MouseGesture::DragEnd => return None,
         };
         if let Some(message) = self.selector_or_link_gesture(gesture, at) {
-            return message;
+            return Some(message);
         }
         // The hero pane is painted separately from the Browser pane's list
         // slot, and its owner decides what input it claims.
@@ -181,23 +193,19 @@ impl LibraryPanel {
     /// the latest frame is the one that resolves (ADR 0024). Link labels are
     /// ordinary text; the panel retains valid URL geometry and owns the click
     /// effect request.
-    fn selector_or_link_gesture(
-        &mut self,
-        gesture: MouseGesture,
-        at: Position,
-    ) -> Option<Option<Msg>> {
+    fn selector_or_link_gesture(&mut self, gesture: MouseGesture, at: Position) -> Option<Msg> {
         if let Some(&index) = self.hits.selector.resolve(at) {
-            return Some(self.slot_event(LibrarySlotEvent::SelectorPicked(index)));
+            return self.slot_event(LibrarySlotEvent::SelectorPicked(index));
         }
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
-            return Some(self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index)));
+            return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
         }
         if let MouseGesture::Click { .. } = gesture {
             if let Some(&index) = self.hits.links.resolve(at) {
                 if let Some(url) = self.painted_link_urls.get(index).cloned().and_then(|url| {
                     super::super::overview_box::sanitize_url(&url).map(str::to_owned)
                 }) {
-                    return Some(Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url)))));
+                    return Some(Msg::Shell(Box::new(ShellRequest::OpenUrl(url))));
                 }
             }
         }
@@ -285,7 +293,7 @@ impl LibraryPanel {
         }
     }
 
-    fn overlay_gesture(&mut self, mouse: &MouseEvent, at: Position) -> Option<Msg> {
+    fn overlay_gesture(&mut self, mouse: MouseEvent, at: Position) -> Option<Msg> {
         let geometry = self.overlay_geometry.as_ref()?;
         let gesture = self.gestures.recognize(mouse)?;
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
@@ -319,8 +327,9 @@ impl LibraryPanel {
         let result = self
             .owners
             .active_mut()
-            .map(|owner| owner.activate_hero_selection())
-            .unwrap_or(LeafKeyResult::Unhandled);
+            .map_or(LeafKeyResult::Unhandled, |owner| {
+                owner.activate_hero_selection()
+            });
         match result {
             // A pointer gesture always claims as mouse. Preserve a
             // destination request, but never leak a keyboard claim from an
@@ -339,7 +348,7 @@ impl LibraryPanel {
         }
     }
 
-    pub(super) fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    pub(super) fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         let gesture_boundary =
             matches!(mouse.kind, MouseEventKind::Down(_) | MouseEventKind::Up(_));
         if matches!(mouse.kind, MouseEventKind::Moved) {

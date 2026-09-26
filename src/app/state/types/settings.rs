@@ -399,7 +399,7 @@ pub fn fmt_feeds_list(list: &[mbv_core::config::FeedSubscription]) -> String {
     }
 }
 
-pub fn fmt_library_routes(routes: &std::collections::HashMap<String, String>) -> String {
+pub fn fmt_library_routes(routes: &std::collections::BTreeMap<String, String>) -> String {
     match routes.len() {
         0 => "none".into(),
         1 => {

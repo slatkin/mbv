@@ -20,10 +20,10 @@ fn focus_panel_keeps_the_card_checkpoint() {
     let mut app = make_app_stub();
     app.last_card_height = 17;
     app.last_card_width = 34;
-    app.dispatch(Command::FocusPanel(crate::app::PanelFocus::Library));
+    app.dispatch(&Command::FocusPanel(crate::app::PanelFocus::Library));
     assert_eq!(app.last_card_height, 17);
     assert_eq!(app.last_card_width, 34);
-    app.dispatch(Command::FocusPanel(crate::app::PanelFocus::Queue));
+    app.dispatch(&Command::FocusPanel(crate::app::PanelFocus::Queue));
     assert_eq!(app.last_card_height, 17);
     assert_eq!(app.last_card_width, 34);
 }
@@ -31,19 +31,40 @@ fn focus_panel_keeps_the_card_checkpoint() {
 #[test]
 fn o_opens_an_idle_feed_link_only_when_available() {
     let o = key(KeyCode::Char('o'));
+    let context =
+        |player_active, has_connected_session, playback_panel_present_idle, link_available| {
+            IdleFeedLinkContext {
+                player_active,
+                has_connected_session,
+                playback_panel_present_idle,
+                link_available,
+            }
+        };
     assert_eq!(
-        idle_feed_command_for_key(o, false, false, false, true),
+        idle_feed_command_for_key(o, &context(false, false, false, true)),
         Some(Command::OpenIdleFeedLink)
     );
-    assert_eq!(idle_feed_command_for_key(o, true, false, false, true), None);
-    assert_eq!(idle_feed_command_for_key(o, false, true, false, true), None);
     assert_eq!(
-        idle_feed_command_for_key(o, false, false, false, false),
+        idle_feed_command_for_key(o, &context(true, false, false, true)),
         None
     );
-    assert_eq!(idle_feed_command_for_key(o, false, false, true, true), None);
     assert_eq!(
-        idle_feed_command_for_key(key_ctrl(KeyCode::Char('o')), false, false, false, true),
+        idle_feed_command_for_key(o, &context(false, true, false, true)),
+        None
+    );
+    assert_eq!(
+        idle_feed_command_for_key(o, &context(false, false, false, false)),
+        None
+    );
+    assert_eq!(
+        idle_feed_command_for_key(o, &context(false, false, true, true)),
+        None
+    );
+    assert_eq!(
+        idle_feed_command_for_key(
+            key_ctrl(KeyCode::Char('o')),
+            &context(false, false, false, true)
+        ),
         None
     );
 }
@@ -87,7 +108,7 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
 
     let mut app = make_app_stub();
     assert!(!app.mute_on);
-    app.dispatch(Command::ToggleMute);
+    app.dispatch(&Command::ToggleMute);
     assert!(app.mute_on);
 
     let prefs_path = crate::config::prefs_path();
@@ -95,7 +116,7 @@ fn dispatch_toggle_mute_flips_state_and_persists() {
     let v: serde_json::Value = serde_json::from_str(&saved).unwrap();
     assert_eq!(v["mute_on"], serde_json::json!(true));
 
-    app.dispatch(Command::ToggleMute);
+    app.dispatch(&Command::ToggleMute);
     assert!(!app.mute_on);
 }
 
@@ -109,7 +130,7 @@ fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() 
     sess.muted = false;
     app.connected_session_state = Some(sess);
 
-    app.dispatch(Command::ToggleMute);
+    app.dispatch(&Command::ToggleMute);
 
     assert!(
         app.connected_session_state.as_ref().unwrap().muted,
@@ -132,7 +153,7 @@ fn dispatch_toggle_mute_while_attached_to_session_toggles_back_off() {
     sess.muted = true;
     app.connected_session_state = Some(sess);
 
-    app.dispatch(Command::ToggleMute);
+    app.dispatch(&Command::ToggleMute);
 
     assert!(!app.connected_session_state.as_ref().unwrap().muted);
 }
@@ -146,7 +167,7 @@ fn dispatch_toggle_mute_while_attached_to_session_with_unknown_mute_state_mutes_
     app.connected_session_id = Some("session-1".into());
     app.connected_session_state = None;
 
-    app.dispatch(Command::ToggleMute);
+    app.dispatch(&Command::ToggleMute);
 
     assert!(!app.mute_on);
 }
@@ -156,7 +177,7 @@ fn dispatch_toggle_play_pause_local_sends_player_command() {
     let mut app = make_app_stub();
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::TogglePlayPause);
+    app.dispatch(&Command::TogglePlayPause);
 
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
 }
@@ -167,7 +188,7 @@ fn dispatch_toggle_play_pause_remote_does_not_touch_local_player() {
     app.connected_session_id = Some("session-1".into());
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::TogglePlayPause);
+    app.dispatch(&Command::TogglePlayPause);
 
     assert!(
         !matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)),
@@ -189,7 +210,7 @@ fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::EmbyItem
 #[test]
 fn queue_play_cursor_on_empty_queue_is_a_no_op() {
     let mut app = make_app_stub();
-    assert!(!app.dispatch(Command::QueuePlayCursor(0)));
+    assert!(!app.dispatch(&Command::QueuePlayCursor(0)));
     assert!(app.status.is_empty());
 }
 
@@ -206,7 +227,7 @@ fn queue_play_cursor_while_attached_to_session_hands_off_to_session() {
     );
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor(1));
+    app.dispatch(&Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -222,7 +243,7 @@ fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
     app.set_queue_scope(QueueScope::Local);
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor(1));
+    app.dispatch(&Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -249,7 +270,7 @@ fn queue_play_cursor_without_direct_remote_stays_on_local_scope() {
     );
     app.connected_session_id = Some("session-1".into());
 
-    app.dispatch(Command::QueuePlayCursor(1));
+    app.dispatch(&Command::QueuePlayCursor(1));
 
     assert!(
         app.status.contains("Requesting playback"),
@@ -293,7 +314,7 @@ fn queue_play_cursor_on_disconnected_remote_reports_jump_rejection() {
         .unwrap()
         .store(true, std::sync::atomic::Ordering::SeqCst);
 
-    app.dispatch(Command::QueuePlayCursor(1));
+    app.dispatch(&Command::QueuePlayCursor(1));
 
     assert_eq!(
         app.status,
@@ -318,11 +339,11 @@ fn queue_play_cursor_jumps_to_cursor_when_active_and_playback_scope() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     let rx = app.player.spy_on_commands();
     let want_slot = app.player_tab.queue.slots()[1].slot_id;
 
-    app.dispatch(Command::QueuePlayCursor(1));
+    app.dispatch(&Command::QueuePlayCursor(1));
 
     assert!(matches!(
         rx.try_recv(),
@@ -338,10 +359,10 @@ fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_ite
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::QueuePlayCursor(0));
+    app.dispatch(&Command::QueuePlayCursor(0));
 
     assert!(matches!(
         rx.try_recv(),
@@ -357,10 +378,10 @@ fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_video_ite
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     let rx = app.player.spy_on_commands();
 
-    app.dispatch(Command::QueuePlayCursor(0));
+    app.dispatch(&Command::QueuePlayCursor(0));
 
     assert!(matches!(
         rx.try_recv(),

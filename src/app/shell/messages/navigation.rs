@@ -1,4 +1,4 @@
-use super::*;
+use super::{DestinationLatestSource, ShellRequest, ToastSeverity};
 
 impl super::super::Model {
     pub(super) fn handle_navigation_request(
@@ -48,7 +48,7 @@ impl super::super::Model {
                 None
             }
             request @ (ShellRequest::LibraryRoutesEnter | ShellRequest::LibraryRoutesEsc) => {
-                self.handle_library_routes_request(request);
+                self.handle_library_routes_request(&request);
                 None
             }
             _ => Some(request),
@@ -136,7 +136,7 @@ impl super::super::Model {
                 self.inline_search_query_started();
             }
             ShellRequest::InlineSearchActivate { id, item_type } => {
-                self.activate_inline_search_item(id, item_type);
+                self.activate_inline_search_item(&id, &item_type);
             }
             ShellRequest::MultiselectCommit { .. } => {
                 self.handle_multiselect_commit();

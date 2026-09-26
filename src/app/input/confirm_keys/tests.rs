@@ -372,7 +372,7 @@ fn an_in_flight_save_completion_never_executes_an_unconfirmed_gated_replacement(
         .playlist_mutations
         .get("playlist-1")
         .and_then(|state| state.active.as_ref())
-        .map(|mutation| mutation.mutation_id())
+        .map(crate::app::state::types::playback::PlaylistMutation::mutation_id)
         .expect("the save is tracked as an in-flight mutation");
 
     // Second activation while that save is still in flight: it gates on the

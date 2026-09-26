@@ -206,7 +206,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .unwrap();
 
@@ -246,7 +246,7 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .unwrap();
     let generation = app.audiobookshelf_runtime.generation();
@@ -465,7 +465,7 @@ fn restore_queue_state_with_no_items_does_nothing() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .expect("save queue state");
 
@@ -512,7 +512,7 @@ fn restore_queue_state_clears_a_stale_dirty_flag() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .expect("save queue state");
 

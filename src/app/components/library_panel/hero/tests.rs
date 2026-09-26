@@ -41,7 +41,7 @@ fn movie_with_backdrop_and_poster_is_landscape() {
             assert_eq!(image_types, &["Backdrop", "Primary"]);
             assert_eq!(cache_key, "m1:Backdrop,Primary");
         }
-        _ => panic!("expected Emby source"),
+        ArtworkSource::AudiobookshelfCover { .. } => panic!("expected Emby source"),
     }
     assert_eq!(
         artwork.decoration,
@@ -126,7 +126,7 @@ fn album_is_always_square() {
             assert_eq!(image_types, &["AudioChild"]);
             assert_eq!(cache_key, "al1:P");
         }
-        _ => panic!("expected Emby source"),
+        ArtworkSource::AudiobookshelfCover { .. } => panic!("expected Emby source"),
     }
 }
 
@@ -157,7 +157,7 @@ fn album_folder_row_uses_the_album_arm_not_the_type_dispatch() {
             assert_eq!(image_types, &["AudioChild"]);
             assert_eq!(cache_key, "525079:P");
         }
-        _ => panic!("expected Emby source"),
+        ArtworkSource::AudiobookshelfCover { .. } => panic!("expected Emby source"),
     }
 }
 
@@ -175,7 +175,7 @@ fn music_album_producer_overrides_the_type_dispatch_artwork() {
     assert_eq!(shape(&emby_artwork_policy(&item)), ArtworkShape::Portrait);
     match source(&data.facts.artwork) {
         ArtworkSource::Emby { cache_key, .. } => assert_eq!(cache_key, "525081:P"),
-        _ => panic!("expected Emby source"),
+        ArtworkSource::AudiobookshelfCover { .. } => panic!("expected Emby source"),
     }
 }
 
@@ -200,13 +200,13 @@ fn episode_with_series_landscape_tags_is_landscape() {
                 image_types,
                 &SERIES_LANDSCAPE_IMAGE_TYPES
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>()
             );
             // Episodes do not use the `:ser:` Series namespace.
             assert_eq!(cache_key, "e1:Thumb,Primary,Backdrop,Logo");
         }
-        _ => panic!("expected Emby source"),
+        ArtworkSource::AudiobookshelfCover { .. } => panic!("expected Emby source"),
     }
 }
 
@@ -235,7 +235,7 @@ fn series_landscape_keeps_the_series_cache_key_namespace() {
                 image_types,
                 &SERIES_LANDSCAPE_IMAGE_TYPES
                     .iter()
-                    .map(|s| s.to_string())
+                    .map(ToString::to_string)
                     .collect::<Vec<_>>()
             );
             assert_eq!(
@@ -243,7 +243,7 @@ fn series_landscape_keeps_the_series_cache_key_namespace() {
                 &series_image_cache_key("s1", SERIES_LANDSCAPE_IMAGE_TYPES)
             );
         }
-        _ => panic!("expected Emby source"),
+        ArtworkSource::AudiobookshelfCover { .. } => panic!("expected Emby source"),
     }
 }
 
@@ -308,7 +308,7 @@ fn thumb_only_video_requests_the_declared_thumb() {
             assert_eq!(image_types.first().map(String::as_str), Some("Thumb"));
             assert_eq!(cache_key, "hv1:Thumb,Backdrop,Primary,Logo");
         }
-        _ => panic!("expected Emby source"),
+        ArtworkSource::AudiobookshelfCover { .. } => panic!("expected Emby source"),
     }
 }
 
@@ -466,8 +466,7 @@ fn movie_credits_reach_library_panel_content_through_browser_owner() {
         library_total: None,
         letter_filter: None,
         loading: false,
-        group_pills: false,
-        show_letter_pills: false,
+        selector_mode: crate::app::components::emby_library_content::EmbySelectorMode::None,
         feed_groups: Vec::new(),
         feed_group_ids: Vec::new(),
         feed_group_cursor: 0,
@@ -718,7 +717,7 @@ fn episode_item(cover: Option<&str>) -> AudiobookshelfQueueItem {
         played: false,
         pub_date_secs: None,
         is_finished: false,
-        cover_path: cover.map(|c| c.to_string()),
+        cover_path: cover.map(ToString::to_string),
     }
 }
 

@@ -30,7 +30,7 @@ fn remote_playback_app() -> App {
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
         config,
     )
 }

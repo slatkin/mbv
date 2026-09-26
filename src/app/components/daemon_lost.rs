@@ -47,10 +47,10 @@ impl DaemonLostComponent {
         daemon_log_path: &str,
         restart_error: Option<&str>,
     ) {
-        self.last_playing_title = last_playing_title.map(|s| s.to_string());
+        self.last_playing_title = last_playing_title.map(ToString::to_string);
         self.daemon_log_path.clear();
         self.daemon_log_path.push_str(daemon_log_path);
-        self.restart_error = restart_error.map(|s| s.to_string());
+        self.restart_error = restart_error.map(ToString::to_string);
     }
 
     pub(in crate::app) fn set_restart_error(&mut self, message: String) {
@@ -65,9 +65,9 @@ impl Default for DaemonLostComponent {
 }
 
 impl Component for DaemonLostComponent {
-    fn view(&mut self, f: &mut ratatui::Frame, _area: ratatui::layout::Rect) {
+    fn view(&mut self, frame: &mut ratatui::Frame, _area: ratatui::layout::Rect) {
         render_daemon_lost_modal_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
             self.last_playing_title.as_deref(),
             &self.daemon_log_path,
@@ -75,7 +75,7 @@ impl Component for DaemonLostComponent {
         );
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -96,9 +96,9 @@ impl AppComponent<Msg, UserEvent> for DaemonLostComponent {
             return None;
         };
         let intent = match key.code {
-            Key::Char('r') | Key::Char('R') => DaemonLostIntent::RestartWithTray,
-            Key::Char('s') | Key::Char('S') => DaemonLostIntent::RestartWithoutTray,
-            Key::Char('q') | Key::Char('Q') => DaemonLostIntent::Quit,
+            Key::Char('r' | 'R') => DaemonLostIntent::RestartWithTray,
+            Key::Char('s' | 'S') => DaemonLostIntent::RestartWithoutTray,
+            Key::Char('q' | 'Q') => DaemonLostIntent::Quit,
             _ => return None,
         };
         Some(Msg::Shell(Box::new(ShellRequest::DaemonLostIntent(intent))))

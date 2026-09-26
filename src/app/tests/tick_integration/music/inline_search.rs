@@ -52,7 +52,7 @@ fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
         workspace
             .inline_search_mut()
             .set_pool(SearchPool::Items(vec![result]));
-    }
+    };
     harness.inject(key(Key::Char('a')));
     harness.step();
     harness
@@ -164,7 +164,7 @@ fn enter_on_inline_search_album_result_defers_to_async_activation() {
                 display_label: "First Album".into(),
                 search_text: "first album".into(),
             }]));
-    }
+    };
 
     harness.inject(key(Key::Enter));
     let outcome = harness.step();

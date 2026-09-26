@@ -1,4 +1,4 @@
-use super::*;
+use super::{parse_item, EmbyClient, EmbyItem};
 use serde_json::Value;
 
 /// `Fields` for `get_latest`. Must include every field its parser
@@ -9,6 +9,19 @@ const LATEST_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName
 /// `Fields` for `get_latest_episodes`. Same `DateCreated` dependency as
 /// [`LATEST_FIELDS`].
 const LATEST_EPISODES_FIELDS: &str = "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,Overview,PremiereDate,DateCreated";
+
+#[derive(Debug)]
+pub struct SortedItemsParams<'a> {
+    pub parent_id: &'a str,
+    pub item_types: Option<&'a str>,
+    pub unplayed_only: bool,
+    pub start_index: usize,
+    pub limit: usize,
+    pub sort_by: &'a str,
+    pub sort_order: &'a str,
+    pub name_ge: Option<&'a str>,
+    pub name_lt: Option<&'a str>,
+}
 
 impl EmbyClient {
     pub(super) fn fetch_items(
@@ -42,7 +55,7 @@ impl EmbyClient {
         let vfolders: Value = self
             .get("/Library/VirtualFolders")
             .call()
-            .map_err(|e| Self::service_failure("Emby views request failed", e))?
+            .map_err(|e| Self::service_failure("Emby views request failed", &e))?
             .body_mut()
             .read_json()
             .map_err(|e| {
@@ -57,7 +70,7 @@ impl EmbyClient {
                 crate::encode_path_segment(&self.user_id)
             ))
             .call()
-            .map_err(|e| Self::service_failure("Emby user views request failed", e))?
+            .map_err(|e| Self::service_failure("Emby user views request failed", &e))?
             .body_mut()
             .read_json()
             .map_err(|e| {
@@ -101,7 +114,7 @@ impl EmbyClient {
         sort_by: &str,
         sort_order: &str,
     ) -> Result<(Vec<EmbyItem>, usize), String> {
-        self.get_items_sorted_ranged(
+        self.get_items_sorted_ranged(&SortedItemsParams {
             parent_id,
             item_types,
             unplayed_only,
@@ -109,34 +122,36 @@ impl EmbyClient {
             limit,
             sort_by,
             sort_order,
-            None,
-            None,
-        )
+            name_ge: None,
+            name_lt: None,
+        })
     }
 
     /// Like `get_items_sorted`, but additionally scopes the fetch to a
-    /// SortName range via Emby's `NameStartsWithOrGreater` /
+    /// `SortName` range via Emby's `NameStartsWithOrGreater` /
     /// `NameLessThan` filters (`name_ge`/`name_lt`, either or both
     /// optional) -- used by the letter-range pills so only the
     /// selected range is fetched from the server. Verified empirically
     /// against a live Emby server (2026-07-22): these filters key off
-    /// SortName, not the raw display Name, matching the app's own
-    /// letter-bucket header grouping (e.g. "The Harder They Come", SortName
+    /// `SortName`, not the raw display Name, matching the app's own
+    /// letter-bucket header grouping (e.g. "The Harder They Come", `SortName`
     /// "Harder They Come", is included in an H-I range fetch and excluded
     /// from a T-U range fetch).
-    #[allow(clippy::too_many_arguments)]
     pub fn get_items_sorted_ranged(
         &self,
-        parent_id: &str,
-        item_types: Option<&str>,
-        unplayed_only: bool,
-        start_index: usize,
-        limit: usize,
-        sort_by: &str,
-        sort_order: &str,
-        name_ge: Option<&str>,
-        name_lt: Option<&str>,
+        params: &SortedItemsParams<'_>,
     ) -> Result<(Vec<EmbyItem>, usize), String> {
+        let SortedItemsParams {
+            parent_id,
+            item_types,
+            unplayed_only,
+            start_index,
+            limit,
+            sort_by,
+            sort_order,
+            name_ge,
+            name_lt,
+        } = *params;
         let mut req = self.get(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)))
             .query("ParentId", parent_id)
             .query("SortBy", sort_by)
@@ -171,7 +186,8 @@ impl EmbyClient {
         })?;
         let parse_started = std::time::Instant::now();
         let resp: Value = resp.body_mut().read_json().map_err(|e| e.to_string())?;
-        let total = resp["TotalRecordCount"].as_u64().unwrap_or(0) as usize;
+        let total =
+            usize::try_from(resp["TotalRecordCount"].as_u64().unwrap_or(0)).unwrap_or(usize::MAX);
         let items: Vec<EmbyItem> = resp["Items"]
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
@@ -370,6 +386,7 @@ impl EmbyClient {
 
     // ── Playback reporting ───────────────────────────────────────────────────
 
+    #[must_use]
     pub fn ws_url(&self) -> String {
         let base = self
             .config

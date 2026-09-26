@@ -1,10 +1,10 @@
-use crate::app::state::bootstrap::bootstrap_legacy_queue;
+use crate::app::state::bootstrap::{bootstrap_legacy_queue, LocalDaemonBootstrap};
 use crate::app::state::types::playback::QueueScope;
 use crate::app::state::types::player_tab::PlayerTab;
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crate::app::state::types::tab_selection::TabSelection;
 use crate::app::{
-    bootstrap_unified_queue, layout, render, spawn_resize_worker, App, AppInit, SessionEvent,
+    bootstrap_unified_queue, layout, spawn_resize_worker, App, AppInit, SessionEvent,
     SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
 use mbv_core::api::{EmbyClient, EmbyItem};
@@ -16,22 +16,185 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 fn list_pane_width_from_prefs(prefs: &serde_json::Value) -> Option<u16> {
-    prefs["list_pane_width"].as_u64().map(|v| v as u16)
+    prefs["list_pane_width"]
+        .as_u64()
+        .and_then(|value| u16::try_from(value).ok())
 }
 
 fn visual_slot_hidden_from_prefs(prefs: &serde_json::Value) -> bool {
     prefs["visual_slot_hidden"].as_bool().unwrap_or(false)
 }
 
+/// The idle Emby service runtime an independent (non-daemon) session starts
+/// from: configured with or without a stored credential.
+fn independent_emby_runtime(configured: bool, credential_present: bool) -> EmbyRuntime {
+    let mut runtime = EmbyRuntime::new(configured);
+    runtime.state = crate::app::dispatch::session::service_startup::initial_state(
+        configured,
+        credential_present,
+    );
+    runtime
+}
+
+/// The idle Audiobookshelf service runtime an independent or attaching
+/// session starts from: configured with or without a stored credential.
+fn independent_audiobookshelf_runtime(
+    configured: bool,
+    credential_present: bool,
+) -> AudiobookshelfRuntime {
+    let mut runtime = AudiobookshelfRuntime::new(configured);
+    runtime.state = crate::app::dispatch::session::service_startup::audiobookshelf_initial_state(
+        configured,
+        credential_present,
+    );
+    runtime
+}
+
+/// A detached Audiobookshelf socket receiver: sessions that do not host the
+/// ABS socket loop still need the channel `App` carries.
+fn detached_socket_rx() -> mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent> {
+    let (_, rx) = mpsc::channel();
+    rx
+}
+
+/// Start MPRIS against the daemon's `RemotePlayer` (#175, previously done in
+/// `main.rs::run_remote_app` before the constructor ran). Moved here so App
+/// owns the resulting handle and can `rebind` it later if
+/// `switch_to_direct_remote` / `restore_local_mode` swap which target owns
+/// playback.
+///
+/// Test builds leave `mpris` unset (build() initializes it to None):
+/// `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real D-Bus
+/// session bus from a thread with no shutdown path -- leaked into every test
+/// process that constructs a remote App, where process teardown races it
+/// (issue #757). Tests that exercise rebind inject `mpris::test_handle`
+/// themselves.
+#[cfg(not(test))]
+fn start_mpris(remote: &mbv_core::remote_player::RemotePlayer) -> crate::mpris::MprisHandle {
+    let mpris_remote = remote.clone();
+    crate::mpris::start(
+        std::sync::Arc::clone(&mpris_remote.status),
+        move |cmd| {
+            let _ = mpris_remote.send_command(cmd);
+        },
+        Some(remote.disconnected_flag()),
+    )
+}
+
+/// The daemon-side queue snapshot an attaching session seeds its queue
+/// scope, local-daemon bootstrap, and queue tabs from.
+struct RemoteSnapshot {
+    items: Vec<mbv_core::api::EmbyItem>,
+    cursor: usize,
+    unified_state: Option<mbv_core::ctrl::UnifiedQueueStateData>,
+}
+
+impl RemoteSnapshot {
+    fn take(remote: &mbv_core::remote_player::RemotePlayer) -> Self {
+        Self {
+            items: remote.items.lock().unwrap().clone(),
+            cursor: remote.status.lock().unwrap().current_idx,
+            unified_state: remote.unified_queue_state(),
+        }
+    }
+
+    /// Whether the daemon side has any queue content to present.
+    fn has_items(&self) -> bool {
+        self.unified_state
+            .as_ref()
+            .map_or(!self.items.is_empty(), |state| !state.slots.is_empty())
+    }
+
+    /// The queue scope the session opens in: remote when a network daemon
+    /// already plays something, local otherwise.
+    fn scope(&self, is_local: bool) -> QueueScope {
+        if !is_local && self.has_items() {
+            QueueScope::Remote
+        } else {
+            QueueScope::Local
+        }
+    }
+
+    /// The legacy/unified bootstrap a local-daemon attach replays through
+    /// `App::build`.
+    fn local_bootstrap(&self, source: &crate::config::QueueSource) -> LocalDaemonBootstrap {
+        self.unified_state.as_ref().map_or_else(
+            || bootstrap_legacy_queue(self.items.clone(), self.cursor, source.clone()),
+            bootstrap_unified_queue,
+        )
+    }
+
+    /// The queue tabs the session mounts: one unified tab for a local
+    /// daemon, separate local/remote tabs for a network daemon.
+    fn tabs(
+        self,
+        is_local: bool,
+        local_daemon_bootstrap: Option<&LocalDaemonBootstrap>,
+    ) -> (PlayerTab, Option<PlayerTab>) {
+        if is_local {
+            // Local daemon: one unified queue, exactly like plain local
+            // playback — no separate remote_player_tab, no scope pill.
+            (
+                local_daemon_bootstrap.as_ref().unwrap().player_tab.clone(),
+                None,
+            )
+        } else {
+            // Remote/network daemon: keep a separate remote queue so the
+            // user can browse locally while the daemon plays elsewhere.
+            (
+                PlayerTab::default(),
+                Some(self.unified_state.as_ref().map_or_else(
+                    || PlayerTab::from_emby_items(self.items, self.cursor),
+                    PlayerTab::from_unified_state,
+                )),
+            )
+        }
+    }
+}
+
+/// The service runtimes and Audiobookshelf credential state a remote or
+/// attaching session starts from: the Emby runtime is ready when a concrete
+/// client exists, idle otherwise; the Audiobookshelf startup request is
+/// armed after `build`, once the runtime's generation exists.
+struct RemoteServices {
+    emby_runtime: EmbyRuntime,
+    audiobookshelf_runtime: AudiobookshelfRuntime,
+    audiobookshelf_configured: bool,
+    audiobookshelf_credential_present: bool,
+}
+
+fn remote_services(
+    app_config: &crate::config::Config,
+    client_arc: Option<&Arc<Mutex<EmbyClient>>>,
+) -> RemoteServices {
+    let emby_configured = app_config.emby_setup.is_some();
+    let emby_credential_present =
+        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
+    let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
+    let audiobookshelf_credential_present =
+        mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
+            .is_some();
+    let emby_runtime = client_arc.map_or_else(
+        || independent_emby_runtime(emby_configured, emby_credential_present),
+        |client| EmbyRuntime::ready(std::sync::Arc::clone(client)),
+    );
+    let audiobookshelf_runtime = independent_audiobookshelf_runtime(
+        audiobookshelf_configured,
+        audiobookshelf_credential_present,
+    );
+    RemoteServices {
+        emby_runtime,
+        audiobookshelf_runtime,
+        audiobookshelf_configured,
+        audiobookshelf_credential_present,
+    }
+}
+
 impl App {
     /// Construct a local player and its worker channels through the ordinary
     /// startup path. The fall-through path uses this before it tears down an
     /// attached owner.
-    pub(in crate::app) fn construct_local_session(&self) -> Result<SuspendedLocalSession, String> {
-        #[cfg(test)]
-        if let Some(prepare) = *crate::app::LOCAL_PLAYER_PREPARE_OVERRIDE.lock().unwrap() {
-            prepare()?;
-        }
+    pub(in crate::app) fn construct_local_session(&self) -> SuspendedLocalSession {
         let config = self.config.lock().unwrap().clone();
         let (player_tx, player_rx) = mpsc::channel();
         let raw_player = Player::new(
@@ -58,7 +221,7 @@ impl App {
         // a real mpv handle that races process teardown.
         #[cfg(test)]
         player.inhibit_mpv();
-        Ok(SuspendedLocalSession {
+        SuspendedLocalSession {
             player,
             player_rx,
             ws_rx,
@@ -66,9 +229,13 @@ impl App {
             audiobookshelf_socket_rx: abs_rx,
             audiobookshelf_socket_tx: None,
             audiobookshelf_socket_generation: None,
-        })
+        }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "App::build is one complete App construction; splitting it before the decompose-app-god-type work would need a Default impl over ~470 non-Default fields — blocked on that change (approved, issue #804)"
+    )]
     pub(in crate::app) fn build(init: AppInit) -> Self {
         // Must run before `load_prefs()`: the guard redirects `config_dir()`/
         // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
@@ -76,7 +243,7 @@ impl App {
         // reading prefs left tests reading (and initializing state from)
         // the real on-disk prefs.json instead of a fresh one.
         #[cfg(test)]
-        let _test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
+        let test_state_dir_guard = crate::config::TestStateDirGuard::new_if_unset();
         let prefs = Self::load_prefs();
         let pending_launch_state = mbv_core::config::load_tui_launch_state();
         // The legacy selected-tab preference is only a migration input. Never
@@ -98,7 +265,7 @@ impl App {
         let (cast_tx, cast_rx) = mpsc::channel();
         let mut app = App {
             #[cfg(test)]
-            _test_state_dir_guard,
+            _test_state_dir_guard: test_state_dir_guard,
             config: init.config,
             emby_runtime: init.emby_runtime,
             audiobookshelf_runtime: init.audiobookshelf_runtime,
@@ -186,8 +353,11 @@ impl App {
             queue_column_width: prefs["queue_column_width"]
                 .as_u64()
                 .or_else(|| prefs["power_left_width"].as_u64())
-                .map(|v| (v as u16).max(LEFT_WIDTH_DEFAULT))
-                .unwrap_or(LEFT_WIDTH_DEFAULT),
+                .map_or(LEFT_WIDTH_DEFAULT, |value| {
+                    u16::try_from(value)
+                        .unwrap_or(u16::MAX)
+                        .max(LEFT_WIDTH_DEFAULT)
+                }),
             list_pane_width: list_pane_width_from_prefs(&prefs),
             visual_slot_hidden: visual_slot_hidden_from_prefs(&prefs),
             panel_mode: PanelMode::default(),
@@ -208,14 +378,16 @@ impl App {
             pending_series_handoff: None,
             pending_track_selection: None,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
-            pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
+            pre_mute_volume: prefs["pre_mute_volume"]
+                .as_u64()
+                .map(|value| u8::try_from(value).unwrap_or(u8::MAX)),
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
             // Visualizer selection is session-local; every launch starts on
             // artwork so a stale visualizer choice never blanks the card.
             visualizer_enabled: false,
             visualizer_failed: false,
             visualizer: None,
-            visualizer_window: Default::default(),
+            visualizer_window: crate::app::infra::visualizer_worker::StereoSampleWindow::default(),
             visualizer_glyph: init.visualizer_glyph,
             last_played_item_id: None,
             last_played_completed: false,
@@ -260,7 +432,9 @@ impl App {
             cast_attachment: None,
             cast_tx,
             cast_rx,
-            last_cast_poll: Instant::now() - Duration::from_secs(60),
+            last_cast_poll: Instant::now()
+                .checked_sub(Duration::from_secs(60))
+                .unwrap_or_else(Instant::now),
             cast_status_loading: false,
             queue_epoch: crate::app::state::queue_owner::QueueEpoch::default(),
             playlist_mutations: std::collections::HashMap::new(),
@@ -269,13 +443,19 @@ impl App {
             direct_remote_connected: false,
             direct_remote_label: None,
             direct_remote_session_id: None,
-            last_session_poll: Instant::now() - Duration::from_secs(60),
+            last_session_poll: Instant::now()
+                .checked_sub(Duration::from_secs(60))
+                .unwrap_or_else(Instant::now),
             session_miss_count: 0,
             remote_pos_s: 0,
             remote_pos_at: Instant::now(),
-            remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
+            remote_api_pos_advanced_at: Instant::now()
+                .checked_sub(Duration::from_secs(60))
+                .unwrap_or_else(Instant::now),
             remote_stalled_while_paused: false,
-            remote_seek_pending_until: Instant::now() - Duration::from_secs(1),
+            remote_seek_pending_until: Instant::now()
+                .checked_sub(Duration::from_secs(1))
+                .unwrap_or_else(Instant::now),
             runtime_zero_since: None,
             suspended_local: None,
             active_route: None,
@@ -283,8 +463,12 @@ impl App {
             force_clear: false,
             prefix_armed: false,
             tab_scroll: 0,
-            last_nav_at: Instant::now() - Duration::from_secs(1),
-            last_library_nav_at: Instant::now() - Duration::from_secs(1),
+            last_nav_at: Instant::now()
+                .checked_sub(Duration::from_secs(1))
+                .unwrap_or_else(Instant::now),
+            last_library_nav_at: Instant::now()
+                .checked_sub(Duration::from_secs(1))
+                .unwrap_or_else(Instant::now),
             refocus_at: None,
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_levels: std::collections::HashMap::new(),
@@ -325,7 +509,7 @@ impl App {
     /// Construct the bare Player owner without creating an Emby client or
     /// performing any network work. Configured Emby setup is initialized by
     /// the bounded worker once `run()` has entered the TUI.
-    pub fn new_independent(app_config: crate::config::Config) -> Self {
+    pub fn new_independent(app_config: &crate::config::Config) -> Self {
         let (player_tx, player_rx) = mpsc::channel();
         let (_, ws_rx) = mpsc::channel();
         let (lib_tx, lib_rx) = mpsc::channel();
@@ -366,23 +550,11 @@ impl App {
         let player = PlayerProxy::local(raw_player, app_config.always_play_next);
         let mut app = Self::build(AppInit {
             config: Arc::new(Mutex::new(app_config.clone())),
-            emby_runtime: {
-                let mut runtime = EmbyRuntime::new(configured);
-                runtime.state = crate::app::dispatch::session::service_startup::initial_state(
-                    configured,
-                    credential_present,
-                );
-                runtime
-            },
-            audiobookshelf_runtime: {
-                let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
-                runtime.state =
-                    crate::app::dispatch::session::service_startup::audiobookshelf_initial_state(
-                        audiobookshelf_configured,
-                        audiobookshelf_credential_present,
-                    );
-                runtime
-            },
+            emby_runtime: independent_emby_runtime(configured, credential_present),
+            audiobookshelf_runtime: independent_audiobookshelf_runtime(
+                audiobookshelf_configured,
+                audiobookshelf_credential_present,
+            ),
             emby_startup_rx: None,
             emby_startup_request: None,
             audiobookshelf_startup_rx: None,
@@ -395,10 +567,7 @@ impl App {
             player_rx,
             ws_rx,
             ws_send_tx: None,
-            audiobookshelf_socket_rx: {
-                let (_, rx) = mpsc::channel();
-                rx
-            },
+            audiobookshelf_socket_rx: detached_socket_rx(),
             audiobookshelf_socket_tx: None,
             audiobookshelf_socket_generation: None,
             player_tab: PlayerTab::default(),
@@ -430,7 +599,7 @@ impl App {
         app.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)
             .then_some((app_config.clone(), generation));
-        if crate::app::dispatch::session::service_startup::should_open_services(&app_config) {
+        if crate::app::dispatch::session::service_startup::should_open_services(app_config) {
             app.open_services_settings();
         }
         app
@@ -450,7 +619,7 @@ impl App {
         client: EmbyClient,
         remote: mbv_core::remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
-        endpoint: DaemonEndpoint,
+        endpoint: &DaemonEndpoint,
     ) -> Self {
         let config = crate::config::load_config().unwrap_or_default();
         Self::new_remote_optional_with_config(Some(client), remote, player_rx, endpoint, config)
@@ -461,7 +630,7 @@ impl App {
         client: EmbyClient,
         remote: mbv_core::remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
-        endpoint: DaemonEndpoint,
+        endpoint: &DaemonEndpoint,
         config: crate::config::Config,
     ) -> Self {
         Self::new_remote_optional_with_config(Some(client), remote, player_rx, endpoint, config)
@@ -471,7 +640,7 @@ impl App {
         client: Option<EmbyClient>,
         remote: mbv_core::remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
-        endpoint: DaemonEndpoint,
+        endpoint: &DaemonEndpoint,
         app_config: crate::config::Config,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<mbv_core::ws::WsEvent>();
@@ -486,12 +655,6 @@ impl App {
         let library_routes = app_config.library_routes.clone();
         let music_levels = app_config.music_levels.clone();
         let always_play_next = app_config.always_play_next;
-        let image_protocol = ui_config.image_protocol.clone();
-        let image_protocol_enabled = image_protocol.is_some();
-        let image_cache_size = ui_config.image_cache_size;
-        let use_nerd_fonts = ui_config.use_nerd_fonts;
-        let indicator_style: render::indicators::IndicatorStyle =
-            ui_config.indicator_style.parse().unwrap_or_default();
         // Both side effects below touch real system state, so test builds
         // must never run them (issue #757): the eviction thread scans and
         // prunes the user's real image-cache dir, and `mpris::start` claims
@@ -503,104 +666,26 @@ impl App {
         // EmbyClient retains this snapshot only for constructing Emby API
         // requests. App general state owns the independent application copy;
         // it is never synchronized back into this concrete API boundary.
-        let emby_configured = app_config.emby_setup.is_some();
-        let emby_credential_present =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby).is_some();
-        let audiobookshelf_configured = app_config.audiobookshelf_setup.is_some();
-        let audiobookshelf_credential_present =
-            mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Audiobookshelf)
-                .is_some();
-        let config = Arc::new(Mutex::new(app_config));
         let client_arc = client.map(|client| Arc::new(Mutex::new(client)));
-        let remote_items = remote.items.lock().unwrap().clone();
-        let remote_cursor = remote.status.lock().unwrap().current_idx;
-        let remote_unified_state = remote.unified_queue_state();
+        let services = remote_services(&app_config, client_arc.as_ref());
+        let config = Arc::new(Mutex::new(app_config));
         let remote_queue_source = remote.queue_source.lock().unwrap().clone();
-        let remote_has_items = remote_unified_state
-            .as_ref()
-            .map_or(!remote_items.is_empty(), |state| !state.slots.is_empty());
-        let initial_queue_scope = if !endpoint.is_local() && remote_has_items {
-            QueueScope::Remote
-        } else {
-            QueueScope::Local
-        };
-        let local_daemon_bootstrap = endpoint.is_local().then(|| {
-            remote_unified_state.as_ref().map_or_else(
-                || {
-                    bootstrap_legacy_queue(
-                        remote_items.clone(),
-                        remote_cursor,
-                        remote_queue_source.clone(),
-                    )
-                },
-                bootstrap_unified_queue,
-            )
-        });
-        // Start MPRIS against this `RemotePlayer` (#175, previously done in
-        // `main.rs::run_remote_app` before this constructor even ran).
-        // Moved here so App owns the resulting handle and can `rebind` it
-        // later if `switch_to_direct_remote` / `restore_local_mode` swap
-        // which target owns playback.
-        // Test builds leave `mpris` unset (build() initializes it to None):
-        // `mpris::start` claims `org.mpris.MediaPlayer2.mbv` on the real
-        // D-Bus session bus from a thread with no shutdown path -- leaked
-        // into every test process that constructs a remote App, where
-        // process teardown races it (issue #757). Tests that exercise
-        // rebind inject `mpris::test_handle` themselves.
+        let snapshot = RemoteSnapshot::take(&remote);
+        let initial_queue_scope = snapshot.scope(endpoint.is_local());
+        let local_daemon_bootstrap = endpoint
+            .is_local()
+            .then(|| snapshot.local_bootstrap(&remote_queue_source));
         #[cfg(not(test))]
-        let mpris_handle = {
-            let mpris_remote = remote.clone();
-            Some(crate::mpris::start(
-                mpris_remote.status.clone(),
-                move |cmd| {
-                    mpris_remote.send_command(cmd);
-                },
-                Some(remote.disconnected_flag()),
-            ))
-        };
+        let mpris_handle = Some(start_mpris(&remote));
         #[cfg(test)]
         let mpris_handle = None;
         let player = PlayerProxy::remote(remote, always_play_next);
-        let (player_tab, remote_player_tab) = if endpoint.is_local() {
-            // Local daemon: one unified queue, exactly like plain local
-            // playback — no separate remote_player_tab, no scope pill.
-            (
-                local_daemon_bootstrap.as_ref().unwrap().player_tab.clone(),
-                None,
-            )
-        } else {
-            // Remote/network daemon: keep a separate remote queue so the
-            // user can browse locally while the daemon plays elsewhere.
-            (
-                PlayerTab::default(),
-                Some(remote_unified_state.as_ref().map_or_else(
-                    || PlayerTab::from_emby_items(remote_items, remote_cursor),
-                    PlayerTab::from_unified_state,
-                )),
-            )
-        };
+        let (player_tab, remote_player_tab) =
+            snapshot.tabs(endpoint.is_local(), local_daemon_bootstrap.as_ref());
         let mut app = Self::build(AppInit {
             config,
-            emby_runtime: client_arc.as_ref().map_or_else(
-                || {
-                    let mut runtime = EmbyRuntime::new(emby_configured);
-                    runtime.state = crate::app::dispatch::session::service_startup::initial_state(
-                        emby_configured,
-                        emby_credential_present,
-                    );
-                    runtime
-                },
-                |client| EmbyRuntime::ready(client.clone()),
-            ),
-            audiobookshelf_runtime: {
-                let mut runtime = AudiobookshelfRuntime::new(audiobookshelf_configured);
-                runtime.state =
-                    crate::app::dispatch::session::service_startup::audiobookshelf_initial_state(
-                        audiobookshelf_configured,
-                        audiobookshelf_credential_present,
-                    );
-                runtime
-            },
+            emby_runtime: services.emby_runtime,
+            audiobookshelf_runtime: services.audiobookshelf_runtime,
             emby_startup_rx: None,
             emby_startup_request: None,
             audiobookshelf_startup_rx: None,
@@ -613,24 +698,21 @@ impl App {
             player_rx,
             ws_rx,
             ws_send_tx: None,
-            audiobookshelf_socket_rx: {
-                let (_, rx) = mpsc::channel();
-                rx
-            },
+            audiobookshelf_socket_rx: detached_socket_rx(),
             audiobookshelf_socket_tx: None,
             audiobookshelf_socket_generation: None,
             player_tab,
             remote_player_tab,
             initial_queue_scope,
             system_notifications: false,
-            image_protocol,
-            image_protocol_enabled,
+            image_protocol: ui_config.image_protocol.clone(),
+            image_protocol_enabled: ui_config.image_protocol.is_some(),
             hidden_libraries,
             library_routes,
             music_levels,
-            use_nerd_fonts,
-            indicator_style,
-            image_cache_size,
+            use_nerd_fonts: ui_config.use_nerd_fonts,
+            indicator_style: ui_config.indicator_style.parse().unwrap_or_default(),
+            image_cache_size: ui_config.image_cache_size,
             visualizer_glyph: ui_config.visualizer_glyph,
             lib_tx,
             lib_rx,
@@ -659,16 +741,16 @@ impl App {
             app.queue_source = bootstrap.queue_source;
             app.last_played_item_id = bootstrap.last_played_item_id;
             app.last_played_completed = bootstrap.last_played_completed;
+            app.try_auto_reconnect();
         } else {
             app.queue_source = remote_queue_source;
         }
-        if endpoint.is_local() {
-            app.try_auto_reconnect();
-        }
-        let generation = app.audiobookshelf_runtime.generation();
-        app.audiobookshelf_startup_request = (audiobookshelf_configured
-            && audiobookshelf_credential_present)
-            .then_some((app.config.lock().unwrap().clone(), generation));
+        app.audiobookshelf_startup_request = (services.audiobookshelf_configured
+            && services.audiobookshelf_credential_present)
+            .then_some((
+                app.config.lock().unwrap().clone(),
+                app.audiobookshelf_runtime.generation(),
+            ));
         app
     }
 

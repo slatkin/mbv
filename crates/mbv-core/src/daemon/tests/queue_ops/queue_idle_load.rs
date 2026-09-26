@@ -88,10 +88,12 @@ fn idle_queue_load_from_unsupported_peer_is_rejected_without_mutation() {
     let client_id = registry.lock().unwrap().connect(
         reply_tx.clone(),
         CtrlTransport::Local,
-        true,
-        true,
-        true,
-        true,
+        crate::ctrl::CtrlAudiobookshelfCapabilities {
+            queue: true,
+            progress: true,
+            book_queue: true,
+            book_progress: true,
+        },
         false,
     );
     let (merged_tx, _merged_rx) = mpsc::channel();
@@ -331,9 +333,8 @@ fn assert_replacement_untouched_by_late_observation(
 /// The published snapshot of the committed queue: one slot, no active slot,
 /// run inactive.
 fn assert_published_committed_queue_state(rx: &mpsc::Receiver<crate::daemon::ctrl::CtrlOutbound>) {
-    let state = match recv_event(rx) {
-        CtrlEvent::UnifiedQueueState(state) => state,
-        _ => panic!("expected unified queue state"),
+    let CtrlEvent::UnifiedQueueState(state) = recv_event(rx) else {
+        panic!("expected unified queue state");
     };
     assert_eq!(state.slots.len(), 1);
     assert_eq!(state.slots[0].item.id(), "new");

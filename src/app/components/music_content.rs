@@ -24,12 +24,10 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
     MediaSemanticState, RowIntent, SelectionOrigin,
 };
+use super::msg::LeafKeyResult;
 use super::msg::{AlbumCursorKind, Msg, MusicArtistTarget, MusicTreeAction, ShellRequest};
-use super::msg::{LeafKeyResult, TerminalObserverEvent};
 use super::music_tree_target::MusicTreeTarget;
-use crate::app::components::list::tree_browser::{
-    TreeBrowser, TreeConsumed, TreeMarkPolicy, TreeNode, TreeOperation,
-};
+use crate::app::components::list::tree_browser::{TreeBrowser, TreeConsumed, TreeOperation};
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::{fmt_duration_gutter, trunc_str};
 
@@ -62,6 +60,13 @@ pub(in crate::app) fn wide_album_metadata(album: &EmbyItem, artist: &str) -> (St
         .to_string();
     (title, album.production_year)
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(in crate::app) enum MusicWorkspaceFocus {
+    #[default]
+    AlbumRail,
+    TrackWorkspace,
+}
+
 /// The neighbour album-artwork window (design D4): the shell prefetches up
 /// to one visible album leaf behind the selected leaf and up to three ahead.
 const NEIGHBOUR_PREFETCH_BEHIND: usize = 1;
@@ -75,7 +80,7 @@ pub struct MusicContent {
     /// owner's stable-target transitions (design D6).
     pub(in crate::app) browser: TreeBrowser<MusicTreeTarget>,
     pub(in crate::app) track_list: MediaListCarrier<String>,
-    pub(in crate::app) track_focused: bool,
+    pub(in crate::app) workspace_focus: MusicWorkspaceFocus,
     /// Whether this frame's geometry hosts the inline track list (the Wide
     /// pane). Pushed each sync pass beside the track-focus clear; narrow
     /// selects the Library Hero overlay instead.
@@ -143,7 +148,7 @@ impl MusicContent {
             ),
             browser: TreeBrowser::new(),
             track_list: MediaListCarrier::new(),
-            track_focused: false,
+            workspace_focus: MusicWorkspaceFocus::AlbumRail,
             inline_track_focus_enabled: false,
             track_rows_owner: None,
             pending_artist_workspace_focus: None,
@@ -343,12 +348,12 @@ impl MusicContent {
         // `clear_track_focus`) or the dismiss path; they always win and now
         // stay won, because no push re-seizes the focus.
         if !enabled && !self.hero_overlay_open {
-            self.track_focused = false;
+            self.workspace_focus = MusicWorkspaceFocus::AlbumRail;
         }
     }
     pub(in crate::app) fn enter_track_focus(&mut self) {
         if !self.track_list.rows().is_empty() {
-            self.track_focused = true;
+            self.workspace_focus = MusicWorkspaceFocus::TrackWorkspace;
             self.track_list.select_first();
         }
     }
@@ -362,7 +367,7 @@ impl MusicContent {
         // that stale carrier as its own Workspace.
         self.reconcile_workspace_rows();
         self.enter_track_focus();
-        if !self.track_focused {
+        if !self.track_focused() {
             // Arm with the focused root's resolved identity (design D7): the
             // entry may only take the cursor when the landing rows belong to
             // this same root.
@@ -370,14 +375,14 @@ impl MusicContent {
         }
     }
     pub(in crate::app) fn clear_track_focus(&mut self) {
-        self.track_focused = false;
+        self.workspace_focus = MusicWorkspaceFocus::AlbumRail;
     }
     #[cfg(test)]
     pub(in crate::app) fn album_cursor(&self) -> usize {
         self.selected_album_index()
     }
     pub(in crate::app) fn track_focused(&self) -> bool {
-        self.track_focused
+        self.workspace_focus == MusicWorkspaceFocus::TrackWorkspace
     }
     /// Whether a Wide artist-Workspace entry is currently armed (task 6.4
     /// tests: the armed entry is invisible state, so its void points assert

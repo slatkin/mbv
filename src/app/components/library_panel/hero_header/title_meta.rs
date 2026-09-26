@@ -96,8 +96,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     );
     let next_row = overview
         .as_ref()
-        .map(|overview| overview.bottom)
-        .unwrap_or(next_row);
+        .map_or(next_row, |overview| overview.bottom);
     (next_row, reserved_image, overview)
 }
 

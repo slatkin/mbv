@@ -178,6 +178,10 @@ const LOGO_MAX_WIDTH_PERCENT: u32 = 60;
 const LOGO_MAX_HEIGHT_PERCENT: u32 = 20;
 const LOGO_INSET_PERCENT: f32 = 5.0;
 
+fn rounded_dimension(value: f32) -> u32 {
+    value.to_string().parse().unwrap_or(u32::MAX)
+}
+
 /// Decorate an already cover-fitted landscape bitmap with a transparent Logo.
 /// The Logo is contain-fitted into the prescribed bounds, then source-over
 /// composited at the rounded, clamped inset.
@@ -193,10 +197,18 @@ pub(in crate::app) fn composite_landscape_logo(
     let logo = logo.resize(max_w, max_h, image::imageops::FilterType::Lanczos3);
     let (logo_w, logo_h) = logo.dimensions();
     let inset_percent = LOGO_INSET_PERCENT / 100.0;
-    let inset_x =
-        ((base_w as f32 * inset_percent).round() as u32).min(base_w.saturating_sub(logo_w));
-    let inset_y =
-        ((base_h as f32 * inset_percent).round() as u32).min(base_h.saturating_sub(logo_h));
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "image scale factor through f32; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
+    let inset_x = rounded_dimension((base_w as f32 * inset_percent).round())
+        .min(base_w.saturating_sub(logo_w));
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "image scale factor through f32; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
+    let inset_y = rounded_dimension((base_h as f32 * inset_percent).round())
+        .min(base_h.saturating_sub(logo_h));
     image::imageops::overlay(
         &mut base,
         &logo.to_rgba8(),
@@ -232,7 +244,7 @@ impl App {
         else {
             return None;
         };
-        let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
+        let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
         self.fetch_card_image(
             cache_key.clone(),
             item_id.clone(),
@@ -268,7 +280,7 @@ impl App {
                 cache_key,
                 ..
             } => {
-                let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
+                let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
                 self.fetch_card_image(
                     cache_key.clone(),
                     item_id.clone(),
@@ -280,10 +292,13 @@ impl App {
             ArtworkSource::AudiobookshelfCover {
                 library_item_id,
                 book,
-            } => match *book {
-                true => self.audiobookshelf_book_cover_key(library_item_id),
-                false => self.audiobookshelf_cover_key(library_item_id),
-            },
+            } => {
+                if *book {
+                    self.audiobookshelf_book_cover_key(library_item_id)
+                } else {
+                    self.audiobookshelf_cover_key(library_item_id)
+                }
+            }
         };
         let Some(cache_key) = cache_key else {
             return State::None;
@@ -421,6 +436,7 @@ mod tests {
         NAV_IMAGE_FETCH_IDLE_DELAY,
     };
     use crate::app::tests::make_app_stub;
+    use image::GenericImageView;
     use std::time::{Duration, Instant};
 
     /// A 4:3 source filled into a 16:9 box is cropped top and bottom (design
@@ -466,11 +482,10 @@ mod tests {
             };
         }
         let filled = cover_fill_hero_box(&img, 160, 90);
-        use image::GenericImageView;
         assert_eq!(filled.dimensions(), (160, 90));
         let brightness = |pixel: &image::Rgb<u8>| {
-            let [r, g, b] = pixel.0;
-            (u16::from(r) + u16::from(g) + u16::from(b)) / 3
+            let [red, green, blue] = pixel.0;
+            (u16::from(red) + u16::from(green) + u16::from(blue)) / 3
         };
         let rgb = filled.as_rgb8().unwrap();
         assert!(brightness(rgb.get_pixel(80, 0)) < 64, "top band cropped");
@@ -507,7 +522,6 @@ mod tests {
 
         let source = image::DynamicImage::new_rgb8(80, 60);
         let encoded = cover_fill_hero_box(&source, 160, u32::from(box_cells.height) * 20);
-        use image::GenericImageView;
         assert_eq!(encoded.dimensions(), (160, 500));
     }
 
@@ -540,7 +554,9 @@ mod tests {
     #[test]
     fn idle_navigation_allows_list_card_image_fetch() {
         let mut app = make_app_stub();
-        app.last_nav_at = Instant::now() - NAV_IMAGE_FETCH_IDLE_DELAY - Duration::from_millis(1);
+        app.last_nav_at = Instant::now()
+            .checked_sub(NAV_IMAGE_FETCH_IDLE_DELAY + Duration::from_millis(1))
+            .expect("test timestamp is within Instant's representable range");
         app.fetch_list_card_image_when_idle(
             "idle-nav:P".into(),
             "idle-nav".into(),

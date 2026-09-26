@@ -1,11 +1,18 @@
 // The module's documentation and shared imports live in the parent module.
-use super::*;
+use super::{
+    fmt_duration_gutter, hero_content_music_album, music_album_artwork, trunc_str,
+    wide_album_metadata, ArtworkShape, EmbyItem, HeroArtwork, HeroContent, HeroContentData,
+    HeroFacts, HeroImageState, LibraryPanelContent, ListSlot, MediaKind, MediaListRow,
+    MediaListTrailing, MediaSemanticState, Msg, MusicArtistTarget, MusicContent, MusicTreeAction,
+    MusicTreeTarget, SelectorRow, ShellRequest, Workspace, WorkspaceHeader,
+    NEIGHBOUR_PREFETCH_AHEAD, NEIGHBOUR_PREFETCH_BEHIND, TICKS_PER_SECOND,
+};
 
 pub(in crate::app) fn track_row_label(track: &EmbyItem, index: usize) -> String {
     let number = if track.index_number > 0 {
         track.index_number
     } else {
-        index as i64 + 1
+        i64::try_from(index).unwrap_or(i64::MAX).saturating_add(1)
     };
     format!("{number}. {}", track.name)
 }
@@ -166,7 +173,7 @@ impl MusicContent {
         let (owner, rows) = self.resolved_workspace();
         let owner_changed = self.track_rows_owner != owner;
         if owner_changed {
-            self.track_focused = false;
+            self.workspace_focus = super::MusicWorkspaceFocus::AlbumRail;
         }
         let arrived = self.track_list.rows().is_empty() && !rows.is_empty();
         if self.track_list.rows() != rows.as_slice() {
@@ -402,7 +409,7 @@ impl MusicContent {
     /// (task 2.4) instead of resolving a track from a snapshot that no longer
     /// addresses the focused node.
     pub(super) fn artist_workspace_focused(&self) -> bool {
-        self.track_focused && self.selected_is_artist() && self.current_artist_detail().is_some()
+        self.track_focused() && self.selected_is_artist() && self.current_artist_detail().is_some()
     }
 
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
@@ -514,13 +521,15 @@ impl MusicContent {
                     .iter()
                     .find(|item| item.id == album_id)
             })
-            .map(music_album_artwork)
-            .unwrap_or(HeroArtwork {
-                shape: ArtworkShape::Square,
-                source: None,
-                decoration: None,
-                image: HeroImageState::None,
-            })
+            .map_or(
+                HeroArtwork {
+                    shape: ArtworkShape::Square,
+                    source: None,
+                    decoration: None,
+                    image: HeroImageState::None,
+                },
+                music_album_artwork,
+            )
     }
 
     /// The Hero pane's content for the tree's current selection, or `None`
@@ -567,7 +576,7 @@ impl MusicContent {
         // Copy the selected snapshot and focus bit before borrowing either
         // list mutably for the returned slots.
         let focused = self.context.focused;
-        let track_focused = self.track_focused;
+        let track_focused = self.track_focused();
         let hero = self.resolved_hero_data().map(|data| HeroContent {
             facts: data.facts,
             // Music has no separate overview box when the album does not
@@ -586,7 +595,7 @@ impl MusicContent {
             .context
             .groups
             .iter()
-            .map(|group| trunc_str(&group.name, 12).to_string())
+            .map(|group| trunc_str(&group.name, 12).clone())
             .collect();
         let selector = Some(SelectorRow {
             markers: vec![false; pills.len()],

@@ -59,7 +59,7 @@ impl StatusBarPanel {
         self.visual_origin = origin;
     }
 
-    fn handle_mouse(&mut self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, event: tuirealm::event::MouseEvent) -> Option<Msg> {
         let at = Position::new(event.column, event.row);
         match event.kind {
             // Legacy wheel mapping: scroll down lowers the volume by the
@@ -102,7 +102,7 @@ impl Component for StatusBarPanel {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.regions = render_status_bar(frame, area, &self.model);
     }
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
@@ -115,10 +115,10 @@ impl Component for StatusBarPanel {
 }
 
 impl AppComponent<Msg, UserEvent> for StatusBarPanel {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
             // Resolve only geometry this panel painted.
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -182,7 +182,7 @@ mod tests {
         let row: String = (0..60).map(|x| buffer[(x, 0)].symbol()).collect();
         assert!(row.contains(" 60"), "volume pill row: {row:?}");
         assert!(row.contains("muted"), "mute pill row: {row:?}");
-        assert!(row.contains("R"), "right segment row: {row:?}");
+        assert!(row.contains('R'), "right segment row: {row:?}");
 
         let regions = panel.regions();
         let vol = regions.volume.expect("volume region");

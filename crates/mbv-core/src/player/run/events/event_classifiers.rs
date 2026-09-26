@@ -1,4 +1,5 @@
-use super::super::*;
+use super::super::{EndFileReason, QueueItem};
+use libmpv2::mpv_end_file_reason;
 
 pub(in crate::player) fn is_clocked_audio_error(
     error: &libmpv2::Error,

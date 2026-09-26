@@ -25,11 +25,10 @@ impl EmbySetupForm {
     fn new(config: &crate::config::Config, previous_state: ServiceState) -> Self {
         Self {
             fields: [
-                config
-                    .emby_setup
-                    .as_ref()
-                    .map(|setup| setup.server_url.clone())
-                    .unwrap_or_else(|| config.server_url.trim_end_matches('/').to_string()),
+                config.emby_setup.as_ref().map_or_else(
+                    || config.server_url.trim_end_matches('/').to_string(),
+                    |setup| setup.server_url.clone(),
+                ),
                 String::new(),
                 String::new(),
             ],
@@ -109,10 +108,10 @@ impl App {
         if server_url.is_empty() || form.fields[1].trim().is_empty() {
             form.error = "Server URL and API key are required".into();
             form.fields[1].clear();
-            form.focus = if server_url.is_empty() { 0 } else { 1 };
+            form.focus = usize::from(!server_url.is_empty());
             return;
         }
-        form.fields[0] = server_url.clone();
+        form.fields[0].clone_from(&server_url);
         let api_key = std::mem::take(&mut form.fields[1]);
         let generation = self.audiobookshelf_runtime.begin_setup();
         form.generation = Some(generation);
@@ -166,8 +165,8 @@ impl App {
             };
             return;
         }
-        form.fields[0] = server_url.clone();
-        form.fields[1] = username.clone();
+        form.fields[0].clone_from(&server_url);
+        form.fields[1].clone_from(&username);
         let password = std::mem::take(&mut form.fields[2]);
         let generation = self.emby_runtime.begin_setup();
         form.generation = Some(generation);
@@ -209,12 +208,15 @@ impl App {
                 self.pending_overlay =
                     Some(crate::app::state::types::overlay::OverlayRequest::OpenFeedsManage);
             }
-            ServiceActionIntent::SetupAudiobookshelf => self.open_audiobookshelf_setup(),
+            ServiceActionIntent::SetupAudiobookshelf
+            | ServiceActionIntent::ReplaceAudiobookshelf => {
+                self.open_audiobookshelf_setup();
+            }
             ServiceActionIntent::TestAudiobookshelf => self.test_audiobookshelf_connection(),
             ServiceActionIntent::RemoveAudiobookshelf => self.request_audiobookshelf_removal(),
-            ServiceActionIntent::ReplaceAudiobookshelf => self.open_audiobookshelf_setup(),
-            ServiceActionIntent::SetupEmby => self.open_emby_setup(),
-            ServiceActionIntent::RepairEmby => self.open_emby_setup(),
+            ServiceActionIntent::SetupEmby | ServiceActionIntent::RepairEmby => {
+                self.open_emby_setup();
+            }
             ServiceActionIntent::RetryEmby => self.retry_emby(),
         }
     }
@@ -270,9 +272,10 @@ impl App {
             ServiceEntry::Audiobookshelf => match self.audiobookshelf_runtime.state {
                 ServiceState::NotConfigured => "Set up Audiobookshelf",
                 ServiceState::Connecting => "",
-                ServiceState::Ready => "Test (t) · Repair · Replace (r) · Remove (d)",
+                ServiceState::Ready | ServiceState::Unavailable => {
+                    "Test (t) · Repair · Replace (r) · Remove (d)"
+                }
                 ServiceState::NeedsAuthentication => "Repair · Replace (r) · Remove (d)",
-                ServiceState::Unavailable => "Test (t) · Repair · Replace (r) · Remove (d)",
             },
             ServiceEntry::Feeds => "Manage feeds",
         }

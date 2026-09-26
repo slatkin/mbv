@@ -22,7 +22,8 @@ impl TvContent {
                 .expect("resolved media-list pointer target"),
         );
         ShellRequest::TvEpisodeMove {
-            delta: self.episodes.cursor() as i64 - from as i64,
+            delta: i64::try_from(self.episodes.cursor()).unwrap_or(i64::MAX)
+                - i64::try_from(from).unwrap_or(i64::MAX),
         }
     }
 
@@ -33,8 +34,10 @@ impl TvContent {
             .as_ref()
             .map_or(0, |detail| detail.seasons.len());
         if count > 0 {
+            let count = i64::try_from(count).unwrap_or(i64::MAX);
+            let cursor = i64::try_from(self.season_cursor).unwrap_or(i64::MAX);
             self.season_cursor =
-                (self.season_cursor as i64 + delta).rem_euclid(count as i64) as usize;
+                usize::try_from((cursor + delta).rem_euclid(count)).unwrap_or(usize::MAX);
             self.refresh_episode_rows();
             self.episodes.select_first();
         }
@@ -69,7 +72,7 @@ impl TvContent {
     /// Painted item rows the Narrow pager moves per PageUp/PageDown: the
     /// fixed-row list strides one selectable row per painted row.
     pub(super) fn narrow_page_rows(&self) -> i64 {
-        self.painted_viewport_height().saturating_sub(1).max(1) as i64
+        i64::try_from(self.painted_viewport_height().saturating_sub(1).max(1)).unwrap_or(i64::MAX)
     }
 
     /// Move the shared owner by `item_rows` painted item rows (Narrow only)

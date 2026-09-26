@@ -69,6 +69,8 @@ fn transaction_test_paths() -> (std::path::PathBuf, std::path::PathBuf, std::pat
 
 #[test]
 fn emby_setup_persistence_removes_legacy_credentials_and_preserves_unrelated_toml() {
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     let _guard = TestStateDirGuard::new();
     std::fs::write(
         config_path(),
@@ -90,8 +92,6 @@ fn emby_setup_persistence_removes_legacy_credentials_and_preserves_unrelated_tom
         load_service_secret(ServiceKind::Emby).as_deref(),
         Some("new-token")
     );
-    #[cfg(unix)]
-    use std::os::unix::fs::PermissionsExt;
     #[cfg(unix)]
     assert_eq!(
         std::fs::metadata(service_secret_path(ServiceKind::Emby))
@@ -207,6 +207,8 @@ fn audiobookshelf_revision_advances_per_commit() {
 
 #[test]
 fn audiobookshelf_lifecycle_isolated_and_ordered() {
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     let _guard = TestStateDirGuard::new();
     std::fs::write(
         config_path(),
@@ -230,7 +232,6 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
         .contains("books-secret"));
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
         assert_eq!(
             std::fs::metadata(service_secret_path(ServiceKind::Audiobookshelf))
                 .unwrap()
@@ -239,7 +240,7 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
                 & 0o777,
             0o600
         );
-    }
+    };
 
     let owned_state = std::sync::Arc::new(std::sync::Mutex::new("preserved"));
     persist_audiobookshelf_setup_and_secret(
@@ -250,8 +251,8 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
     assert_eq!(*owned_state.lock().unwrap(), "preserved");
 
     let order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let clear_order = order.clone();
-    let restore_order = order.clone();
+    let clear_order = std::sync::Arc::clone(&order);
+    let restore_order = std::sync::Arc::clone(&order);
     replace_audiobookshelf_setup_and_secret(
         &AudiobookshelfSetup::new("https://new-books.example"),
         "new-books-secret",
@@ -273,7 +274,7 @@ fn audiobookshelf_lifecycle_isolated_and_ordered() {
     );
 
     let remove_order = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-    let remove_clear = remove_order.clone();
+    let remove_clear = std::sync::Arc::clone(&remove_order);
     remove_audiobookshelf_setup_and_secret_with_owned_state(
         move || {
             remove_clear.lock().unwrap().push("clear");
@@ -300,14 +301,12 @@ fn failed_audiobookshelf_candidate_and_transaction_leave_working_state() {
     .unwrap();
     let before = std::fs::read(config_path()).unwrap();
     let before_secret = load_service_secret(ServiceKind::Audiobookshelf);
-    assert!(
-        crate::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
-            "",
-            "candidate-secret",
-            std::time::Duration::from_millis(1)
-        )
-        .is_err()
-    );
+    crate::audiobookshelf::AudiobookshelfClient::validate_setup_bounded(
+        "",
+        "candidate-secret",
+        std::time::Duration::from_millis(1),
+    )
+    .unwrap_err();
     assert_eq!(std::fs::read(config_path()).unwrap(), before);
     assert_eq!(
         load_service_secret(ServiceKind::Audiobookshelf),

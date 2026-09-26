@@ -73,10 +73,10 @@ pub(crate) fn initial_group_artist_sort_key(item: &mbv_core::api::EmbyItem) -> S
 /// Returns the effective sort key for an item: `sort_name` when Emby provides it,
 /// otherwise the item's display name with any leading article stripped.
 pub(crate) fn effective_sort_str(item: &mbv_core::api::EmbyItem) -> &str {
-    if !item.sort_name.is_empty() {
-        &item.sort_name
-    } else {
+    if item.sort_name.is_empty() {
         strip_article(&item.name)
+    } else {
+        &item.sort_name
     }
 }
 

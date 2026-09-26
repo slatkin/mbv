@@ -20,6 +20,7 @@ impl Default for FeedKind {
 
 impl FeedKind {
     /// The `kind` key as written to `config.toml` (`[[feeds]]` rows).
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             FeedKind::Audio => "audio",
@@ -29,6 +30,7 @@ impl FeedKind {
 
     /// Parse a `kind` value from config; unknown values yield `None` so
     /// callers fall back to `FeedKind::default()`.
+    #[must_use]
     pub fn parse(s: &str) -> Option<FeedKind> {
         match s.trim().to_ascii_lowercase().as_str() {
             "audio" => Some(FeedKind::Audio),

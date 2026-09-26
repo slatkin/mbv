@@ -58,7 +58,6 @@ impl App {
     }
 
     pub(in crate::app) fn connect_direct_endpoint(
-        &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
         (
@@ -86,7 +85,6 @@ impl App {
     /// lifecycle (ADR 0014 supersedes ADR 0003).
     ///
     fn connect_daemon_route_endpoint(
-        &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
         (
@@ -127,7 +125,6 @@ impl App {
     /// caller is expected to try again only on its own next natural trigger
     /// (e.g. the next play/enqueue into this route), never from a
     pub(in crate::app) fn try_daemon_route_connect(
-        &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
         route_label: &str,
     ) -> Result<
@@ -138,7 +135,7 @@ impl App {
         String,
     > {
         log::info!(target: "daemon_route", "daemon route attempt start route={route_label:?} endpoint={endpoint}");
-        self.connect_daemon_route_endpoint(endpoint)
+        Self::connect_daemon_route_endpoint(endpoint)
             .inspect(|_| {
                 log::info!(target: "daemon_route", "daemon route attempt succeeded route={route_label:?} endpoint={endpoint}");
             })
@@ -186,7 +183,7 @@ impl App {
         // and short so an unreachable daemon cannot wedge the UI.
         let mut backoff = Duration::from_millis(300);
         for attempt in 0..3 {
-            match self.connect_daemon_route_endpoint(&endpoint) {
+            match Self::connect_daemon_route_endpoint(&endpoint) {
                 Ok((remote, remote_rx)) => {
                     self.attach_reattached_daemon(remote, remote_rx, &endpoint, attempt);
                     return true;
@@ -230,9 +227,9 @@ impl App {
             let disconnected = mpris_remote.disconnected_flag();
             crate::mpris::rebind(
                 handle,
-                mpris_remote.status.clone(),
+                std::sync::Arc::clone(&mpris_remote.status),
                 move |cmd| {
-                    mpris_remote.send_command(cmd);
+                    let _ = mpris_remote.send_command(cmd);
                 },
                 Some(disconnected),
             );
@@ -246,8 +243,12 @@ impl App {
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.remote_pos_at = Instant::now();
-        self.remote_api_pos_advanced_at = Instant::now() - Duration::from_secs(60);
-        self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
+        self.remote_api_pos_advanced_at = Instant::now()
+            .checked_sub(Duration::from_secs(60))
+            .unwrap_or_else(Instant::now);
+        self.remote_seek_pending_until = Instant::now()
+            .checked_sub(Duration::from_secs(1))
+            .unwrap_or_else(Instant::now);
         self.runtime_zero_since = None;
         self.next_up_item = None;
         if has_initial_items {
@@ -303,9 +304,9 @@ impl App {
                     );
                     return;
                 };
-                match self.try_daemon_route_connect(&endpoint, &name) {
+                match Self::try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
-                        self.switch_to_library_route(&name, remote, remote_rx, &endpoint)
+                        self.switch_to_library_route(&name, remote, remote_rx, &endpoint);
                     }
                     Err(message) => self.flash(message, ToastSeverity::Warning),
                 }
@@ -322,31 +323,28 @@ impl App {
                         return;
                     }
                 };
-                match sessions
+                if let Some(sess) = sessions
                     .into_iter()
                     .find(|s| s.device_name.eq_ignore_ascii_case(&device_name))
                 {
-                    Some(sess) => {
-                        log::info!(target: "auto_reconnect", "direct-session resolved device={device_name:?} session_id={:?}; connecting", sess.id);
-                        self.connect_to_session(&sess);
-                        if self.direct_remote_connected {
-                            log::info!(target: "auto_reconnect", "direct-session connection succeeded device={device_name:?} outcome=direct-daemon-upgrade");
-                        } else if self.connected_session_id.is_some() {
-                            log::info!(target: "auto_reconnect", "direct-session connection initiated device={device_name:?} outcome=emby-session-control");
-                        } else {
-                            log::warn!(target: "auto_reconnect", "direct-session connection failed device={device_name:?}; staying local");
-                        }
+                    log::info!(target: "auto_reconnect", "direct-session resolved device={device_name:?} session_id={:?}; connecting", sess.id);
+                    self.connect_to_session(&sess);
+                    if self.direct_remote_connected {
+                        log::info!(target: "auto_reconnect", "direct-session connection succeeded device={device_name:?} outcome=direct-daemon-upgrade");
+                    } else if self.connected_session_id.is_some() {
+                        log::info!(target: "auto_reconnect", "direct-session connection initiated device={device_name:?} outcome=emby-session-control");
+                    } else {
+                        log::warn!(target: "auto_reconnect", "direct-session connection failed device={device_name:?}; staying local");
                     }
-                    None => {
-                        log::info!(
-                            target: "auto_reconnect",
-                            "device {device_name:?} not found in current sessions; staying local"
-                        );
-                        self.flash(
-                            format!("\u{26a0} {device_name} not found, using local playback"),
-                            ToastSeverity::Warning,
-                        );
-                    }
+                } else {
+                    log::info!(
+                        target: "auto_reconnect",
+                        "device {device_name:?} not found in current sessions; staying local"
+                    );
+                    self.flash(
+                        format!("\u{26a0} {device_name} not found, using local playback"),
+                        ToastSeverity::Warning,
+                    );
                 }
             }
         }

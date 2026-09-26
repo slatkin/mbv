@@ -142,7 +142,9 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) -> Vec<
             spans.push(Span::raw(" "));
             next_x += 1;
         }
-        let width = (label.len() + 2).min(area.right().saturating_sub(next_x) as usize) as u16;
+        let width = u16::try_from(label.len() + 2)
+            .unwrap_or(u16::MAX)
+            .min(area.right().saturating_sub(next_x));
         if width > 0 {
             chip_rects.push((
                 Rect {
@@ -193,7 +195,8 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec
         let badge = badge_for(&item.item_type);
         let badge_str = format!("{badge:<10} ");
         let name_max = chrome::panel_row_text_width(area.width).saturating_sub(badge_str.len());
-        let row_y = area.y + vi as u16;
+        // `vi` breaks above `list_h == area.height`, so it fits `u16`.
+        let row_y = area.y + u16::try_from(vi).expect("row index bounded by area height");
         chrome::render_panel_row(
             f,
             area.x,

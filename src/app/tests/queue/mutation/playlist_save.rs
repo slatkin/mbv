@@ -188,7 +188,7 @@ fn local_daemon_save_as_fixture() -> (
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
         config,
     );
     while commands.try_recv().is_ok() {}
@@ -378,7 +378,7 @@ fn stay_alive_save_as_without_owner_snapshot_is_refused_at_request_time() {
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
         config,
     );
     assert!(app.queue_origin().is_none(), "no owner snapshot yet");

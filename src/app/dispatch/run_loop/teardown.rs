@@ -89,7 +89,8 @@ impl App {
         // can stop concurrently with the player thread.
         let visualizer_handle = self.visualizer.take().and_then(|mut worker| {
             let handle = worker.signal_stop();
-            self.visualizer_window = Default::default();
+            self.visualizer_window =
+                crate::app::infra::visualizer_worker::StereoSampleWindow::default();
             handle
         });
         // Advance the queue lineage so any late work from this process cannot
@@ -142,7 +143,9 @@ impl App {
         );
         let shutdown_response =
             self.request_teardown_shutdown(quit_timeout, should_request_shutdown);
-        if !self.player.is_remote() {
+        if self.player.is_remote() {
+            join_visualizer_worker(visualizer_handle);
+        } else {
             self.player.stop_for_shutdown(quit_timeout);
             // During quit shutdown there is no progress-thread join and no WS
             // flush. The player thread's worst case is the bounded stopped
@@ -157,8 +160,6 @@ impl App {
             let elapsed = started.elapsed();
             log::info!(target: "player", "quit: player join finished in {}ms (bound={}ms)",
                 elapsed.as_millis(), outer_bound.as_millis());
-        } else {
-            join_visualizer_worker(visualizer_handle);
         }
         // After a failed shutdown request (Rejected, Disconnected,
         // TimedOut, or failure to connect Local), set a post-terminal message
@@ -301,8 +302,7 @@ impl App {
             ShutdownResponse::Rejected { reason } => {
                 log::warn!(target: "daemon_shutdown", "daemon rejected shutdown request: {reason}");
                 self.pending_exit_message = Some(format!(
-                    "Local daemon may still be running (shutdown rejected: {}). Use `mbv -q` to stop it.",
-                    reason
+                    "Local daemon may still be running (shutdown rejected: {reason}). Use `mbv -q` to stop it."
                 ));
             }
             ShutdownResponse::Disconnected => {

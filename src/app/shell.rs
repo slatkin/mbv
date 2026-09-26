@@ -457,40 +457,49 @@ impl Model {
         // any QueueOnly/mini-view frame. Read it in its own statement.
         let player_active = self.app.player.status.lock().unwrap().active;
         let snapshot = RouterSnapshot {
-            player_active,
-            has_remote_session: self.app.connected_session_id.is_some()
-                || self.app.player.is_remote()
-                || self.app.is_cast_attached(),
-            connected_session_id_present: self.app.connected_session_id.is_some(),
-            // Task 3.8: the idle-feed open-link gate follows the Queue
-            // playback panel's presence, not the panel mode. The panel is
-            // mounted in every queue-visible layout (idle included), so the
-            // link is gated off whenever the queue column is visible and
-            // nothing is playing; in library-only the Library playback
-            // panel's strip displays the idle feed and the link opens.
-            queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
-                && !self.app.effective_playback_state().active,
+            playback: super::input::RouterPlaybackState {
+                player_active,
+                remote_target: if self.app.connected_session_id.is_some() {
+                    super::input::RemotePlaybackTarget::Session
+                } else if self.app.player.is_remote() {
+                    super::input::RemotePlaybackTarget::DirectRemote
+                } else if self.app.is_cast_attached() {
+                    super::input::RemotePlaybackTarget::Cast
+                } else {
+                    super::input::RemotePlaybackTarget::None
+                },
+                queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
+                    && !self.app.effective_playback_state().active,
+                idle_feed_link_available: self.app.idle_feed_link_available(),
+            },
+            overlays: super::input::RouterOverlayState {
+                focus: if self
+                    .application
+                    .mounted(&ComponentId::Overlay(OverlayId::ContextMenu))
+                {
+                    super::input::OverlayFocus::ContextMenu
+                } else if self.blocking_overlay_active() {
+                    super::input::OverlayFocus::Blocking
+                } else if self.overlay_holds_focus() {
+                    super::input::OverlayFocus::NonBlocking
+                } else {
+                    super::input::OverlayFocus::Free
+                },
+                help: self
+                    .application
+                    .mounted(&ComponentId::Overlay(OverlayId::Help)),
+                sessions_sidebar: self
+                    .application
+                    .mounted(&ComponentId::Overlay(OverlayId::Sessions)),
+                text_entry_focused: matches!(
+                    self.application.focus(),
+                    Some(ComponentId::Overlay(
+                        OverlayId::Search | OverlayId::Settings
+                    ))
+                ) || self.active_inline_search_is_open(),
+            },
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
-            overlay_holds_focus: self.overlay_holds_focus(),
-            blocking_overlay_open: self.blocking_overlay_active(),
-            help_overlay_open: self
-                .application
-                .mounted(&ComponentId::Overlay(OverlayId::Help)),
-            sessions_sidebar_open: self
-                .application
-                .mounted(&ComponentId::Overlay(OverlayId::Sessions)),
-            context_menu_open: self
-                .application
-                .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
-            idle_feed_link_available: self.app.idle_feed_link_available(),
-            text_entry_focused: matches!(
-                self.application.focus(),
-                Some(
-                    ComponentId::Overlay(OverlayId::Search)
-                        | ComponentId::Overlay(OverlayId::Settings)
-                )
-            ) || self.active_inline_search_is_open(),
             prefix_armed: self.app.prefix_armed,
         };
 
@@ -579,18 +588,18 @@ impl Model {
         if leaf_consumed {
             return false;
         }
-        let quit = self.dispatch_router_command(command.clone());
+        let quit = self.dispatch_router_command(command);
         debug_assert!(!quit, "deferred candidates never quit");
         true
     }
 
-    pub(in crate::app) fn dispatch_router_command(&mut self, command: Command) -> bool {
+    pub(in crate::app) fn dispatch_router_command(&mut self, command: &Command) -> bool {
         match command {
             Command::OpenHelp => {
                 self.mount_help();
                 false
             }
-            command => self.app.dispatch(command),
+            _ => self.app.dispatch(command),
         }
     }
 
@@ -718,7 +727,7 @@ impl Model {
                 .application
                 .mount(ComponentId::Library, Box::new(panel), vec![])
                 .expect("mount LibraryPanel");
-        }
+        };
         model
             .application
             .mount(
@@ -734,7 +743,7 @@ impl Model {
 
 fn apply_terminal_observer(
     model: &mut Model,
-    event: TerminalObserverEvent,
+    event: &TerminalObserverEvent,
     music_resize: &mut bool,
     tv_resize: &mut bool,
 ) {
@@ -744,8 +753,8 @@ fn apply_terminal_observer(
             // pass consumes the armed flag and compares it against the size
             // it last handled.
             model.pending_terminal_resize = true;
-            model.app.terminal_width = width;
-            model.app.terminal_height = height;
+            model.app.terminal_width = *width;
+            model.app.terminal_height = *height;
             model.app.force_clear = true;
             model.app.card_image_states.clear();
             model.app.card_image_loading.clear();
@@ -763,8 +772,9 @@ fn apply_terminal_observer(
         // disarms prefix mode (design D6, task 6.1) — a shell-side flag
         // clear plus focus restore; the mouse event's own delivery and
         // handling are unchanged.
-        TerminalObserverEvent::MouseClick { .. } => model.disarm_prefix_mode(),
-        TerminalObserverEvent::Mouse => model.disarm_prefix_mode(),
+        TerminalObserverEvent::MouseClick { .. } | TerminalObserverEvent::Mouse => {
+            model.disarm_prefix_mode();
+        }
         TerminalObserverEvent::Key(_)
         | TerminalObserverEvent::NoOp
         | TerminalObserverEvent::MouseClaimed

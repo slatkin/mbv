@@ -183,7 +183,7 @@ impl HomeContent {
                 self.handle_navigation_key(MediaListSurfaceInput::Last);
                 None
             }
-            Key::Char('.') => self.open_context_menu(),
+            Key::Char('.') => Some(self.open_context_menu()),
             Key::Enter | Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(
                 Msg::Shell(Box::new(ShellRequest::HomeEnqueue(self.row_target()))),
             ),
@@ -202,7 +202,7 @@ impl HomeContent {
         self.delegate_row_local_input(input, None);
     }
 
-    fn open_context_menu(&mut self) -> Option<Msg> {
+    fn open_context_menu(&mut self) -> Msg {
         let targets = match self
             .delegate_row_local_input(MediaListSurfaceInput::Context, None)
             .external_intent
@@ -214,10 +214,10 @@ impl HomeContent {
                 .collect(),
             _ => vec![self.row_target()],
         };
-        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Home(targets),
             None,
-        ))))
+        )))
     }
 
     fn activate_selected_row(&mut self) -> Option<Msg> {
@@ -261,8 +261,8 @@ impl HomeContent {
 
         match input {
             MediaListSurfaceInput::Wheel { .. } => Some(self.claim_wheel(input)),
-            MediaListSurfaceInput::DoubleClick(_) => self.activate_pointer_target(target?),
-            MediaListSurfaceInput::ContextClick(at) => self.open_pointer_context(at, target?),
+            MediaListSurfaceInput::DoubleClick(_) => Some(self.activate_pointer_target(target?)),
+            MediaListSurfaceInput::ContextClick(at) => Some(self.open_pointer_context(at, target?)),
             MediaListSurfaceInput::Click(_)
             | MediaListSurfaceInput::ToggleClick(_)
             | MediaListSurfaceInput::RangeClick(_) => Some(self.claim_pointer_click()),
@@ -275,19 +275,15 @@ impl HomeContent {
         Msg::TerminalEvent(super::msg::TerminalObserverEvent::MouseClaimed)
     }
 
-    fn activate_pointer_target(&mut self, target: String) -> Option<Msg> {
+    fn activate_pointer_target(&mut self, target: String) -> Msg {
         self.carrier
             .delegate_operation(MediaListOperation::Activate(target));
-        Some(Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
+        Msg::Shell(Box::new(ShellRequest::HomeRowActivate {
             target: self.row_target(),
-        })))
+        }))
     }
 
-    fn open_pointer_context(
-        &mut self,
-        at: ratatui::layout::Position,
-        target: String,
-    ) -> Option<Msg> {
+    fn open_pointer_context(&mut self, at: ratatui::layout::Position, target: String) -> Msg {
         let outcome = self
             .carrier
             .delegate_operation(MediaListOperation::Context(target));
@@ -299,10 +295,10 @@ impl HomeContent {
                 .collect(),
             _ => vec![self.row_target()],
         };
-        Some(Msg::Shell(Box::new(ShellRequest::RowContextMenu(
+        Msg::Shell(Box::new(ShellRequest::RowContextMenu(
             ContextMenuTargets::Home(targets),
             Some((at.x, at.y)),
-        ))))
+        )))
     }
 
     fn claim_pointer_click(&self) -> Msg {
@@ -394,10 +390,12 @@ impl LibraryContentOwner for HomeContent {
     /// Translate resolved list gestures into Home's typed requests.
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(_) => None,
             LibrarySlotEvent::List(input) => self.on_list_slot_event(input),
-            // Home has no Workspace and no hero-pane input of its own.
-            LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
+            // Home has no Workspace and no hero-pane input of its own; the
+            // selector pill is likewise inert here.
+            LibrarySlotEvent::SelectorPicked(_)
+            | LibrarySlotEvent::WorkspaceSelectorPicked(_)
+            | LibrarySlotEvent::HeroPane(_) => None,
             LibrarySlotEvent::HeroActivate => self.activate_home_hero(),
         }
     }

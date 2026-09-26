@@ -64,8 +64,8 @@ fn series_image_completion_repushes_tv_workspace_content() {
     {
         let backend = ratatui::backend::TestBackend::new(160, 40);
         let mut term = ratatui::Terminal::new(backend).unwrap();
-        term.draw(|f| model.draw_frame(f, false, false)).unwrap();
-    }
+        term.draw(|f| model.draw_frame(f, false, false)).unwrap()
+    };
     model.sync_mounted_surfaces();
     assert!(
         wide_tv_shows_placeholder(&mut model),
@@ -97,8 +97,8 @@ fn non_series_image_completion_leaves_tv_projection_alone() {
     {
         let backend = ratatui::backend::TestBackend::new(160, 40);
         let mut term = ratatui::Terminal::new(backend).unwrap();
-        term.draw(|f| model.draw_frame(f, false, false)).unwrap();
-    }
+        term.draw(|f| model.draw_frame(f, false, false)).unwrap()
+    };
     model.sync_mounted_surfaces();
     drop_pending_image_completions(&mut model);
     assert!(

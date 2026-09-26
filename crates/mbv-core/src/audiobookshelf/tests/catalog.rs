@@ -177,7 +177,10 @@ fn newest_episodes_shelf_wire_carries_the_embedded_payload() {
     assert_eq!(first.author.as_deref(), Some("Jane Doe"));
     assert_eq!(
         first.duration_ticks,
-        Some((1800.0 * crate::api::TICKS_PER_SECOND as f64) as u64),
+        Some(
+            u64::try_from(1_800 * crate::api::TICKS_PER_SECOND)
+                .expect("1800 seconds in ticks fits u64"),
+        ),
         "audioFile.duration is carried as duration ticks"
     );
     assert_eq!(first.cover_path.as_deref(), Some("/api/items/show-2/cover"));
@@ -299,7 +302,7 @@ fn auth_failures_are_classified_and_errors_redact_credentials() {
     let error =
         AudiobookshelfError::new(super::super::AudiobookshelfFailureClass::AuthenticationRejected);
     assert!(!error.to_string().contains("secret-key"));
-    assert!(serde_json::from_str::<ItemsResponse>("not json").is_err());
+    serde_json::from_str::<ItemsResponse>("not json").unwrap_err();
 }
 
 #[test]

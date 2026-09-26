@@ -121,7 +121,7 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
             .application
             .get_component(&ComponentId::Library)
             .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(|panel| panel.test_list_rect())
+            .and_then(LibraryPanel::test_list_rect)
             .expect("the panel painted a list slot")
     };
 
@@ -239,7 +239,7 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
         .application
         .get_component(&music_id)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(LibraryPanel::test_list_rect)
         .expect("Music panel list geometry");
     assert!(wide_area.width > 0 && wide_area.height > 0);
     harness.inject(click(wide_area.x + 1, wide_area.y + 1));

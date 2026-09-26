@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    broadcast_queue_state, dispatch_slot_jump, mint_queue_lineage, reject_command,
+    reset_slot_jumps, CtrlContext, DaemonOwnerContext, DaemonPlayerOwner, PlayerCommand,
+    PlayerOwnerState, QueueSlotId, RejectContext,
+};
 
 /// `CtrlCmd::UnifiedQueueRemoveSlot`: remove the slot identified by
 /// `slot_id`, handing off playback when it was the active slot.
@@ -21,7 +25,7 @@ pub(super) fn handle_queue_remove_slot(
     let sid = QueueSlotId::from_raw(slot_id);
     if queue.slot(sid).is_none() {
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -30,7 +34,7 @@ pub(super) fn handle_queue_remove_slot(
                 source: &*source,
                 lineage,
             },
-            "slot not found; remove skipped".to_string(),
+            "slot not found; remove skipped",
         );
     } else if queue.active_slot_id() == Some(sid) {
         queue.remove_active_slot_confirmed(sid);
@@ -162,7 +166,7 @@ pub(super) fn handle_queue_move_slot(
     let sid = QueueSlotId::from_raw(slot_id);
     if queue.slot(sid).is_none() {
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -171,7 +175,7 @@ pub(super) fn handle_queue_move_slot(
                 source: &*source,
                 lineage,
             },
-            "slot not found; move skipped".to_string(),
+            "slot not found; move skipped",
         );
     } else {
         queue.move_slot(sid, to_index);
@@ -200,8 +204,8 @@ pub(super) fn handle_queue_play_slot(
     // one to correlate the settling observation.
     if ctx.owner.core.queue.slot(sid).is_none() {
         reject_command(
-            ctx.rejection_context(lineage),
-            "slot not found; play skipped".to_string(),
+            &ctx.rejection_context(lineage),
+            "slot not found; play skipped",
         );
         return;
     }

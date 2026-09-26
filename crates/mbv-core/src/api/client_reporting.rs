@@ -1,4 +1,4 @@
-use super::*;
+use super::{EmbyClient, EmbyItem, EmbySessionId, ItemId, MediaSourceId, TICKS_PER_SECOND};
 
 /// One progress report for both progress transports. The two transports
 /// previously took the same adjacent same-type args (`position_ticks` /
@@ -17,6 +17,7 @@ pub struct ProgressReport {
 }
 
 impl EmbyClient {
+    #[must_use]
     pub fn report_start(
         &self,
         item: &EmbyItem,
@@ -138,6 +139,7 @@ impl EmbyClient {
         }
     }
 
+    #[must_use]
     pub fn report_stopped(
         &self,
         item_id: &ItemId,
@@ -202,6 +204,7 @@ impl EmbyClient {
         })
     }
 
+    #[must_use]
     pub fn report_stopped_for_shutdown(
         &self,
         item_id: &ItemId,

@@ -147,7 +147,7 @@ fn save_and_load_last_remote_connection_round_trips_library_route() {
         library: "music".to_string(),
     };
 
-    assert!(save_last_remote_connection(Some(&conn)).is_ok());
+    save_last_remote_connection(Some(&conn)).unwrap();
 
     assert_eq!(load_last_remote_connection().unwrap(), Some(conn));
 }
@@ -159,7 +159,7 @@ fn save_and_load_last_remote_connection_round_trips_direct_session() {
         device_name: "living-room-mbv".to_string(),
     };
 
-    assert!(save_last_remote_connection(Some(&conn)).is_ok());
+    save_last_remote_connection(Some(&conn)).unwrap();
 
     assert_eq!(load_last_remote_connection().unwrap(), Some(conn));
 }
@@ -167,14 +167,12 @@ fn save_and_load_last_remote_connection_round_trips_direct_session() {
 #[test]
 fn save_last_remote_connection_none_clears_a_previously_saved_record() {
     let _guard = TestStateDirGuard::new();
-    assert!(
-        save_last_remote_connection(Some(&LastRemoteConnection::LibraryRoute {
-            library: "music".to_string(),
-        }))
-        .is_ok()
-    );
+    save_last_remote_connection(Some(&LastRemoteConnection::LibraryRoute {
+        library: "music".to_string(),
+    }))
+    .unwrap();
 
-    assert!(save_last_remote_connection(None).is_ok());
+    save_last_remote_connection(None).unwrap();
 
     assert_eq!(load_last_remote_connection().unwrap(), None);
 }
@@ -268,10 +266,10 @@ fn save_queue_state_preserves_previous_snapshot_on_write_failure() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     };
 
-    assert!(save_queue_state(&original).is_ok());
+    save_queue_state(&original).unwrap();
 
     // Make the tmp path a directory so the write will fail
     let path = queue_state_path();
@@ -285,7 +283,7 @@ fn save_queue_state_preserves_previous_snapshot_on_write_failure() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     };
     let result = save_queue_state(&modified);
     assert!(result.is_err(), "write to directory should fail");

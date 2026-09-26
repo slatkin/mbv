@@ -46,7 +46,7 @@ fn queue_column_width_requires_both_panels_and_shift_horizontal() {
 fn panel_mode_cycle_falls_through_during_text_entry() {
     let key = crossterm::event::KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE);
     let mut text_entry = snapshot();
-    text_entry.text_entry_focused = true;
+    text_entry.overlays.text_entry_focused = true;
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
             key,
@@ -87,7 +87,7 @@ fn hide_visual_slot_routes_to_command_without_overlay() {
 fn hide_visual_slot_falls_through_to_text_entry() {
     let key = crossterm::event::KeyEvent::new(KeyCode::Char('h'), KeyModifiers::NONE);
     let mut typing = snapshot();
-    typing.text_entry_focused = true;
+    typing.overlays.text_entry_focused = true;
     assert_eq!(
         crate::app::input::router::resolve_router_outcome_with_focused(
             key,
@@ -102,7 +102,7 @@ fn hide_visual_slot_falls_through_to_text_entry() {
 #[test]
 fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     let mut active = snapshot();
-    active.player_active = true;
+    active.playback.player_active = true;
     assert_eq!(
         resolve_policy(
             chord(KeyCode::Char(' '), KeyModifiers::NONE),
@@ -124,7 +124,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
     );
 
     let mut idle_feed = snapshot();
-    idle_feed.idle_feed_link_available = true;
+    idle_feed.playback.idle_feed_link_available = true;
     assert_eq!(
         resolve_policy(
             chord(KeyCode::Char('o'), KeyModifiers::NONE),
@@ -138,7 +138,7 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
 
     // A focused text entry (e.g. Inline Search) keeps every playback letter
     // as a typed character rather than routing it to a playback command.
-    idle_feed.text_entry_focused = true;
+    idle_feed.overlays.text_entry_focused = true;
     assert_eq!(
         resolve_policy(
             chord(KeyCode::Char('o'), KeyModifiers::NONE),
@@ -149,8 +149,8 @@ fn playback_gate_uses_per_key_resolution_and_idle_feed_path() {
         None
     );
     let mut typing = snapshot();
-    typing.player_active = true;
-    typing.text_entry_focused = true;
+    typing.playback.player_active = true;
+    typing.overlays.text_entry_focused = true;
     assert_eq!(
         resolve_policy(
             chord(KeyCode::Char(' '), KeyModifiers::NONE),
@@ -187,14 +187,14 @@ fn each_transport_action_resolves_under_its_own_condition() {
 
     for id in gated.iter().chain(ungated.iter()) {
         let mut active = snapshot();
-        active.player_active = true;
+        active.playback.player_active = true;
         assert_eq!(
             resolve_policy(default_chord(id), &active, &keybinds()).map(|entry| entry.name),
             Some(*id),
             "{id} resolves from its default chord with an active player"
         );
         let mut remote = snapshot();
-        remote.has_remote_session = true;
+        remote.playback.remote_target = crate::app::input::RemotePlaybackTarget::DirectRemote;
         assert_eq!(
             resolve_policy(default_chord(id), &remote, &keybinds()).map(|entry| entry.name),
             Some(*id),
@@ -224,19 +224,19 @@ fn each_transport_action_resolves_under_its_own_condition() {
     // not mounted, and a link is displayed.
     let o = default_chord("open_idle_feed_link");
     let mut idle = snapshot();
-    idle.idle_feed_link_available = true;
+    idle.playback.idle_feed_link_available = true;
     assert_eq!(
         resolve_policy(o, &idle, &keybinds()).map(|entry| entry.name),
         Some("open_idle_feed_link")
     );
     let mut busy = idle;
-    busy.player_active = true;
+    busy.playback.player_active = true;
     assert_eq!(
         resolve_policy(o, &busy, &keybinds()).map(|entry| entry.name),
         None
     );
     let mut panel_idle = idle;
-    panel_idle.queue_only_idle = true;
+    panel_idle.playback.queue_only_idle = true;
     assert_eq!(
         resolve_policy(o, &panel_idle, &keybinds()).map(|entry| entry.name),
         None
@@ -279,7 +279,7 @@ fn rebound_transport_action_fires_on_configured_chord_only() {
     let keybinds = rebound("toggle_play_pause", "Ctrl+p");
     let new_chord = chord(KeyCode::Char('p'), KeyModifiers::CONTROL);
     let mut active = snapshot();
-    active.player_active = true;
+    active.playback.player_active = true;
     assert_eq!(
         resolve_policy(new_chord, &active, &keybinds).unwrap().name,
         "toggle_play_pause"
@@ -363,7 +363,7 @@ fn transport_policy_layers_match_the_registry_playback_actions() {
 #[test]
 fn sessions_sidebar_escape_precedes_playback_stop() {
     let mut armed = snapshot();
-    armed.player_active = true;
+    armed.playback.player_active = true;
     assert_eq!(
         resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &armed, &keybinds())
             .unwrap()
@@ -371,7 +371,7 @@ fn sessions_sidebar_escape_precedes_playback_stop() {
         "stop"
     );
 
-    armed.sessions_sidebar_open = true;
+    armed.overlays.sessions_sidebar = true;
     assert_eq!(
         resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &armed, &keybinds())
             .unwrap()
@@ -398,7 +398,7 @@ fn clear_queue_is_gated_when_context_menu_is_open() {
     );
 
     let mut menu = snapshot();
-    menu.context_menu_open = true;
+    menu.overlays.focus = OverlayFocus::ContextMenu;
     assert_ne!(
         resolve_policy(key, &menu, &keybinds()).map(|entry| entry.name),
         Some("clear_queue_prompt_c")
@@ -541,9 +541,9 @@ fn defaults_reproduce_todays_resolution() {
                 | "next_track"
                 | "previous_track"
                 | "toggle_mute_or_cycle_audio" => {
-                    snap.player_active = true;
+                    snap.playback.player_active = true;
                 }
-                "open_idle_feed_link" => snap.idle_feed_link_available = true,
+                "open_idle_feed_link" => snap.playback.idle_feed_link_available = true,
                 _ => {}
             }
             assert_eq!(

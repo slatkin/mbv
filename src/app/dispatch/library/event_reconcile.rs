@@ -30,7 +30,7 @@ impl App {
                 })
             })
             .collect();
-        for slot_id in matching_slot_ids.iter().cloned() {
+        for slot_id in matching_slot_ids.iter().copied() {
             self.player_tab
                 .queue
                 .apply_progress(slot_id, position_ticks, is_finished);
@@ -73,7 +73,7 @@ impl App {
                 })
             })
             .collect();
-        for slot_id in matching_slot_ids.iter().cloned() {
+        for slot_id in matching_slot_ids.iter().copied() {
             self.player_tab
                 .queue
                 .apply_progress(slot_id, position_ticks, is_finished);

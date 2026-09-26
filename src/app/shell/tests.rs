@@ -66,7 +66,7 @@ fn ui_root_router_command_opens_help() {
     )
     .0
     .is_empty());
-    assert!(!model.dispatch_router_command(Command::OpenHelp));
+    assert!(!model.dispatch_router_command(&Command::OpenHelp));
     assert!(model
         .application
         .mounted(&ComponentId::Overlay(OverlayId::Help)));
@@ -174,19 +174,19 @@ fn converted_surface_skips_observer_key_but_retains_redraw_signal() {
     // Leaf focused, empty policy: the fold drops the observer's Key trigger
     // (the leaf already got the event) but keeps non-key observer signals.
     let router = RouterOutcome::FallThrough;
-    let routed = fold_keyboard_messages(
+    let routed_key_messages = fold_keyboard_messages(
         vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))],
         Some(&focused),
         &router,
     );
-    assert!(routed.is_empty());
-    let routed = fold_keyboard_messages(
+    assert!(routed_key_messages.is_empty());
+    let routed_non_key_messages = fold_keyboard_messages(
         vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)],
         Some(&focused),
         &router,
     );
     assert!(matches!(
-        routed.as_slice(),
+        routed_non_key_messages.as_slice(),
         [Msg::TerminalEvent(TerminalObserverEvent::NoOp)]
     ));
 }
@@ -204,7 +204,7 @@ fn terminal_resize_observer_preserves_layout_side_effects() {
     let mut tv_resize = false;
     apply_terminal_observer(
         &mut model,
-        TerminalObserverEvent::Resize {
+        &TerminalObserverEvent::Resize {
             width: 80,
             height: 24,
         },
@@ -227,7 +227,7 @@ fn terminal_resize_observer_applies_new_size_before_paint() {
     let mut tv_resize = false;
     apply_terminal_observer(
         &mut model,
-        TerminalObserverEvent::Resize {
+        &TerminalObserverEvent::Resize {
             width: 150,
             height: 24,
         },
@@ -246,14 +246,14 @@ fn terminal_focus_observer_preserves_refocus_side_effects() {
     let mut tv_resize = false;
     apply_terminal_observer(
         &mut model,
-        TerminalObserverEvent::FocusGained,
+        &TerminalObserverEvent::FocusGained,
         &mut music_resize,
         &mut tv_resize,
     );
     assert!(model.app.refocus_at.is_some());
     apply_terminal_observer(
         &mut model,
-        TerminalObserverEvent::FocusLost,
+        &TerminalObserverEvent::FocusLost,
         &mut music_resize,
         &mut tv_resize,
     );

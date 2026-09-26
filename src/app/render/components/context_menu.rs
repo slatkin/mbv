@@ -42,14 +42,14 @@ pub(in crate::app) fn render_context_menu_content(
             } else {
                 Style::default().fg(palette::TEXT_PRIMARY)
             };
-            ListItem::new(format!(" {} ", label)).style(style)
+            ListItem::new(format!(" {label} ")).style(style)
         })
         .collect();
     let inner = Rect {
         x: rect.x,
         y: rect.y.saturating_add(1),
         width: rect.width,
-        height: entries.len() as u16,
+        height: u16::try_from(entries.len()).unwrap_or(u16::MAX),
     };
     f.render_widget(List::new(list_items), inner);
 }

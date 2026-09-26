@@ -1,4 +1,9 @@
-use super::*;
+use super::{
+    fmt_duration_gutter, fmt_publish_date_short, Date, EmbyItem, MediaKind, MediaListRow,
+    MediaListTrailing, MediaSemanticState, Pane, QueueItem, TvContent, TICKS_PER_SECOND,
+};
+use crate::app::render::effective_sort_str;
+use crate::app::ui_util::natural_sort_key;
 
 pub(super) fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
@@ -8,7 +13,7 @@ pub(super) fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<Stri
             let number = if episode.index_number > 0 {
                 episode.index_number
             } else {
-                index as i64 + 1
+                i64::try_from(index).unwrap_or(i64::MAX).saturating_add(1)
             };
             let trailing = (episode.runtime_ticks > 0)
                 .then(|| fmt_duration_gutter(episode.runtime_ticks / TICKS_PER_SECOND))
@@ -150,8 +155,7 @@ impl TvContent {
                 let season = detail.seasons.get(self.season_cursor)?;
                 detail.episodes.get(&season.id)
             })
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+            .map_or(&[], Vec::as_slice)
     }
     /// Whether the current season's episode key is present in
     /// `series_detail.episodes` at all (even mapped to an empty `Vec`) --
@@ -235,7 +239,7 @@ impl TvContent {
         // collapsing two visibly distinct rows onto the first item.
         let mut items: Vec<&EmbyItem> = self.context.list.items.iter().collect();
         items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        items.get(self.carrier.cursor()).cloned().cloned()
+        items.get(self.carrier.cursor()).copied().cloned()
     }
     /// The Series snapshot the shell pushed for this frame (`context
     /// .selected_series`), exposed so tests can verify the pushed detail

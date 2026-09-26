@@ -200,9 +200,10 @@ fn context_menu_remove_targets_displayed_remote_queue() {
 
     app.open_context_menu(false, None);
 
-    let menu = match app.pending_overlay.as_ref() {
-        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
-        _ => panic!("context menu"),
+    let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) =
+        app.pending_overlay.as_ref()
+    else {
+        panic!("context menu");
     };
     let action = menu
         .entries
@@ -240,9 +241,10 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
 
     app.open_context_menu(false, None);
 
-    let menu = match app.pending_overlay.as_ref() {
-        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
-        _ => panic!("context menu"),
+    let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) =
+        app.pending_overlay.as_ref()
+    else {
+        panic!("context menu");
     };
     let action = menu
         .entries
@@ -258,7 +260,7 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     {
         let tab = app.remote_player_tab.as_mut().unwrap();
         tab.queue.truncate_slots(2);
-    }
+    };
 
     app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)), None);
 

@@ -1,7 +1,11 @@
 //! Per-tick drains and the terminal-message tick, extracted from `Model::run`
 //! (issue #800). Behaviour-preserving extractions; `run` keeps the ordering.
 
-use super::*;
+use super::super::{
+    arbitrate_key, fold_mouse_messages, service_startup, Model, MusicTrackFocusRequest,
+    RouterOutcome,
+};
+use super::{Duration, IdleFeed, Instant, PollStrategy};
 
 /// Outcome of one `drain_worker` step.
 enum WorkerDrain {
@@ -44,12 +48,11 @@ impl Model {
                 &mut worker.rx,
                 // Emby bootstrap wrote Home content; assign + re-project
                 // (5.3d); stale/error return None.
-                |model, completion| model.apply_emby_completion_drain(completion),
+                super::super::Model::apply_emby_completion_drain,
                 |model| model.app.handle_emby_startup_worker_disconnect(generation),
             ) {
-                WorkerDrain::Completed => had_events = true,
+                WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
                 WorkerDrain::Empty => self.app.emby_startup_rx = Some(worker),
-                WorkerDrain::Disconnected => had_events = true,
             }
         }
         if let Some(mut rx) = self.app.emby_setup_rx.take() {
@@ -57,12 +60,11 @@ impl Model {
                 &mut rx,
                 // Emby setup drain re-bootstraps Home content; assign +
                 // re-project (5.3d); stale/decline return None.
-                |model, completion| model.apply_emby_setup_completion_drain(completion),
+                super::super::Model::apply_emby_setup_completion_drain,
                 |model| model.app.handle_emby_setup_worker_disconnect(),
             ) {
-                WorkerDrain::Completed => had_events = true,
+                WorkerDrain::Completed | WorkerDrain::Disconnected => had_events = true,
                 WorkerDrain::Empty => self.app.emby_setup_rx = Some(rx),
-                WorkerDrain::Disconnected => had_events = true,
             }
         }
         had_events
@@ -101,7 +103,7 @@ impl Model {
                     items,
                 } => {
                     self.update_emby_latest_snapshot(
-                        library_id,
+                        &library_id,
                         title,
                         items
                             .into_iter()
@@ -144,7 +146,7 @@ impl Model {
                         level,
                     });
                     if let Some((library_id, title, items)) = latest {
-                        self.update_emby_latest_snapshot(library_id, title, items);
+                        self.update_emby_latest_snapshot(&library_id, title, items);
                     }
                 }
                 // Recursive album activation used to write `Some(0)` on
@@ -171,7 +173,7 @@ impl Model {
                     self.push_inline_search_content();
                 }
                 crate::app::LibEvent::HomeContentRefreshed(content) => {
-                    self.assign_home_content(*content)
+                    self.assign_home_content(*content);
                 }
                 crate::app::LibEvent::SeriesDetailFetched { .. } => {
                     self.app.handle_lib_event(ev);
@@ -384,7 +386,7 @@ impl Model {
         // A prefix-namespace dispatch (design D6, task 6.2) runs the
         // mapped action and disarms, like an immediate `Command`.
         if let RouterOutcome::Command(command) | RouterOutcome::PrefixDispatch(command) = &router {
-            quit |= self.dispatch_router_command(command.clone());
+            quit |= self.dispatch_router_command(command);
         }
         // A deferred candidate fires on an unhandled press; its
         // commands never quit, so it does not feed the loop's quit

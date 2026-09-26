@@ -208,7 +208,7 @@ fn migrated_home() -> (TickHarness, Rc<RefCell<FixtureLog>>) {
     harness.model_mut().sync_library_panel();
     harness
         .model_mut()
-        .push_library_owner(home_key(), Box::new(FixtureOwner::new(log.clone())));
+        .push_library_owner(home_key(), Box::new(FixtureOwner::new(Rc::clone(&log))));
     harness.model_mut().sync_mounted_surfaces();
     (harness, log)
 }
@@ -262,7 +262,7 @@ fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> 
             line.push_str(buf[(x, row)].symbol());
         }
         if let Some(offset) = line.find(needle) {
-            return Some((offset as u16, row));
+            return Some((u16::try_from(offset).unwrap_or(u16::MAX), row));
         }
     }
     None
@@ -282,7 +282,7 @@ fn find_text_in(
             line.push_str(buf[(x, row)].symbol());
         }
         if let Some(offset) = line.find(needle) {
-            return Some((area.left() + offset as u16, row));
+            return Some((area.left() + u16::try_from(offset).unwrap_or(u16::MAX), row));
         }
     }
     None

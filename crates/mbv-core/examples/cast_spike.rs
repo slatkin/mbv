@@ -9,7 +9,7 @@ use mbv_core::api::EmbyClient;
 use mbv_core::audiobookshelf::AudiobookshelfClient;
 use mbv_core::config;
 use rust_cast::channels::media::{Media, MediaQueue, QueueItem, QueueType, StreamType};
-use rust_cast::channels::receiver::CastDeviceApp;
+use rust_cast::channels::receiver::{Application, CastDeviceApp};
 use rust_cast::CastDevice;
 
 fn main() {
@@ -151,7 +151,7 @@ fn emby_direct_play_urls() -> Vec<String> {
         ..Default::default()
     });
     client.user_id = user_id;
-    client.token = token.clone();
+    client.token.clone_from(&token);
 
     let items = client.get_continue_watching(10).unwrap_or_default();
     items
@@ -180,18 +180,43 @@ fn emby_credentials() -> Option<(String, String, String)> {
 }
 
 fn run_cast_spike(host: &str, emby_urls: &[String]) {
+    let Some((device, app)) = connect_and_launch(host) else {
+        return;
+    };
+
+    let Some(url) = emby_urls.first() else {
+        println!("skipped load: no Emby direct-play URL available");
+        return;
+    };
+    load_single_item_and_poll(&device, &app, url);
+    observe_queue_advance(&device, &app, emby_urls);
+}
+
+fn to_media(url: &str) -> Media {
+    Media {
+        content_id: url.to_string(),
+        stream_type: StreamType::Buffered,
+        content_type: "video/mp4".to_string(),
+        metadata: None,
+        duration: None,
+    }
+}
+
+/// Connect to the receiver platform, launch the default media receiver app,
+/// and connect to its transport. Prints and bails (returns `None`) on failure.
+fn connect_and_launch(host: &str) -> Option<(CastDevice<'_>, Application)> {
     let device = match CastDevice::connect_without_host_verification(host, 8009) {
         Ok(d) => d,
         Err(e) => {
             println!("connect failed: {e}");
-            return;
+            return None;
         }
     };
     println!("connect: ok");
 
     if let Err(e) = device.connection.connect("receiver-0") {
         println!("connect to receiver platform failed: {e}");
-        return;
+        return None;
     }
 
     let app = match device
@@ -201,7 +226,7 @@ fn run_cast_spike(host: &str, emby_urls: &[String]) {
         Ok(a) => a,
         Err(e) => {
             println!("launch_app failed: {e}");
-            return;
+            return None;
         }
     };
     println!("launch_app: ok, transport_id={}", app.transport_id);
@@ -212,22 +237,13 @@ fn run_cast_spike(host: &str, emby_urls: &[String]) {
         .is_err()
     {
         println!("connect to app transport failed");
-        return;
+        return None;
     }
+    Some((device, app))
+}
 
-    let Some(url) = emby_urls.first() else {
-        println!("skipped load: no Emby direct-play URL available");
-        return;
-    };
-
-    let to_media = |url: &str| Media {
-        content_id: url.to_string(),
-        stream_type: StreamType::Buffered,
-        content_type: "video/mp4".to_string(),
-        metadata: None,
-        duration: None,
-    };
-
+/// 1.2: load a single direct-play URL and poll its status three times.
+fn load_single_item_and_poll(device: &CastDevice, app: &Application, url: &str) {
     match device.media.load(
         app.transport_id.as_str(),
         app.session_id.as_str(),
@@ -247,7 +263,11 @@ fn run_cast_spike(host: &str, emby_urls: &[String]) {
             Err(e) => println!("1.2 poll {i}: get_status failed: {e}"),
         }
     }
+}
 
+/// 1.3: load a multi-item queue, seek near the end of the first item, and
+/// poll for the unattended advance across items (proactive pong each tick).
+fn observe_queue_advance(device: &CastDevice, app: &Application, emby_urls: &[String]) {
     if emby_urls.len() < 2 {
         println!("skipped 1.3 (multi-item queue): fewer than 2 Emby items available");
         return;

@@ -72,8 +72,13 @@ impl MediaSemanticState {
     /// [`Self::from_queue_item`], which add the music rule on top of this.
     pub fn from_progress(played: bool, position_ticks: i64, runtime_ticks: i64) -> Self {
         if position_ticks > 0 {
-            let progress = (runtime_ticks > 0)
-                .then(|| ((position_ticks as u128 * 100) / runtime_ticks as u128).min(100) as u16);
+            let progress = (runtime_ticks > 0).then(|| {
+                (u128::try_from(position_ticks)
+                    .unwrap_or(u128::MAX)
+                    .saturating_mul(100)
+                    / u128::try_from(runtime_ticks).unwrap_or(u128::MAX))
+                .min(100) as u16
+            });
             Self::active(progress)
         } else if played {
             Self::Played
@@ -393,7 +398,9 @@ impl<Target> RowGeometry<Target> {
 
     fn row_rect(&self, area: Rect, flow_row: usize) -> Rect {
         Rect {
-            y: area.y + (flow_row - self.offset) as u16,
+            y: area.y
+                + u16::try_from(flow_row - self.offset)
+                    .expect("visible row offset is bounded by the painted rect height"),
             height: 1,
             ..area
         }
@@ -424,7 +431,9 @@ impl<Target> RowGeometry<Target> {
                 // Rows anchor at `content_rect.y` (where the list paints)
                 // but inherit x/width from the claim rectangle.
                 let rect = Rect {
-                    y: content_rect.y + (flow_row - self.offset) as u16,
+                    y: content_rect.y
+                        + u16::try_from(flow_row - self.offset)
+                            .expect("visible row offset is bounded by the painted rect height"),
                     height: 1,
                     ..claim_rect
                 };

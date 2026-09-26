@@ -326,7 +326,7 @@ fn clear_multi_selection_routes_by_origin_not_dispatch_focus() {
     );
     harness.model_mut().sync_mounted_surfaces();
     let slot0 = queue_owner(&harness)
-        .and_then(|queue| queue.test_selected_target())
+        .and_then(crate::app::components::QueueComponent::test_selected_target)
         .expect("queue row selected");
     harness
         .model_mut()
@@ -383,7 +383,7 @@ fn status_bar_clear_with_queue_origin_clears_queue() {
     );
     harness.model_mut().sync_mounted_surfaces();
     let slot0 = queue_owner(&harness)
-        .and_then(|queue| queue.test_selected_target())
+        .and_then(crate::app::components::QueueComponent::test_selected_target)
         .expect("queue row selected");
     harness
         .model_mut()
@@ -569,7 +569,7 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
     assert!(outcome.messages.iter().any(|message| matches!(
         message,
         Msg::Shell(ref shell_boxed)
-     if matches!(shell_boxed.as_ref(), ShellRequest::HomeRowClick { target: _ }))));
+     if matches!(shell_boxed.as_ref(), ShellRequest::HomeRowClick { .. }))));
     assert_eq!(home_owner(&harness).cursor(), 2);
     let _ = draw(&mut harness, 60, 20);
     assert_eq!(home_owner(&harness).cursor(), 2);
@@ -646,8 +646,16 @@ fn home_list_row_cells(
         };
         if let Some(single_at) = row_text(y + 1).find(single_title) {
             return (
-                (at as u16, (at + context.len() + 1) as u16, y),
-                (single_at as u16, y + 1),
+                (
+                    u16::try_from(at).expect("rendered row index fits in terminal width"),
+                    u16::try_from(at + context.len() + 1)
+                        .expect("rendered row index fits in terminal width"),
+                    y,
+                ),
+                (
+                    u16::try_from(single_at).expect("rendered row index fits in terminal width"),
+                    y + 1,
+                ),
             );
         }
     }
@@ -659,8 +667,6 @@ fn assert_home_palette_painted(
     label: &str,
     single_fg: ratatui::style::Color,
 ) {
-    use crate::app::palette;
-
     let buf = terminal.backend().buffer();
     // A split row (episode → series context + item title): the context name
     // paints the split-row context role and the item title the split-row

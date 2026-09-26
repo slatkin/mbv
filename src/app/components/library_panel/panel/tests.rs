@@ -204,7 +204,10 @@ fn panel_paints_the_active_owner_and_resolves_slot_events() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));
-    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log))),
+    );
     let buf = draw_panel(&mut panel);
 
     // Content painted: the selector pill and a list row.
@@ -241,7 +244,10 @@ fn selector_move_updates_only_private_hover_identity_and_returns_no_message() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));
-    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log))),
+    );
     let _ = draw_panel(&mut panel);
     let (pill, _) = panel.test_selector_hits().regions()[1];
 
@@ -279,7 +285,10 @@ fn list_click_delegates_to_the_active_owner() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));
-    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log))),
+    );
     let buf = draw_panel(&mut panel);
 
     // Find the second row's text and click it.
@@ -320,7 +329,10 @@ fn split_drag_resolves_the_live_width_from_the_painted_gap() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));
-    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log))),
+    );
     let _ = draw_panel(&mut panel);
     let gap = panel.test_split_gap().expect("a wide split painted");
     assert!(gap.width > 0 && gap.height > 0);
@@ -416,7 +428,10 @@ fn interrupted_split_drag_does_not_claim_a_later_row_release_or_unchanged_drag()
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));
-    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log))),
+    );
     let _ = draw_panel(&mut panel);
     let gap = panel.test_split_gap().expect("a wide split painted");
     let list = panel.test_list_rect().expect("a wide list painted");
@@ -621,7 +636,10 @@ fn overlay_dismissal_handles_escape_backdrop_destination_and_missing_parent() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));
-    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::clone(&log))),
+    );
     let _ = draw_panel(&mut panel);
 
     // Backdrop dismissal: with the overlay exactly the pane's size there is

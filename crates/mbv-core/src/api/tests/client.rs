@@ -160,7 +160,7 @@ fn artist_audio_tracks_error_propagates() {
     let (mut client, http) = mock_client(TEST_URL);
     client.user_id = "user".into();
     http.respond(500, r#"{"error":"unsupported"}"#);
-    assert!(client.get_artist_audio_tracks("artist-9").is_err());
+    client.get_artist_audio_tracks("artist-9").unwrap_err();
 }
 
 #[test]
@@ -234,26 +234,26 @@ fn credential_exchange_rejection_and_connectivity_commit_nothing() {
     http.respond(401, "");
     http.fail(std::io::ErrorKind::ConnectionRefused);
     let client = EmbyClient::new(crate::config::Config::default()).with_test_agent(agent);
-    assert!(client
+    client
         .exchange_credentials_bounded(
             TEST_URL,
             "alice",
             "wrong",
             std::time::Duration::from_secs(2),
         )
-        .is_err());
+        .unwrap_err();
     assert!(!crate::config::token_cache_path().exists());
     assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
     assert!(!crate::config::config_path().exists());
 
-    assert!(client
+    client
         .exchange_credentials_bounded(
             TEST_URL,
             "alice",
             "wrong",
             std::time::Duration::from_secs(2),
         )
-        .is_err());
+        .unwrap_err();
     assert!(!crate::config::token_cache_path().exists());
     assert!(!crate::config::service_secret_path(crate::config::ServiceKind::Emby).exists());
     assert!(!crate::config::config_path().exists());
@@ -355,7 +355,7 @@ fn device_name_trims_hostname_env_var() {
         c.device_name
     };
     // device_name should never embed raw whitespace
-    assert!(!name.contains('\n'), "name contains newline: {:?}", name);
+    assert!(!name.contains('\n'), "name contains newline: {name:?}");
     assert_eq!(name, name.trim());
 }
 
@@ -427,7 +427,7 @@ fn get_playback_info_for_cast_failed_request_is_an_error() {
     let profile = crate::cast::dispatch::build_cast_device_profile(
         crate::cast::dispatch::CastSubtitleKind::None,
     );
-    assert!(client
+    client
         .get_playback_info_for_cast("item123", false, &profile)
-        .is_err());
+        .unwrap_err();
 }

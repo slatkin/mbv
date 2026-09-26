@@ -168,7 +168,7 @@ fn queue_enriched_prunes_live_playback_slots_and_resyncs_player_queue() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
 
     let fresh = vec![
         app.player_tab.emby_items()[0].clone(),
@@ -197,7 +197,7 @@ fn queue_enriched_never_prunes_or_merges_the_active_slot_even_with_a_duplicate_i
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
 
     // The fetch confirms id0 still exists, so slot 1's duplicate id0 would
     // also match by id alone if the skip weren't by-slot.
@@ -233,7 +233,7 @@ fn queue_enriched_skips_player_active_idx_not_queue_cursor() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     let mut stale = app.player_tab.emby_items()[0].clone();
     stale.playback_position_ticks = 46 * mbv_core::api::TICKS_PER_SECOND;
 
@@ -261,7 +261,7 @@ fn queue_enriched_preserves_pending_sync_until_server_confirms_it() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     app.handle_player_event(mbv_core::player::PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
         run_identity: 0,
@@ -304,7 +304,7 @@ fn manual_refresh_merge_uses_queue_model_active_slot_protection() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     let mut stale_active = app.player_tab.emby_items()[0].clone();
     stale_active.playback_position_ticks = mbv_core::api::TICKS_PER_SECOND;
     let mut fresh_inactive = app.player_tab.emby_items()[1].clone();
@@ -362,7 +362,7 @@ fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .expect("save queue state");
 
@@ -395,7 +395,7 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .expect("save queue state");
 

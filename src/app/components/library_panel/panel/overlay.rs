@@ -1,6 +1,6 @@
 //! The Library-local Hero overlay lifecycle: opening, dismissal, and sync against the active destination owner.
 
-use super::*;
+use super::LibraryPanel;
 
 impl LibraryPanel {
     /// Open the Library-local Hero overlay for the active Hero, retaining the

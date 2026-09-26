@@ -29,11 +29,10 @@ impl LibraryTab {
     }
 
     pub(in crate::app) fn library_position_snapshot(&self) -> crate::config::LibraryPosition {
-        let (feed_selected_group, feed_video_cursor, feed_video_scroll) = self
-            .feed_home_video
-            .as_ref()
-            .map(|state| (state.selected_group, state.video_cursor, state.video_scroll))
-            .unwrap_or((0, 0, 0));
+        let (feed_selected_group, feed_video_cursor, feed_video_scroll) =
+            self.feed_home_video.as_ref().map_or((0, 0, 0), |state| {
+                (state.selected_group, state.video_cursor, state.video_scroll)
+            });
         let mut levels: Vec<crate::config::LibraryPositionLevel> = self
             .nav_stack
             .iter()
@@ -44,7 +43,7 @@ impl LibraryTab {
         // pill row without an extra unfiltered fetch (see `library_total`).
         if let Some(root) = levels.first_mut() {
             root.library_total = self.library_total;
-            root.tv_content_mode = self.tv_content_mode.clone();
+            root.tv_content_mode.clone_from(&self.tv_content_mode);
         }
         crate::config::LibraryPosition {
             levels,
@@ -56,7 +55,7 @@ impl LibraryTab {
 
     pub(in crate::app) fn apply_library_position(
         &mut self,
-        position: crate::config::LibraryPosition,
+        position: &crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
         self.library_total = position.levels.first().and_then(|l| l.library_total);

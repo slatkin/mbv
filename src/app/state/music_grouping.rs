@@ -254,9 +254,7 @@ impl App {
                         // Loading is shared with another candidate/warm-up;
                         // Failed is unreachable under NoWork but remains
                         // explicit for exhaustive state handling.
-                        Some(LevelFillState::Loading { .. })
-                        | Some(LevelFillState::Failed)
-                        | None => {}
+                        Some(LevelFillState::Loading { .. } | LevelFillState::Failed) | None => {}
                     },
                 }
             }

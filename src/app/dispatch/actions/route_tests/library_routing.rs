@@ -38,7 +38,7 @@ fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
 fn enqueue_route_conflict_allows_matching_route() {
     let mut app = make_app_stub();
     app.active_route = Some("music".to_string());
-    assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    assert!(!app.enqueue_route_conflict(Some(&"music".to_string())));
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn enqueue_route_conflict_allows_local_queue_local_item() {
 fn enqueue_route_conflict_rejects_mismatched_route() {
     let mut app = make_app_stub();
     app.active_route = Some("music".to_string());
-    assert!(app.enqueue_route_conflict(Some("movies".to_string())));
+    assert!(app.enqueue_route_conflict(Some(&"movies".to_string())));
     assert!(app.status.contains("Can't mix libraries in a routed queue"));
 }
 
@@ -63,7 +63,7 @@ fn enqueue_route_conflict_allows_enqueue_while_attached_to_a_session() {
     // reason unrelated to library routing.
     let mut app = make_app_stub();
     app.connected_session_id = Some("sess-1".to_string());
-    assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    assert!(!app.enqueue_route_conflict(Some(&"music".to_string())));
 }
 
 #[test]
@@ -74,7 +74,7 @@ fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
     app.player_rx = remote_rx;
     // active_route stays None: this is a Sessions-panel direct-remote
     // connection, not a library route.
-    assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    assert!(!app.enqueue_route_conflict(Some(&"music".to_string())));
 }
 
 #[test]

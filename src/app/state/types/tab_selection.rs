@@ -28,9 +28,8 @@ impl TabSelection {
     /// Audiobookshelf, and Feeds.
     pub(in crate::app) fn emby_library_index(self) -> Option<usize> {
         match self {
-            Self::Home | Self::Feeds => None,
+            Self::Home | Self::Feeds | Self::AudiobookshelfLibrary(_) => None,
             Self::EmbyLibrary(i) => Some(i),
-            Self::AudiobookshelfLibrary(_) => None,
         }
     }
 

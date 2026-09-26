@@ -3,7 +3,6 @@ use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::audiobookshelf::socket::AudiobookshelfProgress;
 use mbv_core::audiobookshelf::socket::SocketEvent;
 use mbv_core::playback_queue::QueueItem;
-use mbv_core::player::PlayerEvent;
 use rstest::{fixture, rstest};
 
 fn enable_audiobookshelf_owner(app: &App) {
@@ -191,7 +190,7 @@ fn audiobookshelf_progress_ack_updates_local_queue_when_remote_queue_is_target()
     assert!(!remote_episode.is_finished);
 
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
-    assert_eq!(progress.current_time_seconds, 42.5);
+    assert!((progress.current_time_seconds - 42.5).abs() < f64::EPSILON);
     assert!(progress.is_finished);
 }
 
@@ -330,7 +329,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     // (b) Browse progress map updated.
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
     assert!(progress.is_finished);
-    assert_eq!(progress.current_time_seconds, 120.0);
+    assert!((progress.current_time_seconds - 120.0).abs() < f64::EPSILON);
 
     // (c) Unplayed filter excludes the finished episode.
     assert!(
@@ -432,7 +431,7 @@ fn socket_progress_updates_matching_inactive_queued_episode(make_socket_merge_re
 
     // Browse map updated.
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
-    assert_eq!(progress.current_time_seconds, 42.5);
+    assert!((progress.current_time_seconds - 42.5).abs() < f64::EPSILON);
     assert!(progress.is_finished);
 }
 
@@ -560,6 +559,6 @@ fn audiobookshelf_progress_via_daemon_route_no_match_updates_browse_only() {
 
     // Browse progress map updated even on no queue match.
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-b".into())];
-    assert_eq!(progress.current_time_seconds, 60.0);
+    assert!((progress.current_time_seconds - 60.0).abs() < f64::EPSILON);
     assert!(!progress.is_finished);
 }

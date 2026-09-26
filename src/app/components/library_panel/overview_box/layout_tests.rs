@@ -437,7 +437,7 @@ fn link_outside_box_is_not_overlaid() {
                 &facts,
                 None,
                 &mut HitRegions::new(),
-            )
+            );
         })
         .unwrap();
     assert_eq!(terminal.backend().buffer()[(0, 0)].symbol(), " ");

@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::HashMap;
 
 #[test]
 fn tv_enter_selects_first_episode_for_activation() {
@@ -248,7 +249,7 @@ fn tv_episode_brackets_wrap_season_selection() {
         .collect();
     let detail = crate::app::SeriesDetail {
         seasons,
-        episodes: Default::default(),
+        episodes: HashMap::default(),
     };
     let mut owner = TvContent::new();
 

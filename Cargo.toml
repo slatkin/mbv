@@ -6,6 +6,10 @@ default-members = [".", "crates/mbv-core", "crates/mbvd"]
 version = "0.21.2"
 edition = "2021"
 rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/slatkin/mbv"
+keywords = ["emby", "tui", "media-player", "audiobookshelf", "terminal"]
+categories = ["command-line-utilities", "multimedia::audio", "multimedia::video"]
 
 [workspace.dependencies]
 ureq = { version = "3", default-features = false, features = ["json", "native-tls"] }
@@ -61,6 +65,9 @@ unused_result_ok = "warn"
 too_long_first_doc_paragraph = "warn"
 # May cause issues with structured logging otherwise.
 literal_string_with_formatting_args = "allow"
+# Transitive dependency version skew (thiserror, getrandom, zbus family, etc.) —
+# no source fix exists; converges as upstreams update (issue #804).
+multiple-crate-versions = { level = "allow", reason = "duplicated crates are all transitive dependencies of third-party libraries, not direct choices; converging across semver-incompatible majors is out of this repo's control (issue #804)" }
 
 [workspace.lints.rust]
 ambiguous_negative_literals = "warn"
@@ -76,6 +83,10 @@ name = "mbv"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Terminal UI client for Emby media servers."
 default-run = "mbv"
 
@@ -112,7 +123,7 @@ time = { version = "0.3", features = ["parsing"] }
 pipewire.workspace = true
 
 [dev-dependencies]
-mbv-core = { path = "crates/mbv-core", features = ["test-support"] }
+mbv-core = { path = "crates/mbv-core", features = ["test"] }
 uuid.workspace = true
 rstest.workspace = true
 

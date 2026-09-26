@@ -66,8 +66,8 @@ fn navigated_album_reanchors_the_grouped_owner_workspace() {
         app.album_tracks_cache.insert(
             "album-2".into(),
             vec![crate::app::tests::make_item("Other Track", "Audio")],
-        );
-    }
+        )
+    };
     harness.model_mut().sync_mounted_surfaces();
     harness.inject(key(Key::Down));
     harness.step();

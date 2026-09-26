@@ -57,6 +57,10 @@ struct SplitGeometry {
 /// The Library panel: owner map, focus, painted-slot geometry, and the Wide
 /// split drag. Content owners are plain types beneath it (design D2); they
 /// are never mounted, focused, subscribed, or given a `ComponentId`.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "focused, split_changed, hero_overlay_open, and mini_view_hero_auto_open are independent panel interaction/lifecycle flags, not one mode (design analysis, issue #804)"
+)]
 pub struct LibraryPanel {
     owners: LibraryOwners,
     focused: bool,
@@ -363,7 +367,7 @@ impl LibraryPanel {
         self.owners
             .active_key()
             .and_then(|key| self.owners.get(key))
-            .map(|owner| owner.hero_scroll_offset())
+            .map(super::owner::LibraryContentOwner::hero_scroll_offset)
             .unwrap_or_default()
     }
 

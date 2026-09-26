@@ -1,4 +1,12 @@
-use super::*;
+use super::{
+    AudiobookshelfEpisodeFilter, AudiobookshelfPodcastFilter, AudiobookshelfSelectorKey,
+    LaunchSelector, LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent,
+    LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput, Msg, PillSelection,
+    PodcastContent, PodcastEpisodeIntent, PodcastEpisodeTarget, SelectorIdentity, ShellRequest,
+    TerminalObserverEvent, STATE_PILL_COUNT,
+};
+use crate::app::components::library_panel::{HeroContentData, HeroImageState};
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 impl LibraryContentOwner for PodcastContent {
     fn launch_selector(&self, state: &mbv_core::config::TuiLaunchState) -> Option<LaunchSelector> {
@@ -12,11 +20,11 @@ impl LibraryContentOwner for PodcastContent {
             _ => LaunchSelector::AudiobookshelfState,
         };
         let same = match (&self.pill, &target) {
-            (PillSelection::Latest, LaunchSelector::AudiobookshelfLatest) => true,
+            (PillSelection::Latest, LaunchSelector::AudiobookshelfLatest)
+            | (PillSelection::State(_), LaunchSelector::AudiobookshelfState) => true,
             (PillSelection::Show(current), LaunchSelector::AudiobookshelfShow(target)) => {
                 current == target
             }
-            (PillSelection::State(_), LaunchSelector::AudiobookshelfState) => true,
             _ => false,
         };
         (!same).then_some(target)
@@ -58,13 +66,12 @@ impl LibraryContentOwner for PodcastContent {
                 LibraryItemIdentity::Audiobookshelf { id } => id.split_once('\0'),
                 _ => None,
             })
-            .map(|(library_item_id, episode_id)| {
+            .is_some_and(|(library_item_id, episode_id)| {
                 self.episodes.select_target(&PodcastEpisodeTarget::new(
                     library_item_id.to_owned(),
                     episode_id.to_owned(),
                 ))
-            })
-            .unwrap_or(false);
+            });
         if !selected {
             self.episodes.select_first();
         }
@@ -122,9 +129,11 @@ impl LibraryContentOwner for PodcastContent {
     /// range, so the offset only clamps here.
     fn hero_scroll(&mut self, delta: i16, max_offset: usize) -> bool {
         let next = if delta < 0 {
-            self.hero_scroll.saturating_sub((-delta) as usize)
+            self.hero_scroll
+                .saturating_sub(usize::from(delta.unsigned_abs()))
         } else {
-            self.hero_scroll.saturating_add(delta as usize)
+            self.hero_scroll
+                .saturating_add(usize::from(delta.unsigned_abs()))
         }
         .min(max_offset);
         let changed = next != self.hero_scroll;

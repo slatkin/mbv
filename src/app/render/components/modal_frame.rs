@@ -18,19 +18,25 @@ pub fn render_modal_frame(
     render_modal_frame_inner(f, title, w, h, bg)
 }
 
-fn render_modal_frame_inner(f: &mut Frame, title: &str, w: u16, h: u16, bg: Color) -> Rect {
+fn render_modal_frame_inner(
+    f: &mut Frame,
+    title: &str,
+    width: u16,
+    height: u16,
+    bg: Color,
+) -> Rect {
     dim_backdrop(f);
 
     let full = f.area();
-    let w = w.min(full.width.saturating_sub(2));
-    let h = h.min(full.height);
-    let x = full.x + full.width.saturating_sub(w) / 2;
-    let y = full.y + full.height.saturating_sub(h) / 2;
+    let width = width.min(full.width.saturating_sub(2));
+    let height = height.min(full.height);
+    let x = full.x + full.width.saturating_sub(width) / 2;
+    let y = full.y + full.height.saturating_sub(height) / 2;
     let rect = Rect {
         x,
         y,
-        width: w,
-        height: h,
+        width,
+        height,
     };
 
     f.render_widget(Clear, rect);

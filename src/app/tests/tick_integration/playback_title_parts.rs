@@ -39,7 +39,7 @@ fn title_parts_app(active_idx: usize) -> App {
         status.active = true;
         status.current_idx = active_idx;
         status.queue_len = 2;
-    }
+    };
     app
 }
 

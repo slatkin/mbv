@@ -1,5 +1,31 @@
 use super::*;
 
+/// Draw one frame through the real shell and settle both sync passes, so the
+/// tests below resolve geometry from a completed frame.
+fn settle_frame(harness: &mut TickHarness) {
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+}
+
+/// Dispatch every surviving message of a step outcome through the shell and
+/// re-run the production sync pass.
+fn dispatch_outcome(
+    harness: &mut TickHarness,
+    outcome: crate::app::tests::tick_integration::harness::StepOutcome,
+) {
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+}
+
 /// A mounted Grouped Music tree click focuses Library, while a click on an
 /// already-focused Queue leaves Queue focused. Context clicks also cross the
 /// Music-specific focus-before-menu shell boundary; generic Queue context
@@ -12,12 +38,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
     app.player_tab
         .set_items(vec![make_item("Queue Item", "Audio")], 0);
     let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
+    settle_frame(&mut harness);
 
     let tree_point = {
         let music = harness.model().test_music_owner();
@@ -28,14 +49,6 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
             .expect("tree root")
             .clone();
         tree_node_point(&harness, &root)
-    };
-    let click = |column, row| {
-        Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: tuirealm::event::KeyModifiers::NONE,
-        })
     };
     let right_click = |column, row| {
         Event::Mouse(MouseEvent {
@@ -55,7 +68,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
                 .as_any()
                 .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
         })
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_list_rect)
         .expect("painted Music list area");
     assert!(list_area.contains(ratatui::layout::Position::new(tree_point.0, tree_point.1)));
     assert!(harness
@@ -74,7 +87,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
                 .as_any()
                 .downcast_ref::<crate::app::components::QueueComponent>()
         })
-        .and_then(|queue| queue.selected_row_rect())
+        .and_then(crate::app::components::QueueComponent::selected_row_rect)
         .expect("painted queue row");
     harness.inject(right_click(queue_point.x, queue_point.y));
     let outcome = harness.step();
@@ -89,7 +102,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
         PanelFocus::Queue
     );
 
-    harness.inject(click(tree_point.0, tree_point.1));
+    harness.inject(left_click(tree_point.0, tree_point.1));
     let outcome = harness.step();
     assert!(
         outcome.raw_messages.iter().any(|message| {
@@ -99,12 +112,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
         "tree click messages: {:?}",
         outcome.raw_messages
     );
-    let (mut music_resize, mut tv_resize) = (false, false);
-    for message in outcome.messages {
-        harness
-            .model_mut()
-            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
-    }
+    dispatch_outcome(&mut harness, outcome);
     assert_eq!(
         harness.model().app.effective_panel_focus(),
         PanelFocus::Library
@@ -120,12 +128,7 @@ fn music_tree_click_and_context_menu_focus_library_but_queue_stays_generic() {
         message,
         Msg::Shell(ref shell_boxed)
              if matches!(shell_boxed.as_ref(), ShellRequest::MusicRowContextMenu(_, Some((x, y))) if *x == tree_point.0 && *y == tree_point.1))));
-    let (mut music_resize, mut tv_resize) = (false, false);
-    for message in outcome.messages {
-        harness
-            .model_mut()
-            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
-    }
+    dispatch_outcome(&mut harness, outcome);
     assert_eq!(
         harness.model().app.effective_panel_focus(),
         PanelFocus::Library
@@ -149,13 +152,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     app.panel_focus = PanelFocus::Library;
     app.panel_mode = PanelMode::LibraryOnly;
     let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
+    settle_frame(&mut harness);
 
     let list_area = harness
         .model()
@@ -166,7 +163,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
                 .as_any()
                 .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
         })
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_list_rect)
         .expect("Music tree list geometry");
     let (root_point, album_point) = {
         let music = harness.model().test_music_owner();
@@ -184,18 +181,9 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     assert!(list_area.contains(ratatui::layout::Position::new(root_point.0, root_point.1)));
     assert!(list_area.contains(ratatui::layout::Position::new(album_point.0, album_point.1)));
 
-    let click = |column, row| {
-        Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: tuirealm::event::KeyModifiers::NONE,
-        })
-    };
-
     // The artist root is a painted, focusable tree row but not an album
     // target, so its click changes only the component-local selection.
-    harness.inject(click(root_point.0, root_point.1));
+    harness.inject(left_click(root_point.0, root_point.1));
     let outcome = harness.step();
     assert!(outcome
         .messages
@@ -206,7 +194,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
     // The root click's mutation invalidated the completed frame; re-paint so
     // the leaf click resolves the latest geometry.
     draw_frame(&mut harness);
-    harness.inject(click(album_point.0, album_point.1));
+    harness.inject(left_click(album_point.0, album_point.1));
     let outcome = harness.step();
     assert!(outcome.messages.iter().any(|message| matches!(
         message,
@@ -231,7 +219,7 @@ fn music_tree_mouse_resolves_current_rows_and_rejects_an_invalidated_frame() {
         .test_music_owner_mut()
         .browser
         .invalidate_paint();
-    harness.inject(click(album_point.0, album_point.1));
+    harness.inject(left_click(album_point.0, album_point.1));
     let outcome = harness.step();
     assert!(outcome
         .messages

@@ -37,11 +37,11 @@ impl Model {
                 }
             }
             ShellRequest::EmbyLibraryPlay { item } => {
-                self.app.play_or_activate_lib_item(lib_idx, item)
+                self.app.play_or_activate_lib_item(lib_idx, item);
             }
             ShellRequest::EmbyLibraryEnqueue { item } => self.app.enqueue_lib_item(lib_idx, item),
             ShellRequest::EmbyLibraryToggleWatched { item } => {
-                self.app.toggle_watched_item(lib_idx, item)
+                self.app.toggle_watched_item(lib_idx, &item);
             }
             // Ctrl+S shuffles the supplied item with the preserved
             // `shuffle_play` tail: a folder item shuffles the folder itself;
@@ -50,7 +50,7 @@ impl Model {
             // the component-resolved item, never a `BrowseLevel.cursor`
             // re-read.
             ShellRequest::EmbyLibraryShuffle { item } => {
-                self.app.shuffle_play_selected(lib_idx, item)
+                self.app.shuffle_play_selected(lib_idx, item);
             }
             // Bare `r` refreshes the active Emby library (task 5.3d,
             // Emby browser refresh): the shell derives the active library

@@ -96,9 +96,11 @@ impl LibraryContentOwner for HeroFixtureOwner {
 
     fn hero_scroll(&mut self, delta: i16, max_offset: usize) -> bool {
         let next = if delta < 0 {
-            self.hero_scroll.saturating_sub((-delta) as usize)
+            self.hero_scroll
+                .saturating_sub(usize::from(delta.unsigned_abs()))
         } else {
-            self.hero_scroll.saturating_add(delta as usize)
+            self.hero_scroll
+                .saturating_add(usize::from(delta.unsigned_abs()))
         }
         .min(max_offset);
         let changed = next != self.hero_scroll;
@@ -240,7 +242,7 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
     let _wide_frame = settle_library_frame(&mut decorated, 160, 40);
 
     let wide_geometry = panel_of(&decorated)
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_wide_geometry)
         .expect("the landscape Movie paints the Wide skeleton");
     let wide_image = wide_geometry
         .hero_image
@@ -270,7 +272,7 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
     seed_cached_hero_image(&mut plain, "panel-logo:Backdrop,Primary", [20, 40, 60, 255]);
     let _plain_frame = settle_library_frame(&mut plain, 160, 40);
     let plain_geometry = panel_of(&plain)
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_wide_geometry)
         .expect("the undecorated landscape Movie paints the Wide skeleton");
     assert_eq!(
         wide_image.area,
@@ -321,6 +323,10 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
         "non-Wide does not reserve the Wide-only Logo"
     );
 
+    assert_wide_portrait_movie_remains_undecorated();
+}
+
+fn assert_wide_portrait_movie_remains_undecorated() {
     // Explicit negative leg: a Wide Portrait Movie with a declared Logo is
     // still a single undecorated base protocol.
     let mut portrait_item = crate::app::tests::make_item("Portrait", "Movie");
@@ -340,7 +346,7 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
     );
     let _portrait_frame = settle_library_frame(&mut portrait, 160, 40);
     let portrait_geometry = panel_of(&portrait)
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_wide_geometry)
         .expect("the Portrait Movie paints the Wide skeleton");
     assert!(portrait_geometry.hero_image.is_some());
     assert!(
@@ -525,7 +531,7 @@ fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
                 .as_any()
                 .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
         })
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_wide_geometry)
         .and_then(|geometry| geometry.overview_box)
         .expect("fitting Movie overview box");
     fitting.inject(Event::Mouse(MouseEvent {

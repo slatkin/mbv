@@ -381,7 +381,7 @@ fn alsa_initialization_error_stops_run_with_output_error() {
     let mut progress = noop_progress();
 
     assert!(run.on_mpv_error(
-        libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
+        &libmpv2::Error::Raw(libmpv2::mpv_error::AoInitFailed),
         &mut progress,
     ));
     assert!(!status.lock().unwrap().active);
@@ -435,5 +435,5 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
         false,
         100,
     ));
-    assert!(commands.try_recv().is_err());
+    commands.try_recv().unwrap_err();
 }

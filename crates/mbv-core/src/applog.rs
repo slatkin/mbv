@@ -11,6 +11,7 @@ pub enum Level {
 }
 
 impl Level {
+    #[must_use]
     pub fn logfmt(self) -> &'static str {
         match self {
             Level::Error => "error",
@@ -20,6 +21,7 @@ impl Level {
         }
     }
 
+    #[must_use]
     pub fn parse(value: &str) -> Option<Level> {
         match value {
             "error" => Some(Level::Error),
@@ -65,10 +67,12 @@ fn now_ts() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as libc::time_t;
+    // SAFETY: `libc::tm` is a C POD struct; zero is a valid initial value for
+    // passing it as the output buffer to `localtime_r`.
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe {
-        libc::localtime_r(&secs, &mut tm);
-    }
+    // SAFETY: `secs` and `tm` are valid pointers for the duration of the call,
+    // and `localtime_r` writes the broken-down time into `tm`.
+    unsafe { libc::localtime_r(&raw const secs, &raw mut tm) };
     format!("{:02}:{:02}:{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec)
 }
 
@@ -85,7 +89,7 @@ impl AppLog {
                 let _ = std::fs::create_dir_all(parent);
             }
             // rotate if > 1 MB
-            if path.metadata().map(|m| m.len()).unwrap_or(0) > 1_000_000 {
+            if path.metadata().map_or(0, |m| m.len()) > 1_000_000 {
                 let mut old = path.clone();
                 old.set_extension("log.old");
                 let _ = std::fs::rename(&path, &old);

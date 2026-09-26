@@ -138,7 +138,8 @@ fn unavailable_failure_preserves_ready_runtime_player_secret_setup_generation_an
         token: "valid-token".into(),
     });
     let current = std::sync::Arc::new(std::sync::Mutex::new(client));
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(current.clone());
+    app.emby_runtime =
+        mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::clone(&current));
     app.player
         .update_emby_credentials("https://emby.example".into(), "valid-token".into());
     mbv_core::config::save_service_secret(mbv_core::config::ServiceKind::Emby, "valid-token")
@@ -215,7 +216,8 @@ fn retry_failure_completion_preserves_existing_runtime_and_advances_generation()
         token: "valid-token".into(),
     });
     let current = std::sync::Arc::new(std::sync::Mutex::new(client));
-    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(current.clone());
+    app.emby_runtime =
+        mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::clone(&current));
     app.emby_runtime.state = ServiceState::Unavailable;
     app.player
         .update_emby_credentials("https://emby.example".into(), "valid-token".into());
@@ -375,7 +377,7 @@ fn replacement_candidate_is_not_persisted_and_escape_drops_it() {
             previous_state: ServiceState::Ready,
             result: Ok(crate::app::dispatch::session::service_startup::Startup {
                 client: candidate,
-                bootstrap: Default::default(),
+                bootstrap: mbv_core::service_runtime::EmbyBootstrap::default(),
                 setup: EmbySetup::new("https://new.example/", "new-user"),
             }),
         },

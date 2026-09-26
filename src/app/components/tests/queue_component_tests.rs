@@ -39,8 +39,8 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
     let second = slots[1].slot_id;
     let mut component = QueueComponent::new();
     component.set_content(
-        slots.clone(),
-        QueueCursorUpdate::Set(0),
+        &slots.clone(),
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -54,8 +54,8 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
     let mut reordered = slots;
     reordered.swap(0, 1);
     component.set_content(
-        reordered,
-        QueueCursorUpdate::Preserve,
+        &reordered,
+        &QueueCursorUpdate::Preserve,
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -79,8 +79,8 @@ fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
     let slots = queue();
     let mut component = QueueComponent::new();
     component.set_content(
-        slots.clone(),
-        QueueCursorUpdate::Set(0),
+        &slots.clone(),
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -90,8 +90,8 @@ fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
     // Same slot list, no removal: an identity-based `Preserve` would find
     // slot 0 still present at index 0 and leave the cursor there.
     component.set_content(
-        slots,
-        QueueCursorUpdate::Set(1),
+        &slots,
+        &QueueCursorUpdate::Set(1),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -110,8 +110,8 @@ fn queue_delete_removes_multi_selection_request_and_clears_selection() {
     let second = slots[1].slot_id;
     let mut component = QueueComponent::new();
     component.set_content(
-        slots,
-        QueueCursorUpdate::Set(0),
+        &slots,
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -135,8 +135,8 @@ fn queue_delete_without_multi_selection_removes_cursor_slot() {
     let first = slots[0].slot_id;
     let mut component = QueueComponent::new();
     component.set_content(
-        slots,
-        QueueCursorUpdate::Set(0),
+        &slots,
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -153,8 +153,8 @@ fn queue_delete_without_multi_selection_removes_cursor_slot() {
 fn queue_component_emits_typed_keyboard_intents() {
     let mut component = QueueComponent::new();
     component.set_content(
-        queue(),
-        QueueCursorUpdate::Set(0),
+        &queue(),
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -194,8 +194,8 @@ fn queue_component_emits_typed_keyboard_intents() {
 fn queue_component_renders_a_snapshot_without_app_state() {
     let mut component = QueueComponent::new();
     component.set_content(
-        queue(),
-        QueueCursorUpdate::Set(0),
+        &queue(),
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -221,8 +221,8 @@ fn queue_right_click_uses_the_rendered_slot_target() {
     let second = slots[1].slot_id;
     let mut component = QueueComponent::new();
     component.set_content(
-        slots,
-        QueueCursorUpdate::Set(1),
+        &slots,
+        &QueueCursorUpdate::Set(1),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -253,8 +253,8 @@ fn queue_dot_opens_the_context_menu_for_the_selected_row() {
     let first = slots[0].slot_id;
     let mut component = QueueComponent::new();
     component.set_content(
-        slots,
-        QueueCursorUpdate::Set(0),
+        &slots,
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -270,8 +270,8 @@ fn queue_dot_opens_the_context_menu_for_the_selected_row() {
 fn queue_right_click_on_blank_space_opens_no_menu() {
     let mut component = QueueComponent::new();
     component.set_content(
-        queue(),
-        QueueCursorUpdate::Set(0),
+        &queue(),
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -313,8 +313,8 @@ fn long_queue() -> Vec<mbv_core::playback_queue::QueueSlot> {
 fn queue_component_upward_scrolling_reaches_top() {
     let mut component = QueueComponent::new();
     component.set_content(
-        long_queue(),
-        QueueCursorUpdate::Set(29),
+        &long_queue(),
+        &QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -337,8 +337,8 @@ fn queue_component_upward_scrolling_reaches_top() {
 fn queue_component_page_up_from_bottom_reaches_top() {
     let mut component = QueueComponent::new();
     component.set_content(
-        long_queue(),
-        QueueCursorUpdate::Set(29),
+        &long_queue(),
+        &QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -365,16 +365,16 @@ fn queue_component_instances_isolate_viewport_state() {
     let slots = long_queue();
     let mut bottom = QueueComponent::new();
     bottom.set_content(
-        slots.clone(),
-        QueueCursorUpdate::Set(29),
+        &slots.clone(),
+        &QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
     );
     bottom.set_focused(true);
     let mut untouched = QueueComponent::new();
     untouched.set_content(
-        slots,
-        QueueCursorUpdate::Set(0),
+        &slots,
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -462,8 +462,8 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
     let selected = slots[20].slot_id;
     let mut component = QueueComponent::new();
     component.set_content(
-        slots.clone(),
-        QueueCursorUpdate::Set(20),
+        &slots.clone(),
+        &QueueCursorUpdate::Set(20),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -473,8 +473,8 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
     component.set_content(
-        slots,
-        QueueCursorUpdate::Preserve,
+        &slots,
+        &QueueCursorUpdate::Preserve,
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -491,8 +491,8 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
 fn queue_movement_uses_single_row_stride_and_follows_focus() {
     let mut component = QueueComponent::new();
     component.set_content(
-        long_queue(),
-        QueueCursorUpdate::Set(0),
+        &long_queue(),
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -518,8 +518,8 @@ fn now_playing_queue_row_drops_elapsed_and_keeps_progress() {
         .to_vec();
     let mut component = QueueComponent::new();
     component.set_content(
-        slot,
-        QueueCursorUpdate::Set(0),
+        &slot,
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState {
             active: true,
@@ -549,8 +549,8 @@ fn queue_scope_switch_resets_component_scroll() {
     let slots = long_queue();
     let mut component = QueueComponent::new();
     component.set_content(
-        slots,
-        QueueCursorUpdate::Set(29),
+        &slots,
+        &QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -584,8 +584,8 @@ fn queue_scope_switch_resets_component_scroll() {
     // External scope change (e.g. session switch) flows through
     // `set_content` with a differing scope; the component resets there too.
     component.set_content(
-        long_queue(),
-        QueueCursorUpdate::Set(29),
+        &long_queue(),
+        &QueueCursorUpdate::Set(29),
         QueueScope::Remote,
         PlaybackState::default(),
     );
@@ -603,8 +603,8 @@ fn queue_scope_switch_resets_component_scroll() {
         component.test_scroll()
     );
     component.set_content(
-        long_queue(),
-        // A nonzero-but-in-view cursor, not 0: with the stale (pre-reset)
+        &long_queue(),
+        &// A nonzero-but-in-view cursor, not 0: with the stale (pre-reset)
         // scroll from the Remote content above, render's own reveal-cursor
         // clamp would independently drag scroll down to this same cursor
         // value regardless of whether the reset ran, which would make a
@@ -644,8 +644,8 @@ fn footer_component(
 ) -> QueueComponent {
     let mut component = QueueComponent::new();
     component.set_content(
-        queue(),
-        QueueCursorUpdate::Set(0),
+        &queue(),
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );

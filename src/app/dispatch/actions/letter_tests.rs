@@ -195,7 +195,7 @@ fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
             4,
             crate::app::render::LetterFilterKind::Movie,
         );
-    }
+    };
     let lvl = lib.nav_stack.last().unwrap();
 
     assert_eq!(
@@ -307,7 +307,7 @@ fn activate_searched_series_marks_the_series_pill_and_cursor() {
         level.all_items = Some(corpus.clone());
         level.items = corpus.clone();
         level.total_count = 2;
-    }
+    };
     let zebra = series("series-z", "Zebra");
 
     assert!(app.activate_searched_series(0, &zebra));
@@ -345,7 +345,7 @@ fn activate_searched_series_without_pills_keeps_the_whole_list() {
         level.all_items = Some(corpus.clone());
         level.items = corpus.clone();
         level.total_count = 2;
-    }
+    };
     let zebra = series("series-z", "Zebra");
 
     assert!(app.activate_searched_series(0, &zebra));

@@ -27,6 +27,7 @@ pub struct Transition {
 }
 
 impl Transition {
+    #[must_use]
     pub fn new(
         request_id: PlaybackRequestId,
         generation: PlaybackGeneration,
@@ -44,6 +45,7 @@ impl Transition {
     /// `resume_ticks` is the target slot's resume position, resolved by the
     /// caller from the canonical queue at dispatch time (the Playback run's
     /// own queue mirror is not kept current with in-session progress).
+    #[must_use]
     pub fn into_jump(self, resume_ticks: Option<i64>) -> crate::player::PlayerCommand {
         crate::player::PlayerCommand::JumpTo {
             slot_id: self.target,
@@ -108,10 +110,12 @@ pub struct OwnerTransitionState {
 }
 
 impl OwnerTransitionState {
+    #[must_use]
     pub fn in_flight(&self) -> Option<Transition> {
         self.in_flight
     }
 
+    #[must_use]
     pub fn queued_latest(&self) -> Option<Transition> {
         self.queued_latest
     }

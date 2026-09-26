@@ -31,7 +31,11 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
         let selected_row = rows
             .iter()
             .position(|row| row.selected)
-            .and_then(|index| content_rect.y.checked_add(index as u16))
+            .and_then(|index| {
+                content_rect
+                    .y
+                    .checked_add(u16::try_from(index).unwrap_or(u16::MAX))
+            })
             .map(|y| Rect::new(content_rect.x, y, content_rect.width, 1));
         self.paint.store_completed(
             claim_rect,
@@ -41,7 +45,7 @@ impl<Target: Clone + Eq + std::hash::Hash> Component for TreeBrowser<Target> {
         );
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 

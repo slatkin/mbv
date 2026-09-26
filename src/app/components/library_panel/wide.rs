@@ -122,7 +122,10 @@ pub(in crate::app) struct BrowserPaneGeometry {
 /// column body with): the Selector row's spacer is the panel showing
 /// through, so the full-width spacer band follows that bit, not the list
 /// pane's narrower one.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the wide browser painter takes the panel content plus each pane's focus bit; bundling them into a struct would only move the argument list"
+)]
 pub(in crate::app) fn paint_browser_pane(
     f: &mut Frame,
     pane: WideHeroBrowserPane,
@@ -257,7 +260,7 @@ pub(in crate::app) fn paint_browser_pane(
     let selected = match &mut content.list {
         ListSlot::Media(list) => list.selected_row_rect(),
         ListSlot::Search(search) => search.selected_row_rect(),
-        _ => None,
+        ListSlot::Empty { .. } => None,
     };
 
     BrowserPaneGeometry {
@@ -280,7 +283,10 @@ pub(in crate::app) fn paint_browser_pane(
 /// `ListSlot::Search` is active, the search box paints in the Selector band's
 /// rect and the results in the list box, and the rest of the panel is
 /// unchanged.
-#[allow(clippy::too_many_arguments)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the wide skeleton painter composes selector, list, hero, and workspace slots, each with its own inputs"
+)]
 pub(in crate::app) fn render_wide_skeleton(
     f: &mut Frame,
     area: Rect,

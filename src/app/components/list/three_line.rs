@@ -189,7 +189,7 @@ impl<Target: Clone + Eq> Component for ThreeLineFlatList<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.view_in(frame, area, area);
     }
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}

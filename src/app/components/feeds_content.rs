@@ -187,8 +187,10 @@ impl FeedsContent {
     pub(in crate::app) fn cycle_group(&mut self, delta: i64) {
         self.latest_selected = false;
         let count = self.group_count();
+        let count = i64::try_from(count).unwrap_or(i64::MAX);
+        let selected = i64::try_from(self.selected_group).unwrap_or(i64::MAX);
         self.selected_group =
-            (self.selected_group as i64 + delta).rem_euclid(count as i64) as usize;
+            usize::try_from((selected + delta).rem_euclid(count)).unwrap_or(usize::MAX);
         self.rebuild_visible_entries();
         self.reset_selection();
     }
@@ -248,8 +250,8 @@ impl FeedsContent {
                 self.cycle_group(1);
                 None
             }
-            Key::Enter => self.play_selected_feed(),
-            Key::Char('e') => self.enqueue_selected_feed(),
+            Key::Enter => Some(self.play_selected_feed()),
+            Key::Char('e') => Some(self.enqueue_selected_feed()),
             Key::Char('.') => self.open_selected_feed_context(),
             _ => None,
         }
@@ -257,12 +259,8 @@ impl FeedsContent {
 
     fn handle_navigation_key(&mut self, key: Key) -> bool {
         let input = match key {
-            Key::Up | Key::Char('k') | Key::Left | Key::Char('h') => {
-                MediaListSurfaceInput::Move(-1)
-            }
-            Key::Down | Key::Char('j') | Key::Right | Key::Char('l') => {
-                MediaListSurfaceInput::Move(1)
-            }
+            Key::Up | Key::Char('k' | 'h') | Key::Left => MediaListSurfaceInput::Move(-1),
+            Key::Down | Key::Char('j' | 'l') | Key::Right => MediaListSurfaceInput::Move(1),
             Key::PageUp => MediaListSurfaceInput::Page(-1),
             Key::PageDown => MediaListSurfaceInput::Page(1),
             Key::Home => MediaListSurfaceInput::First,
@@ -273,37 +271,33 @@ impl FeedsContent {
         true
     }
 
-    fn play_selected_feed(&mut self) -> Option<Msg> {
+    fn play_selected_feed(&mut self) -> Msg {
         match self
             .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
             .external_intent
         {
-            Some(RowIntent::Activate(target)) => {
-                Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(
-                    self.entry_for_target(&target)
-                        .cloned()
-                        .into_iter()
-                        .collect(),
-                ))))
-            }
-            _ => Some(Msg::Shell(Box::new(ShellRequest::FeedsPlay(Vec::new())))),
+            Some(RowIntent::Activate(target)) => Msg::Shell(Box::new(ShellRequest::FeedsPlay(
+                self.entry_for_target(&target)
+                    .cloned()
+                    .into_iter()
+                    .collect(),
+            ))),
+            _ => Msg::Shell(Box::new(ShellRequest::FeedsPlay(Vec::new()))),
         }
     }
 
-    fn enqueue_selected_feed(&mut self) -> Option<Msg> {
+    fn enqueue_selected_feed(&mut self) -> Msg {
         match self
             .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
             .external_intent
         {
-            Some(RowIntent::Activate(target)) => {
-                Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(
-                    self.entry_for_target(&target)
-                        .cloned()
-                        .into_iter()
-                        .collect(),
-                ))))
-            }
-            _ => Some(Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(Vec::new())))),
+            Some(RowIntent::Activate(target)) => Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(
+                self.entry_for_target(&target)
+                    .cloned()
+                    .into_iter()
+                    .collect(),
+            ))),
+            _ => Msg::Shell(Box::new(ShellRequest::FeedsEnqueue(Vec::new()))),
         }
     }
 
@@ -327,12 +321,11 @@ impl FeedsContent {
 
     fn rebuild_visible_entries(&mut self) {
         let source = if self.latest_selected || self.selected_group == 0 {
-            &self.all_entries
+            self.all_entries.as_slice()
         } else {
             self.entries
                 .get(self.selected_group - 1)
-                .map(Vec::as_slice)
-                .unwrap_or(&[])
+                .map_or(&[][..], Vec::as_slice)
         };
         self.visible_entries = source
             .iter()
@@ -345,7 +338,7 @@ impl FeedsContent {
         let now = current_time_secs();
         let rows: Vec<MediaListRow<String>> = feed_display_rows(&self.visible_entries, now)
             .into_iter()
-            .map(|row| self.media_list_row(row))
+            .map(|row| self.media_list_row(&row))
             .collect();
         // Ordinary refresh: an unchanged projection preserves the shared
         // owner's painted frame instead of re-issuing it (the 6.1
@@ -357,14 +350,14 @@ impl FeedsContent {
         }
     }
 
-    fn media_list_row(&self, row: FeedDisplayRow) -> MediaListRow<String> {
+    fn media_list_row(&self, row: &FeedDisplayRow) -> MediaListRow<String> {
         match row {
             FeedDisplayRow::Spacer => MediaListRow::Spacer,
             FeedDisplayRow::Heading(group) => MediaListRow::Heading {
                 text: group.label().to_string(),
             },
             FeedDisplayRow::Entry(index) => {
-                let entry = &self.visible_entries[index];
+                let entry = &self.visible_entries[*index];
                 let (primary, secondary, trailing) = if self.latest_selected {
                     let feed_name = entry.feed_id.as_deref().and_then(|feed_id| {
                         self.subscriptions
@@ -404,8 +397,11 @@ impl FeedsContent {
                                 .duration_ticks
                                 .filter(|duration| *duration > 0)
                                 .map(|duration| {
-                                    ((entry.position_ticks.max(0) as u64 * 100) / duration).min(100)
-                                        as u16
+                                    (u64::try_from(entry.position_ticks.max(0))
+                                        .unwrap_or(u64::MAX)
+                                        .saturating_mul(100)
+                                        / duration)
+                                        .min(100) as u16
                                 });
                         MediaSemanticState::active(progress)
                     } else {

@@ -287,6 +287,13 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
         "the pre-navigation position was replaced by the landed state"
     );
     assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("id3"));
+    assert_stale_restore_keeps_navigated_state(&mut app, position);
+}
+
+fn assert_stale_restore_keeps_navigated_state(
+    app: &mut App,
+    position: crate::config::LibraryPosition,
+) {
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
         requested_position: position,

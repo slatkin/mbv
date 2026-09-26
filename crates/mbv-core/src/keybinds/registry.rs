@@ -73,6 +73,7 @@ pub const KEY_SECTIONS: &[KeySection] = &[
 ];
 
 impl KeySection {
+    #[must_use]
     pub fn name(self) -> &'static str {
         match self {
             Self::Services => "Services",
@@ -88,6 +89,7 @@ impl KeySection {
         }
     }
 
+    #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
         KEY_SECTIONS
             .iter()
@@ -126,6 +128,7 @@ pub struct KeybindAction {
 impl KeybindAction {
     /// The declared default chords, parsed. Declaration strings must parse;
     /// the unit tests pin this.
+    #[must_use]
     pub fn parsed_default_chords(&self) -> Vec<Chord> {
         self.default_chords
             .iter()
@@ -443,6 +446,7 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
 ];
 
 /// Look up a declared action by its stable id.
+#[must_use]
 pub fn action_by_id(id: &str) -> Option<&'static KeybindAction> {
     KEYBIND_ACTIONS.iter().find(|action| action.id == id)
 }

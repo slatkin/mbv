@@ -92,7 +92,7 @@ impl LibraryRoutesComponent {
     /// closes the picker on PickLibrary and steps back on PickDevice —
     /// by emitting the same `LibraryRoutesEsc` request. Right-click and
     /// wheel have no keyboard equivalent here and are ignored.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -165,14 +165,14 @@ impl Default for LibraryRoutesComponent {
 }
 
 impl Component for LibraryRoutesComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, _area: Rect) {
         let Some(stage) = self.stage.as_ref() else {
             return;
         };
         let geometry = render_library_routes_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
-            LibraryRoutesRenderModel {
+            &LibraryRoutesRenderModel {
                 stage,
                 cursor: self.cursor,
             },
@@ -186,7 +186,7 @@ impl Component for LibraryRoutesComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -211,7 +211,7 @@ impl AppComponent<Msg, UserEvent> for LibraryRoutesComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }

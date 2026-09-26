@@ -600,6 +600,5 @@ fn refresh_lib_targets_feed_selection() {
     assert!(app.libs[0]
         .feed_home_video
         .as_ref()
-        .map(|state| state.loading)
-        .unwrap_or(false));
+        .is_some_and(|state| state.loading));
 }

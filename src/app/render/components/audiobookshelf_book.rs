@@ -9,6 +9,10 @@ use crate::app::ui_util::fmt_duration_gutter;
 /// Books carry no in-list letter headings (the surname buckets are a pill row)
 /// and no played/active semantic state (matching the legacy book rows). Their
 /// total runtime occupies the shared green gutter.
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+)]
 pub(in crate::app) fn book_rows(
     state: &AudiobookshelfBookBrowseState,
     selected_bucket: usize,

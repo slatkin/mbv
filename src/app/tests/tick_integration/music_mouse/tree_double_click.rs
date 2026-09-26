@@ -73,8 +73,7 @@ fn double_click_expands_artist_and_album_nodes_without_a_hero(
     assert!(
         outcome.raw_messages.iter().all(|message| !matches!(
             message,
-            Msg::Shell(ref shell_boxed)
-                | Msg::Shell(ref shell_boxed)
+            Msg::Shell(ref shell_boxed | ref shell_boxed)
          if matches!(shell_boxed.as_ref(), ShellRequest::MusicAlbumActivate { .. } | ShellRequest::InlineSearchActivate { .. }))),
         "{width}x{height} {node:?} filtered={filtered}: double-click keeps tree semantics: {:?}",
         outcome.raw_messages

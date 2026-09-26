@@ -85,10 +85,10 @@ impl App {
             .libs
             .get(lib_idx)
             .filter(|lib| !lib.nav_stack.is_empty())
-            .map(|lib| lib.library_position_snapshot());
+            .map(crate::app::state::types::library_tab::LibraryTab::library_position_snapshot);
         let is_tv = self.libs[lib_idx].library.collection_type == "tvshows";
         let mut saved = self.saved_library_position(lib_idx);
-        let saved_mode_is_stale = Self::saved_tv_mode_is_stale(&saved);
+        let saved_mode_is_stale = Self::saved_tv_mode_is_stale(saved.as_ref());
 
         if current.as_ref() == saved.as_ref() && (!is_tv || !saved_mode_is_stale) {
             self.activate_unchanged_library_position(lib_idx, current.is_none());
@@ -96,7 +96,7 @@ impl App {
         }
 
         if is_tv {
-            Self::normalize_saved_tv_mode(&mut saved);
+            Self::normalize_saved_tv_mode(saved.as_mut());
         }
         if let Some(position) = saved
             .as_ref()
@@ -112,9 +112,8 @@ impl App {
         }
     }
 
-    fn saved_tv_mode_is_stale(saved: &Option<crate::config::LibraryPosition>) -> bool {
+    fn saved_tv_mode_is_stale(saved: Option<&crate::config::LibraryPosition>) -> bool {
         saved
-            .as_ref()
             .and_then(|position| position.levels.first())
             .is_some_and(|root| match root.tv_content_mode.as_ref() {
                 Some(mbv_core::config::TvContentMode::All) => root
@@ -127,8 +126,8 @@ impl App {
             })
     }
 
-    fn normalize_saved_tv_mode(saved: &mut Option<crate::config::LibraryPosition>) {
-        if let Some(position) = saved.as_mut() {
+    fn normalize_saved_tv_mode(saved: Option<&mut crate::config::LibraryPosition>) {
+        if let Some(position) = saved {
             if let Some(root) = position.levels.first_mut() {
                 let mode = crate::app::render::resolve_tv_content_mode(
                     root.library_total.unwrap_or_default(),
@@ -173,7 +172,7 @@ impl App {
                     .get_or_insert_with(FeedHomeVideoState::default)
                     .loading = true;
             }
-            lib.apply_library_position(position.clone(), vec![placeholder]);
+            lib.apply_library_position(&position, vec![placeholder]);
         }
         self.spawn_restore_library_position(lib_idx, position);
     }
@@ -215,7 +214,7 @@ impl App {
 
     fn reset_library_position(&mut self, lib_idx: usize) {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
-            lib.apply_library_position(crate::config::LibraryPosition::default(), Vec::new());
+            lib.apply_library_position(&crate::config::LibraryPosition::default(), Vec::new());
         }
         self.ensure_lib_loaded_for(lib_idx);
     }

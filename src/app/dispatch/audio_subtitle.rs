@@ -20,8 +20,7 @@ impl App {
         let current = self
             .connected_session_state
             .as_ref()
-            .map(|s| s.muted)
-            .unwrap_or(false);
+            .is_some_and(|s| s.muted);
         let next = !current;
         if let Some(ref mut state) = self.connected_session_state {
             state.muted = next;
@@ -106,7 +105,12 @@ impl App {
                 crate::app::infra::ui_util::next_subtitle_mode(&config.subtitle_mode).to_string();
             (config.subtitle_mode.clone(), config.clone())
         };
-        self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();
+        self.player
+            .subtitle_prefs
+            .lock()
+            .unwrap()
+            .mode
+            .clone_from(&new_mode);
         self.push_subtitle_prefs();
         if let Err(e) = crate::config::save_config_settings(&cfg) {
             log::warn!(target: "config", "config save failed: {e}");
@@ -144,8 +148,7 @@ impl App {
         let idx = self
             .connected_session_state
             .as_ref()
-            .map(|s| s.sub_index)
-            .unwrap_or(-1);
+            .map_or(-1, |s| s.sub_index);
         let next = if idx == -1 {
             remote_indexes.first().copied().unwrap_or(1)
         } else {

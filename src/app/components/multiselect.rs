@@ -53,7 +53,7 @@ impl MultiselectComponent {
                 .all(|(current, next)| current.0 == next.0 && current.1 == next.1);
         if self.kind != Some(popup.kind) || !same_items {
             self.kind = Some(popup.kind);
-            self.items = popup.items.clone();
+            self.items.clone_from(&popup.items);
             self.cursor = popup.cursor.min(self.items.len().saturating_sub(1));
         } else {
             self.cursor = self.cursor.min(self.items.len().saturating_sub(1));
@@ -102,7 +102,7 @@ impl MultiselectComponent {
     /// The painted rows are `[ ]/[x]` checkboxes with no separate confirm
     /// button, so there is no click target for a bare confirm. Right-click
     /// and wheel have no keyboard equivalent here and are ignored.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -176,14 +176,15 @@ impl Default for MultiselectComponent {
 }
 
 impl Component for MultiselectComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        let _ = area;
         let Some(kind) = self.kind else {
             return;
         };
         let geometry = render_multiselect_content(
-            f,
+            frame,
             &mut self.dim_backdrop_active,
-            MultiSelectRenderModel {
+            &MultiSelectRenderModel {
                 kind,
                 items: &self.items,
                 cursor: self.cursor,
@@ -198,7 +199,7 @@ impl Component for MultiselectComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -227,7 +228,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -239,7 +240,7 @@ mod tests {
     use crate::app::components::msg::TerminalObserverEvent;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use tuirealm::event::{KeyEvent, KeyModifiers};
+    use tuirealm::event::KeyModifiers;
 
     fn popup() -> MultiSelectPopup {
         MultiSelectPopup {

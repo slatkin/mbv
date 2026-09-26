@@ -162,7 +162,7 @@ fn mini_view_panel_does_not_overlay_queue_on_mode_switch() {
         status.active = true;
         status.current_idx = 1;
         status.title = "Movie One".into();
-    }
+    };
     app.terminal_width = 70;
     app.mini_view_focus = PanelFocus::Library;
 
@@ -175,7 +175,7 @@ fn mini_view_panel_does_not_overlay_queue_on_mode_switch() {
 
     // A second sync pass, so the projection now carries this frame's panel rect.
     model.sync_mounted_surfaces();
-    model.app.dispatch(Command::CyclePanelMode);
+    model.app.dispatch(&Command::CyclePanelMode);
     assert_eq!(
         model.app.effective_panel_mode(),
         crate::app::PanelMode::QueueOnly

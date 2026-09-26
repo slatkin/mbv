@@ -38,7 +38,7 @@ impl SearchPool {
             Self::Items(items) => items.get(index).cloned(),
             Self::Albums(entries) => entries.get(index).map(|entry| {
                 let mut item = entry.album.clone();
-                item.name = entry.display_label.clone();
+                item.name.clone_from(&entry.display_label);
                 item
             }),
         }
@@ -301,10 +301,9 @@ impl InlineSearch {
             self.order.clear();
             return;
         }
-        use fuzzy_matcher::skim::SkimMatcherV2;
         // Fully case-insensitive: media titles are searched without smart-case
         // (an uppercase query letter must not make the scan case-sensitive).
-        let matcher = SkimMatcherV2::default().ignore_case();
+        let matcher = fuzzy_matcher::skim::SkimMatcherV2::default().ignore_case();
         let mut scored = self.pool.match_scores(&matcher, &self.query);
         scored.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
         self.order = scored;
@@ -458,7 +457,6 @@ pub(in crate::app) trait InlineSearchHost {
 mod tests {
     use super::*;
     use crate::app::tests::make_item;
-    use std::time::{Duration, Instant};
     use tuirealm::event::KeyEvent;
 
     fn pool(ids: &[&str]) -> SearchPool {

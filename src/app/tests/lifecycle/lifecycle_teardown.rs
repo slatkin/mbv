@@ -206,7 +206,7 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .expect("save queue state");
 
@@ -217,7 +217,11 @@ fn local_daemon_client_does_not_overwrite_authoritative_queue_on_teardown() {
 
     let state = crate::config::load_queue_state().expect("existing daemon snapshot");
     assert_eq!(
-        state.items.iter().map(|item| item.id()).collect::<Vec<_>>(),
+        state
+            .items
+            .iter()
+            .map(mbv_core::playback_queue::QueueItem::id)
+            .collect::<Vec<_>>(),
         old_items
             .iter()
             .map(|item| item.id.as_str())

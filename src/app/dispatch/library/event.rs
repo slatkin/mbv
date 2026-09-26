@@ -102,17 +102,7 @@ impl App {
                 parent_id,
                 items,
             } => {
-                if let Some(last) = self
-                    .libs
-                    .get_mut(lib_idx)
-                    .and_then(|lib| lib.nav_stack.last_mut())
-                    .filter(|last| last.parent_id == parent_id)
-                {
-                    last.all_items = Some(items);
-                }
-                // The whole-library corpus is exactly what a pending Series
-                // landing was waiting for (U2 correction).
-                self.retry_pending_series_landing(lib_idx, &parent_id);
+                self.handle_all_items_prefetched(lib_idx, parent_id, items);
                 None
             }
             LibEvent::FeedHomeVideoAggregated {
@@ -121,29 +111,7 @@ impl App {
                 all_items,
                 groups,
             } => {
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if lib
-                        .nav_stack
-                        .first()
-                        .map(|root| root.parent_id == parent_id)
-                        .unwrap_or(false)
-                    {
-                        let (selected_group, video_cursor, video_scroll) = lib
-                            .feed_home_video
-                            .as_ref()
-                            .map_or((0, 0, 0), feed_home_video_selection);
-                        lib.feed_home_video = Some(FeedHomeVideoState {
-                            all_items,
-                            groups,
-                            loading: false,
-                            selected_group,
-                            video_cursor,
-                            video_scroll,
-                        });
-                    }
-                }
-                self.clamp_feed_home_video_state(lib_idx);
-                self.log_feed_home_video_state(lib_idx, "aggregated");
+                self.handle_feed_home_video_aggregated(lib_idx, parent_id, all_items, groups);
                 None
             }
             LibEvent::NavigateTo {
@@ -156,6 +124,56 @@ impl App {
             }
             ev => Some(ev),
         }
+    }
+
+    fn handle_all_items_prefetched(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        items: Vec<mbv_core::api::EmbyItem>,
+    ) {
+        if let Some(last) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+            .filter(|last| last.parent_id == parent_id)
+        {
+            last.all_items = Some(items);
+        }
+        // The whole-library corpus is exactly what a pending Series
+        // landing was waiting for (U2 correction).
+        self.retry_pending_series_landing(lib_idx, &parent_id);
+    }
+
+    fn handle_feed_home_video_aggregated(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        all_items: Vec<mbv_core::api::EmbyItem>,
+        groups: Vec<crate::app::state::types::feed::FeedHomeVideoGroup>,
+    ) {
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            if lib
+                .nav_stack
+                .first()
+                .is_some_and(|root| root.parent_id == parent_id)
+            {
+                let (selected_group, video_cursor, video_scroll) = lib
+                    .feed_home_video
+                    .as_ref()
+                    .map_or((0, 0, 0), feed_home_video_selection);
+                lib.feed_home_video = Some(FeedHomeVideoState {
+                    all_items,
+                    groups,
+                    loading: false,
+                    selected_group,
+                    video_cursor,
+                    video_scroll,
+                });
+            }
+        }
+        self.clamp_feed_home_video_state(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "aggregated");
     }
 
     fn cache_nonempty_album_artist(&mut self, album_id: &str, artist: &str) {
@@ -196,9 +214,9 @@ impl App {
                 result,
             } => {
                 self.handle_artist_tracks_fetched(
-                    destination,
+                    &destination,
                     generation,
-                    artist_id,
+                    &artist_id,
                     revision,
                     result,
                 );
@@ -215,9 +233,9 @@ impl App {
                 self.handle_artist_artwork_fetched(
                     destination,
                     generation,
-                    artist_id,
+                    &artist_id,
                     revision,
-                    cache_key,
+                    &cache_key,
                     available,
                 );
                 None
@@ -242,32 +260,7 @@ impl App {
                 None
             }
             LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
-                let warmup_completed = self.level_artist_warmups_in_flight.remove(&level_id);
-                let orphan_risk = matches!(
-                    self.album_artist_levels.get(&level_id),
-                    Some(LevelFillState::Loading { orphan_risk: true })
-                );
-                if artists.is_empty() {
-                    // HTTP failure (or a trackless level): no fill, the level's
-                    // albums resolve via the existing settle/fallback path.
-                    self.album_artist_levels
-                        .insert(level_id, LevelFillState::Failed);
-                } else {
-                    for (album_id, artist) in artists {
-                        // An empty artist is never cached: an empty cache row
-                        // is terminal for readers, and the album must stay
-                        // free to settle via the fallback path instead. It
-                        // still advances candidates (as a known-unknown) so
-                        // one arrival resolves every waiting album at once.
-                        self.cache_nonempty_album_artist(&album_id, &artist);
-                        self.advance_music_grouping_candidates(&album_id, &artist);
-                    }
-                    self.album_artist_levels
-                        .insert(level_id, LevelFillState::Filled { orphan_risk });
-                }
-                if warmup_completed {
-                    self.drain_level_artist_warmups();
-                }
+                self.handle_album_artist_level_fetched(level_id, artists);
                 None
             }
             LibEvent::MusicGroupWarmupListed { generation, groups } => {
@@ -293,15 +286,41 @@ impl App {
         }
     }
 
+    fn handle_album_artist_level_fetched(
+        &mut self,
+        level_id: String,
+        artists: Vec<(String, String)>,
+    ) {
+        let warmup_completed = self.level_artist_warmups_in_flight.remove(&level_id);
+        let orphan_risk = matches!(
+            self.album_artist_levels.get(&level_id),
+            Some(LevelFillState::Loading { orphan_risk: true })
+        );
+        if artists.is_empty() {
+            // HTTP failure (or a trackless level): no fill, the level's
+            // albums resolve via the existing settle/fallback path.
+            self.album_artist_levels
+                .insert(level_id, LevelFillState::Failed);
+        } else {
+            for (album_id, artist) in artists {
+                // An empty artist is never cached: an empty cache row
+                // is terminal for readers, and the album must stay
+                // free to settle via the fallback path instead. It
+                // still advances candidates (as a known-unknown) so
+                // one arrival resolves every waiting album at once.
+                self.cache_nonempty_album_artist(&album_id, &artist);
+                self.advance_music_grouping_candidates(&album_id, &artist);
+            }
+            self.album_artist_levels
+                .insert(level_id, LevelFillState::Filled { orphan_risk });
+        }
+        if warmup_completed {
+            self.drain_level_artist_warmups();
+        }
+    }
+
     fn handle_playlist_event(&mut self, ev: LibEvent) {
         match ev {
-            LibEvent::AudiobookshelfDetailFetched { .. }
-            | LibEvent::AudiobookshelfShowsFetched { .. }
-            | LibEvent::AudiobookshelfBooksFetched { .. }
-            | LibEvent::AudiobookshelfBookDetailFetched { .. }
-            | LibEvent::AudiobookshelfShelfFetched { .. }
-            | LibEvent::AudiobookshelfProgressAcknowledged(_)
-            | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
             LibEvent::PlaylistsLoaded(items) => {
                 self.playlists = items;
                 self.playlists_loading = false;
@@ -317,8 +336,7 @@ impl App {
                 if self
                     .playlists_open
                     .as_ref()
-                    .map(|p| p.id == playlist_id)
-                    .unwrap_or(false)
+                    .is_some_and(|p| p.id == playlist_id)
                 {
                     self.playlists_open_items = items;
                     self.playlists_open_loading = false;
@@ -328,8 +346,7 @@ impl App {
                 if self
                     .playlists_open
                     .as_ref()
-                    .map(|p| p.id == playlist_id)
-                    .unwrap_or(false)
+                    .is_some_and(|p| p.id == playlist_id)
                 {
                     self.playlists_open_loading = false;
                 }
@@ -358,7 +375,14 @@ impl App {
                 self.pending_series_landing = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
-            LibEvent::Loaded { .. }
+            LibEvent::AudiobookshelfDetailFetched { .. }
+            | LibEvent::AudiobookshelfShowsFetched { .. }
+            | LibEvent::AudiobookshelfBooksFetched { .. }
+            | LibEvent::AudiobookshelfBookDetailFetched { .. }
+            | LibEvent::AudiobookshelfShelfFetched { .. }
+            | LibEvent::AudiobookshelfProgressAcknowledged(_)
+            | LibEvent::AudiobookshelfBookProgressAcknowledged(_)
+            | LibEvent::Loaded { .. }
             | LibEvent::PageAppended { .. }
             | LibEvent::Refreshed { .. }
             | LibEvent::RestoreLibraryPosition { .. }

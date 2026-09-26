@@ -93,8 +93,8 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
     {
         let backend = TestBackend::new(160, 40);
         let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| model.draw_frame(f, false, false)).unwrap();
-    }
+        term.draw(|f| model.draw_frame(f, false, false)).unwrap()
+    };
     model.sync_mounted_surfaces();
 
     let expected_key = series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES);

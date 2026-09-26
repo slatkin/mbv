@@ -45,6 +45,7 @@ pub struct FeedEntryStore {
 
 /// Path to the local feed-entry state file, alongside the other state files
 /// under `state_dir()`.
+#[must_use]
 pub fn feed_entry_state_path() -> PathBuf {
     crate::config::state_dir().join("feed_entry_state.json")
 }
@@ -53,6 +54,7 @@ impl FeedEntryStore {
     /// Read the state file. A missing, unreadable, or invalid file yields an
     /// empty store plus a log line: feed browsing and playback never depend on
     /// this succeeding.
+    #[must_use]
     pub fn load() -> Self {
         let path = feed_entry_state_path();
         let Ok(text) = std::fs::read_to_string(&path) else {
@@ -125,6 +127,7 @@ impl FeedEntryStore {
     }
 
     /// The stored state for one key, if that entry has any.
+    #[must_use]
     pub fn get(&self, user_id: &str, feed_id: &str, entry_guid: &str) -> Option<FeedEntryState> {
         self.rows
             .iter()
@@ -139,6 +142,7 @@ impl FeedEntryStore {
 
     /// Every row under `(user_id, feed_id)`, as `(entry_guid, state)`. Rows of
     /// other feeds and other users are never returned.
+    #[must_use]
     pub fn scan(&self, user_id: &str, feed_id: &str) -> Vec<(String, FeedEntryState)> {
         self.rows
             .iter()
@@ -156,11 +160,13 @@ impl FeedEntryStore {
     }
 
     /// Number of stored rows, for tests and diagnostics.
+    #[must_use]
     pub fn len(&self) -> usize {
         self.rows.len()
     }
 
     /// Whether no rows are stored.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.rows.is_empty()
     }
@@ -187,7 +193,7 @@ mod tests {
             "guid-1",
             state(120, true),
         );
-        assert!(store.save().is_ok());
+        store.save().unwrap();
 
         let loaded = FeedEntryStore::load();
         assert_eq!(
@@ -227,7 +233,7 @@ mod tests {
         store.put("user-1", "feed-1", "guid-2", state(20, true));
         store.put("user-1", "feed-2", "guid-3", state(30, false));
         store.put("user-2", "feed-1", "guid-1", state(40, true));
-        assert!(store.save().is_ok());
+        store.save().unwrap();
 
         let mut scanned = store.scan("user-1", "feed-1");
         scanned.sort_by(|a, b| a.0.cmp(&b.0));
@@ -265,7 +271,7 @@ mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut original = FeedEntryStore::default();
         original.put("user-1", "feed-1", "guid-1", state(120, false));
-        assert!(original.save().is_ok());
+        original.save().unwrap();
 
         // Make the temp path a directory so the write fails.
         let tmp = feed_entry_state_path().with_extension("json.tmp");

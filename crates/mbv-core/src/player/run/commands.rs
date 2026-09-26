@@ -1,4 +1,16 @@
-use super::*;
+use super::{
+    auto_select_tracks, mpv_err_str, mpv_load_opts, mpv_title_opt, mpv_url_for_queue_item,
+    queue_load_indices, queue_load_location, reassert_queue_layout, refresh_tracks,
+    reject_stale_jump, resolve_jump_target, seek_decision, send_ep_info, shift_index_for_move,
+    spawn_progress_reporter, start_queue_playback, volume_decision, LoadState, PlaybackOrigin,
+    PlaybackRun, ProgressGuard, StopReport,
+};
+use crate::api::EmbyItem;
+use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
+use crate::playback_queue::{QueueItem, QueueSlotId};
+use crate::player::{PlayerCommand, PlayerEvent};
+use libmpv2::Mpv;
+use std::time::Instant;
 
 impl PlaybackRun {
     pub(in crate::player) fn handle_command(
@@ -54,7 +66,7 @@ impl PlaybackRun {
                     p.mode = mode;
                     p.subtitle_lang = subtitle_lang;
                     p.audio_lang = audio_lang;
-                }
+                };
                 let prefs = self.subtitle_prefs.lock().unwrap().clone();
                 auto_select_tracks(mpv, &self.status, &prefs);
             }
@@ -67,7 +79,7 @@ impl PlaybackRun {
                 start_pos,
                 item,
             } => {
-                self.cmd_load_new(url, start_pos, item, mpv, progress);
+                self.cmd_load_new(&url, start_pos, &item, mpv, progress);
                 cancel_stop = true;
             }
             PlayerCommand::SubmitQueue { items, start_idx } => {
@@ -123,6 +135,10 @@ impl PlaybackRun {
             PlayerCommand::SetVolume(volume) => {
                 let vol_max = self.status.lock().unwrap().volume_max;
                 let (volume, raw) = volume_decision(volume, vol_max);
+                #[expect(
+                    clippy::cast_precision_loss,
+                    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                )]
                 let _ = mpv.set_property("volume", raw as f64);
                 self.status.lock().unwrap().volume = volume;
                 let _ = mpv.command("show-text", &[&format!("Volume: {volume}%"), "1500"]);
@@ -157,8 +173,7 @@ impl PlaybackRun {
         let Some(idx) = resolve_jump_target(&slot_ids, slot_id) else {
             log::info!(
                 target: "transition",
-                "jump-to reject_stale_jump: slot_id={:?} unresolvable",
-                slot_id,
+                "jump-to reject_stale_jump: slot_id={slot_id:?} unresolvable",
             );
             reject_stale_jump(&self.event_tx, slot_id);
             return;
@@ -207,7 +222,7 @@ impl PlaybackRun {
         }
         self.forced_slot_id = Some(slot_id);
         self.forced_resume_ticks = resume_ticks;
-        if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
+        if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
             self.forced_slot_id = None;
             self.forced_jump_from_idle = false;
             self.forced_transition = None;
@@ -224,7 +239,7 @@ impl PlaybackRun {
             self.queue_len(),
         );
         if self.forced_jump_from_idle {
-            self.play_from_idle_playlist(idx, mpv);
+            Self::play_from_idle_playlist(idx, mpv);
         }
         // Selecting a track should always start it playing, even if
         // mpv was paused on the previous track — otherwise the new
@@ -233,7 +248,7 @@ impl PlaybackRun {
         let _ = mpv.set_property("pause", false);
     }
 
-    fn play_from_idle_playlist(&self, idx: usize, mpv: &Mpv) {
+    fn play_from_idle_playlist(idx: usize, mpv: &Mpv) {
         if let Err(error) = mpv.command("playlist-play-index", &[&idx.to_string()]) {
             log::warn!(target: "player", "jump-to playlist-play-index={idx} failed: {}", mpv_err_str(&error));
         }
@@ -368,7 +383,7 @@ impl PlaybackRun {
             .and_then(|slot| crate::player::resume_ticks_for_item(&slot.item));
         self.forced_slot_id = Some(slot_id);
         self.forced_resume_ticks = resume_ticks;
-        if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
+        if let Err(e) = mpv.set_property("playlist-pos", i64::try_from(idx).unwrap_or(i64::MAX)) {
             self.forced_slot_id = None;
             self.forced_resume_ticks = None;
             log::warn!(target: "player", "step to idx={idx} failed: {}", mpv_err_str(&e));
@@ -431,9 +446,9 @@ impl PlaybackRun {
 
     fn cmd_load_new(
         &mut self,
-        url: String,
+        url: &str,
         start_pos: f64,
-        item: Box<EmbyItem>,
+        item: &EmbyItem,
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
@@ -445,13 +460,13 @@ impl PlaybackRun {
         let _ = mpv.set_property("pause", false);
 
         // Stop progress reporter during transition to prevent stale reports.
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         if self.config.audio_pipe_path.is_some() {
             self.reporter
-                .transition_to_deferred(&item, self.last_valid_pos);
+                .transition_to_deferred(item, self.last_valid_pos);
             self.ext_sub_urls = vec![];
         } else {
-            self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
+            self.ext_sub_urls = self.reporter.transition_to(item, self.last_valid_pos);
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
@@ -460,7 +475,7 @@ impl PlaybackRun {
         // variant and this dead path go together in task 5.1.
         let slot_id = QueueSlotId::from_raw(1);
         self.queue = ExecutionSequence::from_slot_items(
-            vec![(slot_id, QueueItem::Emby(Box::new(item.as_ref().clone())))],
+            vec![(slot_id, QueueItem::Emby(Box::new(item.clone())))],
             Some(slot_id),
         );
         self.current_idx = 0;
@@ -475,8 +490,8 @@ impl PlaybackRun {
             st.position_ticks = item.playback_position_ticks;
             st.current_idx = 0;
             st.queue_len = 1;
-            st.set_current_item_metadata(&item);
-        }
+            st.set_current_item_metadata(item);
+        };
 
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
         let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
@@ -488,13 +503,10 @@ impl PlaybackRun {
         }
         let title_opt = mpv_title_opt(&item.display_name());
         log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-        if let Err(e) = mpv.command(
-            "loadfile",
-            &[url.as_str(), "replace", "-1", title_opt.as_str()],
-        ) {
+        if let Err(e) = mpv.command("loadfile", &[url, "replace", "-1", title_opt.as_str()]) {
             log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
         }
-        send_ep_info(mpv, &item);
+        send_ep_info(mpv, item);
     }
 
     /// Item-generic queue submission: replace the current queue with `items`
@@ -615,7 +627,7 @@ impl PlaybackRun {
         if initialize_load_state {
             self.load_state = LoadState::begin_single();
             self.pending_initial_playlist_layout = false;
-            progress.stop_and_join(self.progress_join_budget());
+            progress.stop_and_join(Self::progress_join_budget());
         }
         if let Some(emby) = active_as_emby {
             let (urls, ok) = self.reporter.start_item(emby);
@@ -680,7 +692,7 @@ impl PlaybackRun {
         };
 
         let had_previous_queue = self.queue_len() > 0;
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
         self.queue = ExecutionSequence::from_slot_items(
             items
@@ -733,7 +745,7 @@ impl PlaybackRun {
         error: String,
     ) {
         let old_pos = self.last_valid_pos;
-        progress.stop_and_join(self.progress_join_budget());
+        progress.stop_and_join(Self::progress_join_budget());
         if self.stop_report == StopReport::NotSent {
             self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(old_pos));
         }

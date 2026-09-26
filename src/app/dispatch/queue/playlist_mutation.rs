@@ -2,8 +2,11 @@
 //! helpers for [`App`], split out of `queue_actions.rs` to keep that file
 //! within the repository's file-size limit.
 
-use super::*;
+use super::{
+    is_playable, App, EmbyItem, LibEvent, PlaylistMutation, QueueItem, SessionEvent, ToastSeverity,
+};
 use crate::app::state::queue_owner::QueueOrigin;
+use mbv_core::api::EmbyClient;
 
 impl App {
     pub(super) fn start_playlist_mutation(&mut self, playlist_id: &str) {
@@ -99,6 +102,12 @@ impl App {
         let tx = self.sessions_tx.clone();
         let playlist_id = playlist_id.to_string();
         let mutation_id = mutation.mutation_id();
+        let ids: Vec<String> = self
+            .player_tab
+            .emby_items()
+            .iter()
+            .map(|e| e.id.clone())
+            .collect();
         match mutation {
             PlaylistMutation::Save {
                 origin,
@@ -106,26 +115,16 @@ impl App {
                 item_ids,
                 ..
             } => {
-                *item_ids = Some(
-                    self.player_tab
-                        .emby_items()
-                        .iter()
-                        .map(|e| e.id.clone())
-                        .collect(),
+                *item_ids = Some(ids.clone());
+                spawn_playlist_save(
+                    client,
+                    tx,
+                    mutation_id,
+                    playlist_id,
+                    *origin,
+                    source_playlist_id.clone(),
+                    ids,
                 );
-                let ids = item_ids.clone().unwrap_or_default();
-                let origin = *origin;
-                let source_playlist_id = source_playlist_id.clone();
-                std::thread::spawn(move || {
-                    let result = client.update_playlist_items(&playlist_id, &ids);
-                    let _ = tx.send(SessionEvent::PlaylistMutationComplete {
-                        mutation_id,
-                        playlist_id,
-                        origin,
-                        source_playlist_id,
-                        result,
-                    });
-                });
             }
             PlaylistMutation::CreateAs {
                 name,
@@ -135,29 +134,17 @@ impl App {
                 source_playlist_id,
                 ..
             } => {
-                *item_ids = Some(
-                    self.player_tab
-                        .emby_items()
-                        .iter()
-                        .map(|e| e.id.clone())
-                        .collect(),
+                *item_ids = Some(ids.clone());
+                spawn_playlist_create(
+                    client,
+                    tx,
+                    mutation_id,
+                    name.clone(),
+                    coordinator_key.clone(),
+                    source_playlist_id.clone(),
+                    *origin,
+                    ids,
                 );
-                let ids = item_ids.clone().unwrap_or_default();
-                let name = name.clone();
-                let coordinator_key = coordinator_key.clone();
-                let source_playlist_id = source_playlist_id.clone();
-                let origin = *origin;
-                std::thread::spawn(move || {
-                    let result = client.create_playlist(&name, &ids);
-                    let _ = tx.send(SessionEvent::PlaylistCreateComplete {
-                        mutation_id,
-                        coordinator_key,
-                        name,
-                        origin,
-                        source_playlist_id,
-                        result,
-                    });
-                });
             }
             PlaylistMutation::Replace {
                 name,
@@ -165,28 +152,16 @@ impl App {
                 item_ids,
                 ..
             } => {
-                *item_ids = Some(
-                    self.player_tab
-                        .emby_items()
-                        .iter()
-                        .map(|e| e.id.clone())
-                        .collect(),
+                *item_ids = Some(ids.clone());
+                spawn_playlist_replace(
+                    client,
+                    tx,
+                    mutation_id,
+                    playlist_id,
+                    name.clone(),
+                    *origin,
+                    ids,
                 );
-                let replacement_name = name.to_string();
-                let ids = item_ids.clone().unwrap_or_default();
-                let origin = *origin;
-                std::thread::spawn(move || {
-                    let result = client
-                        .delete_playlist(&playlist_id)
-                        .and_then(|_| client.create_playlist(&replacement_name, &ids));
-                    let _ = tx.send(SessionEvent::PlaylistReplacementComplete {
-                        mutation_id,
-                        playlist_id,
-                        origin,
-                        name: replacement_name,
-                        result,
-                    });
-                });
             }
         }
     }
@@ -274,10 +249,8 @@ impl App {
                     log::warn!(target: "queue", "failed to clear queue state: {e}");
                 }
             }
-        } else {
-            if let Err(e) = crate::config::save_queue_state(&state) {
-                log::warn!(target: "queue", "failed to save queue state: {e}");
-            }
+        } else if let Err(e) = crate::config::save_queue_state(&state) {
+            log::warn!(target: "queue", "failed to save queue state: {e}");
         }
     }
 
@@ -401,7 +374,7 @@ impl App {
     /// exactly.
     pub(in crate::app) fn enqueue_home_item(&mut self, item: EmbyItem) {
         if item.is_folder {
-            self.do_enqueue_folder(item);
+            self.do_enqueue_folder(&item);
             return;
         }
         if !is_playable(&item) {
@@ -409,7 +382,7 @@ impl App {
         }
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=home", item.id, item.name);
         let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
-        if self.enqueue_route_conflict(resolved) {
+        if self.enqueue_route_conflict(resolved.as_ref()) {
             return;
         }
         self.append_item_to_queue_and_sync(item);
@@ -422,7 +395,7 @@ impl App {
     /// rather than in `current_lib_item`.
     pub(in crate::app) fn enqueue_lib_item(&mut self, lib_idx: usize, item: EmbyItem) {
         if item.is_folder {
-            self.do_enqueue_folder(item);
+            self.do_enqueue_folder(&item);
             return;
         }
         if !is_playable(&item) {
@@ -430,7 +403,7 @@ impl App {
         }
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=library-view", item.id, item.name);
         let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
-        if self.enqueue_route_conflict(resolved) {
+        if self.enqueue_route_conflict(resolved.as_ref()) {
             return;
         }
         self.append_item_to_queue_and_sync(item);
@@ -463,4 +436,77 @@ impl App {
             *self.queue_for_scope_mut(scope) = previous_queue;
         }
     }
+}
+
+/// Spawn the background Save request for an active playlist mutation and
+/// report its completion through `tx`.
+fn spawn_playlist_save(
+    client: EmbyClient,
+    tx: std::sync::mpsc::Sender<SessionEvent>,
+    mutation_id: u64,
+    playlist_id: String,
+    origin: QueueOrigin,
+    source_playlist_id: String,
+    ids: Vec<String>,
+) {
+    std::thread::spawn(move || {
+        let result = client.update_playlist_items(&playlist_id, &ids);
+        let _ = tx.send(SessionEvent::PlaylistMutationComplete {
+            mutation_id,
+            playlist_id,
+            origin,
+            source_playlist_id,
+            result,
+        });
+    });
+}
+
+/// Spawn the background Create-As request for an active playlist mutation
+/// and report its completion through `tx`.
+fn spawn_playlist_create(
+    client: EmbyClient,
+    tx: std::sync::mpsc::Sender<SessionEvent>,
+    mutation_id: u64,
+    name: String,
+    coordinator_key: String,
+    source_playlist_id: Option<String>,
+    origin: QueueOrigin,
+    ids: Vec<String>,
+) {
+    std::thread::spawn(move || {
+        let result = client.create_playlist(&name, &ids);
+        let _ = tx.send(SessionEvent::PlaylistCreateComplete {
+            mutation_id,
+            coordinator_key,
+            name,
+            origin,
+            source_playlist_id,
+            result,
+        });
+    });
+}
+
+/// Spawn the background Replace (delete + recreate) request for an active
+/// playlist mutation and report its completion through `tx`.
+fn spawn_playlist_replace(
+    client: EmbyClient,
+    tx: std::sync::mpsc::Sender<SessionEvent>,
+    mutation_id: u64,
+    playlist_id: String,
+    name: String,
+    origin: QueueOrigin,
+    ids: Vec<String>,
+) {
+    std::thread::spawn(move || {
+        let result = client
+            .delete_playlist(&playlist_id)
+            .and_then(|()| client.create_playlist(&name, &ids));
+        let _ = tx.send(SessionEvent::PlaylistReplacementComplete {
+            mutation_id,
+            playlist_id,
+            origin,
+            name,
+            result,
+        });
+    });
 }

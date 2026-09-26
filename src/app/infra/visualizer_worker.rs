@@ -109,7 +109,7 @@ impl PipeWireWorker {
         let (startup_tx, startup_rx) = mpsc::channel();
         let (failure_tx, failure_rx) = mpsc::channel();
         let buffer = Arc::new(Mutex::new(StereoSampleBuffer::with_capacity(1)));
-        let worker_buffer = buffer.clone();
+        let worker_buffer = Arc::clone(&buffer);
         let handle = thread::Builder::new()
             .name("mbv-pipewire-visualizer".into())
             .spawn(move || run_worker(stop_rx, startup_tx, failure_tx, worker_buffer))
@@ -201,7 +201,7 @@ fn capture_frame_bytes<'a>(
 /// out of the worker.
 fn try_startup_step<T>(
     startup_tx: &Sender<Startup>,
-    message: String,
+    message: &str,
     step: impl FnOnce() -> Result<T, pw::Error>,
 ) -> Option<T> {
     match step() {
@@ -221,21 +221,19 @@ fn run_worker(
 ) {
     pw::init();
 
-    let Some(mainloop) = try_startup_step(
-        &startup_tx,
-        "failed to create PipeWire main loop".into(),
-        || pw::main_loop::MainLoopRc::new(None),
-    ) else {
+    let Some(mainloop) =
+        try_startup_step(&startup_tx, "failed to create PipeWire main loop", || {
+            pw::main_loop::MainLoopRc::new(None)
+        })
+    else {
         return;
     };
-    let Some(context) = try_startup_step(
-        &startup_tx,
-        "failed to create PipeWire context".into(),
-        || pw::context::ContextRc::new(&mainloop, None),
-    ) else {
+    let Some(context) = try_startup_step(&startup_tx, "failed to create PipeWire context", || {
+        pw::context::ContextRc::new(&mainloop, None)
+    }) else {
         return;
     };
-    let Some(core) = try_startup_step(&startup_tx, "failed to connect to PipeWire".into(), || {
+    let Some(core) = try_startup_step(&startup_tx, "failed to connect to PipeWire", || {
         context.connect_rc(None)
     }) else {
         return;
@@ -248,7 +246,7 @@ fn run_worker(
 
     let Some(stream) = try_startup_step(
         &startup_tx,
-        "failed to create PipeWire capture stream".into(),
+        "failed to create PipeWire capture stream",
         || {
             pw::stream::StreamBox::new(
                 &core,
@@ -373,7 +371,7 @@ fn handle_stream_param(
         let mut buffer = data
             .buffer
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *buffer = StereoSampleBuffer::with_sample_rate(format.rate());
         data.format = format;
         if data.streaming {
@@ -574,20 +572,20 @@ mod tests {
         format.set_channels(2);
         format.set_rate(48_000);
         let bytes = [0u8; 8];
-        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_ok());
+        capture_frame_bytes(&format, &bytes, 0, 8, 8, false).unwrap();
 
         format.set_format(AudioFormat::S16LE);
-        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_err());
+        capture_frame_bytes(&format, &bytes, 0, 8, 8, false).unwrap_err();
         format.set_format(AudioFormat::F32LE);
         format.set_channels(1);
-        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_err());
+        capture_frame_bytes(&format, &bytes, 0, 8, 8, false).unwrap_err();
         format.set_channels(2);
-        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 16, false).is_err());
-        assert!(capture_frame_bytes(&format, &bytes, 0, 7, 8, false).is_err());
-        assert!(capture_frame_bytes(&format, &bytes, 1, 8, 8, false).is_err());
-        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, true).is_err());
+        capture_frame_bytes(&format, &bytes, 0, 8, 16, false).unwrap_err();
+        capture_frame_bytes(&format, &bytes, 0, 7, 8, false).unwrap_err();
+        capture_frame_bytes(&format, &bytes, 1, 8, 8, false).unwrap_err();
+        capture_frame_bytes(&format, &bytes, 0, 8, 8, true).unwrap_err();
         format.set_rate(0);
-        assert!(capture_frame_bytes(&format, &bytes, 0, 8, 8, false).is_err());
+        capture_frame_bytes(&format, &bytes, 0, 8, 8, false).unwrap_err();
     }
 
     #[test]

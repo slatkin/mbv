@@ -182,7 +182,7 @@ kind = "video"
     assert_eq!(reparsed.feeds[0].kind, FeedKind::Video);
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -225,7 +225,7 @@ url = "https://example.com/feed/"
     assert_eq!(reparsed.server_url, "http://localhost:8096");
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 // ── Service-independent startup tests (tasks 1.1–1.4) ────────────────────
@@ -298,7 +298,7 @@ kind = "audio"
     assert_eq!(reparsed.feeds[0].name, "Feed A");
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
@@ -356,7 +356,7 @@ consume_audio = true
     );
 
     std::env::remove_var("XDG_CONFIG_HOME");
-    std::fs::remove_dir_all(&dir).ok();
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

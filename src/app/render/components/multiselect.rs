@@ -25,7 +25,7 @@ pub(in crate::app) struct MultiSelectRenderGeometry {
 pub(in crate::app) fn render_multiselect_content(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
-    model: MultiSelectRenderModel<'_>,
+    model: &MultiSelectRenderModel<'_>,
 ) -> MultiSelectRenderGeometry {
     let title = match model.kind {
         MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
@@ -38,9 +38,11 @@ pub(in crate::app) fn render_multiselect_content(
         .map(|(_, n, _)| n.len())
         .max()
         .unwrap_or(0);
-    let inner_w = ((max_name + 6) as u16).clamp(36, 60);
+    let inner_w = u16::try_from((max_name + 6).clamp(36, 60)).expect("clamped to 36..=60");
     let width = inner_w + 2;
-    let content_h = model.items.len() as u16 + 1;
+    let content_h = u16::try_from(model.items.len())
+        .unwrap_or(u16::MAX)
+        .saturating_add(1);
     let height = content_h + 2;
 
     let inner = render_modal_frame(
@@ -86,7 +88,9 @@ pub(in crate::app) fn render_multiselect_content(
             (
                 Rect {
                     x: list_area.x,
-                    y: list_area.y + (i - scroll) as u16,
+                    // `(i - scroll) < list_h == list_area.height`, so it fits `u16`.
+                    y: list_area.y
+                        + u16::try_from(i - scroll).expect("row index bounded by list height"),
                     width: list_area.width,
                     height: 1,
                 },

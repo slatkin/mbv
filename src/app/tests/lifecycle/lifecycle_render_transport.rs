@@ -106,7 +106,7 @@ fn transport_prev_next(
         st.active = active;
         st.queue_len = queue_len;
         st.current_idx = current_idx;
-    }
+    };
     assert_eq!(app.transport_prev_next_available(), expected);
 }
 

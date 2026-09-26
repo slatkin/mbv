@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    fmt_duration_gutter, AudiobookshelfBookBrowseState, AudiobookshelfBookMove, BookChapterTarget,
+    BookContent, BookRow, MediaKind, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
+    MediaSemanticState, Msg, ShellRequest,
+};
 
 /// Canonical row projection for one book's chapter/audio-part detail: one
 /// selectable `Item` per visible row, keyed by its stable row discriminator.
@@ -25,6 +29,10 @@ fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaLis
                     index, duration, ..
                 } => (index, format!("Part {index}"), duration),
             };
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
             let trailing = (duration_seconds > 0.0)
                 .then(|| fmt_duration_gutter(duration_seconds as i64))
                 .map(MediaListTrailing::Gutter);
@@ -66,10 +74,10 @@ impl BookContent {
             index,
         ))
     }
-    pub(in crate::app) fn chapter_focus_request(&self) -> Option<Msg> {
-        Some(Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
+    pub(in crate::app) fn chapter_focus_request(&self) -> Msg {
+        Msg::Shell(Box::new(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::ChapterFocus(self.chapter_target()),
-        ))))
+        )))
     }
     /// Project the selected book's canonical chapter/audio-part rows into the
     /// chapter owner before view (design.md D6). The row's stable target is the

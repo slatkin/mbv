@@ -1,4 +1,6 @@
-use super::*;
+use super::{
+    gen_session_id, parse_item, EmbyClient, EmbyItem, EmbySessionId, MediaSourceId, PlaybackInfo,
+};
 use serde_json::Value;
 
 /// The resolved cast-bound media plus the Emby session/media-source identity
@@ -11,10 +13,11 @@ pub struct CastPlaybackInfo {
 }
 
 impl EmbyClient {
+    #[must_use]
     pub fn get_playback_info(&self, item_id: &str) -> PlaybackInfo {
         let body = serde_json::json!({
             "UserId": self.user_id,
-            "MaxStreamingBitrate": 140000000,
+            "MaxStreamingBitrate": 140_000_000,
             "EnableDirectPlay": true,
             "EnableDirectStream": false,
             "IsPlayback": true,
@@ -54,8 +57,7 @@ impl EmbyClient {
             .to_string();
         let sub_urls: Vec<String> = resp["MediaSources"][0]["MediaStreams"]
             .as_array()
-            .map(|a| a.as_slice())
-            .unwrap_or(&[])
+            .map_or(&[] as &[Value], Vec::as_slice)
             .iter()
             .filter(|s| {
                 s["Type"].as_str() == Some("Subtitle")
@@ -81,7 +83,7 @@ impl EmbyClient {
     /// the media URL/content type the receiver should fetch, per
     /// cast-media-dispatch's "Emby media URLs are negotiated for the
     /// receiver" requirement. Deliberately separate from `get_playback_info`
-    /// above (used for local session tracking from player_runtime.rs and
+    /// above (used for local session tracking from `player_runtime.rs` and
     /// player/controller.rs + player/submit.rs) so this addition touches none of those
     /// call sites. Also carries the session/media-source identity the
     /// cast-session-control progress-reporting requirement needs, since
@@ -94,7 +96,7 @@ impl EmbyClient {
     ) -> Result<CastPlaybackInfo, String> {
         let mut body = serde_json::json!({
             "UserId": self.user_id,
-            "MaxStreamingBitrate": 140000000,
+            "MaxStreamingBitrate": 140_000_000,
             "EnableDirectPlay": true,
             "EnableDirectStream": false,
             "IsPlayback": true,
@@ -180,7 +182,7 @@ impl EmbyClient {
             .map_err(|e| e.to_string())?;
         resp["Id"]
             .as_str()
-            .map(|s| s.to_string())
+            .map(str::to_string)
             .ok_or_else(|| "no Id in response".to_string())
     }
 
@@ -242,7 +244,7 @@ impl EmbyClient {
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v["PlaylistItemId"].as_str())
-                    .map(|s| s.to_string())
+                    .map(str::to_string)
                     .collect()
             })
             .unwrap_or_default();
@@ -311,7 +313,7 @@ impl EmbyClient {
 }
 
 /// The content type for a cast-bound Emby media URL. Deterministic from
-/// (is_audio, direct_play) alone because `build_cast_device_profile`
+/// (`is_audio`, `direct_play`) alone because `build_cast_device_profile`
 /// declares exactly one container per media type in one place (mp4/h264/aac
 /// video, mp3 audio; hls video / mp3-http audio for transcoding).
 fn cast_content_type(is_audio: bool, direct_play: bool) -> &'static str {

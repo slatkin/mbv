@@ -8,8 +8,7 @@ use ratatui::layout::Rect;
 
 use crate::app::components::inline_search::{InlineSearch, SearchPool};
 use crate::app::components::library_panel::content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, PanelList, SelectorRow, Workspace,
-    WorkspaceHeader,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, SelectorRow, Workspace, WorkspaceHeader,
 };
 use crate::app::render::arrangements::library::{
     wide_library_panes, wide_library_panes_with_selector,
@@ -47,16 +46,16 @@ impl PanelList for StubList {
     ) {
     }
 
-    fn view(&mut self, f: &mut Frame, rect: Rect) {
+    fn view(&mut self, frame: &mut Frame, rect: Rect) {
         self.painted = Some(rect);
         for (index, row) in self.rows.iter().enumerate() {
-            if index as u16 >= rect.height {
+            if index >= usize::from(rect.height) {
                 break;
             }
-            f.render_widget(
+            frame.render_widget(
                 Paragraph::new(*row),
                 Rect {
-                    y: rect.y + index as u16,
+                    y: rect.y + u16::try_from(index).expect("index is bounded by rect height"),
                     height: 1,
                     ..rect
                 },

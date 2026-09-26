@@ -12,10 +12,7 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
     ComponentId, ContextMenuComponent, Msg, OverlayId, TerminalObserverEvent,
 };
-use crate::app::shell::Model;
-use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 
 fn library_app() -> App {
     let mut app = make_app_stub();
@@ -290,7 +287,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         .application
         .get_component(&ComponentId::Library)
         .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_narrow_geometry())
+        .and_then(LibraryPanel::test_narrow_geometry)
         .expect("the non-Wide frame painted");
     assert_eq!(
         panel, narrow.list_panel,

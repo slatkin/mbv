@@ -355,7 +355,7 @@ fn tv_wide_tick_click_resolves_season_pill() {
         .test_workspace_selector_hits()
         .regions()
         .first()
-        .cloned()
+        .copied()
         .expect("painted season pill");
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
@@ -405,7 +405,6 @@ fn tv_wide_tick_click_resolves_episode_row() {
             Msg::Shell(ref shell_boxed)  if matches!(shell_boxed.as_ref(), ShellRequest::TvHitClick {
                 hit: TvHit::EpisodeRow(target)
             } if target == "episode-1"))),
-        "tick messages: {:?}",
-        messages
+        "tick messages: {messages:?}"
     );
 }

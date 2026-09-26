@@ -91,7 +91,7 @@ impl SavePlaylistComponent {
     /// path, so the only click with a keyboard equivalent is an outside
     /// click mirroring Esc (`SavePlaylistIntent::Dismiss`). Typing,
     /// submit, and right-click/wheel stay keyboard-only.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -136,7 +136,7 @@ impl Component for SavePlaylistComponent {
         self.frame = geometry.frame;
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
@@ -149,8 +149,8 @@ impl Component for SavePlaylistComponent {
 }
 
 impl AppComponent<Msg, UserEvent> for SavePlaylistComponent {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
                 Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
@@ -162,7 +162,7 @@ impl AppComponent<Msg, UserEvent> for SavePlaylistComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }

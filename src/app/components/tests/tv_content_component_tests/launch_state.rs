@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::HashMap;
 
 #[test]
 fn tv_launch_snapshot_uses_unfiltered_letter_scope_and_excludes_season_workspace() {
@@ -8,7 +9,7 @@ fn tv_launch_snapshot_uses_unfiltered_letter_scope_and_excludes_season_workspace
     season.id = "season-1".into();
     let detail = crate::app::SeriesDetail {
         seasons: vec![season],
-        episodes: Default::default(),
+        episodes: HashMap::default(),
     };
     let mut owner = TvContent::new();
     owner.set_content(TvWideRenderCtx::new(
@@ -32,7 +33,7 @@ fn tv_launch_snapshot_uses_unfiltered_letter_scope_and_excludes_season_workspace
             .as_ref()
             .expect("season detail mounts a Workspace selector row");
         assert_eq!(selector.pills, vec!["Season 1"]);
-    }
+    };
 
     assert_eq!(
         owner.launch_snapshot(),

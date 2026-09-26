@@ -228,8 +228,18 @@ pub(super) fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShel
             .description
             .as_deref()
             .map(crate::api::html_to_text),
-        duration_ticks: duration_seconds
-            .map(|seconds| (seconds * crate::api::TICKS_PER_SECOND as f64) as u64),
+        duration_ticks: duration_seconds.map(|seconds| {
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "podcast duration seconds → ticks through f64; fractional seconds have no integer representation (approved, issue #804)"
+            )]
+            let ticks = seconds * crate::api::TICKS_PER_SECOND as f64;
+            if ticks.is_nan() || ticks <= 0.0 {
+                0
+            } else {
+                ticks.trunc().to_string().parse().unwrap_or(u64::MAX)
+            }
+        }),
         position_ticks: 0,
         played: false,
         pub_date_secs: published_at_secs(recent_episode.published_at),
@@ -250,7 +260,8 @@ pub(super) fn published_at_secs(value: Option<serde_json::Value>) -> Option<u64>
         serde_json::Value::Number(number) => {
             let raw = number.as_u64().or_else(|| {
                 let seconds = number.as_f64()?;
-                (seconds >= 0.0 && seconds.fract() == 0.0).then_some(seconds as u64)
+                (seconds >= 0.0 && seconds.fract() == 0.0)
+                    .then(|| seconds.to_string().parse::<u64>().unwrap_or(u64::MAX))
             })?;
             epoch_value_to_secs(raw)
         }
@@ -296,7 +307,7 @@ fn parse_date_text(text: &str) -> Option<u64> {
     if dt.year() < 1970 {
         return None;
     }
-    Some(dt.unix_timestamp() as u64)
+    u64::try_from(dt.unix_timestamp()).ok()
 }
 impl AudiobookshelfClient {
     /// Runs `f` against a cloned client on a bounded worker thread. All
@@ -384,14 +395,17 @@ impl AudiobookshelfClient {
             .get(&format!("{}{}", self.server_url, path))
             .header("Authorization", &format!("Bearer {key}"))
             .call()
-            .map_err(map_error)
+            .map_err(|error| map_error(&error))
     }
     fn libraries(&self, key: &str) -> Result<Vec<AudiobookshelfLibrary>, AudiobookshelfError> {
         let response: LibrariesResponse = self
             .get(key, "/api/libraries")?
             .body_mut()
             .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+            log::debug!("malformed Audiobookshelf response: {error}");
+            AudiobookshelfError::malformed()
+        })?;
         Ok(response
             .libraries
             .into_iter()
@@ -413,11 +427,14 @@ impl AudiobookshelfClient {
             "/api/libraries/{}/items?page={page}&limit={limit}",
             crate::encode_path_segment(id)
         );
-        let response: ItemsResponse = self
-            .get(key, &path)?
-            .body_mut()
-            .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+        let response: ItemsResponse =
+            self.get(key, &path)?
+                .body_mut()
+                .read_json()
+                .map_err(|error| {
+                    log::debug!("malformed Audiobookshelf response: {error}");
+                    AudiobookshelfError::malformed()
+                })?;
         if response.limit == 0 {
             return Err(AudiobookshelfError::protocol());
         }
@@ -460,7 +477,10 @@ impl AudiobookshelfClient {
             )?
             .body_mut()
             .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!("malformed Audiobookshelf response: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         if response.id != id {
             return Err(AudiobookshelfError::protocol());
         }
@@ -487,7 +507,10 @@ impl AudiobookshelfClient {
             .get(key, "/api/me/progress")?
             .body_mut()
             .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!("malformed Audiobookshelf response: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         Ok(response
             .media_progress
             .into_iter()
@@ -518,7 +541,10 @@ impl AudiobookshelfClient {
             )?
             .body_mut()
             .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!("malformed Audiobookshelf response: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         Ok(response
             .into_iter()
             .map(|x| AudiobookshelfShelf {
@@ -537,17 +563,20 @@ impl AudiobookshelfClient {
             .into_body()
             .into_reader()
             .read_to_end(&mut bytes)
-            .map_err(|_| AudiobookshelfError::malformed())?;
+            .map_err(|error| {
+                log::debug!("malformed Audiobookshelf response: {error}");
+                AudiobookshelfError::malformed()
+            })?;
         Ok(bytes)
     }
 }
 
-pub(super) fn map_error(error: ureq::Error) -> AudiobookshelfError {
+pub(super) fn map_error(error: &ureq::Error) -> AudiobookshelfError {
     match error {
         ureq::Error::StatusCode(401 | 403) => {
             AudiobookshelfError::new(super::AudiobookshelfFailureClass::AuthenticationRejected)
         }
-        ureq::Error::StatusCode(status) if status >= 500 => {
+        ureq::Error::StatusCode(status) if *status >= 500 => {
             AudiobookshelfError::new(super::AudiobookshelfFailureClass::Server)
         }
         ureq::Error::StatusCode(_) => AudiobookshelfError::protocol(),

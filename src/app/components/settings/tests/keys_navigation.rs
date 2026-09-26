@@ -50,7 +50,7 @@ fn keys_destination_paints_groups_actions_and_the_configured_chord() {
     assert!(output.contains("Playback"), "group header painted");
     assert!(output.contains("toggle_play_pause"), "action row painted");
     assert!(
-        output.contains("k"),
+        output.contains('k'),
         "the override's configured chord paints"
     );
     assert!(output.contains("Esc"), "the default chord paints");

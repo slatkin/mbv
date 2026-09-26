@@ -7,6 +7,8 @@ use crate::config::{
     save_control_credential, save_service_secret, service_secret_path, ServiceKind,
     TestStateDirGuard,
 };
+#[cfg(all(test, unix))]
+use std::os::unix::fs::PermissionsExt;
 
 // ── Service-independent startup tests (tasks 1.2–1.4) ────────────────
 #[test]
@@ -39,7 +41,6 @@ fn service_secret_permissions_are_mode_0600() {
     let path = service_secret_path(ServiceKind::Emby);
     let meta = std::fs::metadata(&path).unwrap();
     let perms = meta.permissions();
-    use std::os::unix::fs::PermissionsExt;
     assert_eq!(
         perms.mode() & 0o777,
         0o600,
@@ -75,7 +76,7 @@ fn concurrent_control_credential_creation_converges_on_persisted_winner() {
     let start = std::sync::Arc::new(std::sync::Barrier::new(3));
     let workers: Vec<_> = (0..2)
         .map(|_| {
-            let start = start.clone();
+            let start = std::sync::Arc::clone(&start);
             std::thread::spawn(move || {
                 start.wait();
                 load_or_create_control_credential()
@@ -139,7 +140,6 @@ fn control_credential_permissions_are_mode_0600() {
     let path = control_credential_path();
     let meta = std::fs::metadata(&path).unwrap();
     let perms = meta.permissions();
-    use std::os::unix::fs::PermissionsExt;
     assert_eq!(
         perms.mode() & 0o777,
         0o600,

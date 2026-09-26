@@ -101,7 +101,7 @@ fn playlist_activation_on_a_populated_dirty_queue_asks_then_reaches_the_save_pro
 
     harness
         .model_mut()
-        .handle_playlists_request(ShellRequest::PlaylistsActivate {
+        .handle_playlists_request(&ShellRequest::PlaylistsActivate {
             open: true,
             index: 0,
         });
@@ -213,7 +213,7 @@ fn playlist_load_on_empty_queue_dismisses_the_sidebar() {
 
     harness
         .model_mut()
-        .handle_playlists_request(ShellRequest::PlaylistsActivate {
+        .handle_playlists_request(&ShellRequest::PlaylistsActivate {
             open: true,
             index: 0,
         });
@@ -259,7 +259,7 @@ fn playlist_load_on_populated_queue_dismisses_the_sidebar_on_confirm() {
 
     harness
         .model_mut()
-        .handle_playlists_request(ShellRequest::PlaylistsActivate {
+        .handle_playlists_request(&ShellRequest::PlaylistsActivate {
             open: true,
             index: 0,
         });
@@ -310,7 +310,7 @@ fn playlist_load_on_populated_queue_keeps_the_sidebar_on_cancel() {
 
     harness
         .model_mut()
-        .handle_playlists_request(ShellRequest::PlaylistsActivate {
+        .handle_playlists_request(&ShellRequest::PlaylistsActivate {
             open: true,
             index: 0,
         });
@@ -358,7 +358,7 @@ fn playlist_load_on_dirty_saved_playlist_keeps_the_sidebar_at_the_save_prompt() 
 
     harness
         .model_mut()
-        .handle_playlists_request(ShellRequest::PlaylistsActivate {
+        .handle_playlists_request(&ShellRequest::PlaylistsActivate {
             open: true,
             index: 0,
         });

@@ -63,22 +63,36 @@ fn sample_to_cell(sample: StereoSample, width: u16, height: u16) -> Option<(u16,
     let center_y = height / 2;
     let positive_x = width.saturating_sub(center_x.saturating_add(1));
     let positive_y = height.saturating_sub(center_y.saturating_add(1));
-    let x = center_x as f32
+    let x = f32::from(center_x)
         + if left < 0.0 {
-            left * center_x as f32
+            left * f32::from(center_x)
         } else {
-            left * positive_x as f32
+            left * f32::from(positive_x)
         };
-    let y = center_y as f32
+    let y = f32::from(center_y)
         + if right < 0.0 {
-            right * center_y as f32
+            right * f32::from(center_y)
         } else {
-            right * positive_y as f32
+            right * f32::from(positive_y)
         };
     Some((
-        (x.round() as i32).clamp(0, width as i32 - 1) as u16,
-        (y.round() as i32).clamp(0, height as i32 - 1) as u16,
+        rounded_coordinate(x, width - 1),
+        rounded_coordinate(y, height - 1),
     ))
+}
+
+fn rounded_coordinate(value: f32, max: u16) -> u16 {
+    let rounded = value.round().clamp(0.0, f32::from(max));
+    let (mut low, mut high) = (0, max);
+    while low < high {
+        let middle = low + (high - low) / 2;
+        if f32::from(middle) < rounded {
+            low = middle + 1;
+        } else {
+            high = middle;
+        }
+    }
+    low
 }
 
 fn point_color(sample: StereoSample) -> Color {
@@ -87,5 +101,18 @@ fn point_color(sample: StereoSample) -> Color {
         amplitude if amplitude < 0.5 => palette::TEXT_METADATA,
         amplitude if amplitude < 0.75 => palette::TEXT_FOCUS_ACCENT,
         _ => palette::STATUS_ERROR,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rounded_coordinate;
+
+    #[test]
+    fn rounded_coordinate_matches_round_then_clamp() {
+        assert_eq!(rounded_coordinate(-1.0, 10), 0);
+        assert_eq!(rounded_coordinate(2.5, 10), 3);
+        assert_eq!(rounded_coordinate(99.0, 10), 10);
+        assert_eq!(rounded_coordinate(f32::NAN, 10), 0);
     }
 }

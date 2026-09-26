@@ -30,7 +30,8 @@ fn parse_ymd(date_str: &str) -> Option<(&str, &'static str, u32)> {
 /// Formats an Emby `PremiereDate` value (e.g. `2015-06-19T00:00:00.0000000Z`)
 /// as a release date like "19 Jun 2015".
 pub(in crate::app::render) fn format_release_date(premiere_date: &str) -> String {
-    parse_ymd(premiere_date)
-        .map(|(y, month, d)| format!("{d} {} {y}", &month[..3]))
-        .unwrap_or_else(|| premiere_date.to_string())
+    parse_ymd(premiere_date).map_or_else(
+        || premiere_date.to_string(),
+        |(y, month, d)| format!("{d} {} {y}", &month[..3]),
+    )
 }

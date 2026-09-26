@@ -1,4 +1,12 @@
-use super::*;
+use super::{
+    abs_queue_transport_rejection, admit_queue_items, admit_queue_slots, audio_only_rejection,
+    broadcast_queue_state, daemon_admits, mint_queue_lineage, reject_command, reset_slot_jumps,
+    send_to, CtrlContext, DaemonEvent, DaemonPlayerOwner, EmbyItem, ExecSlot, PlaybackQueue,
+    PlayerCommand, PlayerOwnerState, QueueItem, QueueSlotId, RejectContext,
+};
+use crate::api::EmbyClient;
+use crate::ctrl::CtrlEvent;
+use std::sync::Arc;
 
 /// `CtrlCmd::UnifiedAdoptQueue`: a Client seeds a cold daemon's queue.
 pub(super) fn handle_adopt_queue(
@@ -28,7 +36,7 @@ pub(super) fn handle_adopt_queue(
             queue.len()
         );
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -37,7 +45,7 @@ pub(super) fn handle_adopt_queue(
                 source: &*source,
                 lineage,
             },
-            "daemon already has a queue; adoption skipped".to_string(),
+            "daemon already has a queue; adoption skipped",
         );
         return;
     }
@@ -55,7 +63,7 @@ pub(super) fn handle_adopt_queue(
         abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
     {
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -64,7 +72,7 @@ pub(super) fn handle_adopt_queue(
                 source: &*source,
                 lineage,
             },
-            reason,
+            &reason,
         );
         return;
     }
@@ -89,6 +97,14 @@ pub(super) fn handle_adopt_queue(
         transitions,
     );
 
+    enrich_adopted_emby_slots(queue, ctx.client, ctx.merged_tx);
+}
+
+fn enrich_adopted_emby_slots(
+    queue: &PlaybackQueue,
+    client: &Arc<std::sync::Mutex<EmbyClient>>,
+    merged_tx: &std::sync::mpsc::Sender<DaemonEvent>,
+) {
     let adopted_slots: Vec<(QueueSlotId, String)> = queue
         .slots()
         .iter()
@@ -98,36 +114,35 @@ pub(super) fn handle_adopt_queue(
                 .map(|item| (slot.slot_id, item.id.clone()))
         })
         .collect();
-    if !adopted_slots.is_empty() {
-        let item_ids: Vec<String> = adopted_slots
-            .iter()
-            .map(|(_, item_id)| item_id.clone())
-            .collect();
-        super::playback::spawn_item_lookup(ctx.client, ctx.merged_tx, item_ids, move |result| {
-            match result {
-                Ok(items) => {
-                    let items_by_id: std::collections::HashMap<String, EmbyItem> = items
-                        .into_iter()
-                        .map(|item| (item.id.clone(), item))
-                        .collect();
-                    let enriched = adopted_slots
-                        .into_iter()
-                        .filter_map(|(slot_id, item_id)| {
-                            items_by_id
-                                .get(&item_id)
-                                .cloned()
-                                .map(|item| (slot_id, item))
-                        })
-                        .collect();
-                    Some(DaemonEvent::QueueEnriched(enriched))
-                }
-                Err(error) => {
-                    log::warn!(target: "queue", "adopted queue enrichment fetch failed: {error}");
-                    None
-                }
-            }
-        });
+    if adopted_slots.is_empty() {
+        return;
     }
+    let item_ids: Vec<String> = adopted_slots
+        .iter()
+        .map(|(_, item_id)| item_id.clone())
+        .collect();
+    super::playback::spawn_item_lookup(client, merged_tx, item_ids, move |result| match result {
+        Ok(items) => {
+            let items_by_id: std::collections::HashMap<String, EmbyItem> = items
+                .into_iter()
+                .map(|item| (item.id.clone(), item))
+                .collect();
+            let enriched = adopted_slots
+                .into_iter()
+                .filter_map(|(slot_id, item_id)| {
+                    items_by_id
+                        .get(&item_id)
+                        .cloned()
+                        .map(|item| (slot_id, item))
+                })
+                .collect();
+            Some(DaemonEvent::QueueEnriched(enriched))
+        }
+        Err(error) => {
+            log::warn!(target: "queue", "adopted queue enrichment fetch failed: {error}");
+            None
+        }
+    });
 }
 
 /// `CtrlCmd::UnifiedQueueSourceUpdate`: update only the source of the owner
@@ -152,7 +167,7 @@ pub(super) fn handle_queue_source_update(
         );
     } else if cmd_lineage != lineage {
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -161,7 +176,7 @@ pub(super) fn handle_queue_source_update(
                 source: &ctx.owner.core.source,
                 lineage,
             },
-            "queue source update rejected: owner queue lineage changed".to_string(),
+            "queue source update rejected: owner queue lineage changed",
         );
     } else {
         let DaemonPlayerOwner {
@@ -186,49 +201,23 @@ pub(super) fn handle_queue_source_update(
     }
 }
 
-/// `CtrlCmd::UnifiedQueueReplace`: replace the entire queue with item-generic
-/// slots and optionally begin playback from `start_idx`.
-pub(super) fn handle_queue_replace(
-    ctx: &mut CtrlContext<'_>,
-    lineage: crate::ctrl::QueueLineage,
+fn prepare_replacement_slots(
+    ctx: &CtrlContext<'_>,
     items: Vec<QueueItem>,
     slots: Vec<crate::ctrl::UnifiedQueueSlot>,
     start_idx: Option<usize>,
-    new_source: crate::config::QueueSource,
-) {
-    let has_emby = ctx.has_emby();
-    let DaemonPlayerOwner {
-        core:
-            PlayerOwnerState {
-                queue,
-                source,
-                transitions,
-                ..
-            },
-        queued_transition_origin,
-        ..
-    } = &mut *ctx.owner;
-    let submitted_slots: Vec<(crate::playback_queue::QueueSlotId, QueueItem)> = if slots.is_empty()
-    {
+    has_emby: bool,
+) -> Result<(Vec<(QueueSlotId, QueueItem)>, usize), String> {
+    let submitted_slots: Vec<(QueueSlotId, QueueItem)> = if slots.is_empty() {
         items
             .into_iter()
             .enumerate()
-            .map(|(index, item)| {
-                (
-                    crate::playback_queue::QueueSlotId::from_raw((index + 1) as u64),
-                    item,
-                )
-            })
+            .map(|(index, item)| (QueueSlotId::from_raw((index + 1) as u64), item))
             .collect()
     } else {
         slots
             .into_iter()
-            .map(|slot| {
-                (
-                    crate::playback_queue::QueueSlotId::from_raw(slot.slot_id),
-                    slot.item,
-                )
-            })
+            .map(|slot| (QueueSlotId::from_raw(slot.slot_id), slot.item))
             .collect()
     };
     let submitted_items: Vec<QueueItem> = submitted_slots
@@ -250,19 +239,7 @@ pub(super) fn handle_queue_replace(
         supports_abs_queue,
         supports_abs_book_queue,
     ) {
-        reject_command(
-            RejectContext {
-                reply_tx: ctx.reply_tx,
-                ctrl_clients: ctx.ctrl_clients,
-                client_id: ctx.client_id,
-                player: ctx.player,
-                queue: &*queue,
-                source: &*source,
-                lineage,
-            },
-            reason,
-        );
-        return;
+        return Err(reason);
     }
     let (slots, next_cursor) = admit_queue_slots(
         submitted_slots,
@@ -272,38 +249,45 @@ pub(super) fn handle_queue_replace(
         ctx.has_audiobookshelf,
     );
     if slots.is_empty() {
-        reject_command(
-            RejectContext {
-                reply_tx: ctx.reply_tx,
-                ctrl_clients: ctx.ctrl_clients,
-                client_id: ctx.client_id,
-                player: ctx.player,
-                queue: &*queue,
-                source: &*source,
-                lineage,
-            },
-            "Playback owner rejected the queue replacement".to_string(),
-        );
-        return;
+        return Err("Playback owner rejected the queue replacement".to_string());
     }
-    // Audio-only admission: reject if the daemon is in audio-only
-    // mode and any item is non-audio.
     let admitted_items: Vec<QueueItem> = slots.iter().map(|(_, item)| item.clone()).collect();
     if let Some(reason) = audio_only_rejection(ctx.audio_only, &admitted_items) {
-        reject_command(
-            RejectContext {
-                reply_tx: ctx.reply_tx,
-                ctrl_clients: ctx.ctrl_clients,
-                client_id: ctx.client_id,
-                player: ctx.player,
-                queue: &*queue,
-                source: &*source,
-                lineage,
-            },
-            reason,
-        );
-        return;
+        return Err(reason);
     }
+    Ok((slots, next_cursor))
+}
+
+/// `CtrlCmd::UnifiedQueueReplace`: replace the entire queue with item-generic
+/// slots and optionally begin playback from `start_idx`.
+pub(super) fn handle_queue_replace(
+    ctx: &mut CtrlContext<'_>,
+    lineage: crate::ctrl::QueueLineage,
+    items: Vec<QueueItem>,
+    slots: Vec<crate::ctrl::UnifiedQueueSlot>,
+    start_idx: Option<usize>,
+    new_source: crate::config::QueueSource,
+) {
+    let has_emby = ctx.has_emby();
+    let (slots, next_cursor) =
+        match prepare_replacement_slots(ctx, items, slots, start_idx, has_emby) {
+            Ok(admitted) => admitted,
+            Err(reason) => {
+                reject_command(&ctx.rejection_context(lineage), &reason);
+                return;
+            }
+        };
+    let DaemonPlayerOwner {
+        core:
+            PlayerOwnerState {
+                queue,
+                source,
+                transitions,
+                ..
+            },
+        queued_transition_origin,
+        ..
+    } = &mut *ctx.owner;
     let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
     *queue = PlaybackQueue::from_slot_items(
         slots,
@@ -388,7 +372,7 @@ pub(super) fn handle_queue_append(
         abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
     {
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -397,7 +381,7 @@ pub(super) fn handle_queue_append(
                 source: &*source,
                 lineage,
             },
-            reason,
+            &reason,
         );
         return;
     }
@@ -405,7 +389,7 @@ pub(super) fn handle_queue_append(
     items.retain(|item| daemon_admits(item, ctx.audio_only, has_emby, ctx.has_audiobookshelf));
     if items.is_empty() {
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -414,14 +398,14 @@ pub(super) fn handle_queue_append(
                 source: &*source,
                 lineage,
             },
-            "Playback owner rejected the queue append".to_string(),
+            "Playback owner rejected the queue append",
         );
         return;
     }
     // Audio-only admission: reject if any appended item is non-audio.
     if let Some(reason) = audio_only_rejection(ctx.audio_only, &items) {
         reject_command(
-            RejectContext {
+            &RejectContext {
                 reply_tx: ctx.reply_tx,
                 ctrl_clients: ctx.ctrl_clients,
                 client_id: ctx.client_id,
@@ -430,7 +414,7 @@ pub(super) fn handle_queue_append(
                 source: &*source,
                 lineage,
             },
-            reason,
+            &reason,
         );
         return;
     }

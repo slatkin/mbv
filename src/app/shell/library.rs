@@ -41,8 +41,8 @@ impl Model {
     }
 
     /// The active library surface is always the mounted Library panel.
-    pub(in crate::app) fn active_surface_id(&self) -> Option<ComponentId> {
-        Some(ComponentId::Library)
+    pub(in crate::app) fn active_surface_id() -> ComponentId {
+        ComponentId::Library
     }
 
     /// Whether the right-panel library destination is painted this frame.
@@ -89,10 +89,8 @@ impl Model {
         // Queue, and the playback panels (the transport chrome).
         let mut ids = Vec::new();
         let panel_mode = self.app.effective_panel_mode();
-        if let Some(child) = self
-            .active_surface_id()
-            .filter(|child| self.library_panel_visible() && self.application.mounted(child))
-        {
+        let child = Self::active_surface_id();
+        if self.library_panel_visible() && self.application.mounted(&child) {
             ids.push(child);
         }
         for id in [

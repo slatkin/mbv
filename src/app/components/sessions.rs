@@ -24,6 +24,11 @@ use crate::app::state::panel_targets::{PanelTarget, SessionTargetKey};
 use crate::app::ui_util::service_state_color;
 
 /// The Interactive Component for the Sessions sidebar.
+struct SessionsDisplayContext {
+    use_nerd_fonts: bool,
+    emby_state: ServiceState,
+}
+
 pub struct SessionsComponent {
     targets: Vec<PanelTarget>,
     loading: bool,
@@ -33,8 +38,7 @@ pub struct SessionsComponent {
     connected_session_id: Option<String>,
     cast_attachment_id: Option<String>,
     can_disconnect: bool,
-    use_nerd_fonts: bool,
-    emby_state: ServiceState,
+    display: SessionsDisplayContext,
     requested_panel_area: Option<Rect>,
     painted_panel_area: Option<Rect>,
     #[cfg(test)]
@@ -56,8 +60,10 @@ impl SessionsComponent {
             connected_session_id: None,
             cast_attachment_id: None,
             can_disconnect: false,
-            use_nerd_fonts: false,
-            emby_state: ServiceState::NotConfigured,
+            display: SessionsDisplayContext {
+                use_nerd_fonts: false,
+                emby_state: ServiceState::NotConfigured,
+            },
             requested_panel_area: None,
             painted_panel_area: None,
             #[cfg(test)]
@@ -105,9 +111,11 @@ impl SessionsComponent {
         use_nerd_fonts: bool,
         emby_state: ServiceState,
     ) {
-        if self.use_nerd_fonts != use_nerd_fonts || self.emby_state != emby_state {
-            self.use_nerd_fonts = use_nerd_fonts;
-            self.emby_state = emby_state;
+        if self.display.use_nerd_fonts != use_nerd_fonts || self.display.emby_state != emby_state {
+            self.display = SessionsDisplayContext {
+                use_nerd_fonts,
+                emby_state,
+            };
             self.content_dirty = true;
             self.list.invalidate_paint();
         }
@@ -123,7 +131,7 @@ impl SessionsComponent {
         glyph: &'static str,
         color: Color,
     ) -> (ThreeLineSpan, usize) {
-        if self.use_nerd_fonts {
+        if self.display.use_nerd_fonts {
             (
                 ThreeLineSpan::new(glyph, ThreeLineRole::Badge(color)),
                 glyph.width(),
@@ -169,7 +177,7 @@ impl SessionsComponent {
 
     /// The parent recognizes gestures; the embedded list resolves completed
     /// item geometry and owns selection.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -198,7 +206,7 @@ impl SessionsComponent {
     }
 
     fn project_targets(&self, text_width: usize) -> Vec<ThreeLineItem<SessionTargetKey>> {
-        let emby_color = service_state_color(self.emby_state, palette::ACCENT);
+        let emby_color = service_state_color(self.display.emby_state, palette::ACCENT);
         self.targets
             .iter()
             .map(|target| {
@@ -334,10 +342,10 @@ impl Default for SessionsComponent {
 }
 
 impl Component for SessionsComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, _area: Rect) {
         let (panel_area, content_area, has_content) =
             crate::app::render::render_sessions_overlay_content(
-                f,
+                frame,
                 self.requested_panel_area,
                 self.targets.len(),
                 self.loading,
@@ -347,7 +355,7 @@ impl Component for SessionsComponent {
         #[cfg(test)]
         {
             self.painted_content_area = Some(content_area);
-        }
+        };
         if has_content {
             if self.content_dirty || self.projected_width != Some(content_area.width) {
                 self.list
@@ -355,9 +363,9 @@ impl Component for SessionsComponent {
                 self.projected_width = Some(content_area.width);
                 self.content_dirty = false;
             }
-            self.list.view_in(f, panel_area, content_area);
+            self.list.view_in(frame, panel_area, content_area);
             crate::app::render::render_sessions_scrollbar(
-                f,
+                frame,
                 content_area,
                 self.list.items().len(),
                 self.list.viewport_offset(),
@@ -368,7 +376,7 @@ impl Component for SessionsComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -397,7 +405,7 @@ impl AppComponent<Msg, UserEvent> for SessionsComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -728,7 +736,7 @@ mod tests {
         let mut component = painted_component();
         let content = component.painted_content_area.unwrap();
         assert_eq!(
-            component.handle_mouse(&left_down(content.x, content.y)),
+            component.handle_mouse(left_down(content.x, content.y)),
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Emby("a".into())
             ))))
@@ -743,7 +751,7 @@ mod tests {
             y: component.painted_content_area.unwrap().y + 4,
         };
         // The second item starts immediately after the first item's three lines.
-        assert_eq!(component.handle_mouse(&left_down(point.x, point.y)), None);
+        assert_eq!(component.handle_mouse(left_down(point.x, point.y)), None);
         assert_eq!(
             component.list.selected_target(),
             Some(&SessionTargetKey::Emby("b".into()))
@@ -751,7 +759,7 @@ mod tests {
         component.view_for_test();
         component.reset_mouse_gestures_for_test();
         assert_eq!(
-            component.handle_mouse(&left_down(point.x, point.y)),
+            component.handle_mouse(left_down(point.x, point.y)),
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Emby("b".into())
             ))))
@@ -762,7 +770,7 @@ mod tests {
     fn test_session_mouse_click_outside_painted_panel_dismisses() {
         let mut component = painted_component();
         assert_eq!(
-            component.handle_mouse(&left_down(100, 100)),
+            component.handle_mouse(left_down(100, 100)),
             Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)))
         );
     }
@@ -770,7 +778,7 @@ mod tests {
     #[test]
     fn test_session_mouse_wheel_steps_selection_independent_of_pointer_location() {
         let mut component = painted_component();
-        component.handle_mouse(&MouseEvent {
+        component.handle_mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 1,
             row: 1,
@@ -781,7 +789,7 @@ mod tests {
             Some(&SessionTargetKey::Emby("b".into()))
         );
         component.reset_mouse_gestures_for_test();
-        component.handle_mouse(&MouseEvent {
+        component.handle_mouse(MouseEvent {
             kind: MouseEventKind::ScrollUp,
             column: 50,
             row: 20,

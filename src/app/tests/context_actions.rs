@@ -24,8 +24,8 @@ fn watched_toggle_ignores_folders_and_audio_before_service_access() {
     folder.is_folder = true;
     let audio = make_item("audio", "Audio");
 
-    app.toggle_watched_item(0, folder);
-    app.toggle_watched_item(0, audio);
+    app.toggle_watched_item(0, &folder);
+    app.toggle_watched_item(0, &audio);
 
     assert_eq!(app.status_severity, severity);
 }
@@ -62,7 +62,7 @@ fn watched_toggle_unmarks_a_played_item_through_emby() {
     movie.played = true;
     let severity = app.status_severity;
 
-    app.toggle_watched_item(0, movie);
+    app.toggle_watched_item(0, &movie);
 
     assert!(
         http.requests()[0].contains("DELETE /Users/user/PlayedItems/movie"),

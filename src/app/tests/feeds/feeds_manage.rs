@@ -5,7 +5,7 @@ use crate::app::state::types::feeds_manage::{
 };
 use crate::app::tests::make_app_stub;
 use crate::app::Model;
-use crate::app::*;
+use crate::app::TabSelection;
 use mbv_core::config::{FeedKind, FeedSubscription};
 
 fn fm_component(model: &mut Model) -> &mut FeedsManageComponent {
@@ -157,7 +157,7 @@ fn post_mutation_clears_entries_and_clamps_group_and_cursor() {
 
     assert_eq!(app.feed_tab.subscriptions.len(), 1);
     assert!(
-        app.feed_tab.entries.iter().all(|e| e.is_empty()),
+        app.feed_tab.entries.iter().all(Vec::is_empty),
         "fetched entries must be cleared, not carried over"
     );
     assert!(app.feed_tab.all_entries.is_empty());

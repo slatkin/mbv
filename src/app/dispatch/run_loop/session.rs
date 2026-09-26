@@ -239,7 +239,7 @@ impl App {
                 s.position_s, self.remote_pos_s, s.position_s);
             self.remote_pos_s = s.position_s;
             self.remote_api_pos_advanced_at = now;
-            self.remote_seek_pending_until = now - Duration::from_secs(1);
+            self.remote_seek_pending_until = now.checked_sub(Duration::from_secs(1)).unwrap_or(now);
         } else if api_active {
             let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
             let extrapolated =
@@ -288,7 +288,9 @@ impl App {
         if s.runtime_s == 0 {
             let since = self.runtime_zero_since.get_or_insert_with(Instant::now);
             if since.elapsed() < Duration::from_secs(30) {
-                self.last_session_poll = Instant::now() - Duration::from_millis(500);
+                self.last_session_poll = Instant::now()
+                    .checked_sub(Duration::from_millis(500))
+                    .unwrap_or_else(Instant::now);
             }
         } else {
             self.runtime_zero_since = None;

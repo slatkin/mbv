@@ -418,8 +418,7 @@ fn centered_pill_window(
         // moving left must put the selection at the leading edge rather than
         // leaving it pinned to the trailing edge.
         .max_by_key(|(edge_distance, start)| (*edge_distance, *start))
-        .map(|(_, start)| start)
-        .unwrap_or(0);
+        .map_or(0, |(_, start)| start);
     (start, window_end(start))
 }
 
@@ -449,7 +448,7 @@ fn render_visible_pills(
             palette::Surface::PillChip
         };
         let fill = palette::surface_colors(chip, selected).fill;
-        let pill_w = pill_shell_width(label, marked, 1, true) as u16;
+        let pill_w = u16::try_from(pill_shell_width(label, marked, 1, true)).unwrap_or(u16::MAX);
         selector_tabs.push((
             Rect {
                 x: x_cursor,
@@ -501,7 +500,7 @@ fn render_visible_pills(
 pub(in crate::app) fn render_pill_bar(
     f: &mut Frame,
     area: Rect,
-    bar: PillBar,
+    bar: &PillBar,
 ) -> (Vec<(Rect, usize)>, PillBarWindow) {
     // `ids` runs parallel to `labels`; a mismatch would panic on the slice
     // below, so assert the contract up front rather than fail cryptically.
@@ -540,10 +539,10 @@ pub(in crate::app) fn render_pill_bar(
         return (selector_tabs, bar.window);
     }
     let bar_w = area.width as usize;
-    let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
-    let pill_widths = pill_widths(&bar);
+    let prefix_w = bar.prefix.map_or(0, unicode_width::UnicodeWidthStr::width);
+    let pill_widths = pill_widths(bar);
     let (scroll_start, scroll_end, has_left, has_right) =
-        pill_bar_window(&bar, &pill_widths, prefix_w, bar_w);
+        pill_bar_window(bar, &pill_widths, prefix_w, bar_w);
     let window = PillBarWindow {
         start: Some(scroll_start),
     };
@@ -564,7 +563,7 @@ pub(in crate::app) fn render_pill_bar(
                 Style::default().fg(palette::TEXT_METADATA),
             ));
         }
-        x_cursor += prefix_w as u16;
+        x_cursor += u16::try_from(prefix_w).unwrap_or(u16::MAX);
     }
     if has_left {
         let chunk = "\u{2039} ";
@@ -572,10 +571,10 @@ pub(in crate::app) fn render_pill_bar(
             chunk,
             Style::default().fg(palette::PILL_OVERFLOW_FG),
         ));
-        x_cursor += chunk.width() as u16;
+        x_cursor += u16::try_from(chunk.width()).unwrap_or(u16::MAX);
     }
     let (pill_spans, pill_tabs, pill_end_x) =
-        render_visible_pills(&bar, area, scroll_start, scroll_end, x_cursor);
+        render_visible_pills(bar, area, scroll_start, scroll_end, x_cursor);
     spans.extend(pill_spans);
     selector_tabs.extend(pill_tabs);
     x_cursor = pill_end_x;
@@ -585,7 +584,7 @@ pub(in crate::app) fn render_pill_bar(
             chunk,
             Style::default().fg(palette::PILL_OVERFLOW_FG),
         ));
-        x_cursor += chunk.width() as u16;
+        x_cursor += u16::try_from(chunk.width()).unwrap_or(u16::MAX);
     }
 
     // Clear the rest of the row with the canonical row background so the

@@ -89,8 +89,7 @@ impl Model {
                     }
                     PanelFocus::Library => self
                         .library_menu_geometry()
-                        .map(|(panel, _)| panel)
-                        .unwrap_or(layout.left_area),
+                        .map_or(layout.left_area, |(panel, _)| panel),
                     PanelFocus::Queue => self
                         .queue_menu_geometry()
                         .map(|(panel, _)| panel)
@@ -101,7 +100,7 @@ impl Model {
         };
         let pointer = match &anchor {
             ContextMenuAnchor::Pointer { x, y } => Some((*x, *y)),
-            _ => None,
+            ContextMenuAnchor::SelectedItem(_) => None,
         };
         let (x, y) = ContextMenu::place(panel_rect, size, anchor_rect.as_ref(), pointer);
         Rect {
@@ -162,7 +161,7 @@ impl Model {
                     .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
                     .and_then(|menu| menu.action_at(menu.cursor()));
                 self.dismiss_context_menu();
-                let is_bulk = is_bulk_action(&action);
+                let is_bulk = is_bulk_action(action.as_ref());
                 self.app
                     .execute_context_action(action, self.home_context_item.clone());
                 if is_bulk {
@@ -193,7 +192,7 @@ impl Model {
             .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
             .and_then(|menu| menu.action_at(idx));
         self.dismiss_context_menu();
-        let is_bulk = is_bulk_action(&action);
+        let is_bulk = is_bulk_action(action.as_ref());
         self.app
             .execute_context_action(action, self.home_context_item.clone());
         if is_bulk {
@@ -377,8 +376,9 @@ impl Model {
             };
             let client = client.lock().unwrap();
             let all = match kind {
-                MultiSelectKind::HiddenLibraries => client.get_views().unwrap_or_default(),
-                MultiSelectKind::FeedViewLibraries => client.get_views().unwrap_or_default(),
+                MultiSelectKind::HiddenLibraries | MultiSelectKind::FeedViewLibraries => {
+                    client.get_views().unwrap_or_default()
+                }
                 MultiSelectKind::MyLanguages => unreachable!(),
             };
             let config = self.app.config.lock().unwrap();
@@ -427,7 +427,7 @@ impl Model {
         ComponentId::Popup(PopupId::LibraryRoutes)
     }
 
-    pub(in crate::app) fn handle_library_routes_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_library_routes_request(&mut self, request: &ShellRequest) {
         match request {
             ShellRequest::LibraryRoutesEnter => self.handle_library_routes_enter(),
             ShellRequest::LibraryRoutesEsc => self.handle_library_routes_esc(),
@@ -530,7 +530,10 @@ impl Model {
     }
 
     fn library_routes_cursor(&self) -> usize {
-        self.with_library_routes(|c| c.cursor()).unwrap_or(0)
+        self.with_library_routes(
+            crate::app::components::library_routes::LibraryRoutesComponent::cursor,
+        )
+        .unwrap_or(0)
     }
 
     pub(in crate::app) fn enter_device_stage(
@@ -588,8 +591,7 @@ impl Model {
                     .iter()
                     .position(|(_, ep)| ep.as_ref() == Some(&current))
             })
-            .map(|idx| idx + 1)
-            .unwrap_or(0);
+            .map_or(0, |idx| idx + 1);
 
         self.set_library_routes_content(&LibraryRoutePopup {
             stage: LibraryRouteStage::PickDevice {

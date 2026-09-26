@@ -42,8 +42,8 @@ fn painted_music_offset(model: &mut Model) -> usize {
     let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
     {
         let browser = &mut model.test_music_owner_mut().browser;
-        terminal.draw(|frame| browser.view(frame, area)).unwrap();
-    }
+        terminal.draw(|frame| browser.view(frame, area)).unwrap()
+    };
 
     let browser = &model.test_music_owner().browser;
     let selected = browser

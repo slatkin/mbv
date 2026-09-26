@@ -25,30 +25,62 @@ struct MediaPlayer2;
 #[cfg(not(test))]
 #[interface(name = "org.mpris.MediaPlayer2")]
 impl MediaPlayer2 {
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn quit(&self) {}
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn raise(&self) {}
 
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_quit(&self) -> bool {
         false
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_raise(&self) -> bool {
         false
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn has_track_list(&self) -> bool {
         false
     }
     #[zbus(property)]
-    fn identity(&self) -> &str {
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
+    fn identity(&self) -> &'static str {
         "Emby Browser"
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn supported_uri_schemes(&self) -> Vec<String> {
         vec![]
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn supported_mime_types(&self) -> Vec<String> {
         vec![]
     }
@@ -139,6 +171,23 @@ fn resolve_art_url(
 /// it's cloned/called every poll tick without hesitation; kept separate
 /// from `start` so the "what should published state look like" decision is
 /// unit-testable without a real D-Bus connection.
+fn saturating_i64_from_f64(value: f64) -> i64 {
+    const I64_MIN_AS_F64: f64 = -9_223_372_036_854_775_808.0;
+    const I64_MAX_EXCLUSIVE_AS_F64: f64 = 9_223_372_036_854_775_808.0;
+
+    if value.is_nan() {
+        0
+    } else if value >= I64_MAX_EXCLUSIVE_AS_F64 {
+        i64::MAX
+    } else if value <= I64_MIN_AS_F64 {
+        i64::MIN
+    } else {
+        format!("{value:.0}")
+            .parse()
+            .expect("rounded bounded float fits i64")
+    }
+}
+
 fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
     if disconnected {
         s.active = false;
@@ -211,7 +260,7 @@ impl MediaPlayer2Player {
     /// D-Bus marshaling impl.
     fn status_and_sender(&self) -> StatusAndSender {
         let source = self.source.lock().unwrap();
-        (source.status.clone(), source.send.clone())
+        (Arc::clone(&source.status), Arc::clone(&source.send))
     }
 }
 
@@ -249,6 +298,10 @@ impl MediaPlayer2Player {
     }
 
     fn seek(&self, offset_us: i64) {
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
         let secs = offset_us as f64 / 1_000_000.0;
         // Clamp seek to reasonable bounds (avoid seeking hours into the future).
         if secs.abs() > 86400.0 {
@@ -257,6 +310,10 @@ impl MediaPlayer2Player {
         (self.source.lock().unwrap().send)(PlayerCommand::Seek(secs));
     }
 
+    #[expect(
+        clippy::needless_pass_by_value,
+        reason = "zbus interface method signature is fixed by the macro dispatch (approved, issue #804)"
+    )]
     fn set_position(&self, track_id: zvariant::ObjectPath<'_>, position_us: i64) {
         // Per MPRIS spec: ignore if track_id doesn't match current track or position is negative.
         if track_id.as_str() != "/org/mpris/MediaPlayer2/TrackList/Track1" {
@@ -270,12 +327,22 @@ impl MediaPlayer2Player {
         if runtime_us > 0 && position_us > runtime_us {
             return;
         }
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
         (source.send)(PlayerCommand::SeekAbsolute(
             position_us as f64 / 1_000_000.0,
         ));
     }
 
-    fn open_uri(&self, _uri: &str) {}
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
+    fn open_uri(&self, uri: &str) {
+        let _ = uri;
+    }
 
     #[zbus(property)]
     fn playback_status(&self) -> String {
@@ -290,16 +357,28 @@ impl MediaPlayer2Player {
     }
 
     #[zbus(property)]
-    fn loop_status(&self) -> &str {
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
+    fn loop_status(&self) -> &'static str {
         "None"
     }
 
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn rate(&self) -> f64 {
         1.0
     }
 
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn shuffle(&self) -> bool {
         false
     }
@@ -311,12 +390,19 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn volume(&self) -> f64 {
-        self.snapshot.lock().unwrap().volume as f64 / 100.0
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+        )]
+        let volume = self.snapshot.lock().unwrap().volume as f64 / 100.0;
+        volume
     }
 
     #[zbus(property)]
-    async fn set_volume(&self, vol: f64) {
-        (self.source.lock().unwrap().send)(PlayerCommand::SetVolume((vol * 100.0).round() as i64));
+    fn set_volume(&self, vol: f64) {
+        (self.source.lock().unwrap().send)(PlayerCommand::SetVolume(saturating_i64_from_f64(
+            (vol * 100.0).round(),
+        )));
     }
 
     #[zbus(property)]
@@ -325,36 +411,149 @@ impl MediaPlayer2Player {
     }
 
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn minimum_rate(&self) -> f64 {
         1.0
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn maximum_rate(&self) -> f64 {
         1.0
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_go_next(&self) -> bool {
         true
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_go_previous(&self) -> bool {
         true
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_play(&self) -> bool {
         true
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_pause(&self) -> bool {
         true
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_seek(&self) -> bool {
         true
     }
     #[zbus(property)]
+    #[expect(
+        clippy::unused_self,
+        reason = "zbus interface macro mandates the &self receiver; the method carries no per-instance state (approved, issue #804)"
+    )]
     fn can_control(&self) -> bool {
         true
+    }
+}
+
+#[cfg(not(test))]
+async fn poll_status(
+    conn: zbus::Connection,
+    source_poll: MprisHandle,
+    snapshot_poll: Arc<Mutex<PlayerStatus>>,
+) {
+    let mut last_status = String::new();
+    let mut last_metadata_key = (String::new(), String::new(), String::new(), String::new());
+    let mut last_pos_seconds: i64 = -1;
+    let mut last_vol: i64 = -1;
+
+    loop {
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        // Re-read the source every tick so a rebind takes effect immediately.
+        let (status_arc, is_disconnected) = {
+            let src = source_poll.lock().unwrap();
+            let is_disconnected = src
+                .disconnected
+                .as_ref()
+                .is_some_and(|d| d.load(Ordering::SeqCst));
+            (Arc::clone(&src.status), is_disconnected)
+        };
+
+        let (cur_status, cur_metadata_key, cur_pos_us, cur_vol) = {
+            let raw = status_arc.lock().unwrap().clone();
+            let s = effective_status(raw, is_disconnected);
+            let st = match (s.active, s.paused) {
+                (false, _) => "Stopped",
+                (true, true) => "Paused",
+                (true, false) => "Playing",
+            }
+            .to_string();
+            let pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
+            // Include the resolved cache path so artwork appearing mid-track
+            // triggers a metadata change instead of remaining absent.
+            let art_key = resolve_art_url(
+                &s.art_item_id,
+                &s.art_album_id,
+                crate::config::image_disk_cache_path,
+            )
+            .unwrap_or_default();
+            let result = (
+                st,
+                (s.title.clone(), s.artist.clone(), s.album.clone(), art_key),
+                pos_us,
+                s.volume,
+            );
+            *snapshot_poll.lock().unwrap() = s;
+            result
+        };
+
+        let Ok(iface_ref) = conn
+            .object_server()
+            .interface::<_, MediaPlayer2Player>("/org/mpris/MediaPlayer2")
+            .await
+        else {
+            continue;
+        };
+        let ctxt = iface_ref.signal_context();
+        let iface = iface_ref.get().await;
+
+        if cur_status != last_status {
+            last_status = cur_status;
+            let _ = iface.playback_status_changed(ctxt).await;
+        }
+        if cur_metadata_key != last_metadata_key {
+            last_metadata_key = cur_metadata_key;
+            let _ = iface.metadata_changed(ctxt).await;
+        }
+        let current_pos_seconds = cur_pos_us / 1_000_000;
+        if (current_pos_seconds - last_pos_seconds).abs() >= 5 {
+            last_pos_seconds = current_pos_seconds;
+            let _ = iface.position_changed(ctxt).await;
+        }
+        if cur_vol != last_vol {
+            last_vol = cur_vol;
+            let _ = iface.volume_changed(ctxt).await;
+        }
     }
 }
 
@@ -389,8 +588,8 @@ pub fn start(
         send: Arc::new(send),
         disconnected,
     }));
-    let source_poll = source.clone();
-    let snapshot_poll = snapshot.clone();
+    let source_poll = Arc::clone(&source);
+    let snapshot_poll = Arc::clone(&snapshot);
 
     thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread()
@@ -405,8 +604,8 @@ pub fn start(
         };
         rt.block_on(async move {
             let player_iface = MediaPlayer2Player {
-                source: source_poll.clone(),
-                snapshot: snapshot_poll.clone(),
+                source: Arc::clone(&source_poll),
+                snapshot: Arc::clone(&snapshot_poll),
             };
             let conn = match connection::Builder::session()
                 .unwrap()
@@ -426,99 +625,7 @@ pub fn start(
                 }
             };
 
-            let mut last_status = String::new();
-            let mut last_metadata_key =
-                (String::new(), String::new(), String::new(), String::new());
-            let mut last_pos_s: i64 = -1;
-            let mut last_vol: i64 = -1;
-
-            loop {
-                tokio::time::sleep(Duration::from_millis(500)).await;
-
-                // Re-read the current status/disconnect-flag pair from
-                // `source_poll` on every tick (rather than closing over a
-                // fixed `Arc` once, before the loop) so a `rebind` call
-                // takes effect on the very next poll, not just for a
-                // freshly-registered D-Bus service (#175).
-                let (status_arc, is_disconnected) = {
-                    let src = source_poll.lock().unwrap();
-                    let is_disconnected = src
-                        .disconnected
-                        .as_ref()
-                        .is_some_and(|d| d.load(Ordering::SeqCst));
-                    (src.status.clone(), is_disconnected)
-                };
-
-                let (cur_status, cur_metadata_key, cur_pos_us, cur_vol) = {
-                    // Single clone out of the mutex for the whole tick: `s`
-                    // is consumed to build the tuple below and then moved
-                    // (not cloned again) into `snapshot_poll` last.
-                    let raw = status_arc.lock().unwrap().clone();
-                    let s = effective_status(raw, is_disconnected);
-                    let st = match (s.active, s.paused) {
-                        (false, _) => "Stopped",
-                        (true, true) => "Paused",
-                        (true, false) => "Playing",
-                    }
-                    .to_string();
-                    let pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
-                    // Resolve the actual cached-art result (not just the raw
-                    // item/album id) into the change-detection key: if art
-                    // shows up in the cache after this track already started
-                    // publishing metadata (e.g. a library browse populates
-                    // the cache mid-track), the resolved value flips from ""
-                    // to a real path and `metadata_changed` fires, instead of
-                    // silently staying stuck on the id-only key that never
-                    // changes for the rest of the track.
-                    let art_key = resolve_art_url(
-                        &s.art_item_id,
-                        &s.art_album_id,
-                        crate::config::image_disk_cache_path,
-                    )
-                    .unwrap_or_default();
-                    let result = (
-                        st,
-                        (s.title.clone(), s.artist.clone(), s.album.clone(), art_key),
-                        pos_us,
-                        s.volume,
-                    );
-                    *snapshot_poll.lock().unwrap() = s;
-                    result
-                };
-
-                let Ok(iface_ref) = conn
-                    .object_server()
-                    .interface::<_, MediaPlayer2Player>("/org/mpris/MediaPlayer2")
-                    .await
-                else {
-                    continue;
-                };
-
-                let ctxt = iface_ref.signal_context();
-                let iface = iface_ref.get().await;
-
-                if cur_status != last_status {
-                    last_status = cur_status;
-                    let _ = iface.playback_status_changed(ctxt).await;
-                }
-
-                if cur_metadata_key != last_metadata_key {
-                    last_metadata_key = cur_metadata_key;
-                    let _ = iface.metadata_changed(ctxt).await;
-                }
-
-                // Emit position every ~5s.
-                let cur_pos_s = cur_pos_us / 1_000_000;
-                if (cur_pos_s - last_pos_s).abs() >= 5 {
-                    last_pos_s = cur_pos_s;
-                    let _ = iface.position_changed(ctxt).await;
-                }
-
-                if cur_vol != last_vol {
-                    last_vol = cur_vol;
-                    let _ = iface.volume_changed(ctxt).await;
-                }
-            }
+            poll_status(conn, source_poll, snapshot_poll).await;
         });
     });
 
@@ -566,7 +673,20 @@ pub(crate) fn test_handle(
 
 #[cfg(test)]
 pub(crate) fn test_status(handle: &MprisHandle) -> Arc<Mutex<PlayerStatus>> {
-    handle.lock().unwrap().status.clone()
+    Arc::clone(&handle.lock().unwrap().status)
+}
+
+#[cfg(test)]
+mod volume_conversion_tests {
+    use super::saturating_i64_from_f64;
+
+    #[test]
+    fn rounded_values_keep_saturating_integer_cast_semantics() {
+        assert_eq!(saturating_i64_from_f64(1.6_f64.round()), 2);
+        assert_eq!(saturating_i64_from_f64(f64::NAN), 0);
+        assert_eq!(saturating_i64_from_f64(f64::INFINITY), i64::MAX);
+        assert_eq!(saturating_i64_from_f64(f64::NEG_INFINITY), i64::MIN);
+    }
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use super::*;
+use super::{config_path, Config};
 
 pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), String> {
     let mut doc: toml::Value = match std::fs::read_to_string(path) {
@@ -8,9 +8,8 @@ pub(super) fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> R
         }
         Err(e) => return Err(format!("read {}: {e}", path.display())),
     };
-    let table = match doc.as_table_mut() {
-        Some(t) => t,
-        None => return Err(format!("update {}: root is not a table", path.display())),
+    let Some(table) = doc.as_table_mut() else {
+        return Err(format!("update {}: root is not a table", path.display()));
     };
 
     write_server_section(table, cfg);
@@ -46,9 +45,7 @@ fn section<'a>(
 
 fn write_server_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Config) {
     let setup = cfg.emby_setup.as_ref().filter(|s| !s.server_url.is_empty());
-    let server_url = setup
-        .map(|s| s.server_url.as_str())
-        .unwrap_or(&cfg.server_url);
+    let server_url = setup.map_or(cfg.server_url.as_str(), |s| s.server_url.as_str());
     if !server_url.is_empty() {
         let server = section(table, "server");
         server.insert(
@@ -79,7 +76,7 @@ fn write_audiobookshelf_section(table: &mut toml::map::Map<String, toml::Value>,
         );
         section.insert(
             "revision".to_string(),
-            toml::Value::Integer(setup.revision as i64),
+            toml::Value::Integer(i64::try_from(setup.revision).unwrap_or(i64::MAX)),
         );
     } else {
         table.remove("audiobookshelf");
@@ -106,11 +103,11 @@ fn write_session_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &
     );
     session.insert(
         "quit_timeout_secs".to_string(),
-        toml::Value::Integer(cfg.quit_timeout_secs as i64),
+        toml::Value::Integer(i64::try_from(cfg.quit_timeout_secs).unwrap_or(i64::MAX)),
     );
     session.insert(
         "progress_interval_secs".to_string(),
-        toml::Value::Integer(cfg.progress_interval_secs as i64),
+        toml::Value::Integer(i64::try_from(cfg.progress_interval_secs).unwrap_or(i64::MAX)),
     );
 }
 
@@ -237,11 +234,11 @@ fn write_mpv_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Conf
     );
     mpv.insert(
         "video_cache_forward_mb".to_string(),
-        toml::Value::Integer(cfg.video_cache_forward_mb as i64),
+        toml::Value::Integer(i64::from(cfg.video_cache_forward_mb)),
     );
     mpv.insert(
         "video_cache_back_mb".to_string(),
-        toml::Value::Integer(cfg.video_cache_back_mb as i64),
+        toml::Value::Integer(i64::from(cfg.video_cache_back_mb)),
     );
     mpv.insert(
         "no_scripts".to_string(),
@@ -262,7 +259,7 @@ fn write_idle_feed_section(table: &mut toml::map::Map<String, toml::Value>, cfg:
     );
     idle_feed.insert(
         "rotation_interval_secs".to_string(),
-        toml::Value::Integer(cfg.idle_feed_rotation_secs as i64),
+        toml::Value::Integer(i64::try_from(cfg.idle_feed_rotation_secs).unwrap_or(i64::MAX)),
     );
 }
 
@@ -270,7 +267,7 @@ fn write_mbvd_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
     let mbvd = section(table, "mbvd");
     mbvd.insert(
         "broadcast_ms".to_string(),
-        toml::Value::Integer(cfg.daemon_broadcast_ms as i64),
+        toml::Value::Integer(i64::try_from(cfg.daemon_broadcast_ms).unwrap_or(i64::MAX)),
     );
     mbvd.insert(
         "audio_pipe_enabled".to_string(),
@@ -282,17 +279,17 @@ fn write_mbvd_section(table: &mut toml::map::Map<String, toml::Value>, cfg: &Con
     );
     mbvd.insert(
         "audio_pipe_samplerate".to_string(),
-        toml::Value::Integer(cfg.audio_pipe_samplerate as i64),
+        toml::Value::Integer(i64::from(cfg.audio_pipe_samplerate)),
     );
     mbvd.insert(
         "audio_pipe_bitdepth".to_string(),
-        toml::Value::Integer(cfg.audio_pipe_bitdepth as i64),
+        toml::Value::Integer(i64::from(cfg.audio_pipe_bitdepth)),
     );
     match cfg.audio_pipe_playout_delay_ms {
         Some(delay_ms) => {
             mbvd.insert(
                 "audio_pipe_playout_delay_ms".to_string(),
-                toml::Value::Integer(delay_ms as i64),
+                toml::Value::Integer(i64::try_from(delay_ms).unwrap_or(i64::MAX)),
             );
         }
         None => {

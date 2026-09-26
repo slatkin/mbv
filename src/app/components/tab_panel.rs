@@ -114,7 +114,7 @@ impl Component for TabPanel {
             &mut self.hits,
         );
     }
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
@@ -127,8 +127,8 @@ impl Component for TabPanel {
 }
 
 impl AppComponent<Msg, UserEvent> for TabPanel {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
             // Resolve only geometry this panel painted; clicks elsewhere
             // (including the overflow arrows, which have never been
             // clickable) are no-ops.

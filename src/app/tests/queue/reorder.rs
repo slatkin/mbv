@@ -218,7 +218,7 @@ fn queue_move_preserves_observed_playback_until_owner_observes_change() {
         status.active = true;
         status.current_idx = 2;
         status.queue_len = 5;
-    }
+    };
 
     assert!(app.apply_queue_move(QueueScope::Local, 1, 2));
     assert_eq!(app.effective_playback_state().active_idx, Some(2));
@@ -238,7 +238,7 @@ fn playback_state_reads_observed_status_without_projection() {
         status.queue_len = 5;
         status.position_ticks = 18_000_000_000;
         status.runtime_ticks = 24_000_000_000;
-    }
+    };
     let playback = app.effective_playback_state();
     assert_eq!(playback.active_idx, Some(2));
     assert_eq!(playback.position_ticks, 18_000_000_000);
@@ -258,10 +258,10 @@ fn queue_play_cursor_keeps_observed_progress_until_player_ack() {
         status.queue_len = 5;
         status.position_ticks = 18_000_000_000;
         status.runtime_ticks = 24_000_000_000;
-    }
+    };
     app.panel_focus = crate::app::state::types::settings::PanelFocus::Queue;
     app.player_tab.queue_cursor = 2;
-    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(2));
+    app.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(2));
     let observed = app.effective_playback_state();
     assert_eq!(observed.active_idx, Some(0));
     assert_eq!(observed.position_ticks, 18_000_000_000);
@@ -279,8 +279,8 @@ fn rejected_remote_queue_selection_keeps_observed_playhead() {
         status.queue_len = 3;
         status.position_ticks = 18_000_000_000;
         status.runtime_ticks = 24_000_000_000;
-    }
-    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(2));
+    };
+    app.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(2));
     let playback = app.effective_playback_state();
     assert_eq!(playback.active_idx, Some(0));
     assert_eq!(playback.position_ticks, 18_000_000_000);
@@ -482,7 +482,7 @@ fn moving_now_playing_item_keeps_cursor_on_it() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 1;
-    }
+    };
 
     app.move_queue_item_down(app.player_tab.queue_cursor);
 

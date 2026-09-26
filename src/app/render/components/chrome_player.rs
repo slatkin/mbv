@@ -1,3 +1,4 @@
+use crate::app::components::library_playback_panel::TransportAvailability;
 use crate::app::palette;
 use crate::app::render::arrangements::playback_transport::transport_rows;
 use mbv_core::playback_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
@@ -14,29 +15,35 @@ use title::{marquee_spans, render_queue_title_rows};
 
 #[derive(Clone, Default)]
 pub(in crate::app) struct PlaybackStripAreas {
-    pub(in crate::app) seekbar_area: Rect,
-    pub(in crate::app) play_pause_area: Rect,
-    pub(in crate::app) stop_area: Rect,
-    pub(in crate::app) next_area: Rect,
-    pub(in crate::app) prev_area: Rect,
+    pub(in crate::app) seekbar: Rect,
+    pub(in crate::app) play_pause: Rect,
+    pub(in crate::app) stop: Rect,
+    pub(in crate::app) next: Rect,
+    pub(in crate::app) prev: Rect,
+}
+
+pub(in crate::app) struct PlaybackControls {
+    pub(in crate::app) show: bool,
+    pub(in crate::app) use_nerd_fonts: bool,
+    /// The transport-availability bundle shared with the playback
+    /// projection (branch D10): the painter and the panels' hit-testing read
+    /// the same three bits, never duplicate fields.
+    pub(in crate::app) availability: TransportAvailability,
+    pub(in crate::app) panel_focused: bool,
+    pub(in crate::app) progress: (i64, i64, bool),
+    pub(in crate::app) idle_feed_title: Option<(String, bool)>,
 }
 
 pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) area: Rect,
     pub(in crate::app) playback: &'a mut PlaybackStripAreas,
     pub(in crate::app) player_h: u16,
-    pub(in crate::app) show_controls: bool,
+    pub(in crate::app) controls: PlaybackControls,
     pub(in crate::app) now_playing_title: Option<(String, Color)>,
     /// The panel surface this playback chrome sits on plus the site's own
     /// focus bit; the painter resolves the fill through the surface table
     /// (`surface_colors`) instead of carrying a bare colour.
     pub(in crate::app) panel: palette::Surface,
-    pub(in crate::app) panel_focused: bool,
-    pub(in crate::app) progress: (i64, i64, bool),
-    pub(in crate::app) use_nerd_fonts: bool,
-    pub(in crate::app) stop_available: bool,
-    pub(in crate::app) next_available: bool,
-    pub(in crate::app) prev_available: bool,
     pub(in crate::app) status_indicators: Option<Vec<Span<'static>>>,
     /// The typed now-playing title parts with their closed roles (D6); the
     /// painter resolves a role to a colour, never the producer. `None` when
@@ -44,7 +51,6 @@ pub(in crate::app) struct PlaybackRenderContext<'a> {
     /// receiver or remote Session) — the plain `now_playing_title` carries
     /// that case.
     pub(in crate::app) title_parts: Option<PlaybackTitleParts>,
-    pub(in crate::app) idle_feed_title: Option<(String, bool)>,
     pub(in crate::app) marquee_text: &'a mut String,
     pub(in crate::app) marquee_started_at: &'a mut std::time::Instant,
 }
@@ -62,7 +68,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
     // queue column's transport band (`QueueOnlyPlaybackPanel`) or the
     // right-column strip's own fill (`PlaybackPanel`), whose recess rects
     // share the value through this context.
-    let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
+    let panel_bg = palette::surface_colors(ctx.panel, ctx.controls.panel_focused).fill;
     // The queue column splits its title band (controls + pills on the
     // band's bottom row, title content above); the Library strip keeps the
     // single title row. Derived from the context's panel surface so neither
@@ -70,11 +76,17 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
     let split = split_title_rows(ctx.panel);
     let mut indicator_painted = false;
     match rows.seekbar {
-        Some(seek_area) if ctx.show_controls => {
-            render_seekbar(frame, seek_area, ctx.playback, ctx.progress, panel_bg);
+        Some(seek_area) if ctx.controls.show => {
+            render_seekbar(
+                frame,
+                seek_area,
+                ctx.playback,
+                ctx.controls.progress,
+                panel_bg,
+            );
         }
         Some(seek_area) => {
-            ctx.playback.seekbar_area = Rect::default();
+            ctx.playback.seekbar = Rect::default();
             let bar = "\u{2594}".repeat(seek_area.width as usize);
             frame.render_widget(
                 Paragraph::new(Span::styled(
@@ -86,7 +98,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             );
         }
         None => {
-            ctx.playback.seekbar_area = Rect::default();
+            ctx.playback.seekbar = Rect::default();
         }
     }
 
@@ -124,8 +136,8 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             } else {
                 render_title_row(frame, title_area, title.as_str(), color, &mut ctx);
             }
-        } else if !ctx.show_controls {
-            if let Some((title, _has_link)) = ctx.idle_feed_title.clone() {
+        } else if !ctx.controls.show {
+            if let Some((title, _has_link)) = ctx.controls.idle_feed_title.clone() {
                 let spans = marquee_spans(
                     &mut ctx,
                     &[(title, palette::ACCENT)],
@@ -161,16 +173,26 @@ fn render_seekbar(
     panel_bg: Color,
 ) {
     if area.height == 0 || area.width == 0 {
-        playback.seekbar_area = Rect::default();
+        playback.seekbar = Rect::default();
         return;
     }
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     let ratio = if runtime > 0 {
         (position as f64 / runtime as f64).clamp(0.0, 1.0)
     } else {
         0.0
     };
-    playback.seekbar_area = area;
+    playback.seekbar = area;
     let width = area.width as usize;
+    #[expect(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "seek fraction through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     let filled = ((ratio * width as f64).round() as usize).min(width);
     frame.render_widget(
         Paragraph::new(Line::from(vec![

@@ -54,7 +54,7 @@ fn configured_rebind_fires_through_tick() {
     );
     harness
         .model_mut()
-        .dispatch_router_command(crate::app::dispatch::action::Command::OpenHelp);
+        .dispatch_router_command(&crate::app::dispatch::action::Command::OpenHelp);
     assert!(
         harness
             .model()

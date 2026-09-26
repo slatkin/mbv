@@ -5,38 +5,94 @@
 //! precedence belongs to the router, not to distributed component mirrors.
 
 use super::resolver::KeyChord;
-use crate::app::dispatch::action::{idle_feed_command_for_key, Command, VOLUME_STEP};
+use crate::app::dispatch::action::{
+    idle_feed_command_for_key, Command, IdleFeedLinkContext, VOLUME_STEP,
+};
 use crate::app::state::types::settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::keybinds::{action_by_id, Keybinds};
 
-/// Plain-data state read by the central keyboard policy.
+/// Which attached playback target currently owns remote-control shortcuts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(in crate::app) struct RouterSnapshot {
+pub(in crate::app) enum RemotePlaybackTarget {
+    #[default]
+    None,
+    Session,
+    DirectRemote,
+    Cast,
+}
+
+/// Playback facts read by the central keyboard policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::app) struct RouterPlaybackState {
     pub player_active: bool,
-    pub has_remote_session: bool,
-    pub connected_session_id_present: bool,
+    pub remote_target: RemotePlaybackTarget,
     pub queue_only_idle: bool,
-    pub panel_mode: PanelMode,
-    pub panel_focus: PanelFocus,
-    pub blocking_overlay_open: bool,
-    pub help_overlay_open: bool,
-    /// Whether the (non-blocking) Sessions sidebar is mounted. When open, Esc
-    /// closes it and takes precedence over the Escape playback stop,
-    /// matching the legacy context stack (Sessions before Playback).
-    pub sessions_sidebar_open: bool,
-    pub context_menu_open: bool,
     pub idle_feed_link_available: bool,
+}
+
+/// The overlay-focus situation read by the central keyboard policy.
+///
+/// The policy only ever distinguishes four reachable situations. `blocking`
+/// implies `holds_focus` (the blocking set is a subset of the focus-holding
+/// set) and the context menu is itself a blocking overlay, so the three facts
+/// are not independent and are carried as one ordered enum instead of three
+/// settable bools. `help`/`sessions_sidebar`/`text_entry_focused` stay
+/// independent and live on `RouterOverlayState`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::app) enum OverlayFocus {
+    /// No overlay holds TuiRealm focus; the panels own the keyboard.
+    #[default]
+    Free,
+    /// A non-blocking overlay (Help, a sidebar) holds focus.
+    NonBlocking,
+    /// A blocking overlay other than the context menu holds focus.
+    Blocking,
+    /// The context menu is open (it is a blocking overlay the policy names
+    /// explicitly, so the `ClearQueuePrompt` gate can read it directly).
+    ContextMenu,
+}
+
+impl OverlayFocus {
+    /// Whether a blocking overlay is mounted.
+    pub(in crate::app) fn blocking(self) -> bool {
+        matches!(self, Self::Blocking | Self::ContextMenu)
+    }
+
+    /// Whether any overlay/sidebar/modal holds TuiRealm focus.
+    pub(in crate::app) fn holds_focus(self) -> bool {
+        !matches!(self, Self::Free)
+    }
+
+    /// Whether the context menu is open.
+    pub(in crate::app) fn context_menu(self) -> bool {
+        matches!(self, Self::ContextMenu)
+    }
+}
+
+/// Overlay facts read by the central keyboard policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::app) struct RouterOverlayState {
+    /// Which overlay-focus situation the keyboard sees.
+    pub focus: OverlayFocus,
+    /// Whether the (non-blocking) Help overlay is mounted.
+    pub help: bool,
+    /// Whether the (non-blocking) Sessions sidebar is mounted. When open, Esc
+    /// closes it and takes precedence over the Escape playback stop.
+    pub sessions_sidebar: bool,
     /// Whether the focused leaf is a text-entry component (the search sidebar,
     /// inline library search, or the settings form's text inputs). Global
     /// bindings do not fire while a text entry owns focus.
     pub text_entry_focused: bool,
-    /// Whether any overlay/sidebar/modal holds TuiRealm focus (the shell's
-    /// `overlay_holds_focus()` set). While one does, panel-focus switching is
-    /// gated off: the sidebar owns the keyboard, so plain arrows must reach
-    /// it (e.g. the Playlists sidebar's collapse/open) instead of moving
-    /// panel focus behind it.
-    pub overlay_holds_focus: bool,
+}
+
+/// Plain-data state read by the central keyboard policy.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::app) struct RouterSnapshot {
+    pub playback: RouterPlaybackState,
+    pub overlays: RouterOverlayState,
+    pub panel_mode: PanelMode,
+    pub panel_focus: PanelFocus,
     /// Whether prefix mode is armed (change `add-configurable-keybinds`,
     /// design D6, task 6.1): the mirror of the App-owned bit. While true, the
     /// next chord resolves against the prefix namespace only; arming is
@@ -154,20 +210,20 @@ pub(in crate::app) enum KeyPolicyGate {
 impl KeyPolicyGate {
     pub(in crate::app) fn allows(self, chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
         match self {
-            Self::NoBlockingOverlay => !snapshot.blocking_overlay_open,
+            Self::NoBlockingOverlay => !snapshot.overlays.focus.blocking(),
             Self::NoBlockingOverlayAndHelpClosed => {
-                !snapshot.blocking_overlay_open && !snapshot.help_overlay_open
+                !snapshot.overlays.focus.blocking() && !snapshot.overlays.help
             }
             Self::PanelFocusQueue => panel_focus_queue_allowed(snapshot),
             Self::PanelFocusLibraryBoth => panel_focus_library_both_allowed(snapshot),
             Self::QueueColumnWidth => snapshot.panel_mode == PanelMode::Both,
             Self::ClearQueuePrompt => {
-                !snapshot.blocking_overlay_open && !snapshot.context_menu_open
+                !snapshot.overlays.focus.blocking() && !snapshot.overlays.focus.context_menu()
             }
-            Self::SessionsSidebarOpen => snapshot.sessions_sidebar_open,
+            Self::SessionsSidebarOpen => snapshot.overlays.sessions_sidebar,
             Self::Playback => playback_allowed(snapshot),
             Self::PlaybackUngated | Self::PrefixArming => {
-                !snapshot.blocking_overlay_open && !snapshot.text_entry_focused
+                !snapshot.overlays.focus.blocking() && !snapshot.overlays.text_entry_focused
             }
             Self::IdleFeedLink => idle_feed_link_allowed(chord, snapshot),
         }
@@ -175,14 +231,14 @@ impl KeyPolicyGate {
 }
 
 fn panel_focus_queue_allowed(snapshot: &RouterSnapshot) -> bool {
-    !snapshot.blocking_overlay_open
-        && !snapshot.overlay_holds_focus
+    !snapshot.overlays.focus.blocking()
+        && !snapshot.overlays.focus.holds_focus()
         && snapshot.panel_focus == PanelFocus::Queue
 }
 
 fn panel_focus_library_both_allowed(snapshot: &RouterSnapshot) -> bool {
-    !snapshot.blocking_overlay_open
-        && !snapshot.overlay_holds_focus
+    !snapshot.overlays.focus.blocking()
+        && !snapshot.overlays.focus.holds_focus()
         && snapshot.panel_focus == PanelFocus::Library
         && snapshot.panel_mode == PanelMode::Both
 }
@@ -190,20 +246,24 @@ fn panel_focus_library_both_allowed(snapshot: &RouterSnapshot) -> bool {
 fn playback_allowed(snapshot: &RouterSnapshot) -> bool {
     // Playback shortcuts are single letters (space, a, …); a focused text
     // entry must keep them as typed characters.
-    !snapshot.blocking_overlay_open
-        && !snapshot.text_entry_focused
-        && (snapshot.player_active || snapshot.has_remote_session)
+    !snapshot.overlays.focus.blocking()
+        && !snapshot.overlays.text_entry_focused
+        && (snapshot.playback.player_active
+            || snapshot.playback.remote_target != RemotePlaybackTarget::None)
 }
 
 fn idle_feed_link_allowed(chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
-    !snapshot.blocking_overlay_open
-        && !snapshot.text_entry_focused
+    !snapshot.overlays.focus.blocking()
+        && !snapshot.overlays.text_entry_focused
         && idle_feed_command_for_key(
             chord,
-            snapshot.player_active,
-            snapshot.connected_session_id_present,
-            snapshot.queue_only_idle,
-            snapshot.idle_feed_link_available,
+            &IdleFeedLinkContext {
+                player_active: snapshot.playback.player_active,
+                has_connected_session: snapshot.playback.remote_target
+                    == RemotePlaybackTarget::Session,
+                playback_panel_present_idle: snapshot.playback.queue_only_idle,
+                link_available: snapshot.playback.idle_feed_link_available,
+            },
         )
         .is_some()
 }

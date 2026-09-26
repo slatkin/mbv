@@ -110,14 +110,20 @@ pub(crate) fn idle_snapshot() -> RouterSnapshot {
 
 pub(crate) fn active_snapshot() -> RouterSnapshot {
     RouterSnapshot {
-        player_active: true,
+        playback: crate::app::input::RouterPlaybackState {
+            player_active: true,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     }
 }
 
 pub(crate) fn text_entry_snapshot() -> RouterSnapshot {
     RouterSnapshot {
-        text_entry_focused: true,
+        overlays: crate::app::input::RouterOverlayState {
+            text_entry_focused: true,
+            ..Default::default()
+        },
         ..RouterSnapshot::default()
     }
 }

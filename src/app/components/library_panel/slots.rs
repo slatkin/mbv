@@ -41,7 +41,7 @@ pub(in crate::app) fn paint_pill_bar_row(
     let (tabs, painted_window) = render_pill_bar(
         f,
         area,
-        PillBar {
+        &PillBar {
             labels,
             markers,
             ids: &ids,

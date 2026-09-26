@@ -49,7 +49,7 @@ fn split(harness: &TickHarness) -> (Rect, u16, u16) {
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_split())
+        .and_then(LibraryPanel::test_split)
         .map(|(gap, origin, width, _)| (gap, origin, width))
         .expect("LibraryPanel paints the Wide split")
 }
@@ -231,14 +231,16 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
         serde_json::from_slice::<serde_json::Value>(&after_release).expect("parse saved prefs")
             ["list_pane_width"]
             .as_u64(),
-        Some(expected as u64),
+        Some(u64::from(expected)),
         "release persists the final resolved width"
     );
 
-    // A second gesture with no motion must not rewrite the already-persisted
-    // split or emit a persistence request.
-    draw(&mut harness);
-    let (gap, _, _) = split(&harness);
+    assert_click_without_drag_does_not_persist(&mut harness);
+}
+
+fn assert_click_without_drag_does_not_persist(harness: &mut TickHarness) {
+    draw(harness);
+    let (gap, _, _) = split(harness);
     let before_click = std::fs::read(crate::config::prefs_path()).expect("read saved prefs");
     harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
     assert!(!harness
@@ -252,7 +254,7 @@ fn split_drag_is_live_only_and_persists_once_on_release() {
         .raw_messages
         .iter()
         .any(|message| matches!(message, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::ResizeListPaneEnd(_)))));
-    apply(&mut harness, outcome);
+    apply(harness, outcome);
     assert_eq!(
         std::fs::read(crate::config::prefs_path()).expect("read click prefs"),
         before_click,
@@ -275,7 +277,7 @@ fn split_drag_ignores_the_selector_band() {
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(LibraryPanel::test_wide_geometry)
         .map(|geometry| geometry.hero.y)
         .expect("the Wide skeleton paints a content band below the Selector band");
     assert_eq!(gap.y, band_bottom);

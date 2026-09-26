@@ -129,7 +129,7 @@ impl HelpComponent {
         self.scroll
     }
 
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -148,9 +148,14 @@ impl HelpComponent {
             }
             MouseGesture::Scroll { delta, .. } => {
                 let geometry = self.content_geometry.as_ref()?;
+                let delta = i16::try_from(delta).unwrap_or(if delta.is_negative() {
+                    i16::MIN
+                } else {
+                    i16::MAX
+                });
                 self.scroll = self
                     .scroll
-                    .saturating_add_signed(delta as i16)
+                    .saturating_add_signed(delta)
                     .min(geometry.max_scroll);
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
@@ -166,11 +171,11 @@ impl Default for HelpComponent {
 }
 
 impl Component for HelpComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, _area: Rect) {
         // Use the panel area set by the shell (via `set_panel_area`), not
         // the `area` parameter from TuiRealm (which is the full terminal).
         let geometry = render_help_panel(
-            f,
+            frame,
             self.panel_area,
             &mut self.scroll,
             self.destination,
@@ -180,7 +185,7 @@ impl Component for HelpComponent {
         self.content_geometry = Some(geometry);
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -209,7 +214,7 @@ impl AppComponent<Msg, UserEvent> for HelpComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }
@@ -292,14 +297,14 @@ mod tests {
             panel_area: Rect::default(),
         });
         comp.scroll = 5;
-        comp.handle_mouse(&MouseEvent {
+        comp.handle_mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 1,
             row: 1,
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(comp.scroll, 6);
-        comp.handle_mouse(&MouseEvent {
+        comp.handle_mouse(MouseEvent {
             kind: MouseEventKind::ScrollUp,
             column: 1,
             row: 1,
@@ -310,7 +315,7 @@ mod tests {
             "throttle coalesces back-to-back wheel input"
         );
         comp.mouse_gestures.reset_for_test();
-        comp.handle_mouse(&MouseEvent {
+        comp.handle_mouse(MouseEvent {
             kind: MouseEventKind::ScrollUp,
             column: 1,
             row: 1,
@@ -327,7 +332,7 @@ mod tests {
             max_scroll: 6,
             panel_area: Rect::default(),
         });
-        comp.handle_mouse(&MouseEvent {
+        comp.handle_mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 0,
             row: 0,
@@ -347,12 +352,12 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         };
         assert_eq!(
-            comp.handle_mouse(&down),
+            comp.handle_mouse(down),
             Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
         );
         // The second down is recognized as a double click and dismisses too.
         assert_eq!(
-            comp.handle_mouse(&down),
+            comp.handle_mouse(down),
             Some(Msg::Shell(Box::new(ShellRequest::DismissHelp)))
         );
     }
@@ -361,7 +366,7 @@ mod tests {
     fn mouse_click_outside_panel_dismisses() {
         let mut comp = HelpComponent::new();
         comp.painted_panel_area = Some(Rect::new(0, 0, 40, 20));
-        let msg = comp.handle_mouse(&MouseEvent {
+        let msg = comp.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 50,
             row: 10,
@@ -374,7 +379,7 @@ mod tests {
     fn mouse_click_inside_panel_is_swallowed() {
         let mut comp = HelpComponent::new();
         comp.painted_panel_area = Some(Rect::new(0, 0, 40, 20));
-        let msg = comp.handle_mouse(&MouseEvent {
+        let msg = comp.handle_mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
             row: 10,
@@ -391,7 +396,7 @@ mod tests {
             .draw(|frame| comp.view(frame, frame.area()))
             .unwrap();
         assert_eq!(
-            comp.handle_mouse(&MouseEvent {
+            comp.handle_mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
                 column: 10,
                 row: 10,

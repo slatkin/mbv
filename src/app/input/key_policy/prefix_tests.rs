@@ -86,7 +86,7 @@ mod prefix_mode {
     fn arming_is_suppressed_while_a_text_entry_owns_focus() {
         let keybinds = prefix_keybinds(&[]);
         let mut typing = snapshot();
-        typing.text_entry_focused = true;
+        typing.overlays.text_entry_focused = true;
         assert_eq!(
             resolve(
                 crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
@@ -102,7 +102,7 @@ mod prefix_mode {
     fn arming_is_suppressed_under_a_blocking_overlay() {
         let keybinds = prefix_keybinds(&[]);
         let mut blocked = snapshot();
-        blocked.blocking_overlay_open = true;
+        blocked.overlays.focus = OverlayFocus::Blocking;
         assert_eq!(
             resolve(
                 crossterm::event::KeyEvent::new(KeyCode::Char('b'), KeyModifiers::CONTROL),
@@ -157,7 +157,7 @@ mod prefix_mode {
             RouterOutcome::PrefixSwallow
         );
         let mut active = armed_snapshot();
-        active.player_active = true;
+        active.playback.player_active = true;
         assert_eq!(
             resolve(
                 crossterm::event::KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE),
@@ -177,7 +177,7 @@ mod prefix_mode {
         // mapping fires when the link conditions hold (R6 fix).
         let keybinds = prefix_keybinds(&[("open_idle_feed_link", "f")]);
         let mut link = armed_snapshot();
-        link.idle_feed_link_available = true;
+        link.playback.idle_feed_link_available = true;
         assert_eq!(
             resolve(
                 crossterm::event::KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
@@ -218,7 +218,7 @@ mod prefix_mode {
         // prefix-addressable (design D1): Esc swallows and disarms.
         let keybinds = prefix_keybinds(&[]);
         let mut armed = armed_snapshot();
-        armed.player_active = true;
+        armed.playback.player_active = true;
         assert_eq!(
             resolve(
                 crossterm::event::KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),

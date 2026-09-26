@@ -356,13 +356,7 @@ impl App {
             let exposed_seasons = self.libs[lib_idx]
                 .nav_stack
                 .last()
-                .map(|l| {
-                    l.items
-                        .first()
-                        .map(|i| i.item_type == "Season")
-                        .unwrap_or(false)
-                })
-                .unwrap_or(false);
+                .is_some_and(|l| l.items.first().is_some_and(|i| i.item_type == "Season"));
             if exposed_seasons && self.libs[lib_idx].nav_stack.len() > 1 {
                 let child_id2 = self.libs[lib_idx]
                     .nav_stack

@@ -39,36 +39,45 @@ impl std::str::FromStr for IndicatorStyle {
     }
 }
 
+/// Compact booleans for resolved indicator semantics.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independent resolved indicator facts (resolution, audio-language dimming, audio-only, subtitle state) driving four separate render decisions, sourced from two different backends (design analysis, issue #804)"
+)]
+#[derive(Clone, Copy)]
+pub struct IndicatorFlags {
+    pub res_dim: bool,
+    pub audio_dim: bool,
+    pub audio_only: bool,
+    pub sub_on: bool,
+}
+
 /// Already-resolved indicator values for the currently playing item.
 pub struct IndicatorData {
     pub res_label: String,
-    pub res_dim: bool,
     pub audio_label: String,
-    pub audio_dim: bool,
-    pub audio_only: bool,
     /// Display label for subtitles: the lang/CC abbreviation when on, "CC" when off.
     pub sub_label: String,
-    /// Whether a subtitle track is actually selected; drives `sub_color`.
-    pub sub_on: bool,
+    pub flags: IndicatorFlags,
 }
 
 impl IndicatorData {
     fn res_color(&self) -> Color {
-        if self.res_dim {
+        if self.flags.res_dim {
             palette::TEXT_MUTED
         } else {
             palette::INDICATOR_RESOLUTION_FG
         }
     }
     fn audio_color(&self) -> Color {
-        if self.audio_dim {
+        if self.flags.audio_dim {
             palette::TEXT_MUTED
         } else {
             palette::INDICATOR_AUDIO_FG
         }
     }
     fn sub_color(&self) -> Color {
-        if self.sub_on {
+        if self.flags.sub_on {
             palette::TEXT_METADATA
         } else {
             palette::TEXT_MUTED
@@ -135,11 +144,11 @@ fn chip(label: &str, bg: Color) -> Span<'static> {
 
 fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = vec![chip(&d.res_label, d.res_color())];
-    if !d.audio_only {
+    if !d.flags.audio_only {
         out.push(Span::raw(" "));
         out.push(chip(&d.audio_label, d.audio_color()));
         out.push(Span::raw(" "));
-        if d.sub_on {
+        if d.flags.sub_on {
             out.push(chip(&d.sub_label, d.sub_color()));
         } else {
             // Off: hollow/dim — no fill, dim text.
@@ -163,7 +172,7 @@ fn bracket_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
 fn brackets(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
     bracket_group(&d.res_label, d.res_color(), &mut out);
-    if !d.audio_only {
+    if !d.flags.audio_only {
         out.push(Span::raw(" "));
         bracket_group(&d.audio_label, d.audio_color(), &mut out);
         out.push(Span::raw(" "));
@@ -183,7 +192,7 @@ fn outlined_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
 fn outlined(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
     outlined_group(&d.res_label, d.res_color(), &mut out);
-    if !d.audio_only {
+    if !d.flags.audio_only {
         out.push(Span::raw(" "));
         outlined_group(&d.audio_label, d.audio_color(), &mut out);
         out.push(Span::raw(" "));
@@ -204,11 +213,15 @@ fn dot_group(dot: &str, color: Color, label: &str, out: &mut Vec<Span<'static>>)
 fn dots(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
     dot_group("\u{25CF}", d.res_color(), &d.res_label, &mut out);
-    if !d.audio_only {
+    if !d.flags.audio_only {
         out.push(Span::raw("  "));
         dot_group("\u{25CF}", d.audio_color(), &d.audio_label, &mut out);
         out.push(Span::raw("  "));
-        let dot = if d.sub_on { "\u{25CF}" } else { "\u{25CB}" };
+        let dot = if d.flags.sub_on {
+            "\u{25CF}"
+        } else {
+            "\u{25CB}"
+        };
         dot_group(dot, d.sub_color(), &d.sub_label, &mut out);
     }
     out
@@ -221,7 +234,7 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
         d.res_label.clone(),
         Style::default().fg(d.res_color()),
     )];
-    if !d.audio_only {
+    if !d.flags.audio_only {
         out.push(sep());
         out.push(Span::styled(
             d.audio_label.clone(),
@@ -244,7 +257,7 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
     // res_label already reads as a resolution (FHD/HD/SD/QHD/4K) — no suffix.
     out.push(Span::styled(d.res_label.clone(), bold(d.res_color())));
-    if !d.audio_only {
+    if !d.flags.audio_only {
         out.push(Span::styled(
             " ⧸ ",
             Style::default().fg(palette::TEXT_MUTED),
@@ -262,7 +275,7 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
 // --- Powerline segments (needs a patched font) ---------------------------
 fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut segs: Vec<(String, Color)> = vec![(d.res_label.clone(), d.res_color())];
-    if !d.audio_only {
+    if !d.flags.audio_only {
         segs.push((d.audio_label.clone(), d.audio_color()));
         segs.push((d.sub_label.clone(), d.sub_color()));
     }

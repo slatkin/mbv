@@ -167,8 +167,10 @@ impl App {
                         self.libs[lib_idx].library.name.clone(),
                     );
                 }
-                Some(mbv_core::config::TvContentMode::All)
-                | Some(mbv_core::config::TvContentMode::Range(_))
+                Some(
+                    mbv_core::config::TvContentMode::All
+                    | mbv_core::config::TvContentMode::Range(_),
+                )
                 | None => self.spawn_refresh(
                     lib_idx,
                     parent_id,
@@ -402,10 +404,8 @@ mod tv_latest_tests {
                 .recv()
                 .expect("selected TV refresh must complete")
             {
-                event @ LibEvent::Loaded { .. } | event @ LibEvent::Refreshed { .. } => {
-                    break event
-                }
-                _ => continue,
+                event @ (LibEvent::Loaded { .. } | LibEvent::Refreshed { .. }) => break event,
+                _ => {}
             }
         };
         match event {

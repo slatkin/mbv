@@ -265,13 +265,18 @@ impl PlaylistsComponent {
     }
 
     fn move_page(&mut self, direction: i64) {
-        let page = self.geometry.panel_area.height.saturating_sub(4) as i64;
+        let page = i64::from(self.geometry.panel_area.height.saturating_sub(4));
         if self.open.is_some() {
-            let last = self.open_items.len().saturating_sub(1) as i64;
-            self.open_cursor = (self.open_cursor as i64 + direction * page).clamp(0, last) as usize;
+            let last = i64::try_from(self.open_items.len().saturating_sub(1)).unwrap_or(i64::MAX);
+            let cursor = i64::try_from(self.open_cursor).unwrap_or(i64::MAX);
+            self.open_cursor =
+                usize::try_from(cursor.saturating_add(direction * page).clamp(0, last))
+                    .expect("clamped cursor is non-negative");
         } else {
-            let last = self.playlists.len().saturating_sub(1) as i64;
-            self.cursor = (self.cursor as i64 + direction * page).clamp(0, last) as usize;
+            let last = i64::try_from(self.playlists.len().saturating_sub(1)).unwrap_or(i64::MAX);
+            let cursor = i64::try_from(self.cursor).unwrap_or(i64::MAX);
+            self.cursor = usize::try_from(cursor.saturating_add(direction * page).clamp(0, last))
+                .expect("clamped cursor is non-negative");
         }
     }
 
@@ -293,7 +298,7 @@ impl PlaylistsComponent {
         self.mouse_gestures.reset_for_test();
     }
 
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -376,7 +381,7 @@ impl Component for PlaylistsComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _attr: Attribute, _value: AttrValue) {}
@@ -389,8 +394,8 @@ impl Component for PlaylistsComponent {
 }
 
 impl AppComponent<Msg, UserEvent> for PlaylistsComponent {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
             Event::Keyboard(key) => match self.handle_key(key) {
                 Some(message) => LeafKeyResult::Consumed(Some(Box::new(message))).into_option(),
                 None if matches!(
@@ -413,7 +418,7 @@ impl AppComponent<Msg, UserEvent> for PlaylistsComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             _ => None,
         }
     }

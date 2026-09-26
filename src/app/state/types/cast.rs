@@ -309,7 +309,7 @@ impl CastTransport for FakeCastTransport {
 pub(in crate::app) fn spawn_fake_cast_worker(
     transport: FakeCastTransport,
 ) -> (Sender<CastJob>, Arc<std::sync::Mutex<Vec<String>>>) {
-    let calls = transport.calls.clone();
+    let calls = std::sync::Arc::clone(&transport.calls);
     let tx = spawn_cast_worker(move || Ok(transport)).expect("fake transport build never fails");
     (tx, calls)
 }

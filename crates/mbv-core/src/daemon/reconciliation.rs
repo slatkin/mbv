@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    broadcast_queue_state, AudiobookshelfOwnerContext, DaemonEvent, DaemonOwnerContext,
+    DaemonPlayerOwner, EmbyOwnerContext,
+};
 use crate::config::{EmbySetup, QueueSource};
 use crate::ctrl::ServiceSetupRejection;
 use crate::playback_execution_sequence::ExecSlot;
@@ -90,8 +93,10 @@ pub(super) fn reconcile_packaged_emby(
             },
         ..
     } = &mut *ctx.owner;
-    let owner_config =
-        crate::config::load_config().map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
+    let owner_config = crate::config::load_config().map_err(|error| {
+        log::warn!(target: "daemon", "failed to load owner config during reconciliation: {error}");
+        ServiceSetupRejection::StorageUnavailable
+    })?;
     let setup = owner_config
         .emby_setup
         .as_ref()
@@ -99,8 +104,10 @@ pub(super) fn reconcile_packaged_emby(
     if setup.revision != requested_revision {
         return Err(ServiceSetupRejection::RevisionMismatch);
     }
-    let next = EmbyOwnerContext::from_packaged_storage_result(&owner_config)
-        .map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
+    let next = EmbyOwnerContext::from_packaged_storage_result(&owner_config).map_err(|error| {
+        log::warn!(target: "daemon", "failed to load Emby owner context: {error}");
+        ServiceSetupRejection::StorageUnavailable
+    })?;
 
     let is_replacement = current.as_ref().is_some_and(|old| !same_server(old, setup));
     if is_replacement {
@@ -194,13 +201,15 @@ pub(super) fn reconcile_packaged_audiobookshelf(
             },
         ..
     } = &mut *ctx.owner;
-    let owner_config =
-        crate::config::load_config().map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
+    let owner_config = crate::config::load_config().map_err(|error| {
+        log::warn!(target: "daemon", "failed to load owner config during reconciliation: {error}");
+        ServiceSetupRejection::StorageUnavailable
+    })?;
     let Some(setup) = owner_config.audiobookshelf_setup.as_ref() else {
         if !finalize_active_audiobookshelf(ctx.player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
-        let items = purge_queue(queue, |item| item.is_audiobookshelf_any());
+        let items = purge_queue(queue, QueueItem::is_audiobookshelf_any);
         let active_index = queue.active_index();
         *source = if items.is_empty() {
             QueueSource::Unknown
@@ -227,8 +236,12 @@ pub(super) fn reconcile_packaged_audiobookshelf(
     if setup.revision != requested_revision {
         return Err(ServiceSetupRejection::RevisionMismatch);
     }
-    let next = AudiobookshelfOwnerContext::from_packaged_storage_result(&owner_config)
-        .map_err(|_| ServiceSetupRejection::StorageUnavailable)?;
+    let next = AudiobookshelfOwnerContext::from_packaged_storage_result(&owner_config).map_err(
+        |error| {
+            log::warn!(target: "daemon", "failed to load Audiobookshelf owner context: {error}");
+            ServiceSetupRejection::StorageUnavailable
+        },
+    )?;
     let is_replacement = current
         .as_ref()
         .is_some_and(|old| !same_audiobookshelf_server(old, setup));
@@ -236,7 +249,7 @@ pub(super) fn reconcile_packaged_audiobookshelf(
         if !finalize_active_audiobookshelf(ctx.player, queue) {
             return Err(ServiceSetupRejection::TransitionRejected);
         }
-        let items = purge_queue(queue, |item| item.is_audiobookshelf_any());
+        let items = purge_queue(queue, QueueItem::is_audiobookshelf_any);
         let active_index = queue.active_index();
         *source = if items.is_empty() {
             QueueSource::Unknown

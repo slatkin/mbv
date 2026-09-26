@@ -4,8 +4,10 @@ mod selection;
 #[cfg(test)]
 mod tests;
 
-use super::*;
+use super::{apply_terminal_observer, AlbumCursorKind, Model, ShellRequest, ToastSeverity};
 use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::{ComponentId, Msg};
+use crate::app::state::types::playback::DestinationLatestSource;
 use std::time::Instant;
 
 fn matching_context_items(
@@ -29,7 +31,7 @@ impl Model {
         let mut quit = false;
         match msg {
             Msg::TerminalEvent(event) => {
-                apply_terminal_observer(self, event, music_resize, tv_resize)
+                apply_terminal_observer(self, &event, music_resize, tv_resize);
             }
             Msg::Shell(request) => {
                 let request = *request;
@@ -45,7 +47,7 @@ impl Model {
                 self.handle_queue_request(request);
             }
             Msg::Playback(request) => {
-                self.handle_playback_request(request);
+                self.handle_playback_request(&request);
             }
             Msg::Service(request) => {
                 if self.handle_service_request(request) {
@@ -81,7 +83,7 @@ impl Model {
                 self.clear_multi_selection_from_origin(origin);
             }
             ShellRequest::AudiobookshelfPodcastShowMove { library_item_id } => {
-                self.handle_podcast_show_move_request(library_item_id);
+                self.handle_podcast_show_move_request(library_item_id.as_deref());
             }
             request @ (ShellRequest::AudiobookshelfBookMove(_)
             | ShellRequest::AudiobookshelfBookIntent(_)) => {
@@ -104,10 +106,10 @@ impl Model {
             | ShellRequest::EmbyLibraryRowActivate { .. }) => {
                 self.handle_emby_shell_request(request);
             }
-            ShellRequest::OpenUrl(url) => self.handle_open_url_request(url),
+            ShellRequest::OpenUrl(url) => self.handle_open_url_request(&url),
             ShellRequest::LibraryScroll { key, index, scroll } => {
                 if self
-                    .handle_library_scroll_request(key, index, scroll)
+                    .handle_library_scroll_request(&key, index, scroll)
                     .is_none()
                 {
                     // Preserve the legacy short-circuit: this path skips the deferred-message drain.
@@ -161,7 +163,7 @@ impl Model {
             | ShellRequest::QueueRowActivate { .. }
             | ShellRequest::ResizeListPaneLive(_)
             | ShellRequest::ResizeListPaneEnd(_)) => {
-                self.handle_pointer_and_layout_request(request)
+                self.handle_pointer_and_layout_request(request);
             }
             request
             @ (ShellRequest::RowContextMenu(..) | ShellRequest::MusicRowContextMenu(..)) => {
@@ -261,9 +263,9 @@ impl Model {
         }
     }
 
-    fn handle_open_url_request(&mut self, url: String) {
-        if crate::app::components::library_panel::sanitize_url(&url).is_some() {
-            if let Err(error) = crate::app::open_url(&url) {
+    fn handle_open_url_request(&mut self, url: &str) {
+        if crate::app::components::library_panel::sanitize_url(url).is_some() {
+            if let Err(error) = crate::app::open_url(url) {
                 log::warn!(target: "library_link", "Failed to open provider link {url:?}: {error}");
                 self.app.flash(
                     format!("Unable to open link: {error}"),
@@ -311,13 +313,13 @@ impl Model {
             }
             ShellRequest::EmbyLibraryRowClick { target } => {
                 if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
-                    self.app.handle_mouse_single_click_emby(lib_idx, target);
+                    self.app.handle_mouse_single_click_emby(lib_idx, &target);
                 }
                 self.push_active_emby_library_owner_content();
             }
             ShellRequest::EmbyLibraryRowActivate { target } => {
                 if let (Some(lib_idx), Some(target)) = (self.app.tab.emby_library_index(), target) {
-                    self.app.handle_mouse_double_click_emby(lib_idx, target);
+                    self.app.handle_mouse_double_click_emby(lib_idx, &target);
                 }
                 self.push_active_emby_library_owner_content();
             }
@@ -353,7 +355,7 @@ impl Model {
             | ShellRequest::PlaylistsRename(_)
             | ShellRequest::PlaylistsDelete(_)
             | ShellRequest::PlaylistsRefresh
-            | ShellRequest::DismissPlaylists) => self.handle_playlists_request(request),
+            | ShellRequest::DismissPlaylists) => self.handle_playlists_request(&request),
             ShellRequest::SettingsIntent(intent) => return self.handle_settings_intent(intent),
             _ => unreachable!("request is a TV, playlist, or settings request"),
         }
@@ -383,12 +385,12 @@ impl Model {
     /// the index-taking entry point (clamp, `state.select`, detail-fetch), never recomputing from a delta. The
     /// episode-selection guard lives only on the component
     /// now (D2).
-    fn handle_podcast_show_move_request(&mut self, library_item_id: Option<String>) {
+    fn handle_podcast_show_move_request(&mut self, library_item_id: Option<&str>) {
         // Click-to-focus (task 4.5): a mouse-driven (or already
         // focused keyboard) show move pulls panel focus to the
         // Library.
         self.app.set_panel_focus(crate::app::PanelFocus::Library);
-        if let Some(library_item_id) = library_item_id.as_deref() {
+        if let Some(library_item_id) = library_item_id {
             self.app.select_audiobookshelf_show_target(library_item_id);
         } else {
             // A state-pill scope (or its list interaction): the
@@ -413,14 +415,14 @@ impl Model {
     /// drain); `Some(())` continues normal flow.
     fn handle_library_scroll_request(
         &mut self,
-        key: crate::app::components::library_panel::LibraryKey,
+        key: &crate::app::components::library_panel::LibraryKey,
         index: usize,
         scroll: usize,
     ) -> Option<()> {
         let active_key = self
             .active_emby_library_owner()
             .map(|(_, active, _)| active);
-        if active_key.as_ref() != Some(&key) {
+        if active_key.as_ref() != Some(key) {
             return Some(());
         }
         let lib_idx = self
@@ -428,7 +430,7 @@ impl Model {
             .libs
             .iter()
             .position(|lib| {
-                matches!(&key, crate::app::components::library_panel::LibraryKey::Service { library_id, .. } if lib.library.id == *library_id)
+                matches!(key, crate::app::components::library_panel::LibraryKey::Service { library_id, .. } if lib.library.id == *library_id)
             })?;
         if self.app.tab.emby_library_index() != Some(lib_idx) {
             return None;
@@ -501,7 +503,7 @@ impl Model {
                     },
                 );
             self.app.open_context_menu_for_selection(
-                items,
+                &items,
                 anchor,
                 crate::app::PanelFocus::Queue,
                 capabilities,
@@ -509,7 +511,7 @@ impl Model {
             );
         } else {
             let slot_id = slot_ids.into_iter().next();
-            let cw_selected = self.home_continue_watching_selected();
+            let cw_selected = Model::home_continue_watching_selected();
             if let Some((x, y)) = anchor {
                 self.app
                     .handle_mouse_right_click_queue(slot_id, x, y, cw_selected);
@@ -562,7 +564,7 @@ impl Model {
                         .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
                         .collect();
                     self.app.open_context_menu_for_selection(
-                        items,
+                        &items,
                         anchor,
                         crate::app::PanelFocus::Library,
                         capabilities,
@@ -587,7 +589,7 @@ impl Model {
                             .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
                             .collect();
                         self.app.open_context_menu_for_selection(
-                            items,
+                            &items,
                             anchor,
                             crate::app::PanelFocus::Library,
                             capabilities,

@@ -12,7 +12,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
     let mut at_launch = crate::app::tests::make_item("At launch", "Episode");
     at_launch.date_added = "1970-01-01T00:03:20Z".into();
     harness.model_mut().update_emby_latest_snapshot(
-        source.clone(),
+        &source,
         "TV".into(),
         vec![QueueItem::Emby(Box::new(at_launch))],
     );
@@ -30,7 +30,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
     let mut after_current = crate::app::tests::make_item("After current launch", "Episode");
     after_current.date_added = "1970-01-01T00:03:21Z".into();
     harness.model_mut().update_emby_latest_snapshot(
-        source.clone(),
+        &source,
         "TV".into(),
         vec![
             QueueItem::Emby(Box::new(at_cutoff)),
@@ -43,7 +43,7 @@ fn destination_latest_marker_uses_first_launch_baseline_and_closed_timestamp_win
     let mut only_future = crate::app::tests::make_item("Future", "Episode");
     only_future.date_added = "1970-01-01T00:03:21Z".into();
     harness.model_mut().update_emby_latest_snapshot(
-        source.clone(),
+        &source,
         "TV".into(),
         vec![QueueItem::Emby(Box::new(only_future))],
     );
@@ -223,7 +223,7 @@ fn non_tv_library_refresh_populates_only_its_latest_snapshot_without_home() {
                 items,
             } => {
                 harness.model_mut().update_emby_latest_snapshot(
-                    library_id,
+                    &library_id,
                     title,
                     items
                         .into_iter()
@@ -507,7 +507,7 @@ fn tv_latest_selection_acknowledges_the_destination_marker_through_tick() {
         .test_selector_hits()
         .regions()
         .first()
-        .cloned()
+        .copied()
         .expect("Latest pill geometry");
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),

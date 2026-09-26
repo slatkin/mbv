@@ -6,7 +6,7 @@ impl App {
         remote_pos_s: i64,
         elapsed: Duration,
     ) -> i64 {
-        remote_pos_s + elapsed.as_secs() as i64
+        remote_pos_s + i64::try_from(elapsed.as_secs()).unwrap_or(i64::MAX)
     }
 
     pub(in crate::app) fn ui_config_snapshot(&self) -> crate::config::UiConfig {

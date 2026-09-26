@@ -116,7 +116,7 @@ impl App {
         let new_lang = {
             let mut c = self.config.lock().unwrap();
             let new = cycle_lang(&c.my_languages, &c.subtitle_lang);
-            c.subtitle_lang = new.clone();
+            c.subtitle_lang.clone_from(&new);
             new
         };
         self.player.subtitle_prefs.lock().unwrap().subtitle_lang = new_lang;
@@ -127,7 +127,7 @@ impl App {
         let new_lang = {
             let mut c = self.config.lock().unwrap();
             let new = cycle_lang(&c.my_languages, &c.audio_lang);
-            c.audio_lang = new.clone();
+            c.audio_lang.clone_from(&new);
             new
         };
         self.player.subtitle_prefs.lock().unwrap().audio_lang = new_lang;
@@ -144,10 +144,10 @@ impl App {
             SettingKey::ConsumeVideos => c.consume_videos = !c.consume_videos,
             SettingKey::ConsumeAudio => c.consume_audio = !c.consume_audio,
             SettingKey::SavePlaylistOnConsume => {
-                c.save_playlist_on_consume = !c.save_playlist_on_consume
+                c.save_playlist_on_consume = !c.save_playlist_on_consume;
             }
             SettingKey::SavePlaylistOnConsumeAudio => {
-                c.save_playlist_on_consume_audio = !c.save_playlist_on_consume_audio
+                c.save_playlist_on_consume_audio = !c.save_playlist_on_consume_audio;
             }
             SettingKey::AlwaysSkipIntro => c.always_skip_intro = !c.always_skip_intro,
             SettingKey::ShowAudioWindow => c.show_audio_window = !c.show_audio_window,

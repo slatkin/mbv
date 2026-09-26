@@ -52,7 +52,7 @@ impl Model {
         &mut self,
         f: impl FnOnce(&mut FeedsContent) -> R,
     ) -> Option<R> {
-        self.update_library_owner(LibraryKey::Feeds, || Box::new(FeedsContent::new()), f)
+        self.update_library_owner(&LibraryKey::Feeds, || Box::new(FeedsContent::new()), f)
     }
 }
 

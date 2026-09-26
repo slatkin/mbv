@@ -67,7 +67,7 @@ impl LevelFillState {
     /// (re)starts the fill.
     pub(in crate::app) fn action_for(state: Option<&LevelFillState>) -> LevelFillAction {
         match state {
-            Some(LevelFillState::Loading { .. }) | Some(LevelFillState::Filled { .. }) => {
+            Some(LevelFillState::Loading { .. } | LevelFillState::Filled { .. }) => {
                 LevelFillAction::NoWork
             }
             Some(LevelFillState::Failed) | None => LevelFillAction::Request,
@@ -75,6 +75,10 @@ impl LevelFillState {
     }
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "26 independent core app-state bits spanning launch/readiness, load-in-flight, persistence/UI options, and transient connection flags across unrelated subsystems; grouping would be a pure lint dodge (design analysis, issue #804)"
+)]
 pub struct App {
     /// General application configuration is independent of the optional Emby
     /// runtime. Feed management reads and mutates this context directly.
@@ -186,7 +190,7 @@ pub struct App {
     /// `Config.library_routes` at startup (#256). Values are resolved
     /// `tcp://host:port` endpoints, read directly with no live-session
     /// lookup -- see `mbv_core::config::resolve_library_route`.
-    pub(in crate::app) library_routes: std::collections::HashMap<String, String>,
+    pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) album_indexes: std::collections::HashMap<String, AlbumIndexState>,
     // Per-frame layout geometry from last render, used for mouse hit-testing.

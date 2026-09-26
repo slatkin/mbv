@@ -118,7 +118,7 @@ fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let items = app.player_tab.emby_items();
     let request = capture_error(&http, &mut app, move |app| {
-        app.submit_attached_sequence("session", &items, 1)
+        app.submit_attached_sequence("session", &items, 1);
     });
     assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
     assert!(
@@ -134,7 +134,7 @@ fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
 fn pause_play_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(crate::app::dispatch::action::Command::TogglePlayPause);
+        app.dispatch(&crate::app::dispatch::action::Command::TogglePlayPause);
     });
     assert!(request.starts_with("POST /Sessions/session/Playing/PlayPause HTTP/1.1"));
 }
@@ -143,7 +143,7 @@ fn pause_play_dispatches_and_reports_errors_without_tracking() {
 fn seek_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(crate::app::dispatch::action::Command::SeekRelative(5.0));
+        app.dispatch(&crate::app::dispatch::action::Command::SeekRelative(5.0));
     });
     assert!(request
         .starts_with("POST /Sessions/session/Playing/Seek?SeekPositionTicks=650000000 HTTP/1.1"));
@@ -153,7 +153,7 @@ fn seek_dispatches_and_reports_errors_without_tracking() {
 fn stop_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(crate::app::dispatch::action::Command::Stop);
+        app.dispatch(&crate::app::dispatch::action::Command::Stop);
     });
     assert!(request.starts_with("POST /Sessions/session/Playing/Stop HTTP/1.1"));
 }
@@ -162,7 +162,7 @@ fn stop_dispatches_and_reports_errors_without_tracking() {
 fn next_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(crate::app::dispatch::action::Command::NextTrack);
+        app.dispatch(&crate::app::dispatch::action::Command::NextTrack);
     });
     assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
     assert!(
@@ -180,7 +180,7 @@ fn previous_dispatches_and_reports_errors_without_tracking() {
         .unwrap()
         .now_playing_item_id = Some("b".into());
     let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(crate::app::dispatch::action::Command::PreviousTrack);
+        app.dispatch(&crate::app::dispatch::action::Command::PreviousTrack);
     });
     assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
     assert!(
@@ -194,7 +194,7 @@ fn previous_dispatches_and_reports_errors_without_tracking() {
 fn direct_selection_dispatches_and_reports_errors_without_tracking() {
     let (mut app, http) = remote_command_app();
     let request = capture_error(&http, &mut app, |app| {
-        app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(1));
+        app.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(1));
     });
     assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
     assert!(request.contains("ItemIds"));

@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    render_narrow_skeleton, render_wide_skeleton, wide_hero_fits, LeafKeyResult, LibraryKey,
+    LibraryPanel, SkeletonHits, SkeletonPillWindows,
+};
 
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -15,6 +18,133 @@ impl Default for LibraryPanel {
     fn default() -> Self {
         Self::new()
     }
+}
+
+struct SkeletonPaintState<'a> {
+    focused: bool,
+    list_pane_width: Option<u16>,
+    hovered_selector: Option<usize>,
+    hovered_link: Option<usize>,
+    terminal_height: u16,
+    split: &'a mut Option<super::SplitGeometry>,
+    wide_geometry: &'a mut Option<super::WideSkeletonGeometry>,
+    narrow_geometry: &'a mut Option<super::WideSkeletonGeometry>,
+    hit_regions: &'a mut SkeletonHits,
+    windows: &'a mut SkeletonPillWindows,
+}
+
+struct HeroOverlayPaintState<'a> {
+    hovered_link: Option<usize>,
+    terminal_height: u16,
+    open: bool,
+    geometry: &'a mut Option<super::OverlayGeometry>,
+    hit_regions: &'a mut SkeletonHits,
+    windows: &'a mut SkeletonPillWindows,
+}
+
+fn paint_skeleton(
+    frame: &mut Frame,
+    area: ratatui::layout::Rect,
+    content: &mut super::super::content::LibraryPanelContent<'_>,
+    overview_scroll: usize,
+    show_hero_pane: bool,
+    state: &mut SkeletonPaintState<'_>,
+) -> ratatui::layout::Rect {
+    if wide_hero_fits(area) {
+        if let Some(geometry) = render_wide_skeleton(
+            frame,
+            area,
+            content,
+            state.focused,
+            state.list_pane_width,
+            overview_scroll,
+            state.hovered_selector,
+            state.hovered_link,
+            state.hit_regions,
+            state.windows,
+            state.terminal_height,
+            show_hero_pane,
+        ) {
+            let gap = ratatui::layout::Rect {
+                x: geometry.hero.right(),
+                y: geometry.hero.y,
+                width: geometry.browser.x.saturating_sub(geometry.hero.right()),
+                height: geometry.hero.height,
+            };
+            *state.split = (gap.width > 0 && gap.height > 0).then_some(super::SplitGeometry {
+                gap,
+                pane_origin_x: area.right(),
+                content_width: area.width,
+                width: geometry.browser.width,
+            });
+            *state.wide_geometry = Some(geometry);
+        }
+        area
+    } else {
+        let geometry = render_narrow_skeleton(
+            frame,
+            area,
+            content,
+            state.focused,
+            state.hovered_selector,
+            state.hit_regions,
+            state.windows,
+        );
+        let overlay_area = geometry.list_panel;
+        *state.narrow_geometry = Some(geometry);
+        overlay_area
+    }
+}
+
+fn paint_library_hero_overlay(
+    frame: &mut Frame,
+    overlay_area: ratatui::layout::Rect,
+    hints: &[&str],
+    overview_scroll: usize,
+    content: &mut super::super::content::LibraryPanelContent<'_>,
+    state: &mut HeroOverlayPaintState<'_>,
+) {
+    if !state.open {
+        return;
+    }
+    let Some(overlay_rect) =
+        crate::app::render::arrangements::library::library_hero_overlay(overlay_area)
+    else {
+        return;
+    };
+    let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(
+        frame,
+        overlay_area,
+        overlay_rect,
+        hints,
+    );
+    let hero = content.hero.as_mut().map(|hero| {
+        super::super::hero_composition::paint_library_hero_content(
+            frame,
+            inner,
+            hero,
+            overview_scroll,
+            state.hovered_link,
+            &mut state.hit_regions.links,
+            &mut state.hit_regions.workspace_selector,
+            &mut state.windows.workspace_selector,
+            crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
+            state.terminal_height,
+        )
+    });
+    let composition = hero.unwrap_or(super::super::hero_composition::HeroCompositionGeometry {
+        workspace: None,
+        hero_image: None,
+        overview_box: None,
+        overview_content_length: 0,
+        overview_viewport: 0,
+    });
+    *state.geometry = Some(super::OverlayGeometry {
+        #[cfg(test)]
+        pane: overlay_area,
+        frame: overlay_rect,
+        hero: composition,
+    });
 }
 
 impl Component for LibraryPanel {
@@ -57,7 +187,7 @@ impl Component for LibraryPanel {
                 .as_ref()
                 .map(|selector| selector.markers.clone())
                 .unwrap_or_default();
-        }
+        };
         self.painted_link_urls = content
             .hero
             .as_ref()
@@ -69,109 +199,44 @@ impl Component for LibraryPanel {
                     .collect()
             })
             .unwrap_or_default();
-        let mut hits = std::mem::take(&mut self.hits);
+        let mut hit_regions = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
-        // The overlay's own area. In non-Wide geometry it is the browser's
-        // inset list box below the reserved pill rows, so the pill bar and
-        // its spacer band stay outside both the overlay frame and its dim
-        // backdrop; the Wide geometry keeps the whole panel as before.
-        let mut overlay_area = area;
-        // One breakpoint predicate (design D4): `wide_hero_fits` stays the
-        // single Wide/Narrow choice; the panel clamps the list's viewport
-        // through the list's `clamp_viewport` inside each skeleton.
-        if wide_hero_fits(area) {
-            if let Some(geometry) = render_wide_skeleton(
-                frame,
-                area,
-                &mut content,
-                self.focused,
-                self.list_pane_width,
-                overview_scroll,
-                self.hovered_selector,
-                self.hovered_link,
-                &mut hits,
-                &mut windows,
-                self.terminal_height,
-                show_hero_pane,
-            ) {
-                // The split gesture owns the gap columns it painted: the
-                // gutter between the hero and browser panes, resolved
-                // against the panel's own content area.
-                let gap = ratatui::layout::Rect {
-                    x: geometry.hero.right(),
-                    y: geometry.hero.y,
-                    width: geometry.browser.x.saturating_sub(geometry.hero.right()),
-                    height: geometry.hero.height,
-                };
-                self.split = (gap.width > 0 && gap.height > 0).then_some(SplitGeometry {
-                    gap,
-                    pane_origin_x: area.right(),
-                    content_width: area.width,
-                    width: geometry.browser.width,
-                });
-                self.wide_geometry = Some(geometry);
-            }
-        } else {
-            let geometry = render_narrow_skeleton(
-                frame,
-                area,
-                &mut content,
-                self.focused,
-                self.hovered_selector,
-                &mut hits,
-                &mut windows,
-            );
-            overlay_area = geometry.list_panel;
-            self.narrow_geometry = Some(geometry);
-        }
+        let overlay_area = paint_skeleton(
+            frame,
+            area,
+            &mut content,
+            overview_scroll,
+            show_hero_pane,
+            &mut SkeletonPaintState {
+                focused: self.focused,
+                list_pane_width: self.list_pane_width,
+                hovered_selector: self.hovered_selector,
+                hovered_link: self.hovered_link,
+                terminal_height: self.terminal_height,
+                split: &mut self.split,
+                wide_geometry: &mut self.wide_geometry,
+                narrow_geometry: &mut self.narrow_geometry,
+                hit_regions: &mut hit_regions,
+                windows: &mut windows,
+            },
+        );
         // Paint the Library-local overlay after the ordinary skeleton. The
         // shared Hero path therefore remains the sole content painter.
-        if self.hero_overlay_open {
-            if let Some(overlay_rect) =
-                crate::app::render::arrangements::library::library_hero_overlay(overlay_area)
-            {
-                let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, overlay_area, overlay_rect, hints);
-                if let Some(hero) = content.hero.as_mut() {
-                    let composition = super::super::hero_composition::paint_library_hero_content(
-                        frame,
-                        inner,
-                        hero,
-                        overview_scroll,
-                        self.hovered_link,
-                        &mut hits.links,
-                        &mut hits.workspace_selector,
-                        &mut windows.workspace_selector,
-                        // The overlay's sheet is the pane fill shared content
-                        // repaints behind the Hero header and overview.
-                        crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
-                        self.terminal_height,
-                    );
-                    self.overlay_geometry = Some(super::OverlayGeometry {
-                        #[cfg(test)]
-                        pane: overlay_area,
-                        frame: overlay_rect,
-                        hero: composition,
-                    });
-                } else {
-                    // A target may arrive one projection before its Hero
-                    // snapshot while provider detail is loading. Keep the
-                    // visible overlay/frame and its hit boundary alive rather
-                    // than silently falling back to the covered browser.
-                    self.overlay_geometry = Some(super::OverlayGeometry {
-                        #[cfg(test)]
-                        pane: overlay_area,
-                        frame: overlay_rect,
-                        hero: super::super::hero_composition::HeroCompositionGeometry {
-                            workspace: None,
-                            hero_image: None,
-                            overview_box: None,
-                            overview_content_length: 0,
-                            overview_viewport: 0,
-                        },
-                    });
-                }
-            }
-        }
+        paint_library_hero_overlay(
+            frame,
+            overlay_area,
+            hints,
+            overview_scroll,
+            &mut content,
+            &mut HeroOverlayPaintState {
+                hovered_link: self.hovered_link,
+                terminal_height: self.terminal_height,
+                open: self.hero_overlay_open,
+                geometry: &mut self.overlay_geometry,
+                hit_regions: &mut hit_regions,
+                windows: &mut windows,
+            },
+        );
         // The projected hero image's reserved box (task 5.10, design D9): the
         // shell paints the protocol into it right after view returns.
         self.image_paint = if self.hero_overlay_open {
@@ -199,7 +264,7 @@ impl Component for LibraryPanel {
                 self.deferred_msg = Some(message);
             }
         }
-        self.hits = hits;
+        self.hits = hit_regions;
         self.pill_windows = windows;
         self.painted_area = Some(area);
         if self.split.is_none() {
@@ -207,7 +272,7 @@ impl Component for LibraryPanel {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -227,9 +292,9 @@ impl Component for LibraryPanel {
 }
 
 impl AppComponent<Msg, UserEvent> for LibraryPanel {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+    fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
+        match ev {
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             // The panel's minimal keyboard forwarding (task 5.11, design D3):
             // the focused panel hands the already-routed chord to the active
             // owner, which keeps its local key interpretation exactly as a
@@ -259,8 +324,7 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                 let result = self
                     .owners
                     .active_mut()
-                    .map(|owner| owner.on_key_result(key))
-                    .unwrap_or(LeafKeyResult::Unhandled);
+                    .map_or(LeafKeyResult::Unhandled, |owner| owner.on_key_result(key));
                 let hero_overlay_resolvable = self.hero_overlay_open
                     && self
                         .owners

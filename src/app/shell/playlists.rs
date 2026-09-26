@@ -49,23 +49,23 @@ impl Model {
         }
     }
 
-    pub(in crate::app) fn handle_playlists_request(&mut self, request: ShellRequest) {
+    pub(in crate::app) fn handle_playlists_request(&mut self, request: &ShellRequest) {
         match request {
             ShellRequest::PlaylistsBack => {
                 self.app.playlists_open = None;
                 self.app.playlists_open_items.clear();
             }
             ShellRequest::PlaylistsOpen(index) => {
-                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app.spawn_open_playlist(playlist);
                 }
             }
             ShellRequest::PlaylistsActivate { open, index } => {
-                if open {
+                if *open {
                     let Some(selected_id) = self
                         .app
                         .playlists_open_items
-                        .get(index)
+                        .get(*index)
                         .map(|item| item.id.clone())
                     else {
                         return;
@@ -103,12 +103,12 @@ impl Model {
                     // the replacement actually runs (immediately on an empty
                     // queue, after confirmation on a populated one), so a
                     // cancelled load leaves the sidebar open.
-                } else if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                } else if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app.load_and_play_playlist(playlist.id);
                 }
             }
             ShellRequest::PlaylistsRename(index) => {
-                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app
                         .open_save_playlist_dialog(crate::app::SavePlaylistDialog {
                             input: playlist.name,
@@ -119,7 +119,7 @@ impl Model {
                 }
             }
             ShellRequest::PlaylistsDelete(index) => {
-                if let Some(playlist) = self.app.playlists.get(index).cloned() {
+                if let Some(playlist) = self.app.playlists.get(*index).cloned() {
                     self.app.ask_confirm(crate::app::ConfirmModal {
                         title: " Delete Playlist ".into(),
                         message: format!(

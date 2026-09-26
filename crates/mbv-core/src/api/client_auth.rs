@@ -1,4 +1,5 @@
-use super::*;
+use super::{clear_cached_token, device_id, device_name, load_cached_token, EmbyClient};
+use crate::config::Config;
 use serde_json::Value;
 
 fn user_matches_username(user: &Value, username: &str) -> bool {
@@ -17,7 +18,7 @@ fn emby_agent(
 impl EmbyClient {
     pub(super) fn service_failure(
         context: &str,
-        error: ureq::Error,
+        error: &ureq::Error,
     ) -> crate::service_runtime::EmbyFailure {
         let class = match error {
             ureq::Error::StatusCode(401 | 403) => {
@@ -33,6 +34,7 @@ impl EmbyClient {
 
     // ── HTTP infrastructure ──────────────────────────────────────────────────
 
+    #[must_use]
     pub fn new(config: Config) -> Self {
         let agent = emby_agent(
             std::time::Duration::from_secs(5),
@@ -93,6 +95,7 @@ impl EmbyClient {
     }
 
     /// Install an in-memory mock transport (see `mock_http`).
+    #[must_use]
     pub fn with_test_agent(mut self, agent: ureq::Agent) -> Self {
         self.agent = agent;
         self.mock_agent = true;
@@ -229,8 +232,8 @@ impl EmbyClient {
         hard_bound: std::time::Duration,
     ) -> Result<EmbyClient, crate::service_runtime::EmbyFailure> {
         let mut clone = self.clone();
-        clone.config.server_url = setup.server_url.clone();
-        clone.user_id = setup.user_id.clone();
+        clone.config.server_url.clone_from(&setup.server_url);
+        clone.user_id.clone_from(&setup.user_id);
         clone.token = token;
         crate::bounded::run_with_hard_bound(
             move || {
@@ -241,7 +244,7 @@ impl EmbyClient {
                     ))
                     .call()
                     .map_err(|e| {
-                        Self::service_failure("service credential validation failed", e)
+                        Self::service_failure("service credential validation failed", &e)
                     })?;
                 Ok(clone)
             },
@@ -298,12 +301,12 @@ impl EmbyClient {
     }
 
     pub fn apply_credential_exchange(&mut self, exchange: &EmbyCredentialExchange) {
-        self.config.server_url = exchange.server_url.clone();
+        self.config.server_url.clone_from(&exchange.server_url);
         self.config.username.clear();
         self.config.password.clear();
         self.config.api_key.clear();
-        self.user_id = exchange.user_id.clone();
-        self.token = exchange.token.clone();
+        self.user_id.clone_from(&exchange.user_id);
+        self.token.clone_from(&exchange.token);
     }
 
     /// Load the minimum Home/library data required by the existing TUI after

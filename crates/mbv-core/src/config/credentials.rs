@@ -1,6 +1,6 @@
 // Per-Service secret files and the Local-daemon Control credential.
 
-use super::*;
+use super::{state_dir, ServiceKind};
 use std::path::PathBuf;
 
 /// ── Per-Service secrets ──────────────────────────────────────────────
@@ -9,6 +9,7 @@ use std::path::PathBuf;
 ///
 /// Path to the secret file for a given Service kind.
 /// Files live under `state_dir()/secrets/` for isolation.
+#[must_use]
 pub fn service_secret_path(kind: ServiceKind) -> PathBuf {
     state_dir()
         .join("secrets")
@@ -37,13 +38,14 @@ pub(super) fn save_service_secret_at(secret: &str, path: &std::path::Path) -> Re
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
             .map_err(|e| format!("chmod 0600 {}: {e}", tmp.display()))?;
-    }
+    };
     std::fs::rename(&tmp, path)
         .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
 }
 
 /// Load a Service secret from its dedicated file. Returns `None` when
 /// the file does not exist or cannot be parsed.
+#[must_use]
 pub fn load_service_secret(kind: ServiceKind) -> Option<String> {
     let path = service_secret_path(kind);
     let text = std::fs::read_to_string(path).ok()?;
@@ -83,6 +85,7 @@ pub fn clear_service_secret_result(kind: ServiceKind) -> Result<(), String> {
 ///
 /// Path to the Local daemon Control credential file. This lives under
 /// `state_dir()` so it is per-user and survives daemon restarts.
+#[must_use]
 pub fn control_credential_path() -> PathBuf {
     state_dir().join("control_credential.json")
 }
@@ -107,7 +110,7 @@ pub(super) fn write_control_credential_temp(
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))
             .map_err(|e| format!("chmod 0600 {}: {e}", tmp.display()))?;
-    }
+    };
     Ok(tmp)
 }
 
@@ -156,6 +159,7 @@ pub fn load_or_create_control_credential() -> Result<String, String> {
 
 /// Load the Control credential. Returns `None` when the file does not
 /// exist or cannot be parsed.
+#[must_use]
 pub fn load_control_credential() -> Option<String> {
     let path = control_credential_path();
     let text = std::fs::read_to_string(path).ok()?;

@@ -51,7 +51,7 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) image_protocol: Option<String>,
     pub(in crate::app) image_protocol_enabled: bool,
     pub(in crate::app) hidden_libraries: Vec<String>,
-    pub(in crate::app) library_routes: std::collections::HashMap<String, String>,
+    pub(in crate::app) library_routes: std::collections::BTreeMap<String, String>,
     pub(in crate::app) music_levels: Vec<String>,
     pub(in crate::app) use_nerd_fonts: bool,
     pub(in crate::app) indicator_style: crate::app::render::indicators::IndicatorStyle,

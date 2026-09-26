@@ -25,7 +25,7 @@ fn book_progress_update_does_not_touch_episode_slots() {
         .position_ticks;
 
     apply_audiobookshelf_book_progress(
-        AudiobookshelfBookProgressUpdate {
+        &AudiobookshelfBookProgressUpdate {
             generation: SetupGeneration::new(1),
             library_item_id: "li_1".into(),
             current_time_seconds: 30.0,
@@ -57,7 +57,7 @@ fn episode_progress_update_does_not_touch_book_slots() {
         .position_ticks;
 
     apply_audiobookshelf_progress(
-        AudiobookshelfProgressUpdate {
+        &AudiobookshelfProgressUpdate {
             generation: SetupGeneration::new(1),
             library_item_id: "shared_1".into(),
             episode_id: "ep-1".into(),

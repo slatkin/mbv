@@ -12,7 +12,7 @@ pub(in crate::app) use components::artwork_placeholder::render_artwork_placehold
 pub(in crate::app) use components::audiobookshelf_book::book_rows;
 
 pub(in crate::app) use components::chrome_player::{
-    render_player_panel, PlaybackRenderContext, PlaybackStripAreas,
+    render_player_panel, PlaybackControls, PlaybackRenderContext, PlaybackStripAreas,
 };
 pub(in crate::app) use components::chrome_status::{
     render_status_bar, StatusBarModel, StatusBarRegions, VisualModeIndicator,

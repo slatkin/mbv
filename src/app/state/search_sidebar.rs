@@ -80,11 +80,7 @@ impl SearchSidebar {
             .iter()
             .filter_map(|r| {
                 let t = r.item_type.as_str();
-                if seen.insert(t) {
-                    Some(t)
-                } else {
-                    None
-                }
+                seen.insert(t).then_some(t)
             })
             .collect();
         types.sort_by_key(|t| Self::type_sort_key(t));

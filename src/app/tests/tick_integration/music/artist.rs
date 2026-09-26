@@ -22,7 +22,7 @@ fn mounted_neighbour_app() -> crate::app::App {
             level.items.push(album);
         }
         level.total_count = 5;
-    }
+    };
     for number in 1..=5 {
         let mut track = crate::app::tests::make_item(&format!("Track {number}"), "Audio");
         track.id = format!("track-{number}");

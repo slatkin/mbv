@@ -67,8 +67,8 @@ mod tests {
 
     #[test]
     fn carriers_default_without_a_target_default_bound() {
-        let _: MarkSelectionState<NonDefaultTarget> = Default::default();
-        let _: PaintRetainedState<NonDefaultTarget> = Default::default();
+        let _: MarkSelectionState<NonDefaultTarget> = MarkSelectionState::default();
+        let _: PaintRetainedState<NonDefaultTarget> = PaintRetainedState::default();
         let _ = MarkSelectionState::<NonDefaultTarget>::new();
         let _ = PaintRetainedState::<NonDefaultTarget>::new();
     }

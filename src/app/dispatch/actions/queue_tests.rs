@@ -33,7 +33,7 @@ fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item(
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     let rx = app.player.spy_on_commands();
 
     app.execute_context_action(Some(ContextAction::Play), None);
@@ -64,9 +64,8 @@ fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
     // Right-click row B (index 1): the click resolves slot -> index 1 and
     // opens the menu; the menu's Play action closes over 1.
     app.handle_mouse_right_click_queue(Some(slot_b), 0, 0, false);
-    let menu = match app.pending_overlay.as_ref() {
-        Some(OverlayRequest::ContextMenu(menu)) => menu,
-        _ => panic!("queue context menu must open on right-click"),
+    let Some(OverlayRequest::ContextMenu(menu)) = app.pending_overlay.as_ref() else {
+        panic!("queue context menu must open on right-click");
     };
     let play_index = menu
         .entries
@@ -90,7 +89,7 @@ fn queue_menu_play_carries_clicked_index_not_follow_cursor() {
         st.active = true;
         st.current_idx = 0;
         st.queue_len = 2;
-    }
+    };
     let rx = app.player.spy_on_commands();
     app.execute_context_action(Some(crate::app::ContextAction::PlayQueue(play_index)), None);
 
@@ -120,7 +119,7 @@ fn queue_double_click_plays_clicked_index_not_follow_cursor() {
         st.active = true;
         st.current_idx = 0;
         st.queue_len = 2;
-    }
+    };
     let rx = app.player.spy_on_commands();
 
     // Double-click row B (index 1).
@@ -149,7 +148,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
         st.active = true;
         st.current_idx = 0;
         st.queue_len = 1;
-    }
+    };
 
     let mut library = make_item("Movies", "CollectionFolder");
     library.id = "lib-movies".into();
@@ -199,7 +198,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
     app.player_tab.queue_cursor = 1;
     let want_slot = app.player_tab.queue.slots()[1].slot_id;
 
-    app.dispatch(Command::QueuePlayCursor(1));
+    app.dispatch(&Command::QueuePlayCursor(1));
 
     assert!(matches!(
         rx.try_recv(),

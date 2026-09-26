@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    hero_content_emby, EmbyItem, EmbyLetterBucket, EmbySelectorKey, HeroContent, HeroContentData,
+    HeroImageState, InlineSearch, InlineSearchHost, KeyEvent, LeafKeyResult, LetterFilter,
+    LetterFilterKind, LibraryContentOwner, LibraryItemIdentity, LibraryPanelContent,
+    LibrarySlotEvent, ListSlot, Msg, Pane, SelectorIdentity, SelectorRow, TvContent, TvDisplayMode,
+    TvTreeTarget, Workspace,
+};
 
 impl TvContent {
     /// This frame's typed Library panel content (design D3, task 8.2): the
@@ -12,7 +18,10 @@ impl TvContent {
         // Hero facts first: reading the projected snapshot and image state
         // ends before the Workspace borrows the episode carrier mutably.
         let flat_episode_mode = self.flat_episode_mode();
-        let hero_item = if flat_episode_mode && !self.is_wide && self.hero_overlay_open {
+        let hero_item = if flat_episode_mode
+            && self.display_mode == TvDisplayMode::Narrow
+            && self.hero_overlay_open
+        {
             self.selected_episode_item()
         } else {
             None
@@ -38,11 +47,7 @@ impl TvContent {
             .as_ref()
             .filter(|detail| !detail.seasons.is_empty())
             .map(|detail| SelectorRow {
-                pills: detail
-                    .seasons
-                    .iter()
-                    .map(|season| season.display_name())
-                    .collect(),
+                pills: detail.seasons.iter().map(EmbyItem::display_name).collect(),
                 markers: vec![],
                 active: Some(self.season_cursor.min(detail.seasons.len() - 1)),
             });
@@ -93,8 +98,13 @@ impl TvContent {
             Some(mbv_core::config::TvContentMode::Upcoming) => 1,
             Some(mbv_core::config::TvContentMode::All) => 2,
             Some(mbv_core::config::TvContentMode::Range(index)) => index + 2,
-            None if large => 0,
-            None => 2,
+            None => {
+                if large {
+                    0
+                } else {
+                    2
+                }
+            }
         };
         Some(SelectorRow {
             markers: std::iter::once(self.latest_marker)
@@ -129,7 +139,9 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn mini_view_hero_available(&mut self) -> bool {
-        !self.is_wide && self.flat_episode_mode() && self.selected_episode_item().is_some()
+        self.display_mode == TvDisplayMode::Narrow
+            && self.flat_episode_mode()
+            && self.selected_episode_item().is_some()
     }
 
     fn browser_rows_are_hero_bearing(&mut self) -> bool {
@@ -255,8 +267,7 @@ impl LibraryContentOwner for TvContent {
                 .letter_filter
                 .as_ref()
                 .and_then(|filter| EmbyLetterBucket::from_index(filter.index))
-                .map(EmbySelectorKey::Letter)
-                .unwrap_or(EmbySelectorKey::Unfiltered);
+                .map_or(EmbySelectorKey::Unfiltered, EmbySelectorKey::Letter);
             SelectorIdentity::Emby { key }
         });
         let item = self
@@ -288,7 +299,7 @@ impl LibraryContentOwner for TvContent {
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
         if self.flat_episode_mode() {
-            (self.hero_overlay_open && !self.is_wide)
+            (self.hero_overlay_open && self.display_mode == TvDisplayMode::Narrow)
                 .then(|| self.selected_episode_item())
                 .flatten()
                 .map(|episode| hero_content_emby(&episode))

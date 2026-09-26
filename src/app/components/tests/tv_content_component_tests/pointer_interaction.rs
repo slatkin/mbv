@@ -94,7 +94,7 @@ fn tv_context_click_outside_selection_forwards_cleared_selection() {
     paint(&mut panel, 100, 20);
     tv_mut(&mut panel).select_targets_for_test(&["series-b".into()]);
     let count = tv_mut(&mut panel).context_click_for_test("series-a".into());
-    assert_eq!(count, Some(0));
+    assert_eq!(count, 0);
 }
 
 #[test]

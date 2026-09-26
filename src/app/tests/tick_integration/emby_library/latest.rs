@@ -136,7 +136,7 @@ fn mounted_flat_latest_populates_from_destination_fetch(
                 break (library_id, items, title);
             }
             event @ LibEvent::Loaded { .. } => harness.model_mut().app.handle_lib_event(event),
-            _ => continue,
+            _ => {}
         }
     };
     assert_eq!(snapshot_title, title);
@@ -151,7 +151,7 @@ fn mounted_flat_latest_populates_from_destination_fetch(
         "launching into Latest starts one destination snapshot fetch"
     );
     harness.model_mut().update_emby_latest_snapshot(
-        library_id,
+        &library_id,
         snapshot_title,
         items
             .into_iter()

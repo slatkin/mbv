@@ -336,14 +336,14 @@ impl Model {
     /// collapses to.
     pub(in crate::app) fn update_library_owner<T: LibraryContentOwner + 'static, R>(
         &mut self,
-        key: LibraryKey,
+        key: &LibraryKey,
         make: impl FnOnce() -> Box<T>,
         f: impl FnOnce(&mut T) -> R,
     ) -> Option<R> {
-        if !self.library_panel_has_owner(&key) {
+        if !self.library_panel_has_owner(key) {
             self.push_library_owner(key.clone(), make());
         }
-        self.library_owner_mut(&key).map(f)
+        self.library_owner_mut(key).map(f)
     }
 
     /// Open the active owner's Hero through the Library panel's local overlay
@@ -551,19 +551,18 @@ impl Model {
                 .application
                 .get_component_mut(&ComponentId::Library)
                 .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>());
-            match panel.and_then(LibraryPanel::active_hero_data) {
-                Some(data) => data,
-                None => {
-                    // No hero this frame: the placeholder is final.
-                    if let Some(panel) = self
-                        .application
-                        .get_component_mut(&ComponentId::Library)
-                        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-                    {
-                        panel.set_active_hero_image(HeroImageState::None);
-                    }
-                    return;
+            if let Some(data) = panel.and_then(LibraryPanel::active_hero_data) {
+                data
+            } else {
+                // No hero this frame: the placeholder is final.
+                if let Some(panel) = self
+                    .application
+                    .get_component_mut(&ComponentId::Library)
+                    .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+                {
+                    panel.set_active_hero_image(HeroImageState::None);
                 }
+                return;
             }
         };
         let overlay_box = self

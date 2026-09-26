@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+    audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, App, ImageFetchReq,
+    ImageSource, Instant, MAX_IMAGE_FETCHES, NAV_IMAGE_FETCH_IDLE_DELAY,
+};
 
 impl App {
     pub(in crate::app) fn fetch_card_image(
@@ -34,14 +37,14 @@ impl App {
         #[cfg(test)]
         {
             self.card_image_fetch_calls += 1;
-        }
+        };
         // Reserve the key immediately so duplicate (and queued) requests dedupe.
         self.card_image_loading.insert(cache_key.clone());
         let req = ImageFetchReq {
             cache_key,
             item_id,
             series_id,
-            types: types.iter().map(|s| s.to_string()).collect(),
+            types: types.iter().map(ToString::to_string).collect(),
             source: ImageSource::Emby,
         };
         if self.image_fetches_active >= MAX_IMAGE_FETCHES {

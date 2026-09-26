@@ -50,11 +50,11 @@ pub(in crate::app) fn marquee_spans(
 }
 
 fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
+    const STEP_MS: u128 = 150;
+    const HOLD_MS: u128 = 600;
     if overflow == 0 {
         return 0;
     }
-    const STEP_MS: u128 = 150;
-    const HOLD_MS: u128 = 600;
     let scroll_ms = overflow as u128 * STEP_MS;
     let cycle = 2 * HOLD_MS + 2 * scroll_ms;
     let t = elapsed_ms % cycle;

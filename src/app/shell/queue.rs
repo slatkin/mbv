@@ -25,7 +25,8 @@ pub(in crate::app) struct QueueProjectionFingerprint {
 
 fn progress_bucket(playback: PlaybackState) -> u16 {
     if playback.active && playback.position_ticks > 0 && playback.runtime_ticks > 0 {
-        (playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100) as u16
+        u16::try_from((playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100))
+            .expect("clamped progress bucket fits in u16")
     } else {
         u16::MAX
     }
@@ -227,11 +228,11 @@ impl Model {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_pending_slot(update.pending_slot);
                 if let Some(slots) = update.slots {
-                    queue.set_rows(slots, update.playback);
+                    queue.set_rows(&slots, update.playback);
                 } else if let Some((target, row)) = update.patch {
-                    queue.set_row_patch(&target, row);
+                    queue.set_row_patch(target, row);
                 }
-                queue.set_cursor(update.cursor);
+                queue.set_cursor(&update.cursor);
                 queue.set_scope(update.scope);
                 // The footer pills are all queue concern (playlist source,
                 // autosave, Local/Remote scope while on an mbv-based
@@ -269,7 +270,7 @@ impl Model {
     pub(in crate::app) fn render_queue_panel_at(
         &mut self,
         frame: &mut ratatui::Frame,
-        _placement: ratatui::layout::Rect,
+        placement: ratatui::layout::Rect,
     ) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
@@ -277,7 +278,6 @@ impl Model {
         }
         // The queue panel paints its whole surface (frame, title, status,
         // list) at the placement computed by the root loop (task 3.1).
-        let placement = _placement;
         if placement.width == 0 || placement.height == 0 {
             return;
         }
@@ -305,7 +305,7 @@ impl Model {
             QueueRequest::Play { scope, slot_id } => {
                 if let Some(index) = self.select_queue_slot(scope, slot_id) {
                     self.app
-                        .dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+                        .dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
                             index,
                         ));
                 }
@@ -490,7 +490,7 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::{Msg, QueueRequest};
+    use crate::app::components::Msg;
     use crate::app::tests::{make_app_stub, make_item, make_items, make_remote_app_stub};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -518,7 +518,7 @@ mod tests {
             let mut status = app.player.status.lock().unwrap();
             status.active = true;
             status.current_idx = 0;
-        }
+        };
         let mut model = Model::new(app);
 
         model.sync_queue();
@@ -552,7 +552,7 @@ mod tests {
             let mut status = app.player.status.lock().unwrap();
             status.active = true;
             status.current_idx = 0;
-        }
+        };
         let mut model = Model::new(app);
 
         model.sync_queue();

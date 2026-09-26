@@ -83,7 +83,7 @@ impl App {
             Err(error) => {
                 let state =
                     crate::app::dispatch::session::service_startup::classify_audiobookshelf_failure(
-                        &error,
+                        error,
                     );
                 self.audiobookshelf_runtime
                     .complete(completion.generation, state);

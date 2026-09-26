@@ -37,15 +37,13 @@ impl App {
         if lib_idx >= self.libs.len() {
             return;
         }
-        let parent_id = match explicit_folder {
-            Some(id) => id,
-            None => {
-                let lib = &self.libs[lib_idx];
-                lib.nav_stack
-                    .last()
-                    .map(|l| l.parent_id.clone())
-                    .unwrap_or_else(|| lib.library.id.clone())
-            }
+        let parent_id = if let Some(id) = explicit_folder {
+            id
+        } else {
+            let lib = &self.libs[lib_idx];
+            lib.nav_stack
+                .last()
+                .map_or_else(|| lib.library.id.clone(), |l| l.parent_id.clone())
         };
         // Delegate to the same fetch the context menu's Shuffle action uses
         // (`ContextAction::ShuffleFolder` -> `shuffle_folder`), rather than

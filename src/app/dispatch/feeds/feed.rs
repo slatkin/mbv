@@ -19,16 +19,16 @@ impl App {
             "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
             lib.library.name,
             lib.nav_stack.len(),
-            root.map(|lvl| lvl.parent_id.as_str()).unwrap_or(""),
-            root.map(|lvl| lvl.items.len()).unwrap_or(0),
-            root.map(|lvl| lvl.loading).unwrap_or(false),
+            root.map_or("", |lvl| lvl.parent_id.as_str()),
+            root.map_or(0, |lvl| lvl.items.len()),
+            root.is_some_and(|lvl| lvl.loading),
             feed.is_some(),
-            feed.map(|state| state.loading).unwrap_or(false),
-            feed.map(|state| state.selected_group).unwrap_or(0),
-            feed.map(|state| state.groups.len()).unwrap_or(0),
-            feed.map(|state| state.all_items.len()).unwrap_or(0),
-            feed.map(|state| state.video_cursor).unwrap_or(0),
-            feed.map(|state| state.video_scroll).unwrap_or(0),
+            feed.is_some_and(|state| state.loading),
+            feed.map_or(0, |state| state.selected_group),
+            feed.map_or(0, |state| state.groups.len()),
+            feed.map_or(0, |state| state.all_items.len()),
+            feed.map_or(0, |state| state.video_cursor),
+            feed.map_or(0, |state| state.video_scroll),
             self.is_feed_home_video_group_view(lib_idx),
         );
     }
@@ -37,16 +37,17 @@ impl App {
         self.libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
-            .map(|state| state.groups.len())
-            .unwrap_or(0)
+            .map_or(0, |state| state.groups.len())
     }
 
     pub(in crate::app) fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
         self.libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
-            .map(|state| state.selected_group_index())
-            .unwrap_or(0)
+            .map_or(
+                0,
+                crate::app::state::types::feed::FeedHomeVideoState::selected_group_index,
+            )
     }
 
     pub(in crate::app) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<EmbyItem> {
@@ -181,15 +182,11 @@ impl App {
     ) -> bool {
         self.tab.emby_library_index() == Some(lib_idx)
             && self.is_feed_home_video_library(lib_idx)
-            && self
-                .libs
-                .get(lib_idx)
-                .map(|lib| {
-                    lib.nav_stack.len() == 1
-                        && lib.nav_stack[0].is_fully_loaded()
-                        && extra_ok(&lib.nav_stack[0])
-                })
-                .unwrap_or(false)
+            && self.libs.get(lib_idx).is_some_and(|lib| {
+                lib.nav_stack.len() == 1
+                    && lib.nav_stack[0].is_fully_loaded()
+                    && extra_ok(&lib.nav_stack[0])
+            })
     }
 
     fn spawn_feed_home_video_aggregate(&self, lib_idx: usize) {
@@ -319,19 +316,14 @@ impl App {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
         }
-        let needs_reload = self
-            .libs
-            .get(lib_idx)
-            .map(|lib| {
-                lib.nav_stack.is_empty()
-                    || (!lib.nav_stack[0].loading
-                        && lib.nav_stack[0]
-                            .items
-                            .first()
-                            .map(|item| !item.is_folder)
-                            .unwrap_or(true))
-            })
-            .unwrap_or(false);
+        let needs_reload = self.libs.get(lib_idx).is_some_and(|lib| {
+            lib.nav_stack.is_empty()
+                || (!lib.nav_stack[0].loading
+                    && lib.nav_stack[0]
+                        .items
+                        .first()
+                        .is_none_or(|item| !item.is_folder))
+        });
         if !needs_reload {
             return;
         }
@@ -429,18 +421,14 @@ impl App {
     }
 
     pub(in crate::app) fn maybe_refresh_feed_groups_after_refresh(&mut self, lib_idx: usize) {
-        let should_refresh_feed_groups = self
-            .libs
-            .get(lib_idx)
-            .map(|lib| {
-                self.tab.emby_library_index() == Some(lib_idx)
-                    && self.is_feed_home_video_library(lib_idx)
-                    && lib
-                        .nav_stack
-                        .first()
-                        .is_some_and(BrowseLevel::is_fully_loaded)
-            })
-            .unwrap_or(false);
+        let should_refresh_feed_groups = self.libs.get(lib_idx).is_some_and(|lib| {
+            self.tab.emby_library_index() == Some(lib_idx)
+                && self.is_feed_home_video_library(lib_idx)
+                && lib
+                    .nav_stack
+                    .first()
+                    .is_some_and(BrowseLevel::is_fully_loaded)
+        });
         if should_refresh_feed_groups {
             if let Some(lib) = self.libs.get_mut(lib_idx) {
                 let state = lib

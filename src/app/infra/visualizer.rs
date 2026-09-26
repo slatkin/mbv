@@ -49,7 +49,8 @@ impl App {
         if let Some(mut worker) = self.visualizer.take() {
             worker.stop();
         }
-        self.visualizer_window = Default::default();
+        self.visualizer_window =
+            crate::app::infra::visualizer_worker::StereoSampleWindow::default();
     }
 
     pub(in crate::app) fn toggle_visualizer(&mut self) {
@@ -58,10 +59,10 @@ impl App {
         }
         self.visualizer_enabled = !self.visualizer_enabled;
         self.visualizer_failed = false;
-        if !self.visualizer_enabled {
-            self.stop_visualizer_worker();
-        } else {
+        if self.visualizer_enabled {
             self.sync_visualizer();
+        } else {
+            self.stop_visualizer_worker();
         }
         self.save_prefs();
     }

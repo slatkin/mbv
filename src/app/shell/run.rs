@@ -1,7 +1,15 @@
-use super::*;
-use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
+
+use super::{
+    arbitrate_key, fold_mouse_messages, init_terminal, install_signal_handlers, restore_terminal,
+    service_startup, start_quit_watchdog, IdleFeed, Model, Msg, MusicTrackFocusRequest, PanelFocus,
+    PollStrategy, RouterOutcome, QUIT_REQUESTED,
+};
+// The run-loop tests reach `App` through this module's scope.
+#[cfg(test)]
+use super::App;
+use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {
@@ -23,7 +31,6 @@ impl Model {
         self.sync_sidebar_overlays();
         self.sync_library_playback_panel();
         self.sync_feeds();
-        self.sync_audiobookshelf_book();
         self.sync_queue();
         self.sync_queue_boundary();
         self.sync_tab_panel();
@@ -123,25 +130,25 @@ impl Model {
             let Some(placement) = placement else { continue };
             match placement {
                 crate::app::render::arrangements::chrome::PanelPlacement::Tab(area) => {
-                    self.render_tab_panel_at(f, area)
+                    self.render_tab_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::Library(area) => {
-                    self.render_library_panel_at(f, area)
+                    self.render_library_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::LibraryPlayback(area) => {
-                    self.render_library_playback_panel_at(f, area)
+                    self.render_library_playback_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::Queue(area) => {
-                    self.render_queue_panel_at(f, area)
+                    self.render_queue_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::QueuePlayback(area) => {
-                    self.render_queue_playback_panel(f, area)
+                    self.render_queue_playback_panel(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::StatusBar(area) => {
-                    self.render_status_bar_panel_at(f, area)
+                    self.render_status_bar_panel_at(f, area);
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::QueueBoundary(area) => {
-                    self.render_queue_boundary_at(f, area)
+                    self.render_queue_boundary_at(f, area);
                 }
             }
         }
@@ -239,9 +246,8 @@ impl Model {
             let items = self
                 .tv_latest_snapshots
                 .get(&library_id)
-                .map(|snapshot| snapshot.items.clone())
-                .unwrap_or(items);
-            self.update_emby_latest_snapshot(library_id, title, items);
+                .map_or(items, |snapshot| snapshot.items.clone());
+            self.update_emby_latest_snapshot(&library_id, title, items);
         }
     }
 
@@ -259,13 +265,10 @@ impl Model {
         // no pending flash, mirroring the render loop's own expiry check.
         let has_live_flash = self.app.status_expires.is_some_and(|t| t > Instant::now());
         if !has_live_flash {
-            self.app.status = self
-                .app
-                .emby_client()
-                .map(|_| "Loading...".into())
-                .unwrap_or_else(|| {
-                    service_startup::startup_status(self.app.emby_runtime.state).into()
-                });
+            self.app.status = self.app.emby_client().map_or_else(
+                || service_startup::startup_status(self.app.emby_runtime.state).into(),
+                |_| "Loading...".into(),
+            );
         }
         self.home_content.loading = true;
         terminal.draw(|f| self.draw_frame(f, false, false))?;
@@ -284,7 +287,9 @@ impl Model {
         let quit_timeout = Duration::from_secs(self.app.config.lock().unwrap().quit_timeout_secs);
         start_quit_watchdog(self.app.player.quit_handle(), quit_timeout);
 
-        let mut last_render = Instant::now() - Duration::from_secs(2);
+        let mut last_render = Instant::now()
+            .checked_sub(Duration::from_secs(2))
+            .unwrap_or_else(Instant::now);
 
         'outer: loop {
             let mut had_events = false;

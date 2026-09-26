@@ -80,7 +80,7 @@ impl App {
                 for target in targets {
                     match target {
                         BulkRemoveTarget::ContinueWatching(item) => {
-                            self.remove_from_continue_watching(*item)
+                            self.remove_from_continue_watching(&item);
                         }
                         BulkRemoveTarget::Queue(slot_id) => queue_slot_ids.push(slot_id),
                     }
@@ -143,8 +143,7 @@ impl App {
                         .libs
                         .get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .map(|level| level.resting().cursor())
-                        .unwrap_or(0);
+                        .map_or(0, |level| level.resting().cursor());
                     if let Some(item) = self.current_lib_item(lib_idx, cursor) {
                         self.enqueue_lib_item(lib_idx, item);
                     }
@@ -152,7 +151,7 @@ impl App {
                 None
             }
             Some(ContextAction::EnqueueFolder(item)) => {
-                self.do_enqueue_folder((*item).clone());
+                self.do_enqueue_folder(&item);
                 None
             }
             Some(ContextAction::MarkPlayed(id)) => {
@@ -165,7 +164,7 @@ impl App {
             }
             Some(ContextAction::RemoveFromContinueWatching) => {
                 if let Some(item) = cw_item {
-                    self.remove_from_continue_watching(item);
+                    self.remove_from_continue_watching(&item);
                 }
                 None
             }
@@ -179,7 +178,7 @@ impl App {
     ) -> Option<ContextAction> {
         match action {
             Some(ContextAction::PlayQueue(index)) => {
-                self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+                self.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
                     index,
                 ));
                 None
@@ -197,11 +196,11 @@ impl App {
                 None
             }
             Some(ContextAction::FeedsMarkPlayed(entries)) => {
-                self.set_feed_entries_played(entries, true);
+                self.set_feed_entries_played(&entries, true);
                 None
             }
             Some(ContextAction::FeedsMarkUnplayed(entries)) => {
-                self.set_feed_entries_played(entries, false);
+                self.set_feed_entries_played(&entries, false);
                 None
             }
             action => action,
@@ -225,7 +224,8 @@ impl App {
                     .collect();
                 self.spawn_navigate_to_item(item_id, item_type, libs);
             }
-            Some(
+            None
+            | Some(
                 ContextAction::Play
                 | ContextAction::PlaySelection(_)
                 | ContextAction::ShuffleSelection(_)
@@ -247,7 +247,6 @@ impl App {
                 | ContextAction::FeedsMarkPlayed(_)
                 | ContextAction::FeedsMarkUnplayed(_),
             ) => {}
-            None => {}
         }
     }
 
@@ -265,7 +264,7 @@ impl App {
             // focus should not occur, but keep the legacy read for
             // defensive parity with the pre-D2 behavior.
             let index = self.displayed_queue().queue_cursor;
-            self.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(
+            self.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(
                 index,
             ));
         } else if let Some(lib_idx) = lib_idx {
@@ -273,8 +272,7 @@ impl App {
                 .libs
                 .get(lib_idx)
                 .and_then(|lib| lib.nav_stack.last())
-                .map(|l| l.resting().cursor())
-                .unwrap_or(0);
+                .map_or(0, |l| l.resting().cursor());
             if let Some(item) = self.current_lib_item(lib_idx, cursor) {
                 self.select_item(lib_idx, item);
             }
@@ -329,7 +327,7 @@ impl App {
                                 .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                         }
                         Err(e) => {
-                            self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error)
+                            self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
                         }
                     }
                 } else if let Some(lib_idx) = lib_idx {
@@ -367,7 +365,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn remove_from_continue_watching(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn remove_from_continue_watching(&mut self, item: &EmbyItem) {
         // The shell resolved the target Continue Watching item at the Model
         // boundary from Model-owned `home_content` (task 5.3d) -- the App no
         // longer holds `home.continue_items`/`continue_cursor` to re-read.
@@ -389,7 +387,7 @@ impl App {
                             .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                     }
                     Err(e) => {
-                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error)
+                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
                     }
                 }
             }
@@ -400,7 +398,7 @@ impl App {
         }
     }
 
-    pub(in crate::app) fn toggle_watched_home_item(&mut self, item: EmbyItem) {
+    pub(in crate::app) fn toggle_watched_home_item(&mut self, item: &EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }
@@ -426,7 +424,7 @@ impl App {
                             .send(LibEvent::HomeContentRefreshed(Box::new(content)));
                     }
                     Err(e) => {
-                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error)
+                        self.flash(format!("Couldn't refresh home: {e}"), ToastSeverity::Error);
                     }
                 }
             }
@@ -448,7 +446,7 @@ impl App {
     /// targets the supplied item's identity — identical in the legacy flow,
     /// and correct when the component-selected item differs from a parked
     /// App cursor.
-    pub(in crate::app) fn toggle_watched_item(&mut self, lib_idx: usize, item: EmbyItem) {
+    pub(in crate::app) fn toggle_watched_item(&mut self, lib_idx: usize, item: &EmbyItem) {
         if item.is_folder || item.is_audio() {
             return;
         }
@@ -496,7 +494,7 @@ impl App {
 
     fn set_feed_entries_played(
         &mut self,
-        entries: Vec<mbv_core::playback_queue::FeedEntry>,
+        entries: &[mbv_core::playback_queue::FeedEntry],
         played: bool,
     ) {
         let user_id = self

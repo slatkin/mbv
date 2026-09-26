@@ -7,10 +7,10 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
 
     // The Wide frame's painted gap and list rect, read from the panel.
     let gap = panel_of(&harness)
-        .and_then(|panel| panel.test_split_gap())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_split_gap)
         .expect("the Wide frame paints a split gap");
     let wide_list = panel_of(&harness)
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_list_rect)
         .expect("the Wide frame paints a list slot");
 
     // Resize to Narrow (below TWO_COLUMN_THRESHOLD, above the mini view) and
@@ -21,12 +21,12 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
     drop(draw_frame_sized(&mut harness));
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_split_gap())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_split_gap)
             .is_none(),
         "the Narrow frame must not retain the Wide split's gap"
     );
     let narrow_list = panel_of(&harness)
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_list_rect)
         .expect("the Narrow frame paints a list slot");
 
     // A press at the old gutter position no longer arms the split drag, so
@@ -162,7 +162,7 @@ fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
         .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))));
     drop(draw_frame_sized(&mut harness));
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
 
     let (mut harness, log) = migrated_home_with_workspace();
@@ -199,14 +199,14 @@ fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
     assert_eq!(log.borrow().selections.last(), Some(&Some("gamma".into())));
     drop(draw_frame_sized(&mut harness));
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
     // The 30-row overlay leaves the Workspace one content row: the landscape
     // grid packs the Dune/2021 title/meta entries into a single row, the
     // Workspace box takes the remaining rows, and the cursor on the second
     // track clamps the viewport scroll to 1 so it stays visible.
     let (_, workspace_content) = panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_workspace_box())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_workspace_box)
         .expect("the overlay's Workspace box painted");
     assert_eq!(
         workspace_content.height, 1,
@@ -268,7 +268,7 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
     }));
     let _ = harness.step();
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
     harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
         code: tuirealm::event::Key::Esc,
@@ -277,13 +277,13 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
     let _ = harness.step();
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "Queue Esc must not dismiss Library overlay"
     );
     drop(draw_frame(&mut harness));
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
     assert_eq!(
         harness
@@ -301,7 +301,7 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
         Some(&ComponentId::Library)
     );
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
     assert_eq!(
         harness

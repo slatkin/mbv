@@ -4,6 +4,7 @@ use super::types::{
 };
 use serde_json::Value;
 
+#[must_use]
 pub fn parse_video_info(streams: &[Value]) -> String {
     let Some(s) = streams.iter().find(|s| s["Type"].as_str() == Some("Video")) else {
         return String::new();
@@ -16,12 +17,12 @@ pub fn parse_video_info(streams: &[Value]) -> String {
         1920.. => "1080p".to_string(),
         1280.. => "720p".to_string(),
         720.. => "480p".to_string(),
-        d if d > 0 => format!("{}p", height),
+        d if d > 0 => format!("{height}p"),
         _ => String::new(),
     };
     let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
     match (res.is_empty(), codec.is_empty()) {
-        (false, false) => format!("{} {}", res, codec),
+        (false, false) => format!("{res} {codec}"),
         (false, true) => res,
         (true, false) => codec,
         (true, true) => String::new(),
@@ -81,6 +82,7 @@ fn audio_language_name(lang: &str) -> &'static str {
         .unwrap_or("")
 }
 
+#[must_use]
 pub fn parse_audio_info(streams: &[Value]) -> String {
     let mut parts: Vec<String> = Vec::new();
     for s in streams
@@ -111,6 +113,7 @@ pub fn parse_audio_info(streams: &[Value]) -> String {
     parts.join("  |  ")
 }
 
+#[must_use]
 pub fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
     let audio_only = !streams.iter().any(|s| s["Type"].as_str() == Some("Video"));
     let video_label = if audio_only {
@@ -239,9 +242,54 @@ fn parse_artist_items(raw: &Value) -> Vec<EmbyArtistRef> {
         .unwrap_or_default()
 }
 
+fn parse_genres(raw: &Value) -> Vec<String> {
+    raw["Genres"]
+        .as_array()
+        .map(|genres| {
+            genres
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_people(raw: &Value) -> Vec<EmbyPerson> {
+    raw["People"]
+        .as_array()
+        .map(|people| {
+            people
+                .iter()
+                .map(|person| EmbyPerson {
+                    name: person["Name"].as_str().unwrap_or("").to_string(),
+                    role: person["Role"].as_str().unwrap_or("").to_string(),
+                    kind: person["Type"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn parse_external_urls(raw: &Value) -> Vec<EmbyLink> {
+    raw["ExternalUrls"]
+        .as_array()
+        .map(|links| {
+            links
+                .iter()
+                .map(|link| EmbyLink {
+                    name: link["Name"].as_str().unwrap_or("").to_string(),
+                    url: link["Url"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The single raw-JSON-to-`EmbyItem` constructor. `pub` so the app crate's
 /// tests parse recorded item JSON (task 5.3's fixtures) the way the live
 /// parse path does (task 5.4's artwork-policy tests).
+#[must_use]
 pub fn parse_item(raw: &Value) -> EmbyItem {
     let ud = raw.get("UserData").unwrap_or(&Value::Null);
     let item_type = raw["Type"].as_str().unwrap_or("").to_string();
@@ -258,9 +306,9 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
                 | "Folder"
         );
     let total_count = if item_type == "Series" {
-        raw["RecursiveItemCount"].as_u64().unwrap_or(0) as u32
+        u32::try_from(raw["RecursiveItemCount"].as_u64().unwrap_or(0)).unwrap_or(u32::MAX)
     } else {
-        raw["ChildCount"].as_u64().unwrap_or(0) as u32
+        u32::try_from(raw["ChildCount"].as_u64().unwrap_or(0)).unwrap_or(u32::MAX)
     };
     EmbyItem {
         id: raw["Id"].as_str().unwrap_or("").to_string(),
@@ -281,7 +329,8 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
         album: raw["Album"].as_str().unwrap_or("").to_string(),
         index_number: raw["IndexNumber"].as_i64().unwrap_or(0),
         parent_index_number: raw["ParentIndexNumber"].as_i64().unwrap_or(0),
-        unplayed_item_count: ud["UnplayedItemCount"].as_u64().unwrap_or(0) as u32,
+        unplayed_item_count: u32::try_from(ud["UnplayedItemCount"].as_u64().unwrap_or(0))
+            .unwrap_or(u32::MAX),
         path: raw["Path"].as_str().unwrap_or("").to_string(),
         artist: raw["AlbumArtist"]
             .as_str()
@@ -293,7 +342,9 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
         production_year: raw["ProductionYear"]
             .as_u64()
             .or_else(|| raw["Year"].as_u64())
-            .unwrap_or(0) as u32,
+            .unwrap_or(0)
+            .try_into()
+            .unwrap_or(u32::MAX),
         end_year: raw["EndDate"]
             .as_str()
             .and_then(|s| s.get(..4))
@@ -303,45 +354,14 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
         premiere_date: raw["PremiereDate"]
             .as_str()
             .and_then(|s| s.get(..10))
-            .map(|s| s.to_string())
+            .map(str::to_string)
             .unwrap_or_default(),
         date_added: raw["DateCreated"].as_str().unwrap_or_default().to_string(),
         total_count,
         container: raw["Container"].as_str().unwrap_or("").to_string(),
-        genres: raw["Genres"]
-            .as_array()
-            .map(|genres| {
-                genres
-                    .iter()
-                    .filter_map(|genre| genre.as_str().map(str::to_string))
-                    .collect()
-            })
-            .unwrap_or_default(),
-        people: raw["People"]
-            .as_array()
-            .map(|people| {
-                people
-                    .iter()
-                    .map(|person| EmbyPerson {
-                        name: person["Name"].as_str().unwrap_or("").to_string(),
-                        role: person["Role"].as_str().unwrap_or("").to_string(),
-                        kind: person["Type"].as_str().unwrap_or("").to_string(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        external_urls: raw["ExternalUrls"]
-            .as_array()
-            .map(|links| {
-                links
-                    .iter()
-                    .map(|link| EmbyLink {
-                        name: link["Name"].as_str().unwrap_or("").to_string(),
-                        url: link["Url"].as_str().unwrap_or("").to_string(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
+        genres: parse_genres(raw),
+        people: parse_people(raw),
+        external_urls: parse_external_urls(raw),
         video_info: raw["MediaStreams"]
             .as_array()
             .map(|s| parse_video_info(s))

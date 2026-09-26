@@ -46,7 +46,7 @@ fn podcast_hero_image_projection_keys_the_parent_show_cover_through_the_sync_pas
         .application
         .get_component_mut(&ComponentId::Library)
         .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-        .and_then(|panel| panel.active_hero_data())
+        .and_then(LibraryPanel::active_hero_data)
         .expect("the podcast hero projects")
         .facts
         .artwork
@@ -75,6 +75,27 @@ fn podcast_hero_image_projection_keys_the_parent_show_cover_through_the_sync_pas
 /// reported "wide library hero image flashes constantly" while an ABS podcast
 /// plays. A non-playing show never collided: its `library_item_id` gave the
 /// hero a different key.
+/// The playing episode belongs to the show whose cover the selected hero
+/// draws: the exact hero/queue-card cache-key collision case under test.
+fn playing_show_episode() -> mbv_core::playback_queue::QueueItem {
+    mbv_core::playback_queue::QueueItem::Audiobookshelf(
+        mbv_core::playback_queue::AudiobookshelfQueueItem {
+            library_item_id: "show-a".into(),
+            episode_id: "episode-a".into(),
+            title: "Episode A".into(),
+            show_title: Some("Show A".into()),
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: Some("cover".into()),
+        },
+    )
+}
+
 #[test]
 fn playing_show_cover_keeps_the_hero_and_queue_card_entries_apart() {
     let mut app = audiobookshelf_app();
@@ -84,31 +105,12 @@ fn playing_show_cover_keeps_the_hero_and_queue_card_entries_apart() {
     );
     app.image_protocol_enabled = true;
     app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-    // The playing episode belongs to the show whose cover the selected hero
-    // draws, which is exactly the collision case.
-    app.player_tab
-        .queue
-        .append(mbv_core::playback_queue::QueueItem::Audiobookshelf(
-            mbv_core::playback_queue::AudiobookshelfQueueItem {
-                library_item_id: "show-a".into(),
-                episode_id: "episode-a".into(),
-                title: "Episode A".into(),
-                show_title: Some("Show A".into()),
-                author: None,
-                description: None,
-                duration_ticks: None,
-                position_ticks: 0,
-                played: false,
-                pub_date_secs: None,
-                is_finished: false,
-                cover_path: Some("cover".into()),
-            },
-        ));
+    app.player_tab.queue.append(playing_show_episode());
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
         status.current_idx = 0;
-    }
+    };
     let suffix = app.current_protocol_suffix();
     let hero_key = crate::app::images::audiobookshelf_hero_cover_cache_key(
         "http://abs.test",
@@ -296,7 +298,7 @@ fn wide_hero_overview_wheel_scrolls_the_episode_description() {
             "A deliberately long episode description that overflows the hero box. ".repeat(80),
         );
         episodes.push(episode("show-a", "episode-b"));
-    }
+    };
     let mut harness = TickHarness::new(app);
     draw(&mut harness, 160);
     let (box_rect, max_offset) = {

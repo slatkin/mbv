@@ -7,7 +7,7 @@ pub use types_queue_state::*;
 mod launch_state;
 pub use launch_state::*;
 mod test_support;
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 pub use test_support::*;
 mod types_feed;
 pub use types_feed::*;
@@ -28,5 +28,5 @@ pub use audiobookshelf_lifecycle::*;
 mod emby_lifecycle;
 pub use emby_lifecycle::*;
 
-#[cfg(any(test, feature = "test-support"))]
+#[cfg(any(test, feature = "test"))]
 pub mod tests;

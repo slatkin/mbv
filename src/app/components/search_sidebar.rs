@@ -187,8 +187,11 @@ impl SearchSidebarComponent {
         if n <= 1 {
             return;
         }
-        let cur = self.sidebar.type_filter as i64;
-        let new = ((cur + delta).rem_euclid(n as i64)) as usize;
+        let cur =
+            i64::try_from(self.sidebar.type_filter).expect("type_filter is a small list index");
+        let n = i64::try_from(n).expect("type-filter count is a small list length");
+        let new = (cur + delta).rem_euclid(n);
+        let new = usize::try_from(new).expect("rem_euclid result is non-negative");
         self.sidebar.type_filter = new;
         self.sidebar.cursor = 0;
         self.sidebar.scroll = 0;
@@ -233,7 +236,7 @@ impl SearchSidebarComponent {
     /// no-op. A wheel over a painted result row moves the local cursor by one
     /// result; wheel over any other region is ignored. Right-click has no
     /// keyboard equivalent here and is ignored.
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
+    fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
@@ -322,9 +325,10 @@ impl Default for SearchSidebarComponent {
 }
 
 impl Component for SearchSidebarComponent {
-    fn view(&mut self, f: &mut Frame, _area: Rect) {
+    fn view(&mut self, frame: &mut Frame, area: Rect) {
+        let _ = area;
         let geometry =
-            crate::app::render::render_search_sidebar(f, self.panel_area, &mut self.sidebar);
+            crate::app::render::render_search_sidebar(frame, self.panel_area, &mut self.sidebar);
         // Adopt the rects the painter just produced into the irregular-
         // chrome registries (task 5.1, design.md D6).
         self.frame = geometry.frame;
@@ -338,7 +342,7 @@ impl Component for SearchSidebarComponent {
         }
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _attr: Attribute) -> Option<QueryResult<'_>> {
         None
     }
 
@@ -374,7 +378,7 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
                 }
                 None => LeafKeyResult::Unhandled.into_option(),
             },
-            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            Event::Mouse(mouse) => self.handle_mouse(*mouse),
             #[cfg(test)]
             Event::User(UserEvent::Clock(now)) => self.handle_clock(*now),
             _ => None,
@@ -498,7 +502,10 @@ mod tests {
         comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::NONE));
         comp.handle_key(&make_key(Key::Char('b'), KeyModifiers::NONE));
         let now = comp.debounce_deadline.unwrap();
-        let msg = comp.handle_clock(now - Duration::from_millis(1));
+        let msg = comp.handle_clock(
+            now.checked_sub(Duration::from_millis(1))
+                .expect("debounce deadline follows its start by 300 ms"),
+        );
         assert_eq!(msg, None);
         assert!(comp.debounce_pending.is_some());
     }

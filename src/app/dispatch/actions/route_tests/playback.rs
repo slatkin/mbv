@@ -71,7 +71,7 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
         }) if items.len() == 1 && items[0].id == item.id
     ));
     assert!(app.player_tab.emby_items().is_empty());
-    assert!(command_rx.try_recv().is_err());
+    command_rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn failed_local_preparation_leaves_attachment_unchanged() {
     assert!(matches!(result, Err(ref error) if error == "test preparation failure"));
     assert!(app.player.is_remote());
     assert!(app.remote_player_tab.is_some());
-    assert!(command_rx.try_recv().is_err());
+    command_rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -205,7 +205,7 @@ fn declined_local_fall_through_clears_only_the_pending_play() {
     assert!(app.player.is_remote());
     assert_eq!(app.queue_scope, QueueScope::Remote);
     assert_eq!(app.status, status);
-    assert!(command_rx.try_recv().is_err());
+    command_rx.try_recv().unwrap_err();
 }
 
 #[test]

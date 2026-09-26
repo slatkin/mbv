@@ -80,7 +80,7 @@ pub(in crate::app) struct ContextMenuEntry {
     pub(in crate::app) action: Option<ContextAction>,
 }
 
-pub(in crate::app) fn is_bulk_action(action: &Option<ContextAction>) -> bool {
+pub(in crate::app) fn is_bulk_action(action: Option<&ContextAction>) -> bool {
     matches!(
         action,
         Some(
@@ -155,13 +155,18 @@ impl ContextMenu {
     /// spaces, matching `render_context_menu`'s `" {} "` item format), and
     /// `entries.len() + 2` rows (one blank top/bottom border row each).
     pub(in crate::app) fn rendered_size(entries: &[ContextMenuEntry]) -> (u16, u16) {
-        let width = (entries
-            .iter()
-            .map(|entry| UnicodeWidthStr::width(entry.label))
-            .max()
-            .unwrap_or(4)
-            + 4) as u16;
-        let height = entries.len() as u16 + 2;
+        let width = u16::try_from(
+            entries
+                .iter()
+                .map(|entry| UnicodeWidthStr::width(entry.label))
+                .max()
+                .unwrap_or(4)
+                + 4,
+        )
+        .unwrap_or(u16::MAX);
+        let height = u16::try_from(entries.len())
+            .unwrap_or(u16::MAX)
+            .saturating_add(2);
         (width.max(4), height.max(1))
     }
 

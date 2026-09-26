@@ -41,7 +41,7 @@ fn attaching_to_empty_local_daemon_does_not_restore_or_persist_saved_queue() {
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
         config,
     );
     assert!(app.player_tab.emby_items().is_empty());
@@ -137,7 +137,7 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     })
     .expect("save stale queue state");
 
@@ -174,8 +174,8 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     ));
 
     let progress = &app.audiobookshelf_browse[0].progress[&("show-a".into(), "episode-a".into())];
-    assert_eq!(
-        progress.current_time_seconds, 30.0,
+    assert!(
+        (progress.current_time_seconds - 30.0).abs() < f64::EPSILON,
         "browse must reflect the adopted acknowledged position"
     );
     assert!(!progress.is_finished);

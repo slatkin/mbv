@@ -28,6 +28,9 @@ pub(in crate::app) fn install_signal_handlers() {
         fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
     }
     unsafe {
+        // SAFETY: registering handlers for SIGHUP and SIGTERM whose bodies
+        // only store to an atomic and never allocate or take locks, which is
+        // async-signal-safe.
         signal(1, handle_quit_signal); // SIGHUP — terminal closed
         signal(15, handle_quit_signal); // SIGTERM — process termination
     }
@@ -40,7 +43,9 @@ fn stdin_has_hup() -> bool {
         events: 0,
         revents: 0,
     };
-    unsafe { libc::poll(&mut pfd, 1, 0) > 0 && (pfd.revents & libc::POLLHUP) != 0 }
+    // SAFETY: `pfd` is a valid, initialised `pollfd` whose address is valid
+    // for the duration of the call; `poll` does not retain the pointer.
+    unsafe { libc::poll(&raw mut pfd, 1, 0) > 0 && (pfd.revents & libc::POLLHUP) != 0 }
 }
 
 // Watchdog thread: detects terminal close (SIGHUP or stdin POLLHUP) and

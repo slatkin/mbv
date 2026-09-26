@@ -215,7 +215,7 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
         .draw(|frame| {
             harness
                 .model_mut()
-                .render_library_playback_panel_at(frame, Rect::new(10, 5, 40, 4))
+                .render_library_playback_panel_at(frame, Rect::new(10, 5, 40, 4));
         })
         .unwrap();
 
@@ -348,7 +348,7 @@ fn tick_ctrl_arrows_switch_main_panels() {
         RouterOutcome::Command(Command::FocusPanel(PanelFocus::Library))
     );
     if let RouterOutcome::Command(command) = outcome.router {
-        harness.model_mut().dispatch_router_command(command);
+        harness.model_mut().dispatch_router_command(&command);
     }
     assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
 
@@ -364,7 +364,7 @@ fn tick_ctrl_arrows_switch_main_panels() {
         RouterOutcome::Command(Command::FocusPanel(PanelFocus::Queue))
     );
     if let RouterOutcome::Command(command) = outcome.router {
-        both.model_mut().dispatch_router_command(command);
+        both.model_mut().dispatch_router_command(&command);
     }
     assert_eq!(both.model().app.panel_focus, PanelFocus::Queue);
 
@@ -396,8 +396,11 @@ fn search_clock_user_event_reaches_mounted_search_component() {
     // Expire the deadline directly instead of sleeping out the 300ms
     // wall-clock debounce: the duration is not under test, only that a
     // past-due deadline dispatches on Clock.
-    search_component_mut(&mut harness).debounce_deadline =
-        Some(Instant::now() - Duration::from_millis(1));
+    search_component_mut(&mut harness).debounce_deadline = Some(
+        Instant::now()
+            .checked_sub(Duration::from_millis(1))
+            .expect("a 1ms-back deadline only underflows before process start"),
+    );
 
     harness.inject(Event::User(UserEvent::Clock(Instant::now())));
     let raw_messages = harness
@@ -434,8 +437,11 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
     // trailing application.tick would block its full 500ms poll with no
     // event queued, and this test asserts nothing about that tick part
     // (raw_messages is expected empty).
-    search_component_mut(&mut harness).debounce_deadline =
-        Some(Instant::now() - Duration::from_millis(1));
+    search_component_mut(&mut harness).debounce_deadline = Some(
+        Instant::now()
+            .checked_sub(Duration::from_millis(1))
+            .expect("a 1ms-back deadline only underflows before process start"),
+    );
     let dispatched = harness
         .model_mut()
         .tick_search_clock(Instant::now())
@@ -542,7 +548,7 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     ));
     harness
         .model_mut()
-        .dispatch_router_command(Command::ToggleSettings);
+        .dispatch_router_command(&Command::ToggleSettings);
     {
         let (mut music_resize, mut tv_resize) = (false, false);
         for message in outcome.messages {
@@ -621,7 +627,7 @@ fn function_keys_from_help_dismiss_help_and_open_their_sidebar() {
         harness.inject(key(code));
         let outcome = harness.step();
         if let RouterOutcome::Command(command) = &outcome.router {
-            harness.model_mut().dispatch_router_command(command.clone());
+            harness.model_mut().dispatch_router_command(command);
         }
         let (mut music_resize, mut tv_resize) = (false, false);
         for message in outcome.messages {

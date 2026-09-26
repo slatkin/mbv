@@ -19,7 +19,7 @@ fn overlay_workspace_keys_move_the_episode_list_not_the_browser() {
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "Enter opens the overlay in narrow geometry"
     );
@@ -68,9 +68,9 @@ fn overlay_workspace_keys_move_the_episode_list_not_the_browser() {
     );
     harness.model_mut().sync_mounted_surfaces();
     assert!(
-        panel_of(&harness)
-            .map(|panel| panel.test_hero_overlay_open())
-            .unwrap_or(false),
+        panel_of(&harness).is_some_and(
+            crate::app::components::library_panel::LibraryPanel::test_hero_overlay_open
+        ),
         "the refresh keeps the overlay open"
     );
     harness.inject(Event::Keyboard(KeyEvent {
@@ -106,7 +106,7 @@ fn overlay_workspace_click_selects_and_is_claimed() {
     let _ = harness.step();
     let terminal = draw_frame_at_model_size(&mut harness);
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
 
     let (x, y) =
@@ -151,7 +151,7 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     let _ = harness.step();
     drop(draw_frame_at_model_size(&mut harness));
     assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
         .is_some());
     assert_eq!(tv_owner_of(&harness).episode_scroll(), 0);
 
@@ -183,7 +183,7 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     // the expected window from the box the frame actually painted (the
     // overlay's size is an arrangement fact, not this test's input).
     let (_, box_content) = panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_workspace_box())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_workspace_box)
         .expect("the overlay's Workspace box painted");
     let visible = box_content.height as usize;
     let scroll = tv_owner_of(&harness).episode_scroll();
@@ -201,7 +201,7 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     // whose label cannot match a longer one.)
     if scroll >= 2 {
         assert!(
-            find_text(buf, &format!("{}. Episode {scroll}", scroll)).is_none(),
+            find_text(buf, &format!("{scroll}. Episode {scroll}")).is_none(),
             "the rows above the window left the Workspace box"
         );
     }
@@ -224,7 +224,7 @@ fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_narrow_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_narrow_geometry)
             .is_some(),
         "a non-Wide frame reports the overlay gate"
     );
@@ -235,7 +235,7 @@ fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_some(),
         "a non-Wide browser double-click opens the Library Hero overlay"
     );
@@ -246,16 +246,16 @@ fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
     harness.model_mut().app.terminal_width = 100;
     drop(draw_frame_at_model_size(&mut harness));
     let wide_painted = panel_of(&harness)
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_wide_geometry)
         .is_some();
     assert!(wide_painted, "the frame is Wide");
     let gate_reported = panel_of(&harness)
-        .and_then(|panel| panel.test_narrow_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_narrow_geometry)
         .is_some();
     assert!(!gate_reported, "a Wide frame reports no overlay gate");
     let terminal = draw_frame_at_model_size(&mut harness);
     let list = panel_of(&harness)
-        .and_then(|panel| panel.test_list_rect())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_list_rect)
         .expect("the Wide list painted");
     let (x, y) = find_text_in(terminal.backend().buffer(), "Focused Movie", list)
         .expect("the Wide browser row paints in the list slot");
@@ -263,7 +263,7 @@ fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
         panel_of(&harness)
-            .and_then(|panel| panel.test_overlay_geometry())
+            .and_then(crate::app::components::library_panel::LibraryPanel::test_overlay_geometry)
             .is_none(),
         "a Wide double-click must not take the overlay path"
     );
@@ -278,7 +278,7 @@ fn non_wide_padding_click_is_not_delegated_and_a_row_flow_click_selects() {
     let (mut harness, log) = migrated_home();
     drop(draw_frame_at_model_size(&mut harness));
     let narrow = panel_of(&harness)
-        .and_then(|panel| panel.test_narrow_geometry())
+        .and_then(crate::app::components::library_panel::LibraryPanel::test_narrow_geometry)
         .expect("the frame is non-Wide");
 
     // The outer two columns of the painted list box: on the pane the panel

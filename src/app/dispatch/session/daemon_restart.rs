@@ -67,9 +67,9 @@ impl App {
             let disconnected = mpris_remote.disconnected_flag();
             crate::mpris::rebind(
                 handle,
-                mpris_remote.status.clone(),
+                std::sync::Arc::clone(&mpris_remote.status),
                 move |cmd| {
-                    mpris_remote.send_command(cmd);
+                    let _ = mpris_remote.send_command(cmd);
                 },
                 Some(disconnected),
             );

@@ -33,7 +33,6 @@ pub(in crate::app) struct MusicWideRenderCtx {
 }
 
 impl MusicWideRenderCtx {
-    #[allow(clippy::too_many_arguments)]
     pub(in crate::app) fn new(
         list: LibraryListRenderCtx,
         selected_album: Option<EmbyItem>,
@@ -114,24 +113,21 @@ impl App {
                 &albums,
                 catalog.as_ref(),
             );
-        let album_order = catalog
-            .as_ref()
-            .map(|catalog| {
+        let album_order = catalog.as_ref().map_or_else(
+            || crate::app::render::sorted_group_album_order(&album_info),
+            |catalog| {
                 catalog
                     .entries
                     .iter()
                     .map(|entry| entry.album_index)
                     .filter(|&index| index < albums.len())
                     .collect()
-            })
-            .unwrap_or_else(|| crate::app::render::sorted_group_album_order(&album_info));
+            },
+        );
         let album_tracks = selected_album
             .as_ref()
             .and_then(|album| self.album_tracks_cache.get(&album.id).cloned());
-        let catalog_revision = catalog
-            .as_ref()
-            .map(|catalog| catalog.revision)
-            .unwrap_or(0);
+        let catalog_revision = catalog.as_ref().map_or(0, |catalog| catalog.revision);
 
         MusicWideRenderCtx::new(
             list,

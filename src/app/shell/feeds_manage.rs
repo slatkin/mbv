@@ -81,8 +81,7 @@ impl super::Model {
 
     fn feeds_manage_cursor(&mut self) -> usize {
         self.feeds_manage_component_mut()
-            .map(|component| component.cursor())
-            .unwrap_or(0)
+            .map_or(0, |component| component.cursor())
     }
 
     /// Route a semantic feeds-management intent to the existing shell effects.

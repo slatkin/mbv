@@ -75,7 +75,7 @@ fn destination_independent_globals_resolve_to_router_commands() {
         );
     }
 
-    snapshot.help_overlay_open = false;
+    snapshot.overlays.help = false;
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::F(1)),
@@ -134,7 +134,7 @@ fn exact_chord_narrowing_keeps_superset_chords_from_globals() {
 #[test]
 fn help_and_alt_router_guards_preserve_overlay_precedence() {
     let mut snapshot = idle_snapshot();
-    snapshot.blocking_overlay_open = true;
+    snapshot.overlays.focus = crate::app::input::OverlayFocus::Blocking;
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::F(1)),
@@ -146,8 +146,8 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
         "F1 must not open Help over a blocking overlay"
     );
 
-    snapshot.blocking_overlay_open = false;
-    snapshot.help_overlay_open = true;
+    snapshot.overlays.focus = crate::app::input::OverlayFocus::Free;
+    snapshot.overlays.help = true;
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::F(1)),
@@ -159,7 +159,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
         "Help keeps F1 for its dismiss request"
     );
 
-    snapshot.help_overlay_open = false;
+    snapshot.overlays.help = false;
     snapshot.panel_focus = crate::app::PanelFocus::Queue;
     assert_eq!(
         resolve_router_outcome_with_focused(
@@ -208,7 +208,7 @@ fn plain_panel_arrows_yield_while_an_overlay_holds_focus() {
     // must not move behind it.
     let mut snapshot = idle_snapshot();
     snapshot.panel_focus = crate::app::PanelFocus::Library;
-    snapshot.overlay_holds_focus = true;
+    snapshot.overlays.focus = crate::app::input::OverlayFocus::NonBlocking;
     assert_eq!(
         resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
@@ -296,7 +296,7 @@ fn open_sessions_command_toggles_without_respawning_loads() {
 
     let sessions = ComponentId::Overlay(OverlayId::Sessions);
 
-    model.app.dispatch(Command::OpenSessions);
+    model.app.dispatch(&Command::OpenSessions);
     model.sync_modal_requests();
     assert!(
         model.application.mounted(&sessions),
@@ -306,7 +306,7 @@ fn open_sessions_command_toggles_without_respawning_loads() {
     // Clear the flag the open set so a spurious re-mount would be observable.
     model.app.sessions_loading = false;
 
-    model.app.dispatch(Command::OpenSessions);
+    model.app.dispatch(&Command::OpenSessions);
     model.sync_modal_requests();
     assert!(
         !model.application.mounted(&sessions),
@@ -332,7 +332,7 @@ fn clear_queue_c_is_global_but_yields_to_text_entry() {
     );
 
     let mut typing = idle_snapshot();
-    typing.text_entry_focused = true;
+    typing.overlays.text_entry_focused = true;
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::Char('c')),
@@ -389,7 +389,7 @@ fn rebound_global_respects_text_entry_and_keeps_its_default_inert() {
 fn quit_and_visualizer_yield_to_text_entry() {
     let focused = ComponentId::Library;
     let mut typing = idle_snapshot();
-    typing.text_entry_focused = true;
+    typing.overlays.text_entry_focused = true;
     for key in [key(KeyCode::Char('q')), key(KeyCode::Char('v'))] {
         assert_eq!(
             resolve_router_outcome_with_focused(key, &typing, Some(&focused), &default_keybinds()),
@@ -411,7 +411,7 @@ fn confirm_accept_re_encodes_to_y_chord() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 1;
-    }
+    };
     app.remove_from_queue(1);
     assert!(
         matches!(

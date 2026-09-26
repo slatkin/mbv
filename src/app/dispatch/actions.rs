@@ -346,7 +346,7 @@ impl App {
             let id = conn_id.clone();
             let label = items
                 .get(start_idx)
-                .map(|i| i.playback_label())
+                .map(mbv_core::api::EmbyItem::playback_label)
                 .unwrap_or_default();
             self.flash(
                 playback_request_message(&label, mixed_unplayable),
@@ -470,10 +470,10 @@ impl App {
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
-    pub(in crate::app) fn do_enqueue_folder(&mut self, item: mbv_core::api::EmbyItem) {
+    pub(in crate::app) fn do_enqueue_folder(&mut self, item: &mbv_core::api::EmbyItem) {
         log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
-        let resolved = self.resolve_route_for_enqueue_folder(&item);
-        if self.enqueue_route_conflict(resolved) {
+        let resolved = self.resolve_route_for_enqueue_folder(item);
+        if self.enqueue_route_conflict(resolved.as_ref()) {
             return;
         }
         let Some(client) = self.emby_client() else {

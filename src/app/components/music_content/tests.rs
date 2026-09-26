@@ -505,7 +505,7 @@ fn artist_root_hero_uses_the_projected_summary_and_artwork() {
             hero.workspace.is_some(),
             "the artist Hero carries its Workspace"
         );
-    }
+    };
     assert!(matches!(
         owner.track_list.rows().first(),
         Some(MediaListRow::Heading { text }) if text == "a-0"
@@ -685,7 +685,7 @@ fn a_stale_artist_detail_never_paints_under_the_new_root() {
             content.hero.is_none(),
             "no stale Beta Hero paints under Alpha"
         );
-    }
+    };
     assert!(
         owner.track_list.rows().is_empty(),
         "no stale Beta group rows paint under Alpha"
@@ -712,7 +712,7 @@ fn a_local_album_move_never_paints_the_prior_albums_tracks() {
     {
         let content = owner.content();
         assert!(content.hero.is_some(), "the new leaf's title still paints");
-    }
+    };
     assert!(
         owner.track_list.rows().is_empty(),
         "the prior album's rows must not paint under a-1"

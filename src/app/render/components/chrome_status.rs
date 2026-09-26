@@ -48,15 +48,15 @@ impl App {
             .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
-            RemoteSlotState::Off => None,
+            RemoteSlotState::Off | RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {
                     let device_name = session.device_name.trim();
-                    if !device_name.is_empty() {
-                        Some(device_name.to_string())
-                    } else {
+                    if device_name.is_empty() {
                         let host = session.host.trim();
                         (!host.is_empty()).then(|| host.to_string())
+                    } else {
+                        Some(device_name.to_string())
                     }
                 })
             }
@@ -66,7 +66,6 @@ impl App {
                 .map(|name| format!("route:{name}"))
                 .or_else(|| self.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
-            RemoteSlotState::LocalDaemon => None,
         };
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let label = match target {
@@ -124,15 +123,15 @@ impl App {
         };
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let target = match remote_state {
-            RemoteSlotState::Off => None,
+            RemoteSlotState::Off | RemoteSlotState::LocalDaemon => None,
             RemoteSlotState::AttachedSession => {
                 self.connected_session_state.as_ref().and_then(|session| {
                     let device_name = session.device_name.trim();
-                    if !device_name.is_empty() {
-                        Some(device_name.to_string())
-                    } else {
+                    if device_name.is_empty() {
                         let host = session.host.trim();
                         (!host.is_empty()).then(|| host.to_string())
+                    } else {
+                        Some(device_name.to_string())
                     }
                 })
             }
@@ -142,7 +141,6 @@ impl App {
                 .map(|name| format!("route:{name}"))
                 .or_else(|| self.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
-            RemoteSlotState::LocalDaemon => None,
         };
         let label = match target {
             Some(target) => format!("{gap}{target}"),
@@ -482,7 +480,7 @@ impl App {
     }
 
     pub(in crate::app) fn status_width(spans: &[Span]) -> u16 {
-        spans.iter().map(|s| s.content.width() as u16).sum()
+        spans_width(spans)
     }
 
     pub(in crate::app) fn append_status(
@@ -600,10 +598,19 @@ struct StatusBarLeftSegments {
     remote_width: u16,
     visual_width: u16,
     fits: StatusBarFit,
-    show_visual: bool,
-    show_armed: bool,
-    show_remote: bool,
-    show_volume: bool,
+    visibility: StatusBarVisibility,
+}
+
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independent per-segment visibility results over distinct status-bar fit drop tiers; all four are simultaneously true at StatusBarFit::All (design analysis, issue #804)"
+)]
+#[derive(Clone, Copy)]
+struct StatusBarVisibility {
+    visual: bool,
+    armed: bool,
+    remote: bool,
+    volume: bool,
 }
 
 struct StatusBarWidths {
@@ -615,14 +622,15 @@ struct StatusBarWidths {
 }
 
 #[derive(Clone, Copy)]
-struct StatusBarFit {
-    all: bool,
-    without_mute: bool,
-    without_volume: bool,
-    without_remote: bool,
+enum StatusBarFit {
+    All,
+    WithoutMute,
+    WithoutVolume,
+    WithoutRemote,
+    None,
 }
 
-fn status_bar_fit(widths: StatusBarWidths, available: u16) -> StatusBarFit {
+fn status_bar_fit(widths: &StatusBarWidths, available: u16) -> StatusBarFit {
     let joined_width = |widths: &[u16]| -> u16 {
         let mut total = 0u16;
         for (count, width) in widths.iter().copied().filter(|w| *w > 0).enumerate() {
@@ -645,15 +653,17 @@ fn status_bar_fit(widths: StatusBarWidths, available: u16) -> StatusBarFit {
     let without_volume = !all
         && !without_mute
         && joined_width(&[widths.visual, widths.armed, widths.remote, widths.mute]) <= available;
-    let without_remote = !all
-        && !without_mute
-        && !without_volume
-        && joined_width(&[widths.visual, widths.armed, widths.mute, widths.volume]) <= available;
-    StatusBarFit {
-        all,
-        without_mute,
-        without_volume,
-        without_remote,
+    if all {
+        StatusBarFit::All
+    } else if without_mute {
+        StatusBarFit::WithoutMute
+    } else if without_volume {
+        StatusBarFit::WithoutVolume
+    } else if joined_width(&[widths.visual, widths.armed, widths.mute, widths.volume]) <= available
+    {
+        StatusBarFit::WithoutRemote
+    } else {
+        StatusBarFit::None
     }
 }
 
@@ -672,10 +682,7 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
     // the visual-mode indicator at the top persistence tier: it drops only
     // when nothing else is left (it names the active routing mode).
     let remote_width = App::status_width(&remote);
-    let armed_width = armed
-        .as_ref()
-        .map(|spans| App::status_width(spans))
-        .unwrap_or(0);
+    let armed_width = armed.as_ref().map_or(0, |spans| App::status_width(spans));
     let visual = model.visual_mode.as_ref().map(|indicator| {
         vec![Span::styled(
             format!("-- VISUAL ({}) --", indicator.count),
@@ -684,17 +691,11 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
                 .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
         )]
     });
-    let visual_width = visual
-        .as_ref()
-        .map(|spans| App::status_width(spans))
-        .unwrap_or(0);
-    let mute_width: u16 = mute
-        .as_ref()
-        .map(|spans| App::status_width(spans))
-        .unwrap_or(0);
+    let visual_width = visual.as_ref().map_or(0, |spans| App::status_width(spans));
+    let mute_width: u16 = mute.as_ref().map_or(0, |spans| App::status_width(spans));
     let volume_width = App::status_width(&volume);
     let fits = status_bar_fit(
-        StatusBarWidths {
+        &StatusBarWidths {
             visual: visual_width,
             armed: armed_width,
             remote: remote_width,
@@ -703,7 +704,20 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
         },
         available,
     );
-    let any_fit = fits.all || fits.without_mute || fits.without_volume || fits.without_remote;
+    let any_fit = !matches!(fits, StatusBarFit::None);
+    let visibility = StatusBarVisibility {
+        visual: visual_width > 0 && any_fit,
+        armed: armed_width > 0 && any_fit,
+        remote: remote_width > 0
+            && matches!(
+                fits,
+                StatusBarFit::All | StatusBarFit::WithoutMute | StatusBarFit::WithoutVolume
+            ),
+        volume: matches!(
+            fits,
+            StatusBarFit::All | StatusBarFit::WithoutMute | StatusBarFit::WithoutRemote
+        ),
+    };
     StatusBarLeftSegments {
         mute,
         volume,
@@ -714,10 +728,7 @@ fn status_bar_left_segments(model: &StatusBarModel, available: u16) -> StatusBar
         remote_width,
         visual_width,
         fits,
-        show_visual: visual_width > 0 && any_fit,
-        show_armed: armed_width > 0 && any_fit,
-        show_remote: remote_width > 0 && (fits.all || fits.without_mute || fits.without_volume),
-        show_volume: fits.all || fits.without_mute || fits.without_remote,
+        visibility,
     }
 }
 
@@ -729,7 +740,7 @@ fn render_status_bar_left(
 ) -> (StatusBarRegions, u16) {
     let mut regions = StatusBarRegions::default();
     let mut spans: Vec<Span> = Vec::new();
-    if segments.show_visual {
+    if segments.visibility.visual {
         let visual_x = area.x + App::status_width(&spans);
         App::append_status(&mut spans, segments.visual.unwrap_or_default());
         regions.visual_clear = Some(Rect {
@@ -739,10 +750,10 @@ fn render_status_bar_left(
             height: 1,
         });
     }
-    if segments.show_armed {
+    if segments.visibility.armed {
         App::append_status(&mut spans, segments.armed.unwrap_or_default());
     }
-    if segments.show_volume {
+    if segments.visibility.volume {
         let vol_x = area.x + App::status_width(&spans);
         App::append_status(&mut spans, segments.volume);
         regions.volume = Some(Rect {
@@ -753,9 +764,10 @@ fn render_status_bar_left(
         });
     }
     let remote_x = segments
-        .show_remote
+        .visibility
+        .remote
         .then(|| area.x + App::status_width(&spans) + u16::from(!spans.is_empty()));
-    if segments.show_remote {
+    if segments.visibility.remote {
         App::append_status(&mut spans, segments.remote);
         regions.remote = remote_x.map(|x| Rect {
             x,
@@ -764,7 +776,7 @@ fn render_status_bar_left(
             height: 1,
         });
     }
-    if segments.fits.all || segments.fits.without_mute {
+    if matches!(segments.fits, StatusBarFit::All | StatusBarFit::WithoutMute) {
         if let Some(mute) = segments.mute {
             let mute_x = area.x + App::status_width(&spans);
             let mute_width = App::status_width(&mute);
@@ -781,7 +793,7 @@ fn render_status_bar_left(
     // `left_content_w` tracks how far the left segment actually extends after
     // the above priority drop, so the right-segment overlap check can compare
     // against the real left edge instead of a hardcoded constant.
-    let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
+    let label_w = spans_width(&spans);
     if !spans.is_empty() {
         let label_rect = Rect {
             x: area.x,
@@ -797,6 +809,15 @@ fn render_status_bar_left(
     (regions, label_w)
 }
 
+/// Total rendered width of a span run, saturating instead of truncating
+/// per-span or overflowing the `u16` sum.
+fn spans_width(spans: &[Span<'_>]) -> u16 {
+    spans
+        .iter()
+        .map(|s| u16::try_from(s.content.width()).unwrap_or(u16::MAX))
+        .fold(0, u16::saturating_add)
+}
+
 fn render_status_bar_right(
     f: &mut Frame,
     area: Rect,
@@ -805,7 +826,7 @@ fn render_status_bar_right(
     right_spans: &[Span<'static>],
 ) {
     if !right_spans.is_empty() {
-        let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
+        let right_w = spans_width(right_spans);
         // Compare against `left_content_width` (pill + session label, from Task 2),
         // not a hardcoded pill-only width -- otherwise this check passes while
         // the right segment still overlaps a rendered session label (e.g.

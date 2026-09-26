@@ -102,7 +102,7 @@ fn deferred_series_landing_runs_the_handoff_on_its_retry_drain() {
             .expect("root level");
         level.total_count = 5;
         level.all_items = None;
-    }
+    };
     harness.model_mut().sync_mounted_surfaces();
 
     harness

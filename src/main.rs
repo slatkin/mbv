@@ -58,7 +58,7 @@ fn run_remote_app(
     client: Option<EmbyClient>,
     remote: remote_player::RemotePlayer,
     player_rx: std::sync::mpsc::Receiver<player::PlayerEvent>,
-    endpoint: remote_player::DaemonEndpoint,
+    endpoint: &remote_player::DaemonEndpoint,
     config: config::Config,
 ) {
     let app = App::new_remote_optional_with_config(client, remote, player_rx, endpoint, config);
@@ -94,7 +94,7 @@ fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
             let Some(value) = iter.next() else {
                 return Err("mbv: --connect-daemon requires an endpoint".to_string());
             };
-            endpoint = Some(value.to_string());
+            endpoint = Some(value.clone());
         }
     }
     Ok(endpoint)
@@ -108,20 +108,22 @@ fn cached_emby_client(config: &config::Config) -> Option<EmbyClient> {
     let token = mbv_core::config::load_service_secret(mbv_core::config::ServiceKind::Emby)?;
     let setup = config.emby_setup.as_ref()?;
     let mut client = EmbyClient::new(config.clone());
-    client.config.server_url = setup.server_url.clone();
-    client.user_id = setup.user_id.clone();
+    client.config.server_url.clone_from(&setup.server_url);
+    client.user_id.clone_from(&setup.user_id);
     client.token = token;
     Some(client)
 }
 
 fn state_dir() -> std::path::PathBuf {
     std::env::var("XDG_STATE_HOME")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|_| {
-            std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                .join(".local")
-                .join("state")
-        })
+        .map_or_else(
+            |_| {
+                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+                    .join(".local")
+                    .join("state")
+            },
+            std::path::PathBuf::from,
+        )
         .join("mbv")
 }
 
@@ -146,10 +148,11 @@ fn config_diagnostic_summary(config: &config::Config) -> String {
 }
 
 fn write_crash_log(msg: &str) {
+    use std::io::Write;
+
     let _ = crossterm::terminal::disable_raw_mode();
     let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
     // Write directly to stderr (async-signal-safe, no mutex)
-    use std::io::Write;
     let _ = std::io::stderr().write_all(msg.as_bytes());
     let _ = std::io::stderr().write_all(b"\n");
     log::error!(target: "crash", "{msg}");
@@ -172,12 +175,10 @@ fn install_panic_hook() {
 
 fn install_signal_handlers() {
     // Write a crash log entry for fatal signals before the process dies.
+    // SAFETY: install handlers before the application starts concurrent work.
     unsafe {
         for &sig in &[libc::SIGSEGV, libc::SIGILL, libc::SIGBUS, libc::SIGFPE] {
-            libc::signal(
-                sig,
-                signal_handler as extern "C" fn(libc::c_int) as libc::sighandler_t,
-            );
+            libc::signal(sig, signal_handler as *const () as libc::sighandler_t);
         }
     }
 }
@@ -191,6 +192,7 @@ extern "C" fn signal_handler(sig: libc::c_int) {
         _ => b"CRASH: fatal signal\n",
     };
 
+    // SAFETY: this signal handler uses only async-signal-safe libc calls and a static message.
     unsafe {
         libc::write(libc::STDERR_FILENO, msg.as_ptr().cast(), msg.len());
         libc::signal(sig, libc::SIG_DFL);
@@ -271,23 +273,21 @@ fn pre_config_startup() -> Option<(Option<applog::Level>, Option<String>)> {
 
 fn stop_running_instance() {
     let lock = single_instance::lock_path();
-    match single_instance::read_pid(&lock) {
-        Some(pid) => {
-            let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
-            if ok {
-                println!("mbv: quit signal sent (pid {pid})");
-            } else {
-                eprintln!(
-                    "mbv: failed to signal pid {pid}: {}",
-                    std::io::Error::last_os_error()
-                );
-                std::process::exit(1);
-            }
-        }
-        None => {
-            eprintln!("mbv: no running instance found; if one just started, try again in a moment");
+    if let Some(pid) = single_instance::read_pid(&lock) {
+        // SAFETY: sending SIGTERM to the PID read from the single-instance lock is intentional.
+        let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
+        if ok {
+            println!("mbv: quit signal sent (pid {pid})");
+        } else {
+            eprintln!(
+                "mbv: failed to signal pid {pid}: {}",
+                std::io::Error::last_os_error()
+            );
             std::process::exit(1);
         }
+    } else {
+        eprintln!("mbv: no running instance found; if one just started, try again in a moment");
+        std::process::exit(1);
     }
 }
 
@@ -313,13 +313,13 @@ fn main() {
         }
     };
     log::info!(target: "startup", "{}", config_diagnostic_summary(&config));
-    run_configured_startup(log_level, cli_daemon_endpoint, config);
+    run_configured_startup(log_level, cli_daemon_endpoint, &config);
 }
 
 fn run_configured_startup(
     log_level: Option<applog::Level>,
     cli_daemon_endpoint: Option<String>,
-    config: config::Config,
+    config: &config::Config,
 ) {
     let explicit_daemon_endpoint = cli_daemon_endpoint
         .or_else(|| {
@@ -339,13 +339,13 @@ fn run_configured_startup(
     // always wins: a thin client to `mbvd`, owning no Player and taking no
     // flock. Network/mbvd behavior is unchanged by stay-alive (issue #156).
     if let Some(endpoint) = explicit_daemon_endpoint {
-        let client = cached_emby_client(&config);
+        let client = cached_emby_client(config);
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
         println!("Connecting to daemon at {endpoint}...");
         match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
-                run_remote_app(client, remote, player_rx, endpoint, config.clone());
+                run_remote_app(client, remote, player_rx, &endpoint, config.clone());
                 return;
             }
             Err(e) => {
@@ -358,7 +358,7 @@ fn run_configured_startup(
     run_local_instance(config, log_level);
 }
 
-fn run_local_instance(config: config::Config, log_level: Option<applog::Level>) {
+fn run_local_instance(config: &config::Config, log_level: Option<applog::Level>) {
     // Single-instance resolution (ADR 0006): advisory flock + control-socket
     // connectability. Independent of stay-alive; always on.
     let lock_path = single_instance::lock_path();
@@ -370,7 +370,7 @@ fn run_local_instance(config: config::Config, log_level: Option<applog::Level>) 
             // others already attached. Clients take no lock -- that is what
             // permits any number of them.
             log::info!(target: "startup", "local daemon detected; attaching");
-            let client = cached_emby_client(&config);
+            let client = cached_emby_client(config);
             match remote_player::RemotePlayer::connect_endpoint(
                 &remote_player::DaemonEndpoint::Local,
             ) {
@@ -379,7 +379,7 @@ fn run_local_instance(config: config::Config, log_level: Option<applog::Level>) 
                         client,
                         remote,
                         player_rx,
-                        remote_player::DaemonEndpoint::Local,
+                        &remote_player::DaemonEndpoint::Local,
                         config.clone(),
                     );
                 }
@@ -392,9 +392,15 @@ fn run_local_instance(config: config::Config, log_level: Option<applog::Level>) 
         Ok(single_instance::Resolution::Refuse) => {
             eprintln!("mbv: another mbv instance already owns playback in a foreground terminal.");
             match single_instance::read_pid(&lock_path) {
-                Some(pid) => eprintln!("mbv: that instance's PID is {pid} (per {lock_path:?})."),
+                Some(pid) => eprintln!(
+                    "mbv: that instance's PID is {pid} (per {}).",
+                    lock_path.display()
+                ),
                 None => {
-                    eprintln!("mbv: could not determine that instance's PID from {lock_path:?}.")
+                    eprintln!(
+                        "mbv: could not determine that instance's PID from {}.",
+                        lock_path.display()
+                    );
                 }
             }
             eprintln!(
@@ -407,7 +413,7 @@ fn run_local_instance(config: config::Config, log_level: Option<applog::Level>) 
             let stay_alive = config.stay_alive;
 
             if stay_alive {
-                let client = cached_emby_client(&config);
+                let client = cached_emby_client(config);
                 // This process was just a liveness probe: release the lock
                 // immediately (the local daemon reacquires it for real,
                 // becoming the actual Player-owning process) and attach to
@@ -427,7 +433,7 @@ fn run_local_instance(config: config::Config, log_level: Option<applog::Level>) 
                             client,
                             remote,
                             player_rx,
-                            remote_player::DaemonEndpoint::Local,
+                            &remote_player::DaemonEndpoint::Local,
                             config.clone(),
                         );
                         return;
@@ -472,8 +478,8 @@ mod tests {
                 Some(expected)
             );
         }
-        assert!(parse_log_level_arg(&["--log-level".into(), "trace".into()]).is_err());
-        assert!(parse_log_level_arg(&["--log-level".into()]).is_err());
+        parse_log_level_arg(&["--log-level".into(), "trace".into()]).unwrap_err();
+        parse_log_level_arg(&["--log-level".into()]).unwrap_err();
         assert_eq!(parse_log_level_arg(&[]).unwrap(), None);
     }
 
@@ -491,7 +497,7 @@ mod tests {
 
     #[test]
     fn connect_daemon_arg_requires_value() {
-        assert!(connect_daemon_arg(&["--connect-daemon".into()]).is_err());
+        connect_daemon_arg(&["--connect-daemon".into()]).unwrap_err();
     }
 
     #[test]

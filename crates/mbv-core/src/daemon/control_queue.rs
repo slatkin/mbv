@@ -1,4 +1,4 @@
-use super::*;
+use super::{serialize_ctrl_event, ClientRegistry, DaemonPlayerOwner, SharedQueueState};
 use crate::ctrl::CtrlEvent;
 use crate::playback_queue::{PlaybackQueue, QueueItem};
 use crate::player::Player;
@@ -57,11 +57,8 @@ pub(crate) fn project_queue_state(
         }
     }
 
-    let last_played_item_id = if player_status.active && active_idx < slots.len() {
-        Some(slots[active_idx].item.id().to_string())
-    } else {
-        None
-    };
+    let last_played_item_id = (player_status.active && active_idx < slots.len())
+        .then(|| slots[active_idx].item.id().to_string());
 
     let queue_items: Vec<QueueItem> = slots.iter().map(|s| s.item.clone()).collect();
 
@@ -69,11 +66,8 @@ pub(crate) fn project_queue_state(
         source: source.clone(),
         items: queue_items,
         cursor: active_idx,
-        last_played_content_id: if player_status.active && active_idx < slots.len() {
-            Some(slots[active_idx].item.content_id())
-        } else {
-            None
-        },
+        last_played_content_id: (player_status.active && active_idx < slots.len())
+            .then(|| slots[active_idx].item.content_id()),
         last_played_item_id,
         last_played_completed: false,
         positions,
@@ -204,10 +198,10 @@ pub(crate) fn broadcast_queue_state(
         unified_json,
     ) {
         ctrl_clients.lock().unwrap().broadcast_state_gated(
-            unified_full_json,
-            unified_abs_json,
-            unified_book_json,
-            unified_json,
+            &unified_full_json,
+            &unified_abs_json,
+            &unified_book_json,
+            &unified_json,
         );
     }
 

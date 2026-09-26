@@ -257,7 +257,7 @@ pub(in crate::app) fn audiobookshelf_initial_state(
 }
 
 pub(in crate::app) fn classify_audiobookshelf_failure(
-    error: &mbv_core::audiobookshelf::AudiobookshelfError,
+    error: mbv_core::audiobookshelf::AudiobookshelfError,
 ) -> ServiceState {
     match error.class {
         mbv_core::audiobookshelf::AudiobookshelfFailureClass::AuthenticationRejected => {

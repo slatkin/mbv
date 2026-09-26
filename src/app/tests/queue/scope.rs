@@ -77,7 +77,7 @@ fn local_owner_app() -> (App, std::sync::mpsc::Receiver<CtrlCmd>) {
         mbv_core::api::EmbyClient::new(crate::config::Config::default()),
         remote,
         _events,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
     );
     while commands.try_recv().is_ok() {}
     (app, commands)
@@ -356,7 +356,7 @@ fn clearing_a_local_daemon_queue_replaces_the_daemon_queue_with_empty() {
         mbv_core::api::EmbyClient::new(crate::config::Config::default()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
     );
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
@@ -378,10 +378,10 @@ fn local_daemon_play_uses_owner_slot_despite_generation_mismatch() {
         status.active = true;
         status.current_idx = 0;
         status.sequence_generation = 0;
-    }
+    };
     let owner_slot = app.player_tab.slots()[1].slot_id;
 
-    app.dispatch(crate::app::dispatch::action::Command::QueuePlayCursor(1));
+    app.dispatch(&crate::app::dispatch::action::Command::QueuePlayCursor(1));
 
     let commands: Vec<_> = cmd_rx.try_iter().collect();
     let requested_owner_slot = commands.iter().any(|cmd| {
@@ -409,14 +409,14 @@ fn local_daemon_queue_refresh_prune_reaches_daemon_via_unified_slot_command() {
         mbv_core::api::EmbyClient::new(crate::config::Config::default()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
     );
     app.player_tab.set_items(make_items(3), 0); // id0, id1, id2
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     while cmd_rx.try_recv().is_ok() {}
 
     // Background fetch no longer returns id1 -> its slot must be pruned from

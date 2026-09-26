@@ -1,4 +1,10 @@
-use super::*;
+use super::{
+    upcoming_episode_target, EmbyItem, LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput,
+    Msg, Pane, Position, RowIntent, ShellRequest, TerminalObserverEvent, TreeOperation, TvContent,
+    TvDisplayMode, TvHit, TvTreeTarget,
+};
+#[cfg(test)]
+use super::{KeyEvent, MediaListRow, MediaSemanticState};
 
 impl TvContent {
     pub(super) fn context_menu_request(&mut self) -> Option<ShellRequest> {
@@ -110,7 +116,7 @@ impl TvContent {
             | MediaListSurfaceInput::RangeClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
                 self.apply_pane_click(hit.clone(), at, input);
-                let _ = ();
+                let () = ();
                 Some(Msg::Shell(Box::new(ShellRequest::TvHitClick { hit })))
             }
             MediaListSurfaceInput::DoubleClick(at) => {
@@ -132,7 +138,7 @@ impl TvContent {
                         .into_operation(Some(target))
                         .expect("resolved media-list pointer target"),
                 );
-                let _ = ();
+                let () = ();
                 let items = match outcome.external_intent {
                     Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
@@ -184,7 +190,10 @@ impl TvContent {
     /// pushed bit alone — gates this arm: a stale bit in Wide must never claim
     /// the Wide pane's wheel.
     fn hero_pane_wheel(&mut self, at: Position, delta: i64) -> Option<Msg> {
-        if self.is_wide || !self.hero_overlay_open || !self.episodes.claims_current_point(at) {
+        if self.display_mode == TvDisplayMode::Wide
+            || !self.hero_overlay_open
+            || !self.episodes.claims_current_point(at)
+        {
             return None;
         }
         self.episodes.delegate_operation(
@@ -209,7 +218,7 @@ impl TvContent {
     fn hero_pane_select(&mut self, at: Position, input: MediaListSurfaceInput) -> Option<Msg> {
         let hit = self.hero_pane_hit(at)?;
         self.apply_pane_click(hit.clone(), at, input);
-        let _ = ();
+        let () = ();
         Some(Msg::Shell(Box::new(ShellRequest::TvHitClick { hit })))
     }
 
@@ -248,7 +257,7 @@ impl TvContent {
                 }))
                 .expect("resolved media-list pointer target"),
         );
-        let _ = ();
+        let () = ();
         let items = match outcome.external_intent {
             Some(RowIntent::ContextSelection(targets)) => targets
                 .into_iter()
@@ -318,9 +327,7 @@ impl TvContent {
                     }
                     // A double-click never resolves a context intent, and no
                     // row resolved when the intent is `None`.
-                    Some(RowIntent::Context(_)) | Some(RowIntent::ContextSelection(_)) | None => {
-                        None
-                    }
+                    Some(RowIntent::Context(_) | RowIntent::ContextSelection(_)) | None => None,
                 }
             }
             MediaListSurfaceInput::ContextClick(at) => {
@@ -347,9 +354,7 @@ impl TvContent {
                     // search session has no Visual-mode multi-selection so a
                     // `ContextSelection` cannot arise (D4 non-goal), and no
                     // row resolved when the intent is `None`.
-                    Some(RowIntent::Activate(_)) | Some(RowIntent::ContextSelection(_)) | None => {
-                        None
-                    }
+                    Some(RowIntent::Activate(_) | RowIntent::ContextSelection(_)) | None => None,
                 }
             }
             _ => None,
@@ -595,13 +600,13 @@ impl TvContent {
     }
 
     #[cfg(test)]
-    pub(crate) fn context_click_for_test(&mut self, target: String) -> Option<usize> {
+    pub(crate) fn context_click_for_test(&mut self, target: String) -> usize {
         self.carrier.delegate_operation(
             MediaListSurfaceInput::ContextClick(Position::new(0, 0))
                 .into_operation(Some(target))
                 .expect("resolved media-list pointer target"),
         );
-        Some(self.carrier.multi_selection().len())
+        self.carrier.multi_selection().len()
     }
 
     /// Test-only: the shared owner's current rows' semantic states, in

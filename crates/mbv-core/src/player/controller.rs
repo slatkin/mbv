@@ -1,6 +1,15 @@
 use std::os::unix::io::RawFd;
 
-use super::*;
+use super::PlaybackOrigin;
+use super::{
+    init_mpv, AudiobookshelfPlayerContext, EmbyClient, MpvRunConfig, PlayerCommand, PlayerEvent,
+    PlayerStatus, SubtitlePrefs,
+};
+use crate::playback_queue::QueueItem;
+use libmpv2::Mpv;
+use std::sync::{atomic::AtomicBool, mpsc, Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 // Write end of a self-pipe used to wake the player event loop immediately
 // (see player_session_run.rs) instead of it polling on a fixed timeout.
@@ -11,14 +20,18 @@ pub(super) struct WakeupWriter(pub(super) RawFd);
 impl WakeupWriter {
     fn notify(&self) {
         let byte = [0u8; 1];
+        // SAFETY: the owned pipe write descriptor is valid until Drop, and `byte`
+        // points to one readable byte for the requested write length.
         unsafe {
-            libc::write(self.0, byte.as_ptr() as *const libc::c_void, 1);
+            libc::write(self.0, byte.as_ptr().cast::<libc::c_void>(), 1);
         }
     }
 }
 
 impl Drop for WakeupWriter {
     fn drop(&mut self) {
+        // SAFETY: this wrapper uniquely owns the descriptor returned by pipe(2),
+        // and Drop closes it exactly once.
         unsafe {
             libc::close(self.0);
         }
@@ -29,11 +42,13 @@ impl Drop for WakeupWriter {
 // on pipe(2) failure; callers fall back to bounded polling in that case.
 pub(super) fn make_wakeup_pipe() -> Option<(RawFd, WakeupWriter)> {
     let mut fds = [-1i32; 2];
+    // SAFETY: `fds` points to two writable i32 slots as required by pipe(2).
     if unsafe { libc::pipe(fds.as_mut_ptr()) } != 0 {
         log::warn!(target: "player", "wakeup pipe: pipe(2) failed: {}", std::io::Error::last_os_error());
         return None;
     }
     for fd in fds {
+        // SAFETY: successful pipe(2) initialized both descriptors in `fds`.
         unsafe {
             libc::fcntl(fd, libc::F_SETFL, libc::O_NONBLOCK);
         }
@@ -62,6 +77,10 @@ impl QuitHandle {
 
 // ── Player ────────────────────────────────────────────────────────────────────
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent player options are not mutually exclusive (design analysis, issue #804)"
+)]
 pub struct Player {
     pub(super) credentials: Arc<Mutex<Option<(String, String)>>>,
     pub(super) audiobookshelf_context: Arc<Mutex<Option<AudiobookshelfPlayerContext>>>,
@@ -101,8 +120,7 @@ impl std::fmt::Debug for Player {
         let has_credentials = self
             .credentials
             .lock()
-            .map(|credentials| credentials.is_some())
-            .unwrap_or(false);
+            .is_ok_and(|credentials| credentials.is_some());
         f.debug_struct("Player")
             .field("has_credentials", &has_credentials)
             .field("show_audio_window", &self.show_audio_window)
@@ -117,6 +135,11 @@ impl std::fmt::Debug for Player {
 }
 
 impl Player {
+    #[expect(
+        clippy::fn_params_excessive_bools,
+        reason = "independent player options keep the constructor explicit (design analysis, issue #804)"
+    )]
+    #[must_use]
     pub fn new(
         server_url: String,
         token: String,
@@ -157,6 +180,7 @@ impl Player {
     }
 
     /// Sets the video cache budgets projected on every run for this Player's lifetime.
+    #[must_use]
     pub fn with_video_cache(mut self, forward_mb: u32, back_mb: u32) -> Self {
         self.video_cache_forward_mb = forward_mb;
         self.video_cache_back_mb = back_mb;
@@ -167,6 +191,7 @@ impl Player {
     /// projects on every run for the remainder of this Player's lifetime
     /// (restart-required, matching `audio_device`'s owner-local semantics).
     /// Bare mode and the Local daemon must never call this.
+    #[must_use]
     pub fn with_audio_device(mut self, audio_device: Option<String>) -> Self {
         self.audio_device = audio_device;
         self
@@ -237,7 +262,7 @@ impl Player {
         self.audiobookshelf_context.lock().unwrap().is_some()
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     pub fn audiobookshelf_generation(&self) -> Option<crate::service_runtime::SetupGeneration> {
         self.audiobookshelf_context
             .lock()
@@ -246,7 +271,7 @@ impl Player {
             .map(AudiobookshelfPlayerContext::generation)
     }
 
-    #[cfg(any(test, feature = "test-support"))]
+    #[cfg(any(test, feature = "test"))]
     pub fn emby_credentials(&self) -> Option<(String, String)> {
         self.credentials.lock().unwrap().clone()
     }
@@ -380,7 +405,7 @@ mod tests {
             tx,
             None,
         );
-        let rendered = format!("{:?}", player);
+        let rendered = format!("{player:?}");
         assert!(rendered.contains("Player"));
         assert!(!rendered.contains("emby-secret-token"));
     }

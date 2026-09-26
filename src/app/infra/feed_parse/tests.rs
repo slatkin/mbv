@@ -65,10 +65,10 @@ fn rss_entry_with_enclosure_guid_and_duration() {
 
 #[test]
 fn rss_entry_with_only_link_is_kept() {
-    let item = r#"<item>
+    let item = r"<item>
             <title>No enclosure</title>
             <link>https://example.test/post</link>
-        </item>"#;
+        </item>";
     let entries = parse_rss_entries(
         &format!("<channel>{item}</channel>"),
         FeedKind::Audio,
@@ -136,7 +136,7 @@ fn atom_entry_with_enclosure_and_published() {
 
 #[test]
 fn entries_without_any_source_are_skipped() {
-    let item = r#"<item><title>No source at all</title></item>"#;
+    let item = r"<item><title>No source at all</title></item>";
     let entries = parse_rss_entries(
         &format!("<channel>{item}</channel>"),
         FeedKind::Video,

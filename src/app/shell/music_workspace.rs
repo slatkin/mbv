@@ -36,7 +36,7 @@ impl Model {
         f: impl FnOnce(&mut MusicContent) -> R,
     ) -> Option<R> {
         let key = self.music_owner_key()?;
-        self.update_library_owner(key, || Box::new(MusicContent::new()), f)
+        self.update_library_owner(&key, || Box::new(MusicContent::new()), f)
     }
 
     /// Starts (or reuses) both halves of the focused artist's detail fetch
@@ -47,8 +47,8 @@ impl Model {
     /// repeat pushes with the same identity are free. Used by the projection
     /// push; the component's typed request arms dispatch the two concerns
     /// through their own shell arms.
-    pub(in crate::app) fn request_music_artist_detail(&mut self, target: MusicArtistTarget) {
-        self.request_music_artist_tracks(target.clone());
+    pub(in crate::app) fn request_music_artist_detail(&mut self, target: &MusicArtistTarget) {
+        self.request_music_artist_tracks(target);
         self.request_music_artist_artwork(target);
     }
 
@@ -56,7 +56,7 @@ impl Model {
     /// identity arms the `ArtistIds` Audio query — or, for a fallback root
     /// (`artist_id == None`), the explicit per-album aggregation fetches —
     /// with no invented provider ID.
-    pub(in crate::app) fn request_music_artist_tracks(&mut self, target: MusicArtistTarget) {
+    pub(in crate::app) fn request_music_artist_tracks(&mut self, target: &MusicArtistTarget) {
         let Some(destination) = self.music_owner_key() else {
             return;
         };
@@ -66,11 +66,11 @@ impl Model {
     /// The typed artwork request's handler (task 6.2): the stable artist ID
     /// walks the existing image/cache boundary; a fallback artist is the
     /// explicit no-artwork arm inside `request_artist_artwork`.
-    pub(in crate::app) fn request_music_artist_artwork(&mut self, target: MusicArtistTarget) {
+    pub(in crate::app) fn request_music_artist_artwork(&mut self, target: &MusicArtistTarget) {
         let Some(destination) = self.music_owner_key() else {
             return;
         };
-        self.app.request_artist_artwork(destination, target);
+        self.app.request_artist_artwork(&destination, target);
     }
 
     /// The shell's reaction to a completed recursive album activation
@@ -238,12 +238,12 @@ impl Model {
                 target
             });
         if let Some(target) = artist_target.clone() {
-            self.request_music_artist_detail(target);
+            self.request_music_artist_detail(&target);
         }
         match artist_target {
             Some(target) => self
                 .app
-                .project_music_artist_detail(key, base_context, target),
+                .project_music_artist_detail(key, base_context, &target),
             None => base_context,
         }
     }
@@ -312,9 +312,9 @@ impl Model {
         if let Some(selection) = self.pending_music_track_selection.clone() {
             let resolved = self
                 .update_music_owner(|owner| {
-                    if !owner
+                    if owner
                         .selected_item()
-                        .is_some_and(|album| album.id == selection.album_id)
+                        .is_none_or(|album| album.id != selection.album_id)
                     {
                         // Superseded: the owner moved to another album.
                         return true;
@@ -434,7 +434,7 @@ mod tests {
             }
             let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
                 &level.items,
-                &Default::default(),
+                &std::collections::HashMap::default(),
             );
             catalog.revision = 7;
             catalog.parent_id = level.parent_id.clone();
@@ -443,7 +443,7 @@ mod tests {
                 candidate: None,
                 settled: Some(catalog),
             });
-        }
+        };
         app
     }
 

@@ -55,11 +55,11 @@ pub(in crate::app) enum RouterOutcome {
 ///    namespace only (`resolve_armed_outcome`); no chord reaches any surface.
 /// 1. **Never swallow the focused leaf's own typed request.** When the
 ///    policy would return `Swallow` and the focused leaf is the blocking
-///    overlay (`snapshot.blocking_overlay_open` is true and the focused id
+///    overlay (`snapshot.overlays.focus.blocking()` is true and the focused id
 ///    is one of the blocking-overlay `ComponentId`s), return `FallThrough`
 ///    so the leaf's request stands.
 /// 2. **Text entry keeps ordinary characters.** When the policy matches a
-///    global binding and `snapshot.text_entry_focused` is true, return
+///    global binding and `snapshot.overlays.text_entry_focused` is true, return
 ///    `FallThrough` instead of `Command` so the leaf's character input stands.
 ///    The F1-F4 sidebar bindings remain router-owned so sidebars switch
 ///    directly even while Settings or Search text entry is focused.
@@ -80,12 +80,12 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
         return resolve_armed_outcome(chord, snapshot, keybinds);
     }
     let focused_is_blocking_overlay =
-        snapshot.blocking_overlay_open && focused.is_some_and(is_blocking_overlay);
+        snapshot.overlays.focus.blocking() && focused.is_some_and(is_blocking_overlay);
     match resolve_policy(chord, snapshot, keybinds) {
         Some(entry) if entry.binding == KeyPolicyBinding::PrefixArm => RouterOutcome::PrefixArm,
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
         Some(entry) => {
-            if snapshot.text_entry_focused
+            if snapshot.overlays.text_entry_focused
                 && entry.global
                 && !matches!(
                     entry.binding,
@@ -103,7 +103,7 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
                 }
                 Some(cmd) => RouterOutcome::Command(cmd),
                 None => {
-                    if snapshot.blocking_overlay_open {
+                    if snapshot.overlays.focus.blocking() {
                         if focused_is_blocking_overlay {
                             RouterOutcome::FallThrough
                         } else {
@@ -115,7 +115,7 @@ pub(in crate::app) fn resolve_router_outcome_with_focused(
                 }
             }
         }
-        None if snapshot.blocking_overlay_open => {
+        None if snapshot.overlays.focus.blocking() => {
             if focused_is_blocking_overlay {
                 RouterOutcome::FallThrough
             } else {

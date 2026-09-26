@@ -7,16 +7,14 @@ impl SettingsComponent {
     pub(super) fn service_key(&self, key: &KeyEvent) -> Option<Msg> {
         let request = match key.code {
             Key::Enter | Key::Char(' ') => ServiceRequest::ActivateService(self.services_cursor),
-            Key::Char('d') | Key::Char('D') if self.services_cursor == 0 => {
-                ServiceRequest::RemoveEmby
-            }
-            Key::Char('t') | Key::Char('T') if self.services_cursor == 1 => {
+            Key::Char('d' | 'D') if self.services_cursor == 0 => ServiceRequest::RemoveEmby,
+            Key::Char('t' | 'T') if self.services_cursor == 1 => {
                 ServiceRequest::TestAudiobookshelfConnection
             }
-            Key::Char('r') | Key::Char('R') if self.services_cursor == 1 => {
+            Key::Char('r' | 'R') if self.services_cursor == 1 => {
                 ServiceRequest::ReplaceAudiobookshelf
             }
-            Key::Char('d') | Key::Char('D') if self.services_cursor == 1 => {
+            Key::Char('d' | 'D') if self.services_cursor == 1 => {
                 ServiceRequest::RemoveAudiobookshelf
             }
             _ => return None,

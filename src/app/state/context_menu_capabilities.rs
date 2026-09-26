@@ -1,6 +1,10 @@
 //! Capability derivation for multi-item context menus.
 use mbv_core::playback_queue::{QueueItem, QueueItemKind};
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "four independently intersected backend capabilities (playable, queue-admissible, removable, played-state-capable); all four co-occur for all-Emby selections and unit tests assert each axis independently (design analysis, issue #804)"
+)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct ItemCapabilities {
     pub playable: bool,

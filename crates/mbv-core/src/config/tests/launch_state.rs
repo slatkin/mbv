@@ -204,7 +204,7 @@ fn tui_launch_state_failed_replace_leaves_no_tmp_sibling() {
     );
     let debris: Vec<_> = std::fs::read_dir(scratch.path())
         .unwrap()
-        .filter_map(|entry| entry.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|entry| {
             entry
                 .file_name()
@@ -249,7 +249,7 @@ fn tui_launch_state_interrupted_write_keeps_previous_snapshot() {
     assert_eq!(load_tui_launch_state_at(&path), Some(second));
     let debris: Vec<_> = std::fs::read_dir(scratch.path())
         .unwrap()
-        .filter_map(|entry| entry.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|entry| {
             entry
                 .file_name()

@@ -122,7 +122,7 @@ pub(in crate::app) fn render_queue_status(
             let selected_bg =
                 palette::surface_colors(palette::Surface::QueueScopePillSelected, false).fill;
             let chip_bg = palette::surface_colors(palette::Surface::PillChip, false).fill;
-            let (local_bg, local_fg, remote_bg, remote_fg) = if m.local_selected {
+            let (local_fill, local_text, remote_fill, remote_text) = if m.local_selected {
                 (
                     selected_bg,
                     palette::TEXT_FOCUS_ACCENT,
@@ -137,13 +137,16 @@ pub(in crate::app) fn render_queue_status(
                     palette::TEXT_FOCUS_ACCENT,
                 )
             };
-            let local_span = Span::styled(" \u{2302} ", Style::default().fg(local_fg).bg(local_bg));
+            let local_span =
+                Span::styled(" \u{2302} ", Style::default().fg(local_text).bg(local_fill));
             let remote_span = Span::styled(
                 format!(" {} ", m.remote_icon),
-                Style::default().fg(remote_fg).bg(remote_bg),
+                Style::default().fg(remote_text).bg(remote_fill),
             );
-            let local_w = local_span.content.width() as u16;
-            let remote_w = remote_span.content.width() as u16;
+            // Pill widths are drawn into a u16-sized terminal column, so a
+            // wider-than-u16 span cannot occur; clamp instead of truncating.
+            let local_w = u16::try_from(local_span.content.width()).unwrap_or(u16::MAX);
+            let remote_w = u16::try_from(remote_span.content.width()).unwrap_or(u16::MAX);
             let scope_w = local_w + remote_w;
             if scope_w == 0 || scope_w >= area.width {
                 (None, None)
@@ -179,11 +182,10 @@ pub(in crate::app) fn render_queue_status(
     if let Some(spans) = autosave {
         let width = spans
             .iter()
-            .map(|span| span.content.width() as u16)
+            .map(|span| u16::try_from(span.content.width()).unwrap_or(u16::MAX))
             .sum::<u16>();
         // Autosave yields the far right to the scope pills when shown.
-        let scope_w =
-            scope_remote.map(|r| r.width).unwrap_or(0) + scope_local.map(|r| r.width).unwrap_or(0);
+        let scope_w = scope_remote.map_or(0, |r| r.width) + scope_local.map_or(0, |r| r.width);
         let x = area.x + area.width.saturating_sub(scope_w).saturating_sub(width);
         if x > area.x {
             frame.render_widget(

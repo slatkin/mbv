@@ -10,7 +10,7 @@ use std::time::Instant;
 
 /// The flat shape's fixed selectable-row page distance (design D4). Flat
 /// lists keep a fixed row count per page; the tree owns its own policy.
-const PAGE_DISTANCE: usize = 5;
+const PAGE_DISTANCE: i64 = 5;
 
 mod carrier;
 mod grouping;
@@ -148,7 +148,15 @@ impl<Target> MediaList<Target> {
         Target: Clone + Eq,
     {
         let flow = self.row_flow();
-        Cursored::move_by(self, &flow, delta as isize);
+        Cursored::move_by(
+            self,
+            &flow,
+            isize::try_from(delta).unwrap_or(if delta.is_negative() {
+                isize::MIN
+            } else {
+                isize::MAX
+            }),
+        );
     }
 
     fn select_first(&mut self)
@@ -236,7 +244,7 @@ impl<Target> MediaList<Target> {
                 None
             }
             MediaListOperation::Page(delta) => {
-                self.move_selection(delta.saturating_mul(PAGE_DISTANCE as i64));
+                self.move_selection(delta.saturating_mul(PAGE_DISTANCE));
                 None
             }
             MediaListOperation::First => {

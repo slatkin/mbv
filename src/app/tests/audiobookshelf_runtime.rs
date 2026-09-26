@@ -37,7 +37,7 @@ fn configured_startup_is_independent_and_reaches_ready() {
         "book-secret",
     )
     .unwrap();
-    let mut app = App::new_independent(config);
+    let mut app = App::new_independent(&config);
     assert!(app.audiobookshelf_startup_request.is_some());
     let generation = app.audiobookshelf_runtime.generation();
     app.apply_audiobookshelf_completion(completion(
@@ -139,7 +139,7 @@ fn rejected_key_clears_owner_admission_but_preserves_repairable_queue_snapshot()
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     };
     mbv_core::config::save_queue_state(&queue).unwrap();
     app.player_tab.set_queue_items(queue.items.clone(), 0);
@@ -179,7 +179,7 @@ fn stale_progress_ack_after_authentication_clear_is_ignored() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     };
     app.player_tab.set_queue_items(queue.items.clone(), 0);
     let before_position = app.player_tab.queue.slots()[0]

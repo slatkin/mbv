@@ -408,8 +408,8 @@ fn render_wide_tv(model: &mut Model) -> (ratatui::buffer::Buffer, Rect) {
             .expect("LibraryPanel");
         terminal
             .draw(|f| tuirealm::component::Component::view(panel, f, area))
-            .unwrap();
-    }
+            .unwrap()
+    };
     let rail = model
         .application
         .get_component(&ComponentId::Library)

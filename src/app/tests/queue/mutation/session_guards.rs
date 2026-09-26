@@ -37,7 +37,7 @@ fn attached_session_remove_stays_local_and_does_not_replay_daemon_queue() {
         crate::config::QueueSource::Playlist { ref id, ref name }
             if id.as_deref() == Some("playlist-b") && name == "Playlist B"
     ));
-    assert!(cmd_rx.try_recv().is_err());
+    cmd_rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn attached_session_move_stays_local_without_owner_command() {
             .collect::<Vec<_>>(),
         vec!["b1", "b0", "b2"]
     );
-    assert!(cmd_rx.try_recv().is_err());
+    cmd_rx.try_recv().unwrap_err();
 }
 
 #[test]
@@ -87,7 +87,7 @@ fn attached_session_append_stays_local_without_rollback_or_owner_command() {
         vec!["Item 0", "Item 1", "b2"]
     );
     assert_eq!(app.status, status_before);
-    assert!(cmd_rx.try_recv().is_err());
+    cmd_rx.try_recv().unwrap_err();
 }
 
 #[test]

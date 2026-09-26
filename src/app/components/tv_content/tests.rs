@@ -47,7 +47,7 @@ fn narrow_keyboard_moves_and_refreshes_through_shell_intents() {
         None,
         false,
     ));
-    owner.is_wide = false;
+    owner.set_is_wide(false);
     owner.pane = Pane::Episodes;
     let key = |code| KeyEvent {
         code,

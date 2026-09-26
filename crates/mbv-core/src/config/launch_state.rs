@@ -21,7 +21,7 @@
 // Queue item, a nested Workspace selector, overlays/sidebars, search,
 // multi-selection, scroll offsets, loading/error state, or paint geometry.
 
-use super::*;
+use super::{state_dir, ServiceKind};
 use std::path::{Path, PathBuf};
 
 /// Current on-disk format version. The loader accepts only this version and
@@ -138,6 +138,7 @@ pub enum AudiobookshelfPodcastFilter {
 }
 
 /// The closed surname ranges used by the Audiobookshelf book destination.
+///
 /// Empty ranges are omitted from the current presentation, so restoration
 /// matches this identity against the current populated bucket rather than a
 /// bucket position.
@@ -158,6 +159,7 @@ impl AudiobookshelfBookBucket {
     /// Resolve the bucket's stable identity from its position in the fixed
     /// surname-range table. Empty ranges are omitted from the presented pill
     /// row, so callers must carry this table index rather than a pill index.
+    #[must_use]
     pub fn from_bucket_index(index: usize) -> Option<Self> {
         Some(match index {
             0 => Self::AToC,
@@ -203,6 +205,7 @@ pub enum EmbyLetterBucket {
 impl EmbyLetterBucket {
     /// Resolve the bucket's stable identity from its position in the shared
     /// `LETTER_FILTER_BUCKETS` table.
+    #[must_use]
     pub fn from_index(index: usize) -> Option<Self> {
         Some(match index {
             0 => Self::AToC,
@@ -220,6 +223,7 @@ impl EmbyLetterBucket {
 
     /// Inverse of [`Self::from_index`]: the bucket's position in the shared
     /// `LETTER_FILTER_BUCKETS` table.
+    #[must_use]
     pub fn to_index(self) -> usize {
         match self {
             Self::AToC => 0,
@@ -274,18 +278,19 @@ pub enum TuiLaunchStateError {
 }
 
 impl std::fmt::Display for TuiLaunchStateError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::CreateDirectory(detail) => write!(formatter, "create directory: {detail}"),
-            Self::Serialize(detail) => write!(formatter, "serialize launch state: {detail}"),
-            Self::Write(detail) => write!(formatter, "write launch state: {detail}"),
-            Self::Replace(detail) => write!(formatter, "replace launch state: {detail}"),
+            Self::CreateDirectory(detail) => write!(f, "create directory: {detail}"),
+            Self::Serialize(detail) => write!(f, "serialize launch state: {detail}"),
+            Self::Write(detail) => write!(f, "write launch state: {detail}"),
+            Self::Replace(detail) => write!(f, "replace launch state: {detail}"),
         }
     }
 }
 
 impl std::error::Error for TuiLaunchStateError {}
 
+#[must_use]
 pub fn tui_launch_state_path() -> PathBuf {
     state_dir().join("tui_launch_state.json")
 }
@@ -324,6 +329,7 @@ pub(super) fn save_tui_launch_state_at(
 /// Load the saved snapshot. Missing, unreadable, malformed, or
 /// version-mismatched files all yield `None` — startup falls back to
 /// first-valid-choice rules and is never prevented by launch-state data.
+#[must_use]
 pub fn load_tui_launch_state() -> Option<TuiLaunchState> {
     load_tui_launch_state_at(&tui_launch_state_path())
 }
@@ -354,10 +360,10 @@ pub(super) fn load_tui_launch_state_at(path: &Path) -> Option<TuiLaunchState> {
 /// the rename stays atomic), qualified by pid and a fresh uuid so two
 /// Clients writing concurrently never share a pathname.
 pub(super) fn tui_launch_state_tmp_path(path: &Path) -> PathBuf {
-    let file_name = path
-        .file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "tui_launch_state.json".to_string());
+    let file_name = path.file_name().map_or_else(
+        || "tui_launch_state.json".to_string(),
+        |name| name.to_string_lossy().into_owned(),
+    );
     path.with_file_name(format!(
         "{file_name}.tmp-{}-{}",
         std::process::id(),

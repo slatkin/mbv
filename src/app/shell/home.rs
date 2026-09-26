@@ -55,7 +55,7 @@ impl Model {
                         .map(crate::app::state::context_menu_capabilities::emby_item_capabilities)
                         .collect();
                     self.app.open_context_menu_for_selection(
-                        items,
+                        &items,
                         anchor,
                         crate::app::PanelFocus::Library,
                         capabilities,
@@ -71,7 +71,7 @@ impl Model {
                         QueueItem::Emby(item) => Some(*item),
                         _ => None,
                     });
-                self.home_context_item = item.clone();
+                self.home_context_item.clone_from(&item);
                 let cw_selected = target.is_some();
                 if let Some((x, y)) = anchor {
                     self.app.open_context_menu_at(x, y, cw_selected, item);
@@ -81,7 +81,7 @@ impl Model {
             }
             ShellRequest::HomeDelete(target) => {
                 if let Some((QueueItem::Emby(item), true)) = self.home_stable_target(&target) {
-                    self.app.remove_from_continue_watching(*item);
+                    self.app.remove_from_continue_watching(&item);
                 }
             }
             ShellRequest::HomeToggleWatched(target) => {
@@ -97,7 +97,7 @@ impl Model {
         &mut self,
         f: impl FnOnce(&mut HomeContent) -> R,
     ) -> Option<R> {
-        self.update_library_owner(LibraryKey::Home, || Box::new(HomeContent::new()), f)
+        self.update_library_owner(&LibraryKey::Home, || Box::new(HomeContent::new()), f)
     }
 
     pub(in crate::app) fn push_home_content(&mut self) {

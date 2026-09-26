@@ -105,9 +105,8 @@ impl App {
     // `actions.rs`.
     pub(in crate::app) fn spawn_all_items_prefetch(&self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
-        let lvl = match lib.nav_stack.last() {
-            Some(l) => l,
-            None => return,
+        let Some(lvl) = lib.nav_stack.last() else {
+            return;
         };
         // `lvl.is_fully_loaded()` compares server rows consumed (`fetched_rows`)
         // against the active range's `total_count` -- with a letter-range pill
@@ -150,9 +149,8 @@ impl App {
 
     pub(in crate::app) fn spawn_search_items_load(&self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
-        let lvl = match lib.nav_stack.last() {
-            Some(l) => l,
-            None => return,
+        let Some(lvl) = lib.nav_stack.last() else {
+            return;
         };
         let parent_id = lvl.parent_id.clone();
         // See `spawn_all_items_prefetch` above: always fetch the WHOLE

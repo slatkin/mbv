@@ -242,7 +242,7 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
     let mut selected = make_item("Selected home item", "Movie");
     selected.id = "selected-home-item".into();
     model.update_library_owner(
-        LibraryKey::Home,
+        &LibraryKey::Home,
         || Box::new(HomeContent::new()),
         |owner| {
             owner.set_content(
@@ -268,7 +268,7 @@ fn orderly_teardown_writes_only_the_selected_destination_launch_snapshot() {
         played: false,
     };
     model.update_library_owner(
-        LibraryKey::Feeds,
+        &LibraryKey::Feeds,
         || Box::new(FeedsContent::new()),
         |owner| {
             owner.set_content(FeedsOwnerPush {
@@ -321,7 +321,7 @@ fn two_apps_diverge_in_memory_and_last_orderly_exit_replaces_whole_snapshot() {
     let mut first_item = make_item("First app item", "Movie");
     first_item.id = "first-app-item".into();
     first.update_library_owner(
-        LibraryKey::Home,
+        &LibraryKey::Home,
         || Box::new(HomeContent::new()),
         |owner| {
             owner.set_content(
@@ -351,7 +351,7 @@ fn two_apps_diverge_in_memory_and_last_orderly_exit_replaces_whole_snapshot() {
         played: false,
     };
     second.update_library_owner(
-        LibraryKey::Feeds,
+        &LibraryKey::Feeds,
         || Box::new(FeedsContent::new()),
         |owner| {
             owner.set_content(FeedsOwnerPush {

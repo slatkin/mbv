@@ -1,5 +1,8 @@
-use super::core::DaemonEvent;
-use super::*;
+use super::{
+    broadcast_queue_state, cancel_pending_idle_queue_load_if_run_changed, expire_and_redispatch,
+    expire_pending_idle_queue_load, persist_stay_alive_owner_queue, AudiobookshelfOwnerContext,
+    ClientRegistry, DaemonEvent, DaemonPlayerOwner, DaemonRole, EmbyOwnerContext, SharedQueueState,
+};
 use crate::api::EmbyClient;
 use crate::ctrl::CtrlEvent;
 use crate::player::{Player, PlayerEvent};
@@ -87,7 +90,7 @@ impl DaemonLoop {
             let direct_commands = self.direct_commands.clone();
             let audio_only = self.audio_only;
             std::thread::spawn(move || {
-                client.register_capabilities_with_options(&direct_commands, audio_only)
+                client.register_capabilities_with_options(&direct_commands, audio_only);
             });
             self.last_capabilities = now;
         }
@@ -143,13 +146,13 @@ impl DaemonLoop {
             DaemonEvent::Ws { generation, event } => self.handle_ws_event(generation, event),
             DaemonEvent::QueueEnriched(items) => self.handle_queue_enriched(items),
             DaemonEvent::AudiobookshelfProgress(update) => {
-                self.handle_audiobookshelf_progress(update)
+                self.handle_audiobookshelf_progress(&update)
             }
             DaemonEvent::AudiobookshelfBookProgress(update) => {
-                self.handle_audiobookshelf_book_progress(update)
+                self.handle_audiobookshelf_book_progress(&update)
             }
             DaemonEvent::Ctrl(cmd, client_id, reply_tx) => {
-                self.handle_ctrl_event(cmd, client_id, reply_tx)
+                self.handle_ctrl_event(cmd, client_id, &reply_tx)
             }
             DaemonEvent::PlaybackResolved {
                 start_idx,

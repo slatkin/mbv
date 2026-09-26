@@ -40,6 +40,7 @@ impl std::fmt::Debug for AudiobookshelfValidatedSetup {
 }
 
 impl AudiobookshelfValidatedSetup {
+    #[must_use]
     pub fn new(
         setup: crate::config::AudiobookshelfSetup,
         user: AudiobookshelfUser,
@@ -52,6 +53,7 @@ impl AudiobookshelfValidatedSetup {
         }
     }
 
+    #[must_use]
     pub fn into_parts(
         self,
     ) -> (
@@ -81,17 +83,16 @@ pub struct AudiobookshelfError {
 }
 
 impl std::fmt::Debug for AudiobookshelfError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter
-            .debug_struct("AudiobookshelfError")
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AudiobookshelfError")
             .field("class", &self.class)
             .finish()
     }
 }
 
 impl std::fmt::Display for AudiobookshelfError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        formatter.write_str(match self.class {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self.class {
             AudiobookshelfFailureClass::AuthenticationRejected => "authentication rejected",
             AudiobookshelfFailureClass::Connectivity => "server unavailable",
             AudiobookshelfFailureClass::Server => "server failure",
@@ -206,10 +207,10 @@ impl AudiobookshelfClient {
 
     fn me(&self, api_key: &str) -> Result<AudiobookshelfUser, AudiobookshelfError> {
         let mut response = self.get(api_key, "/api/me")?;
-        let user: AudiobookshelfMeResponse = response
-            .body_mut()
-            .read_json()
-            .map_err(|_| AudiobookshelfError::malformed())?;
+        let user: AudiobookshelfMeResponse = response.body_mut().read_json().map_err(|error| {
+            log::debug!(target: "audiobookshelf", "invalid /api/me response: {error}");
+            AudiobookshelfError::malformed()
+        })?;
         if !user.is_active || user.id.trim().is_empty() || user.username.trim().is_empty() {
             return Err(AudiobookshelfError::malformed());
         }

@@ -30,10 +30,10 @@ pub(in crate::app) struct FeedsManageRenderGeometry {
 pub(in crate::app) fn render_feeds_manage_content(
     f: &mut Frame,
     dim_backdrop_active: &mut bool,
-    model: FeedsManageRenderModel<'_>,
+    model: &FeedsManageRenderModel<'_>,
 ) -> FeedsManageRenderGeometry {
     match model.stage {
-        FeedsManageStage::List => render_feeds_manage_list(f, dim_backdrop_active, &model),
+        FeedsManageStage::List => render_feeds_manage_list(f, dim_backdrop_active, model),
         FeedsManageStage::Form(form) => {
             render_feeds_manage_form(f, dim_backdrop_active, form, model.pending_add)
         }
@@ -48,7 +48,9 @@ fn render_feeds_manage_list(
     let title = " Manage Feeds ";
     let hint = "[a]add  [↵/e]edit  [d]remove  [Esc]close";
     let width: u16 = 58;
-    let content_h = (model.feeds.len().max(1) as u16) + 1;
+    let content_h = u16::try_from(model.feeds.len().max(1))
+        .unwrap_or(u16::MAX)
+        .saturating_add(1);
     let height = content_h + 2;
 
     let inner = render_modal_frame(
@@ -100,7 +102,8 @@ fn render_feeds_manage_list(
             (
                 Rect {
                     x: list_area.x,
-                    y: list_area.y + i as u16,
+                    // `i` is taken from `list_area.height`, so it fits `u16`.
+                    y: list_area.y + u16::try_from(i).expect("row index bounded by list height"),
                     width: list_area.width,
                     height: 1,
                 },
@@ -216,7 +219,8 @@ fn render_feeds_manage_form(
                 (
                     Rect {
                         x: inner.x + 1,
-                        y: inner.y + 1 + i as u16,
+                        // Three fixed fields, so `i` is 0..=2.
+                        y: inner.y + 1 + u16::try_from(i).expect("fixed field index"),
                         width: inner.width.saturating_sub(2),
                         height: 1,
                     },
@@ -229,7 +233,9 @@ fn render_feeds_manage_form(
             Paragraph::new(Span::styled(text.clone(), *style)),
             Rect {
                 x: inner.x + 1,
-                y: inner.y + 1 + i as u16,
+                // Rows were collected with at most one per list row, so `i`
+                // fits `u16`.
+                y: inner.y + 1 + u16::try_from(i).expect("row index bounded by list height"),
                 width: inner.width.saturating_sub(2),
                 height: 1,
             },

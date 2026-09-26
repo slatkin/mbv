@@ -34,6 +34,15 @@ use crate::app::render::{effective_sort_str, LetterFilter};
 mod input;
 mod panel;
 
+/// Which selector policy the projected Emby content exposes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(in crate::app) enum EmbySelectorMode {
+    #[default]
+    None,
+    FeedGroups,
+    Letters,
+}
+
 /// Browse identity used to decide when a projected position should be applied.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub(in crate::app) struct EmbyLibraryIdentity {
@@ -100,11 +109,8 @@ pub(in crate::app) struct BrowserOwnerPush {
     pub library_total: Option<usize>,
     pub letter_filter: Option<LetterFilter>,
     pub loading: bool,
-    /// Whether `items` is a feed/home-video group's selected videos
-    /// (`is_feed_home_video_group_view`): the Selector row shows feed-group
-    /// pills instead of letter pills, and `[`/`]` cycles groups.
-    pub group_pills: bool,
-    pub show_letter_pills: bool,
+    /// Selector policy: feed-group pills and letter pills are alternatives.
+    pub selector_mode: EmbySelectorMode,
     pub feed_groups: Vec<String>,
     /// The group folders' Service content IDs, aligned 1:1 with
     /// `feed_groups` (task 2.1): the launch snapshot resolves the selected
@@ -127,8 +133,7 @@ pub(in crate::app) struct EmbyLibraryContent {
     library_total: Option<usize>,
     letter_filter: Option<LetterFilter>,
     loading: bool,
-    group_pills: bool,
-    show_letter_pills: bool,
+    selector_mode: EmbySelectorMode,
     feed_groups: Vec<String>,
     feed_group_ids: Vec<String>,
     feed_group_cursor: usize,
@@ -167,8 +172,7 @@ impl EmbyLibraryContent {
             library_total: None,
             letter_filter: None,
             loading: false,
-            group_pills: false,
-            show_letter_pills: false,
+            selector_mode: EmbySelectorMode::None,
             feed_groups: Vec::new(),
             feed_group_ids: Vec::new(),
             feed_group_cursor: 0,
@@ -200,8 +204,7 @@ impl EmbyLibraryContent {
         self.library_total = push.library_total;
         self.letter_filter = push.letter_filter;
         self.loading = push.loading;
-        self.group_pills = push.group_pills;
-        self.show_letter_pills = push.show_letter_pills;
+        self.selector_mode = push.selector_mode;
         self.feed_groups = push.feed_groups;
         self.feed_group_ids = push.feed_group_ids;
         self.feed_group_cursor = push.feed_group_cursor;
@@ -326,18 +329,15 @@ impl EmbyLibraryContent {
         self.items().get(self.cursor()).cloned()
     }
 
-    fn pick_selector(&mut self, index: usize) -> Option<Msg> {
+    fn pick_selector(&mut self, index: usize) -> Msg {
         if index == 0 {
             self.set_latest_mode(true);
-            return Some(Msg::Shell(Box::new(
-                ShellRequest::EmbyLibraryLatestSelected,
-            )));
+            return Msg::Shell(Box::new(ShellRequest::EmbyLibraryLatestSelected));
         }
         let was_latest = self.latest_mode;
         self.set_latest_mode(false);
         let target = if was_latest
-            && self.show_letter_pills
-            && !self.group_pills
+            && self.selector_mode == EmbySelectorMode::Letters
             && index == 1
             && self.letter_filter.is_none()
         {
@@ -345,10 +345,10 @@ impl EmbyLibraryContent {
         } else {
             index - 1
         };
-        Some(Msg::Shell(Box::new(if was_latest {
+        Msg::Shell(Box::new(if was_latest {
             ShellRequest::EmbyLibraryLatestExit { target }
         } else {
             ShellRequest::EmbyLibraryPillClick { target: index - 1 }
-        })))
+        }))
     }
 }

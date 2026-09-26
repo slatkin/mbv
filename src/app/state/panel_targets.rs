@@ -102,7 +102,7 @@ mod tests {
             sub_index: -1,
             audio_index: 0,
             muted: false,
-            media_info: Default::default(),
+            media_info: mbv_core::api::SessionMediaInfo::default(),
         }
     }
 

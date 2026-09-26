@@ -50,7 +50,7 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     );
     harness
         .model_mut()
-        .dispatch_router_command(Command::OpenPlaylists);
+        .dispatch_router_command(&Command::OpenPlaylists);
     apply_outcome(&mut harness, outcome);
     harness.model_mut().sync_mounted_surfaces();
     let playlists_id = ComponentId::Overlay(OverlayId::Playlists);
@@ -137,6 +137,29 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
     assert_eq!(help.test_scroll(), 1);
 }
 
+fn mounted_library_cursor(harness: &mut TickHarness) -> usize {
+    let (_, key, _) = harness
+        .model()
+        .active_emby_library_owner()
+        .expect("the Movies owner has migrated");
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .unwrap()
+        .as_any_mut()
+        .downcast_mut::<LibraryPanel>()
+        .unwrap()
+        .owner(&key)
+        .and_then(|owner| {
+            owner
+                .as_any()
+                .downcast_ref::<crate::app::components::emby_library_content::EmbyLibraryContent>()
+        })
+        .map(crate::app::components::emby_library_content::EmbyLibraryContent::cursor)
+        .expect("browser owner installed")
+}
+
 #[test]
 fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     let mut app = crate::app::render::make_queue_app(8);
@@ -158,25 +181,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         !harness.model().mouse_subscribed.contains(&library_id),
         "an unpainted Library destination must not be mouse-eligible"
     );
-    let library_cursor_before = {
-        let (_, key, _) = harness
-            .model()
-            .active_emby_library_owner()
-            .expect("the Movies owner has migrated");
-        let panel = harness
-            .model_mut()
-            .application
-            .get_component_mut(&library_id)
-            .unwrap();
-        panel
-            .as_any_mut()
-            .downcast_mut::<LibraryPanel>()
-            .unwrap()
-            .owner(&key)
-            .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::emby_library_content::EmbyLibraryContent>())
-            .map(|owner| owner.cursor())
-            .expect("browser owner installed")
-    };
+    let library_cursor_before = mounted_library_cursor(&mut harness);
     let first_row = harness
         .model_mut()
         .application
@@ -211,25 +216,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         .iter()
         .all(|msg| !matches!(msg, Msg::Shell(ref shell_boxed) if matches!(shell_boxed.as_ref(), ShellRequest::QueueIntent(_)))));
     assert_eq!(
-        {
-            let (_, key, _) = harness
-                .model()
-                .active_emby_library_owner()
-                .expect("the Movies owner has migrated");
-            let panel = harness
-                .model_mut()
-                .application
-                .get_component_mut(&library_id)
-                .unwrap();
-            panel
-                .as_any_mut()
-                .downcast_mut::<LibraryPanel>()
-                .unwrap()
-                .owner(&key)
-                .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::emby_library_content::EmbyLibraryContent>())
-                .map(|owner| owner.cursor())
-                .expect("browser owner installed")
-        },
+        mounted_library_cursor(&mut harness),
         library_cursor_before,
         "the hidden Library must not mutate from Queue-only wheel"
     );

@@ -47,11 +47,10 @@ pub fn load_config() -> Result<Config, String> {
 
 pub fn load_ui_config() -> Result<UiConfig, String> {
     let path = mbv_core::config::config_path();
-    let text = match std::fs::read_to_string(&path) {
-        Ok(text) => text,
-        Err(_) => return Ok(UiConfig::default()),
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(UiConfig::default());
     };
-    parse_ui_config(&text).map_err(|e| format!("Config parse error in {:?}: {e}", path))
+    parse_ui_config(&text).map_err(|e| format!("Config parse error in {}: {e}", path.display()))
 }
 
 fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
@@ -67,12 +66,11 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
         .map(str::to_string);
     let image_cache_size = display
         .and_then(|m| m.get("image_cache_size"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(1) as usize)
-        .unwrap_or(50);
+        .and_then(toml::Value::as_integer)
+        .map_or(50, |v| usize::try_from(v.max(1)).unwrap_or(usize::MAX));
     let use_nerd_fonts = display
         .and_then(|m| m.get("use_nerd_fonts"))
-        .and_then(|v| v.as_bool())
+        .and_then(toml::Value::as_bool)
         .unwrap_or(false);
     let indicator_style = display
         .and_then(|m| m.get("indicator_style"))
@@ -123,7 +121,7 @@ pub fn save_ui_config(ui: &UiConfig) {
 
     display.insert(
         "image_cache_size".to_string(),
-        toml::Value::Integer(ui.image_cache_size as i64),
+        toml::Value::Integer(i64::try_from(ui.image_cache_size).unwrap_or(i64::MAX)),
     );
     display.insert(
         "use_nerd_fonts".to_string(),
@@ -137,17 +135,14 @@ pub fn save_ui_config(ui: &UiConfig) {
         "visualizer_glyph".to_string(),
         toml::Value::String(validated_visualizer_glyph(Some(&ui.visualizer_glyph))),
     );
-    match &ui.image_protocol {
-        Some(protocol) => {
-            display.insert(
-                "image_protocol".to_string(),
-                toml::Value::String(protocol.clone()),
-            );
-        }
-        None => {
-            display.remove("image_protocol");
-            display.remove("card_image_protocol");
-        }
+    if let Some(protocol) = &ui.image_protocol {
+        display.insert(
+            "image_protocol".to_string(),
+            toml::Value::String(protocol.clone()),
+        );
+    } else {
+        display.remove("image_protocol");
+        display.remove("card_image_protocol");
     }
 
     if let Ok(text) = toml::to_string(&doc) {
@@ -304,7 +299,7 @@ pub fn evict_old_image_cache() {
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
         for entry in entries.flatten() {
             if let Ok(meta) = entry.metadata() {
-                if meta.modified().map(|m| m < cutoff).unwrap_or(false) {
+                if meta.modified().is_ok_and(|m| m < cutoff) {
                     let _ = std::fs::remove_file(entry.path());
                 }
             }
@@ -320,12 +315,11 @@ pub fn evict_old_image_cache() {
 fn touch_image_disk_cache(path: &std::path::Path) {
     let stale = std::fs::metadata(path)
         .and_then(|meta| meta.modified())
-        .map(|modified| {
+        .is_ok_and(|modified| {
             std::time::SystemTime::now()
                 .duration_since(modified)
                 .is_ok_and(|age| age.as_secs() >= 24 * 3600)
-        })
-        .unwrap_or(false);
+        });
     if stale {
         // Read-only open: refreshing mtime needs no write access to the file.
         if let Ok(file) = std::fs::File::open(path) {

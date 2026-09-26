@@ -191,7 +191,7 @@ fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
         };
         let (_buf, wide_geo, _hits) = draw_skeleton(&mut content, true);
         wide_list_area = wide_geo.list_area;
-    }
+    };
     assert_eq!(
         search.results().current_content_rect(),
         Some(wide_list_area)
@@ -226,8 +226,8 @@ fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
                     ),
                 );
             })
-            .unwrap();
-    }
+            .unwrap()
+    };
     let narrow_geo = narrow_geo.expect("narrow skeleton painted");
     assert_ne!(narrow_geo.list_area, wide_list_area, "the geometry changed");
     assert_eq!(
@@ -316,7 +316,7 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
             .current_content_rect()
             .expect("the painted session retained its hit geometry");
         assert_eq!(old_rect, open_geo.list_area);
-    }
+    };
 
     search.close();
     assert!(

@@ -23,11 +23,11 @@ fn queue_three() -> Vec<mbv_core::playback_queue::QueueSlot> {
     .to_vec()
 }
 
-fn component_with_slots(slots: Vec<mbv_core::playback_queue::QueueSlot>) -> QueueComponent {
+fn component_with_slots(slots: &[mbv_core::playback_queue::QueueSlot]) -> QueueComponent {
     let mut component = QueueComponent::new();
     component.set_content(
-        slots,
-        QueueCursorUpdate::Set(0),
+        &slots,
+        &QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
     );
@@ -41,7 +41,7 @@ fn drawn_component() -> (
     Terminal<TestBackend>,
 ) {
     let slots = queue_three();
-    let mut component = component_with_slots(slots.clone());
+    let mut component = component_with_slots(&slots);
     // The panel derives its status overhead from the placement it is
     // handed (task 3.1); 14 rows leave enough framed body rows for the
     // three dragged rows to resolve.

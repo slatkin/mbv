@@ -76,8 +76,7 @@ fn stale_client_jump_to_index_is_rejected_visibly() {
     assert_eq!(owner.core.observed_active_slot(), None);
 }
 
-#[test]
-fn stale_stopped_and_completed_run_observations_are_rejected() {
+fn stale_stopped_run_observation_is_rejected() {
     let player = cold_player();
     player.status.lock().unwrap().sequence_generation = 5;
     let current_run = 5;
@@ -165,6 +164,40 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
             .playback_position_ticks(),
         original_position
     );
+}
+
+fn assert_stale_completion_unchanged(
+    owner: &DaemonPlayerOwner,
+    shared_queue: &SharedQueueState,
+    slot: crate::playback_queue::QueueSlotId,
+    original_len: usize,
+    original_position: i64,
+) {
+    assert_eq!(owner.core.queue.len(), original_len);
+    assert_eq!(owner.core.observed_active_slot(), Some(slot));
+    assert_eq!(
+        *shared_queue.observed_active_slot.lock().unwrap(),
+        Some(slot)
+    );
+    assert_eq!(
+        owner
+            .core
+            .queue
+            .slot(slot)
+            .unwrap()
+            .item
+            .playback_position_ticks(),
+        original_position
+    );
+    assert!(!owner.core.queue.slot(slot).unwrap().item.played());
+}
+
+fn stale_completed_run_observation_is_rejected() {
+    let player = cold_player();
+    player.status.lock().unwrap().sequence_generation = 5;
+    let current_run = 5;
+    let old_run = 4;
+    let shared_queue = shared_queue_state();
 
     let queue = queue_from_items(
         &[
@@ -200,35 +233,18 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         true,
         true,
-        true,
-        false,
+        ConsumePolicy {
+            videos: true,
+            audio: false,
+        },
     ));
-    assert_eq!(completed_owner.core.queue.len(), original_len);
-    assert_eq!(
-        completed_owner.core.observed_active_slot(),
-        Some(completed_slot)
+    assert_stale_completion_unchanged(
+        &completed_owner,
+        &shared_queue,
+        completed_slot,
+        original_len,
+        original_position,
     );
-    assert_eq!(
-        *shared_queue.observed_active_slot.lock().unwrap(),
-        Some(completed_slot)
-    );
-    assert_eq!(
-        completed_owner
-            .core
-            .queue
-            .slot(completed_slot)
-            .unwrap()
-            .item
-            .playback_position_ticks(),
-        original_position
-    );
-    assert!(!completed_owner
-        .core
-        .queue
-        .slot(completed_slot)
-        .unwrap()
-        .item
-        .played());
 
     assert!(apply_track_completed_observation(
         &mut completed_owner,
@@ -239,8 +255,10 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS + 1,
         false,
         false,
-        true,
-        false,
+        ConsumePolicy {
+            videos: true,
+            audio: false,
+        },
     ));
     assert_eq!(
         completed_owner
@@ -261,10 +279,18 @@ fn stale_stopped_and_completed_run_observations_are_rejected() {
         0,
         true,
         true,
-        true,
-        false,
+        ConsumePolicy {
+            videos: true,
+            audio: false,
+        },
     ));
     assert_eq!(completed_owner.core.queue.len(), original_len - 1);
+}
+
+#[test]
+fn stale_stopped_and_completed_run_observations_are_rejected() {
+    stale_stopped_run_observation_is_rejected();
+    stale_completed_run_observation_is_rejected();
 }
 
 #[test]

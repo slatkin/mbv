@@ -1,4 +1,12 @@
-use super::*;
+use super::super::list::tree_browser::{TreeEntry, TreeMarkPolicy, TreeNode, TreeOperation};
+use super::super::media_list::MediaSemanticState;
+use super::super::msg::{Msg, ShellRequest};
+use super::super::tv_tree_target::TvTreeTarget;
+use super::episode_rows::upcoming_episode_target;
+use super::TvContent;
+use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
+use crate::app::ui_util::natural_sort_key;
+use mbv_core::api::EmbyItem;
 
 impl TvContent {
     /// Project the settled show-mode catalog into the shared tree vocabulary.
@@ -113,7 +121,7 @@ impl TvContent {
             let number = if episode.index_number > 0 {
                 episode.index_number
             } else {
-                index as i64 + 1
+                i64::try_from(index).expect("episode enumerate index fits i64") + 1
             };
             let episode_target = TvTreeTarget::Episode {
                 show: show_id.to_owned(),

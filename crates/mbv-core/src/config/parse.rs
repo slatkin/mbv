@@ -1,12 +1,15 @@
-use super::*;
+use super::{
+    config_path, default_daemon_server_tcp_listen, is_valid_audio_device, AudiobookshelfSetup,
+    Config, EmbySetup, FeedKind, FeedSubscription, DEFAULT_VIDEO_CACHE_BACK_MB,
+    DEFAULT_VIDEO_CACHE_FORWARD_MB,
+};
 
 pub fn load_config() -> Result<Config, String> {
     let path = config_path();
-    let text = match std::fs::read_to_string(&path) {
-        Ok(t) => t,
-        Err(_) => return Ok(Config::default()),
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(Config::default());
     };
-    parse_config(&text).map_err(|e| format!("Config parse error in {:?}: {e}", path))
+    parse_config(&text).map_err(|e| format!("Config parse error in {}: {e}", path.display()))
 }
 
 pub fn parse_config(text: &str) -> Result<Config, String> {
@@ -91,6 +94,10 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     })
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mpv settings are independent configuration options (design analysis, issue #804)"
+)]
 struct MpvSettings {
     show_audio_window: bool,
     use_mpv_config: bool,
@@ -133,13 +140,13 @@ fn parse_mpv_section(misc: Option<&toml::Value>) -> Result<MpvSettings, String> 
 
 fn mpv_bool(misc: Option<&toml::Value>, key: &str) -> bool {
     misc.and_then(|m| m.get(key))
-        .and_then(|v| v.as_bool())
+        .and_then(toml::Value::as_bool)
         .unwrap_or(false)
 }
 
 fn mpv_cache_size(misc: Option<&toml::Value>, key: &str, default: u32) -> u32 {
     misc.and_then(|m| m.get(key))
-        .and_then(|v| v.as_integer())
+        .and_then(toml::Value::as_integer)
         .and_then(|v| u32::try_from(v).ok())
         .filter(|v| *v > 0)
         .unwrap_or(default)
@@ -147,37 +154,37 @@ fn mpv_cache_size(misc: Option<&toml::Value>, key: &str, default: u32) -> u32 {
 
 fn mpv_audio_pipe_path(misc: Option<&toml::Value>) -> String {
     misc.and_then(|m| m.get("audio_pipe_path"))
-        .and_then(|v| v.as_str())
+        .and_then(toml::Value::as_str)
         .unwrap_or("/tmp/mbv-pipe")
         .to_string()
 }
 
 fn mpv_audio_pipe_samplerate(misc: Option<&toml::Value>) -> u32 {
     misc.and_then(|m| m.get("audio_pipe_samplerate"))
-        .and_then(|v| v.as_integer())
-        .map(|v| v.max(1) as u32)
-        .unwrap_or(192_000)
+        .and_then(toml::Value::as_integer)
+        .map_or(192_000, |v| u32::try_from(v.max(1)).unwrap_or(u32::MAX))
 }
 
 fn mpv_audio_pipe_bitdepth(misc: Option<&toml::Value>) -> u8 {
     misc.and_then(|m| m.get("audio_pipe_bitdepth"))
-        .and_then(|v| v.as_integer())
-        .map(|v| match v {
-            16 | 24 | 32 => v as u8,
+        .and_then(toml::Value::as_integer)
+        .map_or(32, |v| match v {
+            16 | 24 | 32 => u8::try_from(v).expect("bit depth is bounded to 16, 24, or 32"),
             _ => 32,
         })
-        .unwrap_or(32)
 }
 
 fn mpv_audio_pipe_playout_delay(misc: Option<&toml::Value>) -> Result<Option<u64>, String> {
     match misc
         .and_then(|m| m.get("audio_pipe_playout_delay_ms"))
-        .and_then(|v| v.as_integer())
+        .and_then(toml::Value::as_integer)
     {
         Some(value) if value < 0 => {
             Err("mpv.audio_pipe_playout_delay_ms must be nonnegative".to_string())
         }
-        Some(value) => Ok(Some(value as u64)),
+        Some(value) => Ok(Some(
+            u64::try_from(value).expect("negative values were rejected"),
+        )),
         None => Ok(None),
     }
 }
@@ -194,6 +201,10 @@ fn mpv_audio_device(misc: Option<&toml::Value>) -> Result<String, String> {
     }
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "queue settings control independent behaviors and may be enabled together (design analysis, issue #804)"
+)]
 struct QueueSettings {
     always_play_next: bool,
     consume_videos: bool,
@@ -206,7 +217,7 @@ fn parse_queue_section(queue: Option<&toml::Value>) -> QueueSettings {
     let get_bool = |key: &str| {
         queue
             .and_then(|q| q.get(key))
-            .and_then(|v| v.as_bool())
+            .and_then(toml::Value::as_bool)
             .unwrap_or(false)
     };
     QueueSettings {
@@ -218,6 +229,10 @@ fn parse_queue_section(queue: Option<&toml::Value>) -> QueueSettings {
     }
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "session settings control independent behaviors and may be enabled together (design analysis, issue #804)"
+)]
 struct SessionSettings {
     always_skip_intro: bool,
     stay_alive: bool,
@@ -231,7 +246,7 @@ fn parse_session_section(session: Option<&toml::Value>) -> SessionSettings {
     let get_bool = |key: &str| {
         session
             .and_then(|m| m.get(key))
-            .and_then(|v| v.as_bool())
+            .and_then(toml::Value::as_bool)
             .unwrap_or(false)
     };
     SessionSettings {
@@ -241,14 +256,12 @@ fn parse_session_section(session: Option<&toml::Value>) -> SessionSettings {
         save_playlist_on_quit: get_bool("save_playlist_on_quit"),
         progress_interval_secs: session
             .and_then(|m| m.get("progress_interval_secs"))
-            .and_then(|v| v.as_integer())
-            .map(|v| v.max(1) as u64)
-            .unwrap_or(10),
+            .and_then(toml::Value::as_integer)
+            .map_or(10, |v| u64::try_from(v.max(1)).unwrap_or(u64::MAX)),
         quit_timeout_secs: session
             .and_then(|m| m.get("quit_timeout_secs"))
-            .and_then(|v| v.as_integer())
-            .map(|v| v.max(1) as u64)
-            .unwrap_or(5),
+            .and_then(toml::Value::as_integer)
+            .map_or(5, |v| u64::try_from(v.max(1)).unwrap_or(u64::MAX)),
     }
 }
 
@@ -264,21 +277,21 @@ fn parse_playback_section(playback: Option<&toml::Value>) -> PlaybackSettings {
     let get_str = |key: &str| {
         playback
             .and_then(|p| p.get(key))
-            .and_then(|v| v.as_str())
+            .and_then(toml::Value::as_str)
             .unwrap_or("")
             .to_string()
     };
     PlaybackSettings {
         show_systray_icon: playback
             .and_then(|d| d.get("show_systray_icon"))
-            .and_then(|v| v.as_bool())
+            .and_then(toml::Value::as_bool)
             .unwrap_or(true),
         subtitle_mode: get_str("subtitle_mode"),
         subtitle_lang: get_str("subtitle_lang"),
         audio_lang: get_str("audio_lang"),
         my_languages: playback
             .and_then(|p| p.get("my_languages"))
-            .and_then(|v| v.as_array())
+            .and_then(toml::Value::as_array)
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
@@ -298,11 +311,11 @@ fn parse_display_section(display: Option<&toml::Value>) -> DisplaySettings {
     DisplaySettings {
         system_notifications: display
             .and_then(|m| m.get("system_notifications"))
-            .and_then(|v| v.as_bool())
+            .and_then(toml::Value::as_bool)
             .unwrap_or(false),
         mouse_support: display
             .and_then(|m| m.get("mouse_support"))
-            .and_then(|v| v.as_bool())
+            .and_then(toml::Value::as_bool)
             .unwrap_or(true),
     }
 }
@@ -317,23 +330,21 @@ fn parse_mbvd_section(mbvd: Option<&toml::Value>) -> MbvdSettings {
     MbvdSettings {
         broadcast_ms: mbvd
             .and_then(|d| d.get("broadcast_ms"))
-            .and_then(|v| v.as_integer())
-            .map(|v| v.max(100) as u64)
-            .unwrap_or(500),
+            .and_then(toml::Value::as_integer)
+            .map_or(500, |v| u64::try_from(v.max(100)).unwrap_or(u64::MAX)),
         client_endpoint: mbvd
             .and_then(|d| d.get("client"))
             .and_then(|c| c.get("endpoint"))
-            .and_then(|v| v.as_str())
+            .and_then(toml::Value::as_str)
             .unwrap_or("")
             .to_string(),
         server_tcp_listen: mbvd
             .and_then(|d| d.get("server"))
             .and_then(|s| s.get("tcp_listen"))
-            .and_then(|v| v.as_str())
+            .and_then(toml::Value::as_str)
             .map(str::trim)
             .filter(|v| !v.is_empty())
-            .map(str::to_string)
-            .unwrap_or_else(default_daemon_server_tcp_listen),
+            .map_or_else(default_daemon_server_tcp_listen, str::to_string),
     }
 }
 
@@ -348,17 +359,19 @@ fn parse_library_section(library: Option<&toml::Value>) -> LibrarySettings {
     LibrarySettings {
         hidden_libraries: library
             .and_then(|m| m.get("hidden_libraries"))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str())
-                    .map(|s| s.to_lowercase())
-                    .collect()
-            })
-            .unwrap_or_else(|| vec!["live tv".into()]),
+            .and_then(toml::Value::as_array)
+            .map_or_else(
+                || vec!["live tv".into()],
+                |arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(str::to_lowercase)
+                        .collect()
+                },
+            ),
         music_levels: music
             .and_then(|m| m.get("levels"))
-            .and_then(|v| v.as_array())
+            .and_then(toml::Value::as_array)
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
@@ -368,11 +381,11 @@ fn parse_library_section(library: Option<&toml::Value>) -> LibrarySettings {
             .unwrap_or_default(),
         feed_view_libraries: library
             .and_then(|m| m.get("feed_view_libraries"))
-            .and_then(|v| v.as_array())
+            .and_then(toml::Value::as_array)
             .map(|arr| {
                 arr.iter()
                     .filter_map(|v| v.as_str())
-                    .map(|s| s.to_lowercase())
+                    .map(str::to_lowercase)
                     .collect()
             })
             .unwrap_or_default(),
@@ -388,14 +401,13 @@ fn parse_idle_feed_section(idle_feed: Option<&toml::Value>) -> IdleFeedSettings 
     IdleFeedSettings {
         rss_url: idle_feed
             .and_then(|s| s.get("rss_url"))
-            .and_then(|v| v.as_str())
+            .and_then(toml::Value::as_str)
             .unwrap_or("https://novaramedia.com/feed/")
             .to_string(),
         rotation_secs: idle_feed
             .and_then(|s| s.get("rotation_interval_secs"))
-            .and_then(|v| v.as_integer())
-            .map(|v| v.max(1) as u64)
-            .unwrap_or(10),
+            .and_then(toml::Value::as_integer)
+            .map_or(10, |v| u64::try_from(v.max(1)).unwrap_or(u64::MAX)),
     }
 }
 
@@ -410,7 +422,7 @@ fn parse_server_section(server: Option<&toml::Value>) -> (String, Option<EmbySet
         let mut setup = EmbySetup::new(&server_url, user_id);
         setup.revision = server
             .and_then(|s| s.get("revision"))
-            .and_then(|v| v.as_integer())
+            .and_then(toml::Value::as_integer)
             .and_then(|v| u64::try_from(v).ok())
             .filter(|revision| *revision > 0)
             .unwrap_or(setup.revision);
@@ -429,7 +441,7 @@ fn parse_audiobookshelf_section(
         let mut setup = AudiobookshelfSetup::new(audiobookshelf_url);
         setup.revision = audiobookshelf
             .and_then(|s| s.get("revision"))
-            .and_then(|v| v.as_integer())
+            .and_then(toml::Value::as_integer)
             .and_then(|v| u64::try_from(v).ok())
             .filter(|revision| *revision > 0)
             .unwrap_or(setup.revision);
@@ -439,7 +451,7 @@ fn parse_audiobookshelf_section(
 
 fn parse_library_routes_section(
     value: Option<&toml::Value>,
-) -> std::collections::HashMap<String, String> {
+) -> std::collections::BTreeMap<String, String> {
     value
         .and_then(|v| v.as_table())
         .map(|table| {
@@ -454,7 +466,7 @@ fn parse_library_routes_section(
 fn get_str(section: &toml::Value, key: &str) -> String {
     section
         .get(key)
-        .and_then(|v| v.as_str())
+        .and_then(toml::Value::as_str)
         .unwrap_or("")
         .to_string()
 }
@@ -518,8 +530,9 @@ fn parse_raw_keybinds(keys: &toml::Value) -> Result<crate::keybinds::RawKeybinds
 /// empty/absent `url` is skipped, an empty `name` falls back to the
 /// URL's host, and missing or unknown `kind` values default to Video.
 /// One malformed row never fails the whole config load.
+#[must_use]
 pub fn parse_feeds(value: Option<&toml::Value>) -> Vec<FeedSubscription> {
-    let Some(arr) = value.and_then(|v| v.as_array()) else {
+    let Some(arr) = value.and_then(toml::Value::as_array) else {
         return Vec::new();
     };
     arr.iter()
@@ -527,7 +540,7 @@ pub fn parse_feeds(value: Option<&toml::Value>) -> Vec<FeedSubscription> {
             let t = item.as_table()?;
             let url = t
                 .get("url")
-                .and_then(|v| v.as_str())
+                .and_then(toml::Value::as_str)
                 .unwrap_or("")
                 .trim()
                 .to_string();
@@ -536,13 +549,13 @@ pub fn parse_feeds(value: Option<&toml::Value>) -> Vec<FeedSubscription> {
             }
             let name = t
                 .get("name")
-                .and_then(|v| v.as_str())
+                .and_then(toml::Value::as_str)
                 .unwrap_or("")
                 .trim()
                 .to_string();
             let kind = t
                 .get("kind")
-                .and_then(|v| v.as_str())
+                .and_then(toml::Value::as_str)
                 .and_then(FeedKind::parse)
                 .unwrap_or_default();
             Some(FeedSubscription {

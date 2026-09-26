@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    mpsc, ActiveItemLifecycle, Arc, AudiobookshelfPlayerContext, Duration, ExecutionSequence,
+    Instant, IntroState, ItemId, LoadState, MpvRunConfig, Mutex, NextUp, PlayerEvent, PlayerStatus,
+    PreparedSource, QueueSlotId, SessionReporter, StartupPause, StopReport, SubtitlePrefs,
+};
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub(in crate::player) enum PlaybackOrigin {
@@ -27,6 +31,10 @@ pub(in crate::player) struct RunInit {
     pub(in crate::player) prepared_source: Option<PreparedSource>,
 }
 
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "runtime flags represent independent playback state, not alternatives (design analysis, issue #804)"
+)]
 pub(in crate::player) struct PlaybackRun {
     pub(in crate::player) origin: PlaybackOrigin,
     pub(in crate::player) run_identity: crate::ctrl::PlaybackGeneration,
@@ -48,7 +56,7 @@ pub(in crate::player) struct PlaybackRun {
     pub(in crate::player) current_idx: usize,
     pub(in crate::player) forced_slot_id: Option<QueueSlotId>,
     /// Whether the current playlist jump began with no active playback. Such a
-    /// jump has no outgoing EndFile to settle it; PlaybackRestart must do so.
+    /// jump has no outgoing `EndFile` to settle it; `PlaybackRestart` must do so.
     pub(in crate::player) forced_jump_from_idle: bool,
     /// Request identity of the in-flight explicit jump that set
     /// `forced_slot_id`, so the settling `TrackChanged` observation can be

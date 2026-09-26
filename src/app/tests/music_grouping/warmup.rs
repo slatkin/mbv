@@ -168,7 +168,7 @@ fn warmup_fan_out_stays_bounded_before_level_arrivals() {
     }
 
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
-        generation: Default::default(),
+        generation: mbv_core::service_runtime::SetupGeneration::default(),
         groups: (0..7)
             .map(|index| make_group_item(&format!("group-{index}"), "Group"))
             .collect(),
@@ -214,7 +214,7 @@ fn warmup_listing_requests_one_fill_per_group_child_without_a_view() {
     let mut app = make_unopened_music_app();
 
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
-        generation: Default::default(),
+        generation: mbv_core::service_runtime::SetupGeneration::default(),
         groups: vec![
             make_group_item("group-0", "A-D"),
             make_group_item("group-1", "E-H"),
@@ -265,7 +265,7 @@ fn warmup_dedupes_on_loading_and_filled_levels() {
     );
 
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
-        generation: Default::default(),
+        generation: mbv_core::service_runtime::SetupGeneration::default(),
         groups: vec![make_group_item("group-0", "A-D")],
     });
 
@@ -283,7 +283,7 @@ fn warmup_dedupes_on_loading_and_filled_levels() {
         LevelFillState::Filled { orphan_risk: false },
     );
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
-        generation: Default::default(),
+        generation: mbv_core::service_runtime::SetupGeneration::default(),
         groups: vec![make_group_item("group-1", "E-H")],
     });
     assert_eq!(
@@ -316,7 +316,7 @@ fn warmup_and_candidate_share_one_fill_decision() {
 
     // The warm-up listing arrives too: still no second fill for the level.
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
-        generation: Default::default(),
+        generation: mbv_core::service_runtime::SetupGeneration::default(),
         groups: vec![make_group_item("group-0", "A-D")],
     });
     assert_eq!(
@@ -329,7 +329,7 @@ fn warmup_and_candidate_share_one_fill_decision() {
 fn warmup_fill_failure_marks_failed_and_leaves_browsing_untouched() {
     let mut app = make_unopened_music_app();
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
-        generation: Default::default(),
+        generation: mbv_core::service_runtime::SetupGeneration::default(),
         groups: vec![make_group_item("group-0", "A-D")],
     });
     let status_before = app.status.clone();
@@ -369,7 +369,7 @@ fn warmup_fill_failure_marks_failed_and_leaves_browsing_untouched() {
         .candidate
         .as_mut()
         .unwrap()
-        .created_at = Instant::now() - Duration::from_secs(4);
+        .created_at = Instant::now().checked_sub(Duration::from_secs(4)).unwrap();
     app.expire_music_grouping_candidates();
     let state = app.libs[0]
         .nav_stack

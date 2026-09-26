@@ -44,7 +44,7 @@ fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_sel
         }
         let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
             &level.items,
-            &Default::default(),
+            &std::collections::HashMap::default(),
         );
         catalog.revision = 7;
         catalog.parent_id = level.parent_id.clone();
@@ -53,7 +53,7 @@ fn enter_on_a_mounted_artist_workspace_row_plays_the_artist_discography_from_sel
             candidate: None,
             settled: Some(catalog),
         });
-    }
+    };
     let destination = crate::app::components::library_panel::LibraryKey::Service {
         service: mbv_core::config::ServiceKind::Emby,
         library_id: "lib-music".into(),

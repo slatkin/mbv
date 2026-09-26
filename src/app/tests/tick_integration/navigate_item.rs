@@ -353,7 +353,7 @@ fn recv_season_episodes(harness: &mut TickHarness, season_id: &str) {
                     return;
                 }
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
             Err(e @ std::sync::mpsc::RecvTimeoutError::Disconnected) => panic!("{e}"),
         }
     }
@@ -557,6 +557,5 @@ fn panel_overlay_open(harness: &TickHarness) -> bool {
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .map(|panel| panel.test_hero_overlay_open())
-        .unwrap_or(false)
+        .is_some_and(LibraryPanel::test_hero_overlay_open)
 }

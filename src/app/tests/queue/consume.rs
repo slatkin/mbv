@@ -40,7 +40,7 @@ fn stopped_with_accepted_report_marks_pending_sync_and_clears_active_slot() {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
         status.current_idx = 0;
-    }
+    };
 
     app.handle_player_event(PlayerEvent::Stopped {
         slot_id: app.playback_queue().resolve_slot_at(0),
@@ -118,7 +118,7 @@ fn confirmed_delete_removes_the_active_now_playing_slot_immediately() {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
         st.current_idx = 0;
-    }
+    };
     app.ask_confirm(ConfirmModal {
         title: String::new(),
         message: String::new(),

@@ -1,4 +1,3 @@
-use super::stub_endpoint;
 use super::*;
 use rstest::rstest;
 
@@ -59,7 +58,7 @@ fn local_daemon_construction_ignores_saved_queue_without_recovery_modal() {
         mbv_core::api::EmbyClient::new(config.clone()),
         remote,
         events,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
         config,
     );
 
@@ -135,7 +134,6 @@ fn restoring_a_suspended_in_process_player_clears_locality_and_shows_in_process_
 
 #[test]
 fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home() {
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn reconnect_local(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
@@ -148,6 +146,7 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
         Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
     }
 
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(reconnect_local);
     QUIT_REQUESTED.store(false, std::sync::atomic::Ordering::Relaxed);
     let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
@@ -155,7 +154,7 @@ fn announced_shutdown_of_current_remote_target_does_not_quit_local_daemon_home()
         mbv_core::api::EmbyClient::new(crate::config::Config::default()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
     );
     // The app was launched against the local daemon, but playback has since
     // moved to a genuinely remote route. Disconnect handling must use this
@@ -334,7 +333,7 @@ fn displayed_queue_playback_state_stays_active_for_local_daemon_queue() {
         status.position_ticks = 42;
         status.runtime_ticks = 84;
         status.paused = true;
-    }
+    };
 
     assert_eq!(
         app.displayed_queue_playback_state(),
@@ -357,7 +356,7 @@ fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
         status.current_idx = 1;
-    }
+    };
 
     let next_slot_id = app.playback_queue().resolve_slot_at(2).unwrap();
     app.handle_player_event(PlayerEvent::TrackCompleted {
@@ -374,7 +373,7 @@ fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
         // from the daemon's TrackChanged event before App handles the
         // pending consume removal, so App must correct the shifted index.
         status.current_idx = 2;
-    }
+    };
     app.handle_player_event(PlayerEvent::TrackChanged {
         slot_id: next_slot_id,
         transition: None,
@@ -402,7 +401,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
         status.current_idx = 1;
-    }
+    };
 
     let next_slot_id = app.playback_queue().resolve_slot_at(2).unwrap();
     app.handle_player_event(PlayerEvent::TrackCompleted {
@@ -418,7 +417,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
         // The owner consumes its canonical queue; the Client keeps its mirror
         // until the next owner snapshot.
         status.current_idx = 2;
-    }
+    };
     app.handle_player_event(PlayerEvent::TrackChanged {
         slot_id: next_slot_id,
         transition: None,
@@ -454,8 +453,6 @@ fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exi
     // `suspended_local` stays `None` for its whole life. Before this fix,
     // `restore_local_mode` did nothing in that case, leaving the player
     // disconnected instead of reconnected to the local daemon.
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_success(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
@@ -471,6 +468,8 @@ fn restore_local_mode_reconnects_local_daemon_when_no_suspended_local_player_exi
         ))
     }
 
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     let mut app = make_local_daemon_app_stub(make_items(2));
     assert!(app.home_is_local_daemon);
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
@@ -496,8 +495,6 @@ fn restore_local_mode_clears_remote_queue_presentation_for_local_daemon_home() {
     // Before the fix the reconnected items were stuffed back into
     // `remote_player_tab`, leaving `has_remote_queue()` true and
     // `remote_slot_state()` reporting `DirectRemote`.
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_success(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
@@ -513,6 +510,8 @@ fn restore_local_mode_clears_remote_queue_presentation_for_local_daemon_home() {
         ))
     }
 
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     let mut app = make_local_daemon_app_stub(make_items(2));
     assert!(app.home_is_local_daemon);
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(3), 0);
@@ -539,8 +538,6 @@ fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails(
     // attempt itself fails -- confirms `restore_local_mode` reports the
     // daemon as unavailable instead of claiming local playback works
     // (there is no suspended local player in this path).
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     fn route_connect_failure(
         _endpoint: &mbv_core::remote_player::DaemonEndpoint,
     ) -> Result<
@@ -553,6 +550,8 @@ fn restore_local_mode_flashes_combined_status_when_local_daemon_reconnect_fails(
         Err("test: connect failure".to_string())
     }
 
+    let _guard = crate::config::TestStateDirGuard::new();
+    let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
     let mut app = make_local_daemon_app_stub(make_items(2));
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());

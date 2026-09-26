@@ -7,6 +7,7 @@ use crate::app::state::types::settings;
 use crate::app::state::types::settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use mbv_core::keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use ratatui::layout::Rect;
+use std::fmt::Write as _;
 
 impl Model {
     pub(in crate::app) fn update_settings_content(&mut self) {
@@ -170,11 +171,11 @@ impl Model {
                     .keybinds
                     .router_chords(action)
                     .iter()
-                    .map(|chord| chord.to_string())
+                    .map(std::string::ToString::to_string)
                     .collect::<Vec<_>>()
                     .join(" / ");
                 if let Some(prefix) = self.keybinds.prefix_assignment(action.id) {
-                    value.push_str(&format!(" · pfx {prefix}"));
+                    let _ = write!(value, " · pfx {prefix}");
                 }
                 rows.push(SettingsRow {
                     label: action.id.into(),

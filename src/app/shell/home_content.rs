@@ -24,14 +24,14 @@ impl Model {
 
     pub(in crate::app) fn update_emby_latest_snapshot(
         &mut self,
-        library_id: String,
+        library_id: &str,
         title: String,
         items: Vec<QueueItem>,
     ) {
-        let source = DestinationLatestSource::Emby(library_id.clone());
+        let source = DestinationLatestSource::Emby(library_id.to_string());
         let snapshot = self
             .tv_latest_snapshots
-            .entry(library_id.clone())
+            .entry(library_id.to_string())
             .or_insert_with(|| {
                 DestinationLatestSnapshot::new_with_launch_window(
                     title.clone(),
@@ -131,7 +131,7 @@ impl Model {
         }
     }
 
-    pub(in crate::app) fn home_continue_watching_selected(&self) -> bool {
+    pub(in crate::app) fn home_continue_watching_selected() -> bool {
         true
     }
 

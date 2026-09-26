@@ -1,4 +1,13 @@
-use super::*;
+use super::super::core::DaemonEvent;
+use super::{
+    broadcast_queue_state, dispatch_slot_jump, handle_stop, mint_queue_lineage, send_to,
+    CtrlContext, DaemonOwnerContext, DaemonPlayerOwner,
+};
+use crate::api::{EmbyClient, EmbyItem};
+use crate::ctrl::CtrlEvent;
+use crate::playback_queue::{PlaybackQueue, QueueItem};
+use crate::player::{PlayerCommand, PlayerOwnerState};
+use std::sync::{mpsc, Arc, Mutex};
 
 /// Fetches `item_ids` from Emby off the event-loop thread and sends the
 /// result through `tx` as a `DaemonEvent`, built by `to_event`. Shared by
@@ -128,7 +137,7 @@ pub(super) fn handle_playback_intent(
         }
         action @ (crate::ctrl::PlaybackIntentAction::Next
         | crate::ctrl::PlaybackIntentAction::Previous) => {
-            step_to_neighbor_slot(ctx, action, intent_request_id, intent_generation);
+            step_to_neighbor_slot(ctx, &action, intent_request_id, intent_generation);
         }
     }
 }
@@ -175,7 +184,7 @@ fn resolve_play_intent(
 /// rapid Next presses kept landing on (or re-issuing) the wrong slot.
 fn step_to_neighbor_slot(
     ctx: &mut CtrlContext<'_>,
-    action: crate::ctrl::PlaybackIntentAction,
+    action: &crate::ctrl::PlaybackIntentAction,
     request_id: crate::ctrl::PlaybackRequestId,
     generation: crate::ctrl::PlaybackGeneration,
 ) {
@@ -189,7 +198,7 @@ fn step_to_neighbor_slot(
         .or(observed_active_slot)
         .or_else(|| queue.active_slot_id())
         .and_then(|slot| queue.slot_index(slot));
-    let neighbor_idx = base_idx.and_then(|idx| match action {
+    let neighbor_idx = base_idx.and_then(|idx| match *action {
         crate::ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
         _ => Some(idx + 1).filter(|&next| next < queue.len()),
     });

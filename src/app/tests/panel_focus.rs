@@ -1,8 +1,6 @@
 use super::*;
 use crate::app::components::{Msg, TerminalObserverEvent};
 use crate::app::tests::tick_integration::harness::TickHarness;
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
 use tuirealm::event::Event;
 
 #[test]
@@ -204,7 +202,7 @@ fn entering_queue_focus_selects_now_playing_item() {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
         status.current_idx = 1;
-    }
+    };
 
     app.set_panel_focus(PanelFocus::Queue);
 

@@ -27,18 +27,14 @@ pub(in crate::app) struct LibraryRoutesRenderGeometry {
     pub rows: Vec<(Rect, usize)>,
 }
 
-pub(in crate::app) fn render_library_routes_content(
-    f: &mut Frame,
-    dim_backdrop_active: &mut bool,
-    model: LibraryRoutesRenderModel<'_>,
-) -> LibraryRoutesRenderGeometry {
-    let (title, lines): (&str, Vec<Line>) = match model.stage {
+fn route_lines(stage: &LibraryRouteStage, cursor: usize) -> (&'static str, Vec<Line<'static>>) {
+    match stage {
         LibraryRouteStage::PickLibrary { items } => {
             let lines = items
                 .iter()
                 .enumerate()
                 .map(|(i, (_, name, assigned))| {
-                    let focused = i == model.cursor;
+                    let focused = i == cursor;
                     let arrow = if focused { "▸ " } else { "  " };
                     let name_style = if focused {
                         Style::default().fg(palette::TEXT_PRIMARY)
@@ -56,11 +52,7 @@ pub(in crate::app) fn render_library_routes_content(
                 .collect();
             (" Library Routes ", lines)
         }
-        LibraryRouteStage::PickDevice {
-            library_display,
-            devices,
-            ..
-        } => {
+        LibraryRouteStage::PickDevice { devices, .. } => {
             let mut lines = vec![];
             if devices.is_empty() {
                 lines.push(Line::from(Span::styled(
@@ -72,12 +64,7 @@ pub(in crate::app) fn render_library_routes_content(
                     Style::default().fg(palette::TEXT_MUTED),
                 )));
             }
-            // (label, routable) -- a device without a resolvable
-            // endpoint (#256) is shown greyed out with its reason
-            // appended, rather than omitted, so a device visible in
-            // F3 but not currently pickable here isn't a silent
-            // mystery. It stays visible via arrow-key navigation but
-            // `commit_device_selection` refuses to commit it.
+            // A device without a resolvable endpoint stays visible, but is not selectable.
             let mut rows: Vec<(String, bool)> = vec![(LOCAL_NO_ROUTE.to_string(), true)];
             rows.extend(devices.iter().map(|(name, endpoint)| {
                 if endpoint.is_some() {
@@ -87,7 +74,7 @@ pub(in crate::app) fn render_library_routes_content(
                 }
             }));
             for (i, (label, routable)) in rows.iter().enumerate() {
-                let focused = i == model.cursor;
+                let focused = i == cursor;
                 let arrow = if focused { "▸ " } else { "  " };
                 let name_style = if !routable {
                     Style::default().fg(palette::TEXT_MUTED)
@@ -101,16 +88,25 @@ pub(in crate::app) fn render_library_routes_content(
                     Span::styled(label.clone(), name_style),
                 ]));
             }
-            let _ = library_display;
             (" Pick Device ", lines)
         }
-    };
+    }
+}
 
-    let max_w = lines.iter().map(|l| l.width()).max().unwrap_or(0);
-    let inner_w = ((max_w + 6) as u16).clamp(36, 60);
+pub(in crate::app) fn render_library_routes_content(
+    f: &mut Frame,
+    dim_backdrop_active: &mut bool,
+    model: &LibraryRoutesRenderModel<'_>,
+) -> LibraryRoutesRenderGeometry {
+    let (title, lines) = route_lines(model.stage, model.cursor);
+
+    let max_w = lines.iter().map(Line::width).max().unwrap_or(0);
+    let inner_w = u16::try_from(max_w.saturating_add(6))
+        .unwrap_or(u16::MAX)
+        .clamp(36, 60);
     let width = inner_w + 2;
-    let content_h = lines.len() as u16 + 1;
-    let height = content_h + 2;
+    let content_h = u16::try_from(lines.len().saturating_add(1)).unwrap_or(u16::MAX);
+    let height = content_h.saturating_add(2);
 
     let inner = render_modal_frame(
         f,
@@ -142,7 +138,7 @@ pub(in crate::app) fn render_library_routes_content(
     // "no other mbv devices" notice), so their rects must skip them.
     let info_lines = match &model.stage {
         LibraryRouteStage::PickDevice { devices, .. } => usize::from(devices.is_empty()) * 2,
-        _ => 0,
+        LibraryRouteStage::PickLibrary { .. } => 0,
     };
     let row_count = match &model.stage {
         LibraryRouteStage::PickLibrary { items } => items.len(),
@@ -154,7 +150,9 @@ pub(in crate::app) fn render_library_routes_content(
             (
                 Rect {
                     x: list_area.x,
-                    y: list_area.y + (info_lines + i) as u16,
+                    y: list_area.y
+                        + u16::try_from(info_lines + i)
+                            .expect("row index is bounded by list height"),
                     width: list_area.width,
                     height: 1,
                 },

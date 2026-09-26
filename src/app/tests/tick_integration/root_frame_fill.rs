@@ -26,7 +26,7 @@ fn assert_placements_fully_repainted(mut app: crate::app::App, width: u16, heigh
     harness.model_mut().sync_mounted_surfaces();
 
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    for cell in terminal.current_buffer_mut().content.iter_mut() {
+    for cell in &mut terminal.current_buffer_mut().content {
         cell.set_symbol(SENTINEL);
     }
     let completed = terminal
@@ -64,7 +64,7 @@ fn active_queue_app(panel_mode: PanelMode) -> crate::app::App {
         status.current_idx = 0;
         status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
         status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
-    }
+    };
     app
 }
 

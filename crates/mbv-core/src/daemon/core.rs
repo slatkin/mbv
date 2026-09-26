@@ -242,19 +242,16 @@ impl PlaybackIntentState {
         if !current.pipe_output || !matches!(current.action, PlaybackIntentAction::Play { .. }) {
             return None;
         }
-        let (phase, estimated_remaining_ms) = match delay {
-            Some(delay) => {
-                current.phase = PlaybackIntentPhase::OutputBuffering;
-                current.buffering_deadline = Some(Instant::now() + delay);
-                (
-                    crate::ctrl::PipePlaybackPhase::OutputBuffering,
-                    Some(delay.as_millis().try_into().unwrap_or(u64::MAX)),
-                )
-            }
-            None => {
-                current.phase = PlaybackIntentPhase::Applied;
-                (crate::ctrl::PipePlaybackPhase::OutputStarted, None)
-            }
+        let (phase, estimated_remaining_ms) = if let Some(delay) = delay {
+            current.phase = PlaybackIntentPhase::OutputBuffering;
+            current.buffering_deadline = Some(Instant::now() + delay);
+            (
+                crate::ctrl::PipePlaybackPhase::OutputBuffering,
+                Some(delay.as_millis().try_into().unwrap_or(u64::MAX)),
+            )
+        } else {
+            current.phase = PlaybackIntentPhase::Applied;
+            (crate::ctrl::PipePlaybackPhase::OutputStarted, None)
         };
         Some((
             current.connection_id,
@@ -417,10 +414,7 @@ pub(super) fn dispatch_slot_jump(
         crate::playback_transition::DispatchDecision::DispatchNow(t) => {
             log::info!(
                 target: "transition",
-                "dispatch_slot_jump: decision=DispatchNow target={:?} request_id={} generation={}",
-                transition_target,
-                transition_request_id,
-                transition_generation,
+                "dispatch_slot_jump: decision=DispatchNow target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
             );
             let resume_ticks = crate::player::resume_ticks_for_slot(queue, transition_target);
             ctx.player.send_command(t.into_jump(resume_ticks));
@@ -428,10 +422,7 @@ pub(super) fn dispatch_slot_jump(
         crate::playback_transition::DispatchDecision::Queued { superseded } => {
             log::info!(
                 target: "transition",
-                "dispatch_slot_jump: decision=Queued target={:?} request_id={} generation={}",
-                transition_target,
-                transition_request_id,
-                transition_generation,
+                "dispatch_slot_jump: decision=Queued target={transition_target:?} request_id={transition_request_id} generation={transition_generation}",
             );
             if let (Some(s), Some((origin_request_id, origin_client))) =
                 (superseded, *queued_origin)
@@ -488,9 +479,7 @@ pub(super) fn settle_and_redispatch(
     else {
         log::info!(
             target: "transition",
-            "settle_and_redispatch: request_id={} slot={:?} settled=false dispatch_next=false",
-            observed_request_id,
-            observed_slot,
+            "settle_and_redispatch: request_id={observed_request_id} slot={observed_slot:?} settled=false dispatch_next=false",
         );
         return;
     };
@@ -605,6 +594,7 @@ impl std::fmt::Debug for DaemonRuntimeHooks {
     }
 }
 
+#[must_use]
 pub fn pid_file() -> std::path::PathBuf {
     let dir = crate::config::data_dir_system_or_local();
     let _ = std::fs::create_dir_all(&dir);
@@ -615,7 +605,7 @@ pub(super) fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
     let Some(json) = serialize_ctrl_event(event) else {
         return;
     };
-    clients.lock().unwrap().broadcast_to_all(json);
+    clients.lock().unwrap().broadcast_to_all(&json);
 }
 
 /// Fans out redacted Audiobookshelf progress to peers that negotiated
@@ -628,7 +618,7 @@ pub(super) fn broadcast_audiobookshelf_progress(
     let Some(json) = serialize_ctrl_event(&CtrlEvent::AudiobookshelfProgress(event)) else {
         return;
     };
-    clients.lock().unwrap().broadcast_progress_gated(json);
+    clients.lock().unwrap().broadcast_progress_gated(&json);
 }
 
 /// Fans out redacted Audiobookshelf book progress to peers that negotiated
@@ -640,7 +630,7 @@ pub(super) fn broadcast_audiobookshelf_book_progress(
     let Some(json) = serialize_ctrl_event(&CtrlEvent::AudiobookshelfBookProgress(event)) else {
         return;
     };
-    clients.lock().unwrap().broadcast_book_progress_gated(json);
+    clients.lock().unwrap().broadcast_book_progress_gated(&json);
 }
 
 /// A reason a ctrl-socket command is not acted on, computed server-side.
@@ -653,9 +643,6 @@ pub(super) fn audio_only_rejection<'a>(
     audio_only: bool,
     fetched: impl IntoIterator<Item = &'a QueueItem>,
 ) -> Option<String> {
-    if audio_only && !all_audio(fetched) {
-        Some("Daemon is running in audio-only mode; can't play video items".to_string())
-    } else {
-        None
-    }
+    (audio_only && !all_audio(fetched))
+        .then(|| "Daemon is running in audio-only mode; can't play video items".to_string())
 }

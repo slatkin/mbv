@@ -2,8 +2,9 @@ use rstest::rstest;
 
 use crate::player::{
     active_item_state, advance_decision, parse_tracks, queue_next_up_decision, resolve_jump_target,
-    seek_decision, select_tracks, standalone_next_up_decision, volume_decision, NextUp, NextUpFire,
-    SubtitlePrefs, TrackInfo,
+    seek_decision, select_tracks, standalone_next_up_decision, volume_decision,
+    AdvanceDecisionInput, CompletedMedia, FinishReason, NextUp, NextUpFire, SubtitlePrefs,
+    TrackInfo,
 };
 
 type AudioTracks = Vec<(i64, String)>;
@@ -25,20 +26,20 @@ fn tracks() -> (AudioTracks, SubtitleTracks) {
 
 #[rstest]
 #[case::default_leaves_subtitle_unchanged("Default", "English", "fr", None)]
-#[case::none_disables_subtitles("None", "", "fr", Some(None))]
-#[case::forced_prefers_requested_language("OnlyForced", "French", "en", Some(Some(4)))]
-#[case::always_matches_requested_language("Always", "French", "en", Some(Some(4)))]
-#[case::smart_hides_matching_audio_language("Smart", "English", "en", Some(None))]
-#[case::smart_selects_when_audio_differs("Smart", "French", "en", Some(Some(4)))]
-#[case::hearing_impaired_prefers_sdh("HearingImpaired", "French", "fr", Some(Some(5)))]
-#[case::only_forced_falls_back_to_any_forced("OnlyForced", "German", "en", Some(Some(4)))]
-#[case::always_falls_back_to_first("Always", "German", "en", Some(Some(3)))]
+#[case::none_disables_subtitles("None", "", "fr", None)]
+#[case::forced_prefers_requested_language("OnlyForced", "French", "en", Some(4))]
+#[case::always_matches_requested_language("Always", "French", "en", Some(4))]
+#[case::smart_hides_matching_audio_language("Smart", "English", "en", None)]
+#[case::smart_selects_when_audio_differs("Smart", "French", "en", Some(4))]
+#[case::hearing_impaired_prefers_sdh("HearingImpaired", "French", "fr", Some(5))]
+#[case::only_forced_falls_back_to_any_forced("OnlyForced", "German", "en", Some(4))]
+#[case::always_falls_back_to_first("Always", "German", "en", Some(3))]
 #[case::unknown_mode_leaves_selection_unchanged("Unknown", "French", "en", None)]
 fn subtitle_modes_choose_expected_track(
     #[case] mode: &str,
     #[case] subtitle_lang: &str,
     #[case] audio_lang: &str,
-    #[case] expected: Option<Option<i64>>,
+    #[case] expected: Option<i64>,
 ) {
     let (audio, subtitles) = tracks();
     let prefs = SubtitlePrefs {
@@ -144,9 +145,27 @@ fn queue_next_up_fires_at_threshold(
 #[rstest]
 #[case::armed(NextUp::Armed, true, 7_000_000_000, 6_500_000_000, crate::player::NextUpDecision { fire: Some(NextUpFire::Standalone), ..Default::default() })]
 #[case::no_series_arms(NextUp::Idle, false, 7_000_000_000, 1, crate::player::NextUpDecision { arm: true, ..Default::default() })]
-#[case::no_series_already_armed(NextUp::Armed, false, 7_000_000_000, 1, Default::default())]
-#[case::short_runtime_does_not_fire(NextUp::Armed, true, 60_000_000, 1, Default::default())]
-#[case::fired_does_not_fire(NextUp::Fired, true, 7_000_000_000, 6_500_000_000, Default::default())]
+#[case::no_series_already_armed(
+    NextUp::Armed,
+    false,
+    7_000_000_000,
+    1,
+    crate::player::NextUpDecision::default()
+)]
+#[case::short_runtime_does_not_fire(
+    NextUp::Armed,
+    true,
+    60_000_000,
+    1,
+    crate::player::NextUpDecision::default()
+)]
+#[case::fired_does_not_fire(
+    NextUp::Fired,
+    true,
+    7_000_000_000,
+    6_500_000_000,
+    crate::player::NextUpDecision::default()
+)]
 fn standalone_next_up_obeys_state_and_series_gates(
     #[case] state: NextUp,
     #[case] has_series: bool,
@@ -169,7 +188,7 @@ fn standalone_next_up_obeys_state_and_series_gates(
     false,
     7_000_000_000,
     6_500_000_000,
-    Default::default()
+    crate::player::NextUpDecision::default()
 )]
 #[case::next_item_not_episode(
     NextUp::Idle,
@@ -179,7 +198,7 @@ fn standalone_next_up_obeys_state_and_series_gates(
     false,
     7_000_000_000,
     6_500_000_000,
-    Default::default()
+    crate::player::NextUpDecision::default()
 )]
 #[case::runtime_too_short(
     NextUp::Idle,
@@ -189,7 +208,7 @@ fn standalone_next_up_obeys_state_and_series_gates(
     true,
     5_999_999_999,
     5_500_000_000,
-    Default::default()
+    crate::player::NextUpDecision::default()
 )]
 #[case::insufficient_remaining(
     NextUp::Idle,
@@ -199,7 +218,7 @@ fn standalone_next_up_obeys_state_and_series_gates(
     true,
     7_000_000_000,
     6_900_000_000,
-    Default::default()
+    crate::player::NextUpDecision::default()
 )]
 #[case::resets_fired_below_window(NextUp::Fired, 0, 2, true, true, 7_000_000_000, 6_000_000_000, crate::player::NextUpDecision { reset: true, arm: false, fire: None })]
 #[case::arms_near_start(NextUp::Idle, 0, 2, true, true, 7_000_000_000, 1, crate::player::NextUpDecision { arm: true, ..Default::default() })]
@@ -230,11 +249,19 @@ fn queue_next_up_preserves_guards_and_reset(
 #[test]
 fn queue_advance_decision_keeps_audio_unplayed_but_consumable() {
     assert_eq!(
-        advance_decision(true, false, false, true, 42),
+        advance_decision(&AdvanceDecisionInput {
+            media: CompletedMedia::Audio,
+            finish: FinishReason::NextUp,
+            last_valid_pos: 42,
+        }),
         (true, false, true, 0)
     );
     assert_eq!(
-        advance_decision(false, false, false, false, 42),
+        advance_decision(&AdvanceDecisionInput {
+            media: CompletedMedia::Video,
+            finish: FinishReason::Unfinished,
+            last_valid_pos: 42,
+        }),
         (false, false, false, 42)
     );
 }

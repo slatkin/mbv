@@ -65,16 +65,16 @@ fn queue_edit_forwards_to_local_daemon_while_daemon_is_idle() {
     // still reach the daemon over ctrl, or its authoritative copy diverges
     // from what the client shows and re-adopting it on the next launch
     // resurrects deleted items.
-    let _guard = crate::config::TestStateDirGuard::new();
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
+    let _guard = crate::config::TestStateDirGuard::new();
     let (remote, player_rx, cmd_rx) =
         mbv_core::remote_player::RemotePlayer::stub_with_command_rx(vec![], 0);
     let mut app = App::new_remote(
         EmbyClient::new(Config::default()),
         remote,
         player_rx,
-        mbv_core::remote_player::DaemonEndpoint::Local,
+        &mbv_core::remote_player::DaemonEndpoint::Local,
     );
     app.player_tab
         .set_items(make_items(3), app.player_tab.queue_cursor);

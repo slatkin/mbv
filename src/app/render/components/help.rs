@@ -138,7 +138,7 @@ fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
     Line::from(vec![
         Span::raw(""),
         Span::styled(
-            format!("{:<kw$}", key, kw = key_w),
+            format!("{key:<key_w$}"),
             Style::default()
                 .fg(palette::TEXT_PRIMARY)
                 .add_modifier(Modifier::BOLD),
@@ -177,7 +177,7 @@ fn action_keys(keybinds: &Keybinds, id: &str) -> String {
     let chords: Vec<String> = keybinds
         .router_chords(action)
         .iter()
-        .map(|chord| chord.to_string())
+        .map(ToString::to_string)
         .collect();
     if chords.len() > 2 {
         format!("{} – {}", chords[0], chords[chords.len() - 1])
@@ -208,6 +208,20 @@ fn build_help_sections(
     key_w: usize,
     keybinds: &Keybinds,
 ) -> Vec<(HelpSection, Vec<Line<'static>>)> {
+    let mut sections = vec![
+        (HelpSection::Global, build_global_section(key_w, keybinds)),
+        (
+            HelpSection::Playback,
+            build_playback_section(key_w, keybinds),
+        ),
+    ];
+    sections.extend(static_help_sections(key_w));
+    sections
+}
+
+/// The Global section: the configurable registry rows, the panel-focus pair,
+/// the hand-written leaf-local rows, and the prefix namespace when configured.
+fn build_global_section(key_w: usize, keybinds: &Keybinds) -> Vec<Line<'static>> {
     let mut sec_global = vec![help_section_line("Global")];
     for (id, label) in GLOBAL_CONFIGURABLE_ROWS {
         sec_global.push(help_line(key_w, &action_keys(keybinds, id), label));
@@ -244,9 +258,13 @@ fn build_help_sections(
         }
     }
     sec_global.push(help_blank());
-    // Rendered from the declared registry (design D7): one row per Playback
-    // action, its keys the chords it actually fires on for the loaded
-    // configuration, so the section cannot silently drift from routing.
+    sec_global
+}
+
+/// The Playback section, rendered from the declared registry (design D7): one
+/// row per Playback action, its keys the chords it actually fires on for the
+/// loaded configuration, so the section cannot silently drift from routing.
+fn build_playback_section(key_w: usize, keybinds: &Keybinds) -> Vec<Line<'static>> {
     let mut sec_playback = vec![help_section_line("Playback")];
     // The transport bucket: the Playback-section actions gated `Playback`
     // (design D2). `visualizer` shares the section but is presented in the
@@ -258,12 +276,18 @@ fn build_help_sections(
         let keys = keybinds
             .router_chords(action)
             .iter()
-            .map(|chord| chord.to_string())
+            .map(ToString::to_string)
             .collect::<Vec<_>>()
             .join(" / ");
         sec_playback.push(help_line(key_w, &keys, playback_label(action.id)));
     }
     sec_playback.push(help_blank());
+    sec_playback
+}
+
+/// The sections whose rows do not depend on the loaded keybinds: Queue, Home,
+/// `EmbyLibrary`, Audiobookshelf, and Feeds.
+fn static_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
     let sec_queue = vec![
         help_section_line("Queue"),
         help_line(key_w, "p", "Jump to playing item"),
@@ -335,8 +359,6 @@ fn build_help_sections(
         help_blank(),
     ];
     vec![
-        (HelpSection::Global, sec_global),
-        (HelpSection::Playback, sec_playback),
         (HelpSection::Queue, sec_queue),
         (HelpSection::Home, sec_home),
         (HelpSection::EmbyLibrary, sec_library),
@@ -407,7 +429,7 @@ pub(in crate::app) fn render_help_panel(
 
     let total = lines.len();
     let visible = content.height as usize;
-    let max_scroll = total.saturating_sub(visible) as u16;
+    let max_scroll = u16::try_from(total.saturating_sub(visible)).unwrap_or(u16::MAX);
     *scroll = (*scroll).min(max_scroll);
     f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content);
     chrome::render_sidebar_scrollbar(f, content, total, *scroll as usize);

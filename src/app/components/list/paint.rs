@@ -92,11 +92,11 @@ impl<Target> PaintRetainedState<Target> {
 
     /// Resolve `point` against the latest completed paint's target geometry.
     pub fn resolve_point(&self, point: Position) -> Option<&Target> {
-        let paint = self.completed.as_ref()?;
-        if !paint.claim_rect.contains(point) {
+        let completed = self.completed.as_ref()?;
+        if !completed.claim_rect.contains(point) {
             return None;
         }
-        paint
+        completed
             .rows
             .iter()
             .find_map(|(rect, target)| rect.contains(point).then_some(target))

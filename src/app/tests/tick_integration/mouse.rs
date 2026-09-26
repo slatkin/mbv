@@ -36,7 +36,7 @@ fn search_sidebar_with_painted_results() -> (TickHarness, Vec<(Rect, usize)>) {
             make_item("Other Clip", "Series"),
         ];
         component.sidebar.list_height = 10;
-    }
+    };
     let mut terminal = Terminal::new(TestBackend::new(40, 16)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().render_search_overlay(frame))
@@ -81,7 +81,7 @@ fn assert_blocking_modal_suppresses_sidebar_clicks(
         assert_eq!(component.sidebar.cursor, 0, "underlying cursor untouched");
         assert_eq!(component.sidebar.scroll, 0, "underlying scroll untouched");
         assert_eq!(component.sidebar.type_filter, 0);
-    }
+    };
 
     // Outside the sidebar's painted frame: an eligible sidebar would emit
     // `DismissSearch` here (its Esc path).

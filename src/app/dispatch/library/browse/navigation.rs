@@ -263,11 +263,7 @@ fn build_chain_nav_stack(
     for (parent_id, target_id) in parents.into_iter().zip(targets) {
         let (mut items, total_count) =
             client.get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending")?;
-        if items
-            .first()
-            .map(|it| it.item_type == "Episode")
-            .unwrap_or(false)
-        {
+        if items.first().is_some_and(|it| it.item_type == "Episode") {
             sort_episodes(&mut items);
         }
         let cursor = items.iter().position(|it| it.id == target_id).unwrap_or(0);
@@ -322,19 +318,20 @@ impl App {
             .find(|(_, _, ctype)| ctype == target_ctype)
             .and_then(|(_, library_id, _)| self.album_indexes.get(library_id))
             .and_then(|state| match state {
-                AlbumIndexState::Ready(index) => Some(index.clone()),
+                AlbumIndexState::Ready(index) => Some(std::sync::Arc::clone(index)),
                 _ => None,
             });
         std::thread::spawn(move || {
             // Match library by collection_type since CollectionFolder IDs never appear in ancestors
-            let (lib_idx, lib_id) = match libs.iter().find(|(_, _, ctype)| ctype == target_ctype) {
-                Some((idx, id, _)) => (*idx, id.clone()),
-                None => {
-                    let _ = tx.send(LibEvent::Error(
-                        "No matching library for this item type".into(),
-                    ));
-                    return;
-                }
+            let (lib_idx, lib_id) = if let Some((idx, id, _)) =
+                libs.iter().find(|(_, _, ctype)| ctype == target_ctype)
+            {
+                (*idx, id.clone())
+            } else {
+                let _ = tx.send(LibEvent::Error(
+                    "No matching library for this item type".into(),
+                ));
+                return;
             };
 
             // D1: resolve the reveal target and build the per-kind landing

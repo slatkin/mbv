@@ -268,7 +268,7 @@ fn artist_and_album_hero_workspaces_switch_atomically_in_wide() {
             album.facts.meta_rows,
             vec!["Alpha".to_string(), "2001".to_string()]
         );
-    }
+    };
     assert_eq!(
         harness.model().test_music_owner().track_list.rows().len(),
         1,
@@ -285,7 +285,7 @@ fn artist_and_album_hero_workspaces_switch_atomically_in_wide() {
             artist.facts.meta_rows,
             vec!["5 albums".to_string(), "2001".to_string()]
         );
-    }
+    };
     assert_eq!(
         harness.model().test_music_owner().track_list.rows().len(),
         10,
@@ -302,7 +302,7 @@ fn artist_and_album_hero_workspaces_switch_atomically_in_wide() {
             .active_hero_data()
             .expect("album hero returns");
         assert_eq!(album.facts.title, "Album 1");
-    }
+    };
     assert_eq!(
         harness.model().test_music_owner().track_list.rows().len(),
         1

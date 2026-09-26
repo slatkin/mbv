@@ -183,32 +183,33 @@ impl App {
                     };
                     let (name_ge, name_lt) = letter_filter
                         .as_ref()
-                        .map(|f| (f.name_ge, f.name_lt))
-                        .unwrap_or((None, None));
-                    let (items, total_count) = client.get_items_sorted_ranged(
-                        &saved_level.parent_id,
-                        saved_level.item_types.as_deref(),
-                        saved_level.unplayed_only,
-                        0,
-                        PAGE_SIZE,
-                        &saved_level.sort_by,
-                        &saved_level.sort_order,
-                        name_ge,
-                        name_lt,
-                    )?;
-                    let fetched_rows = items.len();
-                    if total_count > fetched_rows {
-                        let (items, total_count) = client.get_items_sorted_ranged(
-                            &saved_level.parent_id,
-                            saved_level.item_types.as_deref(),
-                            saved_level.unplayed_only,
-                            0,
-                            total_count,
-                            &saved_level.sort_by,
-                            &saved_level.sort_order,
+                        .map_or((None, None), |f| (f.name_ge, f.name_lt));
+                    let (items, total_count) =
+                        client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+                            parent_id: &saved_level.parent_id,
+                            item_types: saved_level.item_types.as_deref(),
+                            unplayed_only: saved_level.unplayed_only,
+                            start_index: 0,
+                            limit: PAGE_SIZE,
+                            sort_by: &saved_level.sort_by,
+                            sort_order: &saved_level.sort_order,
                             name_ge,
                             name_lt,
-                        )?;
+                        })?;
+                    let fetched_rows = items.len();
+                    if total_count > fetched_rows {
+                        let (items, total_count) =
+                            client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+                                parent_id: &saved_level.parent_id,
+                                item_types: saved_level.item_types.as_deref(),
+                                unplayed_only: saved_level.unplayed_only,
+                                start_index: 0,
+                                limit: total_count,
+                                sort_by: &saved_level.sort_by,
+                                sort_order: &saved_level.sort_order,
+                                name_ge,
+                                name_lt,
+                            })?;
                         let fetched_rows = items.len();
                         Ok((items, total_count, fetched_rows))
                     } else {
@@ -313,20 +314,19 @@ impl App {
         let tx = self.lib_tx.clone();
         let (name_ge, name_lt) = letter_filter
             .as_ref()
-            .map(|f| (f.name_ge, f.name_lt))
-            .unwrap_or((None, None));
+            .map_or((None, None), |f| (f.name_ge, f.name_lt));
         std::thread::spawn(move || {
-            match client.get_items_sorted_ranged(
-                &parent_id,
-                item_types.as_deref(),
+            match client.get_items_sorted_ranged(&mbv_core::api::SortedItemsParams {
+                parent_id: &parent_id,
+                item_types: item_types.as_deref(),
                 unplayed_only,
                 start_index,
                 limit,
-                &sort_by,
-                &sort_order,
+                sort_by: &sort_by,
+                sort_order: &sort_order,
                 name_ge,
                 name_lt,
-            ) {
+            }) {
                 Ok((items, total_count)) => {
                     let _ = tx.send(LibEvent::PageAppended {
                         lib_idx,

@@ -63,10 +63,11 @@ impl LibraryContentOwner for EmbyLibraryContent {
     }
 
     fn hero_scroll(&mut self, delta: i16, max_offset: usize) -> bool {
+        let step = usize::from(delta.unsigned_abs());
         let next = if delta < 0 {
-            self.hero_scroll.saturating_sub((-delta) as usize)
+            self.hero_scroll.saturating_sub(step)
         } else {
-            self.hero_scroll.saturating_add(delta as usize)
+            self.hero_scroll.saturating_add(step)
         }
         .min(max_offset);
         let changed = next != self.hero_scroll;
@@ -86,7 +87,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 workspace: None,
             }
         });
-        let selector = if self.group_pills {
+        let selector = if self.selector_mode == super::EmbySelectorMode::FeedGroups {
             let pills: Vec<String> = std::iter::once("Latest".to_string())
                 .chain(std::iter::once("All".to_string()))
                 .chain(
@@ -105,7 +106,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                     self.feed_group_cursor + 1
                 }),
             })
-        } else if self.show_letter_pills {
+        } else if self.selector_mode == super::EmbySelectorMode::Letters {
             let pills: Vec<String> = std::iter::once("Latest".to_string())
                 .chain(LetterFilter::labels())
                 .collect();
@@ -116,10 +117,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 active: Some(if self.latest_mode {
                     0
                 } else {
-                    self.letter_filter
-                        .as_ref()
-                        .map(|f| f.index + 1)
-                        .unwrap_or(1)
+                    self.letter_filter.as_ref().map_or(1, |f| f.index + 1)
                 }),
             })
         } else {
@@ -144,7 +142,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
 
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(index) => self.pick_selector(index),
+            LibrarySlotEvent::SelectorPicked(index) => Some(self.pick_selector(index)),
             LibrarySlotEvent::List(input) => self.on_list_event(input),
             // The Browser owner has no Workspace and no hero-pane input of
             // its own.
@@ -202,7 +200,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
         ) {
             return (!self.latest_mode).then_some(LaunchSelector::EmbyLatest);
         }
-        if self.group_pills {
+        if self.selector_mode == super::EmbySelectorMode::FeedGroups {
             let target = match state.selector.as_ref() {
                 Some(SelectorIdentity::Emby {
                     key: EmbySelectorKey::Group(id),
@@ -210,14 +208,13 @@ impl LibraryContentOwner for EmbyLibraryContent {
                     .feed_group_ids
                     .iter()
                     .position(|candidate| candidate == id)
-                    .map(|index| index + 1)
-                    .unwrap_or(0),
+                    .map_or(0, |index| index + 1),
                 _ => 0,
             };
             return (self.latest_mode || self.feed_group_cursor != target)
                 .then_some(LaunchSelector::Emby { index: target });
         }
-        if self.show_letter_pills {
+        if self.selector_mode == super::EmbySelectorMode::Letters {
             let current = self.letter_filter.as_ref().map(|filter| filter.index);
             return match state.selector.as_ref() {
                 Some(SelectorIdentity::Emby {
@@ -261,7 +258,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
             Some(SelectorIdentity::Emby {
                 key: EmbySelectorKey::Latest,
             })
-        } else if self.group_pills {
+        } else if self.selector_mode == super::EmbySelectorMode::FeedGroups {
             if self.feed_group_cursor == 0 {
                 Some(SelectorIdentity::Emby {
                     key: EmbySelectorKey::Unfiltered,
@@ -276,7 +273,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                         })
                 })
             }
-        } else if self.show_letter_pills {
+        } else if self.selector_mode == super::EmbySelectorMode::Letters {
             Some(SelectorIdentity::Emby {
                 key: self
                     .letter_filter
@@ -285,8 +282,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                         EmbyLetterBucket::from_index(filter.index)
                             .expect("LetterFilter index comes from LETTER_FILTER_BUCKETS")
                     })
-                    .map(EmbySelectorKey::Letter)
-                    .unwrap_or(EmbySelectorKey::Unfiltered),
+                    .map_or(EmbySelectorKey::Unfiltered, EmbySelectorKey::Letter),
             })
         } else {
             None
@@ -363,7 +359,7 @@ impl EmbyLibraryContent {
                 let target = target?;
                 self.carrier
                     .delegate_operation(input.into_operation(Some(target.clone()))?);
-                let _ = ();
+                let () = ();
                 Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRowClick {
                     target: Some(target),
                 })))

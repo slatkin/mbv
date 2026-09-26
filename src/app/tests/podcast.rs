@@ -130,9 +130,10 @@ fn emby_queue_item_still_opens_queue_panel_menu() {
         .set_items(vec![make_item("Queue Movie", "Movie")], 0);
 
     app.open_context_menu(false, None);
-    let menu = match app.pending_overlay.as_ref() {
-        Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) => menu,
-        _ => panic!("queue panel must open a menu"),
+    let Some(crate::app::state::types::overlay::OverlayRequest::ContextMenu(menu)) =
+        app.pending_overlay.as_ref()
+    else {
+        panic!("queue panel must open a menu");
     };
     let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
     assert!(

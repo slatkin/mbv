@@ -394,13 +394,13 @@ fn daemon_install_audiobookshelf_context_enables_player_admission() {
     let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
 
     assert!(!player.can_admit_audiobookshelf());
-    install_daemon_audiobookshelf_context(&player, &Some(runtime), &merged_tx);
+    install_daemon_audiobookshelf_context(&player, Some(&runtime), &merged_tx);
     assert!(
         player.can_admit_audiobookshelf(),
         "installed runtime enables Audiobookshelf admission on the daemon player"
     );
 
-    install_daemon_audiobookshelf_context(&player, &None, &merged_tx);
+    install_daemon_audiobookshelf_context(&player, None, &merged_tx);
     assert!(
         !player.can_admit_audiobookshelf(),
         "clearing the runtime clears Audiobookshelf admission"

@@ -1,4 +1,9 @@
-use super::*;
+use crate::api::EmbyItem;
+use crate::id_types::ItemId;
+use crate::playback_execution_sequence::ExecSlot;
+use crate::playback_queue::{QueueItem, QueueSlotId};
+use libmpv2::Mpv;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, Default)]
 pub struct SubtitlePrefs {
@@ -8,6 +13,10 @@ pub struct SubtitlePrefs {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "status booleans are independent observed player properties (design analysis, issue #804)"
+)]
 pub struct PlayerStatus {
     pub position_ticks: i64,
     #[serde(default)]
@@ -72,25 +81,25 @@ impl PlayerStatus {
         match item {
             QueueItem::Emby(emby) => self.set_current_item_metadata(emby),
             QueueItem::Feed(entry) => {
-                self.title = entry.title.clone();
-                self.art_item_id = entry.guid.clone();
+                self.title.clone_from(&entry.title);
+                self.art_item_id.clone_from(&entry.guid);
             }
             QueueItem::Audiobookshelf(ep) => {
-                self.title = ep.title.clone();
-                self.art_item_id = ep.episode_id.clone();
+                self.title.clone_from(&ep.title);
+                self.art_item_id.clone_from(&ep.episode_id);
             }
             QueueItem::AudiobookshelfBook(book) => {
-                self.title = book.title.clone();
-                self.art_item_id = book.library_item_id.clone();
+                self.title.clone_from(&book.title);
+                self.art_item_id.clone_from(&book.library_item_id);
             }
         }
     }
 
     pub fn set_current_item_metadata(&mut self, item: &EmbyItem) {
         self.title = item.display_name();
-        self.artist = item.artist.clone();
-        self.album = item.album.clone();
-        self.art_item_id = item.id.clone();
+        self.artist.clone_from(&item.artist);
+        self.album.clone_from(&item.album);
+        self.art_item_id.clone_from(&item.id);
         // Same audio-album grouping condition as the queue card
         // (src/app/render/power/card.rs) uses for its cache key, so a
         // previously browsed/cached album cover is found under the same key.
@@ -109,6 +118,7 @@ impl PlayerStatus {
         self.art_album_id.clear();
     }
 
+    #[must_use]
     pub fn subtitle_stream_index_to_mpv_id(&self, stream_index: i64) -> Option<i64> {
         if stream_index < 0 {
             return Some(0);
@@ -130,6 +140,7 @@ impl PlayerStatus {
         None
     }
 
+    #[must_use]
     pub fn next_idx(&self) -> Option<usize> {
         if !self.active {
             return None;
@@ -138,6 +149,7 @@ impl PlayerStatus {
         (n < self.queue_len).then_some(n)
     }
 
+    #[must_use]
     pub fn previous_idx(&self) -> Option<usize> {
         if !self.active || self.current_idx == 0 {
             return None;
@@ -145,6 +157,7 @@ impl PlayerStatus {
         Some(self.current_idx - 1)
     }
 
+    #[must_use]
     pub fn toggle_to_reach(&self, paused: bool) -> Option<PlayerCommand> {
         (self.paused != paused).then_some(PlayerCommand::TogglePause)
     }
@@ -259,8 +272,8 @@ pub enum PlayerEvent {
     QueueNextUp {
         next_idx: usize,
     },
-    /// Emitted by RemotePlayer when a `UnifiedQueueState` arrives so App can
-    /// sync the full canonical queue (tagged QueueItems, slot identity, active
+    /// Emitted by `RemotePlayer` when a `UnifiedQueueState` arrives so App can
+    /// sync the full canonical queue (tagged `QueueItems`, slot identity, active
     /// slot, revision) without decomposing into legacy Emby-only shapes.
     UnifiedQueueUpdated(Box<crate::ctrl::UnifiedQueueStateData>),
     /// Correlated result of an owner-authoritative idle queue load.
@@ -272,7 +285,7 @@ pub enum PlayerEvent {
     IntroStarted {
         intro_end_ticks: i64,
     },
-    /// Chapter API: playback passed IntroEnd (or track changed).
+    /// Chapter API: playback passed `IntroEnd` (or track changed).
     IntroEnded,
     /// Chapter API: user clicked the "Skip Intro" button in MPV.
     SkipIntroPlay,
@@ -283,19 +296,19 @@ pub enum PlayerEvent {
     /// string is owner-computed and shown to the user as-is.
     CommandRejected(String),
     /// Correlated lifecycle update for a guarded direct-daemon playback
-    /// intent. The confirmed PlayerStatus remains authoritative separately.
+    /// intent. The confirmed `PlayerStatus` remains authoritative separately.
     PlaybackIntent(crate::ctrl::PlaybackIntentEvent),
     /// Direct-daemon pipe startup status; absent for local, Emby-attached,
     /// and non-pipe playback routes.
     PipePlaybackStatus(crate::ctrl::PipePlaybackStatus),
-    /// Emitted by RemotePlayer when the daemon intentionally disconnects this
+    /// Emitted by `RemotePlayer` when the daemon intentionally disconnects this
     /// ctrl client (actual connection close, not an authority-change notification).
     RemoteDisconnected(String),
-    /// Emitted by RemotePlayer when the daemon sends a `Disconnected` notification
+    /// Emitted by `RemotePlayer` when the daemon sends a `Disconnected` notification
     /// for Emby remote authority takeover. Unlike `RemoteDisconnected`, this is
     /// an authority-change notification — the connection stays open.
     EmbyAuthorityTaken(String),
-    /// Emitted by RemotePlayer when its connection closes after the daemon
+    /// Emitted by `RemotePlayer` when its connection closes after the daemon
     /// announced a deliberate shutdown (`DisconnectReason::DaemonShutdown`).
     /// Unlike `RemoteDisconnected`, this is not a crash: the client SHALL
     /// print one line, restore the terminal, and exit rather than offer
@@ -306,7 +319,7 @@ pub enum PlayerEvent {
     /// mirror to become stale. The detail describes what was detected. The UI
     /// shows this as a warning toast.
     QueueDesynced(String),
-    /// Emitted by RemotePlayer when the daemon sends redacted Audiobookshelf
+    /// Emitted by `RemotePlayer` when the daemon sends redacted Audiobookshelf
     /// progress. Dormant: delivered for a future browse-reconciliation
     /// consumer, but nothing applies it to queue or browse state yet.
     AudiobookshelfProgress(crate::ctrl::AudiobookshelfProgressEvent),
@@ -474,7 +487,7 @@ pub(super) struct ParsedTracks {
 pub(super) fn parse_tracks(tracks: &[TrackInfo]) -> ParsedTracks {
     let mut parsed = ParsedTracks::default();
     for (index, track) in tracks.iter().enumerate() {
-        let fallback = index as i64 + 1;
+        let fallback = index + 1;
         match track.kind.as_str() {
             "audio" => {
                 if track.selected {
@@ -536,7 +549,7 @@ pub(super) fn select_tracks(
     audio_id: i64,
     audio_lang: &str,
     prefs: &SubtitlePrefs,
-) -> (Option<i64>, Option<Option<i64>>) {
+) -> (Option<i64>, Option<i64>) {
     (
         preferred_audio_track(audio_tracks, audio_id, &prefs.audio_lang),
         preferred_subtitle_track(sub_tracks, audio_lang, prefs),
@@ -563,14 +576,12 @@ fn preferred_subtitle_track(
     tracks: &[(i64, String, bool)],
     audio_lang: &str,
     prefs: &SubtitlePrefs,
-) -> Option<Option<i64>> {
+) -> Option<i64> {
     match prefs.mode.as_str() {
-        "" | "Default" => None,
-        "None" => Some(None),
-        "OnlyForced" => Some(only_forced_subtitle(tracks, &prefs.subtitle_lang)),
-        "Always" => Some(language_subtitle_or_first(tracks, &prefs.subtitle_lang)),
-        "Smart" => Some(smart_subtitle(tracks, audio_lang, &prefs.subtitle_lang)),
-        "HearingImpaired" => Some(hearing_impaired_subtitle(tracks, &prefs.subtitle_lang)),
+        "OnlyForced" => only_forced_subtitle(tracks, &prefs.subtitle_lang),
+        "Always" => language_subtitle_or_first(tracks, &prefs.subtitle_lang),
+        "Smart" => smart_subtitle(tracks, audio_lang, &prefs.subtitle_lang),
+        "HearingImpaired" => hearing_impaired_subtitle(tracks, &prefs.subtitle_lang),
         _ => None,
     }
 }
@@ -641,15 +652,8 @@ pub(super) fn auto_select_tracks(
         status.lock().unwrap().audio_id = id;
     }
     if let Some(id) = subtitle {
-        match id {
-            Some(id) => {
-                let _ = mpv.set_property("sid", id);
-            }
-            None => {
-                let _ = mpv.set_property("sid", "no".to_string());
-            }
-        }
-        status.lock().unwrap().sub_id = id.unwrap_or(0);
+        let _ = mpv.set_property("sid", id);
+        status.lock().unwrap().sub_id = id;
     }
     refresh_tracks(mpv, status);
 }

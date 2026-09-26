@@ -1,5 +1,11 @@
 // The module's documentation and shared imports live in the parent module.
-use super::*;
+use super::{
+    AlbumCursorKind, EmbyItem, EmbySelectorKey, HeroContentData, HeroImageState, InlineSearch,
+    InlineSearchHost, Key, KeyEvent, KeyModifiers, LeafKeyResult, LibraryContentOwner,
+    LibraryItemIdentity, LibraryPanelContent, LibrarySlotEvent, MediaListSurfaceInput, Msg,
+    MusicContent, MusicTreeAction, MusicTreeTarget, RowIntent, SelectorIdentity, ShellRequest,
+    TreeConsumed, TreeOperation,
+};
 
 impl InlineSearchHost for MusicContent {
     fn inline_search(&self) -> &InlineSearch {
@@ -182,21 +188,22 @@ impl LibraryContentOwner for MusicContent {
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Music is focused.
-        if key.modifiers.contains(KeyModifiers::CONTROL) && !self.track_focused {
+        if key.modifiers.contains(KeyModifiers::CONTROL) && !self.track_focused() {
             return self.on_key_ctrl_chord(key);
         }
-        if let Some(result) = self.on_key_track_focused(key) {
+        if let KeyOutcome::Handled(result) = self.on_key_track_focused(key) {
             return result;
         }
-        if let Some(result) = self.on_key_library_command(key) {
+        if let KeyOutcome::Handled(result) = self.on_key_library_command(key) {
             return result;
         }
-        self.on_key_album_navigation(key)
-            .unwrap_or_else(|| match key.code {
+        match self.on_key_album_navigation(key) {
+            KeyOutcome::Handled(result) => result,
+            KeyOutcome::Unhandled => match key.code {
                 Key::Enter => self.on_key_enter(),
                 // Right on an album node expands only cached track children;
                 // missing data remains the shell's responsibility.
-                Key::Right if !self.track_focused && !self.selected_is_artist() => {
+                Key::Right if !self.track_focused() && !self.selected_is_artist() => {
                     if let Some(target) = self.browser.selected_target().cloned() {
                         if !self.browser.is_expanded(&target) {
                             self.browser
@@ -207,12 +214,12 @@ impl LibraryContentOwner for MusicContent {
                 }
                 // Right on an artist root expands first, then enters its
                 // Workspace on a later keypress.
-                Key::Right if !self.track_focused && self.selected_is_artist() => {
+                Key::Right if !self.track_focused() && self.selected_is_artist() => {
                     self.tree_right_artist()
                 }
-                Key::Right => None,
                 _ => None,
-            })
+            },
+        }
     }
 
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
@@ -231,7 +238,7 @@ impl LibraryContentOwner for MusicContent {
                         | Key::Right
                         | Key::Char(_)
                 ))
-                || (self.track_focused
+                || (self.track_focused()
                     && matches!(
                         key.code,
                         Key::Enter
@@ -287,7 +294,7 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn set_hero_image(&mut self, state: HeroImageState) {
-        self.set_hero_image(state)
+        self.set_hero_image(state);
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
@@ -296,6 +303,22 @@ impl LibraryContentOwner for MusicContent {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+/// Outcome of a key handler: whether the key was consumed, and the optional
+/// message a consumed key emits.
+enum KeyOutcome {
+    Unhandled,
+    Handled(Option<Msg>),
+}
+
+impl KeyOutcome {
+    fn or_else(self, f: impl FnOnce() -> KeyOutcome) -> KeyOutcome {
+        match self {
+            KeyOutcome::Handled(message) => KeyOutcome::Handled(message),
+            KeyOutcome::Unhandled => f(),
+        }
     }
 }
 
@@ -314,105 +337,107 @@ impl MusicContent {
         }
     }
     /// Track-pane key handling that takes precedence over album navigation.
-    /// The outer option distinguishes an unhandled key from a handled key
-    /// whose local action emits no message.
-    fn on_key_track_focused(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+    /// `Unhandled` distinguishes an unhandled key from a handled key whose
+    /// local action emits no message.
+    fn on_key_track_focused(&mut self, key: &KeyEvent) -> KeyOutcome {
         self.on_key_track_focus_exit(key)
             .or_else(|| self.on_key_track_move(key))
             .or_else(|| self.on_key_track_overlay_navigation(key))
             .or_else(|| self.on_key_track_context_menu(key))
     }
 
-    fn on_key_track_focus_exit(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+    fn on_key_track_focus_exit(&mut self, key: &KeyEvent) -> KeyOutcome {
         match key.code {
-            Key::Esc | Key::Backspace if self.track_focused => {
+            Key::Esc | Key::Backspace if self.track_focused() => {
                 self.clear_track_focus();
-                Some(None)
+                KeyOutcome::Handled(None)
             }
-            _ => None,
+            _ => KeyOutcome::Unhandled,
         }
     }
 
-    fn on_key_track_move(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+    fn on_key_track_move(&mut self, key: &KeyEvent) -> KeyOutcome {
         match key.code {
-            Key::Up | Key::Char('k') if self.track_focused => {
+            Key::Up | Key::Char('k') if self.track_focused() => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Move(-1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Some(None)
+                KeyOutcome::Handled(None)
             }
-            Key::Down | Key::Char('j') if self.track_focused => {
+            Key::Down | Key::Char('j') if self.track_focused() => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Move(1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Some(None)
+                KeyOutcome::Handled(None)
             }
-            _ => None,
+            _ => KeyOutcome::Unhandled,
         }
     }
 
     /// Overlay pager/jump chords move the focused track list, never the
     /// covered album browser. Outside this guard, album navigation still sees
     /// Home/End/PageUp/PageDown even while a track is focused.
-    fn on_key_track_overlay_navigation(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+    fn on_key_track_overlay_navigation(&mut self, key: &KeyEvent) -> KeyOutcome {
         match key.code {
-            Key::PageUp if self.hero_overlay_open && self.track_focused => {
+            Key::PageUp if self.hero_overlay_open && self.track_focused() => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Page(-1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Some(None)
+                KeyOutcome::Handled(None)
             }
-            Key::PageDown if self.hero_overlay_open && self.track_focused => {
+            Key::PageDown if self.hero_overlay_open && self.track_focused() => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Page(1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Some(None)
+                KeyOutcome::Handled(None)
             }
-            Key::Home if self.hero_overlay_open && self.track_focused => {
+            Key::Home if self.hero_overlay_open && self.track_focused() => {
                 self.track_list.select_first();
-                Some(None)
+                KeyOutcome::Handled(None)
             }
-            Key::End if self.hero_overlay_open && self.track_focused => {
+            Key::End if self.hero_overlay_open && self.track_focused() => {
                 self.track_list.select_last();
-                Some(None)
+                KeyOutcome::Handled(None)
             }
-            _ => None,
+            _ => KeyOutcome::Unhandled,
         }
     }
 
     /// The focused track's own menu wins over the album menu.
-    fn on_key_track_context_menu(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+    fn on_key_track_context_menu(&mut self, key: &KeyEvent) -> KeyOutcome {
         match key.code {
-            Key::Char('.') if self.track_focused => Some(self.workspace_track_context_menu()),
-            _ => None,
+            Key::Char('.') if self.track_focused() => {
+                KeyOutcome::Handled(self.workspace_track_context_menu())
+            }
+            _ => KeyOutcome::Unhandled,
         }
     }
 
     /// Search, context-menu, refresh, and selector-row commands.
-    fn on_key_library_command(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+    fn on_key_library_command(&mut self, key: &KeyEvent) -> KeyOutcome {
         match key.code {
             Key::Char('/') => {
                 if !self.inline_search.is_active() {
                     self.inline_search.open();
                     self.browser.apply(TreeOperation::EditFilter(String::new()));
                 }
-                Some(Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch))))
+                KeyOutcome::Handled(Some(Msg::Shell(Box::new(ShellRequest::OpenInlineSearch))))
             }
-            Key::Char('.') => Some(self.album_context_menu_msg()),
+            Key::Char('.') => KeyOutcome::Handled(self.album_context_menu_msg()),
             Key::Char('r')
-                if !self.track_focused
+                if !self.track_focused()
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                Some(Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRefresh))))
+                KeyOutcome::Handled(Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRefresh))))
             }
             Key::Char('[' | ']')
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -421,35 +446,38 @@ impl MusicContent {
                 let count = self.context.groups.len();
                 let current = self.context.group_cursor;
                 let delta = if key.code == Key::Char('[') { -1 } else { 1 };
-                let next = (current as i64 + delta).rem_euclid(count as i64) as usize;
-                Some(self.on_slot_event(LibrarySlotEvent::SelectorPicked(next)))
+                let count = i64::try_from(count).unwrap_or(i64::MAX);
+                let current = i64::try_from(current).unwrap_or(i64::MAX);
+                let next =
+                    usize::try_from((current + delta).rem_euclid(count)).unwrap_or(usize::MAX);
+                KeyOutcome::Handled(self.on_slot_event(LibrarySlotEvent::SelectorPicked(next)))
             }
-            _ => None,
+            _ => KeyOutcome::Unhandled,
         }
     }
 
     /// Album-browser movement and jumps, unless a focused track-pane arm
     /// consumed the key first.
-    fn on_key_album_navigation(&mut self, key: &KeyEvent) -> Option<Option<Msg>> {
+    fn on_key_album_navigation(&mut self, key: &KeyEvent) -> KeyOutcome {
         match key.code {
-            Key::Up | Key::Char('k') if !self.track_focused => {
-                Some(self.move_album(-1, AlbumCursorKind::Move))
+            Key::Up | Key::Char('k') if !self.track_focused() => {
+                KeyOutcome::Handled(self.move_album(-1, AlbumCursorKind::Move))
             }
-            Key::Down | Key::Char('j') if !self.track_focused => {
-                Some(self.move_album(1, AlbumCursorKind::Move))
+            Key::Down | Key::Char('j') if !self.track_focused() => {
+                KeyOutcome::Handled(self.move_album(1, AlbumCursorKind::Move))
             }
             Key::Home => {
                 self.browser.apply(TreeOperation::First);
-                Some(self.album_selection_request(AlbumCursorKind::Jump))
+                KeyOutcome::Handled(self.album_selection_request(AlbumCursorKind::Jump))
             }
             Key::End => {
                 self.browser.apply(TreeOperation::Last);
-                Some(self.album_selection_request(AlbumCursorKind::Jump))
+                KeyOutcome::Handled(self.album_selection_request(AlbumCursorKind::Jump))
             }
-            Key::PageUp => Some(self.page_album(-1, AlbumCursorKind::Page)),
-            Key::PageDown => Some(self.page_album(1, AlbumCursorKind::Page)),
-            Key::Left if !self.track_focused => Some(self.tree_move_left()),
-            _ => None,
+            Key::PageUp => KeyOutcome::Handled(self.page_album(-1, AlbumCursorKind::Page)),
+            Key::PageDown => KeyOutcome::Handled(self.page_album(1, AlbumCursorKind::Page)),
+            Key::Left if !self.track_focused() => KeyOutcome::Handled(self.tree_move_left()),
+            _ => KeyOutcome::Unhandled,
         }
     }
 
@@ -509,7 +537,6 @@ impl MusicContent {
                 // Artist roots are grouping rows, so watched-state is
                 // unavailable while the library-wide rescan remains
                 // available from every focused library row.
-                Key::Char('w') => None,
                 Key::Char('r') => Some(Msg::Shell(Box::new(ShellRequest::EmbyLibraryRescan))),
                 _ => None,
             };
@@ -547,7 +574,7 @@ impl MusicContent {
             }
             return None;
         }
-        if self.track_focused {
+        if self.track_focused() {
             return self.workspace_track_activation();
         }
         if self.selected_is_track() {

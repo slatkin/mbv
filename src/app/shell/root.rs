@@ -18,17 +18,17 @@ impl Model {
                 ComponentId::Overlay(OverlayId::Settings) => self.render_settings_overlay(frame),
                 ComponentId::Overlay(OverlayId::Playlists) => self.render_playlists_overlay(frame),
                 ComponentId::Modal(ModalId::SavePlaylist) => {
-                    self.render_save_playlist_overlay(frame)
+                    self.render_save_playlist_overlay(frame);
                 }
                 ComponentId::Overlay(OverlayId::Help) => self.render_help_overlay(frame),
                 ComponentId::Modal(ModalId::Confirm) => self.render_confirm_overlay(frame),
                 ComponentId::Modal(ModalId::DaemonLost) => self.render_daemon_lost_overlay(frame),
                 ComponentId::Overlay(OverlayId::ContextMenu) => {
-                    self.render_context_menu_overlay(frame)
+                    self.render_context_menu_overlay(frame);
                 }
                 ComponentId::Popup(PopupId::Multiselect) => self.render_multiselect_popup(frame),
                 ComponentId::Popup(PopupId::LibraryRoutes) => {
-                    self.render_library_routes_popup(frame)
+                    self.render_library_routes_popup(frame);
                 }
                 ComponentId::Popup(PopupId::FeedManage) => self.render_feeds_manage_popup(frame),
                 ComponentId::Overlay(OverlayId::Search) => self.render_search_overlay(frame),

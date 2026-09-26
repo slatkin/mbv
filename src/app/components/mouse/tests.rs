@@ -17,7 +17,7 @@ struct MouseProbe;
 
 impl Component for MouseProbe {
     fn view(&mut self, _f: &mut Frame, _a: Rect) {}
-    fn query<'a>(&'a self, _a: Attribute) -> Option<QueryResult<'a>> {
+    fn query(&self, _a: Attribute) -> Option<QueryResult<'_>> {
         None
     }
     fn attr(&mut self, _a: Attribute, _v: AttrValue) {}

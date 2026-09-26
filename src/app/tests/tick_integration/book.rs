@@ -89,6 +89,14 @@ fn draw_at(h: &mut TickHarness, width: u16, height: u16) {
         .unwrap();
 }
 
+/// Push the provider book content, sync the mounted surfaces, and redraw at
+/// the narrow 80x24 fixture size used by the hero-workflow test.
+fn push_sync_draw_narrow(h: &mut TickHarness) {
+    h.model_mut().push_audiobookshelf_book_content();
+    h.model_mut().sync_mounted_surfaces();
+    draw_at(h, 80, 24);
+}
+
 #[test]
 fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     let mut h = harness();
@@ -98,8 +106,8 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
         browse.books[0].audio_files.clear();
         browse.detail_cache.clear();
         browse.detail_loading = true;
-        browse.detail_loading_ids.insert("book-0".into());
-    }
+        browse.detail_loading_ids.insert("book-0".into())
+    };
     h.model_mut().push_audiobookshelf_book_content();
     h.model_mut().app.terminal_width = 80;
     h.model_mut().app.terminal_height = 24;
@@ -144,9 +152,7 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     browse
         .detail_cache
         .insert("book-0".into(), (vec![chapter], Vec::new()));
-    h.model_mut().push_audiobookshelf_book_content();
-    h.model_mut().sync_mounted_surfaces();
-    draw_at(&mut h, 80, 24);
+    push_sync_draw_narrow(&mut h);
     assert!(!h.model().app.audiobookshelf_book_browse[1].detail_loading);
     assert_eq!(
         h.model()
@@ -164,15 +170,13 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
     browse.buckets = crate::app::state::types::audiobookshelf_browse::books::build_surname_buckets(
         &browse.books,
     );
-    h.model_mut().push_audiobookshelf_book_content();
-    h.model_mut().sync_mounted_surfaces();
-    draw_at(&mut h, 80, 24);
+    push_sync_draw_narrow(&mut h);
     assert!(h
         .model()
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .is_some_and(|panel| panel.test_hero_overlay_open()));
+        .is_some_and(LibraryPanel::test_hero_overlay_open));
     assert_eq!(
         h.model().test_abs_book_owner().selected_book_id(),
         Some("book-0")
@@ -192,9 +196,7 @@ fn books_narrow_hero_workspace_completes_empty_and_reanchors_stably() {
         .detail_cache
         .insert("book-0".into(), (Vec::new(), Vec::new()));
     browse.detail_loading = false;
-    h.model_mut().push_audiobookshelf_book_content();
-    h.model_mut().sync_mounted_surfaces();
-    draw_at(&mut h, 80, 24);
+    push_sync_draw_narrow(&mut h);
     assert!(h
         .model()
         .test_abs_book_owner()

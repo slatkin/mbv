@@ -8,7 +8,9 @@
 //! entangled with the same suspend/restore machinery the Sessions-panel
 //! direct-remote path uses).
 
-use crate::app::*;
+#[cfg(test)]
+use crate::app::TabSelection;
+use crate::app::{App, Duration, Instant, PanelFocus};
 
 /// How long a `library_route_cache` entry (#223) stays trusted before a
 /// repeat lookup re-resolves from scratch, so a mid-session library
@@ -66,12 +68,11 @@ impl App {
             log::info!(target: "library_route", "configured library missing library={name:?}");
             return None;
         };
-        let endpoint = match mbv_core::remote_player::DaemonEndpoint::parse(raw) {
-            Ok(endpoint @ mbv_core::remote_player::DaemonEndpoint::Tcp(_)) => endpoint,
-            _ => {
-                log::warn!(target: "library_route", "malformed endpoint library={name:?} endpoint={raw:?}; accepted shape is tcp://host:port");
-                return None;
-            }
+        let Ok(endpoint @ mbv_core::remote_player::DaemonEndpoint::Tcp(_)) =
+            mbv_core::remote_player::DaemonEndpoint::parse(raw)
+        else {
+            log::warn!(target: "library_route", "malformed endpoint library={name:?} endpoint={raw:?}; accepted shape is tcp://host:port");
+            return None;
         };
         log::info!(target: "library_route", "accepted endpoint library={name:?} endpoint={endpoint}");
         Some((name.to_lowercase(), endpoint))
@@ -390,7 +391,9 @@ mod tests {
             "item-1".to_string(),
             (
                 Some("music".to_string()),
-                Instant::now() - LIBRARY_ROUTE_CACHE_TTL - Duration::from_secs(1),
+                Instant::now()
+                    .checked_sub(LIBRARY_ROUTE_CACHE_TTL + Duration::from_secs(1))
+                    .unwrap_or_else(Instant::now),
             ),
         );
 
@@ -409,7 +412,9 @@ mod tests {
         let mut app = make_app_stub();
         app.library_routes
             .insert("music".to_string(), "living-room-pc".to_string());
-        let expired_at = Instant::now() - LIBRARY_ROUTE_CACHE_TTL - Duration::from_secs(1);
+        let expired_at = Instant::now()
+            .checked_sub(LIBRARY_ROUTE_CACHE_TTL + Duration::from_secs(1))
+            .unwrap_or_else(Instant::now);
         for i in 0..LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD {
             app.library_route_cache.insert(
                 format!("stale-{i}"),

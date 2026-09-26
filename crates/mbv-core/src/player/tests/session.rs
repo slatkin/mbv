@@ -27,7 +27,7 @@ fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
     // shutdown_report_timeout being None to behave as ordinary mid-playback
     // calls again — asserting the None state above is the load-bearing
     // check; both helpers are exercised directly by other tests.
-    assert_eq!(session.progress_join_budget(), Duration::from_secs(30));
+    assert_eq!(PlaybackRun::progress_join_budget(), Duration::from_secs(30));
 }
 
 #[test]
@@ -244,13 +244,13 @@ fn shutdown_stop_sets_timeout_without_changing_plain_stop() {
     let (plain_tx, plain_rx) = mpsc::channel();
     *player.stop_tx.lock().unwrap() = Some(plain_tx);
     player.stop();
-    assert!(plain_rx.recv_timeout(Duration::from_millis(50)).is_ok());
+    plain_rx.recv_timeout(Duration::from_millis(50)).unwrap();
     assert!(player.shutdown_report_timeout.lock().unwrap().is_none());
 
     let (shutdown_tx, shutdown_rx) = mpsc::channel();
     *player.stop_tx.lock().unwrap() = Some(shutdown_tx);
     player.stop_for_shutdown(Duration::from_secs(7));
-    assert!(shutdown_rx.recv_timeout(Duration::from_millis(50)).is_ok());
+    shutdown_rx.recv_timeout(Duration::from_millis(50)).unwrap();
     assert_eq!(
         *player.shutdown_report_timeout.lock().unwrap(),
         Some(Duration::from_secs(7))
@@ -596,7 +596,7 @@ fn resume_start_pos_uses_saved_position_for_resumable_video() {
 
     let queue_item = QueueItem::Emby(Box::new(item));
 
-    assert_eq!(resume_start_pos(&queue_item), resume_secs);
+    assert!((resume_start_pos(&queue_item) - resume_secs).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -604,21 +604,15 @@ fn resume_start_pos_is_zero_for_audio_non_resumable_and_zero_position_feed_items
     let mut audio_item = make_media_item("audio");
     audio_item.media_type = "Audio".into();
     audio_item.playback_position_ticks = audio_item.runtime_ticks / 2;
-    assert_eq!(
-        resume_start_pos(&QueueItem::Emby(Box::new(audio_item))),
-        0.0
-    );
+    assert!(resume_start_pos(&QueueItem::Emby(Box::new(audio_item))).abs() < f64::EPSILON);
 
     let fresh_item = make_media_item("fresh");
     assert!(!fresh_item.should_resume());
-    assert_eq!(
-        resume_start_pos(&QueueItem::Emby(Box::new(fresh_item))),
-        0.0
-    );
+    assert!(resume_start_pos(&QueueItem::Emby(Box::new(fresh_item))).abs() < f64::EPSILON);
 
     let feed_entry = make_feed_entry("feed-1", "Podcast Episode 1");
     // Feed entry with zero position starts from the beginning.
-    assert_eq!(resume_start_pos(&QueueItem::Feed(feed_entry)), 0.0);
+    assert!(resume_start_pos(&QueueItem::Feed(feed_entry)).abs() < f64::EPSILON);
 }
 
 #[test]
@@ -660,7 +654,13 @@ fn queue_load_plan_never_starts_playback_mid_load() {
         // With the plan built, the reassert safety net must observe Ok: a
         // mismatch there means the no-play load plan drifted.
         assert_eq!(
-            queue_layout_verdict(start_idx, len, start_idx as i64, len as i64, false),
+            queue_layout_verdict(
+                start_idx,
+                len,
+                i64::try_from(start_idx).unwrap(),
+                i64::try_from(len).unwrap(),
+                false,
+            ),
             QueueLayoutVerdict::Ok
         );
     }

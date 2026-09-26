@@ -1,9 +1,8 @@
 use super::*;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Position;
 use ratatui::Terminal;
 use rstest::rstest;
-use tuirealm::event::{KeyEvent, KeyModifiers};
+use tuirealm::event::KeyModifiers;
 
 fn tree_point<Target: PartialEq>(browser: &TreeBrowser<Target>, target: &Target) -> Position {
     (0..24)
@@ -62,7 +61,7 @@ fn show_modes_paint_the_tree_in_every_panel_geometry(#[case] width: u16) {
         .buffer()
         .content()
         .iter()
-        .map(|cell| cell.symbol())
+        .map(ratatui::buffer::Cell::symbol)
         .collect::<String>();
     assert!(
         painted.contains("Season 1"),
@@ -134,6 +133,17 @@ fn flat_episode_modes_keep_the_flat_list_at_every_panel_geometry(#[case] width: 
     }
 }
 
+fn assert_settled_show_tree(
+    component: &TvContent,
+    show: &TvTreeTarget,
+    season: &TvTreeTarget,
+    episode: &TvTreeTarget,
+) {
+    assert_eq!(component.browser.selected_target(), Some(episode));
+    assert!(component.browser.is_expanded(show));
+    assert!(component.browser.is_expanded(season));
+}
+
 #[test]
 fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
     use crate::app::components::library_panel::ListSlot;
@@ -197,9 +207,7 @@ fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
         context.set_tv_content_mode(Some(mode));
         component.set_content(context);
         assert!(component.flat_episode_mode());
-        assert_eq!(component.browser.selected_target(), Some(&episode_target));
-        assert!(component.browser.is_expanded(&show));
-        assert!(component.browser.is_expanded(&season_target));
+        assert_settled_show_tree(&component, &show, &season_target, &episode_target);
         assert_eq!(
             component.panel_content().selector.unwrap().active,
             Some(active_pill)
@@ -213,9 +221,7 @@ fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
     let mut context = show_context();
     context.set_tv_content_mode(Some(TvContentMode::All));
     component.set_content(context);
-    assert_eq!(component.browser.selected_target(), Some(&episode_target));
-    assert!(component.browser.is_expanded(&show));
-    assert!(component.browser.is_expanded(&season_target));
+    assert_settled_show_tree(&component, &show, &season_target, &episode_target);
 
     assert!(component
         .test_key(&KeyEvent {
@@ -230,21 +236,17 @@ fn flat_modes_and_inline_search_preserve_the_settled_show_tree() {
         component.panel_content().list,
         ListSlot::Search(_)
     ));
-    assert_eq!(component.browser.selected_target(), Some(&episode_target));
-    assert!(component.browser.is_expanded(&show));
-    assert!(component.browser.is_expanded(&season_target));
+    assert_settled_show_tree(&component, &show, &season_target, &episode_target);
 
     component.test_key(&KeyEvent {
         code: Key::Esc,
         modifiers: KeyModifiers::NONE,
     });
     assert!(!component.inline_search_active());
-    let content = component.panel_content();
-    assert!(content.selector.is_some());
-    assert!(!matches!(content.list, ListSlot::Search(_)));
-    assert_eq!(component.browser.selected_target(), Some(&episode_target));
-    assert!(component.browser.is_expanded(&show));
-    assert!(component.browser.is_expanded(&season_target));
+    let panel_content = component.panel_content();
+    assert!(panel_content.selector.is_some());
+    assert!(!matches!(panel_content.list, ListSlot::Search(_)));
+    assert_settled_show_tree(&component, &show, &season_target, &episode_target);
 }
 
 #[rstest]
@@ -457,7 +459,7 @@ fn expanded_tree_episode_coexists_with_independent_workspace_episode_and_show_he
         .buffer()
         .content()
         .iter()
-        .map(|cell| cell.symbol())
+        .map(ratatui::buffer::Cell::symbol)
         .collect::<String>();
     assert_eq!(painted.matches("Pilot").count(), 2);
     assert_eq!(owner.browser.selected_target(), Some(&episode_target));

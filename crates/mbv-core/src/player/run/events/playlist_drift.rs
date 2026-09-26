@@ -1,4 +1,5 @@
-use super::super::*;
+use super::super::{divergent_entry, PlaybackRun};
+use crate::player::PlayerEvent;
 
 impl PlaybackRun {
     pub(in crate::player) fn on_playlist_pos_changed(&mut self, pos: i64, mpv_pos_ticks: i64) {
@@ -17,7 +18,7 @@ impl PlaybackRun {
         }
         let queue_len = self.queue_len();
         let Some(index) = divergent_entry(pos, self.current_idx, queue_len) else {
-            if pos >= 0 && pos as usize >= queue_len {
+            if usize::try_from(pos).is_ok_and(|index| index >= queue_len) {
                 log::warn!(
                     target: "player",
                     "ignoring out-of-range playlist-pos={pos} for queue len {queue_len}"
@@ -50,7 +51,7 @@ impl PlaybackRun {
         let old_n = self.queue_len();
         if count < old_n {
             let removed = old_n - count;
-            log::warn!(target: "player", "playlist-count dropped from {} to {}: {} item(s) removed externally", old_n, count, removed);
+            log::warn!(target: "player", "playlist-count dropped from {old_n} to {count}: {removed} item(s) removed externally");
             let removed_slot_ids: Vec<_> = self
                 .queue
                 .slots()
@@ -80,7 +81,7 @@ impl PlaybackRun {
             )));
         } else {
             let added = count - old_n;
-            log::warn!(target: "player", "playlist-count increased from {} to {}: {} item(s) added externally", old_n, count, added);
+            log::warn!(target: "player", "playlist-count increased from {old_n} to {count}: {added} item(s) added externally");
             // We cannot reconstruct the added EmbyItems from mpv's playlist,
             // so we keep the queue as-is. Clamp current_idx to the last
             // known item in case the external tool also changed position.

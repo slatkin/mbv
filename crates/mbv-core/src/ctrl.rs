@@ -9,7 +9,7 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 /// all running daemons until the user runs `mbv -q`.
 ///
 /// No bump -- advertise an optional capability instead:
-///   - a new `CtrlCmd` variant (unknown commands are skipped, see daemon_core)
+///   - a new `CtrlCmd` variant (unknown commands are skipped, see `daemon_core`)
 ///   - a new `CtrlEvent` variant (unknown events are logged and ignored)
 ///   - a new `#[serde(default)]` field on an existing message
 ///
@@ -24,9 +24,9 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 /// that pre-existing drift is reconciled here by shipping v9 and rejecting
 /// every other version.
 ///
-/// Version 10 bumps for the EmbyItem wire-shape change: `director`/`genre`
+/// Version 10 bumps for the `EmbyItem` wire-shape change: `director`/`genre`
 /// (required on v9 peers) were replaced by defaultable `genres`/`people`/
-/// `external_urls`. A v9 peer drops every UnifiedQueue* command from a v10
+/// `external_urls`. A v9 peer drops every `UnifiedQueue`* command from a v10
 /// client because the removed required fields fail deserialization — silently,
 /// since undeserializable ctrl lines are skipped without a log.
 ///
@@ -88,6 +88,7 @@ pub struct CtrlHello {
 }
 
 impl CtrlHello {
+    #[must_use]
     pub fn current() -> Self {
         Self {
             protocol_version: CTRL_PROTOCOL_VERSION,
@@ -109,6 +110,7 @@ impl CtrlHello {
         }
     }
 
+    #[must_use]
     pub fn current_control_client(control_token: String) -> Self {
         let mut hello = Self::current();
         hello.control_token = Some(control_token);
@@ -139,48 +141,56 @@ impl CtrlHello {
         Ok(())
     }
 
+    #[must_use]
     pub fn supports_lifecycle_shutdown(&self) -> bool {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_LIFECYCLE_SHUTDOWN)
     }
 
+    #[must_use]
     pub fn supports_audio_only(&self) -> bool {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_AUDIO_ONLY)
     }
 
+    #[must_use]
     pub fn supports_control_auth(&self) -> bool {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_CONTROL_AUTH)
     }
 
+    #[must_use]
     pub fn supports_abs_queue(&self) -> bool {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_ABS_QUEUE)
     }
 
+    #[must_use]
     pub fn supports_abs_progress(&self) -> bool {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_ABS_PROGRESS)
     }
 
+    #[must_use]
     pub fn supports_abs_book_queue(&self) -> bool {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_ABS_BOOK_QUEUE)
     }
 
+    #[must_use]
     pub fn supports_abs_book_progress(&self) -> bool {
         self.capabilities
             .iter()
             .any(|cap| cap == CTRL_CAP_ABS_BOOK_PROGRESS)
     }
 
+    #[must_use]
     pub fn supports_owner_queue_load(&self) -> bool {
         self.capabilities
             .iter()
@@ -208,7 +218,23 @@ impl CtrlHello {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "queue/progress/book_queue/book_progress are four independently negotiated peer capabilities, not one state (design analysis, issue #804)"
+)]
+pub struct CtrlAudiobookshelfCapabilities {
+    pub queue: bool,
+    pub progress: bool,
+    pub book_queue: bool,
+    pub book_progress: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each supports_* bit is an independently negotiated optional protocol feature; no honest enum or bundle exists across queue/lifecycle/audio/auth/owner-load (design analysis, issue #804)"
+)]
 pub struct CtrlCompatibility {
     pub peer_protocol_version: u32,
     pub client_protocol_version: u32,
@@ -216,10 +242,7 @@ pub struct CtrlCompatibility {
     pub supports_lifecycle_shutdown: bool,
     pub supports_audio_only: bool,
     pub supports_control_auth: bool,
-    pub supports_abs_queue: bool,
-    pub supports_abs_progress: bool,
-    pub supports_abs_book_queue: bool,
-    pub supports_abs_book_progress: bool,
+    pub audiobookshelf: CtrlAudiobookshelfCapabilities,
     pub supports_owner_queue_load: bool,
 }
 
@@ -233,10 +256,12 @@ impl CtrlCompatibility {
                 supports_lifecycle_shutdown: false,
                 supports_audio_only: false,
                 supports_control_auth: true,
-                supports_abs_queue: true,
-                supports_abs_progress: true,
-                supports_abs_book_queue: true,
-                supports_abs_book_progress: true,
+                audiobookshelf: CtrlAudiobookshelfCapabilities {
+                    queue: true,
+                    progress: true,
+                    book_queue: true,
+                    book_progress: true,
+                },
                 supports_owner_queue_load: false,
             }),
             _ => Err(format!(
@@ -245,6 +270,7 @@ impl CtrlCompatibility {
         }
     }
 
+    #[must_use]
     pub fn current() -> Self {
         Self::for_peer(CTRL_PROTOCOL_VERSION).expect("local ctrl protocol version is compatible")
     }
@@ -296,6 +322,7 @@ pub struct UnifiedQueueStateData {
 /// Build an `UnifiedQueueSlot` from a `QueueSlotId`.  Callers in
 /// `mbv-core` can use this at the daemon boundary; the `From` trait is
 /// not exposed to keep the wire type independent of internal queue types.
+#[must_use]
 pub fn slot_id_to_u64(id: QueueSlotId) -> u64 {
     id.raw()
 }
@@ -389,7 +416,7 @@ pub enum CtrlCmd {
 
 /// Reply a gated command's `OwnerGate` failure sends. Carried by
 /// [`OwnerGate::OwnerOnly`]/[`OwnerGate::NonOwnerOnly`] so
-/// `send_role_gate_rejection` (daemon_control.rs) can match on it
+/// `send_role_gate_rejection` (`daemon_control.rs`) can match on it
 /// exhaustively with no wildcard arm.
 #[derive(Debug)]
 pub enum OwnerGateRejection {
@@ -414,6 +441,7 @@ pub enum OwnerGate {
 impl CtrlCmd {
     /// Owner-role gate for commands whose acceptance depends on whether the
     /// daemon is the Stay-alive owner (`DaemonRole::Local`).
+    #[must_use]
     pub fn requires_owner(&self) -> OwnerGate {
         match self {
             CtrlCmd::UnifiedQueueLoadIdle { request_id, .. } => {
@@ -446,6 +474,7 @@ impl CtrlCmd {
     /// Whether the owner must persist its queue after handling this command.
     /// Exhaustive so a new queue-editing command cannot silently skip
     /// persistence.
+    #[must_use]
     pub fn mutates_owner_queue(&self) -> bool {
         match self {
             CtrlCmd::UnifiedQueueLoadIdle { .. }
@@ -469,6 +498,7 @@ impl CtrlCmd {
 
     /// Builds `UnifiedQueueReplace`, deriving the legacy `items` payload from
     /// `slots` so callers don't each re-project the same list.
+    #[must_use]
     pub fn unified_queue_replace(
         slots: Vec<UnifiedQueueSlot>,
         start_idx: Option<usize>,

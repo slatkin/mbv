@@ -21,13 +21,14 @@ pub const MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS: i64 = 30 * TICKS_PER_SECOND
 /// <= 0`) is always resumable. Zero and negative positions never qualify.
 /// For a known runtime the position must be at least `RESUME_THRESHOLD_PERCENT`
 /// (inclusive) of runtime. Uses `i128` multiplication to avoid overflow.
+#[must_use]
 pub fn should_resume(position_ticks: i64, runtime_ticks: i64) -> bool {
     if position_ticks <= 0 {
         return false;
     }
     if runtime_ticks > 0 {
-        (position_ticks as i128) * 100
-            >= (runtime_ticks as i128) * (RESUME_THRESHOLD_PERCENT as i128)
+        i128::from(position_ticks) * 100
+            >= i128::from(runtime_ticks) * i128::from(RESUME_THRESHOLD_PERCENT)
     } else {
         true
     }
@@ -69,17 +70,14 @@ pub fn decode_entities(text: &str) -> String {
             }
             _ => None,
         };
-        match decoded_char {
-            Some(ch) => {
-                result.push(ch);
-                rest = &tail[semi_idx + 1..];
-            }
-            None => {
-                // Unrecognized entity: leave the leading '&' untouched and
-                // keep scanning from just after it.
-                result.push('&');
-                rest = &tail[1..];
-            }
+        if let Some(ch) = decoded_char {
+            result.push(ch);
+            rest = &tail[semi_idx + 1..];
+        } else {
+            // Unrecognized entity: leave the leading '&' untouched and
+            // keep scanning from just after it.
+            result.push('&');
+            rest = &tail[1..];
         }
     }
     result.push_str(rest);
@@ -90,6 +88,7 @@ pub fn decode_entities(text: &str) -> String {
 /// descriptions) into plain terminal text: block tags become paragraph
 /// breaks, links keep their visible text plus the URL as `text (URL)`,
 /// and entities are decoded. Inline styling/formatting tags are dropped.
+#[must_use]
 pub fn html_to_text(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
     let mut rest = html;
@@ -162,10 +161,12 @@ fn extract_href(tag_body: &str) -> Option<String> {
     Some(decode_entities(&tag_body[start..start + end]))
 }
 
+#[must_use]
 pub fn gen_session_id() -> EmbySessionId {
     EmbySessionId::new(uuid::Uuid::new_v4().simple().to_string())
 }
 
+#[must_use]
 pub fn device_name() -> String {
     std::fs::read_to_string("/etc/hostname")
         .ok()
@@ -185,15 +186,17 @@ pub fn device_id() -> String {
     let data_home = std::env::var("XDG_DATA_HOME")
         .ok()
         .filter(|s| !s.is_empty())
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| {
-            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-            std::path::PathBuf::from(home).join(".local/share")
-        });
-    device_id_in(data_home)
+        .map_or_else(
+            || {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+                std::path::PathBuf::from(home).join(".local/share")
+            },
+            std::path::PathBuf::from,
+        );
+    device_id_in(&data_home)
 }
 
-fn device_id_in(data_home: std::path::PathBuf) -> String {
+fn device_id_in(data_home: &std::path::Path) -> String {
     let dir = data_home.join("mbv");
     let path = dir.join("device_id");
     if let Ok(id) = std::fs::read_to_string(&path) {
@@ -334,6 +337,7 @@ pub struct EmbyImageTags {
 }
 
 impl EmbyItem {
+    #[must_use]
     pub fn is_audio(&self) -> bool {
         self.media_type == "Audio" || self.item_type == "Audio"
     }
@@ -345,6 +349,7 @@ impl EmbyItem {
     /// facts carry no meaning anywhere: a row derived from a music item is
     /// always ordinary, and only the row that is actually playing shows
     /// anything.
+    #[must_use]
     pub fn is_music(&self) -> bool {
         self.item_type == "MusicAlbum" || self.item_type == "MusicArtist" || self.is_audio()
     }
@@ -355,6 +360,7 @@ impl EmbyItem {
     /// single applicable pair resolves: zero matches, or several equal-name
     /// pairs, resolve nothing rather than picking an arbitrary first pair.
     /// Returns `None` for every absent, unmatched, or ambiguous case.
+    #[must_use]
     pub fn matched_artist_item_id(&self, display_artist: &str) -> Option<&str> {
         let target = display_artist.trim().to_lowercase();
         if target.is_empty() {
@@ -375,22 +381,35 @@ impl EmbyItem {
         matched
     }
 
+    #[must_use]
     pub fn is_video(&self) -> bool {
         self.media_type == "Video"
     }
 
+    #[must_use]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "playback position ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     pub fn resume_seconds(&self) -> f64 {
         self.playback_position_ticks as f64 / TICKS_PER_SECOND as f64
     }
 
+    #[must_use]
     pub fn should_resume(&self) -> bool {
         should_resume(self.playback_position_ticks, self.runtime_ticks)
     }
 
+    #[must_use]
+    #[expect(
+        clippy::cast_precision_loss,
+        reason = "runtime ticks → seconds through f64; no lossless integer-path conversion exists (approved, issue #804)"
+    )]
     pub fn runtime_seconds(&self) -> f64 {
         self.runtime_ticks as f64 / TICKS_PER_SECOND as f64
     }
 
+    #[must_use]
     pub fn file_name(&self) -> &str {
         if self.path.is_empty() {
             return &self.name;
@@ -399,6 +418,7 @@ impl EmbyItem {
         p.file_name().and_then(|f| f.to_str()).unwrap_or(&self.name)
     }
 
+    #[must_use]
     pub fn sort_key(&self) -> &str {
         if !self.path.is_empty() {
             self.file_name()
@@ -409,6 +429,7 @@ impl EmbyItem {
         }
     }
 
+    #[must_use]
     pub fn playback_label(&self) -> String {
         if self.item_type == "Audio" && !self.artist.is_empty() {
             format!("{} - {}", self.artist, self.name)
@@ -457,6 +478,7 @@ impl EmbyItem {
         }
     }
 
+    #[must_use]
     pub fn display_name(&self) -> String {
         if self.item_type == "Episode" && !self.series_name.is_empty() {
             format!("{} {}", self.series_name, self.name)
@@ -468,6 +490,7 @@ impl EmbyItem {
     /// The two-tone title parts for a list row: the series title and, for
     /// episode rows, the episode title that paints after it in the accent
     /// role. Non-episode items return the display name with no second part.
+    #[must_use]
     pub fn display_name_parts(&self) -> (String, Option<String>) {
         if self.item_type == "Episode" && !self.series_name.is_empty() {
             (self.series_name.clone(), Some(self.name.clone()))
@@ -525,7 +548,7 @@ pub struct SessionSubtitleStream {
     pub forced: bool,
 }
 
-/// Result of a PlaybackInfo lookup for an item.
+/// Result of a `PlaybackInfo` lookup for an item.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaybackInfo {
     pub session_id: EmbySessionId,
@@ -535,10 +558,12 @@ pub struct PlaybackInfo {
 
 pub const MBV_DIRECT_TCP_PORT_PREFIX: &str = "mbv-direct-tcp-port:";
 
+#[must_use]
 pub fn mbv_direct_tcp_port_command(port: u16) -> String {
     format!("{MBV_DIRECT_TCP_PORT_PREFIX}{port}")
 }
 
+#[must_use]
 pub fn parse_mbv_direct_tcp_port(commands: &[String]) -> Option<u16> {
     commands.iter().find_map(|cmd| {
         cmd.strip_prefix(MBV_DIRECT_TCP_PORT_PREFIX)
@@ -589,7 +614,7 @@ mod tests {
         let mut client = EmbyClient::new(Config::default());
         let token = "emby-secret-token-123";
         client.token = token.to_string();
-        let rendered = format!("{:?}", client);
+        let rendered = format!("{client:?}");
         assert!(rendered.contains("EmbyClient"));
         assert!(!rendered.contains(token));
     }

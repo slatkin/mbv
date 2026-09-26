@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    AlbumCursorKind, LibrarySlotEvent, MediaListSurfaceInput, Msg, MusicContent, MusicTreeTarget,
+    RowIntent, ShellRequest, TreeOperation,
+};
+use crate::app::components::msg::TerminalObserverEvent;
 
 impl MusicContent {
     /// Whether the destination's own tree filter owns pointer/keyboard input.
@@ -27,7 +31,8 @@ impl MusicContent {
     }
 
     fn selector_picked(&self, index: usize) -> Option<Msg> {
-        let delta = index as i64 - self.context.group_cursor as i64;
+        let delta = i64::try_from(index).unwrap_or(i64::MAX)
+            - i64::try_from(self.context.group_cursor).unwrap_or(i64::MAX);
         (delta != 0).then_some(Msg::Shell(Box::new(ShellRequest::MusicGroupSwitch {
             delta,
         })))
@@ -43,7 +48,7 @@ impl MusicContent {
     }
 
     fn hero_activate(&mut self) -> Option<Msg> {
-        if self.track_focused {
+        if self.track_focused() {
             self.workspace_track_activation()
         } else {
             self.selected_item()
@@ -72,7 +77,7 @@ impl MusicContent {
             | MediaListSurfaceInput::RangeClick(at)
             | MediaListSurfaceInput::DoubleClick(at) => {
                 let target = self.track_list.resolve_current_point(at)?.clone();
-                self.track_focused = true;
+                self.workspace_focus = super::MusicWorkspaceFocus::TrackWorkspace;
                 self.track_list.delegate_operation(
                     input
                         .into_operation(Some(target))
@@ -89,7 +94,7 @@ impl MusicContent {
                         .into_operation(Some(target))
                         .expect("resolved media-list pointer target"),
                 );
-                let _ = ();
+                let () = ();
                 let items = match outcome.external_intent {
                     Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
@@ -139,9 +144,6 @@ impl MusicContent {
             // modified click must not mutate it: the framework
             // delivers after mutation, and discarding the message
             // would leave a losing selection change behind.
-            MediaListSurfaceInput::Click(_)
-            | MediaListSurfaceInput::ToggleClick(_)
-            | MediaListSurfaceInput::RangeClick(_) => None,
             MediaListSurfaceInput::DoubleClick(at) => {
                 let target = search.results_mut().resolve_current_point(at)?.clone();
                 let outcome = search.results_mut().delegate_operation(
@@ -164,9 +166,7 @@ impl MusicContent {
                     // A double-click never resolves a context
                     // intent, and no row resolved when the intent
                     // is `None`.
-                    Some(RowIntent::Context(_)) | Some(RowIntent::ContextSelection(_)) | None => {
-                        None
-                    }
+                    Some(RowIntent::Context(_) | RowIntent::ContextSelection(_)) | None => None,
                 }
             }
             MediaListSurfaceInput::ContextClick(at) => {
@@ -195,9 +195,7 @@ impl MusicContent {
                     // multi-selection so a `ContextSelection`
                     // cannot arise (D4 non-goal), and no row
                     // resolved when the intent is `None`.
-                    Some(RowIntent::Activate(_)) | Some(RowIntent::ContextSelection(_)) | None => {
-                        None
-                    }
+                    Some(RowIntent::Activate(_) | RowIntent::ContextSelection(_)) | None => None,
                 }
             }
             _ => None,

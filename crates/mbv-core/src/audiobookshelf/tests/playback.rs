@@ -1,5 +1,5 @@
 use super::*;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use rstest::rstest;
 
@@ -86,7 +86,7 @@ fn captured_sessions_decode_and_validate_requested_single_podcast_track() {
             )
             .unwrap();
         assert_eq!(session.source.method, method);
-        assert_eq!(session.current_time_seconds, 1.0);
+        assert!((session.current_time_seconds - 1.0).abs() < f64::EPSILON);
         assert_eq!(session.source.url, format!("http://127.0.0.1:1{path}"));
     }
 
@@ -261,8 +261,8 @@ fn book_playback_session_decodes_sources_and_timings() {
 
     assert_eq!(session.id, "<SESSION_ID>");
     assert_eq!(session.library_item_id, "<LIBRARY_ITEM_ID>");
-    assert_eq!(session.duration_seconds, 3054.336);
-    assert_eq!(session.current_time_seconds, 1.0);
+    assert!((session.duration_seconds - 3054.336).abs() < f64::EPSILON);
+    assert!((session.current_time_seconds - 1.0).abs() < f64::EPSILON);
     assert_eq!(session.sources.len(), 2);
     for (source, (path, duration)) in session
         .sources
@@ -272,7 +272,7 @@ fn book_playback_session_decodes_sources_and_timings() {
         assert_eq!(source.method, AudiobookshelfSourceMethod::Direct);
         assert_eq!(source.mime_type, "audio/mpeg");
         assert_eq!(source.url, format!("http://127.0.0.1:1{path}"));
-        assert_eq!(source.duration_seconds, duration);
+        assert!((source.duration_seconds - duration).abs() < f64::EPSILON);
     }
     assert_eq!(http.requests().len(), 1);
     assert!(http.requests()[0].starts_with("POST /api/items/%3CLIBRARY_ITEM_ID%3E/play HTTP/1.1"));

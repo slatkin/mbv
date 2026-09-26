@@ -53,6 +53,13 @@ enum Pane {
     Series,
     Episodes,
 }
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum TvDisplayMode {
+    #[default]
+    Wide,
+    Narrow,
+}
 pub(in crate::app) struct TvContent {
     context: TvWideRenderCtx,
     /// The one shared series-row owner, kept in the fixed-row Wide
@@ -92,7 +99,7 @@ pub(in crate::app) struct TvContent {
     /// `false` paints the flat Narrow series list. Defaults to `true` so an
     /// owner built and viewed without an explicit push (existing unit
     /// tests) keeps painting the Wide workspace.
-    is_wide: bool,
+    display_mode: TvDisplayMode,
     /// Whether the Library Hero overlay is open over this owner (pushed by
     /// the panel, design D2). In Narrow geometry only the overlay focuses
     /// the Episodes pane, so this gates the overlay Workspace's key routing.
@@ -126,7 +133,7 @@ impl TvContent {
             last_series_rows: None,
             last_episode_rows: None,
             inline_search: InlineSearch::new(),
-            is_wide: true,
+            display_mode: TvDisplayMode::Wide,
             hero_overlay_open: false,
             latest_marker: false,
         }
@@ -142,7 +149,11 @@ impl TvContent {
     /// Must be pushed before `set_content` so viewport sizing uses the current
     /// frame's geometry.
     pub(in crate::app) fn set_is_wide(&mut self, is_wide: bool) {
-        self.is_wide = is_wide;
+        self.display_mode = if is_wide {
+            TvDisplayMode::Wide
+        } else {
+            TvDisplayMode::Narrow
+        };
     }
     pub(in crate::app) fn set_hero_overlay_open(&mut self, open: bool) {
         self.hero_overlay_open = open;

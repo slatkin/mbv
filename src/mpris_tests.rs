@@ -151,18 +151,18 @@ fn rebind_repoints_a_handle_at_a_new_status_and_sender() {
     let sent = Arc::new(Mutex::new(Vec::<PlayerCommand>::new()));
 
     let handle: MprisHandle = Arc::new(Mutex::new(MprisSource {
-        status: status_a.clone(),
+        status: Arc::clone(&status_a),
         send: Arc::new(|_: PlayerCommand| {}),
         disconnected: None,
     }));
 
-    let sent_for_rebind = sent.clone();
+    let sent_for_rebind = Arc::clone(&sent);
     let disconnected_b = Arc::new(std::sync::atomic::AtomicBool::new(false));
     rebind(
         &handle,
-        status_b.clone(),
+        Arc::clone(&status_b),
         move |cmd| sent_for_rebind.lock().unwrap().push(cmd),
-        Some(disconnected_b.clone()),
+        Some(Arc::clone(&disconnected_b)),
     );
 
     let source = handle.lock().unwrap();

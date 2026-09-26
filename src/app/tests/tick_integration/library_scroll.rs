@@ -41,7 +41,7 @@ fn deferred_wheel_is_drained_before_following_keyboard_cursor_move() {
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(LibraryPanel::test_wide_geometry)
         .expect("the panel paints a Wide list")
         .list_area;
     // Simulate a claimed wheel whose owner returned no message: the deferred
@@ -101,7 +101,7 @@ fn library_panel_wheel_at_loaded_edge_fetches_next_page() {
         .application
         .get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(LibraryPanel::test_wide_geometry)
         .expect("the panel paints a Wide list")
         .list_area;
     harness.inject(Event::Mouse(MouseEvent {

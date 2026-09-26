@@ -1,4 +1,8 @@
-use super::super::*;
+use super::super::super::saturating_i64_from_f64;
+use super::super::{
+    handle_intro, queue_next_up_decision, standalone_next_up_decision, Mpv, NextUpFire,
+    PlaybackOrigin, PlaybackRun, PlayerEvent, QueueItem, QueueSlotId, TICKS_PER_SECOND,
+};
 
 impl PlaybackRun {
     /// Emit `TrackChanged` for `slot_id`, tagging it with `transition` only if
@@ -74,7 +78,11 @@ impl PlaybackRun {
     }
 
     pub(in crate::player) fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
-        let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "mpv time-pos seconds → ticks through f64; mpv exposes the position as f64 (approved, issue #804)"
+        )]
+        let ticks = saturating_i64_from_f64(pos_secs * TICKS_PER_SECOND as f64);
         {
             let mut st = self.status.lock().unwrap();
             st.position_ticks = ticks;

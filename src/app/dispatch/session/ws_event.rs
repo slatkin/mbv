@@ -31,6 +31,10 @@ impl App {
             WsEvent::TogglePause => {
                 self.player.send_command(PlayerCommand::TogglePause);
             }
+            #[expect(
+                clippy::cast_precision_loss,
+                reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            )]
             WsEvent::Seek(ticks) => {
                 self.player.send_command(PlayerCommand::SeekAbsolute(
                     ticks as f64 / TICKS_PER_SECOND as f64,

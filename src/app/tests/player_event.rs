@@ -1,5 +1,5 @@
 use crate::app::tests::*;
-use mbv_core::player::{PlayerCommand, PlayerEvent};
+use mbv_core::player::PlayerCommand;
 
 #[test]
 fn intro_started_auto_skips_when_client_prefers_it() {
@@ -14,7 +14,7 @@ fn intro_started_auto_skips_when_client_prefers_it() {
 
     assert!(matches!(
         rx.try_recv(),
-        Ok(PlayerCommand::SeekAbsolute(secs)) if secs == 30.0
+        Ok(PlayerCommand::SeekAbsolute(secs)) if secs.to_bits() == 30.0_f64.to_bits()
     ));
     assert!(matches!(rx.try_recv(), Ok(PlayerCommand::SkipIntroDismiss)));
     assert!(

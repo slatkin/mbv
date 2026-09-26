@@ -377,7 +377,7 @@ fn applying_library_position_preserves_persisted_feed_group_state() {
     };
 
     lib.apply_library_position(
-        position,
+        &position,
         vec![BrowseLevel {
             fetched_rows: 0,
             parent_id: "lib-movies".into(),

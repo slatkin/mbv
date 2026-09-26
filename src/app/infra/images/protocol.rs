@@ -1,4 +1,8 @@
-use super::*;
+use super::{
+    cover_fill_hero_box, mem_key, palette, App, CachedImage, ImageFetchReq, ImageSource, IoRead,
+    Picker, MAX_IMAGE_FETCHES, QUEUE_CARD_PLACEHOLDER_BYTES, QUEUE_CARD_PLACEHOLDER_KEY,
+    RENDER_FILTER,
+};
 impl App {
     /// Pre-warm nearby movie poster images for the migrated browser owner.
     /// The caller supplies the projected item window and the owner's
@@ -9,14 +13,14 @@ impl App {
         items: &[mbv_core::api::EmbyItem],
         cursor: usize,
     ) {
+        const PREFETCH_AHEAD: usize = 3;
+        const PREFETCH_BEHIND: usize = 1;
         if !items
             .get(cursor)
             .is_some_and(|item| item.item_type == "Movie" && !item.is_folder)
         {
             return;
         }
-        const PREFETCH_AHEAD: usize = 3;
-        const PREFETCH_BEHIND: usize = 1;
         let start = cursor.saturating_sub(PREFETCH_BEHIND);
         let end = (cursor + PREFETCH_AHEAD + 1).min(items.len());
         let prefetch: Vec<(String, String, String)> = items[start..end]
@@ -72,9 +76,7 @@ impl App {
     /// The suffix of the protocol currently active: the halfblock picker's
     /// while a dimmed backdrop is up, else the configured picker's.
     pub(in crate::app) fn current_protocol_suffix(&self) -> &'static str {
-        self.picker_and_suffix()
-            .map(|(_, s)| s)
-            .unwrap_or("halfblock")
+        self.picker_and_suffix().map_or("halfblock", |(_, s)| s)
     }
 
     /// The picker that encodes the given protocol suffix.
@@ -182,18 +184,15 @@ impl App {
     pub(in crate::app) fn is_halfblock_configured(&self) -> bool {
         self.image_protocol
             .as_deref()
-            .map(|s| s.eq_ignore_ascii_case("halfblocks"))
-            .unwrap_or(false)
-            || self
-                .image_picker
-                .as_ref()
-                .map(|p| p.protocol_type() == ratatui_image::picker::ProtocolType::Halfblocks)
-                .unwrap_or(false)
+            .is_some_and(|s| s.eq_ignore_ascii_case("halfblocks"))
+            || self.image_picker.as_ref().is_some_and(|p| {
+                p.protocol_type() == ratatui_image::picker::ProtocolType::Halfblocks
+            })
     }
 
     pub(in crate::app) fn configured_protocol_name(&self) -> &'static str {
         use ratatui_image::picker::ProtocolType;
-        match self.image_picker.as_ref().map(|p| p.protocol_type()) {
+        match self.image_picker.as_ref().map(Picker::protocol_type) {
             Some(ProtocolType::Sixel) => "sixel",
             Some(ProtocolType::Kitty) => "kitty",
             Some(ProtocolType::Iterm2) => "iterm2",
@@ -255,8 +254,9 @@ impl App {
     /// picker and then the picker constructor's default.
     pub(in crate::app) fn image_font_size(&self) -> ratatui_image::FontSize {
         self.picker_and_suffix()
-            .map(|(picker, _)| picker.font_size())
-            .unwrap_or(ratatui_image::FontSize::new(10, 20))
+            .map_or(ratatui_image::FontSize::new(10, 20), |(picker, _)| {
+                picker.font_size()
+            })
     }
 
     /// One hero artwork box's pixel size from its cell size (task 5.10,

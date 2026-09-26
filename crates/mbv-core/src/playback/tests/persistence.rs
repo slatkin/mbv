@@ -51,7 +51,7 @@ fn queue_item_deserializes(
         (QueueItem::Emby(_), true) | (QueueItem::Feed(_), false) => {}
         (QueueItem::Emby(_), false) => panic!("expected Feed variant"),
         (QueueItem::Feed(_), true) => panic!("expected Emby variant"),
-        (QueueItem::Audiobookshelf(_), _) | (QueueItem::AudiobookshelfBook(_), _) => {
+        (QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_), _) => {
             panic!("unexpected queue item variant")
         }
     }
@@ -90,13 +90,16 @@ fn queue_state_round_trip_preserves_item_kind() {
     match &restored[0] {
         QueueItem::Emby(e) => assert_eq!(e.id, "emby-1"),
         QueueItem::Feed(_) => panic!("expected Emby variant"),
-        QueueItem::Audiobookshelf(_) => panic!("expected Emby variant"),
-        QueueItem::AudiobookshelfBook(_) => panic!("expected Emby variant"),
+        QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {
+            panic!("expected Emby variant")
+        }
     }
 
     // Feed kind preserved
     match &restored[1] {
-        QueueItem::Emby(_) => panic!("expected Feed variant"),
+        QueueItem::Emby(_) | QueueItem::Audiobookshelf(_) | QueueItem::AudiobookshelfBook(_) => {
+            panic!("expected Feed variant")
+        }
         QueueItem::Feed(f) => {
             assert_eq!(f.guid, "feed-1");
             assert_eq!(f.title, "Podcast Episode");
@@ -105,8 +108,6 @@ fn queue_state_round_trip_preserves_item_kind() {
                 Some("https://example.com/ep1.mp3")
             );
         }
-        QueueItem::Audiobookshelf(_) => panic!("expected Feed variant"),
-        QueueItem::AudiobookshelfBook(_) => panic!("expected Feed variant"),
     }
 }
 
@@ -210,7 +211,7 @@ fn audiobookshelf_admission_and_purge_keep_other_kinds() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: Default::default(),
+        positions: std::collections::HashMap::default(),
     };
     let filtered = state.without_audiobookshelf();
     assert_eq!(filtered.items.len(), 2);

@@ -4,8 +4,8 @@ use mbv_core::config::QueueState;
 use mbv_core::service_runtime::ServiceState;
 
 fn forward_audiobookshelf_updates<T, F>(
-    receiver: std::sync::mpsc::Receiver<T>,
-    sender: std::sync::mpsc::Sender<crate::app::state::types::events::LibEvent>,
+    receiver: &std::sync::mpsc::Receiver<T>,
+    sender: &std::sync::mpsc::Sender<crate::app::state::types::events::LibEvent>,
     event: F,
 ) where
     T: Send + 'static,
@@ -66,7 +66,6 @@ impl App {
         &mut self,
         completion: crate::app::dispatch::session::service_startup::AudiobookshelfSetupCompletion,
     ) {
-        use crate::app::dispatch::notify::ToastSeverity;
         if !self.audiobookshelf_runtime.accepts(completion.generation) {
             return;
         }
@@ -107,32 +106,29 @@ impl App {
                         candidate.api_key,
                     ),
                 );
-                match result {
-                    Ok((_, revision)) => {
-                        let mut committed = setup.clone();
-                        committed.revision = revision;
-                        self.config.lock().unwrap().audiobookshelf_setup = Some(committed);
-                        self.audiobookshelf_runtime
-                            .commit_ready(completion.generation, user.clone());
-                        self.start_audiobookshelf_socket(completion.generation);
-                        self.install_audiobookshelf_player_context(completion.generation);
-                        self.audiobookshelf_setup_form = None;
-                        self.signal_running_local_daemon(revision);
-                        self.flash(
-                            format!(
-                                "Audiobookshelf {} is ready for {}",
-                                setup.server_url, user.username
-                            ),
-                            ToastSeverity::Success,
-                        );
-                    }
-                    Err(_) => {
-                        self.audiobookshelf_runtime
-                            .complete(completion.generation, completion.previous_state);
-                        if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
-                            form.busy = false;
-                            form.error = "Could not save Audiobookshelf setup".into();
-                        }
+                if let Ok((_, revision)) = result {
+                    let mut committed = setup.clone();
+                    committed.revision = revision;
+                    self.config.lock().unwrap().audiobookshelf_setup = Some(committed);
+                    self.audiobookshelf_runtime
+                        .commit_ready(completion.generation, user.clone());
+                    self.start_audiobookshelf_socket(completion.generation);
+                    self.install_audiobookshelf_player_context(completion.generation);
+                    self.audiobookshelf_setup_form = None;
+                    self.signal_running_local_daemon(revision);
+                    self.flash(
+                        format!(
+                            "Audiobookshelf {} is ready for {}",
+                            setup.server_url, user.username
+                        ),
+                        ToastSeverity::Success,
+                    );
+                } else {
+                    self.audiobookshelf_runtime
+                        .complete(completion.generation, completion.previous_state);
+                    if let Some(form) = self.audiobookshelf_setup_form.as_mut() {
+                        form.busy = false;
+                        form.error = "Could not save Audiobookshelf setup".into();
                     }
                 }
             }
@@ -161,7 +157,7 @@ impl App {
 
     /// Helper that persists a filtered queue or clears the file when empty.
     /// Mirrors Emby's `persist_filtered_queue` but for Audiobookshelf.
-    fn persist_filtered_queue_abs(state: &Option<QueueState>) -> Result<(), String> {
+    fn persist_filtered_queue_abs(state: Option<&QueueState>) -> Result<(), String> {
         match state {
             Some(state) if !state.items.is_empty() => mbv_core::config::save_queue_state(state),
             _ => mbv_core::config::clear_queue_state(),
@@ -214,7 +210,7 @@ impl App {
         // so setup/secret removal and queue purge are atomic from the caller's view.
         let persist_result =
             mbv_core::config::remove_audiobookshelf_setup_and_secret_with_owned_state(
-                || Self::persist_filtered_queue_abs(&filtered),
+                || Self::persist_filtered_queue_abs(filtered.as_ref()),
                 || {},
             );
 
@@ -280,7 +276,7 @@ impl App {
                 candidate.user,
                 candidate.api_key,
             ),
-            || Self::persist_filtered_queue_abs(&filtered),
+            || Self::persist_filtered_queue_abs(filtered.as_ref()),
             || {
                 // Restore in-memory queues on failure.
                 self.player_tab
@@ -348,8 +344,8 @@ impl App {
                 let lib_tx = self.lib_tx.clone();
                 let _ = std::thread::spawn(move || {
                     forward_audiobookshelf_updates(
-                        receiver,
-                        lib_tx,
+                        &receiver,
+                        &lib_tx,
                         crate::app::state::types::events::LibEvent::AudiobookshelfProgressAcknowledged,
                     );
                 });
@@ -358,8 +354,8 @@ impl App {
                 let lib_tx = self.lib_tx.clone();
                 let _ = std::thread::spawn(move || {
                     forward_audiobookshelf_updates(
-                        book_receiver,
-                        lib_tx,
+                        &book_receiver,
+                        &lib_tx,
                         crate::app::state::types::events::LibEvent::AudiobookshelfBookProgressAcknowledged,
                     );
                 });
@@ -414,9 +410,13 @@ impl App {
         &mut self,
         ev: mbv_core::audiobookshelf::socket::SocketEvent,
     ) {
-        use crate::app::dispatch::notify::ToastSeverity;
         match ev {
-            mbv_core::audiobookshelf::socket::SocketEvent::Authenticated => {}
+            // Authenticated is a deliberate no-op here; Open, ConnectAck are
+            // consumed by the background thread and never forwarded to the
+            // app.
+            mbv_core::audiobookshelf::socket::SocketEvent::Authenticated
+            | mbv_core::audiobookshelf::socket::SocketEvent::Open { .. }
+            | mbv_core::audiobookshelf::socket::SocketEvent::ConnectAck => {}
             mbv_core::audiobookshelf::socket::SocketEvent::InvalidToken => {
                 // Task 2.3: surface the same ABS authentication failure
                 // classification used elsewhere; do NOT clear the installed
@@ -428,12 +428,8 @@ impl App {
                 );
             }
             mbv_core::audiobookshelf::socket::SocketEvent::ProgressUpdated(progress) => {
-                self.apply_audiobookshelf_socket_progress(progress);
+                self.apply_audiobookshelf_socket_progress(&progress);
             }
-            // Open, ConnectAck are consumed by the background thread and
-            // never forwarded to the app.
-            mbv_core::audiobookshelf::socket::SocketEvent::Open { .. }
-            | mbv_core::audiobookshelf::socket::SocketEvent::ConnectAck => {}
         }
     }
 
@@ -443,7 +439,7 @@ impl App {
     /// via reconcile (no REST call). Task 3.4 covers test cases.
     fn apply_audiobookshelf_socket_progress(
         &mut self,
-        progress: mbv_core::audiobookshelf::socket::AudiobookshelfProgress,
+        progress: &mbv_core::audiobookshelf::socket::AudiobookshelfProgress,
     ) {
         // Task 3.3: drop events from a superseded connection generation.
         let Some(gen) = self.audiobookshelf_socket_generation else {
@@ -454,7 +450,7 @@ impl App {
         }
 
         // Task 3.2: never touch the actively Player-owned slot.
-        if self.player_owns_active_match(&progress) {
+        if self.player_owns_active_match(progress) {
             return;
         }
 

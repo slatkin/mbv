@@ -1,8 +1,4 @@
 use super::*;
-use crate::app::tests::{make_app_stub, make_items, make_remote_app_stub_with_cmd_rx};
-use mbv_core::player::PlayerEvent;
-use std::time::{Duration, Instant};
-
 /// Row 1.3: the Next-Up accept on an out-of-process owner requests the jump
 /// from the owner (`CtrlCmd::UnifiedQueuePlaySlot`), never constructs a local
 /// `JumpTo`, leaves the client cursor on the owner snapshot (A3), and the
@@ -18,7 +14,7 @@ fn next_up_accept_on_out_of_process_owner_requests_unified_queue_play_slot() {
         status.active = true;
         status.current_idx = 0;
         status.queue_len = 3;
-    }
+    };
     app.next_up_item = Some(remote_items[1].clone());
 
     app.handle_player_event(PlayerEvent::NextUpPlay);
@@ -61,7 +57,7 @@ fn next_up_accept_on_app_process_owner_mints_and_dispatches_local_jump() {
         status.active = true;
         status.current_idx = 0;
         status.queue_len = 3;
-    }
+    };
     let items = make_items(3);
     app.next_up_item = Some(items[2].clone());
 
@@ -76,7 +72,7 @@ fn next_up_accept_on_app_process_owner_mints_and_dispatches_local_jump() {
         ),
         "the accept must jump to the next-up slot by identity"
     );
-    assert!(commands.try_recv().is_err());
+    commands.try_recv().unwrap_err();
     assert_eq!(
         app.bare_owner.in_flight_transition_slot(),
         Some(target),
@@ -120,7 +116,7 @@ fn expire_dispatches_the_promoted_transition_unchanged() {
         mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation, .. }
             if slot_id == slot_b && request_id == request_id_b && generation == generation_b
     ));
-    assert!(commands.try_recv().is_err());
+    commands.try_recv().unwrap_err();
     assert_eq!(
         app.bare_owner.in_flight_transition_slot(),
         Some(slot_b),
@@ -163,7 +159,7 @@ fn settle_dispatches_the_promoted_transition_unchanged() {
         mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation, .. }
             if slot_id == slot_b && request_id == request_id_b && generation == generation_b
     ));
-    assert!(commands.try_recv().is_err());
+    commands.try_recv().unwrap_err();
     assert_eq!(
         app.bare_owner.in_flight_transition_slot(),
         Some(slot_b),

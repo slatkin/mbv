@@ -6,7 +6,7 @@ pub use context::*;
 mod core;
 pub use core::*;
 mod core_ctrl_spawn;
-pub(in crate::daemon) use core_ctrl_spawn::*;
+pub(in crate::daemon) use core_ctrl_spawn::spawn_ctrl_client;
 mod run_shutdown;
 pub(crate) use run_shutdown::*;
 mod run;
@@ -18,7 +18,11 @@ pub(crate) use audiobookshelf::*;
 mod control;
 pub(crate) use control::*;
 mod control_queue;
-pub(in crate::daemon) use control_queue::*;
+pub(in crate::daemon) use control_queue::{
+    broadcast_queue_state, persist_stay_alive_owner_queue, project_queue_state,
+};
+#[cfg(test)]
+pub(crate) use control_queue::{daemon_admits, unified_queue_state_for_peer};
 mod ws;
 pub(crate) use ws::*;
 mod reconciliation;

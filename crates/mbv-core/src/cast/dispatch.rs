@@ -28,6 +28,7 @@ pub struct CastDeviceProfile {
     pub subtitle_stream_index: Option<i64>,
 }
 
+#[must_use]
 pub fn build_cast_device_profile(subtitles: CastSubtitleKind) -> CastDeviceProfile {
     let profile_json = serde_json::json!({
         "Name": "mbv-chromecast",
@@ -126,6 +127,7 @@ pub struct CastDispatchItem {
 
 /// Splits a selection's per-item resolutions into the media to dispatch and
 /// the (name, reason) pairs to surface, in one pass.
+#[must_use]
 pub fn partition_cast_dispatch(
     items: Vec<CastDispatchItem>,
 ) -> (Vec<CastMediaItem>, Vec<(String, String)>) {
@@ -143,7 +145,6 @@ pub fn partition_cast_dispatch(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audiobookshelf::AudiobookshelfSourceMethod;
 
     // ── 4.1 device profile ──────────────────────────────────────────────
 
@@ -270,7 +271,7 @@ mod tests {
             method: AudiobookshelfSourceMethod::Hls,
             ..direct_source("https://abs.test/hls/1.m3u8")
         };
-        assert!(resolve_audiobookshelf_episode_dispatch(&source, "secret").is_err());
+        resolve_audiobookshelf_episode_dispatch(&source, "secret").unwrap_err();
     }
 
     // ── 4.5 Audiobookshelf book classification ──────────────────────────
