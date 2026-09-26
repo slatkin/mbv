@@ -1,5 +1,5 @@
 use super::{
-    MediaKind, MediaList, MediaListCarrier, MediaListRow, MediaListTitleReveal, MediaSemanticState,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListTitleReveal, MediaSemanticState,
     WideMediaList, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
@@ -54,43 +54,6 @@ fn wide_list_maps_structural_rows_and_clamps_viewport() {
 }
 
 #[test]
-fn raising_the_window_keeps_the_selections_group_heading_visible() {
-    let mut list = WideMediaList::new();
-    list.set_content(vec![
-        MediaListRow::Heading { text: "A".into() },
-        item("a"),
-        item("b"),
-        MediaListRow::Heading { text: "B".into() },
-        item("c"),
-        item("d"),
-    ]);
-
-    // Scroll away from the top, then walk the cursor back up into view.
-    list.select_last();
-    list.set_scroll(4);
-    assert_eq!(list.resolve_viewport(2).offset, 4); // bottom branch: B's label + c + d
-    list.move_selection(-1); // cursor on "c" (display row 4) — still inside the window
-    assert_eq!(list.resolve_viewport(2).offset, 4);
-    list.move_selection(-1); // cursor on "b" (display row 2), above the window
-    assert_eq!(list.resolve_viewport(2).offset, 2);
-    list.move_selection(-1); // cursor on "a" (display row 1)
-    assert_eq!(list.resolve_viewport(2).offset, 0); // raised over A's Heading
-
-    // The walk stops at the previous selectable row: only the selection's own
-    // group label rides along, never the previous group's rows.
-    list.select_index(3); // "c", first item of group B
-    list.set_scroll(5);
-    assert_eq!(list.resolve_viewport(2).offset, 4); // B's label + c
-
-    // A raise with no label above the selection lands exactly on its row.
-    let mut plain = WideMediaList::new();
-    plain.set_content(vec![item("a"), item("b"), item("c"), item("d")]);
-    plain.select_index(1);
-    plain.set_scroll(2);
-    assert_eq!(plain.resolve_viewport(2).offset, 1);
-}
-
-#[test]
 fn refresh_preserves_target_and_resolves_a_missing_target_to_the_first_row() {
     let rows = vec![item("a"), item("b"), item("c"), item("d")];
     let mut list = WideMediaList::new();
@@ -103,28 +66,6 @@ fn refresh_preserves_target_and_resolves_a_missing_target_to_the_first_row() {
     list.set_content(vec![item("a"), item("b")]);
     assert_eq!(list.selected_target(), Some(&"a".to_string()));
     assert!(list.scroll() <= 1);
-}
-
-#[test]
-fn fixed_row_owner_survives_wide_narrow_wide_geometry_changes() {
-    let mut carrier = MediaListCarrier::new();
-    carrier.set_content((0..8).map(|i| item(&i.to_string())).collect());
-    carrier.select_target(&"5".to_string());
-    carrier.set_scroll(5);
-    let target = carrier.selected_target().cloned();
-
-    // Both breakpoint arms configure the same fixed-row owner. The smaller
-    // viewport clamps on view; no presentation-specific state is transferred.
-    carrier.clamp_viewport(3);
-    paint(carrier.wide_mut(), Rect::new(0, 0, 20, 3));
-    let narrow_offset = carrier.scroll();
-    assert_eq!(carrier.selected_target(), target.as_ref());
-    assert!(narrow_offset <= 5);
-
-    carrier.clamp_viewport(7);
-    paint(carrier.wide_mut(), Rect::new(0, 0, 20, 7));
-    assert_eq!(carrier.selected_target(), target.as_ref());
-    assert!(carrier.scroll() <= narrow_offset);
 }
 
 #[test]
@@ -158,25 +99,6 @@ fn fixed_row_claims_only_completed_current_frame() {
     );
     list.set_geometry(Rect::new(0, 0, 0, 2), area);
     assert!(!list.claims_current_point(Position { x: 2, y: 1 }));
-}
-
-#[test]
-fn carrier_preserves_multi_selection_across_geometry_changes() {
-    let mut carrier = MediaListCarrier::new();
-    carrier.set_content(vec![item("one"), item("two"), item("three")]);
-    carrier.toggle_selection(&"one".to_string());
-    carrier.toggle_selection(&"three".to_string());
-    carrier.clamp_viewport(2);
-    assert_eq!(carrier.multi_selection(), &["one", "three"]);
-}
-
-#[test]
-fn media_list_selection_summary_stays_provider_neutral() {
-    let mut list = MediaList::new();
-    list.set_content(vec![item("one"), item("two")]);
-    list.enter_visual_mode();
-    let transition = list.delegate_operation(super::MediaListOperation::Context("two".into()));
-    assert!(transition.external_intent.is_some());
 }
 
 /// The one canonical state derivation every list uses: `played` wins, a

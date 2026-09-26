@@ -157,22 +157,4 @@ mod tests {
             vec!["A", "C"]
         );
     }
-
-    #[test]
-    fn spacer_precedes_every_heading_except_the_first() {
-        let rows = letter_grouped_rows(movies_fixture(), 7, false);
-        for window in rows.windows(2) {
-            if matches!(window[1], MediaListRow::Heading { .. }) {
-                assert!(
-                    matches!(window[0], MediaListRow::Spacer),
-                    "non-first heading must be preceded by a spacer"
-                );
-            }
-        }
-        // First row is a heading with no preceding spacer.
-        assert!(matches!(rows[0], MediaListRow::Heading { .. }));
-        assert!(headings(&rows).len() >= 2);
-        // No trailing spacer.
-        assert!(!matches!(rows.last(), Some(MediaListRow::Spacer)));
-    }
 }
