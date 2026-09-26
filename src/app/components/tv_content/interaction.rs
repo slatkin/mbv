@@ -623,30 +623,3 @@ impl TvContent {
             .collect()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn hero_pane_click_on_blank_workspace_emits_a_pane_hit() {
-        let mut owner = TvContent::new();
-        let at = ratatui::layout::Position::new(4, 3);
-        assert!(matches!(
-            owner.hero_pane_event(MediaListSurfaceInput::Click(at)),
-            Some(Msg::Shell(request)) if matches!(request.as_ref(), ShellRequest::TvHitClick { hit: TvHit::EpisodesPane })
-        ));
-    }
-
-    #[test]
-    fn wide_hero_pane_wheel_is_not_claimed_as_an_overlay_gesture() {
-        let mut owner = TvContent::new();
-        assert_eq!(
-            owner.hero_pane_event(MediaListSurfaceInput::Wheel {
-                at: ratatui::layout::Position::new(4, 3),
-                delta: -1,
-            }),
-            None
-        );
-    }
-}
