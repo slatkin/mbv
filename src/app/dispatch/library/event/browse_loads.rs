@@ -22,7 +22,6 @@ impl App {
         self.retain_grouped_music_level_items(lib_idx, &mut level);
         // The drain's own parent id tells a root load apart from a deeper
         // level's load for the pending Series landing retry below.
-        let loaded_parent_id = parent_id.to_string();
         self.handle_loaded_level(lib_idx, parent_id, level);
         if let Some(mode) = self.libs[lib_idx].tv_content_mode.clone() {
             if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
@@ -44,7 +43,7 @@ impl App {
         // A pending Series landing retries once this library's ROOT level has
         // drained (U2 correction: ensure-then-land); a deeper level's load
         // re-arms and waits.
-        self.retry_pending_series_landing(lib_idx, &loaded_parent_id);
+        self.retry_pending_series_landing(lib_idx, parent_id);
     }
 
     /// On the FIRST unfiltered load of a library's top browse level, this
