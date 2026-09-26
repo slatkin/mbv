@@ -68,6 +68,15 @@ impl Player {
     /// Submit a canonical Bound queue. The Playback run must preserve these
     /// identities because every later command and observation addresses slots,
     /// not playlist positions.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any of the player's shared mutexes is poisoned, i.e. a previous
+    /// owner panicked while holding it: the owner state read or seeded here
+    /// (`status`, `origin`, `ws_tx`, `credentials`, `audiobookshelf_context`,
+    /// `stop_tx`, `shutdown_report_timeout`, `cmd_tx`, `wakeup_fd`,
+    /// `pre_warmed_mpv`, `thread_handle`). An empty or rejected submission
+    /// returns before locking.
     pub fn submit_queue_slots(
         &self,
         items: Vec<ExecSlot>,

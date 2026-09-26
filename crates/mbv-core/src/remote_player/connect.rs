@@ -608,6 +608,13 @@ fn write_remote_commands(
 /// i.e. once `RemotePlayer::disconnect()` (or dropping the owner) shuts the
 /// client end down -- the hermetic oracle for "the previous remote was
 /// disconnected" without a listener or spawned product process.
+///
+/// # Panics
+///
+/// The spawned peer thread panics if `UnixStream::try_clone` fails on the
+/// daemon end of the pair, if writing or reading the stub handshake hits an IO
+/// error, or if the handshake events cannot be serialized to JSON. The
+/// returned `Result` covers only the client end of the pair.
 #[cfg(any(test, feature = "test"))]
 pub fn connect_stub_daemon_pair() -> Result<
     (
