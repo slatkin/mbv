@@ -6,7 +6,7 @@
 
 ## 2. Mechanical doc_markdown fixes
 
-- [ ] 2.1 Run `cargo clippy --workspace --all-targets --fix --allow-dirty -- -W clippy::doc_markdown` and review the diff is backtick-only (no prose rewrites). Verify: `cargo clippy --workspace --all-targets -- -D warnings 2>&1 | grep -c doc_markdown` returns 0, and `git diff --stat` shows only doc-comment lines changed.
+- [x] 2.1 Run `cargo clippy --workspace --all-targets --fix --allow-dirty -- -W clippy::doc_markdown` and review the diff is backtick-only (no prose rewrites). Verify: `cargo clippy --workspace --all-targets -- -D warnings 2>&1 | grep -c doc_markdown` returns 0, and `git diff --stat` shows only doc-comment lines changed.
 
 ## 3. Hand-written `# Panics` sections
 
