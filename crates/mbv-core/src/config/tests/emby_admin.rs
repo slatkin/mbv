@@ -49,7 +49,7 @@ fn different_server_replacement_clears_only_emby_owned_state() {
         last_played_content_id: None,
         last_played_item_id: None,
         last_played_completed: false,
-        positions: std::collections::HashMap::default(),
+        positions: Default::default(),
     })
     .unwrap();
 
