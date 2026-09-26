@@ -414,13 +414,12 @@ fn abs_book_meta_rows(
         rows.push("Finished".into());
     } else if book.position_ticks > 0 {
         if let Some(duration_ticks) = book.duration_ticks.filter(|ticks| *ticks > 0) {
-            let percent = (crate::app::render::components::math::int_ratio(
-                book.position_ticks,
-                i64::try_from(duration_ticks).unwrap_or(i64::MAX),
-            ) * 100.0)
+            let numerator = book.position_ticks.checked_mul(100).unwrap_or(i64::MAX);
+            let denominator = i64::try_from(duration_ticks).unwrap_or(i64::MAX);
+            let percent = crate::app::render::components::math::int_ratio(numerator, denominator)
                 .floor()
                 .clamp(1.0, 99.0);
-            let pct = u8::try_from(mbv_core::api::i64_ticks_saturating(percent)).unwrap_or(u8::MAX);
+            let pct = format!("{percent:.0}").parse::<u8>().unwrap_or(u8::MAX);
             progress_row = Some(rows.len());
             rows.push(format!("{pct}%"));
         }
