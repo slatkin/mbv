@@ -133,11 +133,14 @@ impl App {
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::PlaybackIntent(event) => {
-                self.handle_playback_intent(&event);
+                self.flash(
+                    playback_intent_message(&event.outcome).to_string(),
+                    ToastSeverity::Neutral,
+                );
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::PipePlaybackStatus(status) => {
-                self.handle_pipe_playback_status(&status);
+                self.flash(pipe_playback_message(&status), ToastSeverity::Neutral);
                 PlayerEventFlow::Proceed
             }
             PlayerEvent::RemoteDisconnected(reason) => {
@@ -164,17 +167,6 @@ impl App {
                 PlayerEventFlow::Proceed
             }
         }
-    }
-
-    fn handle_playback_intent(&mut self, event: &mbv_core::ctrl::PlaybackIntentEvent) {
-        self.flash(
-            playback_intent_message(&event.outcome).to_string(),
-            ToastSeverity::Neutral,
-        );
-    }
-
-    fn handle_pipe_playback_status(&mut self, status: &mbv_core::ctrl::PipePlaybackStatus) {
-        self.flash(pipe_playback_message(status), ToastSeverity::Neutral);
     }
 
     fn handle_emby_authority_taken(&mut self, reason: String) {
