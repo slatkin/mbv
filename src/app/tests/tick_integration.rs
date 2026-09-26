@@ -9,11 +9,10 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::components::{
-    ComponentId, ModalId, Msg, MusicContent, OverlayId, QueueRequest, SearchPool,
-    SearchSidebarComponent, ShellRequest, TerminalObserverEvent, UserEvent,
+    ComponentId, ModalId, Msg, OverlayId, QueueRequest, SearchSidebarComponent, ShellRequest,
+    TerminalObserverEvent, UserEvent,
 };
 use crate::app::dispatch::action::Command;
 use crate::app::input::router::RouterOutcome;
@@ -594,28 +593,15 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     assert_eq!(harness.model().app.mouse_capture_pending, Some(false));
 }
 
-mod book;
 mod disconnect;
-mod emby_library;
-mod feeds;
 pub(crate) mod harness;
-mod home;
 mod keybinds;
-mod library_panel;
-mod library_scroll;
 mod mouse;
 mod mouse_sidebar;
-mod music;
-mod music_mouse;
-mod navigate_item;
 mod playback_title_parts;
-mod podcast;
 mod prefix_mode;
 mod queue_playback;
-mod root_frame_fill;
 mod sessions;
-mod tv;
-mod wide_split;
 
 /// A function key pressed while the Help overlay is open must dismiss Help and
 /// open its sidebar. Help stays mounted otherwise, and (painting after
