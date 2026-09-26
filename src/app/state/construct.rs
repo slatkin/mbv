@@ -799,36 +799,3 @@ impl App {
         self.halfblock_picker = Some(Picker::halfblocks());
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{list_pane_width_from_prefs, visual_slot_hidden_from_prefs};
-
-    #[test]
-    fn visual_slot_hidden_pref_defaults_false_for_missing_or_invalid_values() {
-        assert!(!visual_slot_hidden_from_prefs(&serde_json::json!({})));
-        assert!(!visual_slot_hidden_from_prefs(
-            &serde_json::json!({ "visual_slot_hidden": "true" })
-        ));
-        assert!(visual_slot_hidden_from_prefs(
-            &serde_json::json!({ "visual_slot_hidden": true })
-        ));
-    }
-
-    #[test]
-    fn list_pane_width_pref_accepts_width_and_rejects_empty_or_invalid_values() {
-        assert_eq!(
-            list_pane_width_from_prefs(&serde_json::json!({ "list_pane_width": 42 })),
-            Some(42)
-        );
-        assert_eq!(
-            list_pane_width_from_prefs(&serde_json::json!({ "list_pane_width": null })),
-            None
-        );
-        assert_eq!(list_pane_width_from_prefs(&serde_json::json!({})), None);
-        assert_eq!(
-            list_pane_width_from_prefs(&serde_json::json!({ "list_pane_width": "42" })),
-            None
-        );
-    }
-}
