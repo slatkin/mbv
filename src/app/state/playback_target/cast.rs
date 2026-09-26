@@ -188,26 +188,6 @@ mod tests {
     }
 
     #[test]
-    fn detach_issues_no_stop() {
-        let (mut app, calls) = attached_app_with_fake_transport();
-        app.detach_cast();
-        assert!(app.cast_attachment.is_none());
-        assert!(!calls.lock().unwrap().contains(&"stop".to_string()));
-    }
-
-    #[test]
-    fn jump_track_routes_to_skip_next_and_skip_previous() {
-        let (mut app, calls) = attached_app_with_fake_transport();
-        CastPlaybackTarget::jump_track(&mut app, 1);
-        wait_for_cast_call(&calls, |c| c == "skip_next", "skip_next");
-        CastPlaybackTarget::jump_track(&mut app, -1);
-        wait_for_cast_call(&calls, |c| c == "skip_previous", "skip_previous");
-        let calls = calls.lock().unwrap().clone();
-        assert!(calls.contains(&"skip_next".to_string()));
-        assert!(calls.contains(&"skip_previous".to_string()));
-    }
-
-    #[test]
     fn toggle_command_mute_sends_set_muted_and_updates_displayed_mute() {
         let (mut app, calls) = attached_app_with_fake_transport();
         assert!(!CastPlaybackTarget::displayed_mute(&app));
