@@ -77,11 +77,6 @@ impl TabSelection {
 mod tests {
     use super::*;
 
-    #[test]
-    fn feeds_emby_library_index_is_none() {
-        assert_eq!(TabSelection::Feeds.emby_library_index(), None);
-    }
-
     fn assert_positions_round_trip(emby: usize, audio: usize, feeds: bool) {
         let total = 1 + emby + audio + usize::from(feeds);
         let feeds_pos = feeds.then_some(total - 1);

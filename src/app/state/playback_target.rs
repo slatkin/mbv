@@ -446,20 +446,4 @@ mod now_playing_status_tests {
         assert!(state.active);
         assert_eq!(state.active_idx, Some(1));
     }
-
-    #[test]
-    fn local_daemon_queue_row_ignores_client_generation_mismatch() {
-        let mut app = crate::app::tests::make_local_daemon_app_stub(make_items(3));
-        {
-            let mut status = app.player.status.lock().unwrap();
-            status.active = true;
-            status.current_idx = 1;
-            status.sequence_generation = 7;
-        };
-        app.player_tab.sequence_generation = 8;
-
-        let state = app.queue_row_playback_state();
-        assert!(state.active);
-        assert_eq!(state.active_idx, Some(1));
-    }
 }

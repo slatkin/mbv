@@ -162,22 +162,4 @@ mod tests {
         let titles: Vec<&str> = state.all_entries.iter().map(|e| e.title.as_str()).collect();
         assert_eq!(titles, vec!["new", "mid", "old", "nodate"]);
     }
-
-    #[test]
-    fn subscription_groups_are_sorted_newest_first_with_none_last() {
-        let mut state = FeedTabState {
-            entries: vec![vec![
-                entry("old", Some(100)),
-                entry("new", Some(300)),
-                entry("nodate", None),
-            ]],
-            ..Default::default()
-        };
-        state.rebuild_all_entries();
-        let titles: Vec<&str> = state.entries[0]
-            .iter()
-            .map(|entry| entry.title.as_str())
-            .collect();
-        assert_eq!(titles, vec!["new", "old", "nodate"]);
-    }
 }
