@@ -392,7 +392,7 @@ impl MediaPlayer2Player {
     fn volume(&self) -> f64 {
         #[expect(
             clippy::cast_precision_loss,
-            reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+            reason = "percent-to-fraction conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
         )]
         let volume = self.snapshot.lock().unwrap().volume as f64 / 100.0;
         volume

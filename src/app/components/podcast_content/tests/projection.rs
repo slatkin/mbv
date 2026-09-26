@@ -1,4 +1,5 @@
 use super::*;
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 #[test]
 fn reanchor_launch_state_falls_back_to_first_show_scope_and_episode() {
