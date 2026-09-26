@@ -31,7 +31,7 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 6. Dispatch and state (`app::dispatch::*` 208 → ≤ 110, `app::state::*` 110 → ≤ 60)
 
-- [ ] 6.1 Apply Decisions 1 and 3. Delete M-TAUTOLOGICAL-TESTS cases (asserting constants, `Default`s, trivial accessors, or branch-mirroring). Keep tests for real state transitions and for dispatch arms with cross-boundary effects. Verify: both counts within budget; group gate passes; commit.
+- [x] 6.1 Apply Decisions 1 and 3. Delete M-TAUTOLOGICAL-TESTS cases (asserting constants, `Default`s, trivial accessors, or branch-mirroring). Keep tests for real state transitions and for dispatch arms with cross-boundary effects. Verify: both counts within budget; group gate passes; commit.
 
 ## 7. Shell, infra, input and the rest of the binary (145 + ~158 → ≤ 140)
 
