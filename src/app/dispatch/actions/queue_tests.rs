@@ -1,7 +1,6 @@
 use crate::app::state::types::browse::BrowseResting;
 
 use crate::app::App;
-use mbv_core::player::PlayerCommand;
 use rstest::rstest;
 
 // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────

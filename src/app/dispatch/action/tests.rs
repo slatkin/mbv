@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_audio_items, make_remote_app_stub};
 use crate::app::{LibEvent, QueueScope};
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::KeyModifiers;
 
 fn key(code: KeyCode) -> KeyChord {
     KeyChord::new(code, KeyModifiers::NONE)

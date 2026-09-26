@@ -230,7 +230,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{LibraryTab, PanelFocus};
+    use crate::app::LibraryTab;
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {

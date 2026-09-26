@@ -6,10 +6,8 @@ use mbv_core::audiobookshelf::{
     AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow,
 };
 
-use super::books::{SURNAME_BUCKET_LABELS, SURNAME_BUCKET_UPPER};
 use super::*;
 use mbv_core::audiobookshelf::audiobook_author_sort_key;
-use mbv_core::config::AudiobookshelfBookBucket;
 
 fn library() -> AudiobookshelfLibrary {
     AudiobookshelfLibrary {

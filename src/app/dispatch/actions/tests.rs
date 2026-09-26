@@ -1,6 +1,6 @@
 use super::*;
 use crate::app::components::list::tree_browser::TreeOperation;
-use crate::app::components::msg::{Msg, MusicArtistTarget, ShellRequest};
+use crate::app::components::msg::MusicArtistTarget;
 use crate::app::dispatch::library::browse::{
     build_album_index_with, recursive_album_search_eligible,
 };
