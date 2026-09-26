@@ -24,7 +24,7 @@
 - [ ] 5.1 mpv volume curve: `player/runtime.rs:467,472`, `player/run/decisions.rs:87`, `player/run/commands.rs:139` — narrow via `u32::try_from` + `f64::from` (design Decision 5). Verify: `cargo nextest run -p mbv-core` (volume-decision coverage), clippy `-p mbv-core`.
 - [ ] 5.2 Render/images: `chrome_player.rs:180` via `int_ratio`, `chrome_player.rs:191` via `f64::from(area.width)`, `infra/images.rs:201,207` via `u16::try_from` + `f32::from`. Verify: `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv` (seekbar render test).
 - [ ] 5.3 Remaining one-offs: `state/playback_target/cast.rs:84` (u8 route), `mpris.rs:401` (u32 route), `crates/mbv-net/src/lib.rs:33` (u32 route), `mouse_gestures.rs:31` (u32 route). Verify: `cargo clippy --workspace --all-targets -- -D warnings`.
-- [ ] 5.4 Sweep: `rg -n 'clippy::cast_precision_loss' src crates` returns exactly 2 hits (the two kernels). Any site that resisted its fix reports back with its specific domain argument instead of re-adding an expect. Verify: the count is 2.
+- [ ] 5.4 Sweep: `rg -n 'clippy::cast_precision_loss' src crates` returns exactly 3 hits (the three sanctioned kernels: ticks in `api/types.rs`, µs in `mpris.rs`, and `int_ratio` in `render/components/math.rs`). Any site that resisted its fix reports back with its specific domain argument instead of re-adding an expect. Verify: the count is 3.
 
 ## 6. Final gates
 

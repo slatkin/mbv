@@ -12,7 +12,7 @@ Issue #811 (downscoped after evaluation): the codebase carries 44 `#[expect(clip
 - Migrate Family A (ticks→seconds, ~19 sites) and Family B (seconds→ticks, ~12 sites) to the helpers, deleting their per-site expects.
 - Migrate the mpris µs→seconds sites (2) to a small local helper with one expect.
 - **Eliminate, not allow, the residual lints.** Family D sites (mpv volume curve, chrome seek-fraction render, image f32 scale, cast/mpris volume, reconnect backoff, mouse-gesture scaling) each get a genuine fix: narrow the value through `u32::try_from`/`i32::try_from` (the domain bound, expressed in types) and convert via `f64::from`/`f32::from`, or reuse a helper. No residual `cast_precision_loss` expect survives at a call site.
-- End state: exactly 2 `cast_precision_loss` expects remain in the workspace — one inside `ticks_to_seconds`, one inside mpris `us_to_seconds` — each the single audited conversion kernel for its unit, carrying the 2^53-exactness domain doc. (A quotient/remainder exact-construction variant that removes even these is documented in design as rejected: it obscures the math to dodge a linter.)
+- End state: exactly 3 `cast_precision_loss` expects remain in the workspace — one inside `ticks_to_seconds`, one inside mpris `us_to_seconds`, and one inside `int_ratio` — each a sanctioned conversion kernel carrying its domain rationale. (A quotient/remainder exact-construction variant that removes even these is documented in design as rejected: it obscures the math to dodge a linter.)
 - No behavior change: helpers and per-site fixes preserve the arithmetic each site performs today (including `.round()`/truncation differences — see design).
 
 ## Capabilities
@@ -29,5 +29,5 @@ Issue #811 (downscoped after evaluation): the codebase carries 44 `#[expect(clip
 
 - `crates/mbv-core/src/api/types.rs` (new helpers), `crates/mbv-core/src/player.rs` (`saturating_i64_from_f64` moves/promotes), and ~44 expect sites across `src/` and `crates/` (mpris, mbv-net, dispatch, components, render, player, daemon, playback).
 - Net diff expected negative: ~42 expect blocks deleted, 2 added (kernel-internal), plus small per-site type-bound code.
-- Zero `cast_precision_loss` findings outside the two kernels; verified by `rg 'clippy::cast_precision_loss'` (target count: 2) and a clean `cargo clippy --workspace --all-targets -- -D warnings`.
+- Zero `cast_precision_loss` findings outside the three sanctioned kernels (ticks, mpris µs, and `int_ratio`); verified by `rg 'clippy::cast_precision_loss'` (target count: 3) and a clean `cargo clippy --workspace --all-targets -- -D warnings`.
 - No API/protocol/wire changes; golden wire-format tests unaffected. Full gates apply: `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt`, `cargo nextest run -p mbv -p mbv-core`.
