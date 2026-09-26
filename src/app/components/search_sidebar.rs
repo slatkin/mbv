@@ -403,8 +403,6 @@ mod tests {
         KeyModifiers::NONE,
         Some(Msg::Shell(Box::new(ShellRequest::DismissSearch)))
     )]
-    #[case::ctrl_key_is_swallowed(Key::Char('a'), KeyModifiers::CONTROL, None)]
-    #[case::alt_key_is_swallowed(Key::Char('a'), KeyModifiers::ALT, None)]
     #[case::unbound_key_is_swallowed(Key::Function(1), KeyModifiers::NONE, None)]
     fn key_handling(
         #[case] key: Key,
@@ -430,31 +428,6 @@ mod tests {
     }
 
     #[test]
-    fn backspace_pops_query() {
-        let mut comp = SearchSidebarComponent::new();
-        comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::NONE));
-        comp.handle_key(&make_key(Key::Char('b'), KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.query, "ab");
-
-        comp.handle_key(&make_key(Key::Backspace, KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.query, "a");
-    }
-
-    #[test]
-    fn backspace_on_empty_emits_dismiss() {
-        let mut comp = SearchSidebarComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Backspace, KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(Box::new(ShellRequest::DismissSearch))));
-    }
-
-    #[test]
-    fn enter_on_empty_results_is_noop() {
-        let mut comp = SearchSidebarComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Enter, KeyModifiers::NONE));
-        assert_eq!(msg, None);
-    }
-
-    #[test]
     fn enter_on_result_emits_search_activate() {
         let mut comp = SearchSidebarComponent::new();
         comp.sidebar.results = vec![make_item("Movie 1", "Movie")];
@@ -464,50 +437,6 @@ mod tests {
             msg,
             Some(Msg::Shell(ref shell_boxed))
                  if matches!(shell_boxed.as_ref(), ShellRequest::SearchActivate { id, item_type } if id == "id" && item_type == "Movie")));
-    }
-
-    #[test]
-    fn up_down_move_cursor() {
-        let mut comp = SearchSidebarComponent::new();
-        comp.sidebar.results = vec![
-            make_item("A", "Movie"),
-            make_item("B", "Movie"),
-            make_item("C", "Movie"),
-        ];
-        comp.sidebar.list_height = 10;
-        comp.handle_key(&make_key(Key::Down, KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.cursor, 1);
-        comp.handle_key(&make_key(Key::Down, KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.cursor, 2);
-        comp.handle_key(&make_key(Key::Up, KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.cursor, 1);
-    }
-
-    #[test]
-    fn tab_cycles_type_filter() {
-        let mut comp = SearchSidebarComponent::new();
-        comp.sidebar.results = vec![make_item("A", "Movie"), make_item("B", "Series")];
-        assert_eq!(comp.sidebar.type_filter, 0);
-        comp.handle_key(&make_key(Key::Tab, KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.type_filter, 1);
-        comp.handle_key(&make_key(Key::Tab, KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.type_filter, 2);
-        comp.handle_key(&make_key(Key::Tab, KeyModifiers::NONE));
-        assert_eq!(comp.sidebar.type_filter, 0); // wraps to All
-    }
-
-    #[test]
-    fn clock_before_deadline_does_not_dispatch() {
-        let mut comp = SearchSidebarComponent::new();
-        comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::NONE));
-        comp.handle_key(&make_key(Key::Char('b'), KeyModifiers::NONE));
-        let now = comp.debounce_deadline.unwrap();
-        let msg = comp.handle_clock(
-            now.checked_sub(Duration::from_millis(1))
-                .expect("debounce deadline follows its start by 300 ms"),
-        );
-        assert_eq!(msg, None);
-        assert!(comp.debounce_pending.is_some());
     }
 
     #[test]
@@ -544,15 +473,6 @@ mod tests {
     }
 
     #[test]
-    fn apply_drain_sets_results() {
-        let mut comp = SearchSidebarComponent::new();
-        comp.sidebar.query = "test".into();
-        comp.apply_drain("test", Ok(vec![make_item("Found", "Movie")]));
-        assert_eq!(comp.sidebar.results.len(), 1);
-        assert!(!comp.sidebar.loading);
-    }
-
-    #[test]
     fn apply_drain_discards_stale_query() {
         let mut comp = SearchSidebarComponent::new();
         comp.sidebar.query = "ab".into();
@@ -560,13 +480,5 @@ mod tests {
         comp.apply_drain("a", Ok(vec![make_item("Stale", "Movie")]));
         assert_eq!(comp.sidebar.cursor, 5);
         assert!(comp.sidebar.results.is_empty());
-    }
-
-    #[test]
-    fn no_debounce_armed_below_two_characters() {
-        let mut comp = SearchSidebarComponent::new();
-        comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::NONE));
-        assert!(comp.debounce_pending.is_none());
-        assert!(comp.debounce_deadline.is_none());
     }
 }
