@@ -240,17 +240,6 @@ fn parse_atom_entries(body: &str, subscription_kind: FeedKind, feed_id: &str) ->
     entries
 }
 
-/// Infer the media kind of a feed entry from its enclosure MIME type;
-/// absent or unrecognized values default to Video. Keep in one helper so
-/// #472 can reuse it.
-#[cfg(test)]
-pub(in crate::app) fn infer_feed_kind_from_mime(mime: Option<&str>) -> FeedKind {
-    match mime.map(|m| m.trim().to_ascii_lowercase()) {
-        Some(m) if m.starts_with("audio/") => FeedKind::Audio,
-        _ => FeedKind::Video,
-    }
-}
-
 /// The first `<enclosure ...>` element's `url` and `type` attributes
 /// (RSS), sanitized. None when no enclosure parses.
 fn extract_enclosure(text: &str) -> Option<(String, Option<String>)> {

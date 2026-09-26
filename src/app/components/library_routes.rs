@@ -118,23 +118,6 @@ impl LibraryRoutesComponent {
             _ => None,
         }
     }
-
-    #[cfg(test)]
-    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
-        &self.hit_rows
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_frame(&self) -> Rect {
-        self.frame
-    }
-
-    /// Test seam: forget the last click so the next event is neither
-    /// throttled nor promoted to a double-click.
-    #[cfg(test)]
-    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
-        self.mouse_gestures.reset_for_test();
-    }
 }
 
 fn same_stage_kind(left: &LibraryRouteStage, right: &LibraryRouteStage) -> bool {

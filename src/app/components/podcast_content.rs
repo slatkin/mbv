@@ -7,6 +7,7 @@
 //! selection modal, and no inline detail — every one is dead under the new
 //! pill bar.
 
+#[cfg(test)]
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use mbv_core::api::TICKS_PER_SECOND;
@@ -454,18 +455,6 @@ impl PodcastContent {
     #[cfg(test)]
     pub(in crate::app) fn selected_episode_target(&self) -> Option<PodcastEpisodeTarget> {
         self.episodes.selected_target().cloned()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn episode_rows(&self) -> &[MediaListRow<PodcastEpisodeTarget>] {
-        self.episodes.rows()
-    }
-
-    /// The episode list's declared title-reveal policy: the destination opts
-    /// in once at construction and the shared row painter applies it.
-    #[cfg(test)]
-    pub(in crate::app) fn episode_title_reveal(&self) -> MediaListTitleReveal {
-        self.episodes.wide().title_reveal()
     }
 
     /// The selected episode as the existing hero producer's input: the

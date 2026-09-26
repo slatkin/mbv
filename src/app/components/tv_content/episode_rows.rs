@@ -241,14 +241,6 @@ impl TvContent {
         items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
         items.get(self.carrier.cursor()).copied().cloned()
     }
-    /// The Series snapshot the shell pushed for this frame (`context
-    /// .selected_series`), exposed so tests can verify the pushed detail
-    /// follows the component's authoritative selection rather than the App
-    /// browse cursor.
-    #[cfg(test)]
-    pub(in crate::app) fn selected_series_snapshot(&self) -> Option<&EmbyItem> {
-        self.context.selected_series.as_ref()
-    }
     /// The episode item under the episode owner's current selection, resolved
     /// from the pushed season detail (design.md D4: the component carries the
     /// stable episode identity; the shell never reads the cursor).
@@ -278,25 +270,6 @@ impl TvContent {
                 mbv_core::config::TvContentMode::Latest | mbv_core::config::TvContentMode::Upcoming
             )
         )
-    }
-    /// Test-only: the episode owner's selectable cursor index, used to prove
-    /// the cursor survives a loading refresh where no episode item is
-    /// resolvable.
-    #[cfg(test)]
-    pub(in crate::app) fn episode_cursor(&self) -> usize {
-        self.episodes.cursor()
-    }
-    /// Test-only: the episode owner's resting scroll offset, used to prove
-    /// the overlay Workspace's viewport follows cursor/wheel movement.
-    #[cfg(test)]
-    pub(in crate::app) fn episode_scroll(&self) -> usize {
-        self.episodes.scroll()
-    }
-    /// Test-only: whether the Episodes pane holds the local focus (the
-    /// "workspace is active" state).
-    #[cfg(test)]
-    pub(in crate::app) fn episode_pane_focused(&self) -> bool {
-        self.pane == Pane::Episodes
     }
     pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();

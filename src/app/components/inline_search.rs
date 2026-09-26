@@ -223,11 +223,6 @@ impl InlineSearch {
         &mut self.results
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn selected_target(&self) -> Option<(String, String)> {
-        self.selected_item().map(|item| (item.id, item.item_type))
-    }
-
     pub(in crate::app) fn results_len(&self) -> usize {
         self.results.rows().len()
     }

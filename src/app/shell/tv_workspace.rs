@@ -316,18 +316,6 @@ impl Model {
         self.tv_owner_key().expect("TV library active")
     }
 
-    /// Test-only: the owner key for library `index` whether or not it is the
-    /// active tab (the Movies-tab assertions check the absence of a TV owner
-    /// for a non-TV library).
-    #[cfg(test)]
-    pub(in crate::app) fn test_tv_owner_key_at(&self, index: usize) -> LibraryKey {
-        LibraryKey::Service {
-            service: ServiceKind::Emby,
-            library_id: self.app.libs[index].library.id.clone(),
-            kind: LibraryKind::TvShows,
-        }
-    }
-
     /// Test-only: the mounted panel's last painted role rects, for the
     /// characterization tests that used to read the deleted component's
     /// geometry (task 8.4).

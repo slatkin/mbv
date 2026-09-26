@@ -113,6 +113,4 @@ use crate::app::infra::ui_util::natural_sort_key;
 #[cfg(test)]
 mod fixtures;
 #[cfg(test)]
-pub(crate) use fixtures::{
-    make_movie_app, make_music_group_app, make_music_group_app_with_second_album, make_queue_app,
-};
+pub(crate) use fixtures::{make_movie_app, make_music_group_app, make_queue_app};

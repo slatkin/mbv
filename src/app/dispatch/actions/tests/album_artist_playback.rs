@@ -18,47 +18,6 @@ fn artist_cache_key(
     }
 }
 
-fn artist_dispatch_model() -> (Model, MusicArtistTarget) {
-    let fixture = make_music_group_app_with_second_album();
-    let mut app = remote_playback_app();
-    app.tab = fixture.tab;
-    app.libs = fixture.libs;
-    app.music_levels = fixture.music_levels;
-    {
-        let level = app.libs[0].nav_stack.last_mut().expect("music albums");
-        for item in &mut level.items {
-            item.artist_items = vec![mbv_core::api::EmbyArtistRef {
-                name: "Alpha".into(),
-                id: "artist-alpha".into(),
-            }];
-        }
-        let mut catalog = crate::app::state::music_grouping::build_grouped_album_catalog(
-            &level.items,
-            &std::collections::HashMap::default(),
-        );
-        catalog.revision = 7;
-        catalog.parent_id = level.parent_id.clone();
-        level.music_grouping = Some(crate::app::state::music_grouping::MusicGroupingState {
-            revision: 7,
-            candidate: None,
-            settled: Some(catalog),
-        });
-    };
-
-    let mut model = Model::new(app);
-    model.app.panel_focus = PanelFocus::Library;
-    model.sync_mounted_surfaces();
-    model
-        .test_music_owner_mut()
-        .browser
-        .apply(TreeOperation::First);
-    let target = model
-        .test_music_owner()
-        .artist_detail_target()
-        .expect("artist target");
-    (model, target)
-}
-
 /// Task 6.3 correction: an artist root's Workspace rows are projected from the
 /// shell-owned artist-detail cache, which the `ArtistIds` path fills without
 /// ever touching `album_tracks_cache`. Activation resolves that cache as its

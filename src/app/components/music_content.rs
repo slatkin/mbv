@@ -384,24 +384,6 @@ impl MusicContent {
     pub(in crate::app) fn track_focused(&self) -> bool {
         self.workspace_focus == MusicWorkspaceFocus::TrackWorkspace
     }
-    /// Whether a Wide artist-Workspace entry is currently armed (task 6.4
-    /// tests: the armed entry is invisible state, so its void points assert
-    /// through this accessor).
-    #[cfg(test)]
-    pub(in crate::app) fn pending_artist_workspace_focus_for_test(&self) -> bool {
-        self.pending_artist_workspace_focus.is_some()
-    }
-    #[cfg(test)]
-    pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {
-        // The tree's visible-node row flow: one entry per projected node, an
-        // album target for leaves and `None` for artist roots and tracks.
-        self.browser
-            .visible_targets()
-            .iter()
-            .map(|target| target.album_leaf_target().map(str::to_string))
-            .collect()
-    }
-
     /// Expands every projected node (test fixture for the tree's settled
     /// visible order, tracks included).
     #[cfg(test)]

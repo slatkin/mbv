@@ -232,23 +232,6 @@ impl HomeContent {
         }
     }
 
-    /// The active carrier's resting scroll offset.
-    #[cfg(test)]
-    pub(in crate::app) fn test_active_scroll(&self) -> usize {
-        self.carrier.scroll()
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_multi_selection_len(&self) -> usize {
-        self.carrier.multi_selection().len()
-    }
-
-    /// Continue Watching rows for projection tests.
-    #[cfg(test)]
-    pub(in crate::app) fn test_active_rows(&self) -> &[MediaListRow<String>] {
-        self.carrier.rows()
-    }
-
     fn on_list_slot_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         let at = pointer_position(input);
         // Pointer target resolution and local selection: the same `claim_row`

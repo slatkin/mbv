@@ -140,33 +140,6 @@ impl MultiselectComponent {
             }))
         })
     }
-
-    #[cfg(test)]
-    pub(crate) fn test_rows(&self) -> &HitRegions<usize> {
-        &self.hit_rows
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_cursor(&self) -> usize {
-        self.cursor
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_items(&self) -> &[(String, String, bool)] {
-        &self.items
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_frame(&self) -> Rect {
-        self.frame
-    }
-
-    /// Test seam: forget the last click so the next event is neither
-    /// throttled nor promoted to a double-click.
-    #[cfg(test)]
-    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
-        self.mouse_gestures.reset_for_test();
-    }
 }
 
 impl Default for MultiselectComponent {

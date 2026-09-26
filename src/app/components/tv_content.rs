@@ -169,12 +169,6 @@ impl TvContent {
         let viewport_height = self.painted_viewport_height();
         self.carrier.clamp_viewport(viewport_height);
     }
-    #[cfg(test)]
-    pub(in crate::app) fn test_set_letter_filter(&mut self, index: usize) {
-        self.context.list.letter_filter =
-            LetterFilter::for_index_for_kind(index, LetterFilterKind::Tv);
-    }
-
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
         let episode_mode = Self::is_episode_mode(&context);
@@ -420,11 +414,6 @@ impl TvContent {
             painted
         }
     }
-    #[cfg(test)]
-    pub(crate) fn selected_tree_target(&self) -> Option<&TvTreeTarget> {
-        self.browser.selected_target()
-    }
-
     #[cfg(test)]
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         let target = self.carrier.selected_target()?;

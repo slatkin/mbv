@@ -121,11 +121,6 @@ impl PlaylistsComponent {
     pub(in crate::app) fn cursor(&self) -> usize {
         self.cursor
     }
-    #[cfg(test)]
-    pub(in crate::app) fn open_cursor(&self) -> usize {
-        self.open_cursor
-    }
-
     fn local_change() -> Option<Msg> {
         None
     }
@@ -278,24 +273,6 @@ impl PlaylistsComponent {
             self.cursor = usize::try_from(cursor.saturating_add(direction * page).clamp(0, last))
                 .expect("clamped cursor is non-negative");
         }
-    }
-
-    /// Mouse handling (task 5.2): recognition via the component's own
-    /// `MouseGestureState` (ADR 0024, design.md D3) — including the
-    /// double-click window the hand-rolled `last_click` field used to own;
-    /// row geometry via `HitRegions` (D6). Behaviour unchanged from the
-    /// ad-hoc handler: the wheel steps the visible list's cursor, a
-    /// right-click on an open playlist goes back, an outside click
-    /// dismisses, a row click selects, and a double click activates (the
-    /// Enter equivalent).
-    #[cfg(test)]
-    pub(crate) fn first_open_row(&self) -> Rect {
-        self.geometry.open_rows[0].0
-    }
-
-    #[cfg(test)]
-    pub(crate) fn reset_mouse_gestures_for_test(&mut self) {
-        self.mouse_gestures.reset_for_test();
     }
 
     fn handle_mouse(&mut self, mouse: MouseEvent) -> Option<Msg> {

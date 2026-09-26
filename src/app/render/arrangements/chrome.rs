@@ -100,21 +100,6 @@ pub(crate) enum PanelPlacement {
     QueueBoundary(Rect),
 }
 
-impl PanelPlacement {
-    #[cfg(test)]
-    pub(crate) fn rect(self) -> Rect {
-        match self {
-            Self::Tab(rect)
-            | Self::Library(rect)
-            | Self::LibraryPlayback(rect)
-            | Self::Queue(rect)
-            | Self::QueuePlayback(rect)
-            | Self::StatusBar(rect)
-            | Self::QueueBoundary(rect) => rect,
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct RootFrame {
     /// Tab bar at the top of the library column (`TabPanel`, task 2.1).

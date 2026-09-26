@@ -1,10 +1,10 @@
+#[cfg(test)]
+use super::KeyEvent;
 use super::{
     upcoming_episode_target, EmbyItem, LibrarySlotEvent, MediaListOperation, MediaListSurfaceInput,
     Msg, Pane, Position, RowIntent, ShellRequest, TerminalObserverEvent, TreeOperation, TvContent,
     TvDisplayMode, TvHit, TvTreeTarget,
 };
-#[cfg(test)]
-use super::{KeyEvent, MediaListRow, MediaSemanticState};
 
 impl TvContent {
     pub(super) fn context_menu_request(&mut self) -> Option<ShellRequest> {
@@ -585,41 +585,5 @@ impl TvContent {
             let target = item.id.clone();
             self.carrier.select_target(&target);
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn select_targets_for_test(&mut self, targets: &[String]) {
-        let Some(first) = targets.first() else { return };
-        self.carrier.select_target(first);
-        self.carrier.enter_visual_mode();
-        for target in targets.iter().skip(1) {
-            self.carrier
-                .delegate_operation(MediaListOperation::Range(target.clone()));
-        }
-        let _ = self.carrier.selection_summary();
-    }
-
-    #[cfg(test)]
-    pub(crate) fn context_click_for_test(&mut self, target: String) -> usize {
-        self.carrier.delegate_operation(
-            MediaListSurfaceInput::ContextClick(Position::new(0, 0))
-                .into_operation(Some(target))
-                .expect("resolved media-list pointer target"),
-        );
-        self.carrier.multi_selection().len()
-    }
-
-    /// Test-only: the shared owner's current rows' semantic states, in
-    /// display order.
-    #[cfg(test)]
-    pub(crate) fn test_row_semantic_states(&self) -> Vec<MediaSemanticState> {
-        self.carrier
-            .rows()
-            .iter()
-            .filter_map(|row| match row {
-                MediaListRow::Item { semantic_state, .. } => Some(semantic_state.clone()),
-                _ => None,
-            })
-            .collect()
     }
 }
