@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbv-ws", "crates/mbv-text", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -104,6 +104,7 @@ mbv-ids = { path = "crates/mbv-ids" }
 mbv-keybinds = { path = "crates/mbv-keybinds" }
 mbv-net = { path = "crates/mbv-net" }
 mbv-ws = { path = "crates/mbv-ws" }
+mbv-text = { path = "crates/mbv-text" }
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"
@@ -112,7 +113,6 @@ serde_json.workspace = true
 toml.workspace = true
 rand.workspace = true
 textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
-fuzzy-matcher.workspace = true
 zbus = { version = "4", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 ksni = { version = "0.3", features = ["blocking"] }

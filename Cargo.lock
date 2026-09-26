@@ -1702,7 +1702,6 @@ name = "mbv"
 version = "0.21.2"
 dependencies = [
  "crossterm",
- "fuzzy-matcher",
  "image",
  "ksni",
  "libc",
@@ -1711,6 +1710,7 @@ dependencies = [
  "mbv-ids",
  "mbv-keybinds",
  "mbv-net",
+ "mbv-text",
  "mbv-ws",
  "mimalloc",
  "nix 0.31.3",
@@ -1777,6 +1777,13 @@ dependencies = [
  "percent-encoding",
  "rand 0.10.2",
  "ureq",
+]
+
+[[package]]
+name = "mbv-text"
+version = "0.21.2"
+dependencies = [
+ "fuzzy-matcher",
 ]
 
 [[package]]

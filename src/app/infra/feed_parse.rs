@@ -380,7 +380,7 @@ fn strip_tags_no_cdata(text: &str) -> String {
 /// text before it can reach the terminal, e.g. via an OSC 8 escape sequence.
 fn strip_control_chars(text: &str) -> String {
     text.chars()
-        .filter(|ch| !crate::app::infra::text_safety::is_control_char(*ch))
+        .filter(|ch| !mbv_text::text_safety::is_control_char(*ch))
         .collect()
 }
 
