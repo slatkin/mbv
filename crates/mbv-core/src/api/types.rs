@@ -1,5 +1,5 @@
 pub use crate::config::Config;
-use crate::id_types::{EmbySessionId, MediaSourceId};
+use mbv_ids::{EmbySessionId, MediaSourceId};
 
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
 

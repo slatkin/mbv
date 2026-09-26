@@ -29,7 +29,7 @@ use crate::app::input::router::{
 };
 use crate::app::shell::fold_keyboard_messages;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::keybinds::{Chord, KeySection, Keybinds, SectionBindings};
+use mbv_keybinds::{Chord, KeySection, Keybinds, SectionBindings};
 
 /// The registry-defaults configuration the matrix resolves against (task
 /// 3.2): no prefix, every declared action on its declared chords.

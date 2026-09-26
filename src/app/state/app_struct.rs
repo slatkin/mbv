@@ -1,5 +1,4 @@
 use crate::app::infra::resize::{ResizeRegisterTx, ResizeResponseRx};
-use crate::app::infra::visualizer_worker::{PipeWireWorker, StereoSampleWindow};
 use crate::app::infra::{images, layout};
 use crate::app::render;
 use crate::app::state::panel_targets::PanelTarget;
@@ -26,7 +25,8 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use mbv_core::ws::WsEvent;
+use mbv_visualizer::{PipeWireWorker, StereoSampleWindow};
+use mbv_ws::WsEvent;
 use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 use std::time::Instant;
@@ -375,7 +375,7 @@ pub struct App {
     pub(in crate::app) pending_local_play: Option<PendingQueueAction>,
     pub(in crate::app) use_nerd_fonts: bool,
     pub(in crate::app) indicator_style: render::indicators::IndicatorStyle,
-    pub(in crate::app) ws_send_tx: Option<mbv_core::ws::WsSender>,
+    pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) last_keepalive: Instant,
     pub(in crate::app) last_capabilities: Instant,
     pub(in crate::app) sessions_tx: mpsc::Sender<SessionEvent>,

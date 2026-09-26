@@ -2,8 +2,8 @@ use super::{make_app_stub, make_item};
 use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::ContextAction;
 use mbv_core::api::EmbyClient;
-use mbv_core::mock_http::MockHttp;
 use mbv_core::service_runtime::EmbyRuntime;
+use mbv_net::mock_http::MockHttp;
 use std::sync::{Arc, Mutex};
 
 fn app_with_mock_emby(http: &MockHttp) -> crate::app::App {

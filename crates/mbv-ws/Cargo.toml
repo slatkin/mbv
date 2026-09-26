@@ -1,0 +1,22 @@
+[package]
+name = "mbv-ws"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Emby websocket client transport for mbv."
+
+[lints]
+workspace = true
+
+[dependencies]
+tungstenite.workspace = true
+serde_json.workspace = true
+log.workspace = true
+mbv-net = { path = "../mbv-net" }
+
+[dev-dependencies]
+rstest.workspace = true

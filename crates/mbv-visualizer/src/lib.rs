@@ -28,7 +28,7 @@ pub struct StereoSampleWindow {
 }
 
 #[derive(Debug)]
-pub(crate) struct StereoSampleBuffer {
+pub struct StereoSampleBuffer {
     samples: VecDeque<StereoSample>,
     capacity: usize,
 }
@@ -479,7 +479,7 @@ fn connect_capture_stream(
     true
 }
 
-pub(crate) fn join_worker(handle: JoinHandle<()>) {
+pub fn join_worker(handle: JoinHandle<()>) {
     let (done_tx, done_rx) = mpsc::channel();
     thread::spawn(move || {
         if handle.join().is_err() {

@@ -17,7 +17,7 @@ use crate::app::input::router::RouterOutcome;
 use crate::app::tests::tick_integration::harness::TickHarness;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{PanelFocus, TabSelection};
-use mbv_core::keybinds::{RawKeybinds, RawSection};
+use mbv_keybinds::{RawKeybinds, RawSection};
 
 fn key(code: Key) -> Event<UserEvent> {
     Event::Keyboard(KeyEvent {
@@ -32,7 +32,7 @@ fn key(code: Key) -> Event<UserEvent> {
 fn prefix_config(assignments: &[(&str, &str)]) -> crate::config::Config {
     let mut sections: Vec<(String, RawSection)> = Vec::new();
     for (id, chord) in assignments {
-        let section = mbv_core::keybinds::action_by_id(id)
+        let section = mbv_keybinds::action_by_id(id)
             .expect("declared action")
             .section
             .name()
@@ -50,7 +50,7 @@ fn prefix_config(assignments: &[(&str, &str)]) -> crate::config::Config {
             .push(((*id).into(), (*chord).into()));
     }
     crate::config::Config {
-        keybinds: mbv_core::keybinds::load(&RawKeybinds {
+        keybinds: mbv_keybinds::load(&RawKeybinds {
             prefix: Some("Ctrl+b".into()),
             sections,
         })

@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use rstest::rstest;
 
-use crate::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!(

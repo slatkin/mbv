@@ -155,7 +155,7 @@ impl AudiobookshelfClient {
         if server_url.is_empty() {
             return Err(AudiobookshelfError::protocol());
         }
-        let agent = crate::native_tls_agent(
+        let agent = mbv_net::native_tls_agent(
             Some(Self::REQUEST_HARD_BOUND),
             Some(Self::REQUEST_HARD_BOUND),
         );
@@ -202,7 +202,7 @@ impl AudiobookshelfClient {
             return Err(AudiobookshelfError::protocol());
         }
         let client = self.clone();
-        crate::bounded::run_with_hard_bound(move || client.me(&api_key), hard_bound)
+        mbv_net::bounded::run_with_hard_bound(move || client.me(&api_key), hard_bound)
     }
 
     fn me(&self, api_key: &str) -> Result<AudiobookshelfUser, AudiobookshelfError> {

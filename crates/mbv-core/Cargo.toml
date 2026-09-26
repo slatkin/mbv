@@ -11,14 +11,17 @@ description = "Core runtime, service providers, and playback engine for mbv."
 readme = "../../README.md"
 
 [features]
-test = []
+test = ["mbv-net/test"]
 
 [lints]
 workspace = true
 
 [dependencies]
+mbv-ids = { path = "../mbv-ids" }
+mbv-keybinds = { path = "../mbv-keybinds" }
+mbv-net = { path = "../mbv-net" }
+mbv-ws = { path = "../mbv-ws" }
 ureq.workspace = true
-percent-encoding.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
@@ -39,3 +42,4 @@ mdns-sd = { version = "0.21", default-features = false, features = ["log"] }
 # logic without a real mDNS browse.
 flume = "0.12"
 rstest.workspace = true
+mbv-net = { path = "../mbv-net", features = ["test"] }

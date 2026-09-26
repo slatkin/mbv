@@ -16,7 +16,7 @@ impl ProgressGuard {
         let _ = self.stop_tx.send(());
         if let Some(h) = self.handle.take() {
             let start = std::time::Instant::now();
-            let result = crate::bounded::run_with_hard_bound(
+            let result = mbv_net::bounded::run_with_hard_bound(
                 move || {
                     let _ = h.join();
                     Ok::<(), String>(())

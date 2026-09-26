@@ -67,7 +67,7 @@ impl EmbyClient {
         let user_views: Value = self
             .get(&format!(
                 "/Users/{}/Views",
-                crate::encode_path_segment(&self.user_id)
+                mbv_net::encode_path_segment(&self.user_id)
             ))
             .call()
             .map_err(|e| Self::service_failure("Emby user views request failed", &e))?
@@ -152,7 +152,7 @@ impl EmbyClient {
             name_ge,
             name_lt,
         } = *params;
-        let mut req = self.get(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)))
+        let mut req = self.get(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)))
             .query("ParentId", parent_id)
             .query("SortBy", sort_by)
             .query("SortOrder", sort_order)
@@ -203,7 +203,7 @@ impl EmbyClient {
 
     pub fn search_items(&self, term: &str, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
-        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
+        self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("SearchTerm",  term),
             ("Recursive",   "true"),
             ("Limit",       &limit),
@@ -213,7 +213,7 @@ impl EmbyClient {
 
     pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
-        self.fetch_items(&format!("/Users/{}/Items/Resume", crate::encode_path_segment(&self.user_id)), &[
+        self.fetch_items(&format!("/Users/{}/Items/Resume", mbv_net::encode_path_segment(&self.user_id)), &[
             ("UserId",     &self.user_id),
             ("Limit",      &limit),
             ("EnableUserData", "true"),
@@ -226,7 +226,7 @@ impl EmbyClient {
         let resp: Value = self
             .get(&format!(
                 "/Users/{}/Items/Latest",
-                crate::encode_path_segment(&self.user_id)
+                mbv_net::encode_path_segment(&self.user_id)
             ))
             .query("ParentId", parent_id)
             .query("Limit", limit.to_string())
@@ -250,7 +250,10 @@ impl EmbyClient {
     ) -> Result<Vec<EmbyItem>, String> {
         let limit = limit.to_string();
         self.fetch_items(
-            &format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)),
+            &format!(
+                "/Users/{}/Items",
+                mbv_net::encode_path_segment(&self.user_id)
+            ),
             &[
                 ("ParentId", parent_id),
                 ("Limit", &limit),
@@ -280,7 +283,7 @@ impl EmbyClient {
     }
 
     pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
+        self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
             ("Recursive",        "true"),
@@ -292,7 +295,7 @@ impl EmbyClient {
     }
 
     pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
+        self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
             ("SortBy",           "SortName"),
@@ -303,7 +306,7 @@ impl EmbyClient {
     }
 
     pub fn get_all_videos_recursive(&self, parent_id: &str) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
+        self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ParentId",         parent_id),
             ("IncludeItemTypes", "Episode,Movie,Video"),
             ("Recursive",        "true"),
@@ -325,7 +328,7 @@ impl EmbyClient {
     /// they are never valid here. Unsupported or rejected queries propagate
     /// as `Err` and the caller falls back to per-album aggregation.
     pub fn get_artist_audio_tracks(&self, artist_id: &str) -> Result<Vec<EmbyItem>, String> {
-        self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
+        self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("ArtistIds",        artist_id),
             ("IncludeItemTypes", "Audio"),
             ("Recursive",        "true"),
@@ -338,8 +341,8 @@ impl EmbyClient {
     pub fn mark_played(&self, item_id: &str) -> Result<(), String> {
         self.post(&format!(
             "/Users/{}/PlayedItems/{}",
-            crate::encode_path_segment(&self.user_id),
-            crate::encode_path_segment(item_id)
+            mbv_net::encode_path_segment(&self.user_id),
+            mbv_net::encode_path_segment(item_id)
         ))
         .send_empty()
         .map_err(|e| e.to_string())?;
@@ -349,8 +352,8 @@ impl EmbyClient {
     pub fn mark_unplayed(&self, item_id: &str) -> Result<(), String> {
         self.delete(&format!(
             "/Users/{}/PlayedItems/{}",
-            crate::encode_path_segment(&self.user_id),
-            crate::encode_path_segment(item_id)
+            mbv_net::encode_path_segment(&self.user_id),
+            mbv_net::encode_path_segment(item_id)
         ))
         .call()
         .map_err(|e| e.to_string())?;
@@ -360,8 +363,8 @@ impl EmbyClient {
     pub fn hide_from_resume(&self, item_id: &str) -> Result<(), String> {
         self.post(&format!(
             "/Users/{}/Items/{}/HideFromResume",
-            crate::encode_path_segment(&self.user_id),
-            crate::encode_path_segment(item_id)
+            mbv_net::encode_path_segment(&self.user_id),
+            mbv_net::encode_path_segment(item_id)
         ))
         .query("Hide", "true")
         .send_empty()
@@ -372,7 +375,7 @@ impl EmbyClient {
     pub fn post_library_refresh(&self, library_id: &str) -> Result<(), String> {
         self.post(&format!(
             "/Items/{}/Refresh",
-            crate::encode_path_segment(library_id)
+            mbv_net::encode_path_segment(library_id)
         ))
         .query("Recursive", "true")
         .query("ImageRefreshMode", "Default")

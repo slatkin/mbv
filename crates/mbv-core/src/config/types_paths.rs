@@ -111,7 +111,7 @@ pub struct Config {
     /// D3): the optional prefix chord plus per-section router overrides and
     /// prefix-namespace assignments, validated against the keybind registry
     /// at parse time. Absent section resolves to the all-defaults value.
-    pub keybinds: crate::keybinds::Keybinds,
+    pub keybinds: mbv_keybinds::Keybinds,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -168,7 +168,7 @@ impl Default for Config {
             idle_feed_rss_url: "https://novaramedia.com/feed/".to_string(),
             idle_feed_rotation_secs: 10,
             feeds: vec![],
-            keybinds: crate::keybinds::Keybinds::default(),
+            keybinds: mbv_keybinds::Keybinds::default(),
         }
     }
 }

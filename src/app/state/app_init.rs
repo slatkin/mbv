@@ -5,7 +5,7 @@ use crate::app::state::types::player_tab::PlayerTab;
 use mbv_core::api::EmbyItem;
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::service_runtime::{AudiobookshelfRuntime, EmbyRuntime};
-use mbv_core::ws::WsEvent;
+use mbv_ws::WsEvent;
 use std::sync::{mpsc, Arc, Mutex};
 
 pub(in crate::app) struct AppInit {
@@ -38,7 +38,7 @@ pub(in crate::app) struct AppInit {
     pub(in crate::app) player: PlayerProxy,
     pub(in crate::app) player_rx: mpsc::Receiver<PlayerEvent>,
     pub(in crate::app) ws_rx: mpsc::Receiver<WsEvent>,
-    pub(in crate::app) ws_send_tx: Option<mbv_core::ws::WsSender>,
+    pub(in crate::app) ws_send_tx: Option<mbv_ws::WsSender>,
     pub(in crate::app) audiobookshelf_socket_rx:
         mpsc::Receiver<mbv_core::audiobookshelf::socket::SocketEvent>,
     pub(in crate::app) audiobookshelf_socket_tx: Option<mpsc::Sender<()>>,

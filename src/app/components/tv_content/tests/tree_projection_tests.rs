@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::list::tree_browser::TreeEntry;
 use rstest::rstest;
 
 #[test]

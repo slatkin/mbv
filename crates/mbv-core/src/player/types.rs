@@ -1,8 +1,8 @@
 use crate::api::EmbyItem;
-use crate::id_types::ItemId;
 use crate::playback_execution_sequence::ExecSlot;
 use crate::playback_queue::{QueueItem, QueueSlotId};
 use libmpv2::Mpv;
+use mbv_ids::ItemId;
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, Default)]
@@ -10,6 +10,17 @@ pub struct SubtitlePrefs {
     pub mode: String, // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"
     pub subtitle_lang: String, // full language name, e.g. "English"
     pub audio_lang: String, // full language name, e.g. "English"
+}
+
+/// How the subtitle preference resolves against the available tracks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SubtitleChoice {
+    /// Leave the current selection unchanged.
+    Leave,
+    /// No subtitles (`sid` = "no").
+    Off,
+    /// Select a specific track id.
+    Track(i64),
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -542,14 +553,15 @@ pub(super) fn parse_tracks(tracks: &[TrackInfo]) -> ParsedTracks {
     parsed
 }
 
-/// Returns `(audio_id, subtitle_id)`. `None` means leave that mpv selection unchanged.
+/// Returns the audio id to select (`None` leaves it unchanged) and the
+/// subtitle choice to apply.
 pub(super) fn select_tracks(
     audio_tracks: &[(i64, String)],
     sub_tracks: &[(i64, String, bool)],
     audio_id: i64,
     audio_lang: &str,
     prefs: &SubtitlePrefs,
-) -> (Option<i64>, Option<i64>) {
+) -> (Option<i64>, SubtitleChoice) {
     (
         preferred_audio_track(audio_tracks, audio_id, &prefs.audio_lang),
         preferred_subtitle_track(sub_tracks, audio_lang, prefs),
@@ -576,14 +588,24 @@ fn preferred_subtitle_track(
     tracks: &[(i64, String, bool)],
     audio_lang: &str,
     prefs: &SubtitlePrefs,
-) -> Option<i64> {
+) -> SubtitleChoice {
     match prefs.mode.as_str() {
-        "OnlyForced" => only_forced_subtitle(tracks, &prefs.subtitle_lang),
-        "Always" => language_subtitle_or_first(tracks, &prefs.subtitle_lang),
-        "Smart" => smart_subtitle(tracks, audio_lang, &prefs.subtitle_lang),
-        "HearingImpaired" => hearing_impaired_subtitle(tracks, &prefs.subtitle_lang),
-        _ => None,
+        "None" => SubtitleChoice::Off,
+        "OnlyForced" => subtitle_choice(only_forced_subtitle(tracks, &prefs.subtitle_lang)),
+        "Always" => subtitle_choice(language_subtitle_or_first(tracks, &prefs.subtitle_lang)),
+        "Smart" => subtitle_choice(smart_subtitle(tracks, audio_lang, &prefs.subtitle_lang)),
+        "HearingImpaired" => {
+            subtitle_choice(hearing_impaired_subtitle(tracks, &prefs.subtitle_lang))
+        }
+        // `""`, `"Default"`, and unrecognized modes leave the selection untouched.
+        _ => SubtitleChoice::Leave,
     }
+}
+
+/// An active subtitle mode that resolves to no track turns subtitles off;
+/// only `""`/`"Default"`/unknown modes leave the selection untouched.
+fn subtitle_choice(track: Option<i64>) -> SubtitleChoice {
+    track.map_or(SubtitleChoice::Off, SubtitleChoice::Track)
 }
 
 fn only_forced_subtitle(tracks: &[(i64, String, bool)], language: &str) -> Option<i64> {
@@ -651,9 +673,16 @@ pub(super) fn auto_select_tracks(
         let _ = mpv.set_property("aid", id);
         status.lock().unwrap().audio_id = id;
     }
-    if let Some(id) = subtitle {
-        let _ = mpv.set_property("sid", id);
-        status.lock().unwrap().sub_id = id;
+    match subtitle {
+        SubtitleChoice::Leave => {}
+        SubtitleChoice::Off => {
+            let _ = mpv.set_property("sid", "no".to_string());
+            status.lock().unwrap().sub_id = 0;
+        }
+        SubtitleChoice::Track(id) => {
+            let _ = mpv.set_property("sid", id);
+            status.lock().unwrap().sub_id = id;
+        }
     }
     refresh_tracks(mpv, status);
 }

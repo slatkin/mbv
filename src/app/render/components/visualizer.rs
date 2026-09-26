@@ -1,5 +1,5 @@
 use super::super::{palette, App};
-use crate::app::infra::visualizer_worker::StereoSample;
+use mbv_visualizer::StereoSample;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::Frame;
@@ -101,5 +101,18 @@ fn point_color(sample: StereoSample) -> Color {
         amplitude if amplitude < 0.5 => palette::TEXT_METADATA,
         amplitude if amplitude < 0.75 => palette::TEXT_FOCUS_ACCENT,
         _ => palette::STATUS_ERROR,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rounded_coordinate;
+
+    #[test]
+    fn rounded_coordinate_matches_round_then_clamp() {
+        assert_eq!(rounded_coordinate(-1.0, 10), 0);
+        assert_eq!(rounded_coordinate(2.5, 10), 3);
+        assert_eq!(rounded_coordinate(99.0, 10), 10);
+        assert_eq!(rounded_coordinate(f32::NAN, 10), 0);
     }
 }

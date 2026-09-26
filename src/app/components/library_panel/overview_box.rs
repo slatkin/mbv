@@ -300,8 +300,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
 }
 
 fn contains_control(text: &str) -> bool {
-    text.chars()
-        .any(crate::app::infra::text_safety::is_control_char)
+    text.chars().any(mbv_text::text_safety::is_control_char)
 }
 
 pub(in crate::app) fn sanitize_url(url: &str) -> Option<&str> {

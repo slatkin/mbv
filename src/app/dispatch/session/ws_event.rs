@@ -1,7 +1,7 @@
 use crate::app::{dispatch::notify::ToastSeverity, App, LibEvent, PanelFocus};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
-use mbv_core::ws::WsEvent;
+use mbv_ws::WsEvent;
 
 impl App {
     pub(in crate::app) fn handle_ws_event(&mut self, ev: WsEvent) {
@@ -303,7 +303,7 @@ mod tests {
     /// Install a stub Emby runtime whose transport is `http`, so the handler's
     /// synchronous fetch is served from scripted in-memory responses (no real
     /// server, per the mocks-only test policy).
-    fn app_with_mock_emby(http: &mbv_core::mock_http::MockHttp) -> crate::app::App {
+    fn app_with_mock_emby(http: &mbv_net::mock_http::MockHttp) -> crate::app::App {
         let mut app = make_app_stub();
         let config = crate::config::Config {
             server_url: "http://127.0.0.1:1".into(),
@@ -341,7 +341,7 @@ mod tests {
         #[case] start_position_ticks: i64,
         #[case] expected_positions: Vec<(&str, i64)>,
     ) {
-        let http = mbv_core::mock_http::MockHttp::new();
+        let http = mbv_net::mock_http::MockHttp::new();
         http.respond(200, response);
         let mut app = app_with_mock_emby(&http);
 
@@ -378,7 +378,7 @@ mod tests {
 
     #[test]
     fn user_data_changed_successful_fetch_sends_home_content_refreshed() {
-        let http = mbv_core::mock_http::MockHttp::new();
+        let http = mbv_net::mock_http::MockHttp::new();
         // `fetch_home` sequences: VirtualFolders, user Views, Continue Watching.
         http.respond(200, "[]");
         http.respond(200, r#"{"Items":[]}"#);

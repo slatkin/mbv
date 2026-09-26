@@ -1,6 +1,5 @@
-use super::{
-    gen_session_id, parse_item, EmbyClient, EmbyItem, EmbySessionId, MediaSourceId, PlaybackInfo,
-};
+use super::{gen_session_id, parse_item, EmbyClient, EmbyItem, PlaybackInfo};
+use mbv_ids::{EmbySessionId, MediaSourceId};
 use serde_json::Value;
 
 /// The resolved cast-bound media plus the Emby session/media-source identity
@@ -26,7 +25,7 @@ impl EmbyClient {
         let resp: Value = match self
             .post(&format!(
                 "/Items/{}/PlaybackInfo",
-                crate::encode_path_segment(item_id)
+                mbv_net::encode_path_segment(item_id)
             ))
             .send_json(body)
         {
@@ -108,7 +107,7 @@ impl EmbyClient {
         let mut resp: Value = self
             .post(&format!(
                 "/Items/{}/PlaybackInfo",
-                crate::encode_path_segment(item_id)
+                mbv_net::encode_path_segment(item_id)
             ))
             .send_json(body)
             .map_err(|e| format!("cast PlaybackInfo failed: {e}"))?
@@ -158,7 +157,10 @@ impl EmbyClient {
 
     pub fn get_playlists(&self) -> Result<Vec<EmbyItem>, String> {
         self.fetch_items(
-            &format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)),
+            &format!(
+                "/Users/{}/Items",
+                mbv_net::encode_path_segment(&self.user_id)
+            ),
             &[
                 ("IncludeItemTypes", "Playlist"),
                 ("Recursive", "true"),
@@ -189,7 +191,7 @@ impl EmbyClient {
     pub fn delete_playlist(&self, playlist_id: &str) -> Result<(), String> {
         self.delete(&format!(
             "/Items/{}",
-            crate::encode_path_segment(playlist_id)
+            mbv_net::encode_path_segment(playlist_id)
         ))
         .call()
         .map_err(|e| e.to_string())?;
@@ -200,7 +202,7 @@ impl EmbyClient {
         let body = serde_json::json!({"Name": new_name});
         self.post(&format!(
             "/Items/{}",
-            crate::encode_path_segment(playlist_id)
+            mbv_net::encode_path_segment(playlist_id)
         ))
         .send_json(body)
         .map_err(|e| e.to_string())?;
@@ -210,7 +212,7 @@ impl EmbyClient {
     /// Replace a playlist's contents with the given item ids (in order).
     /// Fetches current entry ids, deletes them all, then adds the new set.
     pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<EmbyItem>, String> {
-        let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", crate::encode_path_segment(playlist_id)))
+        let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", mbv_net::encode_path_segment(playlist_id)))
             .query("UserId", &self.user_id)
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres,ExternalUrls,ProviderIds")
             .query("EnableUserData", "true")
@@ -231,7 +233,7 @@ impl EmbyClient {
         let resp: serde_json::Value = self
             .get(&format!(
                 "/Playlists/{}/Items",
-                crate::encode_path_segment(playlist_id)
+                mbv_net::encode_path_segment(playlist_id)
             ))
             .query("UserId", &self.user_id)
             .call()
@@ -252,7 +254,7 @@ impl EmbyClient {
         if !entry_ids.is_empty() {
             self.delete(&format!(
                 "/Playlists/{}/Items",
-                crate::encode_path_segment(playlist_id)
+                mbv_net::encode_path_segment(playlist_id)
             ))
             .query("EntryIds", entry_ids.join(","))
             .call()
@@ -262,7 +264,7 @@ impl EmbyClient {
         if !item_ids.is_empty() {
             self.post(&format!(
                 "/Playlists/{}/Items",
-                crate::encode_path_segment(playlist_id)
+                mbv_net::encode_path_segment(playlist_id)
             ))
             .query("Ids", item_ids.join(","))
             .query("UserId", &self.user_id)
@@ -279,7 +281,7 @@ impl EmbyClient {
             return Ok(vec![]);
         }
         let joined = ids.join(",");
-        let mut items = self.fetch_items(&format!("/Users/{}/Items", crate::encode_path_segment(&self.user_id)), &[
+        let mut items = self.fetch_items(&format!("/Users/{}/Items", mbv_net::encode_path_segment(&self.user_id)), &[
             ("Ids",    &joined),
             ("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
         ])?;
@@ -297,7 +299,7 @@ impl EmbyClient {
         let resp: Value = self
             .get(&format!(
                 "/Items/{}/Ancestors",
-                crate::encode_path_segment(item_id)
+                mbv_net::encode_path_segment(item_id)
             ))
             .query("Fields", "SortName")
             .call()

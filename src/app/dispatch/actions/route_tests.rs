@@ -5,7 +5,7 @@ use crate::app::tests::{
 };
 use crate::app::{BrowseLevel, ConfirmAction, ContextAction, LibraryTab, PanelFocus};
 use mbv_core::ctrl::CtrlCmd;
-use mbv_core::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 use rstest::rstest;
 
 fn selection(media_types: &[&str]) -> Vec<EmbyItem> {

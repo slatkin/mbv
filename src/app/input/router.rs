@@ -7,7 +7,7 @@
 //! leaf's own typed request stands).
 
 use crossterm::event::KeyEvent;
-use mbv_core::keybinds::Keybinds;
+use mbv_keybinds::Keybinds;
 
 use super::key_policy::{command_for_policy, resolve_policy, KeyPolicyBinding};
 use super::resolver::KeyChord;

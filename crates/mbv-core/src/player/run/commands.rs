@@ -137,7 +137,7 @@ impl PlaybackRun {
                 let (volume, raw) = volume_decision(volume, vol_max);
                 #[expect(
                     clippy::cast_precision_loss,
-                    reason = "seconds↔ticks conversion through f64; no lossless integer-path conversion exists (approved, issue #804)"
+                    reason = "computed volume (i64) → f64 for the mpv volume property; mpv stores volume as a float (approved, issue #804)"
                 )]
                 let _ = mpv.set_property("volume", raw as f64);
                 self.status.lock().unwrap().volume = volume;

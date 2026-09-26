@@ -12,7 +12,7 @@ fn emby_agent(
     connect_timeout: std::time::Duration,
     total_timeout: std::time::Duration,
 ) -> ureq::Agent {
-    crate::native_tls_agent(Some(connect_timeout), Some(total_timeout))
+    mbv_net::native_tls_agent(Some(connect_timeout), Some(total_timeout))
 }
 
 impl EmbyClient {
@@ -129,7 +129,7 @@ impl EmbyClient {
         match self
             .get(&format!(
                 "/Users/{}",
-                crate::encode_path_segment(&self.user_id)
+                mbv_net::encode_path_segment(&self.user_id)
             ))
             .call()
         {
@@ -173,7 +173,7 @@ impl EmbyClient {
         hard_bound: std::time::Duration,
     ) -> Result<EmbyClient, String> {
         let mut clone = self.clone();
-        crate::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound(
             move || clone.authenticate().map(|()| clone),
             hard_bound,
         )
@@ -189,7 +189,7 @@ impl EmbyClient {
     ) -> Result<EmbyClient, String> {
         let mut clone = self.clone();
         clone.token = token;
-        crate::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound(
             move || {
                 let users: Value = clone
                     .get("/Users")
@@ -235,12 +235,12 @@ impl EmbyClient {
         clone.config.server_url.clone_from(&setup.server_url);
         clone.user_id.clone_from(&setup.user_id);
         clone.token = token;
-        crate::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound(
             move || {
                 clone
                     .get(&format!(
                         "/Users/{}",
-                        crate::encode_path_segment(&clone.user_id)
+                        mbv_net::encode_path_segment(&clone.user_id)
                     ))
                     .call()
                     .map_err(|e| {
@@ -269,7 +269,7 @@ impl EmbyClient {
         if client.config.server_url.is_empty() || username.is_empty() || password.is_empty() {
             return Err("server URL, username, and password are required".to_string());
         }
-        crate::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound(
             move || {
                 let resp: Value = client
                     .agent
@@ -317,7 +317,7 @@ impl EmbyClient {
         hard_bound: std::time::Duration,
     ) -> Result<crate::service_runtime::EmbyBootstrap, crate::service_runtime::EmbyFailure> {
         let client = self.clone();
-        crate::bounded::run_with_hard_bound(
+        mbv_net::bounded::run_with_hard_bound(
             move || {
                 let continue_items = client.get_continue_watching(20).unwrap_or_default();
                 let views = client.get_views_classified()?;

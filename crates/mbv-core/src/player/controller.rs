@@ -110,7 +110,7 @@ pub struct Player {
     pub(super) mpv_inhibited: AtomicBool,
     pub status: Arc<Mutex<PlayerStatus>>,
     pub(super) thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
-    pub(super) ws_tx: Arc<Mutex<Option<crate::ws::WsSender>>>,
+    pub(super) ws_tx: Arc<Mutex<Option<mbv_ws::WsSender>>>,
 }
 
 impl std::fmt::Debug for Player {
@@ -149,7 +149,7 @@ impl Player {
         always_skip_intro: bool,
         subtitle_prefs: SubtitlePrefs,
         event_tx: mpsc::Sender<PlayerEvent>,
-        ws_tx: Option<crate::ws::WsSender>,
+        ws_tx: Option<mbv_ws::WsSender>,
     ) -> Self {
         Player {
             credentials: Arc::new(Mutex::new(
@@ -237,12 +237,7 @@ impl Player {
         }
     }
 
-    pub fn update_emby_runtime(
-        &self,
-        server_url: String,
-        token: String,
-        ws_tx: crate::ws::WsSender,
-    ) {
+    pub fn update_emby_runtime(&self, server_url: String, token: String, ws_tx: mbv_ws::WsSender) {
         self.update_emby_credentials(server_url, token);
         *self.ws_tx.lock().unwrap() = Some(ws_tx);
     }

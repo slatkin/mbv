@@ -221,7 +221,7 @@ impl AudiobookshelfClient {
     ) -> Result<AudiobookshelfBookPage, AudiobookshelfError> {
         let path = format!(
             "/api/libraries/{}/items?page={page}&limit={limit}",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         );
         let response: BooksResponse =
             self.get(key, &path)?
@@ -290,7 +290,7 @@ impl AudiobookshelfClient {
         let response: BookDetailWire = self
             .get(
                 key,
-                &format!("/api/items/{}?expanded=1", crate::encode_path_segment(id)),
+                &format!("/api/items/{}?expanded=1", mbv_net::encode_path_segment(id)),
             )?
             .body_mut()
             .read_json()

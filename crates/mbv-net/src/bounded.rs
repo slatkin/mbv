@@ -16,7 +16,7 @@ use std::time::Duration;
 /// `spawn/recv_timeout/abandon` mechanics only need to be gotten right once,
 /// and so each caller's own timeout logic can be unit-tested directly with a
 /// closure -- no real socket or filesystem state required.
-pub(crate) fn run_with_hard_bound<T, F, E>(f: F, hard_bound: Duration) -> Result<T, E>
+pub fn run_with_hard_bound<T, F, E>(f: F, hard_bound: Duration) -> Result<T, E>
 where
     T: Send + 'static,
     E: From<String> + Send + 'static,
@@ -39,7 +39,7 @@ where
 /// worker until the receiver explicitly accepts it. If the bound wins the race
 /// with result delivery, dropping the unaccepted guard runs `cleanup` on the
 /// worker (or while the disconnected channel is being destroyed).
-pub(crate) fn run_with_hard_bound_or_cleanup<T, F, E, C>(
+pub fn run_with_hard_bound_or_cleanup<T, F, E, C>(
     f: F,
     cleanup: C,
     hard_bound: Duration,

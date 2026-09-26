@@ -506,10 +506,9 @@ impl Model {
         };
         match stage {
             LibraryRouteStage::PickLibrary { items } => {
-                if let Some((lower, display, _)) = items.get(self.library_routes_cursor()) {
+                if let Some((lower, _, _)) = items.get(self.library_routes_cursor()) {
                     let lower = lower.clone();
-                    let display = display.clone();
-                    self.enter_device_stage(lower, display);
+                    self.enter_device_stage(lower);
                 }
             }
             LibraryRouteStage::PickDevice { .. } => {
@@ -536,11 +535,7 @@ impl Model {
         .unwrap_or(0)
     }
 
-    pub(in crate::app) fn enter_device_stage(
-        &mut self,
-        library_lower: String,
-        library_display: String,
-    ) {
+    pub(in crate::app) fn enter_device_stage(&mut self, library_lower: String) {
         let sessions = match self.app.fetch_sessions_blocking() {
             Ok(sessions) => {
                 log::info!(target: "library_route", "F2 session fetch succeeded count={}", sessions.len());
@@ -596,7 +591,6 @@ impl Model {
         self.set_library_routes_content(&LibraryRoutePopup {
             stage: LibraryRouteStage::PickDevice {
                 library_lower,
-                library_display,
                 devices,
             },
             cursor,

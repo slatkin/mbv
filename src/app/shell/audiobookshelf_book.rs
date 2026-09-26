@@ -54,12 +54,6 @@ impl Model {
         });
     }
 
-    pub(in crate::app) fn sync_audiobookshelf_book() {
-        // Books are retained as a LibraryPanel owner for the lifetime of the
-        // catalog entry; content is pushed by discrete writers/events. The
-        // panel sync pass reconciles the active owner and focus separately.
-    }
-
     pub(in crate::app) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
         // A request can arrive before the Books owner has been registered by
         // its first discrete content push. Do not mutate shell focus on that

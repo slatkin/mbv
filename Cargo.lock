@@ -1702,15 +1702,19 @@ name = "mbv"
 version = "0.21.2"
 dependencies = [
  "crossterm",
- "fuzzy-matcher",
  "image",
  "ksni",
  "libc",
  "log",
  "mbv-core",
+ "mbv-ids",
+ "mbv-keybinds",
+ "mbv-net",
+ "mbv-text",
+ "mbv-visualizer",
+ "mbv-ws",
  "mimalloc",
  "nix 0.31.3",
- "pipewire",
  "rand 0.10.2",
  "ratatui",
  "ratatui-image",
@@ -1737,8 +1741,11 @@ dependencies = [
  "libmpv2",
  "libmpv2-sys",
  "log",
+ "mbv-ids",
+ "mbv-keybinds",
+ "mbv-net",
+ "mbv-ws",
  "mdns-sd",
- "percent-encoding",
  "rand 0.10.2",
  "rstest",
  "rust_cast",
@@ -1749,6 +1756,53 @@ dependencies = [
  "tungstenite",
  "ureq",
  "uuid",
+]
+
+[[package]]
+name = "mbv-ids"
+version = "0.21.2"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "mbv-keybinds"
+version = "0.21.2"
+
+[[package]]
+name = "mbv-net"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "percent-encoding",
+ "rand 0.10.2",
+ "ureq",
+]
+
+[[package]]
+name = "mbv-text"
+version = "0.21.2"
+dependencies = [
+ "fuzzy-matcher",
+]
+
+[[package]]
+name = "mbv-visualizer"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "pipewire",
+]
+
+[[package]]
+name = "mbv-ws"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "mbv-net",
+ "rstest",
+ "serde_json",
+ "tungstenite",
 ]
 
 [[package]]

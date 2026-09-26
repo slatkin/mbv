@@ -1,4 +1,5 @@
 use super::*;
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 /// The scoped loading projection (row 3.3): a state pill is loading
 /// while its required shows fetch (and shows nothing stale meanwhile);
