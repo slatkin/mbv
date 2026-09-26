@@ -4,7 +4,7 @@ impl App {
     /// The `AudiobookshelfBooksFetched` body: append the fetched page to the
     /// library's book browse state, fetch the selected book's detail, and
     /// chain the next page when one is needed.
-    fn apply_audiobookshelf_books_fetched(
+    pub(super) fn handle_audiobookshelf_books_fetched(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
         library_id: String,
@@ -13,6 +13,9 @@ impl App {
             mbv_core::audiobookshelf::AudiobookshelfError,
         >,
     ) {
+        if !self.audiobookshelf_runtime.accepts(generation) {
+            return;
+        }
         if let Some(index) = self
             .audiobookshelf_libraries
             .iter()
@@ -48,8 +51,9 @@ impl App {
 
     /// The `AudiobookshelfBookDetailFetched` body: retire the in-flight mark
     /// on the owning browse state and cache the detail on success.
-    fn apply_audiobookshelf_book_detail_fetched(
+    pub(super) fn handle_audiobookshelf_book_detail_fetched(
         &mut self,
+        generation: mbv_core::service_runtime::SetupGeneration,
         library_item_id: &str,
         result: Result<
             (
@@ -59,6 +63,9 @@ impl App {
             mbv_core::audiobookshelf::AudiobookshelfError,
         >,
     ) {
+        if !self.audiobookshelf_runtime.accepts(generation) {
+            return;
+        }
         match result {
             Ok(detail) => {
                 if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
@@ -94,7 +101,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_audiobookshelf_detail_fetched(
+    pub(super) fn handle_audiobookshelf_podcast_detail_fetched(
         &mut self,
         generation: mbv_core::service_runtime::SetupGeneration,
         request: u64,
@@ -203,37 +210,6 @@ impl App {
         if let Ok(shelves) = result {
             let items = App::newest_episodes_items(shelves);
             self.audiobookshelf_shelf_cache.insert(library_id, items);
-        }
-    }
-
-    pub(super) fn handle_audiobookshelf_books_fetched(
-        &mut self,
-        generation: mbv_core::service_runtime::SetupGeneration,
-        library_id: String,
-        result: Result<
-            mbv_core::audiobookshelf::AudiobookshelfBookPage,
-            mbv_core::audiobookshelf::AudiobookshelfError,
-        >,
-    ) {
-        if self.audiobookshelf_runtime.accepts(generation) {
-            self.apply_audiobookshelf_books_fetched(generation, library_id, result);
-        }
-    }
-
-    pub(super) fn handle_audiobookshelf_book_detail_fetched(
-        &mut self,
-        generation: mbv_core::service_runtime::SetupGeneration,
-        library_item_id: &str,
-        result: Result<
-            (
-                Vec<mbv_core::audiobookshelf::AudiobookshelfChapter>,
-                Vec<mbv_core::audiobookshelf::AudiobookshelfAudioFile>,
-            ),
-            mbv_core::audiobookshelf::AudiobookshelfError,
-        >,
-    ) {
-        if self.audiobookshelf_runtime.accepts(generation) {
-            self.apply_audiobookshelf_book_detail_fetched(library_item_id, result);
         }
     }
 
