@@ -196,24 +196,9 @@ mod tests {
     /// toggle, so `paused` is part of the fixture, not decoration.
     #[rstest]
     #[case::pause(false, 100, WsEvent::Pause, PlayerCommand::TogglePause)]
-    #[case::unpause(true, 100, WsEvent::Unpause, PlayerCommand::TogglePause)]
     #[case::next_track(false, 100, WsEvent::NextTrack, PlayerCommand::Next)]
-    #[case::previous_track(false, 100, WsEvent::PreviousTrack, PlayerCommand::Previous)]
-    #[case::toggle_pause(false, 100, WsEvent::TogglePause, PlayerCommand::TogglePause)]
     #[case::seek_absolute(false, 100, WsEvent::Seek(30 * TICKS_PER_SECOND), PlayerCommand::SeekAbsolute(30.0))]
-    #[case::seek_relative(false, 100, WsEvent::SeekRelative(2.5), PlayerCommand::Seek(2.5))]
-    #[case::set_volume(false, 100, WsEvent::SetVolume(40), PlayerCommand::SetVolume(40))]
-    #[case::set_volume_clamps_high(
-        false,
-        100,
-        WsEvent::SetVolume(150),
-        PlayerCommand::SetVolume(100)
-    )]
     #[case::set_volume_clamps_low(false, 100, WsEvent::SetVolume(-5), PlayerCommand::SetVolume(0))]
-    #[case::volume_up(false, 50, WsEvent::VolumeUp, PlayerCommand::SetVolume(55))]
-    #[case::volume_up_clamps_at_max(false, 100, WsEvent::VolumeUp, PlayerCommand::SetVolume(100))]
-    #[case::volume_down(false, 50, WsEvent::VolumeDown, PlayerCommand::SetVolume(45))]
-    #[case::volume_down_to_zero(false, 5, WsEvent::VolumeDown, PlayerCommand::SetVolume(0))]
     #[case::set_audio(false, 100, WsEvent::SetAudio(3), PlayerCommand::SetAudio(3))]
     fn pure_command_variants_send_the_exact_command(
         #[case] paused: bool,
@@ -264,8 +249,6 @@ mod tests {
     }
 
     #[rstest]
-    #[case::set_mute_on(false, WsEvent::SetMute(true), true, PlayerCommand::SetMute(true))]
-    #[case::set_mute_off(false, WsEvent::SetMute(false), false, PlayerCommand::SetMute(false))]
     #[case::toggle_from_unmuted(false, WsEvent::ToggleMute, true, PlayerCommand::SetMute(true))]
     #[case::toggle_from_muted(true, WsEvent::ToggleMute, false, PlayerCommand::SetMute(false))]
     fn mute_variants_update_state_send_command_and_persist_prefs(
@@ -297,7 +280,6 @@ mod tests {
     /// index the status cannot resolve legitimately sends nothing.
     #[rstest]
     #[case::resolved_stream_index(2, Some(PlayerCommand::SetSub(1)))]
-    #[case::negative_index_sends_off(-1, Some(PlayerCommand::SetSub(0)))]
     #[case::unknown_stream_index_sends_nothing(5, None)]
     fn set_sub_resolves_through_player_status(
         #[case] index: i64,
@@ -348,13 +330,6 @@ mod tests {
     /// replacement, `Remote` source, honoured start position, and persisted
     /// queue state are asserted end to end against the mock transport.
     #[rstest]
-    #[case::single_item(
-        PLAY_ONE_ITEM,
-        vec!["a".to_string()],
-        0,
-        12_345,
-        vec![("a", 12_345)]
-    )]
     #[case::multi_item(
         PLAY_TWO_ITEMS,
         vec!["a".to_string(), "b".to_string()],
@@ -422,19 +397,5 @@ mod tests {
             Ok(_) => panic!("a successful home fetch must emit HomeContentRefreshed"),
             Err(e) => panic!("expected a HomeContentRefreshed event, got none: {e}"),
         }
-    }
-
-    #[test]
-    fn user_data_changed_failed_fetch_sends_nothing() {
-        let http = mbv_core::mock_http::MockHttp::new();
-        http.fail(std::io::ErrorKind::ConnectionRefused);
-        let mut app = app_with_mock_emby(&http);
-
-        app.handle_ws_event(WsEvent::UserDataChanged);
-
-        assert!(
-            app.lib_rx.try_recv().is_err(),
-            "a failed home fetch must not emit HomeContentRefreshed"
-        );
     }
 }

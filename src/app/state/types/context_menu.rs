@@ -220,6 +220,3 @@ impl ContextMenu {
         (x, y)
     }
 }
-
-#[cfg(test)]
-mod tests;

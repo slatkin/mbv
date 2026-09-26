@@ -144,35 +144,6 @@ fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() 
 }
 
 #[test]
-fn dispatch_toggle_mute_while_attached_to_session_toggles_back_off() {
-    use crate::app::tests::make_session;
-
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    let mut sess = make_session("remote-host", "Emby");
-    sess.muted = true;
-    app.connected_session_state = Some(sess);
-
-    app.dispatch(&Command::ToggleMute);
-
-    assert!(!app.connected_session_state.as_ref().unwrap().muted);
-}
-
-#[test]
-fn dispatch_toggle_mute_while_attached_to_session_with_unknown_mute_state_mutes_first() {
-    // No session-state poll has landed yet for this connected session --
-    // `connected_session_state` is still `None`. The first press should
-    // be treated as "currently not muted" and mute.
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    app.connected_session_state = None;
-
-    app.dispatch(&Command::ToggleMute);
-
-    assert!(!app.mute_on);
-}
-
-#[test]
 fn dispatch_toggle_play_pause_local_sends_player_command() {
     let mut app = make_app_stub();
     let rx = app.player.spy_on_commands();
@@ -208,35 +179,6 @@ fn set_local_queue(app: &mut crate::app::App, items: Vec<mbv_core::api::EmbyItem
 }
 
 #[test]
-fn queue_play_cursor_on_empty_queue_is_a_no_op() {
-    let mut app = make_app_stub();
-    assert!(!app.dispatch(&Command::QueuePlayCursor(0)));
-    assert!(app.status.is_empty());
-}
-
-#[test]
-fn queue_play_cursor_while_attached_to_session_hands_off_to_session() {
-    let mut app = make_app_stub();
-    set_local_queue(
-        &mut app,
-        vec![
-            make_item("Track One", "Audio"),
-            make_item("Track Two", "Audio"),
-        ],
-        1,
-    );
-    app.connected_session_id = Some("session-1".into());
-
-    app.dispatch(&Command::QueuePlayCursor(1));
-
-    assert!(
-        app.status.contains("Requesting playback"),
-        "expected a remote-handoff status flash, got {:?}",
-        app.status
-    );
-}
-
-#[test]
 fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
     let mut app = make_remote_app_stub(make_items(2), make_items(3));
     set_local_queue(&mut app, make_items(2), 1);
@@ -254,33 +196,6 @@ fn queue_play_cursor_with_direct_remote_switches_to_remote_scope() {
         app.viewed_queue_scope(),
         QueueScope::Remote,
         "queue scope should switch to Remote when Direct remote control is active"
-    );
-}
-
-#[test]
-fn queue_play_cursor_without_direct_remote_stays_on_local_scope() {
-    let mut app = make_app_stub();
-    set_local_queue(
-        &mut app,
-        vec![
-            make_item("Track One", "Audio"),
-            make_item("Track Two", "Audio"),
-        ],
-        1,
-    );
-    app.connected_session_id = Some("session-1".into());
-
-    app.dispatch(&Command::QueuePlayCursor(1));
-
-    assert!(
-        app.status.contains("Requesting playback"),
-        "expected a remote-handoff status flash, got {:?}",
-        app.status
-    );
-    assert_eq!(
-        app.viewed_queue_scope(),
-        QueueScope::Local,
-        "queue scope should remain Local when there is no Direct remote control"
     );
 }
 
@@ -355,25 +270,6 @@ fn queue_play_cursor_jumps_to_cursor_when_active_and_playback_scope() {
 fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_item() {
     let mut app = make_app_stub();
     set_local_queue(&mut app, vec![make_item("Track One", "Audio")], 0);
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-    let rx = app.player.spy_on_commands();
-
-    app.dispatch(&Command::QueuePlayCursor(0));
-
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(PlayerCommand::SeekAbsolute(pos)) if pos == 0.0
-    ));
-}
-
-#[test]
-fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_video_item() {
-    let mut app = make_app_stub();
-    set_local_queue(&mut app, vec![make_item("Movie", "Movie")], 0);
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;

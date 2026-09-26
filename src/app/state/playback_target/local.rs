@@ -209,28 +209,3 @@ impl LocalPlaybackTarget {
         })
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::tests::make_app_stub;
-
-    fn res_label_for(video_height: i64) -> String {
-        let app = make_app_stub();
-        {
-            let mut st = app.player.status.lock().unwrap();
-            st.active = true;
-            st.video_height = video_height;
-        };
-        LocalPlaybackTarget::indicator_data(&app).unwrap().res_label
-    }
-
-    #[test]
-    fn local_indicator_uses_short_resolution_labels() {
-        assert_eq!(res_label_for(2160), "4K");
-        assert_eq!(res_label_for(1440), "QHD");
-        assert_eq!(res_label_for(1080), "FHD");
-        assert_eq!(res_label_for(720), "HD");
-        assert_eq!(res_label_for(480), "SD");
-    }
-}

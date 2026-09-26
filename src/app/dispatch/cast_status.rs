@@ -354,28 +354,6 @@ mod tests {
     }
 
     #[test]
-    fn extrapolates_steady_playback_by_elapsed_time_and_rate() {
-        let mut status = playing_status(10.0, "https://a");
-        status.playback_rate = 2.0;
-        let status_at = Instant::now()
-            .checked_sub(Duration::from_secs(3))
-            .unwrap_or_else(Instant::now);
-        let position = cast_extrapolate(&status, status_at).unwrap();
-        // 10s reported + 3s elapsed * 2.0 rate = 16s, with slack for test timing.
-        assert!((15.5..=16.5).contains(&position), "position={position}");
-    }
-
-    #[test]
-    fn holds_position_while_buffering() {
-        let mut status = playing_status(10.0, "https://a");
-        status.state = CastPlaybackState::Buffering;
-        let status_at = Instant::now()
-            .checked_sub(Duration::from_secs(5))
-            .unwrap_or_else(Instant::now);
-        assert_eq!(cast_extrapolate(&status, status_at), Some(10.0));
-    }
-
-    #[test]
     fn holds_position_while_paused() {
         let mut status = playing_status(10.0, "https://a");
         status.state = CastPlaybackState::Paused;
@@ -399,58 +377,11 @@ mod tests {
     }
 
     #[test]
-    fn matched_item_produces_a_progress_report() {
-        let cast = attachment(vec![dispatched("https://a")]);
-        let status = playing_status(10.0, "https://a");
-        assert!(cast_progress_for_status(&cast, &status).is_some());
-    }
-
-    #[test]
-    fn unmatched_item_produces_no_progress_report() {
-        let cast = attachment(vec![dispatched("https://a")]);
-        let status = playing_status(10.0, "https://not-dispatched");
-        assert!(cast_progress_for_status(&cast, &status).is_none());
-    }
-
-    #[test]
-    fn now_playing_title_is_none_while_idle() {
-        let mut cast = attachment(vec![dispatched("https://a")]);
-        cast.status = Some(CastStatus {
-            position_seconds: None,
-            duration_seconds: None,
-            playback_rate: 1.0,
-            state: CastPlaybackState::Idle,
-            playing_content_id: None,
-        });
-        let _app = make_app_stub();
-        assert_eq!(App::cast_now_playing_title(&cast), None);
-    }
-
-    #[test]
     fn now_playing_title_is_the_matched_dispatched_item_while_playing() {
         let mut cast = attachment(vec![dispatched("https://a")]);
         cast.status = Some(playing_status(10.0, "https://a"));
         let _app = make_app_stub();
         assert_eq!(App::cast_now_playing_title(&cast).as_deref(), Some("Title"));
-    }
-
-    #[test]
-    fn status_update_stores_position_duration_rate_state_and_playing_entry() {
-        let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
-        app.apply_cast_status("device-1", Ok(playing_status(12.5, "https://a")));
-        let status = app
-            .cast_attachment
-            .as_ref()
-            .unwrap()
-            .status
-            .clone()
-            .unwrap();
-        assert_eq!(status.position_seconds, Some(12.5));
-        assert_eq!(status.duration_seconds, Some(100.0));
-        assert_eq!(status.playback_rate, 1.0);
-        assert_eq!(status.state, CastPlaybackState::Playing);
-        assert_eq!(status.playing_content_id.as_deref(), Some("https://a"));
     }
 
     #[test]

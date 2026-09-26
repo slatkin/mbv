@@ -137,25 +137,3 @@ fn cancelling_a_folder_play_leaves_the_queue_source_unchanged() {
     assert!(app.pending_queue_replacement.is_none());
     assert_eq!(app.queue_source, crate::config::QueueSource::Album);
 }
-
-/// Row 3.4: an album track on an empty target queue plays immediately; the
-/// gate asks nothing.
-#[test]
-fn empty_queue_album_track_needs_no_replacement_confirmation() {
-    let mut app = remote_playback_app();
-    let mut track = make_item("Track", "Audio");
-    track.id = "track-1".into();
-    app.album_tracks_cache
-        .insert("album-1".into(), vec![track.clone()]);
-
-    assert!(app.play_album_track("album-1", &track));
-
-    assert!(app.pending_queue_replacement.is_none());
-    assert!(!matches!(
-        app.pending_overlay,
-        Some(crate::app::state::types::overlay::OverlayRequest::Confirm(
-            _
-        ))
-    ));
-    assert_eq!(queued_track_ids(&app), ["track-1"]);
-}

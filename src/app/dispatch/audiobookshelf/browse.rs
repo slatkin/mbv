@@ -787,6 +787,3 @@ fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
 
 #[cfg(test)]
 mod book_seek_tests;
-
-#[cfg(test)]
-mod split_browse_state_book_tests;

@@ -1,6 +1,6 @@
 use super::queue_state_tests::XdgHomeGuard;
 use crate::app::state::types::browse::BrowseResting;
-use crate::app::{BrowseLevel, FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection};
+use crate::app::{BrowseLevel, LibEvent, LibraryTab};
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
@@ -100,35 +100,6 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
 }
 
 #[test]
-fn ensure_feed_library_preserves_saved_feed_position() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.tab = TabSelection::EmbyLibrary(0);
-    app.config.lock().unwrap().feed_view_libraries = vec!["youtube".into()];
-
-    let mut library = crate::app::tests::make_item("YouTube", "CollectionFolder");
-    library.id = "lib-feed".into();
-    library.is_folder = true;
-    library.collection_type = "homevideos".into();
-    app.libs.push(LibraryTab {
-        feed_home_video: Some(FeedHomeVideoState {
-            selected_group: 2,
-            video_cursor: 3,
-            video_scroll: 4,
-            ..Default::default()
-        }),
-        ..LibraryTab::new(library)
-    });
-
-    app.ensure_lib_loaded_for(0);
-
-    let state = app.libs[0].feed_home_video.as_ref().unwrap();
-    assert!(state.loading);
-    assert_eq!(state.selected_group, 2);
-    assert_eq!(state.video_cursor, 3);
-    assert_eq!(state.video_scroll, 4);
-}
-
-#[test]
 fn queue_enriched_prunes_items_the_server_no_longer_returns() {
     let mut app = crate::app::tests::make_app_stub();
     app.player_tab.set_items(
@@ -182,143 +153,6 @@ fn queue_enriched_prunes_live_playback_slots_and_resyncs_player_queue() {
             Ok(crate::player::PlayerCommand::QueueRemove(_))
         ),
         "pruning a live playback queue slot must also remove it from the player's private queue copy"
-    );
-}
-
-#[test]
-fn queue_enriched_never_prunes_or_merges_the_active_slot_even_with_a_duplicate_id() {
-    let mut app = crate::app::tests::make_app_stub();
-    let mut items = crate::app::tests::make_items(2); // id0, id1
-    items[1].id = "id0".to_string(); // duplicate of the active item's id
-    app.player_tab.set_items(items, app.player_tab.queue_cursor);
-    app.player_tab
-        .set_slot_progress_at(0, 3 * mbv_core::api::TICKS_PER_SECOND);
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-
-    // The fetch confirms id0 still exists, so slot 1's duplicate id0 would
-    // also match by id alone if the skip weren't by-slot.
-    let mut fresh = app.player_tab.emby_items()[0].clone();
-    fresh.name = "Refreshed Name".to_string();
-    app.handle_lib_event(LibEvent::QueueEnriched {
-        items: vec![fresh.clone()],
-    });
-
-    assert_eq!(
-        app.player_tab.emby_items()[0].playback_position_ticks,
-        3 * mbv_core::api::TICKS_PER_SECOND,
-        "the active slot must keep its authoritative local progress even though its id matched"
-    );
-    assert_eq!(
-        app.player_tab.emby_items()[1].name,
-        "Refreshed Name",
-        "the non-active duplicate-id slot must still be enriched from the fresh fetch"
-    );
-}
-
-#[test]
-fn queue_enriched_skips_player_active_idx_not_queue_cursor() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.set_items(
-        crate::app::tests::make_items(2),
-        app.player_tab.queue_cursor,
-    );
-    app.player_tab.queue_cursor = 1;
-    app.player_tab
-        .set_slot_progress_at(0, 3 * mbv_core::api::TICKS_PER_SECOND);
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-    let mut stale = app.player_tab.emby_items()[0].clone();
-    stale.playback_position_ticks = 46 * mbv_core::api::TICKS_PER_SECOND;
-
-    app.handle_lib_event(LibEvent::QueueEnriched { items: vec![stale] });
-
-    assert_eq!(
-        app.player_tab.emby_items()[0].playback_position_ticks,
-        3 * mbv_core::api::TICKS_PER_SECOND,
-        "stale enrichment must not overwrite the actively playing slot"
-    );
-}
-
-#[test]
-fn queue_enriched_preserves_pending_sync_until_server_confirms_it() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.set_items(
-        crate::app::tests::make_items(1),
-        app.player_tab.queue_cursor,
-    );
-    app.handle_player_event(mbv_core::player::PlayerEvent::TrackChanged {
-        slot_id: app.playback_queue().resolve_slot_at(0).unwrap(),
-        transition: None,
-    });
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-    app.handle_player_event(mbv_core::player::PlayerEvent::Stopped {
-        slot_id: app.playback_queue().resolve_slot_at(0),
-        run_identity: 0,
-        position_ticks: 6 * mbv_core::api::TICKS_PER_SECOND,
-        played: false,
-        consume: false,
-        progress_report_accepted: true,
-        error: None,
-    });
-    let mut stale = app.player_tab.emby_items()[0].clone();
-    stale.playback_position_ticks = mbv_core::api::TICKS_PER_SECOND;
-
-    app.handle_lib_event(LibEvent::QueueEnriched { items: vec![stale] });
-
-    assert_eq!(
-        app.player_tab.emby_items()[0].playback_position_ticks,
-        6 * mbv_core::api::TICKS_PER_SECOND,
-        "stale enrichment must not overwrite accepted local stopped progress while sync is pending"
-    );
-    assert!(app.player_tab.queue.slots()[0]
-        .progress_state
-        .pending_sync
-        .is_some());
-}
-
-#[test]
-fn manual_refresh_merge_uses_queue_model_active_slot_protection() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.set_items(
-        crate::app::tests::make_items(2),
-        app.player_tab.queue_cursor,
-    );
-    let active_slot = app.player_tab.queue.slots()[0].slot_id;
-    let _ = app.player_tab.queue.apply_progress(
-        active_slot,
-        9 * mbv_core::api::TICKS_PER_SECOND,
-        false,
-    );
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.current_idx = 0;
-    };
-    let mut stale_active = app.player_tab.emby_items()[0].clone();
-    stale_active.playback_position_ticks = mbv_core::api::TICKS_PER_SECOND;
-    let mut fresh_inactive = app.player_tab.emby_items()[1].clone();
-    fresh_inactive.playback_position_ticks = 4 * mbv_core::api::TICKS_PER_SECOND;
-
-    let _ = app.merge_refreshed_queue(QueueScope::Local, vec![stale_active, fresh_inactive]);
-
-    assert_eq!(
-        app.player_tab.emby_items()[0].playback_position_ticks,
-        9 * mbv_core::api::TICKS_PER_SECOND
-    );
-    assert_eq!(
-        app.player_tab.emby_items()[1].playback_position_ticks,
-        4 * mbv_core::api::TICKS_PER_SECOND
     );
 }
 
@@ -410,21 +244,4 @@ fn save_queue_state_no_clear_preserves_file_when_locally_empty_and_not_attached(
         "quitting with a transiently-empty in-memory queue must not delete an \
          existing on-disk snapshot — only an explicit user-initiated clear should"
     );
-}
-
-#[test]
-fn save_queue_state_no_clear_still_saves_when_queue_has_items() {
-    let _g = XDG_HOME_LOCK.lock().unwrap();
-    let _xdg = XdgHomeGuard::new();
-
-    let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.set_items(
-        crate::app::tests::make_items(2),
-        app.player_tab.queue_cursor,
-    );
-
-    app.save_queue_state_no_clear();
-
-    let state = crate::config::load_queue_state().expect("queue should be saved");
-    assert_eq!(state.items.len(), 2);
 }

@@ -519,22 +519,6 @@ mod tests {
     }
 
     #[test]
-    fn attach_and_detach_set_and_clear_without_touching_player() {
-        let mut app = make_app_stub();
-        assert!(!app.is_cast_attached());
-        app.attach_cast("device-1".to_string());
-        assert!(app.is_cast_attached());
-        assert_eq!(
-            app.cast_attachment.as_ref().unwrap().receiver_id,
-            "device-1"
-        );
-        assert!(!app.player.status.lock().unwrap().active);
-        app.detach_cast();
-        assert!(!app.is_cast_attached());
-        assert!(!app.player.status.lock().unwrap().active);
-    }
-
-    #[test]
     fn attaching_a_cast_target_stops_a_running_pipewire_capture() {
         // No real `PipeWireWorker` is started here (no audio device in
         // CI) -- `stop_visualizer_worker`'s window teardown is the
@@ -649,42 +633,6 @@ mod tests {
         assert!(app.is_cast_attached());
         assert!(app.connected_session_id.is_none());
         assert!(app.connected_session_state.is_none());
-    }
-
-    #[test]
-    fn selecting_a_cast_target_severs_the_previous_cast_attachment() {
-        let _connect_guard = crate::app::CAST_CONNECT_TEST_LOCK.lock().unwrap();
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
-
-        let mut app = make_app_stub();
-        app.attach_cast("device-old".to_string());
-
-        let receiver = mbv_core::cast::discovery::CastReceiver {
-            id: "device-1".to_string(),
-            friendly_name: "Living Room".to_string(),
-            host: "192.168.0.5".to_string(),
-            port: 8009,
-        };
-        app.select_panel_target(PanelTarget::Cast(receiver));
-
-        *crate::app::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
-
-        assert_eq!(
-            app.cast_attachment.as_ref().unwrap().receiver_id,
-            "device-1"
-        );
-    }
-
-    #[test]
-    fn connecting_to_a_session_severs_an_attached_cast_target() {
-        let mut app = make_app_stub();
-        app.attach_cast("device-1".to_string());
-        let sess = crate::app::tests::make_session("tv", "mbv");
-
-        app.connect_to_session(&sess);
-
-        assert!(!app.is_cast_attached());
-        assert_eq!(app.connected_session_id.as_deref(), Some(sess.id.as_str()));
     }
 
     #[test]

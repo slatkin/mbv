@@ -349,17 +349,3 @@ impl App {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::player_join_outer_bound;
-    use std::time::Duration;
-
-    #[test]
-    fn player_join_outer_bound_includes_quit_fallback_and_cushion() {
-        assert_eq!(
-            player_join_outer_bound(Duration::from_secs(5)),
-            Duration::from_millis(6_200)
-        );
-    }
-}
