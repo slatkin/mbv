@@ -40,30 +40,30 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 1. `mbv-ids`
 
-- [ ] 1.1 Create `crates/mbv-ids/Cargo.toml`: `name = "mbv-ids"`, a `description`
+- [x] 1.1 Create `crates/mbv-ids/Cargo.toml`: `name = "mbv-ids"`, a `description`
   ("Type-safe media identifier newtypes for mbv."), all seven
   `*.workspace = true` package fields, `[lints] workspace = true`, and
   `serde.workspace = true`. Add `"crates/mbv-ids"` to `[workspace] members` and
   `default-members`. Verify: `cargo check -p mbv-ids` succeeds on the empty crate.
-- [ ] 1.2 Move `crates/mbv-core/src/id_types.rs` verbatim to
+- [x] 1.2 Move `crates/mbv-core/src/id_types.rs` verbatim to
   `crates/mbv-ids/src/lib.rs`, keeping the file's leading comment block and the
   `string_id!` macro. Verify: `cargo check -p mbv-ids` succeeds and
   `ItemId`, `MediaSourceId`, `EmbySessionId` are `pub`.
-- [ ] 1.3 Delete `pub mod id_types;` and `pub use id_types::{EmbySessionId,
+- [x] 1.3 Delete `pub mod id_types;` and `pub use id_types::{EmbySessionId,
   ItemId, MediaSourceId};` from `crates/mbv-core/src/lib.rs`; add
   `mbv-ids = { path = "../mbv-ids" }` to `mbv-core`'s `[dependencies]`. Verify:
   `rg 'id_types' crates/ src/` returns only the new crate's own file, if any.
-- [ ] 1.4 Rewrite the 8 `crate::id_types::…` / `super::{… ItemId …}` import
+- [x] 1.4 Rewrite the 8 `crate::id_types::…` / `super::{… ItemId …}` import
   sites inside `mbv-core` to `mbv_ids::…`. Edit sites by role: the Emby client
   root and its types/reporting modules, the player root and its types /
   report-worker / run-decisions modules, and the daemon event-loop player-events
   module. Verify: `cargo check -p mbv-core --all-targets` succeeds.
-- [ ] 1.5 Add `mbv-ids = { path = "crates/mbv-ids" }` to the `mbv` package's
+- [x] 1.5 Add `mbv-ids = { path = "crates/mbv-ids" }` to the `mbv` package's
   `[dependencies]` and rewrite its `use mbv_core::{ItemId, …}` /
   `use mbv_core::ItemId` sites (the cast state-types module and the dispatch
   actions module) to `mbv_ids::…`. Verify: `cargo check -p mbv --all-targets`
   succeeds.
-- [ ] 1.6 Run the group gate for `mbv-ids`.
+- [x] 1.6 Run the group gate for `mbv-ids`.
 
 ## 2. `mbv-keybinds`
 
