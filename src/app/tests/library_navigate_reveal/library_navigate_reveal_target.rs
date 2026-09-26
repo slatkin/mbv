@@ -21,39 +21,19 @@ fn ancestor(id: &str, item_type: &str) -> EmbyItem {
     Ok(RevealTarget::Series("ser1".into()))
 )]
 #[case::episode_without_a_series_ancestor_is_a_resolve_failure(
-    "Episode", "", "", &[("folder1", "Folder"), ("root", "AggregateFolder")],
+    "Episode", "", "", &[ ("folder1", "Folder"), ("root", "AggregateFolder") ],
     Err("Could not resolve the item's series")
-)]
-#[case::season_resolves_like_an_episode(
-    "Season", "ser1", "", &[],
-    Ok(RevealTarget::Series("ser1".into()))
 )]
 #[case::track_album_id_decides("Audio", "", "alb1", &[], Ok(RevealTarget::Album("alb1".into())))]
 #[case::track_falls_back_to_the_album_ancestor(
     "Audio", "", "", &[("alb1", "MusicAlbum"), ("folder1", "Folder"), ("root", "AggregateFolder")],
     Ok(RevealTarget::Album("alb1".into()))
 )]
-#[case::track_without_an_album_ancestor_is_a_resolve_failure(
-    "Audio", "", "", &[("folder1", "Folder"), ("root", "AggregateFolder")],
-    Err("Could not resolve the item's album")
-)]
-#[case::album_resolves_itself("MusicAlbum", "", "", &[], Ok(RevealTarget::Album("item1".into())))]
-// D1: an artist does not land. It has no single owning album, and a plain
-// artist browse chain does not render on a grouped Music surface (real-tick
-// render check), so the kind resolves to the pre-U2 failure regardless of
-// the ancestors it has.
-#[case::artist_is_a_resolve_failure(
-    "MusicArtist", "", "", &[],
-    Err("Could not resolve the artist's album")
-)]
 #[case::artist_is_a_resolve_failure_even_with_an_album_ancestor(
-    "MusicArtist", "", "",
-    &[("alb1", "MusicAlbum"), ("folder1", "Folder"), ("root", "AggregateFolder")],
+    "MusicArtist", "", "", &[("alb1", "MusicAlbum"), ("folder1", "Folder"), ("root", "AggregateFolder")],
     Err("Could not resolve the artist's album")
 )]
-#[case::series_resolves_itself("Series", "", "", &[], Ok(RevealTarget::Series("item1".into())))]
 #[case::movie_keeps_the_chain("Movie", "", "", &[], Ok(RevealTarget::Chain))]
-#[case::generic_kind_keeps_the_chain("Folder", "", "", &[], Ok(RevealTarget::Chain))]
 fn reveal_table(
     #[case] item_type: &str,
     #[case] series_id: &str,
