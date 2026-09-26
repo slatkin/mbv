@@ -1,6 +1,7 @@
 use super::*;
-#[cfg(not(test))]
-use mbv_core::playback_queue::AudiobookshelfBookQueueItem;
+pub(in crate::app) use mbv_core::playback_queue::AudiobookshelfBookQueueItem;
+
+// ---- Book browsing actions -----------------------------------------
 
 impl App {
     pub(in crate::app) fn audiobookshelf_book_refresh(&mut self) {

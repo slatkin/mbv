@@ -3,12 +3,11 @@ use crate::app::dispatch::notify::ToastSeverity;
 use crate::app::state::types::audiobookshelf_browse::AudiobookshelfEpisodeFilter;
 use crate::app::App;
 use mbv_core::api::TICKS_PER_SECOND;
-#[cfg(test)]
-use mbv_core::playback_queue::AudiobookshelfBookQueueItem;
 use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
 
 mod books;
 pub(in crate::app) use books::audiobookshelf_book_queue_item;
+pub(super) use books::AudiobookshelfBookQueueItem;
 
 /// The number of per-show episode fetches the podcast fan-out keeps in
 /// flight at once (design D5: bounded in-flight requests; a library with
@@ -502,8 +501,6 @@ impl App {
             }),
         ))
     }
-
-    // ---- Book browsing actions -----------------------------------------
 }
 
 pub(in crate::app) fn seconds_to_ticks(seconds: f64) -> i64 {

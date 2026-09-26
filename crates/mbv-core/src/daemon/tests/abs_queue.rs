@@ -42,9 +42,6 @@ fn recv_unified_queue(rx: &mpsc::Receiver<CtrlOutbound>) -> crate::ctrl::Unified
     }
 }
 
-// Covers initial snapshots and reconnects: `unified_queue_state_for_peer` is
-// the function handle_ws calls for both. Tested directly here to avoid the
-// socket plumbing that integration tests cover.
 fn progress_update(
     generation: u64,
     current_time_seconds: f64,
@@ -63,9 +60,6 @@ fn progress_update(
 fn abs_queue_with_slot() -> PlaybackQueue {
     PlaybackQueue::from_queue_items(vec![abs_qi("li_1", "ep_1")], Some(0))
 }
-
-// Acknowledged periodic sync updates the matching Bound slot and is broadcast
-// as redacted progress to a client that negotiated abs-progress.
 
 mod admission;
 mod progress;

@@ -1,5 +1,8 @@
 use super::*;
 
+// Covers initial snapshots and reconnects: `unified_queue_state_for_peer` is
+// the function handle_ws calls for both. Tested directly here to avoid the
+// socket plumbing that integration tests cover.
 #[test]
 fn unified_projection_uses_observed_slot_not_desired_queue_slot() {
     let queue = PlaybackQueue::from_queue_items(

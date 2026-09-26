@@ -1,5 +1,7 @@
 use super::*;
 
+// Acknowledged periodic sync updates the matching Bound slot and is broadcast
+// as redacted progress to a client that negotiated abs-progress.
 #[test]
 fn acknowledged_progress_updates_bound_slot_and_broadcasts() {
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
