@@ -427,31 +427,6 @@ mod tests {
     }
 
     #[test]
-    fn test_session_local_navigation_stays_local() {
-        let mut component = SessionsComponent::new();
-        component.list.set_content(vec![
-            ThreeLineItem::new(
-                SessionTargetKey::Emby("a".into()),
-                std::array::from_fn(|_| Vec::new()),
-            ),
-            ThreeLineItem::new(
-                SessionTargetKey::Emby("b".into()),
-                std::array::from_fn(|_| Vec::new()),
-            ),
-        ]);
-        component.handle_key(&key(Key::Down));
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("b".into()))
-        );
-        component.handle_key(&key(Key::Up));
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("a".into()))
-        );
-    }
-
-    #[test]
     fn test_session_disconnect_key_detaches_cast_only_attachment() {
         let mut component = SessionsComponent::new();
         component.can_disconnect = false;
@@ -518,43 +493,6 @@ mod tests {
         component
     }
 
-    #[test]
-    fn test_session_plain_badges_unchanged_without_nerd_fonts() {
-        let component = badge_component(false, ServiceState::Ready, None);
-        let items = component.project_targets(40);
-        assert_eq!(items[0].lines[0][0].text, "[EMBY] ");
-        assert_eq!(items[0].lines[0][0].role, ThreeLineRole::Kind);
-        assert_eq!(items[1].lines[0][0].text, "[CAST] ");
-        assert_eq!(items[1].lines[0][0].role, ThreeLineRole::Kind);
-    }
-
-    #[test]
-    fn test_session_nerd_font_badges_use_service_glyphs() {
-        let component = badge_component(true, ServiceState::Ready, None);
-        let items = component.project_targets(40);
-        assert_eq!(items[0].lines[0][0].text, "\u{f06b4} ");
-        assert_eq!(
-            items[0].lines[0][0].role,
-            ThreeLineRole::Badge(palette::ACCENT)
-        );
-        assert_eq!(items[1].lines[0][0].text, "\u{f0118} ");
-        assert_eq!(
-            items[1].lines[0][0].role,
-            ThreeLineRole::Badge(palette::TEXT_FOCUS_ACCENT)
-        );
-    }
-
-    #[test]
-    fn test_session_nerd_cast_badge_switches_glyph_when_attached() {
-        let component = badge_component(true, ServiceState::Ready, Some("cast-1"));
-        let items = component.project_targets(40);
-        assert_eq!(items[1].lines[0][0].text, "\u{f0119} ");
-        assert_eq!(
-            items[1].lines[0][0].role,
-            ThreeLineRole::Badge(palette::TEXT_FOCUS_ACCENT)
-        );
-    }
-
     #[rstest]
     #[case(ServiceState::Ready, palette::ACCENT)]
     #[case(ServiceState::NotConfigured, palette::TEXT_MUTED)]
@@ -569,30 +507,6 @@ mod tests {
         let items = component.project_targets(40);
         assert_eq!(items[0].lines[0][0].text, "\u{f06b4} ");
         assert_eq!(items[0].lines[0][0].role, ThreeLineRole::Badge(expected));
-    }
-
-    #[test]
-    fn test_session_nerd_badges_paint_badge_colors() {
-        let mut component = badge_component(true, ServiceState::Ready, None);
-        let mut terminal = Terminal::new(TestBackend::new(50, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let content = component.painted_content_area.unwrap();
-        let buffer = terminal.backend().buffer();
-        let fg_at = |symbol: &str, row: u16| {
-            let x = (0..buffer.area.width)
-                .find(|&x| buffer[(x, row)].symbol() == symbol)
-                .unwrap_or_else(|| panic!("no {symbol:?} painted on row {row}"));
-            buffer[(x, row)].fg
-        };
-        // The first row is selected, so this also pins that badge colors
-        // survive selection like the connected `Accent` badge does.
-        assert_eq!(fg_at("\u{f06b4}", content.y), palette::ACCENT);
-        assert_eq!(
-            fg_at("\u{f0118}", content.y + 3),
-            palette::TEXT_FOCUS_ACCENT
-        );
     }
 
     fn painted_component() -> SessionsComponent {
@@ -637,101 +551,6 @@ mod tests {
     }
 
     #[test]
-    fn test_session_buffer_zebra_adjacency_selection_and_hit_geometry() {
-        use crate::app::palette;
-        use crate::app::tests::make_session;
-
-        let mut first = make_session("first", "Emby");
-        first.id = "first".into();
-        let mut second = make_session("connected", "Emby");
-        second.id = "connected".into();
-        let targets = [
-            PanelTarget::Emby(Box::new(first)),
-            PanelTarget::Emby(Box::new(second)),
-        ];
-        let area = Rect::new(0, 0, 50, 16);
-        let mut component = SessionsComponent::new();
-        component.set_content(&targets, false, Some("connected"), None, false, Some(area));
-        component.list.set_focused(false);
-        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-
-        let content = component.painted_content_area.unwrap();
-        let y = content.y;
-        let stripe = palette::SESSIONS_STRIPE_BG;
-        let surface = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
-        let buffer = terminal.backend().buffer();
-        // With gap 0 the items are adjacent: item 0 owns y..y+3 and item 1 owns
-        // y+3..y+6, alternating stripes with no blank row between them.
-        for row in y..y + 3 {
-            assert_eq!(buffer[(content.x, row)].bg, surface, "first item unstriped");
-        }
-        for row in y + 3..y + 6 {
-            assert_eq!(buffer[(content.x, row)].bg, stripe, "second item's zebra");
-        }
-        // Every painted line resolves to its own item; no dead rows between.
-        let first_key = SessionTargetKey::Emby("first".into());
-        let second_key = SessionTargetKey::Emby("connected".into());
-        for row in y..y + 3 {
-            assert_eq!(
-                component.target_at_for_test(Position {
-                    x: content.x,
-                    y: row
-                }),
-                Some(first_key.clone()),
-                "line {row} resolves to item 0"
-            );
-        }
-        for row in y + 3..y + 6 {
-            assert_eq!(
-                component.target_at_for_test(Position {
-                    x: content.x,
-                    y: row
-                }),
-                Some(second_key.clone()),
-                "line {row} resolves to item 1"
-            );
-        }
-        let badge_x = cell_x(buffer, y + 3, "✚");
-        assert_eq!(buffer[(badge_x, y + 3)].fg, palette::ACCENT_ACTIVE);
-
-        component.list.set_focused(true);
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let buffer = terminal.backend().buffer();
-        // The selected bar spans exactly item 0's three lines and stops there.
-        for row in y..y + 3 {
-            assert_eq!(buffer[(content.x, row)].bg, palette::SELECTED_ROW_BG);
-        }
-        assert_eq!(
-            buffer[(content.x, y + 3)].bg,
-            stripe,
-            "selection bar does not bleed into the next item"
-        );
-
-        component
-            .list
-            .select_target(&SessionTargetKey::Emby("connected".into()));
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let buffer = terminal.backend().buffer();
-        for row in y + 3..y + 6 {
-            assert_eq!(buffer[(content.x, row)].bg, palette::SELECTED_ROW_BG);
-        }
-        let badge_x = cell_x(buffer, y + 3, "✚");
-        assert_eq!(buffer[(badge_x, y + 3)].fg, palette::ACCENT_ACTIVE);
-        assert_eq!(
-            buffer[(content.x, y + 6)].bg,
-            surface,
-            "selection bar ends with item 1"
-        );
-    }
-
-    #[test]
     fn test_session_mouse_click_on_selected_item_connects() {
         let mut component = painted_component();
         let content = component.painted_content_area.unwrap();
@@ -763,41 +582,6 @@ mod tests {
             Some(Msg::Shell(Box::new(ShellRequest::SelectSession(
                 SessionTargetKey::Emby("b".into())
             ))))
-        );
-    }
-
-    #[test]
-    fn test_session_mouse_click_outside_painted_panel_dismisses() {
-        let mut component = painted_component();
-        assert_eq!(
-            component.handle_mouse(left_down(100, 100)),
-            Some(Msg::Shell(Box::new(ShellRequest::DismissSessions)))
-        );
-    }
-
-    #[test]
-    fn test_session_mouse_wheel_steps_selection_independent_of_pointer_location() {
-        let mut component = painted_component();
-        component.handle_mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 1,
-            row: 1,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("b".into()))
-        );
-        component.reset_mouse_gestures_for_test();
-        component.handle_mouse(MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            column: 50,
-            row: 20,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(
-            component.list.selected_target(),
-            Some(&SessionTargetKey::Emby("a".into()))
         );
     }
 

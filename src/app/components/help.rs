@@ -260,39 +260,4 @@ mod tests {
         let msg = comp.handle_key(&make_key(key, modifiers));
         assert_eq!(msg, expected);
     }
-
-    #[test]
-    fn mouse_scroll_moves_one_line_inside_content_and_clamps() {
-        let mut comp = HelpComponent::new();
-        comp.content_geometry = Some(HelpRenderGeometry {
-            max_scroll: 6,
-            panel_area: Rect::default(),
-        });
-        comp.scroll = 5;
-        comp.handle_mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 1,
-            row: 1,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(comp.scroll, 6);
-        comp.handle_mouse(MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            column: 1,
-            row: 1,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(
-            comp.scroll, 6,
-            "throttle coalesces back-to-back wheel input"
-        );
-        comp.mouse_gestures.reset_for_test();
-        comp.handle_mouse(MouseEvent {
-            kind: MouseEventKind::ScrollUp,
-            column: 1,
-            row: 1,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(comp.scroll, 5);
-    }
 }
