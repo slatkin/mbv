@@ -8,4 +8,3 @@ pub(in crate::app) mod signals;
 pub(in crate::app) mod terminal;
 pub(crate) mod ui_util;
 pub(in crate::app) mod visualizer;
-pub(in crate::app) mod visualizer_worker;

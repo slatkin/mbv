@@ -280,7 +280,7 @@ pub(crate) fn make_app_stub() -> App {
         visualizer_enabled: false,
         visualizer_failed: false,
         visualizer: None,
-        visualizer_window: crate::app::infra::visualizer_worker::StereoSampleWindow::default(),
+        visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
         visualizer_glyph: crate::config::DEFAULT_VISUALIZER_GLYPH.into(),
         sessions: Vec::new(),
         cast_receivers: Vec::new(),

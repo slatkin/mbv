@@ -1711,10 +1711,10 @@ dependencies = [
  "mbv-keybinds",
  "mbv-net",
  "mbv-text",
+ "mbv-visualizer",
  "mbv-ws",
  "mimalloc",
  "nix 0.31.3",
- "pipewire",
  "rand 0.10.2",
  "ratatui",
  "ratatui-image",
@@ -1784,6 +1784,14 @@ name = "mbv-text"
 version = "0.21.2"
 dependencies = [
  "fuzzy-matcher",
+]
+
+[[package]]
+name = "mbv-visualizer"
+version = "0.21.2"
+dependencies = [
+ "log",
+ "pipewire",
 ]
 
 [[package]]

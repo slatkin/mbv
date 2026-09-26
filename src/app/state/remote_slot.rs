@@ -85,7 +85,7 @@ impl App {
     /// mbv's connection to it. No-op when nothing is connected.
     pub(in crate::app) fn sever_active_connection(&mut self) {
         if self.cast_attachment.take().is_some() {
-            self.stop_visualizer_worker();
+            self.stop_visualizer_capture();
         }
         if self.active_route.is_some() {
             self.restore_local_mode("Local playback restored before connecting");

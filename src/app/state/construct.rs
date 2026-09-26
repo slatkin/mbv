@@ -387,7 +387,7 @@ impl App {
             visualizer_enabled: false,
             visualizer_failed: false,
             visualizer: None,
-            visualizer_window: crate::app::infra::visualizer_worker::StereoSampleWindow::default(),
+            visualizer_window: mbv_visualizer::StereoSampleWindow::default(),
             visualizer_glyph: init.visualizer_glyph,
             last_played_item_id: None,
             last_played_completed: false,
