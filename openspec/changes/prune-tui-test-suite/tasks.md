@@ -9,9 +9,9 @@ Read design.md Decisions 1–4 before starting any group. They are the whole rul
 
 ## 1. Tick integration (`app::tests::tick_integration`, 290 → ≤ 60)
 
-- [ ] 1.1 List the cross-boundary contracts in design.md Decision 2 and pick one carrier test for each from existing tests (in `src/app/tests/tick_integration/`). Verify: the carrier list is recorded in the group's commit message.
-- [ ] 1.2 Delete every other per-screen test in `tv`, `music`, `music_mouse`, `library_panel`, `emby_library`, `podcast`, `home`, `mouse`, `feeds`, `sessions` and the remaining files, except behaviour unique to one screen (Decision 2). Verify: family count ≤ 60.
-- [ ] 1.3 Collapse surviving `#[case]` tables per Decision 3, and delete `…_through_tick` state tests per Decision 4 (write a fresh `app::state`/`app::dispatch` unit test only when no owner exists). Verify: `grep -c '::case_'` for the family is ≤ 10; group gate passes; commit.
+- [x] 1.1 List the cross-boundary contracts in design.md Decision 2 and pick one carrier test for each from existing tests (in `src/app/tests/tick_integration/`). Verify: the carrier list is recorded in the group's commit message.
+- [x] 1.2 Delete every other per-screen test in `tv`, `music`, `music_mouse`, `library_panel`, `emby_library`, `podcast`, `home`, `mouse`, `feeds`, `sessions` and the remaining files, except behaviour unique to one screen (Decision 2). Verify: family count ≤ 60.
+- [x] 1.3 Collapse surviving `#[case]` tables per Decision 3, and delete `…_through_tick` state tests per Decision 4 (write a fresh `app::state`/`app::dispatch` unit test only when no owner exists). Verify: `grep -c '::case_'` for the family is ≤ 10; group gate passes; commit.
 
 ## 2. Other app tests, part A (`app::tests::{queue, music_grouping, route_state, routing_matrix}`, 242 → ≤ 90)
 
