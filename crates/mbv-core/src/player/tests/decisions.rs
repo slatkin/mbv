@@ -3,8 +3,8 @@ use rstest::rstest;
 use crate::player::{
     active_item_state, advance_decision, parse_tracks, queue_next_up_decision, resolve_jump_target,
     seek_decision, select_tracks, standalone_next_up_decision, volume_decision,
-    AdvanceDecisionInput, CompletedMedia, FinishReason, NextUp, NextUpFire, SubtitlePrefs,
-    TrackInfo,
+    AdvanceDecisionInput, CompletedMedia, FinishReason, NextUp, NextUpFire, SubtitleChoice,
+    SubtitlePrefs, TrackInfo,
 };
 
 type AudioTracks = Vec<(i64, String)>;
@@ -25,21 +25,26 @@ fn tracks() -> (AudioTracks, SubtitleTracks) {
 }
 
 #[rstest]
-#[case::default_leaves_subtitle_unchanged("Default", "English", "fr", None)]
-#[case::none_disables_subtitles("None", "", "fr", None)]
-#[case::forced_prefers_requested_language("OnlyForced", "French", "en", Some(4))]
-#[case::always_matches_requested_language("Always", "French", "en", Some(4))]
-#[case::smart_hides_matching_audio_language("Smart", "English", "en", None)]
-#[case::smart_selects_when_audio_differs("Smart", "French", "en", Some(4))]
-#[case::hearing_impaired_prefers_sdh("HearingImpaired", "French", "fr", Some(5))]
-#[case::only_forced_falls_back_to_any_forced("OnlyForced", "German", "en", Some(4))]
-#[case::always_falls_back_to_first("Always", "German", "en", Some(3))]
-#[case::unknown_mode_leaves_selection_unchanged("Unknown", "French", "en", None)]
+#[case::default_leaves_subtitle_unchanged("Default", "English", "fr", SubtitleChoice::Leave)]
+#[case::none_disables_subtitles("None", "", "fr", SubtitleChoice::Off)]
+#[case::forced_prefers_requested_language("OnlyForced", "French", "en", SubtitleChoice::Track(4))]
+#[case::always_matches_requested_language("Always", "French", "en", SubtitleChoice::Track(4))]
+#[case::smart_hides_matching_audio_language("Smart", "English", "en", SubtitleChoice::Off)]
+#[case::smart_selects_when_audio_differs("Smart", "French", "en", SubtitleChoice::Track(4))]
+#[case::hearing_impaired_prefers_sdh("HearingImpaired", "French", "fr", SubtitleChoice::Track(5))]
+#[case::only_forced_falls_back_to_any_forced(
+    "OnlyForced",
+    "German",
+    "en",
+    SubtitleChoice::Track(4)
+)]
+#[case::always_falls_back_to_first("Always", "German", "en", SubtitleChoice::Track(3))]
+#[case::unknown_mode_leaves_selection_unchanged("Unknown", "French", "en", SubtitleChoice::Leave)]
 fn subtitle_modes_choose_expected_track(
     #[case] mode: &str,
     #[case] subtitle_lang: &str,
     #[case] audio_lang: &str,
-    #[case] expected: Option<i64>,
+    #[case] expected: SubtitleChoice,
 ) {
     let (audio, subtitles) = tracks();
     let prefs = SubtitlePrefs {
@@ -48,6 +53,26 @@ fn subtitle_modes_choose_expected_track(
         audio_lang: audio_lang.into(),
     };
     let (_, selected) = select_tracks(&audio, &subtitles, 1, "en", &prefs);
+    assert_eq!(selected, expected);
+}
+
+#[rstest]
+#[case::none_turns_subtitles_off("None", "English", SubtitleChoice::Off)]
+#[case::known_mode_selects_matching_track("Always", "French", SubtitleChoice::Track(4))]
+#[case::unknown_mode_leaves_unchanged("Unknown", "French", SubtitleChoice::Leave)]
+#[case::empty_mode_leaves_unchanged("", "French", SubtitleChoice::Leave)]
+fn subtitle_preference_string_maps_to_choice(
+    #[case] mode: &str,
+    #[case] subtitle_lang: &str,
+    #[case] expected: SubtitleChoice,
+) {
+    let (_, subtitles) = tracks();
+    let prefs = SubtitlePrefs {
+        mode: mode.into(),
+        subtitle_lang: subtitle_lang.into(),
+        ..Default::default()
+    };
+    let (_, selected) = select_tracks(&[], &subtitles, 1, "en", &prefs);
     assert_eq!(selected, expected);
 }
 
