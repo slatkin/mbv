@@ -24,7 +24,7 @@ Each group is one commit. The gate for a group is `cargo check -p mbv`, `cargo c
 
 ## 5. RemoteTracking seam
 
-- [ ] 5.1 Create `src/app/state/remote_tracking.rs` with `RemoteTracking` holding these fields, moved from `App`: `remote_pos_s, remote_pos_at, remote_api_pos_advanced_at, remote_stalled_while_paused, remote_seek_pending_until, runtime_zero_since, session_miss_count, last_session_poll, direct_remote_connected, direct_remote_label, direct_remote_session_id`. Do NOT move `connected_session_id` / `connected_session_state`. Add a constructor with today's initial values from `construct.rs`. Add the field `remote: RemoteTracking` to `App`, delete the originals, and fix access paths to `.remote.<field>`. Keep every write site's values exactly as they are, including the unpaired direct-remote writes in `dispatch/session/switch.rs` and `connect.rs`. Verify: gate green.
+- [x] 5.1 Create `src/app/state/remote_tracking.rs` with `RemoteTracking` holding these fields, moved from `App`: `remote_pos_s, remote_pos_at, remote_api_pos_advanced_at, remote_stalled_while_paused, remote_seek_pending_until, runtime_zero_since, session_miss_count, last_session_poll, direct_remote_connected, direct_remote_label, direct_remote_session_id`. Do NOT move `connected_session_id` / `connected_session_state`. Add a constructor with today's initial values from `construct.rs`. Add the field `remote: RemoteTracking` to `App`, delete the originals, and fix access paths to `.remote.<field>`. Keep every write site's values exactly as they are, including the unpaired direct-remote writes in `dispatch/session/switch.rs` and `connect.rs`. Verify: gate green.
 
 ## 6. RuntimeChannels seam
 
