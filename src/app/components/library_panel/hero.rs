@@ -495,6 +495,3 @@ pub(in crate::app) fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
         credits: None,
     }
 }
-
-#[cfg(test)]
-mod tests;

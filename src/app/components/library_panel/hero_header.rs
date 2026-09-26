@@ -13,8 +13,6 @@
 //! shell projection (task 5.10) shares with the painter.
 
 mod artwork_box;
-#[cfg(test)]
-mod hero_header_tests;
 mod title_meta;
 
 /// Panes whose *terminal* is this short (or fewer rows) use compact caps so

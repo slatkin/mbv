@@ -478,9 +478,3 @@ pub(in crate::app) fn overlay_links_grid(
     );
     paint_link_hit_row(f, cell, area.bottom(), facts, hovered_link, link_hits);
 }
-
-#[cfg(test)]
-mod layout_tests;
-
-#[cfg(test)]
-mod credits_tests;

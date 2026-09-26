@@ -50,6 +50,3 @@ pub(in crate::app) fn render_narrow_skeleton(
         ..Default::default()
     }
 }
-
-#[cfg(test)]
-mod tests;

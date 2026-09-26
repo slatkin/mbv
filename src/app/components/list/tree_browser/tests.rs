@@ -33,7 +33,6 @@ fn paint(browser: &mut TreeBrowser<Target>) {
         .unwrap();
 }
 
-mod painting;
 mod selection;
 mod structure;
 

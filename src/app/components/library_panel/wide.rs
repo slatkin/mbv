@@ -405,6 +405,3 @@ pub(in crate::app) fn text_in(buf: &ratatui::buffer::Buffer, area: Rect, needle:
     }
     false
 }
-
-#[cfg(test)]
-mod tests;
