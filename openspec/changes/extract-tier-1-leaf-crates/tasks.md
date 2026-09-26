@@ -175,35 +175,35 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 5. `mbv-visualizer`
 
-- [ ] 5.1 Re-check for collisions: `openspec list` plus
+- [x] 5.1 Re-check for collisions: `openspec list` plus
   `rg 'visualizer_worker|app_struct|state/construct' openspec/changes/*/tasks.md`
   to confirm no unchecked task in another in-flight change edits
   `src/app/state/app_struct.rs` or `src/app/state/construct.rs`. Verify: no
   unchecked box names either file; if one does, stop and report.
-- [ ] 5.2 Create `crates/mbv-visualizer/Cargo.toml`: `name = "mbv-visualizer"`,
+- [x] 5.2 Create `crates/mbv-visualizer/Cargo.toml`: `name = "mbv-visualizer"`,
   `description` ("PipeWire stereo audio capture worker for mbv's visualizer."),
   the seven `*.workspace = true` package fields, `[lints] workspace = true`, and
   `pipewire.workspace = true`, `log.workspace = true`. Register it in `members`
   and `default-members`. Verify: `cargo check -p mbv-visualizer` succeeds on the
   empty crate.
-- [ ] 5.3 Move `src/app/infra/visualizer_worker.rs` to
+- [x] 5.3 Move `src/app/infra/visualizer_worker.rs` to
   `crates/mbv-visualizer/src/lib.rs`, widening `StereoSampleBuffer` and
   `join_worker` from `pub(crate)` to `pub`. `StereoSample`,
   `StereoSampleWindow` and `PipeWireWorker` are already `pub`. Verify:
   `cargo nextest run -p mbv-visualizer` succeeds.
-- [ ] 5.4 Delete `pub(in crate::app) mod visualizer_worker;` from
+- [x] 5.4 Delete `pub(in crate::app) mod visualizer_worker;` from
   `src/app/infra.rs`, add `mbv-visualizer = { path = "crates/mbv-visualizer" }`
   to the `mbv` package's `[dependencies]`, and remove
   `pipewire.workspace = true` from it. Verify:
   `rg 'pipewire' Cargo.toml` shows it only under `[workspace.dependencies]`.
-- [ ] 5.5 Rewrite the 9 remaining `crate::app::infra::visualizer_worker::…`
+- [x] 5.5 Rewrite the 9 remaining `crate::app::infra::visualizer_worker::…`
   references in `src/` to `mbv_visualizer::…`. Edit sites by role: the app-struct
   and construct state modules, the remote-slot state module, the visualizer infra
   module (its `use super::visualizer_worker::PipeWireWorker` becomes a
   `mbv_visualizer` path), the cast dispatch module, the run-loop teardown module,
   the visualizer painter, and the `src/app/tests.rs` fixture. Verify:
   `rg 'visualizer_worker' src/` returns nothing.
-- [ ] 5.6 Run the group gate for `mbv-visualizer`, and additionally confirm the
+- [x] 5.6 Run the group gate for `mbv-visualizer`, and additionally confirm the
   packaging constraint still holds: `crates/mbvd/Cargo.toml` has no path to
   `mbv-visualizer` and `cargo tree -p mbvd | rg pipewire` returns nothing (CI's
   build.yml asserts "mbvd must not depend on PipeWire runtime packages").
