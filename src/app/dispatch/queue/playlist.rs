@@ -1,4 +1,4 @@
-use super::*;
+use super::{App, PlaylistMutation, QueueItem};
 
 impl App {
     pub(in crate::app) fn queue_is_saved_playlist(&self) -> bool {

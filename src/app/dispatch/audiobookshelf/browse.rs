@@ -7,7 +7,6 @@ use mbv_core::playback_queue::{AudiobookshelfQueueItem, QueueItem};
 
 mod books;
 pub(in crate::app) use books::audiobookshelf_book_queue_item;
-pub(super) use books::AudiobookshelfBookQueueItem;
 
 /// The number of per-show episode fetches the podcast fan-out keeps in
 /// flight at once (design D5: bounded in-flight requests; a library with
