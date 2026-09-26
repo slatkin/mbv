@@ -67,24 +67,24 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
 
 ## 2. `mbv-keybinds`
 
-- [ ] 2.1 Create `crates/mbv-keybinds/Cargo.toml`: `name = "mbv-keybinds"`,
+- [x] 2.1 Create `crates/mbv-keybinds/Cargo.toml`: `name = "mbv-keybinds"`,
   `description` ("Configurable keybinding registry, chord grammar, and
   validation for mbv."), the seven `*.workspace = true` package fields, and
   `[lints] workspace = true`. It needs **no** dependencies — the module is pure
   `std`. Register it in `members` and `default-members`. Verify:
   `cargo check -p mbv-keybinds` succeeds on the empty crate.
-- [ ] 2.2 Move `crates/mbv-core/src/keybinds.rs` to
+- [x] 2.2 Move `crates/mbv-core/src/keybinds.rs` to
   `crates/mbv-keybinds/src/lib.rs` (keep its `//!` doc comment, its three `mod`
   declarations, its three `pub use` blocks, and its `#[cfg(test)] mod tests;`),
   and move `crates/mbv-core/src/keybinds/{chord,config,registry,tests}.rs` to
   `crates/mbv-keybinds/src/`. Verify: `cargo nextest run -p mbv-keybinds` runs
   the moved test module and passes.
-- [ ] 2.3 Delete `pub mod keybinds;` from `crates/mbv-core/src/lib.rs` and add
+- [x] 2.3 Delete `pub mod keybinds;` from `crates/mbv-core/src/lib.rs` and add
   `mbv-keybinds = { path = "../mbv-keybinds" }` to `mbv-core`'s `[dependencies]`.
   Rewrite the `crate::keybinds::…` references in `mbv-core` — the app-config
   parse, save, types-paths and config-test modules — to `mbv_keybinds::…`.
   Verify: `cargo check -p mbv-core --all-targets` succeeds.
-- [ ] 2.4 Add `mbv-keybinds = { path = "crates/mbv-keybinds" }` to the `mbv`
+- [x] 2.4 Add `mbv-keybinds = { path = "crates/mbv-keybinds" }` to the `mbv`
   package's `[dependencies]` and rewrite its 12+ `use mbv_core::keybinds::…`
   lines to `use mbv_keybinds::…`. Edit sites by role: the three input-routing
   modules and their test-support/resolution/prefix test modules, the shell
@@ -92,7 +92,7 @@ be added to silence a lint — if one cannot be fixed at the source, stop and as
   and the help painter, the settings state-types module, and the
   tick-integration and routing-matrix test support modules. Verify:
   `rg 'mbv_core::keybinds' src/ crates/` returns nothing.
-- [ ] 2.5 Run the group gate for `mbv-keybinds`.
+- [x] 2.5 Run the group gate for `mbv-keybinds`.
 
 ## 3. `mbv-net`
 
