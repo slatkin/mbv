@@ -45,6 +45,12 @@ runs Bare, via the Stay-alive process, or packaged `mbvd` Player owner.
 * `crates/mbv-core/` — runtime, Services, providers, config, protocols, canonical
   queue, source prep, mpv projection; no UI/feed fetch.
 * `crates/mbvd/` — packaged daemon, persistence, sockets.
+* `crates/mbv-ids/` — type-safe media identifier newtypes (`ItemId`, `MediaSourceId`, `EmbySessionId`).
+* `crates/mbv-keybinds/` — configurable keybinding registry, chord grammar, validation.
+* `crates/mbv-net/` — shared HTTP, TLS-agent, socket and retry primitives.
+* `crates/mbv-ws/` — Emby websocket client transport.
+* `crates/mbv-visualizer/` — PipeWire stereo audio capture worker for the visualizer.
+* `crates/mbv-text/` — fuzzy-match acceptance and control-character predicates for text input.
 
 ## Interactive architecture
 
