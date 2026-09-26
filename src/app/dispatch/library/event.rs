@@ -14,32 +14,67 @@ fn feed_home_video_selection(state: &FeedHomeVideoState) -> (usize, usize, usize
 }
 
 impl App {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Exhaustive LibEvent routing keeps each variant visible at one dispatch site"
+    )]
     pub(in crate::app) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
-            event @ LibEvent::Loaded { .. } => self.handle_loaded_event(event),
+            LibEvent::Loaded {
+                lib_idx,
+                parent_id,
+                level,
+            } => self.handle_lib_loaded(lib_idx, &parent_id, *level),
             // The shell drain applies the Model-owned latest snapshot.
             LibEvent::EmbyLatestSnapshotFetched {
                 library_id,
                 title,
                 items,
             } => drop((library_id, title, items)),
-            event @ LibEvent::PageAppended { .. } => self.handle_page_appended_event(event),
-            event @ LibEvent::Refreshed { .. } => self.handle_refreshed_event(event),
-            event @ LibEvent::SearchItemsLoaded { .. } => {
-                self.handle_search_items_loaded_event(event);
-            }
+            LibEvent::PageAppended {
+                lib_idx,
+                parent_id,
+                items,
+                total_count,
+            } => self.handle_lib_page_appended(lib_idx, &parent_id, items, total_count),
+            LibEvent::Refreshed {
+                lib_idx,
+                parent_id,
+                item_types,
+                unplayed_only,
+                items,
+                total_count,
+            } => self.handle_lib_refreshed(
+                lib_idx,
+                &parent_id,
+                item_types.as_deref(),
+                unplayed_only,
+                items,
+                total_count,
+            ),
+            LibEvent::SearchItemsLoaded {
+                lib_idx,
+                parent_id,
+                items,
+            } => self.handle_search_items_loaded(lib_idx, &parent_id, items),
             LibEvent::AlbumIndexBuilt { library_id, result } => {
                 self.handle_album_index_built(library_id, result);
             }
-            event @ LibEvent::RecursiveAlbumActivated { .. } => {
-                self.handle_recursive_album_activated_event(event);
-            }
-            event @ LibEvent::AllItemsPrefetched { .. } => {
-                self.handle_all_items_prefetched_event(event);
-            }
-            event @ LibEvent::FeedHomeVideoAggregated { .. } => {
-                self.handle_feed_home_video_aggregated_event(event);
-            }
+            LibEvent::RecursiveAlbumActivated {
+                library_id,
+                nav_stack,
+            } => self.handle_recursive_album_activated(&library_id, nav_stack),
+            LibEvent::AllItemsPrefetched {
+                lib_idx,
+                parent_id,
+                items,
+            } => self.handle_all_items_prefetched(lib_idx, &parent_id, items),
+            LibEvent::FeedHomeVideoAggregated {
+                lib_idx,
+                parent_id,
+                all_items,
+                groups,
+            } => self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups),
             LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
                 self.handle_album_artist_level_fetched(level_id, artists);
             }
@@ -49,23 +84,58 @@ impl App {
             LibEvent::AlbumTracksFetched { album_id, tracks } => {
                 self.handle_album_tracks_fetched(album_id, tracks);
             }
-            event @ LibEvent::ArtistTracksFetched { .. } => {
-                self.handle_artist_tracks_fetched_event(event);
-            }
-            event @ LibEvent::ArtistArtworkFetched { .. } => {
-                self.handle_artist_artwork_fetched_event(event);
-            }
-            event @ LibEvent::SeriesDetailFetched { .. } => {
-                self.handle_series_detail_fetched_event(event);
-            }
+            LibEvent::ArtistTracksFetched {
+                destination,
+                generation,
+                artist_id,
+                revision,
+                result,
+            } => self.handle_artist_tracks_fetched(
+                &destination,
+                generation,
+                &artist_id,
+                revision,
+                result,
+            ),
+            LibEvent::ArtistArtworkFetched {
+                destination,
+                generation,
+                artist_id,
+                revision,
+                cache_key,
+                available,
+            } => self.handle_artist_artwork_fetched(
+                destination,
+                generation,
+                &artist_id,
+                revision,
+                &cache_key,
+                available,
+            ),
+            LibEvent::SeriesDetailFetched {
+                series_id,
+                seasons,
+                episodes,
+            } => self.handle_series_detail_fetched(
+                &series_id,
+                crate::app::SeriesDetail { seasons, episodes },
+            ),
             LibEvent::SeriesSeasonEpisodesFetched {
                 series_id,
                 season_id,
                 episodes,
             } => self.handle_series_season_episodes_fetched(&series_id, season_id, episodes),
-            event @ LibEvent::AudiobookshelfDetailFetched { .. } => {
-                self.handle_audiobookshelf_podcast_detail_fetched_event(event);
-            }
+            LibEvent::AudiobookshelfDetailFetched {
+                generation,
+                request,
+                library_item_id,
+                result,
+            } => self.handle_audiobookshelf_podcast_detail_fetched(
+                generation,
+                request,
+                library_item_id,
+                result,
+            ),
             LibEvent::AudiobookshelfShowsFetched {
                 generation,
                 library_id,
@@ -81,8 +151,16 @@ impl App {
                 library_id,
                 result,
             } => self.handle_audiobookshelf_shelf_fetched(generation, library_id, result),
-            event @ LibEvent::AudiobookshelfBookDetailFetched { .. } => {
-                self.handle_audiobookshelf_book_detail_fetched_event(event);
+            LibEvent::AudiobookshelfBookDetailFetched {
+                generation,
+                library_item_id,
+                result,
+            } => {
+                self.handle_audiobookshelf_book_detail_fetched(
+                    generation,
+                    &library_item_id,
+                    result,
+                );
             }
             LibEvent::AudiobookshelfProgressAcknowledged(update) => {
                 self.handle_audiobookshelf_progress_acknowledged(&update);
@@ -95,9 +173,17 @@ impl App {
                 landing,
                 switch_tab,
             } => self.handle_navigate_to_event(lib_idx, landing, switch_tab),
-            event @ LibEvent::RestoreLibraryPosition { .. } => {
-                self.handle_restore_library_position_event(event);
-            }
+            LibEvent::RestoreLibraryPosition {
+                lib_idx,
+                requested_position,
+                position,
+                nav_stack,
+            } => self.handle_restored_library_position(
+                lib_idx,
+                &requested_position,
+                position,
+                nav_stack,
+            ),
             LibEvent::PlaylistsLoaded(items) => self.handle_playlists_loaded(items),
             LibEvent::PlaylistsLoadError(error) => self.handle_playlists_load_error(error),
             LibEvent::PlaylistItemsLoaded { playlist_id, items } => {
@@ -117,194 +203,6 @@ impl App {
             LibEvent::HomeContentCleared => {}
             LibEvent::Error(error) => self.handle_error(&error),
         }
-    }
-    fn handle_loaded_event(&mut self, event: LibEvent) {
-        let LibEvent::Loaded {
-            lib_idx,
-            parent_id,
-            level,
-        } = event
-        else {
-            return;
-        };
-        self.handle_lib_loaded(lib_idx, &parent_id, *level);
-    }
-
-    fn handle_page_appended_event(&mut self, event: LibEvent) {
-        let LibEvent::PageAppended {
-            lib_idx,
-            parent_id,
-            items,
-            total_count,
-        } = event
-        else {
-            return;
-        };
-        self.handle_lib_page_appended(lib_idx, &parent_id, items, total_count);
-    }
-
-    fn handle_search_items_loaded_event(&mut self, event: LibEvent) {
-        let LibEvent::SearchItemsLoaded {
-            lib_idx,
-            parent_id,
-            items,
-        } = event
-        else {
-            return;
-        };
-        self.handle_search_items_loaded(lib_idx, &parent_id, items);
-    }
-
-    fn handle_recursive_album_activated_event(&mut self, event: LibEvent) {
-        let LibEvent::RecursiveAlbumActivated {
-            library_id,
-            nav_stack,
-        } = event
-        else {
-            return;
-        };
-        self.handle_recursive_album_activated(&library_id, nav_stack);
-    }
-
-    fn handle_all_items_prefetched_event(&mut self, event: LibEvent) {
-        let LibEvent::AllItemsPrefetched {
-            lib_idx,
-            parent_id,
-            items,
-        } = event
-        else {
-            return;
-        };
-        self.handle_all_items_prefetched(lib_idx, &parent_id, items);
-    }
-
-    fn handle_feed_home_video_aggregated_event(&mut self, event: LibEvent) {
-        let LibEvent::FeedHomeVideoAggregated {
-            lib_idx,
-            parent_id,
-            all_items,
-            groups,
-        } = event
-        else {
-            return;
-        };
-        self.handle_feed_home_video_aggregated(lib_idx, &parent_id, all_items, groups);
-    }
-
-    fn handle_series_detail_fetched_event(&mut self, event: LibEvent) {
-        let LibEvent::SeriesDetailFetched {
-            series_id,
-            seasons,
-            episodes,
-        } = event
-        else {
-            return;
-        };
-        self.handle_series_detail_fetched(
-            &series_id,
-            crate::app::SeriesDetail { seasons, episodes },
-        );
-    }
-
-    fn handle_audiobookshelf_podcast_detail_fetched_event(&mut self, event: LibEvent) {
-        let LibEvent::AudiobookshelfDetailFetched {
-            generation,
-            request,
-            library_item_id,
-            result,
-        } = event
-        else {
-            return;
-        };
-        self.handle_audiobookshelf_podcast_detail_fetched(
-            generation,
-            request,
-            library_item_id,
-            result,
-        );
-    }
-
-    fn handle_audiobookshelf_book_detail_fetched_event(&mut self, event: LibEvent) {
-        let LibEvent::AudiobookshelfBookDetailFetched {
-            generation,
-            library_item_id,
-            result,
-        } = event
-        else {
-            return;
-        };
-        self.handle_audiobookshelf_book_detail_fetched(generation, &library_item_id, result);
-    }
-
-    fn handle_refreshed_event(&mut self, event: LibEvent) {
-        let LibEvent::Refreshed {
-            lib_idx,
-            parent_id,
-            item_types,
-            unplayed_only,
-            items,
-            total_count,
-        } = event
-        else {
-            return;
-        };
-        self.handle_lib_refreshed(
-            lib_idx,
-            &parent_id,
-            item_types.as_deref(),
-            unplayed_only,
-            items,
-            total_count,
-        );
-    }
-
-    fn handle_artist_tracks_fetched_event(&mut self, event: LibEvent) {
-        let LibEvent::ArtistTracksFetched {
-            destination,
-            generation,
-            artist_id,
-            revision,
-            result,
-        } = event
-        else {
-            return;
-        };
-        self.handle_artist_tracks_fetched(&destination, generation, &artist_id, revision, result);
-    }
-
-    fn handle_artist_artwork_fetched_event(&mut self, event: LibEvent) {
-        let LibEvent::ArtistArtworkFetched {
-            destination,
-            generation,
-            artist_id,
-            revision,
-            cache_key,
-            available,
-        } = event
-        else {
-            return;
-        };
-        self.handle_artist_artwork_fetched(
-            destination,
-            generation,
-            &artist_id,
-            revision,
-            &cache_key,
-            available,
-        );
-    }
-
-    fn handle_restore_library_position_event(&mut self, event: LibEvent) {
-        let LibEvent::RestoreLibraryPosition {
-            lib_idx,
-            requested_position,
-            position,
-            nav_stack,
-        } = event
-        else {
-            return;
-        };
-        self.handle_restored_library_position(lib_idx, &requested_position, position, nav_stack);
     }
     fn handle_all_items_prefetched(
         &mut self,
