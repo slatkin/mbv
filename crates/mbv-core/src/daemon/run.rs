@@ -11,7 +11,7 @@ use crate::daemon::{ClientRegistry, CtrlClients};
 use crate::playback::PlaybackQueue;
 use crate::playback_queue::QueueSlotId;
 use crate::player::{Player, PlayerEvent, PlayerOwnerState};
-use crate::stream::SocketStream;
+use mbv_net::stream::SocketStream;
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};

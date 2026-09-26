@@ -1,5 +1,5 @@
 use super::*;
-use crate::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 use rstest::rstest;
 
 fn wire_fixture(name: &str) -> String {

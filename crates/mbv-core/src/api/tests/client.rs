@@ -4,7 +4,7 @@ use serde_json::json;
 
 // ── EmbyClient::ws_url ───────────────────────────────────────────────────
 
-use crate::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 
 /// A URL that never leaves the process: the mock transport ignores it, but it
 /// must remain an IP literal so the default resolver never attempts DNS.

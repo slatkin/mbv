@@ -12,7 +12,7 @@ impl EmbyClient {
         let resp: Value = match self
             .get(&format!(
                 "/Shows/{}/Episodes",
-                crate::encode_path_segment(series_id.as_str())
+                mbv_net::encode_path_segment(series_id.as_str())
             ))
             .query("UserId", &self.user_id)
             .query(
@@ -154,7 +154,7 @@ impl EmbyClient {
     pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), String> {
         self.post(&format!(
             "/Sessions/{}/Playing/{cmd}",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .send("")
         .map_err(|e| e.to_string())?;
@@ -164,7 +164,7 @@ impl EmbyClient {
     pub fn session_seek(&self, id: &str, ticks: i64) -> Result<(), String> {
         self.post(&format!(
             "/Sessions/{}/Playing/Seek",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .query("SeekPositionTicks", ticks.to_string())
         .send("")
@@ -175,7 +175,7 @@ impl EmbyClient {
     pub fn session_set_volume(&self, id: &str, vol: i64) -> Result<(), String> {
         self.post(&format!(
             "/Sessions/{}/Command/SetVolume",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .send_json(serde_json::json!({"Arguments":{"Volume": vol.to_string()}}))
         .map_err(|e| e.to_string())?;
@@ -185,7 +185,7 @@ impl EmbyClient {
     pub fn session_set_subtitle_index(&self, id: &str, index: i64) -> Result<(), String> {
         self.post(&format!(
             "/Sessions/{}/Command/SetSubtitleStreamIndex",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))
         .map_err(|e| e.to_string())?;
@@ -195,7 +195,7 @@ impl EmbyClient {
     pub fn session_set_audio_index(&self, id: &str, index: i64) -> Result<(), String> {
         self.post(&format!(
             "/Sessions/{}/Command/SetAudioStreamIndex",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .send_json(serde_json::json!({"Arguments":{"Index": index.to_string()}}))
         .map_err(|e| e.to_string())?;
@@ -206,7 +206,7 @@ impl EmbyClient {
         let cmd = if muted { "Mute" } else { "Unmute" };
         self.post(&format!(
             "/Sessions/{}/Command/{cmd}",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .send("")
         .map_err(|e| e.to_string())?;
@@ -216,7 +216,7 @@ impl EmbyClient {
     pub fn session_play(&self, id: &str, item_id: &str, start_ticks: i64) -> Result<(), String> {
         self.post(&format!(
             "/Sessions/{}/Playing",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .send_json(serde_json::json!({
             "PlayCommand": "PlayNow",
@@ -236,7 +236,7 @@ impl EmbyClient {
     ) -> Result<(), String> {
         self.post(&format!(
             "/Sessions/{}/Playing",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         ))
         .send_json(serde_json::json!({
             "PlayCommand": "PlayNow",

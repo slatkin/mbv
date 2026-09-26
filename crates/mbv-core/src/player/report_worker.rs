@@ -115,7 +115,7 @@ fn run_report_worker(rx: mpsc::Receiver<ReportJob>) {
                 stopped,
             } => {
                 if let Some(h) = handle {
-                    let _ = crate::bounded::run_with_hard_bound(
+                    let _ = mbv_net::bounded::run_with_hard_bound(
                         move || {
                             let _ = h.join();
                             Ok::<(), String>(())

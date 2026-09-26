@@ -1,4 +1,4 @@
-use crate::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 
 fn emby_client(http: &MockHttp) -> super::EmbyClient {
     let config = crate::config::Config {

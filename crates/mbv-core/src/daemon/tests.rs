@@ -8,7 +8,6 @@ use crate::ctrl::{
     CtrlCmd, CtrlEvent, CtrlHello, PlaybackIntent, PlaybackIntentAction, PlaybackIntentOutcome,
     WireCommand,
 };
-use crate::mock_http::MockHttp;
 use crate::playback_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, PlaybackQueue, QueueItem,
 };
@@ -17,8 +16,9 @@ use crate::player::{
     PlayerEvent, PlayerOwnerState, PlayerStatus, SubtitlePrefs,
 };
 use crate::service_runtime::SetupGeneration;
-use crate::stream::SocketStream;
 use crate::ws::WsEvent;
+use mbv_net::mock_http::MockHttp;
+use mbv_net::stream::SocketStream;
 use rstest::rstest;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;

@@ -229,7 +229,7 @@ impl EmbyClient {
             "outbound: Stopped shutdown pos={position_ticks} timeout={}ms",
             hard_bound.as_millis()
         );
-        let result = crate::bounded::run_with_hard_bound(
+        let result = mbv_net::bounded::run_with_hard_bound(
             move || {
                 client
                     .post("/Sessions/Playing/Stopped")

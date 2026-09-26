@@ -237,7 +237,7 @@ fn feed_empty_queue_creates_standalone_session() {
 
 #[rstest::rstest]
 fn reporter_session_lifecycle(
-    make_no_session_reporter_with_ids: (SessionReporter, crate::mock_http::MockHttp),
+    make_no_session_reporter_with_ids: (SessionReporter, mbv_net::mock_http::MockHttp),
     make_no_session_reporter: SessionReporter,
 ) {
     let (with_ids, _) = make_no_session_reporter_with_ids;
@@ -397,7 +397,7 @@ fn reporter_no_session_all_reporting_is_noop(make_no_session_reporter: SessionRe
 
 #[rstest::rstest]
 fn reporter_with_session_stopped_proceeds_to_client(
-    make_no_session_reporter_with_ids: (SessionReporter, crate::mock_http::MockHttp),
+    make_no_session_reporter_with_ids: (SessionReporter, mbv_net::mock_http::MockHttp),
 ) {
     let (reporter, http) = make_no_session_reporter_with_ids;
     assert!(reporter.has_session());
@@ -412,9 +412,9 @@ fn reporter_with_session_stopped_proceeds_to_client(
 }
 
 #[rstest::fixture]
-fn make_no_session_reporter_with_ids() -> (SessionReporter, crate::mock_http::MockHttp) {
+fn make_no_session_reporter_with_ids() -> (SessionReporter, mbv_net::mock_http::MockHttp) {
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
-    let http = crate::mock_http::MockHttp::new();
+    let http = mbv_net::mock_http::MockHttp::new();
     let agent = http.agent();
     let cfg = crate::config::Config {
         server_url: "http://127.0.0.1:1".into(),

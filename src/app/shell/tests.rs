@@ -7,7 +7,7 @@ use crate::app::tests::{
 use crate::app::LibraryTab;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::EmbyItem;
-use mbv_core::mock_http::MockHttp;
+use mbv_net::mock_http::MockHttp;
 use std::sync::{Arc, Mutex};
 
 #[test]

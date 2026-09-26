@@ -1,6 +1,6 @@
 [workspace]
-members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbvd"]
-default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbvd"]
+members = ["crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbvd"]
+default-members = [".", "crates/mbv-core", "crates/mbv-ids", "crates/mbv-keybinds", "crates/mbv-net", "crates/mbvd"]
 
 [workspace.package]
 version = "0.21.2"
@@ -102,6 +102,7 @@ path = "src/main.rs"
 mbv-core = { path = "crates/mbv-core" }
 mbv-ids = { path = "crates/mbv-ids" }
 mbv-keybinds = { path = "crates/mbv-keybinds" }
+mbv-net = { path = "crates/mbv-net" }
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"
@@ -127,6 +128,7 @@ pipewire.workspace = true
 
 [dev-dependencies]
 mbv-core = { path = "crates/mbv-core", features = ["test"] }
+mbv-net = { path = "crates/mbv-net", features = ["test"] }
 uuid.workspace = true
 rstest.workspace = true
 

@@ -125,9 +125,9 @@ pub(in crate::player) fn make_queue_session_for_pos_tests_with_mock(
     PlaybackRun,
     Arc<Mutex<PlayerStatus>>,
     mpsc::Receiver<PlayerEvent>,
-    crate::mock_http::MockHttp,
+    mbv_net::mock_http::MockHttp,
 ) {
-    let http = crate::mock_http::MockHttp::new();
+    let http = mbv_net::mock_http::MockHttp::new();
     let agent = http.agent();
     let cfg = crate::config::Config {
         server_url: "http://127.0.0.1:1".into(),

@@ -15,7 +15,7 @@ use crate::ctrl::{
     UnifiedQueueStateData,
 };
 use crate::player::{PlayerEvent, PlayerStatus};
-use crate::stream::SocketStream;
+use mbv_net::stream::SocketStream;
 
 use crate::remote_player::RemotePlayer;
 
@@ -411,7 +411,7 @@ fn connect_stream(
     // `stream` itself is kept untouched on this thread for the writer
     // thread spawned below; a clone goes to the worker thread instead.
     let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
-    let (reader, state_event, ctrl_compatibility) = crate::bounded::run_with_hard_bound(
+    let (reader, state_event, ctrl_compatibility) = mbv_net::bounded::run_with_hard_bound(
         move || {
             perform_handshake(handshake_stream, || {
                 crate::config::load_or_create_control_credential()

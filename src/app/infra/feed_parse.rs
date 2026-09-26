@@ -21,7 +21,7 @@ fn fetch_feed_body(url: &str) -> Result<String, String> {
 /// explicitly on the agent's config, or `https://` requests fail with "no
 /// TLS backend is configured".
 pub(in crate::app) fn tls_agent(global_timeout: Option<std::time::Duration>) -> ureq::Agent {
-    mbv_core::native_tls_agent(None, global_timeout)
+    mbv_net::native_tls_agent(None, global_timeout)
 }
 pub(in crate::app) fn normalize_feed_url(input: &str) -> Result<String, String> {
     let Some((host, path_and_query)) = url_authority_and_path(input) else {

@@ -322,7 +322,7 @@ impl AudiobookshelfClient {
         T: Send + 'static,
     {
         let client = self.clone();
-        crate::bounded::run_with_hard_bound(move || f(client), bound)
+        mbv_net::bounded::run_with_hard_bound(move || f(client), bound)
     }
 
     pub fn libraries_bounded(
@@ -425,7 +425,7 @@ impl AudiobookshelfClient {
     ) -> Result<AudiobookshelfShowPage, AudiobookshelfError> {
         let path = format!(
             "/api/libraries/{}/items?page={page}&limit={limit}",
-            crate::encode_path_segment(id)
+            mbv_net::encode_path_segment(id)
         );
         let response: ItemsResponse =
             self.get(key, &path)?
@@ -473,7 +473,7 @@ impl AudiobookshelfClient {
         let response: ExpandedWire = self
             .get(
                 key,
-                &format!("/api/items/{}?expanded=1", crate::encode_path_segment(id)),
+                &format!("/api/items/{}?expanded=1", mbv_net::encode_path_segment(id)),
             )?
             .body_mut()
             .read_json()
@@ -536,7 +536,7 @@ impl AudiobookshelfClient {
                 key,
                 &format!(
                     "/api/libraries/{}/personalized",
-                    crate::encode_path_segment(id)
+                    mbv_net::encode_path_segment(id)
                 ),
             )?
             .body_mut()
@@ -556,7 +556,7 @@ impl AudiobookshelfClient {
     fn cover(&self, key: &str, id: &str) -> Result<Vec<u8>, AudiobookshelfError> {
         let response = self.get(
             key,
-            &format!("/api/items/{}/cover", crate::encode_path_segment(id)),
+            &format!("/api/items/{}/cover", mbv_net::encode_path_segment(id)),
         )?;
         let mut bytes = Vec::new();
         response
