@@ -112,6 +112,25 @@ impl Model {
         }
     }
 
+    fn spawn_emby_latest_snapshot(&mut self, key: &LibraryKey) {
+        let LibraryKey::Service {
+            service: ServiceKind::Emby,
+            library_id,
+            ..
+        } = key
+        else {
+            return;
+        };
+        if let Some(lib_idx) = self
+            .app
+            .libs
+            .iter()
+            .position(|library| library.library.id == *library_id)
+        {
+            self.app.spawn_destination_latest_snapshot(lib_idx);
+        }
+    }
+
     fn apply_launch_selector(&mut self, key: &LibraryKey, selector: LaunchSelector) {
         match selector {
             LaunchSelector::EmbyLatest => {
@@ -123,21 +142,7 @@ impl Model {
                     }
                 ) {
                     self.set_emby_owner_latest_mode(key, true);
-                    if let LibraryKey::Service {
-                        service: ServiceKind::Emby,
-                        library_id,
-                        ..
-                    } = key
-                    {
-                        if let Some(lib_idx) = self
-                            .app
-                            .libs
-                            .iter()
-                            .position(|library| library.library.id == *library_id)
-                        {
-                            self.app.spawn_destination_latest_snapshot(lib_idx);
-                        }
-                    }
+                    self.spawn_emby_latest_snapshot(key);
                 }
             }
             LaunchSelector::Emby { index } => {

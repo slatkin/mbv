@@ -8,6 +8,16 @@ use super::*;
 use crate::app::components::library_panel::LibraryPanel;
 use std::time::Instant;
 
+fn matching_context_items(
+    items: &[mbv_core::api::EmbyItem],
+    targets: &[String],
+) -> Vec<mbv_core::api::EmbyItem> {
+    targets
+        .iter()
+        .filter_map(|target| items.iter().find(|item| item.id == *target).cloned())
+        .collect()
+}
+
 impl Model {
     pub(crate) fn handle_terminal_message(
         &mut self,
@@ -514,6 +524,19 @@ impl Model {
     /// The generic (non-Queue, non-Music) `RowContextMenu` arm: record the
     /// selection origin/snapshot, open the destination-appropriate menu, and
     /// re-project all destination owners.
+    fn open_emby_context_item(
+        &mut self,
+        item: mbv_core::api::EmbyItem,
+        anchor: Option<(u16, u16)>,
+    ) {
+        self.focus_emby_context_item(&item);
+        if let Some((x, y)) = anchor {
+            self.app.open_context_menu_for_at(item, x, y);
+        } else {
+            self.app.open_context_menu_for(item);
+        }
+    }
+
     fn handle_library_row_context_menu(
         &mut self,
         targets: crate::app::state::types::context_menu::ContextMenuTargets,
@@ -546,12 +569,7 @@ impl Model {
                         Vec::new(),
                     );
                 } else if let Some(item) = items.pop() {
-                    self.focus_emby_context_item(&item);
-                    if let Some((x, y)) = anchor {
-                        self.app.open_context_menu_for_at(item, x, y);
-                    } else {
-                        self.app.open_context_menu_for(item);
-                    }
+                    self.open_emby_context_item(item, anchor);
                 }
             }
             crate::app::state::types::context_menu::ContextMenuTargets::Browser(targets) => {
@@ -561,14 +579,7 @@ impl Model {
                         .libs
                         .get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .map(|level| {
-                            targets
-                                .iter()
-                                .filter_map(|target| {
-                                    level.items.iter().find(|item| item.id == *target).cloned()
-                                })
-                                .collect::<Vec<mbv_core::api::EmbyItem>>()
-                        })
+                        .map(|level| matching_context_items(&level.items, &targets))
                         .unwrap_or_default();
                     if items.len() > 1 {
                         let capabilities = items
@@ -583,12 +594,7 @@ impl Model {
                             Vec::new(),
                         );
                     } else if let Some(item) = items.into_iter().next() {
-                        self.focus_emby_context_item(&item);
-                        if let Some((x, y)) = anchor {
-                            self.app.open_context_menu_for_at(item, x, y);
-                        } else {
-                            self.app.open_context_menu_for(item);
-                        }
+                        self.open_emby_context_item(item, anchor);
                     }
                 }
             }

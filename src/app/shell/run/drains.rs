@@ -114,13 +114,18 @@ impl Model {
                     parent_id,
                     level,
                 } => {
-                    let latest = self.app.libs.get(lib_idx).and_then(|lib| {
-                        (lib.library.collection_type == "tvshows"
-                            && (lib.tv_content_mode
-                                == Some(mbv_core::config::TvContentMode::Latest)
-                                || level.tv_content_mode
-                                    == Some(mbv_core::config::TvContentMode::Latest)))
-                        .then(|| {
+                    let latest = self
+                        .app
+                        .libs
+                        .get(lib_idx)
+                        .filter(|lib| {
+                            lib.library.collection_type == "tvshows"
+                                && (lib.tv_content_mode
+                                    == Some(mbv_core::config::TvContentMode::Latest)
+                                    || level.tv_content_mode
+                                        == Some(mbv_core::config::TvContentMode::Latest))
+                        })
+                        .map(|lib| {
                             (
                                 lib.library.id.clone(),
                                 lib.library.name.clone(),
@@ -128,13 +133,11 @@ impl Model {
                                     .items
                                     .iter()
                                     .cloned()
-                                    .map(|item| {
-                                        mbv_core::playback_queue::QueueItem::Emby(Box::new(item))
-                                    })
+                                    .map(Box::new)
+                                    .map(mbv_core::playback_queue::QueueItem::Emby)
                                     .collect(),
                             )
-                        })
-                    });
+                        });
                     self.app.handle_lib_event(crate::app::LibEvent::Loaded {
                         lib_idx,
                         parent_id,
@@ -229,12 +232,14 @@ impl Model {
             // Responses are tagged with the per-suffix mem-key
             // ("bare@suffix"); route them into the matching protocol of
             // the bare-key cache entry.
-            if let Some((bare_key, suffix)) = key.rsplit_once('@') {
-                if let Some(entry) = self.app.card_image_states.get_mut(bare_key) {
-                    if let Some(state) = entry.protocols.get_mut(suffix) {
-                        state.update_resized_protocol(response);
-                    }
-                }
+            let Some((bare_key, suffix)) = key.rsplit_once('@') else {
+                continue;
+            };
+            let Some(entry) = self.app.card_image_states.get_mut(bare_key) else {
+                continue;
+            };
+            if let Some(state) = entry.protocols.get_mut(suffix) {
+                state.update_resized_protocol(response);
             }
         }
         had_events

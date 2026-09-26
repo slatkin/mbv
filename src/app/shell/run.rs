@@ -157,6 +157,15 @@ impl Model {
     /// re-push. The infix is the only Series-family marker, so both live chains
     /// (Wide's Thumb-first, narrow's `Primary`) gate without a suffix list that
     /// can drift from the key the painter builds.
+    fn evict_excess_card_images(&mut self) {
+        while self.app.image_lru.len() > self.app.image_cache_size_total {
+            let Some(evict) = self.app.image_lru.pop_front() else {
+                break;
+            };
+            self.app.card_image_states.remove(&evict);
+        }
+    }
+
     pub(in crate::app) fn drain_card_image_completions(&mut self) -> bool {
         let mut series_image_changed = false;
         let mut drained = false;
@@ -186,11 +195,7 @@ impl Model {
             if entry.img.is_some() {
                 self.app.image_lru.retain(|k| k != &cache_key);
                 self.app.image_lru.push_back(cache_key.clone());
-                while self.app.image_lru.len() > self.app.image_cache_size_total {
-                    if let Some(evict) = self.app.image_lru.pop_front() {
-                        self.app.card_image_states.remove(&evict);
-                    }
-                }
+                self.evict_excess_card_images();
             }
             self.app.card_image_states.insert(cache_key, entry);
             if let Some(event) = artist_completion {

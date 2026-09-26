@@ -455,13 +455,12 @@ pub fn start(
                     // (not cloned again) into `snapshot_poll` last.
                     let raw = status_arc.lock().unwrap().clone();
                     let s = effective_status(raw, is_disconnected);
-                    let st = if !s.active {
-                        "Stopped".to_string()
-                    } else if s.paused {
-                        "Paused".to_string()
-                    } else {
-                        "Playing".to_string()
-                    };
+                    let st = match (s.active, s.paused) {
+                        (false, _) => "Stopped",
+                        (true, true) => "Paused",
+                        (true, false) => "Playing",
+                    }
+                    .to_string();
                     let pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
                     // Resolve the actual cached-art result (not just the raw
                     // item/album id) into the change-detection key: if art
