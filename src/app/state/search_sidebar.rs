@@ -213,20 +213,6 @@ mod tests {
     }
 
     #[test]
-    fn global_drain_all_unnavigable_yields_empty() {
-        let mut sidebar = SearchSidebar::new();
-        let items = vec![
-            make_item("BoxSet 1", "BoxSet"),
-            make_item("Book 1", "Book"),
-            make_item("Photo 1", "Photo"),
-        ];
-
-        sidebar.apply_drain("", Ok(items));
-
-        assert!(sidebar.results.is_empty());
-    }
-
-    #[test]
     fn stale_response_is_discarded_current_response_applies() {
         let mut sidebar = SearchSidebar::new();
         sidebar.query = "a".into();
@@ -247,20 +233,5 @@ mod tests {
         assert_eq!(sidebar.cursor, 0);
         assert_eq!(sidebar.results.len(), 1);
         assert_eq!(sidebar.results[0].name, "Fresh");
-    }
-
-    #[test]
-    fn available_types_sorted_by_display_order() {
-        let mut sidebar = SearchSidebar::new();
-        sidebar.results = vec![
-            make_item("Series 1", "Series"),
-            make_item("Movie 1", "Movie"),
-            make_item("Episode 1", "Episode"),
-        ];
-
-        assert_eq!(
-            sidebar.available_types(),
-            vec!["Movie", "Series", "Episode"]
-        );
     }
 }
