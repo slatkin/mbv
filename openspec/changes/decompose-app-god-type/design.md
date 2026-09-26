@@ -7,7 +7,7 @@ See proposal.md, Why. Current facts that shape the approach (re-measured on `mai
 - All `App` fields are `pub(in crate::app)`, and tests construct `App` through `App::build(AppInit)` (`src/app/state/construct.rs`). Every moved field therefore forces edits at each access site. Those edits are mechanical and found by the compiler.
 - Measured spread of the candidate seams (files that reference them): image fields ~18 files, mostly `src/app/infra/images*`, `shell/`, `render/components/card.rs`; setup/startup receivers ≤5 files each; remote tracking ≤11 files each, except `connected_session_id`/`connected_session_state` (34 and 21 files); `lib_tx`/`lib_rx` 24 files, mostly tests.
 - The `lib`, `search`, `sessions`, `notif_action` and `card_image` channel pairs are not created in `App::build`. They are created at three `AppInit` construction sites and passed in: `App::new_independent` (`src/app/state/construct.rs`), `App::new_remote_optional_with_config` (`src/app/state/construct/remote.rs`) and the test helper in `src/app/tests.rs`. Only the `cast` pair is created inside `build`.
-- The #804 lint pass left two approved suppressions that name this change as their blocker: `#[expect(clippy::too_many_lines)]` on `App::build` (`construct.rs`, reason: splitting is "blocked on" decompose-app-god-type) and `#[expect(clippy::struct_excessive_bools)]` on `App` (`app_struct.rs`, reason counts 26 bools). Three of those bools move into seams here: `image_protocol_enabled`, `remote_stalled_while_paused`, `direct_remote_connected`.
+- The #804 lint pass left an approved `#[expect(clippy::too_many_lines)]` on `App::build` (`construct.rs`), whose reason previously named this change as its blocker, and an approved `#[expect(clippy::struct_excessive_bools)]` on `App` (`app_struct.rs`, reason counts 26 bools). The `App::build` exception remains because heterogeneous `App` fields are explicitly initialized together after extracting four owned seams. Three bools move into seams here: `image_protocol_enabled`, `remote_stalled_while_paused`, `direct_remote_connected`.
 - `PlayerEvent` is an `mbv-core` type (`crates/mbv-core/src/player/types.rs`) shared with the daemon, so it cannot be split into nested enums without crossing the crate and protocol boundary. `LibEvent` is TUI-local (`src/app/state/types/events.rs`, 35 variants, ~300 uses across 58 files).
 
 ## Goals / Non-Goals
@@ -15,7 +15,7 @@ See proposal.md, Why. Current facts that shape the approach (re-measured on `mai
 **Goals**
 - Each of the four seams has one named owner type, and its fields are reachable only through that type's field on `App`.
 - Both event dispatchers are exhaustive single matches, so adding an event variant fails the build at the dispatch site. This follows AGENTS.md: "exhaustive dispatch arm or documented no-op — never wildcard-hidden".
-- The `too_many_lines` suppression on `App::build` is removed: seam constructors shrink `build`, and the #804 reason names this change as the blocker. The `struct_excessive_bools` suppression on `App` gets its reason count updated to the bools still on `App`, and is removed if that count drops to 3 or fewer.
+- The user-approved `too_many_lines` suppression on `App::build` is retained with an updated, truthful reason: heterogeneous `App` fields remain explicitly initialized together after extracting four owned seams. The `struct_excessive_bools` suppression on `App` gets its reason count updated to the bools still on `App`, and is removed if that count drops to 3 or fewer.
 
 **Non-Goals**
 - Shell `Model`. It has ~18 fields, each already documented as shell-owned projection/arbitration state. It has no cross-cutting subsystem cluster comparable to `App`'s. Revisit it in its own change if a seam appears.
@@ -61,7 +61,7 @@ The user approved one per-instance exception to the no-suppressions rule for thi
 
 - [Large mechanical diff touching many test files] → One seam per task group, each ending green on check/clippy/nextest before the next starts. No behaviour edits are mixed into the moves.
 - [Inline arm moved into a helper silently changes an early `return`] → Early `return None` / `return Ok(..)` inside a moved body becomes `return` from the new helper. The implementer re-reads each moved arm for control flow. Existing tests in `src/app/tests/` cover the drained events.
-- [New seam files trip pedantic workspace lints (for example `must_use_candidate`, `struct_excessive_bools`)] → Fix at the source. Any new `#[expect]` needs per-instance user approval (AGENTS.md).
+- [New seam files trip pedantic workspace lints (for example `must_use_candidate`, `struct_excessive_bools`)] → Fix at the source. Any new `#[expect]` needs per-instance user approval (AGENTS.md); the retained `App::build` expectation is separately approved.
 - [Files cross 800 lines after new helpers] → The file-lines check runs only before push (AGENTS.md). Split then if needed.
 
 ## Migration Plan

@@ -1,6 +1,6 @@
 # Tasks
 
-Each group is one commit. The gate for a group is `cargo check -p mbv`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv`, all green, with `cargo fmt` applied. No behaviour edits inside a move. No lint suppressions except the single user-approved `#[expect(clippy::too_many_lines, reason = "Exhaustive LibEvent routing keeps each variant visible at one dispatch site")]` on `src/app/dispatch/library/event.rs::handle_lib_event` (design D5).
+Each group is one commit. The gate for a group is `cargo check -p mbv`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run -p mbv`, all green, with `cargo fmt` applied. No behaviour edits inside a move. No lint suppressions except the two user-approved instances: `#[expect(clippy::too_many_lines, reason = "Exhaustive LibEvent routing keeps each variant visible at one dispatch site")]` on `src/app/dispatch/library/event.rs::handle_lib_event` (design D5), and `#[expect(clippy::too_many_lines, reason = "App construction explicitly initializes heterogeneous fields after extracting four owned seams")]` on `src/app/state/construct.rs::App::build` (design D2).
 
 ## 1. Player event dispatch (design D4)
 
@@ -32,5 +32,5 @@ Each group is one commit. The gate for a group is `cargo check -p mbv`, `cargo c
 
 ## 7. Wrap-up
 
-- [ ] 7.1 Delete the `#[expect(clippy::too_many_lines)]` on `App::build` (`src/app/state/construct.rs`). If clippy still fires, split `build` along the seam constructors, not with a new suppression. Update the count in the `#[expect(clippy::struct_excessive_bools)]` reason on `App` (`src/app/state/app_struct.rs`) to the bools left on `App`; delete the attribute if that count is 3 or fewer. Verify: `rg "decompose-app-god-type" src` is empty, and the gate is green.
+- [ ] 7.1 Retain the existing user-approved `#[expect(clippy::too_many_lines)]` on `App::build` (`src/app/state/construct.rs`) and update its reason to explain that heterogeneous `App` fields remain explicitly initialized together after extracting the four owned seams. Do not use a stale `decompose-app-god-type` marker. Update the count in the `#[expect(clippy::struct_excessive_bools)]` reason on `App` (`src/app/state/app_struct.rs`) to the bools left on `App`; delete the attribute if that count is 3 or fewer. Verify: `rg "decompose-app-god-type" src` is empty, and the gate is green.
 - [ ] 7.2 Run `rg -c "^\s+pub\(in crate::app\) \w+:" src/app/state/app_struct.rs` and record the before/after field count in the PR description (before: 194 at `922802192`). Run `make check-code-file-lines` before pushing and split any file over 800 lines along responsibility seams. Verify: the check passes.
