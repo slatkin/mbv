@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::components::msg::TvHit;
-use rstest::rstest;
 
 #[test]
 fn typed_tv_requests_keep_component_cursor_authoritative() {

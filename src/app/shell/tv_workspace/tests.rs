@@ -1,11 +1,9 @@
 use super::*;
-use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent};
+use crate::app::components::{Msg, ShellRequest};
 use crate::app::render::make_movie_app;
 use crate::app::state::types::browse::BrowseResting;
 use mbv_core::mock_http::MockHttp;
-use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ratatui::Terminal;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 mod group;

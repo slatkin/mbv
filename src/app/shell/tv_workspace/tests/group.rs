@@ -1,5 +1,3 @@
-use super::*;
-
 #[test]
 fn cycle_letter_pill_derives_from_filter_not_cursor() {
     // A tvshows library large enough to surface letter pills, at its top

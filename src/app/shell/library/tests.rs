@@ -2,11 +2,7 @@ use super::*;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::OverlayId;
 use crate::app::render::make_movie_app;
-use crate::app::state::types::browse::BrowseResting;
-use crate::app::tests::make_item;
-use crate::app::{
-    BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, PanelFocus, PanelMode, TabSelection,
-};
+use crate::app::{PanelMode, TabSelection};
 
 // ADR 0024 D2 (task 2.3): the three-rung mouse-eligibility ladder.
 
