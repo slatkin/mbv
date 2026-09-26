@@ -12,15 +12,12 @@ use crate::app::components::msg::AlbumCursorKind;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_music_group_app;
 use crate::app::tests::make_item;
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
-use mbv_core::config::ServiceKind;
+use crate::app::{LibraryTab, PanelFocus};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::Component;
-use tuirealm::event::{
-    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
-};
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 fn music_group_app_two_albums() -> crate::app::App {
     let mut app = make_music_group_app();

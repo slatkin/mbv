@@ -305,7 +305,6 @@ impl Model {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::ServiceRequest;
     use mbv_core::keybinds::{Chord, KeySection, SectionBindings};
 
     #[test]

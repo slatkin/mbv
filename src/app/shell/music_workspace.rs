@@ -347,7 +347,7 @@ impl Model {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::render::{make_movie_app, make_music_group_app};
+    use crate::app::render::make_music_group_app;
     use crate::app::shell::Model;
     use mbv_core::api::{EmbyClient, EmbyCredentialExchange};
     use mbv_core::service_runtime::EmbyRuntime;
