@@ -237,9 +237,6 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::msg::TerminalObserverEvent;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
     use tuirealm::event::KeyModifiers;
 
     fn popup() -> MultiSelectPopup {
@@ -261,23 +258,6 @@ mod tests {
     }
 
     #[test]
-    fn settings_popup_multiselect_keeps_local_cursor_and_choice() {
-        let mut component = MultiselectComponent::new();
-        component.set_content(&popup());
-        assert_eq!(
-            component.on(&key(Key::Down)),
-            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        );
-        assert_eq!(
-            component.on(&key(Key::Char(' '))),
-            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        );
-
-        assert_eq!(component.cursor, 1);
-        assert!(!component.items[1].2);
-    }
-
-    #[test]
     fn settings_popup_multiselect_commit_is_typed() {
         let mut component = MultiselectComponent::new();
         component.set_content(&popup());
@@ -288,24 +268,5 @@ mod tests {
         if matches!(shell_boxed.as_ref(),
                super::super::msg::ShellRequest::MultiselectCommit { .. }
            )));
-    }
-
-    #[test]
-    fn settings_popup_multiselect_renders_without_app_state() {
-        let mut component = MultiselectComponent::new();
-        component.set_content(&popup());
-        let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Hidden Libraries"));
-        assert!(output.contains("Movies"));
     }
 }

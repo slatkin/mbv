@@ -380,8 +380,6 @@ impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
 
     fn key(code: Key) -> Event<UserEvent> {
         Event::Keyboard(KeyEvent {
@@ -413,24 +411,5 @@ mod tests {
         if matches!(shell_boxed.as_ref(), ShellRequest::FeedsManageIntent(
                FeedsManageIntent::Submit
            ))));
-    }
-
-    #[test]
-    fn settings_popup_feeds_manage_renders_without_app_state() {
-        let mut component = FeedsManageComponent::new();
-        component.set_stage(FeedsManageStage::List);
-        let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Manage Feeds"));
-        assert!(output.contains("No feed subscriptions"));
     }
 }

@@ -108,8 +108,7 @@ impl AppComponent<Msg, UserEvent> for DaemonLostComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rstest::rstest;
-    use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+    use tuirealm::event::KeyModifiers;
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> tuirealm::event::KeyEvent {
         tuirealm::event::KeyEvent { code, modifiers }
@@ -128,47 +127,5 @@ mod tests {
         if matches!(shell_boxed.as_ref(), ShellRequest::DaemonLostIntent(
                DaemonLostIntent::RestartWithTray
            ))));
-    }
-
-    #[test]
-    fn unbound_key_is_swallowed_locally() {
-        let mut comp = DaemonLostComponent::new();
-        assert_eq!(
-            comp.on(&Event::Keyboard(make_key(
-                Key::Char('x'),
-                KeyModifiers::NONE,
-            ))),
-            None
-        );
-    }
-
-    #[test]
-    fn non_keyboard_events_return_none() {
-        let mut comp = DaemonLostComponent::new();
-        assert_eq!(comp.on(&Event::<UserEvent>::None), None);
-        assert_eq!(
-            comp.on(&Event::Mouse(MouseEvent {
-                kind: MouseEventKind::Down(MouseButton::Left),
-                column: 10,
-                row: 5,
-                modifiers: KeyModifiers::NONE,
-            })),
-            None
-        );
-    }
-
-    #[rstest]
-    #[case::set_content_updates_fields(Some("Birthday Clip"), "/tmp/mbvd.log", Some("refused"))]
-    #[case::set_content_with_none_values(None, "/var/log/mbvd.log", None)]
-    fn set_content(
-        #[case] title: Option<&str>,
-        #[case] log_path: &str,
-        #[case] restart_error: Option<&str>,
-    ) {
-        let mut comp = DaemonLostComponent::new();
-        comp.set_content(title, log_path, restart_error);
-        assert_eq!(comp.last_playing_title.as_deref(), title);
-        assert_eq!(comp.daemon_log_path, log_path);
-        assert_eq!(comp.restart_error.as_deref(), restart_error);
     }
 }

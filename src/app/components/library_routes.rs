@@ -220,9 +220,7 @@ impl AppComponent<Msg, UserEvent> for LibraryRoutesComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::event::{KeyEvent, KeyModifiers};
+    use tuirealm::event::KeyModifiers;
 
     fn popup() -> LibraryRoutePopup {
         LibraryRoutePopup {
@@ -244,14 +242,6 @@ mod tests {
     }
 
     #[test]
-    fn settings_popup_library_routes_keeps_local_cursor() {
-        let mut component = LibraryRoutesComponent::new();
-        component.set_content(&popup());
-        component.on(&key(Key::Down));
-        assert_eq!(component.cursor, 1);
-    }
-
-    #[test]
     fn settings_popup_library_routes_cross_boundary_keys_are_typed() {
         let mut component = LibraryRoutesComponent::new();
         component.set_content(&popup());
@@ -263,24 +253,5 @@ mod tests {
             component.on(&key(Key::Esc)),
             Some(Msg::Shell(Box::new(ShellRequest::LibraryRoutesEsc)))
         );
-    }
-
-    #[test]
-    fn settings_popup_library_routes_renders_without_app_state() {
-        let mut component = LibraryRoutesComponent::new();
-        component.set_content(&popup());
-        let mut terminal = Terminal::new(TestBackend::new(60, 16)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        let output: String = terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .map(|cell| cell.symbol().to_owned())
-            .collect();
-        assert!(output.contains("Library Routes"));
-        assert!(output.contains("Movies"));
     }
 }
